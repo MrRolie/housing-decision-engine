@@ -170,12 +170,16 @@ class TestMonteCarloProbability:
     
     def test_identical_costs_prob_around_half(self):
         """Test that similar costs give probability around 50%."""
-        # Make costs similar with some volatility
-        condo = CondoParams(monthly_fee=500, all_cash=True)  # $6000/year
+        # Make costs similar with some volatility.
+        # Both use initial_value=0 so financing terms are zero and the
+        # comparison is purely between running costs (maintenance vs fees).
+        other_cost = RecurringOtherCost(name="maintenance", annual_amount=6000, escalation_rate=0.0)
+        condo = CondoParams(monthly_fee=500, all_cash=True)  # $6000/year fees
         house = HouseParams(
-            initial_value=400_000,
-            annual_maintenance_rate=0.015,  # $6000/year
+            initial_value=0,
+            annual_maintenance_rate=0.0,
             all_cash=True,
+            other_recurring_costs=[other_cost],  # $6000/year, matches condo fee
         )
         sim = SimulationParams(
             years=20,
@@ -184,9 +188,10 @@ class TestMonteCarloProbability:
             random_seed=42,
             house_maintenance_vol=0.20,
             condo_fee_vol=0.20,
+            other_cost_vol=0.20,
         )
         econ = EconomicParams()
-        
+
         result = run_monte_carlo(_ch_spec(condo, house, sim, econ))
 
         # With similar costs and volatility, probability should be around 50%
@@ -462,3 +467,35 @@ class TestAffordabilityMC:
         spec = _spec(condo=condo, num_sims=100)
         result = run_monte_carlo(spec)
         assert result.affordability_mc is None
+
+
+def test_mc_house_zero_vol_converges_with_mortgage():
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_house_option
+    from hde.monte_carlo import _simulate_house_pv_once
+    import numpy as np
+    h = HouseParams(initial_value=400_000, value_growth_rate=0.03,
+                    annual_maintenance_rate=0.01, down_payment=80_000,
+                    mortgage_rate=0.05, mortgage_term_years=25)
+    sim = SimulationParams(years=10, discount_rate=0.04, house_maintenance_vol=0.0)
+    econ = EconomicParams(mode="real", inflation_vol=0.0)
+    det = _compute_house_option(h, sim, econ).total_pv
+    rng = np.random.default_rng(0)
+    mc = _simulate_house_pv_once(h, sim, econ, rng)
+    assert mc == pytest.approx(det, rel=1e-9)
+
+
+def test_mc_condo_zero_vol_converges_with_value():
+    from hde.models import CondoParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_condo_option
+    from hde.monte_carlo import _simulate_condo_pv_once
+    import numpy as np
+    c = CondoParams(monthly_fee=500, fee_escalation_rate=0.02, initial_value=300_000,
+                    value_growth_rate=0.03, down_payment=60_000, mortgage_rate=0.05,
+                    mortgage_term_years=25)
+    sim = SimulationParams(years=10, discount_rate=0.04, condo_fee_vol=0.0)
+    econ = EconomicParams(mode="real", inflation_vol=0.0)
+    det = _compute_condo_option(c, sim, econ).total_pv
+    rng = np.random.default_rng(0)
+    mc = _simulate_condo_pv_once(c, sim, econ, rng)
+    assert mc == pytest.approx(det, rel=1e-9)

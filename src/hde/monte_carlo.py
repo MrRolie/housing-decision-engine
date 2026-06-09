@@ -210,34 +210,36 @@ def _simulate_condo_pv_once(
     """
     pv = 0.0
     r = sim.discount_rate
-    
+
     fee_growth_base = condo.fee_escalation_rate
     reserve_growth_base = condo.reserve_growth_rate
-    
+
     fee_amount = condo.monthly_fee * 12
     reserve_balance = condo.reserve_initial_balance
-    
+    terminal_value = condo.initial_value
+
     other_amounts = [c.annual_amount for c in condo.other_recurring_costs]
-    
+
     # Precompute event years
     event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in condo.events}
-    
+
     for year in range(1, sim.years + 1):
         inflation_factor, z_inf = _draw_inflation_factor(rng, econ)
-        
+        terminal_value *= (1 + _effective_growth_rate(condo.value_growth_rate, inflation_factor, econ))
+
         # Condo fee with escalation and volatility
         fee_growth = _effective_growth_rate(fee_growth_base, inflation_factor, econ)
         fee_amount *= (1 + fee_growth)
         z_fee = _correlated_z(z_inf, sim.corr_inflation_condo, rng)
         fee_amount *= _shock_multiplier(sim.condo_fee_vol, z_fee, sim.shock_model)
         pv += pv_single(fee_amount, r, year)
-        
+
         # Reserves
         reserve_growth = _effective_growth_rate(reserve_growth_base, inflation_factor, econ)
         reserve_balance *= (1 + reserve_growth)
         reserve_contribution = fee_amount * condo.reserve_contribution_rate
         reserve_balance += reserve_contribution
-        
+
         # Other recurring costs with volatility
         for idx, rec_cost in enumerate(condo.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
@@ -245,7 +247,7 @@ def _simulate_condo_pv_once(
             z_other = _correlated_z(z_inf, sim.corr_inflation_other, rng)
             other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
-        
+
         # Events
         for event in condo.events:
             if event_years[event.name] is None:
@@ -257,7 +259,14 @@ def _simulate_condo_pv_once(
                 reserve_balance -= covered
                 net_cost = event_cost - covered
                 pv += pv_single(net_cost, r, year)
-    
+
+    from .deterministic import _financing_pv
+    dp_pv, mort_pv, term_eq_pv = _financing_pv(
+        condo.initial_value, condo.down_payment, condo.mortgage_rate,
+        condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
+        terminal_value, r, sim.years,
+    )
+    pv += dp_pv + mort_pv + term_eq_pv
     return pv
 
 
@@ -276,26 +285,28 @@ def _simulate_house_pv_once(
     """
     pv = 0.0
     r = sim.discount_rate
-    
+
     value_growth_base = house.value_growth_rate
     house_value = house.initial_value
-    
+    terminal_value = house.initial_value
+
     other_amounts = [c.annual_amount for c in house.other_recurring_costs]
     event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in house.events}
-    
+
     for year in range(1, sim.years + 1):
         inflation_factor, z_inf = _draw_inflation_factor(rng, econ)
-        
+        terminal_value *= (1 + _effective_growth_rate(value_growth_base, inflation_factor, econ))
+
         if year > 1:
             value_growth = _effective_growth_rate(value_growth_base, inflation_factor, econ)
             house_value *= (1 + value_growth)
-        
+
         maintenance_rate = _maintenance_rate_for_year(house, year)
         maint_t = maintenance_rate * house_value
         z_house = _correlated_z(z_inf, sim.corr_inflation_house, rng)
         maint_t *= _shock_multiplier(sim.house_maintenance_vol, z_house, sim.shock_model)
         pv += pv_single(maint_t, r, year)
-        
+
         # Other recurring costs with volatility
         for idx, rec_cost in enumerate(house.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
@@ -303,7 +314,7 @@ def _simulate_house_pv_once(
             z_other = _correlated_z(z_inf, sim.corr_inflation_other, rng)
             other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
-        
+
         # Events
         for event in house.events:
             if event_years[event.name] is None:
@@ -312,7 +323,14 @@ def _simulate_house_pv_once(
                 z_event = _correlated_z(z_inf, sim.corr_inflation_event_cost, rng)
                 event_cost = _sample_event_cost(event, z_event)
                 pv += pv_single(event_cost, r, year)
-    
+
+    from .deterministic import _financing_pv
+    dp_pv, mort_pv, term_eq_pv = _financing_pv(
+        house.initial_value, house.down_payment, house.mortgage_rate,
+        house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
+        terminal_value, r, sim.years,
+    )
+    pv += dp_pv + mort_pv + term_eq_pv
     return pv
 
 
