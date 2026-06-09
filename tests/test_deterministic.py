@@ -379,6 +379,61 @@ class TestAffordabilityReport:
         assert result.income_report is None
 
 
+def test_house_total_equals_sum_of_breakdown():
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_house_option
+    h = HouseParams(initial_value=400_000, value_growth_rate=0.03,
+                    annual_maintenance_rate=0.01, down_payment=80_000,
+                    mortgage_rate=0.05, mortgage_term_years=25)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    econ = EconomicParams(mode="real")
+    res = _compute_house_option(h, sim, econ)
+    assert res.total_pv == pytest.approx(sum(res.breakdown.values()), rel=1e-12)
+    for k in ("downpayment_pv", "mortgage_pv", "terminal_equity_pv"):
+        assert k in res.breakdown
+    assert res.breakdown["downpayment_pv"] == 80_000
+    assert res.breakdown["terminal_equity_pv"] < 0  # equity is a benefit
+
+def test_house_terminal_equity_oracle():
+    """value_N = P0*(1+g)^N pinned; all-cash so equity = value_N*(1-sc)."""
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_house_option
+    from hde.pv import pv_single
+    h = HouseParams(initial_value=500_000, value_growth_rate=0.03,
+                    annual_maintenance_rate=0.0, all_cash=True, selling_cost_rate=0.05)
+    sim = SimulationParams(years=10, discount_rate=0.05)
+    res = _compute_house_option(h, sim, EconomicParams(mode="real"))
+    value_N = 500_000 * (1.03 ** 10)
+    assert res.breakdown["terminal_equity_pv"] == pytest.approx(
+        -pv_single(value_N * 0.95, 0.05, 10), rel=1e-9)
+
+def test_price_drop_makes_owning_costlier():
+    """Sign check the whole point of S4b: lower appreciation -> higher net cost."""
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_house_option
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    econ = EconomicParams(mode="real")
+    base = dict(initial_value=400_000, annual_maintenance_rate=0.01, all_cash=True)
+    high = _compute_house_option(HouseParams(value_growth_rate=0.05, **base), sim, econ)
+    low = _compute_house_option(HouseParams(value_growth_rate=-0.02, **base), sim, econ)
+    assert low.total_pv > high.total_pv  # a price crash makes owning more expensive
+
+def test_condo_zero_value_all_cash_unchanged_total():
+    """Condo with default initial_value=0 + all_cash -> zero equity -> carrying-cost total."""
+    from hde.models import CondoParams, SimulationParams, EconomicParams
+    from hde.deterministic import _compute_condo_option
+    c = CondoParams(monthly_fee=400, fee_escalation_rate=0.02, all_cash=True)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    res = _compute_condo_option(c, sim, EconomicParams(mode="real"))
+    assert res.breakdown["terminal_equity_pv"] == 0.0
+    assert res.breakdown["downpayment_pv"] == 0.0
+    assert res.breakdown["mortgage_pv"] == 0.0
+    # carrying total == fee+events+other+reserve (financing terms are all 0)
+    assert res.total_pv == pytest.approx(
+        res.breakdown["fee_pv"] + res.breakdown["events_pv"]
+        + res.breakdown["other_pv"] + res.breakdown["reserve_pv"], rel=1e-12)
+
+
 def test_financing_pv_all_cash():
     from hde.deterministic import _financing_pv
     # all_cash: D = initial_value, no mortgage, terminal = value_N*(1-sc)

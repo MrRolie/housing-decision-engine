@@ -279,12 +279,23 @@ def _compute_condo_option(
                 events_pv += pv_single(event_cost, discount_rate, year)
                 reserve_pv -= pv_single(covered, discount_rate, year)
 
-    total_pv = fee_pv + events_pv + other_pv + reserve_pv
+    condo_value_growth = _effective_growth_rate(condo.value_growth_rate, econ)
+    value_N = condo.initial_value * (1 + condo_value_growth) ** sim.years
+    downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
+        condo.initial_value, condo.down_payment, condo.mortgage_rate,
+        condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
+        value_N, discount_rate, sim.years,
+    )
+    total_pv = (fee_pv + events_pv + other_pv + reserve_pv
+                + downpayment_pv + mortgage_pv + terminal_equity_pv)
     breakdown = {
         "fee_pv": fee_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
         "reserve_pv": reserve_pv,
+        "downpayment_pv": downpayment_pv,
+        "mortgage_pv": mortgage_pv,
+        "terminal_equity_pv": terminal_equity_pv,
     }
     assert set(breakdown.keys()) == CONDO_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
@@ -342,11 +353,21 @@ def _compute_house_option(
             if event_years[event.name] == year:
                 events_pv += pv_single(event.base_cost, discount_rate, year)
 
-    total_pv = maintenance_pv + events_pv + other_pv
+    value_N = house.initial_value * (1 + house_value_growth) ** sim.years
+    downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
+        house.initial_value, house.down_payment, house.mortgage_rate,
+        house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
+        value_N, discount_rate, sim.years,
+    )
+    total_pv = (maintenance_pv + events_pv + other_pv
+                + downpayment_pv + mortgage_pv + terminal_equity_pv)
     breakdown = {
         "maintenance_pv": maintenance_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
+        "downpayment_pv": downpayment_pv,
+        "mortgage_pv": mortgage_pv,
+        "terminal_equity_pv": terminal_equity_pv,
     }
     assert set(breakdown.keys()) == HOUSE_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
