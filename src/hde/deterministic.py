@@ -6,7 +6,7 @@ ownership costs using deterministic (fixed) parameters, without
 any randomness or Monte Carlo simulation.
 """
 
-from typing import List
+from typing import List, Optional, Tuple
 
 from .models import (
     CondoParams,
@@ -31,6 +31,8 @@ from .pv import (
     pv_annuity,
     pv_growth_annuity,
     pv_recurring_with_escalation,
+    mortgage_payment,
+    outstanding_balance,
 )
 
 
@@ -41,6 +43,47 @@ def _effective_growth_rate(base_rate: float, econ: EconomicParams) -> float:
     if econ.mode == "nominal":
         return (1 + base_rate) * (1 + econ.inflation_rate) - 1
     return base_rate
+
+
+def _financing_pv(
+    initial_value: float,
+    down_payment: Optional[float],
+    mortgage_rate: Optional[float],
+    mortgage_term_years: Optional[int],
+    all_cash: bool,
+    selling_cost_rate: float,
+    value_N: float,
+    dr: float,
+    n_years: int,
+) -> Tuple[float, float, float]:
+    """
+    (downpayment_pv, mortgage_pv, terminal_equity_pv) for an owned option.
+
+    Fail-loud (strategic Mod 5): direct-construction callers that declare neither
+    all_cash nor a complete mortgage block raise here, not compute silent garbage.
+    """
+    if not all_cash and (
+        down_payment is None or mortgage_rate is None or mortgage_term_years is None
+    ):
+        raise ValueError(
+            "owned option requires all_cash=True OR a full mortgage block "
+            "(down_payment + mortgage_rate + mortgage_term_years)"
+        )
+    if all_cash:
+        downpayment_pv = initial_value
+        mortgage_pv = 0.0
+        balance_N = 0.0
+    else:
+        downpayment_pv = down_payment
+        loan = initial_value - down_payment
+        payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
+        mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
+        balance_N = outstanding_balance(
+            loan, mortgage_rate, mortgage_term_years, n_years, payment
+        )
+    equity_N = value_N * (1 - selling_cost_rate) - balance_N
+    terminal_equity_pv = -pv_single(equity_N, dr, n_years)
+    return downpayment_pv, mortgage_pv, terminal_equity_pv
 
 
 def _maintenance_rate_for_year(house: HouseParams, year: int) -> float:

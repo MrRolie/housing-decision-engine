@@ -372,3 +372,39 @@ class TestAffordabilityReport:
         spec = _spec(condo=condo)
         result = compute_deterministic(spec)
         assert result.income_report is None
+
+
+def test_financing_pv_all_cash():
+    from hde.deterministic import _financing_pv
+    # all_cash: D = initial_value, no mortgage, terminal = value_N*(1-sc)
+    dp, mort, term_eq = _financing_pv(
+        initial_value=500_000, down_payment=None, mortgage_rate=None,
+        mortgage_term_years=None, all_cash=True, selling_cost_rate=0.05,
+        value_N=671_958.19, dr=0.05, n_years=10,
+    )
+    assert dp == 500_000
+    assert mort == 0.0
+    assert term_eq == pytest.approx(-391_897.84, abs=0.05)
+
+def test_financing_pv_mortgage():
+    from hde.deterministic import _financing_pv
+    from hde.pv import mortgage_payment, pv_annuity, outstanding_balance, pv_single
+    dp, mort, term_eq = _financing_pv(
+        initial_value=500_000, down_payment=100_000, mortgage_rate=0.05,
+        mortgage_term_years=25, all_cash=False, selling_cost_rate=0.05,
+        value_N=671_958.19, dr=0.04, n_years=10,
+    )
+    M = mortgage_payment(400_000, 0.05, 25)
+    assert dp == 100_000
+    assert mort == pytest.approx(pv_annuity(M, 0.04, 10), rel=1e-9)
+    B_N = outstanding_balance(400_000, 0.05, 25, 10, M)
+    assert term_eq == pytest.approx(-pv_single(671_958.19 * 0.95 - B_N, 0.04, 10), rel=1e-9)
+
+def test_financing_pv_guard_raises():
+    from hde.deterministic import _financing_pv
+    with pytest.raises(ValueError):
+        _financing_pv(
+            initial_value=500_000, down_payment=None, mortgage_rate=None,
+            mortgage_term_years=None, all_cash=False, selling_cost_rate=0.05,
+            value_N=600_000, dr=0.04, n_years=10,
+        )
