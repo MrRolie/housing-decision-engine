@@ -12,6 +12,9 @@ economic:
 condo:
   monthly_fee: 550
   fee_escalation_rate: 0.015  # real growth above inflation
+  initial_value: 420000
+  value_growth_rate: 0.02
+  all_cash: true
   reserve_contribution_rate: 0.30
   reserve_initial_balance: 15000
   reserve_growth_rate: 0.02
@@ -44,6 +47,7 @@ house:
   initial_value: 500000
   value_growth_rate: 0.03
   annual_maintenance_rate: 0.009
+  all_cash: true
   maintenance_curve:
     - year: 1
       rate: 0.007

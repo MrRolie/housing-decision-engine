@@ -178,6 +178,16 @@ _SWEEP_PATHS: dict[str, tuple[str | None, str]] = {
     "rent.monthly_rent":                  ("rent", "monthly_rent"),
     "rent.invested_down_payment":         ("rent", "invested_down_payment"),
     "rent.investment_return_rate":        ("rent", "investment_return_rate"),
+    "house.down_payment":                 ("house", "down_payment"),
+    "house.mortgage_rate":                ("house", "mortgage_rate"),
+    "house.mortgage_term_years":          ("house", "mortgage_term_years"),
+    "house.selling_cost_rate":            ("house", "selling_cost_rate"),
+    "condo.initial_value":                ("condo", "initial_value"),
+    "condo.value_growth_rate":            ("condo", "value_growth_rate"),
+    "condo.down_payment":                 ("condo", "down_payment"),
+    "condo.mortgage_rate":                ("condo", "mortgage_rate"),
+    "condo.mortgage_term_years":          ("condo", "mortgage_term_years"),
+    "condo.selling_cost_rate":            ("condo", "selling_cost_rate"),
 }
 
 
@@ -204,7 +214,7 @@ def sweep_param(scenario_name: str, param_path: str, values: list[float]) -> dic
 
     # Coerce integer fields — JSON delivers all numbers as float (e.g. 10.0),
     # but SimulationParams.years: int — range(1, sim.years + 1) crashes on float.
-    INT_FIELDS = {"years", "num_sims", "random_seed"}
+    INT_FIELDS = {"years", "num_sims", "random_seed", "mortgage_term_years"}
     if field in INT_FIELDS:
         values = [int(v) for v in values]
 

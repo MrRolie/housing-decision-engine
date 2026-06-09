@@ -7,6 +7,8 @@ discount_rate: 0.05
 condo:
   monthly_fee: 700
   fee_escalation_rate: 0.03
+  initial_value: 500000
+  all_cash: true
 
 rent:
   monthly_rent: 2500

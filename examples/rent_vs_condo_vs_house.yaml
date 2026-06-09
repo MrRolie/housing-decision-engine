@@ -7,6 +7,9 @@ discount_rate: 0.05
 condo:
   monthly_fee: 800
   fee_escalation_rate: 0.03
+  initial_value: 480000
+  value_growth_rate: 0.02
+  all_cash: true
   events:
     - name: "special_assessment"
       base_cost: 15000
@@ -17,6 +20,7 @@ house:
   initial_value: 550000
   value_growth_rate: 0.03
   annual_maintenance_rate: 0.012
+  all_cash: true
   events:
     - name: "roof_replacement"
       base_cost: 20000
