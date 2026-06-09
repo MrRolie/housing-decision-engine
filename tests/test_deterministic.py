@@ -468,3 +468,26 @@ def test_financing_pv_guard_raises():
             mortgage_term_years=None, all_cash=False, selling_cost_rate=0.05,
             value_N=600_000, dr=0.04, n_years=10,
         )
+
+
+def test_affordability_house_cost_includes_mortgage():
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _annual_costs_for_option
+    from hde.pv import mortgage_payment
+    h = HouseParams(initial_value=400_000, value_growth_rate=0.0,
+                    annual_maintenance_rate=0.01, down_payment=80_000,
+                    mortgage_rate=0.05, mortgage_term_years=25)
+    sim = SimulationParams(years=5, discount_rate=0.04)
+    costs = _annual_costs_for_option("house", h, sim, EconomicParams(mode="real"))
+    M = mortgage_payment(320_000, 0.05, 25)
+    # year 1 cost = maintenance(=0.01*400000) + mortgage payment
+    assert costs[0] == pytest.approx(400_000 * 0.01 + M, rel=1e-9)
+
+
+def test_affordability_all_cash_house_no_mortgage_term():
+    from hde.models import HouseParams, SimulationParams, EconomicParams
+    from hde.deterministic import _annual_costs_for_option
+    h = HouseParams(initial_value=400_000, annual_maintenance_rate=0.01, all_cash=True)
+    sim = SimulationParams(years=3, discount_rate=0.04)
+    costs = _annual_costs_for_option("house", h, sim, EconomicParams(mode="real"))
+    assert costs[0] == pytest.approx(400_000 * 0.01, rel=1e-9)  # no mortgage term

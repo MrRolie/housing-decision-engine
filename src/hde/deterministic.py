@@ -451,9 +451,21 @@ def _annual_costs_for_option(
     Note: these are nominal/undiscounted cash outflows (not PVs); they are
     divided by the year's income to form an affordability ratio.
     """
+    # Compute the level mortgage payment once (0 if all_cash or no mortgage block)
+    mort_payment = 0.0
+    mort_term = 0
+    if option_type in ("house", "condo") and not getattr(params, "all_cash", False):
+        if (params.down_payment is not None and params.mortgage_rate is not None
+                and params.mortgage_term_years is not None):
+            from .pv import mortgage_payment as _mortgage_payment
+            loan = params.initial_value - params.down_payment
+            mort_payment = _mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
+            mort_term = params.mortgage_term_years
+
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
+        mort_t = mort_payment if year <= mort_term else 0.0
         if option_type == "condo":
             base = params.monthly_fee * 12 * ((1 + params.fee_escalation_rate) ** t)
             ev_cost = sum(
@@ -464,7 +476,7 @@ def _annual_costs_for_option(
                 c.annual_amount * ((1 + c.escalation_rate) ** t)
                 for c in params.other_recurring_costs
             )
-            costs.append(base + ev_cost + other_cost)
+            costs.append(base + ev_cost + other_cost + mort_t)
         elif option_type == "house":
             house_val = params.initial_value * ((1 + params.value_growth_rate) ** t)
             maint_rate = _maintenance_rate_for_year(params, year)
@@ -476,7 +488,7 @@ def _annual_costs_for_option(
                 c.annual_amount * ((1 + c.escalation_rate) ** t)
                 for c in params.other_recurring_costs
             )
-            costs.append(house_val * maint_rate + ev_cost + other_cost)
+            costs.append(house_val * maint_rate + ev_cost + other_cost + mort_t)
         elif option_type == "rent":
             base = params.monthly_rent * 12 * ((1 + params.rent_escalation_rate) ** t)
             ev_cost = sum(
