@@ -5,7 +5,6 @@ calculator (e.g. an online mortgage calculator, or numpy_financial.pmt with the
 sign convention pmt = -mortgage_payment) to the cent before trusting them. The
 INVARIANT assertions are implementation-independent and catch most defects.
 """
-import math
 import pytest
 from hde.pv import mortgage_payment, outstanding_balance, pv_annuity, pv_single
 

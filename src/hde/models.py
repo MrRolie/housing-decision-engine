@@ -87,6 +87,14 @@ class CondoParams:
     reserve_contribution_rate: float = 0.0  # Fraction of annual fees set aside each year
     reserve_initial_balance: float = 0.0
     reserve_growth_rate: float = 0.0  # Deterministic annual growth on reserve balance
+    # --- S4a: condo as an owned, appreciating asset + capital structure ---
+    initial_value: float = 0.0
+    value_growth_rate: float = 0.0
+    down_payment: Optional[float] = None
+    mortgage_rate: Optional[float] = None
+    mortgage_term_years: Optional[int] = None
+    all_cash: bool = False
+    selling_cost_rate: float = 0.05
 
 
 @dataclass
@@ -108,6 +116,12 @@ class HouseParams:
     events: List[EventConfig] = field(default_factory=list)
     other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
     maintenance_curve: List[Tuple[int, float]] = field(default_factory=list)  # (year, rate) pairs sorted by year
+    # --- S4a capital structure (net-wealth model) ---
+    down_payment: Optional[float] = None
+    mortgage_rate: Optional[float] = None
+    mortgage_term_years: Optional[int] = None
+    all_cash: bool = False
+    selling_cost_rate: float = 0.05
 
 
 @dataclass
@@ -285,8 +299,14 @@ class MonteCarloResult:
 # ----- S3 Result Types -----
 
 # Breakdown key constants — drift protection when fields are renamed
-CONDO_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"fee_pv", "events_pv", "other_pv", "reserve_pv"})
-HOUSE_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"maintenance_pv", "events_pv", "other_pv"})
+CONDO_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
+    {"fee_pv", "events_pv", "other_pv", "reserve_pv",
+     "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
+)
+HOUSE_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
+    {"maintenance_pv", "events_pv", "other_pv",
+     "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
+)
 RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"rent_pv", "events_pv", "other_pv", "invested_dp_benefit_pv"})
 
 
