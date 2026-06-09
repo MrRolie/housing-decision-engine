@@ -52,8 +52,8 @@ def _make_mc() -> ComparisonMonteCarloResult:
 BASIC_CONFIG = {
     "years": 20,
     "discount_rate": 0.03,
-    "condo": {"monthly_fee": 500},
-    "house": {"initial_value": 400_000},
+    "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True},
+    "house": {"initial_value": 400_000, "all_cash": True},
 }
 
 
@@ -190,8 +190,10 @@ def test_sweep_paths_resolve_against_live_dataclass_fields():
     from mcp_server.tools import _SWEEP_PATHS
     base = {
         "years": 20, "discount_rate": 0.03,
-        "condo": {"monthly_fee": 500, "fee_escalation_rate": 0.02, "reserve_contribution_rate": 0.01},
-        "house": {"initial_value": 400_000, "value_growth_rate": 0.01, "annual_maintenance_rate": 0.015},
+        "condo": {"monthly_fee": 500, "fee_escalation_rate": 0.02, "reserve_contribution_rate": 0.01,
+                  "initial_value": 300_000, "all_cash": True},
+        "house": {"initial_value": 400_000, "value_growth_rate": 0.01, "annual_maintenance_rate": 0.015,
+                  "all_cash": True},
         "rent": {"monthly_rent": 2000, "invested_down_payment": 100_000, "investment_return_rate": 0.07},
         "simulation": {"house_maintenance_vol": 0.3, "condo_fee_vol": 0.05},
         "economic": {"inflation_rate": 0.02},
@@ -309,7 +311,7 @@ def test_drift_guard_sweep_paths_rent():
 
 def test_sweep_param_rent_path_no_rent_section():
     """Sweep on rent.* path with no rent section returns error."""
-    define_scenario("s1", {"years": 10, "discount_rate": 0.05, "condo": {"monthly_fee": 500}})
+    define_scenario("s1", {"years": 10, "discount_rate": 0.05, "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True}})
     result = sweep_param("s1", "rent.monthly_rent", [2000.0, 2500.0])
     assert "error" in result
     assert "no rent section" in result["error"]

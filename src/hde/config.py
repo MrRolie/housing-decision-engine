@@ -144,6 +144,13 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         reserve_contribution_rate=float(condo_data.get("reserve_contribution_rate", 0.0)),
         reserve_initial_balance=float(condo_data.get("reserve_initial_balance", 0.0)),
         reserve_growth_rate=float(condo_data.get("reserve_growth_rate", 0.0)),
+        initial_value=float(condo_data.get("initial_value", 0.0)),
+        value_growth_rate=float(condo_data.get("value_growth_rate", 0.0)),
+        down_payment=(None if "down_payment" not in condo_data else float(condo_data["down_payment"])),
+        mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
+        mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
+        all_cash=bool(condo_data.get("all_cash", False)),
+        selling_cost_rate=float(condo_data.get("selling_cost_rate", 0.05)),
     )
 
 
@@ -179,6 +186,11 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         events=events,
         other_recurring_costs=other_costs,
         maintenance_curve=maintenance_curve,
+        down_payment=(None if "down_payment" not in house_data else float(house_data["down_payment"])),
+        mortgage_rate=(None if "mortgage_rate" not in house_data else float(house_data["mortgage_rate"])),
+        mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
+        all_cash=bool(house_data.get("all_cash", False)),
+        selling_cost_rate=float(house_data.get("selling_cost_rate", 0.05)),
     )
 
 
@@ -367,6 +379,26 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
 
     if econ.inflation_vol < 0:
         warnings.append(f"inflation_vol should be >= 0, got {econ.inflation_vol}")
+
+    def _check_capital_structure(name, opt):
+        if opt is None:
+            return
+        if name == "condo" and (opt.initial_value is None or opt.initial_value <= 0):
+            warnings.append(f"{name}: initial_value must be > 0 in the net-wealth model")
+        if not opt.all_cash:
+            if opt.down_payment is None or opt.mortgage_rate is None or opt.mortgage_term_years is None:
+                warnings.append(
+                    f"{name}: declare all_cash: true OR a mortgage block "
+                    f"(down_payment + mortgage_rate + mortgage_term_years)")
+            elif not (0 <= opt.down_payment <= opt.initial_value):
+                warnings.append(f"{name}: down_payment must be in [0, initial_value]")
+            elif opt.mortgage_rate < 0 or opt.mortgage_term_years <= 0:
+                warnings.append(f"{name}: mortgage_rate >= 0 and mortgage_term_years > 0 required")
+        if not (0 <= opt.selling_cost_rate < 1):
+            warnings.append(f"{name}: selling_cost_rate must be in [0, 1)")
+
+    _check_capital_structure("condo", spec.condo)
+    _check_capital_structure("house", spec.house)
 
     return warnings
 
