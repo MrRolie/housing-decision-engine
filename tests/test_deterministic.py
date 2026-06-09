@@ -491,3 +491,26 @@ def test_affordability_all_cash_house_no_mortgage_term():
     sim = SimulationParams(years=3, discount_rate=0.04)
     costs = _annual_costs_for_option("house", h, sim, EconomicParams(mode="real"))
     assert costs[0] == pytest.approx(400_000 * 0.01, rel=1e-9)  # no mortgage term
+
+
+def test_report_mentions_financing_lines():
+    """Report must surface terminal_equity and down_payment lines in the per-option breakdown."""
+    from hde.models import HouseParams, SimulationParams, EconomicParams, ComparisonSpec
+    from hde.deterministic import compute_deterministic
+    from hde.reporting import format_text_report
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    econ = EconomicParams(mode="real")
+    spec = ComparisonSpec(
+        simulation=sim,
+        economic=econ,
+        house=HouseParams(
+            initial_value=400_000, value_growth_rate=0.03,
+            annual_maintenance_rate=0.01, all_cash=True,
+        ),
+    )
+    det = compute_deterministic(spec)
+    # format_text_report(det, mc, sim, econ) — actual signature at reporting.py:27
+    text = format_text_report(det, None, sim, econ)
+    assert "terminal_equity_pv" in text
+    assert "downpayment_pv" in text
+    assert "mortgage_pv" in text
