@@ -89,5 +89,5 @@ Sessions:
 ## Do not
 
 - Add geographic tax rules (explicitly out of scope — see roadmap)
-- Add mortgage optimization / leverage modeling (out of scope)
+- Add mortgage *optimization* / refinancing / variable-rate modeling (out of scope). NOTE: mortgage amortization + terminal equity ARE modeled as of S4a (2026-06-08); the rent-vs-buy DCF is leveraged.
 - Import from fund repos (`mm-infra`, `mm-strategies`, etc.) — this is standalone personal tooling
