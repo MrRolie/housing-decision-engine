@@ -27,8 +27,8 @@ class TestMonteCarloBasics:
     
     def test_output_shapes(self):
         """Test that output arrays have correct shapes."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03, num_sims=1000)
         econ = EconomicParams()
         
@@ -40,8 +40,8 @@ class TestMonteCarloBasics:
     
     def test_reproducibility_with_seed(self):
         """Test that same seed produces same results."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03, num_sims=100, random_seed=42)
         econ = EconomicParams()
         
@@ -61,8 +61,8 @@ class TestMonteCarloBasics:
             timing_std_years=2.0,  # Add timing jitter for randomness
             cost_vol=0.1
         )
-        condo = CondoParams(monthly_fee=400, events=[event])
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, events=[event], all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim1 = SimulationParams(years=20, discount_rate=0.03, num_sims=100, random_seed=42)
         sim2 = SimulationParams(years=20, discount_rate=0.03, num_sims=100, random_seed=123)
         econ = EconomicParams()
@@ -78,11 +78,12 @@ class TestMonteCarloDeterministicConvergence:
     
     def test_zero_volatility_converges_to_deterministic(self):
         """Test MC mean equals deterministic when volatility is zero."""
-        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02)
+        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02, all_cash=True)
         house = HouseParams(
             initial_value=400_000,
             value_growth_rate=0.01,
             annual_maintenance_rate=0.015,
+            all_cash=True,
         )
         sim = SimulationParams(
             years=20,
@@ -111,8 +112,8 @@ class TestMonteCarloVolatility:
     
     def test_higher_volatility_increases_std(self):
         """Test that higher volatility produces wider distribution."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         econ = EconomicParams()
         
         sim_low = SimulationParams(
@@ -131,8 +132,8 @@ class TestMonteCarloVolatility:
     
     def test_volatility_affects_spread(self):
         """Test that volatility affects the 5th-95th percentile spread."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         econ = EconomicParams()
         
         sim_low = SimulationParams(
@@ -158,8 +159,8 @@ class TestMonteCarloProbability:
     
     def test_prob_in_valid_range(self):
         """Test that probability is between 0 and 1."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03, num_sims=1000)
         econ = EconomicParams()
         
@@ -170,10 +171,11 @@ class TestMonteCarloProbability:
     def test_identical_costs_prob_around_half(self):
         """Test that similar costs give probability around 50%."""
         # Make costs similar with some volatility
-        condo = CondoParams(monthly_fee=500)  # $6000/year
+        condo = CondoParams(monthly_fee=500, all_cash=True)  # $6000/year
         house = HouseParams(
             initial_value=400_000,
             annual_maintenance_rate=0.015,  # $6000/year
+            all_cash=True,
         )
         sim = SimulationParams(
             years=20,
@@ -193,10 +195,11 @@ class TestMonteCarloProbability:
     
     def test_clearly_higher_house_cost_gives_high_prob(self):
         """Test that clearly higher house costs give high probability."""
-        condo = CondoParams(monthly_fee=100)  # Very low
+        condo = CondoParams(monthly_fee=100, all_cash=True)  # Very low
         house = HouseParams(
             initial_value=500_000,
             annual_maintenance_rate=0.02,  # High
+            all_cash=True,
         )
         sim = SimulationParams(
             years=20, discount_rate=0.03, num_sims=1000,
@@ -215,8 +218,8 @@ class TestMonteCarloSummary:
     
     def test_summary_statistics_consistent(self):
         """Test that summary statistics are consistent with arrays."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim = SimulationParams(
             years=20, discount_rate=0.03, num_sims=1000,
             house_maintenance_vol=0.20,
@@ -232,8 +235,8 @@ class TestMonteCarloSummary:
     
     def test_percentiles_ordered(self):
         """Test that percentiles are properly ordered."""
-        condo = CondoParams(monthly_fee=400)
-        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=400, all_cash=True)
+        house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
         sim = SimulationParams(
             years=20, discount_rate=0.03, num_sims=1000,
             house_maintenance_vol=0.20,
@@ -258,8 +261,8 @@ class TestMonteCarloEventTiming:
             min_year=10,
             max_year=20,
         )
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=[event])
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=[event], all_cash=True)
         sim = SimulationParams(years=25, discount_rate=0.03, num_sims=1000)
         econ = EconomicParams()
         
@@ -278,8 +281,8 @@ class TestMonteCarloEventTiming:
             timing_std_years=0.0,
             cost_vol=0.0,
         )
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=[event])
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=[event], all_cash=True)
         sim = SimulationParams(years=25, discount_rate=0.03, num_sims=100)
         econ = EconomicParams()
         
@@ -295,8 +298,8 @@ class TestMonteCarloAdvancedDynamics:
     def test_other_cost_volatility_increases_spread(self):
         """Volatility on other_recurring_costs should widen the distribution."""
         other = RecurringOtherCost(name="insurance", annual_amount=2000, escalation_rate=0.0)
-        condo = CondoParams(monthly_fee=0, other_recurring_costs=[other])
-        house = HouseParams(initial_value=0)
+        condo = CondoParams(monthly_fee=0, other_recurring_costs=[other], all_cash=True)
+        house = HouseParams(initial_value=0, all_cash=True)
         econ = EconomicParams()
         
         sim_low = SimulationParams(
@@ -323,8 +326,8 @@ class TestMonteCarloAdvancedDynamics:
             hazard_base=0.0,
             hazard_growth=0.0,
         )
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=[hazard_event])
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=[hazard_event], all_cash=True)
         sim = SimulationParams(years=10, discount_rate=0.03, num_sims=500)
         econ = EconomicParams()
         
@@ -336,15 +339,16 @@ class TestMonteCarloAdvancedDynamics:
     def test_reserves_reduce_expected_event_costs(self):
         """Reserve funding should lower expected PV of condo events."""
         event = EventConfig(name="assessment", base_cost=10_000, expected_year=3)
-        
-        condo_no_reserve = CondoParams(monthly_fee=1000, events=[event])
+
+        condo_no_reserve = CondoParams(monthly_fee=1000, events=[event], all_cash=True)
         condo_with_reserve = CondoParams(
             monthly_fee=1000,
             events=[event],
             reserve_contribution_rate=1.0,  # save entire fee
             reserve_growth_rate=0.0,
+            all_cash=True,
         )
-        house = HouseParams(initial_value=0)
+        house = HouseParams(initial_value=0, all_cash=True)
         sim = SimulationParams(years=5, discount_rate=0.03, num_sims=500, random_seed=123)
         econ = EconomicParams()
         
@@ -404,8 +408,8 @@ class TestRentMC:
 class TestRankingProbs:
     def test_prob_cheapest_sums_to_one(self):
         """All three options: ranking probs sum to 1.0."""
-        condo = CondoParams(monthly_fee=800.0)
-        house = HouseParams(initial_value=400_000.0, value_growth_rate=0.0, annual_maintenance_rate=0.01)
+        condo = CondoParams(monthly_fee=800.0, all_cash=True)
+        house = HouseParams(initial_value=400_000.0, value_growth_rate=0.0, annual_maintenance_rate=0.01, all_cash=True)
         rent = RentParams(monthly_rent=2000.0)
         spec = _spec(condo=condo, house=house, rent=rent, num_sims=500)
         result = run_monte_carlo(spec)
@@ -424,8 +428,8 @@ class TestRankingProbs:
         assert result.prob_house_cheapest is None
 
     def test_prob_cheapest_two_options_sums_to_one(self):
-        condo = CondoParams(monthly_fee=600.0)
-        house = HouseParams(initial_value=400_000.0, value_growth_rate=0.0, annual_maintenance_rate=0.015)
+        condo = CondoParams(monthly_fee=600.0, all_cash=True)
+        house = HouseParams(initial_value=400_000.0, value_growth_rate=0.0, annual_maintenance_rate=0.015, all_cash=True)
         spec = _spec(condo=condo, house=house, num_sims=500)
         result = run_monte_carlo(spec)
         assert 0.0 <= result.prob_condo_cheapest <= 1.0
@@ -438,7 +442,7 @@ class TestAffordabilityMC:
     def test_affordability_mc_prob_near_zero_when_below_threshold(self):
         """Fee = 24% of income, zero vol → P(exceed 35%) should be near zero."""
         income = IncomeParams(annual_income=50_000.0, affordability_threshold=0.35)
-        condo = CondoParams(monthly_fee=1000.0)  # 12k/50k = 24%, below threshold
+        condo = CondoParams(monthly_fee=1000.0, all_cash=True)  # 12k/50k = 24%, below threshold
         spec = _spec(condo=condo, income=income, num_sims=500)
         result = run_monte_carlo(spec)
         assert result.affordability_mc is not None
@@ -447,14 +451,14 @@ class TestAffordabilityMC:
     def test_affordability_mc_prob_near_one_when_above_threshold(self):
         """Fee = 48% of income, zero vol → P(exceed 35%) should be near 1."""
         income = IncomeParams(annual_income=25_000.0, affordability_threshold=0.35)
-        condo = CondoParams(monthly_fee=1000.0)  # 12k/25k = 48%, above threshold
+        condo = CondoParams(monthly_fee=1000.0, all_cash=True)  # 12k/25k = 48%, above threshold
         spec = _spec(condo=condo, income=income, num_sims=200)
         result = run_monte_carlo(spec)
         assert result.affordability_mc is not None
         assert result.affordability_mc.prob_condo_exceeds > 0.95  # should be near 1
 
     def test_no_income_no_affordability_mc(self):
-        condo = CondoParams(monthly_fee=500.0)
+        condo = CondoParams(monthly_fee=500.0, all_cash=True)
         spec = _spec(condo=condo, num_sims=100)
         result = run_monte_carlo(spec)
         assert result.affordability_mc is None

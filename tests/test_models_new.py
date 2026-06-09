@@ -51,7 +51,7 @@ def test_comparison_spec_all_none_options_is_valid_at_model_level():
 
 
 def test_comparison_spec_with_options():
-    condo = CondoParams(monthly_fee=800.0)
+    condo = CondoParams(monthly_fee=800.0, all_cash=True)
     spec = ComparisonSpec(simulation=_sim(), economic=_econ(), condo=condo)
     assert spec.condo is condo
 

@@ -21,8 +21,8 @@ class TestCondoDeterministic:
     
     def test_simple_condo_level_fee(self):
         """Test condo with level (no escalation) fees."""
-        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.0)
-        house = HouseParams(initial_value=0, annual_maintenance_rate=0.0)
+        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.0, all_cash=True)
+        house = HouseParams(initial_value=0, annual_maintenance_rate=0.0, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -39,8 +39,8 @@ class TestCondoDeterministic:
     
     def test_condo_with_escalation(self):
         """Test condo with fee escalation."""
-        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02)
-        house = HouseParams(initial_value=0, annual_maintenance_rate=0.0)
+        condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02, all_cash=True)
+        house = HouseParams(initial_value=0, annual_maintenance_rate=0.0, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -56,8 +56,8 @@ class TestCondoDeterministic:
     def test_condo_with_event(self):
         """Test condo with a one-time event."""
         event = EventConfig(name="special_assessment", base_cost=5000, expected_year=10)
-        condo = CondoParams(monthly_fee=400, events=[event])
-        house = HouseParams(initial_value=0)
+        condo = CondoParams(monthly_fee=400, events=[event], all_cash=True)
+        house = HouseParams(initial_value=0, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -70,8 +70,8 @@ class TestCondoDeterministic:
     def test_condo_with_other_costs(self):
         """Test condo with other recurring costs."""
         other = RecurringOtherCost(name="insurance", annual_amount=1000, escalation_rate=0.0)
-        condo = CondoParams(monthly_fee=0, other_recurring_costs=[other])
-        house = HouseParams(initial_value=0)
+        condo = CondoParams(monthly_fee=0, other_recurring_costs=[other], all_cash=True)
+        house = HouseParams(initial_value=0, all_cash=True)
         sim = SimulationParams(years=10, discount_rate=0.05)
         econ = EconomicParams()
         
@@ -84,15 +84,16 @@ class TestCondoDeterministic:
     def test_condo_reserves_offset_events(self):
         """Reserve contributions should reduce net event costs."""
         event = EventConfig(name="assessment", base_cost=10_000, expected_year=5)
-        condo_no_reserve = CondoParams(monthly_fee=1000, events=[event])
+        condo_no_reserve = CondoParams(monthly_fee=1000, events=[event], all_cash=True)
         condo_with_reserve = CondoParams(
             monthly_fee=1000,
             events=[event],
             reserve_contribution_rate=0.5,  # Save half the fee each year
             reserve_growth_rate=0.0,
             reserve_initial_balance=0.0,
+            all_cash=True,
         )
-        house = HouseParams(initial_value=0)
+        house = HouseParams(initial_value=0, all_cash=True)
         sim = SimulationParams(years=6, discount_rate=0.0)
         econ = EconomicParams()
         
@@ -116,11 +117,12 @@ class TestHouseDeterministic:
     
     def test_simple_house_maintenance(self):
         """Test house with level maintenance (no value growth)."""
-        condo = CondoParams(monthly_fee=0)
+        condo = CondoParams(monthly_fee=0, all_cash=True)
         house = HouseParams(
             initial_value=400_000,
             value_growth_rate=0.0,
             annual_maintenance_rate=0.015,
+            all_cash=True,
         )
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
@@ -136,11 +138,12 @@ class TestHouseDeterministic:
     
     def test_house_with_value_growth(self):
         """Test house with growing value (growing maintenance)."""
-        condo = CondoParams(monthly_fee=0)
+        condo = CondoParams(monthly_fee=0, all_cash=True)
         house = HouseParams(
             initial_value=400_000,
             value_growth_rate=0.02,
             annual_maintenance_rate=0.015,
+            all_cash=True,
         )
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
@@ -160,8 +163,8 @@ class TestHouseDeterministic:
             EventConfig(name="roof", base_cost=12000, expected_year=15),
             EventConfig(name="hvac", base_cost=7000, expected_year=10),
         ]
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=events)
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=events, all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -173,12 +176,13 @@ class TestHouseDeterministic:
     
     def test_house_maintenance_curve(self):
         """Maintenance should follow an age/condition curve."""
-        condo = CondoParams(monthly_fee=0)
+        condo = CondoParams(monthly_fee=0, all_cash=True)
         house = HouseParams(
             initial_value=100_000,
             value_growth_rate=0.0,
             annual_maintenance_rate=0.01,
             maintenance_curve=[(1, 0.01), (10, 0.02)],
+            all_cash=True,
         )
         sim = SimulationParams(years=10, discount_rate=0.0)
         econ = EconomicParams()
@@ -196,8 +200,8 @@ class TestDiffCalculation:
     
     def test_diff_positive_house_more_expensive(self):
         """Test that positive diff means house is more expensive."""
-        condo = CondoParams(monthly_fee=100)  # Low fees
-        house = HouseParams(initial_value=500_000, annual_maintenance_rate=0.02)  # High maintenance
+        condo = CondoParams(monthly_fee=100, all_cash=True)  # Low fees
+        house = HouseParams(initial_value=500_000, annual_maintenance_rate=0.02, all_cash=True)  # High maintenance
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -208,8 +212,8 @@ class TestDiffCalculation:
     
     def test_diff_negative_condo_more_expensive(self):
         """Test that negative diff means condo is more expensive."""
-        condo = CondoParams(monthly_fee=1000)  # High fees
-        house = HouseParams(initial_value=100_000, annual_maintenance_rate=0.005)  # Low maintenance
+        condo = CondoParams(monthly_fee=1000, all_cash=True)  # High fees
+        house = HouseParams(initial_value=100_000, annual_maintenance_rate=0.005, all_cash=True)  # Low maintenance
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -222,13 +226,14 @@ class TestDiffCalculation:
         """Test that total equals sum of components."""
         event = EventConfig(name="roof", base_cost=10000, expected_year=10)
         other = RecurringOtherCost(name="insurance", annual_amount=1000)
-        
-        condo = CondoParams(monthly_fee=400, events=[event], other_recurring_costs=[other])
+
+        condo = CondoParams(monthly_fee=400, events=[event], other_recurring_costs=[other], all_cash=True)
         house = HouseParams(
             initial_value=400_000,
             annual_maintenance_rate=0.015,
             events=[event],
             other_recurring_costs=[other],
+            all_cash=True,
         )
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
@@ -246,8 +251,8 @@ class TestEventYearClamping:
     def test_event_year_clamped_to_horizon(self):
         """Test that events beyond horizon are clamped."""
         event = EventConfig(name="far_future", base_cost=10000, expected_year=50)
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=[event])
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=[event], all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -261,8 +266,8 @@ class TestEventYearClamping:
     def test_event_year_zero_clamped_to_one(self):
         """Test that events at year 0 are clamped to year 1."""
         event = EventConfig(name="immediate", base_cost=10000, expected_year=0)
-        condo = CondoParams(monthly_fee=0)
-        house = HouseParams(initial_value=0, events=[event])
+        condo = CondoParams(monthly_fee=0, all_cash=True)
+        house = HouseParams(initial_value=0, events=[event], all_cash=True)
         sim = SimulationParams(years=20, discount_rate=0.03)
         econ = EconomicParams()
         
@@ -337,7 +342,7 @@ class TestAffordabilityReport:
     def test_affordability_basic_income_trajectory(self):
         """Income trajectory with zero growth rate stays flat."""
         income = IncomeParams(annual_income=100_000.0, income_growth_rate=0.0)
-        condo = CondoParams(monthly_fee=500.0)
+        condo = CondoParams(monthly_fee=500.0, all_cash=True)
         spec = _spec(condo=condo, income=income, years=5)
         result = compute_deterministic(spec)
         assert len(result.income_report.annual_incomes) == 5
@@ -350,7 +355,7 @@ class TestAffordabilityReport:
             income_growth_rate=0.0,
             pay_drop_events=[PayDropEvent(year=2, magnitude=0.8)],
         )
-        condo = CondoParams(monthly_fee=500.0)
+        condo = CondoParams(monthly_fee=500.0, all_cash=True)
         spec = _spec(condo=condo, income=income, years=5)
         result = compute_deterministic(spec)
         incomes = result.income_report.annual_incomes
@@ -361,14 +366,14 @@ class TestAffordabilityReport:
     def test_affordability_threshold_flagging(self):
         """Years where ratio > threshold appear in years_exceeding list."""
         income = IncomeParams(annual_income=10_000.0, affordability_threshold=0.35)
-        condo = CondoParams(monthly_fee=500.0)  # 6000/yr / 10000 = 0.60 > 0.35
+        condo = CondoParams(monthly_fee=500.0, all_cash=True)  # 6000/yr / 10000 = 0.60 > 0.35
         spec = _spec(condo=condo, income=income, years=3)
         result = compute_deterministic(spec)
         assert len(result.income_report.years_condo_exceeds) == 3
 
     def test_no_income_no_report(self):
         """When income=None, income_report is None."""
-        condo = CondoParams(monthly_fee=500.0)
+        condo = CondoParams(monthly_fee=500.0, all_cash=True)
         spec = _spec(condo=condo)
         result = compute_deterministic(spec)
         assert result.income_report is None
