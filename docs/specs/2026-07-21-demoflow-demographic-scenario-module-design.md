@@ -1,7 +1,11 @@
 # demoflow — Demographic Housing-Flow Scenario Module — Design
 
 **Date:** 2026-07-21
-**Status:** Approved design (operator 2026-07-21); spec pending operator review
+**Status:** Approved design (operator 2026-07-21); elegance-gate 2A+2B folded (both
+PROCEED-WITH-MODIFICATIONS, 2026-07-21 — 2B re-sequenced to rankings-first tranches with the
+ScenarioPrior emitter deferred behind an S4b input-slot sketch; 2A subtractive mods folded: parquet
+mirror cut, plex compute deferred to v1, CLI folded to run+tripwires, flat error classes,
+enum→string serialization stated); spec pending operator review
 **money-path:** no (personal decision tooling; touches no fund globs)
 **load-bearing-claim:** yes (stress-tester) — "fail-loud loaders, no silent fallback" and
 "schema-enforced output prohibition" are load-bearing correctness claims; stress-tester fires at
@@ -24,10 +28,18 @@ unconditional crash probability or point price forecast** (the Mankiw–Weil gua
 enforced structurally: the output schema cannot express the forbidden quantities (§7), and a contract
 test pins the schema to an allowlist. "Forecaster-lite" was named to the operator and rejected.
 
-Consumers: (1) hde S4b Monte-Carlo (via the ScenarioPrior artifact — file contract, never an import);
-(2) the operator (rankings + tripwires); (3) a LinkedIn showcase framed as "scenario map + named
-epistemic limits" — never a crash number. Model output must never be used to argue the operator's
-30%-drawdown-survival stress DOWN (skeptic ruling; restated in the artifact's `flags` semantics §7).
+Consumers, in VALUE ORDER (2B gate re-sequencing, 2026-07-21): (1) the operator — multi-geography
+**rankings + tripwires** are the core v0 output (this is where both the decision value and the
+showcase value live); (2) a LinkedIn showcase framed as "scenario map + named epistemic limits" —
+never a crash number; (3) hde S4b Monte-Carlo via the ScenarioPrior artifact — **deferred Tranche 2**,
+gated on a real S4b demographic-input-slot sketch (S4b's roadmapped contract currently has no
+demographic slot; building the emitter against an imagined consumer is the sequencing inversion the
+gate caught). Model output must never be used to argue the operator's 30%-drawdown-survival stress
+DOWN (skeptic ruling). **Binding cross-spec obligation recorded here:** the future S4b integration
+spec MUST honor the `never_relax_stress` flag semantics (§7); the stress-relaxation guard's only
+enforceable home is the consumer that runs the drawdown test. demoflow does NOT floor the tilt
+(flag-not-clamp is deliberate — a universal floor would kill the legitimate borough-ranking signal;
+flooring, if ever, is an operator decision at the S4b seam).
 
 ## 2. Placement & dependency topology
 
@@ -68,9 +80,9 @@ demoflow/
     loaders/                # isq.py, census.py, ircc.py, constants.py (MIFI/CMHC anchors)
     cohort/                 # household-state roll-forward + decrements (§5)
     demand/                 # native formation + immigrant YSL decomposition (§6)
-    balance/                # excess-demand + ED→prior mapping (versioned) (§7)
-    output/                 # ScenarioPrior / rankings / tripwire emitters + schemas (§7)
-    cli.py                  # `demoflow run`, `demoflow tripwires`, `demoflow rankings`
+    balance/                # excess-demand fraction (Tranche 1); ED→prior mapping (Tranche 2) (§7)
+    output/                 # rankings / tripwire emitters (T1); ScenarioPrior emitter (T2) (§7)
+    cli.py                  # `demoflow run` (emits rankings + artifacts), `demoflow tripwires`
   tests/
   data/                     # committed small reference workbooks (ISQ xlsx, ~8.4MB total)
                             # + sha256 pins; runtime prefers pinned re-download, falls back
@@ -79,7 +91,10 @@ demoflow/
 ```
 
 No service, no scheduler, no database, no MCP server in v0. Tripwires are a CLI the operator (or a
-future cron, out of scope here) runs; outputs are files.
+future cron, out of scope here) runs; outputs are files. Rankings are a byproduct of `run` (single
+vintage, §7b), not a separate pipeline invocation — no third subcommand. Packaging discipline: no
+empty stage-directories; a stage becomes a package only at ≥2 real modules (loaders/ qualifies
+day one), otherwise a flat module.
 
 ## 4. Data contracts
 
@@ -95,7 +110,9 @@ future cron, out of scope here) runs; outputs are files.
 Degenerate policy (load-bearing-claim scope, applies to every loader): empty sheet, missing scenario
 label, unknown geography label, negative or NaN population, non-monotone year index → **raise**, never
 impute, never warn-and-continue. Cause-owner: all of these are data/environment state → explicit named
-error (LoaderError subtype), no silent fallback of any kind.
+error. Error classes follow hde's convention (sole precedent: `ConfigValidationError(Exception)`):
+`LoaderError(Exception)` and `CalibrationError(Exception)`, flat, no hierarchy unless the degenerate
+taxonomy genuinely forces one.
 
 ## 5. Cohort engine (supply side)
 
@@ -133,24 +150,35 @@ labeled `borrowed_prior`). Registre foncier mutation counts are the coarse valid
 **Invariant I2 — no demand double-count (mirror of I1):** ISQ scenario populations already CONTAIN
 immigrants. The immigrant channel therefore **decomposes** the projected population into arrival
 cohorts (flows from the `compo-*` components workbooks, by scenario) vs resident base — it never adds
-demand on top. Ownership propensity is differential: resident base uses Census age curves; immigrant
-cohorts use a years-since-landing S-curve **borrowed from ROC CHSP** (CHSP excludes Québec — the
-borrowed curve carries a Québec discount multiplier band **[0.60, 0.85]**, labeled `borrowed_prior`;
-this is the widest-leverage assumption on the demand side and is swept, not point-set).
+demand on top.
 
-Native formation = headship-rate deltas on the resident base. The plex owner-occupier-landlord
-channel enters as a labeled tilt on immigrant dwelling choice (band, `borrowed_prior`), pending any
-Québec-specific tenure data.
+**Tranche 1 (core) — COARSE netting:** ownership propensity is differential at one level only:
+resident base uses Census age curves; the immigrant-arrival stock uses the **Census immigrant vs
+non-immigrant homeownership differential at CMA level** (free, Census-covered for Québec — probe
+task §11), applied as a banded multiplier. This coarse netting is load-bearing: without it a new
+(rental-skewed) immigrant reads as a new buyer and the ownership-flow inversion collapses to raw
+population — the netting IS the showcase's originality claim. Native formation = headship-rate
+deltas on the resident base.
 
-**Dwelling-type axis v0:** `all` and `plex` (plex demand via occupancy-share priors; plex supply stock
-from the rôle d'évaluation CUBF counts is a v1 refinement — v0 plex rows carry a
-`weak_identification` flag).
+**Tranche 2 (deferred with the emitter):** the years-since-landing S-curve **borrowed from ROC CHSP**
+(CHSP excludes Québec — Québec discount multiplier band **[0.60, 0.85]**, labeled `borrowed_prior`;
+the widest-leverage, least-validatable demand assumption) and the plex owner-occupier-landlord tilt.
+
+**Dwelling-type axis v0:** schema field retained for forward-compatibility; v0 emits `all` only.
+The plex demand compute (occupancy-share priors + owner-landlord tilt) is **deferred to v1**
+alongside its supply source (rôle CUBF stock, §13) — v0 plex rows would have carried a
+self-discrediting `weak_identification` flag; ship the geography signal clean instead.
+[2A mod 2 — flagged for operator confirm: if a directional plex read is wanted in v0 despite weak
+identification, name the concrete decision it informs.]
 
 ## 7. Outputs (the contract layer)
 
-**(a) ScenarioPrior artifact** — versioned JSON (+ parquet mirror), one row per
+**(a) ScenarioPrior artifact — TRANCHE 2 (deferred; gated on a one-page S4b demographic-input-slot
+sketch, authored when S4b's own design session runs).** Versioned **JSON only** (parquet mirror CUT
+per 2A — one consumer, ≤240 rows; a binary mirror defeats golden-artifact diffing). One row per
 (geography, dwelling_type, horizon_year ∈ {2030,2035,2040,2045,2050}, scenario ∈ {low, reference,
-high} mapped at load from ISQ labels {D2026, A2026, E2026}):
+high} mapped at load from ISQ labels {D2026, A2026, E2026}). The `geography` field carries the
+Geography enum's **string value** — the enum never crosses the file boundary:
 
 ```
 schema_version, mapping_version, data_vintage {isq_edition, census_year, constants_as_of},
@@ -162,23 +190,35 @@ drawdown_weight_tilt,                               # ≥0 multiplier on S4b's O
                                                     # 1.0 = neutral; S4b composes it, we never emit
                                                     # an absolute probability
 excess_demand_fraction,                             # raw structural signal, transparency
-flags[]                                             # e.g. borrowed_prior, weak_identification,
-                                                    # never_relax_stress (always present on rows
-                                                    # whose tilt < 1.0)
+flags[]                                             # e.g. borrowed_prior, ra_proxy,
+                                                    # never_relax_stress (contract-tested present
+                                                    # on every row whose tilt < 1.0)
 ```
 
 **Prohibition enforcement:** the schema is an allowlist; a contract test asserts the emitted field
 set equals it exactly — no `crash_probability`, no point forecast, no unconditional quantity can be
-added without failing the test and amending this spec. S4b consumes drift bands as priors on its
-price-drift generator and the tilt on its shock weights — raw conditional inputs; S4b self-computes
-its shocks (locus rule: substrate supplies raw inputs, consumer derives).
+added without failing the test and amending this spec. A second contract test asserts
+`never_relax_stress` is present in `flags[]` on EVERY row with `drawdown_weight_tilt < 1.0`. S4b
+consumes drift bands as priors on its price-drift generator and the tilt on its shock weights — raw
+conditional inputs; S4b self-computes its shocks (locus rule: substrate supplies raw inputs,
+consumer derives).
 
-**ED→prior mapping (the danger zone, isolated):** `balance/mapping.py`, version-stamped; v0 =
+**ED→prior mapping (the danger zone, isolated — TRANCHE 2):** `balance/mapping.py`, version-stamped;
 monotone piecewise-linear real-drift response with slope band β ∈ [1.0, 4.0] (%/yr per unit ED
 fraction); p10/p90 spans INCLUDE β uncertainty (not just input scenarios). Every artifact row carries
-`mapping_version`; changing the mapping without a version bump fails a test.
+`mapping_version`; changing the mapping without a version bump fails a test. β is unvalidatable
+until the consumer exists — a further reason this whole layer waits for the S4b sketch. Tranche 1's
+`balance/` stops at the raw `excess_demand_fraction` per (geography, year, scenario) — a structural
+quantity honest on its own.
 
-**(b) Rankings table** — relative geography/segment ordering by demographic-flow risk.
+**(b) Rankings table — TRANCHE 1 CORE OUTPUT.** Relative geography ordering by demographic-flow
+risk: per-geography excess-demand trajectories under the three scenarios, ranked, with the
+scenario-fan spread shown. **Ranked set includes RA14/15/16 (couronne/periphery proxies)** —
+justification per 2A mod 5: they are RANKING MEMBERS carrying the periphery-erosion signal (the
+skeptic's strongest-honest-output), NOT participants in any balance identity (v0 models no
+cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
+`ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
+not data quality.
 **Composition rule:** rankings are computed within a single run (one data vintage, one
 assumptions_hash) — cross-vintage comparison is refused at the emitter.
 
@@ -192,7 +232,7 @@ v0.
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels ("RMR de Montréal", "Montréal", "Laval", …) per workbook | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, RA14_CTX, RA15_CTX, RA16_CTX} | Explicit per-source label→enum map; unknown label → raise. Context rows (RA14/15/16) carry `context_only` — Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
+| Geography | ISQ row labels ("RMR de Montréal", "Montréal", "Laval", …) per workbook | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | Explicit per-source label→enum map; unknown label → raise. RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
 | Age | ISQ single-year `0..99, "100 et plus"` | CPM table integer ages | "100 et plus" → capped at table max; assert CPM table covers ≥100 at load |
 | Sex | ISQ M/F labels | actuarial-system `gender` strings | Explicit two-entry map; anything else → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
@@ -217,9 +257,11 @@ TDD throughout (mm-spine discipline). Anchors:
   (reconciliation gate test); a q outside [0,1] MUST raise.
 - **Loader pins**: recorded sha256 fixtures; schema-drift fixture (mutated sheet) MUST raise; the
   fail-loud claims get their adversarial pass from stress-tester at PR time (load-bearing-claim tag).
-- **Contract tests**: ScenarioPrior field allowlist; mapping_version bump enforcement; ranking
-  same-vintage refusal; import-direction tests (demoflow⊥hde both ways).
-- **Golden artifact**: one committed ScenarioPrior regression output (reference scenario, MTL_RMR).
+- **Contract tests**: ranking same-vintage refusal; import-direction tests (demoflow⊥hde both
+  ways). Tranche 2 adds: ScenarioPrior field allowlist; `never_relax_stress` on every tilt<1.0 row;
+  mapping_version bump enforcement.
+- **Golden artifacts (Tranche 1)**: one committed rankings output + one tripwire-baseline output
+  from the committed data vintage (JSON, diffable). Tranche 2 adds the golden ScenarioPrior.
 - **Basis assertion test**: entry point on a fresh interpreter must fail if the Québec basis is not
   active (guards the US-default gotcha).
 
@@ -229,22 +271,41 @@ TDD throughout (mm-spine discipline). Anchors:
    the QC basis (in-repo proven; cross-env install mechanical but unproven).
 2. StatCan WDS table-API pull of 98-10-0231-01 (MTL + QC CMAs).
 3. Census living-arrangement cross-tab hunt (fallback: vitrine 28% + widened band).
-4. IRCC PR-by-CMA CSV download + schema record.
-5. MRC-level ISQ source hunt for couronne-nord precision (404 on slug convention; try product pages /
+4. Census immigrant vs non-immigrant homeownership by CMA (the Tranche-1 coarse-netting
+   differential — Census-covered for Québec, unlike CHSP).
+5. IRCC PR-by-CMA CSV download + schema record.
+6. MRC-level ISQ source hunt for couronne-nord precision (404 on slug convention; try product pages /
    full-edition downloads); if found → Geography enum extension in v1, not v0.
 
-## 12. Effort & sequencing
+## 12. Effort & sequencing (re-cut per 2B gate, 2026-07-21)
 
-~5 build sessions (reduced from the full-form 10–14 by the altitude ruling): S1 loaders + junctions
-(+ probes), S2 cohort engine + gates, S3 demand decomposition, S4 balance + outputs + rankings +
-tripwires, S5 calibration sweep + golden artifacts + docs. Handed off Opus-main per steering routing.
-Independent of the S4a closeout lane; S4b *integration* (hde side) is a separate later spec consuming
-the merged S4a + the first ScenarioPrior artifact.
+**Execution precondition:** the S4a closeout lane (PR + merge of `feat/housing-decision-engine-s4a`)
+runs FIRST — demoflow's build starts from post-merge main. Rationale: recovery-point hygiene (this
+spec is committed on that branch; two arcs must not entangle), not an artifact dependency.
 
-## 13. Deferred ledger (explicitly out of v0)
+**Tranche 1 (~2–3 sessions) — the value core:** T1a loaders + junctions (+ §11 probes);
+T1b cohort engine + calibration gates; T1c coarse demand netting + excess-demand fractions +
+rankings + tripwires + golden artifacts. **The LinkedIn showcase ships off Tranche 1** (map +
+inversion headline + tripwire table + epistemic-limits framing) — none of the deferred machinery
+is visible to that audience.
 
-MRC-level couronne split (pending source); StatCan paid custom tabulation (CT-level immigrant
-tenure); >2051 horizon tail (only QC-total reaches 2071 — any extension is a named extrapolation);
-actuarial-system multiple-decrement combinator (charter extension, operator sign-off);
-plex supply stock from rôle CUBF (v1); tripwire scheduling/cron; forecaster-lite (REJECTED, not
-deferred).
+**Tranche 2 (deferred; own gate):** ScenarioPrior emitter + ED→drift mapping (β) + YSL fine
+structure + QC-discount multiplier. Gated on the named artifact: a one-page S4b
+demographic-input-slot sketch (authored in S4b's design session, which itself consumes merged S4a).
+Deferral costs nothing — the artifact is unconsumable until S4b exists.
+
+Handed off Opus-main per steering routing.
+
+## 13. Deferred ledger (explicitly out of v0 / Tranche 1)
+
+**Tranche 2 (gated on S4b input-slot sketch):** ScenarioPrior emitter; ED→drift mapping (β band);
+immigrant YSL S-curve + ROC-CHSP borrowing + QC-discount multiplier [0.60, 0.85];
+`never_relax_stress` contract enforcement (rides the emitter).
+**v1+:** MRC-level couronne split (pending source); plex demand compute + supply stock from rôle
+CUBF (2A mod 2 — operator may pull forward with a named decision it informs); StatCan paid custom
+tabulation (CT-level immigrant tenure); >2051 horizon tail (only QC-total reaches 2071 — any
+extension is a named extrapolation); actuarial-system multiple-decrement combinator (charter
+extension, operator sign-off); tripwire scheduling/cron.
+**CUT (not deferred):** parquet mirror (revisit only at columnar scale); `weak_identification`
+flag (dies with the v0 plex compute).
+**REJECTED (not deferred):** forecaster-lite.
