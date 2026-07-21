@@ -73,7 +73,7 @@ uv run hde examples/basic_config.yaml
 - **MC numpy arrays** never cross the MCP boundary; only `MonteCarloSummary` scalars + `prob_X_cheapest` returned.
 - **store_results** uses total-replace semantics — running deterministic-only clears cached MC results.
 - **Scenario names** are sanitized via `Path(name).name` before joining figure paths.
-- **sweep_param** whitelist has 14 paths; rent paths require `spec.rent is not None`.
+- **sweep_param** whitelist has 24 paths; rent paths require `spec.rent is not None`.
 - **Breakdown keys** centralized as `CONDO_BREAKDOWN_KEYS`, `HOUSE_BREAKDOWN_KEYS`, `RENT_BREAKDOWN_KEYS` frozensets.
 
 ## Roadmap

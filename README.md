@@ -70,10 +70,14 @@ discount_rate: 0.03
 condo:
   monthly_fee: 400
   fee_escalation_rate: 0.02
+  initial_value: 350000   # required (> 0) in the net-wealth model
+  all_cash: true          # declare all_cash OR a mortgage block
+                          # (down_payment + mortgage_rate + mortgage_term_years)
 
 house:
   initial_value: 400000
   annual_maintenance_rate: 0.015
+  all_cash: true
   events:
     - name: "roof"
       base_cost: 12000

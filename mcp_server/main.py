@@ -26,8 +26,12 @@ def define_scenario_tool(name: str, config: dict) -> dict:
     """Define a named housing scenario from a config dict.
 
     Required config keys: 'years' (int), 'discount_rate' (float), and at least one
-    option section: 'condo' (with 'monthly_fee'), 'house' (with 'initial_value'),
-    or 'rent' (with 'monthly_rent').
+    option section:
+      - 'condo': 'monthly_fee', 'initial_value' (> 0), and a capital structure —
+        either 'all_cash: true' OR a mortgage block ('down_payment' +
+        'mortgage_rate' + 'mortgage_term_years'), declared as exactly one.
+      - 'house': 'initial_value' and the same capital-structure requirement.
+      - 'rent': 'monthly_rent'.
 
     Optional: 'income' (with 'annual_income') for affordability, plus 'economic'
     and 'simulation' sections — see examples/basic_config.yaml.
