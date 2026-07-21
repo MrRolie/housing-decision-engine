@@ -2,7 +2,7 @@
 
 ## Status
 
-**Overall:** In progress (S4a — net-wealth foundation — designed, implementing; S4 split into S4a/S4b)
+**Overall:** S4a complete (PR #4, pending merge); S4b not started — its brainstorm will consume the demoflow ScenarioPrior contract (`docs/specs/2026-07-21-demoflow-demographic-scenario-module-design.md`, Tranche 2) and must author the one-page S4b demographic-input-slot sketch that gates demoflow's emitter
 **Created:** 2026-06-07
 **Last Updated:** 2026-06-09
 **Slug:** `housing-decision-engine`
@@ -14,7 +14,7 @@
 | 1 | decisive | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine` — commit `daf9503` | Rename + uv + AGENTS.md/CLAUDE.md + docs structure |
 | 2 | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
-| 4a | brainstorm-to-execute | `in_progress` | `docs/specs/2026-06-08-net-wealth-foundation-design.md` | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
+| 4a | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
 | 4b | brainstorm-to-execute | `not_started` | (will be produced by S4b) | Market scenario layer: price-drop events, discount-rate sensitivity, correlated market+income shocks, crisis/forced-sell, sensitivity_sweep/stress_test tools, + 4 S3-deferred items. Depends on S4a. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
