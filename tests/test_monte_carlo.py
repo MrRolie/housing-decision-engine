@@ -499,3 +499,26 @@ def test_mc_condo_zero_vol_converges_with_value():
     rng = np.random.default_rng(0)
     mc = _simulate_condo_pv_once(c, sim, econ, rng)
     assert mc == pytest.approx(det, rel=1e-9)
+
+
+# --- PR #4 external-review follow-up: MC growth-sign guard (parallels finding #4) ---
+
+def test_mc_rejects_house_value_growth_sign_flip():
+    """A directly-constructed spec with value_growth_rate <= -1 flips terminal_value by
+    year parity in the MC year-by-year loop, independent of the deterministic guard.
+    run_monte_carlo must raise (config bound covers the config path; this covers direct
+    construction)."""
+    house = HouseParams(initial_value=400_000.0, all_cash=True, value_growth_rate=-1.5)
+    sim = SimulationParams(years=10, discount_rate=0.04, num_sims=16)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), house=house)
+    with pytest.raises(ValueError, match="value_growth"):
+        run_monte_carlo(spec)
+
+
+def test_mc_rejects_condo_value_growth_sign_flip():
+    condo = CondoParams(monthly_fee=500.0, initial_value=300_000.0, all_cash=True,
+                        value_growth_rate=-2.0)
+    sim = SimulationParams(years=10, discount_rate=0.04, num_sims=16)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), condo=condo)
+    with pytest.raises(ValueError, match="value_growth"):
+        run_monte_carlo(spec)

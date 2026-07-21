@@ -498,6 +498,17 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     """
     sim = spec.simulation
     econ = spec.economic
+
+    # Reject impossible appreciation once per run: the per-sim loops compound
+    # terminal_value by (1 + value_growth_rate) year-by-year, which flips sign by
+    # year parity when value_growth_rate <= -1 (mirrors the deterministic guard;
+    # config validation covers the config path, this covers direct construction).
+    from .deterministic import _require_valued_growth
+    if spec.condo is not None:
+        _require_valued_growth(spec.condo.value_growth_rate, "condo")
+    if spec.house is not None:
+        _require_valued_growth(spec.house.value_growth_rate, "house")
+
     rng = np.random.default_rng(sim.random_seed)
 
     n = sim.num_sims
