@@ -125,14 +125,21 @@ apply our own living-arrangement split, ownership propensity, and decrements. **
 mortality is counted exactly once,** via the CPM2014/CPM-B decrement below; no input that already
 embeds mortality (ISQ *household* projections, all-cause retention rates) may enter the roll-forward.
 
-**Initialization — unit-preserving persons→households conversion (codex F1):** at base year, per
-(geography, age, sex): `Solo_s(a) = pop_s(a) × living_alone_rate(a)` (person-denominated rate;
-each such person is one household); `Couple(a) = [Σ_s pop_s(a) × (1 − living_alone_rate(a)) ×
-couple_share(a)] / 2` (÷2: two persons per couple household); collective-dwelling/institutional
-population excluded first via the Census collective share. Ownership rates are
-HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD counts, never person
-counts. Fixture (§10): 100 men + 100 women all coupled, 60% household ownership → exactly 60 Couple
-owner units, 0 Solo; both person and household totals reconcile.
+**Initialization — unit-preserving persons→households conversion (codex r1-F1, r2-F1):** at base
+year, per (geography, age, sex), private-household persons partition into exactly THREE buckets:
+`Solo_s(a) = pop_s(a) × living_alone_rate(a)` (person-denominated; each is one household);
+`Couple(a) = [Σ_s pop_s(a) × (1 − living_alone_rate(a)) × couple_share(a)] / 2` (÷2: two persons
+per couple household); and the RESIDUAL `Other(a) = Σ_s pop_s(a) × (1 − living_alone_rate(a)) ×
+(1 − couple_share(a))` — persons living with others (family/roommates, incl. seniors living with
+adult children) — who are EXPLICITLY EXCLUDED from the cohort's owner-unit stock as presumptive
+non-maintainers (a conservative undercount of senior-held units, carried as a labeled assumption;
+collective-dwelling/institutional persons are removed before the partition via the Census
+collective share). Person conservation is asserted: Solo persons + 2×Couple + Other = private pop.
+Ownership rates are HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD
+counts, never person counts. Fixtures (§10): (a) 100 men + 100 women all coupled, 60% household
+ownership → exactly 60 Couple owner units, 0 Solo, 0 Other; (b) GENERAL case — 200 persons,
+living_alone 0.25, couple_share 0.80 → 50 Solo + 60 Couple + 30 Other, persons reconcile
+50 + 120 + 30 = 200 (the all-coupled fixture alone cannot see a leaked residual).
 
 **Stock-flow discipline (I1 at the equation level — codex F2):** ISQ population enters the owner
 roll-forward EXACTLY ONCE per cohort — at band entry (base-year stock + each year's newly-aged-75
@@ -182,13 +189,17 @@ immigrants. The immigrant channel therefore **decomposes** the projected populat
 cohorts (flows from the `compo-*` components workbooks, by scenario) vs resident base — it never adds
 demand on top.
 
-**Tranche 1 (core) — COARSE netting:** ownership propensity is differential at one level only:
-resident base uses Census age curves; the immigrant-arrival stock uses the **Census immigrant vs
-non-immigrant homeownership differential at CMA level** (free, Census-covered for Québec — probe
-task §11), applied as a banded multiplier. This coarse netting is load-bearing: without it a new
-(rental-skewed) immigrant reads as a new buyer and the ownership-flow inversion collapses to raw
-population — the netting IS the showcase's originality claim. Native formation = headship-rate
-deltas on the resident base.
+**Tranche 1 (core) — COARSE netting, dimensionally explicit (codex r2-F2):** ISQ component
+arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
+persons never multiply a household rate directly. The chain is: arrivals(persons) × immigrant
+headship rate (households formed per person — Census immigrant household size / maintainer rate,
+probe §11) → immigrant HOUSEHOLDS → × the **Census immigrant vs non-immigrant homeownership
+differential at CMA level** (banded multiplier) → immigrant owner-household demand. Dimensional
+test (§10): 100 arriving persons as 50 two-person households vs as 100 one-person households MUST
+produce different D (identical D = the units defect). This coarse netting is load-bearing: without
+it a new (rental-skewed) immigrant reads as a new buyer and the ownership-flow inversion collapses
+to raw population — the netting IS the showcase's originality claim. Native formation =
+headship-rate deltas on the resident base.
 
 **Tranche 2 (deferred with the emitter):** the years-since-landing S-curve **borrowed from ROC CHSP**
 (CHSP excludes Québec — Québec discount multiplier band **[0.60, 0.85]**, labeled `borrowed_prior`;
@@ -220,9 +231,13 @@ drawdown_weight_tilt,                               # ≥0 multiplier on S4b's O
                                                     # 1.0 = neutral; S4b composes it, we never emit
                                                     # an absolute probability
 excess_demand_fraction,                             # raw structural signal, transparency
-flags[]                                             # e.g. borrowed_prior, ra_proxy,
-                                                    # never_relax_stress (contract-tested present
-                                                    # on every row whose tilt < 1.0)
+flags[]                                             # CLOSED enum (codex r2-F3): exactly
+                                                    # {borrowed_prior, ra_proxy, never_relax_stress}
+                                                    # — value-bearing or unknown flag strings are
+                                                    # REJECTED at validation (an open flags[] is a
+                                                    # serialization side-channel for the prohibited
+                                                    # quantities); never_relax_stress contract-tested
+                                                    # present on every row whose tilt < 1.0
 ```
 
 **Prohibition + integrity enforcement (strengthened per codex F6):** the schema is an allowlist; a
@@ -283,8 +298,12 @@ sign, annual ISQ release). **Fail-safe contract (this is a verification gate —
 never false-green):** each indicator's result ∈ {OK, CROSSED, UNKNOWN(reason)}; UNKNOWN fires on
 source-unavailable, operator-input-missing, or `as_of` older than the indicator's declared
 freshness limit — a stale baseline is NEVER reported as within-band. Threshold endpoints evaluate
-as CROSSED (closed bands). Exit code: 0 only when every indicator is OK; nonzero on any CROSSED or
-UNKNOWN. Scheduling is out of scope v0.
+as CROSSED (closed bands). **Completeness integrity (codex r2-F4 — no vacuous green):** the
+required-indicator set is VERSIONED in the baseline file; the evaluator asserts exact-key equality
+against it — an empty registry, a missing required indicator, or a duplicate key is itself
+UNKNOWN/nonzero, so "all OK" can never be vacuously true over a partial set. Exit code: 0 only when
+every REQUIRED indicator is present exactly once and OK; nonzero on any CROSSED, UNKNOWN, missing,
+duplicate, or empty registry. Scheduling is out of scope v0.
 
 ## 8. Junction table (typed, per 9b)
 
@@ -292,7 +311,7 @@ UNKNOWN. Scheduling is out of scope v0.
 |---|---|---|---|
 | Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN the explicit label→enum map; unknown-after-normalization → raise. RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
 | Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored |
-| Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map with semantics CONFIRMED at load by additivity (code-3 totals ≈ code-1 + code-2 per geography×year×scenario — raise if not); any other code → raise |
+| Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
 | Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (codex F8): Québec-province tenure×age NET of the CMAs (derived residual from the same table pull — probe §11 item 2), `borrowed_prior`-flagged if only the province total is available** — a strict full-geography join must find a rate for every enum member or raise |
@@ -313,12 +332,17 @@ TDD throughout (mm-spine discipline). Anchors:
   exactly one of {remain, widowed, dissolved, exited}).
 - **RED calibration gates**: a config that double-counts mortality MUST raise CalibrationError
   (reconciliation gate test); a q outside [0,1] MUST raise.
-- **Codex-fold fixtures (F1/F3/F4/F6)**: persons→households initialization (100+100 coupled, 60% →
-  60 Couple / 0 Solo, dual reconciliation); competing-risk partition (0.20/0.08/0.72, sums to 1);
-  hand-worked ED fixture (unique value, estate-lag boundary crossing) + ranking fixture (unique
-  ordering, exact tie, scenario crossing); one RED fixture per ScenarioPrior integrity rule
-  (missing row, duplicate key, NaN, inverted band, negative tilt, unknown enum) — Tranche 2. The
-  F2 double-decrement mutation test rides the cohort-engine build task.
+- **Codex-fold fixtures (round 1 F1/F3/F4/F6 + round 2 F1–F5)**: persons→households initialization
+  — all-coupled fixture (100+100, 60% → 60 Couple / 0 Solo / 0 Other) AND the general-case fixture
+  (200 persons, 0.25/0.80 → 50 Solo + 60 Couple + 30 Other, persons reconcile 200); competing-risk
+  partition (0.20/0.08/0.72, sums to 1); dimensional headship test (100 arrivals as 50 couples vs
+  100 singles → DIFFERENT D); hand-worked ED fixture (unique value, estate-lag boundary crossing) +
+  ranking fixture (unique ordering, exact tie, scenario crossing); sex-code orientation guard RED
+  (swapped 1↔2 map must raise on the 85+ female-excess check) + code-3 exclusion test; tripwire
+  completeness REDs (empty registry, missing required indicator, duplicate key → nonzero, never
+  exit 0); Tranche 2 adds one RED fixture per ScenarioPrior integrity rule (missing row, duplicate
+  key, NaN, inverted band, negative tilt, unknown enum, value-bearing/unknown flag string). The
+  double-decrement mutation test rides the cohort-engine build task.
 - **Loader pins**: recorded sha256 fixtures; schema-drift fixture (mutated sheet) MUST raise; the
   fail-loud claims get their adversarial pass from stress-tester at PR time (load-bearing-claim tag).
 - **Contract tests**: ranking same-vintage refusal; import-direction tests (demoflow⊥hde both
