@@ -116,7 +116,14 @@ label, unknown geography label, negative or NON-FINITE (NaN/±Inf) values in ANY
 populations, headship/ownership/living-arrangement rates, immigrant propensities, hazards q —
 non-monotone year index → **raise**, never impute, never warn-and-continue (codex r4-F3: the finite
 contract is END-TO-END — every emitted JSON in every tranche, rankings and tripwires included,
-serializes with `allow_nan=False` and asserts field finiteness pre-write). Cause-owner: all of
+serializes with `allow_nan=False` and asserts field finiteness pre-write). Two further loader
+contracts (codex r5-F1/F2): every FRACTION-valued input — living-alone, couple-share,
+collective-share, headship, ownership, immigrant ratio/propensity, φ_market, q — is asserted
+∈ [0, 1] (1+ε passes a mere finite/negative gate while producing negative buckets or owners >
+households); and every loaded series declares its PRIMARY KEY (geography × year × scenario × sex ×
+age-block) with duplicates → raise AND a CONTIGUOUS year lattice (consecutive year differences
+exactly 1 over each series' span — a deleted interior year leaves a monotone index while a 1-year
+transition silently spans the gap) → raise. Cause-owner: all of
 these are data/environment state → explicit named
 error. Error classes follow hde's convention (sole precedent: `ConfigValidationError(Exception)`):
 `LoaderError(Exception)` and `CalibrationError(Exception)`, flat, no hierarchy unless the degenerate
@@ -204,10 +211,19 @@ labeled `borrowed_prior`). Registre foncier mutation counts are the coarse valid
 
 ## 6. Demand side
 
-**Invariant I2 — no demand double-count (mirror of I1):** ISQ scenario populations already CONTAIN
-immigrants. The immigrant channel therefore **decomposes** the projected population into arrival
-cohorts (flows from the `compo-*` components workbooks, by scenario) vs resident base — it never adds
-demand on top.
+**Invariant I2 — no demand double-count (mirror of I1), EXECUTABLE (codex r5-F3):** ISQ scenario
+populations already CONTAIN immigrants. The immigrant channel therefore **decomposes** the projected
+population — it never adds demand on top — and the decomposition is an EQUATION with a gate, not a
+principle: per (age, geography, scenario, year t),
+
+    P_resident(t) = P_ISQ(t) − Σ_c SurvivingArrivalCohort_c(t)
+
+where arrival cohorts come from the `compo-*` annual flows and survive forward on the same CPM
+basis (mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the
+flow's). Native formation consumes P_resident ONLY. The I2 reconciliation gate asserts the identity
+above within tolerance each run; the mutation test feeds TOTAL ISQ population into native formation
+while retaining immigrant formation — the gate MUST fail (the dimensional headship test alone
+cannot catch this double-entry).
 
 **Tranche 1 (core) — COARSE netting, dimensionally explicit (codex r2-F2):** ISQ component
 arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
@@ -217,7 +233,13 @@ probe §11) → immigrant HOUSEHOLDS → × the immigrant ownership propensity, 
 is ambiguous between relative multiplier and absolute probability): `p_imm(a) = p_nonimm(a) ×
 ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at CMA level**
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
-`p_imm` is asserted ∈ [0,1] → immigrant owner-household demand. Dimensional
+`p_imm` is asserted ∈ [0,1] → immigrant owner-household demand. **Full-geography join for the
+immigrant inputs (codex r5-F4 — the base-ownership borrowing rule does not cover them):** immigrant
+headship and the immigrant/non-immigrant ratio resolve per modeled geography from an EXPLICIT
+source table — MTL_RMR/QC_RMR: their CMA values direct; RA members: parent-CMA value,
+`borrowed_prior`; HORS_RMR: province-level value, `borrowed_prior` (a province-net residual for
+these cross-tabs is not cheaply available); every modeled member must resolve or the run raises —
+no unstated default under the no-imputation policy. Dimensional
 test (§10): 100 arriving persons as 50 two-person households vs as 100 one-person households MUST
 produce different D (identical D = the units defect). This coarse netting is load-bearing: without
 it a new (rental-skewed) immigrant reads as a new buyer and the ownership-flow inversion collapses
@@ -318,6 +340,14 @@ skeptic's strongest-honest-output), NOT participants in any balance identity (v0
 cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
 `ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
 not data quality.
+**Tranche-1 output allowlists (codex r5-F5 — the prohibition must bind SHIPPED formats, not only
+the deferred artifact):** the rankings JSON and tripwire JSON each carry an exact nested field
+allowlist (rankings row: {geography, mean_ed_reference, mean_ed_low, mean_ed_high, rank, flags[]};
+tripwire record: {indicator, current_value, source, as_of, band_low, band_high, status, reason?});
+contract tests assert emitted field sets equal the allowlists exactly, with a RED fixture adding
+`crash_probability` to each format — updating a golden artifact cannot legitimize a forbidden
+field, because the allowlist test is independent of the golden.
+
 **Ranking collapse rule (codex F4 — one deterministic ordering from a multi-year × 3-scenario
 trajectory):** rank by MEAN ED over the horizon years under the REFERENCE scenario, ascending (most
 negative ED = highest demographic-flow risk = rank 1); the low/high scenario fan is REPORTED per
@@ -356,7 +386,7 @@ PR-visible act, which is review's job to catch, not the runtime's. Scheduling is
 | Junction | Left | Right | Rule |
 |---|---|---|---|
 | Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): modeled labels → their enum member; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
-| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored |
+| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (codex r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
 | Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
@@ -412,7 +442,11 @@ TDD throughout (mm-spine discipline). Anchors:
 2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total AND
    every other QC CMA the table carries (or its non-CMA/CA aggregate row if published): the
    HORS_RMR rate derives as province-net-of-ALL-CMAs (codex r1-F8 + r4-F2 — netting only MTL+QC
-   wrongly folds the five other RMRs into hors-RMR).
+   wrongly folds the five other RMRs into hors-RMR). CA caveat (codex r5-F7): a published
+   "non-CMA/CA" row EXCLUDES Census Agglomerations while province-minus-CMAs INCLUDES them — use
+   the published row only if it reconciles exactly against the computed residual (numerators AND
+   denominators); otherwise compute the residual and record which geography HORS_RMR actually
+   denotes in the probe note.
 3. Census living-arrangement cross-tab hunt — SEX-SPECIFIC rates required (living-alone AND
    couple shares by age × sex; the r3-F1/r4-F1 matching depends on both). Fallbacks are
    PER-INPUT (codex r4-F6 — the living-alone fallback cannot supply couple_share): living-alone →
