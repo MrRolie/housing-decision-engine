@@ -5,7 +5,10 @@
 PROCEED-WITH-MODIFICATIONS, 2026-07-21 — 2B re-sequenced to rankings-first tranches with the
 ScenarioPrior emitter deferred behind an S4b input-slot sketch; 2A subtractive mods folded: parquet
 mirror cut, plex compute deferred to v1, CLI folded to run+tripwires, flat error classes,
-enum→string serialization stated); spec pending operator review
+enum→string serialization stated); 2C cross-CONTEXT arm WAIVED by operator 2026-07-21 (session model
+is Fable; residual gap recorded: the arm's catch mechanism is independent context + hunt-NEW framing,
+not model tier — same-family folded-spec defects go unhunted by that arm; codex cross-FAMILY arm ran
+regardless, per doctrine the waiver never reaches it); spec pending operator review
 **money-path:** no (personal decision tooling; touches no fund globs)
 **load-bearing-claim:** yes (stress-tester) — "fail-loud loaders, no silent fallback" and
 "schema-enforced output prohibition" are load-bearing correctness claims; stress-tester fires at
@@ -61,8 +64,9 @@ flooring, if ever, is an operator decision at the S4b seam).
   lain-local batch tool.
 - **Basis contract (gotcha codified in actuarial-system/CLAUDE.md):** the engine DEFAULTS to the US
   RP2014+MP2021 basis. Every demoflow entry point sets
-  `set_active_mortality("CPM2014_combined", "CPM-B")` and then asserts `active_mortality()` echoes the
-  Québec basis before any `get_qx` call; assertion failure raises. Single-threaded batch only
+  `set_active_mortality("CPM2014_combined", "CPM-B")` and then CHECKS `active_mortality()` echoes the
+  Québec basis before any `get_qx` call — an explicit `if`-check raising `BasisError(Exception)`,
+  NEVER a bare `assert` (stripped under `python -O` — codex F7). Single-threaded batch only
   (the engine's module-level `_active_base` global is a documented v1 concurrency assumption);
   demoflow performs no concurrent engine calls. Scalar `get_qx` loop is accepted for v0 (no
   vectorization request into actuarial-system).
@@ -121,24 +125,50 @@ apply our own living-arrangement split, ownership propensity, and decrements. **
 mortality is counted exactly once,** via the CPM2014/CPM-B decrement below; no input that already
 embeds mortality (ISQ *household* projections, all-cause retention rates) may enter the roll-forward.
 
+**Initialization — unit-preserving persons→households conversion (codex F1):** at base year, per
+(geography, age, sex): `Solo_s(a) = pop_s(a) × living_alone_rate(a)` (person-denominated rate;
+each such person is one household); `Couple(a) = [Σ_s pop_s(a) × (1 − living_alone_rate(a)) ×
+couple_share(a)] / 2` (÷2: two persons per couple household); collective-dwelling/institutional
+population excluded first via the Census collective share. Ownership rates are
+HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD counts, never person
+counts. Fixture (§10): 100 men + 100 women all coupled, 60% household ownership → exactly 60 Couple
+owner units, 0 Solo; both person and household totals reconcile.
+
+**Stock-flow discipline (I1 at the equation level — codex F2):** ISQ population enters the owner
+roll-forward EXACTLY ONCE per cohort — at band entry (base-year stock + each year's newly-aged-75
+entrants from ISQ cohort aging; their pre-75 mortality is ISQ's, disjoint from our 75+ decrements).
+Post-entry, stocks evolve ONLY by our decrements; the roll-forward is NEVER re-anchored to ISQ's
+projected 75+ stocks in later years (those stocks embed deaths — re-anchor + decrement = the
+double-count). The plan writes the t→t+1 stock-flow equation with every death term appearing exactly
+once, plus a mutation test: applying the CPM decrement twice must breach the reconciliation envelope
+across the allowed (q_live, age-shape, state-mix) sweep.
+
 **Household states, tracked per (geography, age, year, scenario):**
 `Couple`, `Solo_m`, `Solo_f` — owner-households, age = reference person (couples: same-age
-approximation, stated). Annual transitions at age *a* with q_m, q_f from CPM2014+CPM-B (year-projected):
+approximation, stated). **Pinned competing-risk algebra (codex F3): death resolves first; living
+exit is survivor-conditional; branches partition to 1 by construction.** With q_m, q_f from
+CPM2014+CPM-B (year-projected) and q_live survivor-conditional:
 
-- `Couple`: exactly-one-dies `q_m(1−q_f) + q_f(1−q_m)` → **widowed `Solo_{surviving sex}`, unit
-  retained** (the skeleton's first-order fix — widowhood is a state, not a same-year coincidence);
-  both-die `q_m·q_f` → dissolution (estate); living exit `q_live` → exit by cause; else remain.
-- `Solo_s`: death `q_s` → dissolution (estate); living exit `q_live` → exit by cause; else remain.
+- `Couple`: P(both die) = `q_m·q_f` → dissolution (estate); P(exactly one dies) =
+  `q_m(1−q_f) + q_f(1−q_m)` → **widowed `Solo_{surviving sex}`, unit retained** (widowhood is a
+  state, not a same-year coincidence; the new widow is NOT living-exit-eligible in the transition
+  year — eligible from the next year); P(no death) = `(1−q_m)(1−q_f)`, splitting `q_live` →
+  living exit, `1−q_live` → remain.
+- `Solo_s`: death `q_s` → dissolution (estate); survivors split `(1−q_s)·q_live` → living exit,
+  `(1−q_s)(1−q_live)` → remain. Partition fixture (§10): q_s=0.20, q_live=0.10 → death 0.20,
+  living-exit 0.08, remain 0.72; all branches ≥0, sum exactly 1.
 
 **Living-exit calibration (Invariant I3 — calibration targets are not interchangeable):**
 `q_live` anchored to the CMHC survivor-conditional figure: 36%/5yr (75+, QC) → annualized
 `1−(1−0.36)^{1/5} ≈ 8.5%/yr`, band **[6%, 11%]/yr**, age-shape (flat vs rising) as a sensitivity
 axis. The Myers all-cause retention numbers are NEVER a calibration target.
 
-**Reconciliation gate (Invariant I1's executable form):** roll a 75-year-old owner cohort forward one
-decade; all-cause retention (survivors still owning / initial) must land in **[0.20, 0.40]** (Myers
-0.26–0.31 envelope, widened). Outside the envelope → **raise CalibrationError**. This makes
-double-counted mortality (the crash-inflating failure mode) mechanically unshippable.
+**Reconciliation gate (I1's aggregate backstop — honest claim, codex F2):** roll a 75-year-old owner
+cohort forward one decade; all-cause retention (survivors still owning / initial) must land in
+**[0.20, 0.40]** (Myers 0.26–0.31 envelope, widened). Outside → **raise CalibrationError**. This
+catches GROSS mortality double-counting; it is an aggregate band, not a proof of exactly-once — the
+exactly-once guarantee lives in the stock-flow equation + mutation test above. Both together are the
+enforcement.
 
 **Transfer-vs-market split:** exits carry cause; `φ_market(cause)` fractions with estate-lag
 convolution — voluntary exits list promptly (φ≈0.9, band [0.7,1.0]); death/estate exits convert to
@@ -195,10 +225,15 @@ flags[]                                             # e.g. borrowed_prior, ra_pr
                                                     # on every row whose tilt < 1.0)
 ```
 
-**Prohibition enforcement:** the schema is an allowlist; a contract test asserts the emitted field
-set equals it exactly — no `crash_probability`, no point forecast, no unconditional quantity can be
-added without failing the test and amending this spec. A second contract test asserts
-`never_relax_stress` is present in `flags[]` on EVERY row with `drawdown_weight_tilt < 1.0`. S4b
+**Prohibition + integrity enforcement (strengthened per codex F6):** the schema is an allowlist; a
+contract test asserts the emitted field set equals it exactly — no `crash_probability`, no point
+forecast, no unconditional quantity can be added without failing the test and amending this spec.
+Further contract tests: `never_relax_stress` present in `flags[]` on EVERY row with
+`drawdown_weight_tilt < 1.0`; row keys form the COMPLETE Cartesian product of the declared
+(geography × dwelling_type × horizon × scenario) domains with NO duplicates; every numeric field
+finite (JSON serialized with `allow_nan=False` — Python's default permits NaN); band ordering
+`p10 ≤ mean ≤ p90` on every row; `drawdown_weight_tilt ≥ 0`; horizon/scenario values drawn only
+from the declared enums. Each violation is a distinct RED fixture in §10. S4b
 consumes drift bands as priors on its price-drift generator and the tilt on its shock weights — raw
 conditional inputs; S4b self-computes its shocks (locus rule: substrate supplies raw inputs,
 consumer derives).
@@ -207,9 +242,21 @@ consumer derives).
 monotone piecewise-linear real-drift response with slope band β ∈ [1.0, 4.0] (%/yr per unit ED
 fraction); p10/p90 spans INCLUDE β uncertainty (not just input scenarios). Every artifact row carries
 `mapping_version`; changing the mapping without a version bump fails a test. β is unvalidatable
-until the consumer exists — a further reason this whole layer waits for the S4b sketch. Tranche 1's
-`balance/` stops at the raw `excess_demand_fraction` per (geography, year, scenario) — a structural
-quantity honest on its own.
+until the consumer exists — a further reason this whole layer waits for the S4b sketch.
+
+**Tranche 1's `balance/` stops at the raw excess-demand fraction, DEFINED (codex F4) — all terms
+annual, household-denominated, per (geography g, year t, scenario s):**
+
+    ED(g,t,s) = [ D(g,t,s) − S(g,t,s) ] / OwnerStock(g,t,s)
+
+    D = native owner-household formation (headship deltas × ownership propensity)
+      + immigrant-cohort formation (arrival flows × immigrant-differential propensity)   # §6
+    S = Σ_cause exits(cause) × φ_market(cause), with estate exits lagged L years          # §5
+    OwnerStock = total owner-households in g at t (all ages, same run)
+
+Zero/near-zero denominator → raise (never emit an unbounded fraction). ED is scale-invariant
+(households/households); a hand-worked fixture (§10) pins one unique ED value from the spec alone,
+including a delayed estate listing crossing a horizon boundary.
 
 **(b) Rankings table — TRANCHE 1 CORE OUTPUT.** Relative geography ordering by demographic-flow
 risk: per-geography excess-demand trajectories under the three scenarios, ranked, with the
@@ -219,25 +266,36 @@ skeptic's strongest-honest-output), NOT participants in any balance identity (v0
 cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
 `ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
 not data quality.
+**Ranking collapse rule (codex F4 — one deterministic ordering from a multi-year × 3-scenario
+trajectory):** rank by MEAN ED over the horizon years under the REFERENCE scenario, ascending (most
+negative ED = highest demographic-flow risk = rank 1); the low/high scenario fan is REPORTED per
+geography (min/max mean-ED), never blended into the ordering; ties (exact mean-ED equality) break by
+the LOW-scenario mean (worst case), then by enum order as the final deterministic tiebreak. A
+fixture (§10) pins one unique ordering, including an exact-tie case and a scenario-crossing case.
 **Composition rule:** rankings are computed within a single run (one data vintage, one
 assumptions_hash) — cross-vintage comparison is refused at the emitter.
 
-**(c) Tripwire baselines** — file of (indicator, current value, source, as_of, threshold band):
-IRCC PR-by-CMA landings; temporary-resident stock vs MIFI plan; Registre foncier transfer volume;
-natural-increase sign; CMHC senior-sale-rate refresh; **ISQ edition watch** (new `mise à jour` —
-pin-bump trigger). `demoflow tripwires` recomputes and reports crossings; scheduling is out of scope
-v0.
+**(c) Tripwire baselines** — file of (indicator, current value, source, as_of, threshold band),
+with a per-indicator SOURCE-COVERAGE declaration (codex F5): `wired` (IRCC PR-by-CMA landings;
+temporary-resident stock — source named at probe §11; ISQ edition watch) vs `operator-supplied`
+(Registre foncier transfer volume — manual v0; CMHC senior-sale-rate refresh; natural-increase
+sign, annual ISQ release). **Fail-safe contract (this is a verification gate — it must refuse,
+never false-green):** each indicator's result ∈ {OK, CROSSED, UNKNOWN(reason)}; UNKNOWN fires on
+source-unavailable, operator-input-missing, or `as_of` older than the indicator's declared
+freshness limit — a stale baseline is NEVER reported as within-band. Threshold endpoints evaluate
+as CROSSED (closed bands). Exit code: 0 only when every indicator is OK; nonzero on any CROSSED or
+UNKNOWN. Scheduling is out of scope v0.
 
 ## 8. Junction table (typed, per 9b)
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels ("RMR de Montréal", "Montréal", "Laval", …) per workbook | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | Explicit per-source label→enum map; unknown label → raise. RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
-| Age | ISQ single-year `0..99, "100 et plus"` | CPM table integer ages | "100 et plus" → capped at table max; assert CPM table covers ≥100 at load |
-| Sex | ISQ M/F labels | actuarial-system `gender` strings | Explicit two-entry map; anything else → raise |
+| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN the explicit label→enum map; unknown-after-normalization → raise. RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
+| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored |
+| Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map with semantics CONFIRMED at load by additivity (code-3 totals ≈ code-1 + code-2 per geography×year×scenario — raise if not); any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
-| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse CMA rate with `borrowed_prior` flag until a finer cross-tab lands |
+| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (codex F8): Québec-province tenure×age NET of the CMAs (derived residual from the same table pull — probe §11 item 2), `borrowed_prior`-flagged if only the province total is available** — a strict full-geography join must find a rate for every enum member or raise |
 
 ## 9. Operational-future statement (item 10)
 
@@ -255,6 +313,12 @@ TDD throughout (mm-spine discipline). Anchors:
   exactly one of {remain, widowed, dissolved, exited}).
 - **RED calibration gates**: a config that double-counts mortality MUST raise CalibrationError
   (reconciliation gate test); a q outside [0,1] MUST raise.
+- **Codex-fold fixtures (F1/F3/F4/F6)**: persons→households initialization (100+100 coupled, 60% →
+  60 Couple / 0 Solo, dual reconciliation); competing-risk partition (0.20/0.08/0.72, sums to 1);
+  hand-worked ED fixture (unique value, estate-lag boundary crossing) + ranking fixture (unique
+  ordering, exact tie, scenario crossing); one RED fixture per ScenarioPrior integrity rule
+  (missing row, duplicate key, NaN, inverted band, negative tilt, unknown enum) — Tranche 2. The
+  F2 double-decrement mutation test rides the cohort-engine build task.
 - **Loader pins**: recorded sha256 fixtures; schema-drift fixture (mutated sheet) MUST raise; the
   fail-loud claims get their adversarial pass from stress-tester at PR time (load-bearing-claim tag).
 - **Contract tests**: ranking same-vintage refusal; import-direction tests (demoflow⊥hde both
@@ -262,18 +326,25 @@ TDD throughout (mm-spine discipline). Anchors:
   mapping_version bump enforcement.
 - **Golden artifacts (Tranche 1)**: one committed rankings output + one tripwire-baseline output
   from the committed data vintage (JSON, diffable). Tranche 2 adds the golden ScenarioPrior.
-- **Basis assertion test**: entry point on a fresh interpreter must fail if the Québec basis is not
-  active (guards the US-default gotcha).
+- **Basis guard tests (codex F7 — two directions, both explicit):** (a) normal path: a fresh
+  interpreter entry point that sets the Québec basis SUCCEEDS (the US default before set is
+  expected, not an error); (b) guard path: with `set_active_mortality` stubbed to a no-op so
+  `active_mortality()` returns the US basis, `BasisError` is raised and `get_qx` is never called —
+  verified under `python -O` too (the guard must survive assertion-stripping).
 
 ## 11. Plan Task-1 probes (execution-hardening; run at plan execution, not spec time)
 
 1. demoflow env stands up: uv project + path dep on actuarial-system; `get_qx` fires cross-env with
    the QC basis (in-repo proven; cross-env install mechanical but unproven).
-2. StatCan WDS table-API pull of 98-10-0231-01 (MTL + QC CMAs).
+2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total (the
+   HORS_RMR rate derives as the province-net-of-CMAs residual, codex F8).
 3. Census living-arrangement cross-tab hunt (fallback: vitrine 28% + widened band).
 4. Census immigrant vs non-immigrant homeownership by CMA (the Tranche-1 coarse-netting
    differential — Census-covered for Québec, unlike CHSP).
 5. IRCC PR-by-CMA CSV download + schema record.
+5b. Temporary-resident STOCK source (codex F5): StatCan NPR estimates (17-10-0121-01 family) vs
+   IRCC temporary-resident tables — pick one, record schema + cadence; until wired the tripwire
+   reports UNKNOWN, never a stale within-band.
 6. MRC-level ISQ source hunt for couronne-nord precision (404 on slug convention; try product pages /
    full-edition downloads); if found → Geography enum extension in v1, not v0.
 
