@@ -57,7 +57,9 @@ flooring, if ever, is an operator decision at the S4b seam).
 - **Import rules (both directions, test-enforced):** `hde` and `hde`'s `mcp_server` never import
   `demoflow`; `demoflow` never imports `hde` or hde's `mcp_server`. Coupling is the ScenarioPrior
   artifact file only.
-- **actuarial-system dependency:** uv path dependency (`../actuarial-system` — lain-local; showcase
+- **actuarial-system dependency:** uv path dependency (`../../actuarial-system` from the
+  `demoflow/` project directory — one level under the HDE repo root, so two levels up to the
+  sibling checkout; codex r6-F7 caught the §2/§3 contradiction — lain-local; showcase
   runs need both repos present, accepted at the operator fork 2026-07-21). Import surface pinned to
   `mcp_server.engine.mortality` public functions only: `set_active_mortality`, `active_mortality`,
   `get_qx`. No private reach-ins. Dependency weight (fastmcp/cvxpy/osqp ride along) accepted —
@@ -121,9 +123,11 @@ contracts (codex r5-F1/F2): every FRACTION-valued input — living-alone, couple
 collective-share, headship, ownership, immigrant ratio/propensity, φ_market, q — is asserted
 ∈ [0, 1] (1+ε passes a mere finite/negative gate while producing negative buckets or owners >
 households); and every loaded series declares its PRIMARY KEY (geography × year × scenario × sex ×
-age-block) with duplicates → raise AND a CONTIGUOUS year lattice (consecutive year differences
-exactly 1 over each series' span — a deleted interior year leaves a monotone index while a 1-year
-transition silently spans the gap) → raise. Cause-owner: all of
+age-block) with duplicates → raise AND a CONTIGUOUS year lattice pinned to the EXPECTED DOMAIN
+(codex r5-F2 + r6-F3): consecutive year differences exactly 1 AND endpoints equal to the file
+family's declared span (2021–2051 for the RMR/RA workbooks) AND an identical year domain across
+every geography × scenario × sex series — a missing terminal year for one geography must raise,
+never silently shorten that geography's ranking mean. Cause-owner: all of
 these are data/environment state → explicit named
 error. Error classes follow hde's convention (sole precedent: `ConfigValidationError(Exception)`):
 `LoaderError(Exception)` and `CalibrationError(Exception)`, flat, no hierarchy unless the degenerate
@@ -220,10 +224,14 @@ principle: per (age, geography, scenario, year t),
 
 where arrival cohorts come from the `compo-*` annual flows and survive forward on the same CPM
 basis (mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the
-flow's). Native formation consumes P_resident ONLY. The I2 reconciliation gate asserts the identity
-above within tolerance each run; the mutation test feeds TOTAL ISQ population into native formation
-while retaining immigrant formation — the gate MUST fail (the dimensional headship test alone
-cannot catch this double-entry).
+flow's). **Operand binding (codex r6-F1 — the identity alone cannot catch a mis-wired consumer,
+because it holds regardless of what native formation reads):** native formation's ONLY population
+parameter is P_resident by construction (single code path, no access to P_ISQ), and the
+double-entry mutation test operates at the PIPELINE level: with arrivals > 0,
+`D_native(P_resident) ≠ D_native(P_ISQ)` in the fixture, and the emitted demand must equal the
+P_resident evaluation — feeding P_ISQ at the call site changes the output and fails the
+integration assertion. The decomposition-identity gate remains as the data-side check; the
+operand assertion is the consumer-side check; both run.
 
 **Tranche 1 (core) — COARSE netting, dimensionally explicit (codex r2-F2):** ISQ component
 arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
@@ -233,7 +241,16 @@ probe §11) → immigrant HOUSEHOLDS → × the immigrant ownership propensity, 
 is ambiguous between relative multiplier and absolute probability): `p_imm(a) = p_nonimm(a) ×
 ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at CMA level**
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
-`p_imm` is asserted ∈ [0,1] → immigrant owner-household demand. **Full-geography join for the
+`p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
+
+**Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
+decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
+senior release):** `D_native(g,t,s) = Σ_{a < 75} max(0, H_resident(a,t) − H_resident(a−1, t−1)) ×
+ownership(a)` — GROSS formations from the UNDER-75 resident base only (cohort-followed headship
+gains, floored at zero). All 75+ stock dynamics — dissolution, downsizing, estate release — live
+EXCLUSIVELY in S via the cohort engine; the age-75 boundary makes D and S structurally disjoint.
+Reconciliation fixture: a two-year run with no arrivals, one 75+ cohort declining in headship, and
+one supply-side exit must show the decline in S only, D unchanged. **Full-geography join for the
 immigrant inputs (codex r5-F4 — the base-ownership borrowing rule does not cover them):** immigrant
 headship and the immigrant/non-immigrant ratio resolve per modeled geography from an EXPLICIT
 source table — MTL_RMR/QC_RMR: their CMA values direct; RA members: parent-CMA value,
@@ -307,8 +324,11 @@ consumer derives).
 ambiguity was worth 100×):** `balance/mapping.py`, version-stamped; v0 form is LINEAR THROUGH THE
 ORIGIN: `demo_drift = β × ED`, where ED is the dimensionless fraction of §7 and β converts to
 DECIMAL real drift per year per unit ED — worked fixture: `ED = 0.01, β = 2.0 → demo_drift = 0.02
-decimal/yr = 2%/yr real`. β band [1.0, 4.0] in these units; zero intercept by construction (no
-demographic tilt at flow balance); any knots/saturation are a Tranche-2 decision made WITH the S4b
+decimal/yr = 2%/yr real`. β band [1.0, 4.0] in these units with a UNIFORM distribution over the
+interval (codex r6-F5 — an interval alone leaves quantiles undefined): demo_drift quantiles follow
+in closed form from the linear map (for ED ≥ 0, p10/p90 of drift = β's 10th/90th quantiles × ED;
+reversed for ED < 0; mean = 2.5 × ED). Zero intercept by construction (no demographic tilt at flow
+balance); any knots/saturation or a non-uniform β prior are a Tranche-2 decision made WITH the S4b
 sketch, never improvised. p10/p90 spans INCLUDE β uncertainty (not just input scenarios). Every artifact row carries
 `mapping_version`; changing the mapping without a version bump fails a test. β is unvalidatable
 until the consumer exists — a further reason this whole layer waits for the S4b sketch.
@@ -340,13 +360,24 @@ skeptic's strongest-honest-output), NOT participants in any balance identity (v0
 cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
 `ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
 not data quality.
-**Tranche-1 output allowlists (codex r5-F5 — the prohibition must bind SHIPPED formats, not only
-the deferred artifact):** the rankings JSON and tripwire JSON each carry an exact nested field
-allowlist (rankings row: {geography, mean_ed_reference, mean_ed_low, mean_ed_high, rank, flags[]};
-tripwire record: {indicator, current_value, source, as_of, band_low, band_high, status, reason?});
-contract tests assert emitted field sets equal the allowlists exactly, with a RED fixture adding
-`crash_probability` to each format — updating a golden artifact cannot legitimize a forbidden
-field, because the allowlist test is independent of the golden.
+**Tranche-1 output allowlists (codex r5-F5, value channels closed r6-F4 — the prohibition must
+bind SHIPPED formats AND their string fields):** the rankings JSON and tripwire JSON each carry an
+exact nested field allowlist — rankings row: {geography, mean_ed_reference, mean_ed_low,
+mean_ed_high, rank, flags[]} with `flags[]` a CLOSED enum {borrowed_prior, ra_proxy} (scenario
+semantics per the collapse rule below); tripwire record: {indicator, current_value, source, as_of,
+band_low, band_high, status, reason?} with `reason` drawn from a CLOSED machine-token enum {stale,
+source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
+missing_indicator, duplicate_indicator, empty_registry} — NO free-text string field exists in
+either format (an open string is the same serialization side-channel the ScenarioPrior flags enum
+closes). Contract tests assert field sets equal the allowlists exactly AND every enum-typed value
+is a member, with RED fixtures adding a `crash_probability` field AND smuggling
+`"crash_probability=0.35"` through flags[]/reason — all independent of the goldens.
+
+**Scenario-named fan fields (codex r6-F6 — scenario identity vs min/max are DIFFERENT semantics
+and can cross):** `mean_ed_low` / `mean_ed_high` are SCENARIO-NAMED — the Faible (D2026) and Fort
+(E2026) scenario means respectively, whatever their numeric order; the ranking tiebreak uses the
+scenario-named Faible mean; any min/max "fan envelope" is derived at display time, never stored.
+A scenario-crossing fixture (Faible mean +0.02, Fort mean −0.03) pins the field semantics.
 
 **Ranking collapse rule (codex F4 — one deterministic ordering from a multi-year × 3-scenario
 trajectory):** rank by MEAN ED over the horizon years under the REFERENCE scenario, ascending (most
