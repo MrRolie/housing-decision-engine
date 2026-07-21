@@ -391,8 +391,10 @@ registry (codex r7-F1 — each indicator's source string is declared in the regi
 record must equal it exactly, so `source` cannot carry smuggled content) — NO free-text string
 field exists in either format. **UNKNOWN-branch nullability (codex r7-F2 — a first-run failure has
 no honest measurement):** `current_value` and `as_of` are NULLABLE exactly when status=UNKNOWN with
-reason ∈ {source_unavailable, operator_input_missing, missing_indicator} — null, NEVER a fabricated
-finite value; every other status requires all fields non-null; contract-tested both ways (an open string is the same serialization side-channel the ScenarioPrior flags enum
+reason ∈ {source_unavailable, operator_input_missing, missing_indicator, **non_finite** (codex
+r8-F2 — a NaN/Inf measurement cannot ride a finite-only JSON: current_value is null, the offending
+raw value goes to the run log, never the artifact)} — null, NEVER a fabricated finite value; every
+other status requires all fields non-null; contract-tested both ways (an open string is the same serialization side-channel the ScenarioPrior flags enum
 closes). Contract tests assert field sets equal the allowlists exactly AND every enum-typed value
 is a member, with RED fixtures adding a `crash_probability` field AND smuggling
 `"crash_probability=0.35"` through flags[]/reason — all independent of the goldens.
@@ -403,11 +405,27 @@ and can cross):** `mean_ed_low` / `mean_ed_high` are SCENARIO-NAMED — the Faib
 scenario-named Faible mean; any min/max "fan envelope" is derived at display time, never stored.
 A scenario-crossing fixture (Faible mean +0.02, Fort mean −0.03) pins the field semantics.
 
-**Ranking collapse rule (codex F4 — one deterministic ordering from a multi-year × 3-scenario
-trajectory):** rank by MEAN ED over the horizon years under the REFERENCE scenario, ascending (most
-negative ED = highest demographic-flow risk = rank 1); the low/high scenario fan is REPORTED per
-geography (min/max mean-ED), never blended into the ordering; ties (exact mean-ED equality) break by
-the LOW-scenario mean (worst case), then by enum order as the final deterministic tiebreak. A
+**Run contract for banded assumptions (codex r8-F1 — bands alone leave the run underdetermined;
+two conforming implementations must not emit different rankings from identical data):** a Tranche-1
+run evaluates every banded assumption at its declared CENTRAL value — q_live 0.085/yr flat
+age-shape, φ_market voluntary 0.9 / estate eventual 0.725, estate lag L=2, immigrant ratio band
+center — as the headline; band ENDPOINTS enter only through the mandated robustness sweep, reported
+per geography as a rank-stability flag (does the ordering change anywhere in the sweep grid?).
+The central values + sweep grid are enumerated in `constants.py` and covered by assumptions_hash —
+the hash identifies the selection, the spec's central-value rule DETERMINES it.
+
+**Ranking temporal domain (codex r8-F3):** ranking means average over PROJECTED years only
+(`Statut = proj` rows — estimation years are history, not scenario), the full contiguous annual
+lattice from the first projected year through 2051, both endpoints included; a fixture pins a pair
+of trajectories whose ordering would reverse under an all-years average.
+
+**Ranking collapse rule (codex F4, fan wording reconciled r8-F4 — the earlier min/max sentence
+contradicted the scenario-named fields):** rank by MEAN ED over the domain above under the
+REFERENCE scenario, ascending (most negative ED = highest demographic-flow risk = rank 1); the fan
+is REPORTED per geography as the SCENARIO-NAMED Faible and Fort means (mean_ed_low / mean_ed_high
+per the field semantics below — min/max envelopes are display-derived only, never stored); ties
+(exact mean-ED equality) break by the scenario-named Faible mean (worst case), then by enum order
+as the final deterministic tiebreak. A
 fixture (§10) pins one unique ordering, including an exact-tie case and a scenario-crossing case.
 **Composition rule:** rankings are computed within a single run (one data vintage, one
 assumptions_hash) — cross-vintage comparison is refused at the emitter.
