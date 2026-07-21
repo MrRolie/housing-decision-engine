@@ -112,8 +112,12 @@ day one), otherwise a flat module.
 | Registre foncier monthly transfer counts (validation only) | Known open data | donneesquebec.ca | v0: manual validation input, not a wired loader |
 
 Degenerate policy (load-bearing-claim scope, applies to every loader): empty sheet, missing scenario
-label, unknown geography label, negative or NaN population, non-monotone year index → **raise**, never
-impute, never warn-and-continue. Cause-owner: all of these are data/environment state → explicit named
+label, unknown geography label, negative or NON-FINITE (NaN/±Inf) values in ANY numeric input —
+populations, headship/ownership/living-arrangement rates, immigrant propensities, hazards q —
+non-monotone year index → **raise**, never impute, never warn-and-continue (codex r4-F3: the finite
+contract is END-TO-END — every emitted JSON in every tranche, rankings and tripwires included,
+serializes with `allow_nan=False` and asserts field finiteness pre-write). Cause-owner: all of
+these are data/environment state → explicit named
 error. Error classes follow hde's convention (sole precedent: `ConfigValidationError(Exception)`):
 `LoaderError(Exception)` and `CalibrationError(Exception)`, flat, no hierarchy unless the degenerate
 taxonomy genuinely forces one.
@@ -135,11 +139,17 @@ population structure): `Solo_s(a) = pop_s(a) × living_alone_rate_s(a)`;
 with others (family/roommates, incl. seniors with adult children), EXPLICITLY EXCLUDED from the
 cohort's owner-unit stock as presumptive non-maintainers (conservative undercount, labeled
 assumption; collective/institutional persons removed before the partition via the Census collective
-share). Couples form only from matched pairs: `Couple(a) = [coupled_m(a) + coupled_f(a)] / 2` with
-a FAIL-LOUD balance constraint `|coupled_m − coupled_f| / max(coupled_m, coupled_f) ≤ 0.25` —
-per-sex Census rates should nearly balance the two by construction; a breach means the rate inputs
-are wrong (raise CalibrationError), never silently manufacture partners. Person conservation
-asserted per sex: `Solo_s + coupled_s + Other_s = private pop_s`.
+share). Couples form only from matched pairs, and matching is a MINIMUM, never an average (codex
+r4-F1 — averaging 100 vs 80 coupled persons emits 90 couples when at most 80 matched pairs exist):
+`Couple(a) = min(coupled_m(a), coupled_f(a))`; the EXCESS of the larger side,
+`max − min` persons, routes to `Other` (they are real coupled persons whose partners fall outside
+the same-age band — the same-age approximation makes them unmatchable here; routing to Other keeps
+them excluded conservatively and preserves person conservation BY SEX exactly). Zero-zero branch:
+`coupled_m = coupled_f = 0 → Couple = 0`, no ratio evaluated. The balance check
+`|coupled_m − coupled_f| / max(...) ≤ 0.25` (evaluated only when `max > 0`) remains as a DATA-SANITY
+gate on the rate inputs (breach ⇒ CalibrationError — per-sex Census rates should nearly balance).
+Person conservation asserted per sex: `Solo_s + coupled_s + Other_s = private pop_s`, and
+post-match: `min + excess = coupled_larger` (nothing fabricated, nothing dropped).
 Ownership rates are HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD
 counts, never person counts. Fixtures (§10): (a) 100 men + 100 women all coupled, 60% household
 ownership → exactly 60 Couple owner units, 0 Solo, 0 Other; (b) GENERAL case — 200 persons,
@@ -203,8 +213,11 @@ demand on top.
 arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
 persons never multiply a household rate directly. The chain is: arrivals(persons) × immigrant
 headship rate (households formed per person — Census immigrant household size / maintainer rate,
-probe §11) → immigrant HOUSEHOLDS → × the **Census immigrant vs non-immigrant homeownership
-differential at CMA level** (banded multiplier) → immigrant owner-household demand. Dimensional
+probe §11) → immigrant HOUSEHOLDS → × the immigrant ownership propensity, DEFINED (codex r4-F5 — a bare "differential"
+is ambiguous between relative multiplier and absolute probability): `p_imm(a) = p_nonimm(a) ×
+ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at CMA level**
+(banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
+`p_imm` is asserted ∈ [0,1] → immigrant owner-household demand. Dimensional
 test (§10): 100 arriving persons as 50 two-person households vs as 100 one-person households MUST
 produce different D (identical D = the units defect). This coarse netting is load-bearing: without
 it a new (rental-skewed) immigrant reads as a new buyer and the ownership-flow inversion collapses
@@ -332,18 +345,22 @@ r3-F5):** a present, fresh indicator whose current value is NaN/±Inf/non-numeri
 in the future, or whose band is inverted (lower > upper) ⇒ UNKNOWN, never within-band (naive
 comparisons classify NaN as inside every band — both boundary checks are False); tripwire JSON is
 emitted with `allow_nan=False` too. Exit code: 0 only when every code-required indicator is present
-exactly once, finite, fresh, well-banded, and OK; nonzero otherwise. Scheduling is out of scope v0.
+exactly once, finite, fresh, well-banded, and OK; nonzero otherwise. Epistemic limit (codex r4-F4):
+no runtime check defends the checker's own source from a coordinated edit — the residual guard is
+that the golden-baseline TEST pins the full required-indicator name list LITERALLY in the test body
+(a third, test-owned copy), so a co-deletion must touch code + baseline + test in one diff — a
+PR-visible act, which is review's job to catch, not the runtime's. Scheduling is out of scope v0.
 
 ## 8. Junction table (typed, per 9b)
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN the explicit label→enum map; unknown-after-normalization → raise. RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
+| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): modeled labels → their enum member; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
 | Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored |
 | Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
-| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (codex F8): Québec-province tenure×age NET of the CMAs (derived residual from the same table pull — probe §11 item 2), `borrowed_prior`-flagged if only the province total is available** — a strict full-geography join must find a rate for every enum member or raise |
+| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (codex r1-F8, corrected r4-F2): the residual is Québec-province tenure×age NET of ALL Québec CMAs — not merely MTL+QC (the other RMRs are neither MTL/QC nor hors-RMR); probe §11 item 2 pulls province + every QC CMA the table carries, or the table's own non-CMA/CA aggregate row if published; `borrowed_prior`-flagged if only coarser geography is available** — a strict full-geography join must find a rate for every MODELED enum member or raise |
 
 ## 9. Operational-future statement (item 10)
 
@@ -368,8 +385,9 @@ TDD throughout (mm-spine discipline). Anchors:
   100 singles → DIFFERENT D); hand-worked ED fixture (unique value, estate-lag boundary crossing) +
   ranking fixture (unique ordering, exact tie, scenario crossing); sex-code orientation guard RED
   (swapped 1↔2 map must raise on the 85+ female-excess check) + code-3 exclusion test; couple
-  balance RED (20 men + 100 women, couple_share=1 → CalibrationError, never 60 fabricated couples
-  — codex r3-F1); tripwire completeness + value-integrity REDs (empty registry, missing required
+  matching fixtures (codex r3-F1 + r4-F1): coupled 100 vs 80 → exactly 80 Couple + 20 excess→Other
+  (never 90 averaged); 20 vs 100 → CalibrationError (balance breach at 0.8); 0 vs 0 → 0 Couple, no
+  error, no division; post-match per-sex conservation asserted in all three; tripwire completeness + value-integrity REDs (empty registry, missing required
   indicator vs the CODE-owned set, duplicate key, NaN/±Inf/non-numeric current value, future
   as_of, inverted band → nonzero, never exit 0); Tranche 2 adds one RED fixture per ScenarioPrior integrity rule (missing row, duplicate
   key, NaN, inverted band, negative tilt, unknown enum, value-bearing/unknown flag string). The
@@ -391,11 +409,17 @@ TDD throughout (mm-spine discipline). Anchors:
 
 1. demoflow env stands up: uv project + path dep on actuarial-system; `get_qx` fires cross-env with
    the QC basis (in-repo proven; cross-env install mechanical but unproven).
-2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total (the
-   HORS_RMR rate derives as the province-net-of-CMAs residual, codex F8).
-3. Census living-arrangement cross-tab hunt — SEX-SPECIFIC rates required (living-alone and
-   couple shares by age × sex; the r3-F1 balance constraint depends on them). Fallback: vitrine
-   28% + widened band applied per-sex with the balance constraint relaxed to a labeled assumption.
+2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total AND
+   every other QC CMA the table carries (or its non-CMA/CA aggregate row if published): the
+   HORS_RMR rate derives as province-net-of-ALL-CMAs (codex r1-F8 + r4-F2 — netting only MTL+QC
+   wrongly folds the five other RMRs into hors-RMR).
+3. Census living-arrangement cross-tab hunt — SEX-SPECIFIC rates required (living-alone AND
+   couple shares by age × sex; the r3-F1/r4-F1 matching depends on both). Fallbacks are
+   PER-INPUT (codex r4-F6 — the living-alone fallback cannot supply couple_share): living-alone →
+   vitrine 28% + widened band per-sex; couple_share → pinned at probe time from the Census
+   province-level profile with citation (recorded observation). If neither the cross-tab nor a
+   citable couple_share exists, initialization RAISES (LoaderError) — couple_share has no
+   invented default.
 4. Census immigrant vs non-immigrant homeownership by CMA (the Tranche-1 coarse-netting
    differential — Census-covered for Québec, unlike CHSP).
 5. IRCC PR-by-CMA CSV download + schema record.
