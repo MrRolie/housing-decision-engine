@@ -55,13 +55,13 @@ def run_comparison_tool(name: str, mode: str = "both") -> dict:
 def sweep_param_tool(name: str, param_path: str, values: list[float]) -> dict:
     """Sweep a scalar parameter across values using the deterministic engine.
 
-    Supported param_path values (dot-notation, flat scalars only):
-    years, discount_rate,
-    condo.monthly_fee, condo.fee_escalation_rate, condo.reserve_contribution_rate,
-    house.initial_value, house.value_growth_rate, house.annual_maintenance_rate,
-    rent.monthly_rent, rent.invested_down_payment, rent.investment_return_rate,
-    simulation.house_maintenance_vol, simulation.condo_fee_vol,
-    economic.inflation_rate.
+    param_path is dot-notation for a single flat scalar field, drawn from the
+    _SWEEP_PATHS whitelist: the top-level 'years' and 'discount_rate', plus scalar
+    fields on the condo / house / rent / simulation / economic sections (including
+    the owned-option financing fields down_payment, mortgage_rate,
+    mortgage_term_years, selling_cost_rate, initial_value, value_growth_rate).
+    Calling with an unsupported path returns an error listing the full supported set.
+    A mortgage field is rejected on an all_cash option (the sweep would be a no-op).
 
     Returns {name, param_path, rows: [{value, and condo_total_pv / house_total_pv /
     rent_total_pv for each option present in the scenario}]}.
