@@ -542,3 +542,56 @@ def test_config_condo_requires_initial_value_and_capital_structure():
            "condo": {"monthly_fee": 500, "all_cash": True}}  # missing initial_value
     with pytest.raises(ConfigValidationError):
         load_config_dict(cfg)
+
+
+# --- PR #4 external-review findings ---
+
+def test_config_rejects_all_cash_with_mortgage_block():
+    """Finding #1: all_cash=True AND a mortgage field set is ambiguous intent — reject."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "all_cash": True,
+                     "down_payment": 80_000, "mortgage_rate": 0.05, "mortgage_term_years": 25}}
+    with pytest.raises(ConfigValidationError, match="all_cash"):
+        load_config_dict(cfg)
+
+
+def test_config_rejects_condo_value_growth_at_or_below_neg_one():
+    """Finding #2/#4: value_growth_rate <= -1 flips terminal-equity sign by year parity — reject."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True,
+                     "value_growth_rate": -1.5}}
+    with pytest.raises(ConfigValidationError, match="value_growth_rate"):
+        load_config_dict(cfg)
+
+
+def test_config_rejects_house_value_growth_at_or_below_neg_one():
+    """Finding #4 (house side): value_growth_rate <= -1 rejected at config level."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "all_cash": True, "value_growth_rate": -1.0}}
+    with pytest.raises(ConfigValidationError, match="value_growth_rate"):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_string_false_parses_to_false():
+    """Finding #6: bool('false') is True — 'false' must parse to False, not True.
+    With all_cash correctly False and no mortgage block, capital-structure validation must fire."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "false"}}
+    with pytest.raises(ConfigValidationError):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_invalid_string_rejected():
+    """Finding #6: a non-boolean all_cash value is rejected at parse time."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "maybe"}}
+    with pytest.raises(ConfigValidationError, match="all_cash"):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_string_true_still_accepted():
+    """Finding #6: exact 'true'/'false' strings remain valid for YAML round-trip tolerance."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "true"}}
+    spec = load_config_dict(cfg)
+    assert spec.condo.all_cash is True

@@ -60,3 +60,50 @@ def test_terminal_equity_pinned_value():
     assert value_N == pytest.approx(671_958.19, abs=0.01)
     assert E_N == pytest.approx(638_360.28, abs=0.01)
     assert terminal_equity_pv == pytest.approx(-391_897.84, abs=0.05)  # verify externally
+
+
+# --- PR #4 external-review findings: direct-construction (config-bypass) defenses ---
+from hde.models import HouseParams, CondoParams, SimulationParams, EconomicParams, ComparisonSpec
+from hde.deterministic import compute_deterministic
+
+
+def test_financing_pv_rejects_down_payment_exceeding_value():
+    """Finding #3: down_payment > initial_value makes the loan negative; mortgage_payment
+    returns 0.0 for non-positive principal, silently zeroing an impossible block.
+    Direct construction must raise, not compute garbage."""
+    house = HouseParams(initial_value=400_000.0, down_payment=500_000.0,
+                        mortgage_rate=0.05, mortgage_term_years=25, all_cash=False)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), house=house)
+    with pytest.raises(ValueError, match="down_payment"):
+        compute_deterministic(spec)
+
+
+def test_financing_pv_down_payment_equal_to_value_is_legal():
+    """Guard boundary: down_payment == initial_value (loan 0) is legal, not an error."""
+    house = HouseParams(initial_value=400_000.0, down_payment=400_000.0,
+                        mortgage_rate=0.05, mortgage_term_years=25, all_cash=False)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), house=house)
+    result = compute_deterministic(spec)  # must not raise
+    assert result.house.breakdown["mortgage_pv"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_compute_rejects_house_value_growth_sign_flip():
+    """Finding #4: value_growth_rate < -1 flips (1+g)**years by year parity; the computation
+    site must raise even when config validation is bypassed by direct construction."""
+    house = HouseParams(initial_value=400_000.0, all_cash=True, value_growth_rate=-1.5)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), house=house)
+    with pytest.raises(ValueError, match="value_growth"):
+        compute_deterministic(spec)
+
+
+def test_compute_rejects_condo_value_growth_sign_flip():
+    """Finding #4 (condo side)."""
+    condo = CondoParams(monthly_fee=500.0, initial_value=300_000.0, all_cash=True,
+                        value_growth_rate=-2.0)
+    sim = SimulationParams(years=10, discount_rate=0.04)
+    spec = ComparisonSpec(simulation=sim, economic=EconomicParams(), condo=condo)
+    with pytest.raises(ValueError, match="value_growth"):
+        compute_deterministic(spec)

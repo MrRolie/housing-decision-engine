@@ -45,6 +45,21 @@ def _effective_growth_rate(base_rate: float, econ: EconomicParams) -> float:
     return base_rate
 
 
+def _require_valued_growth(effective_growth: float, label: str) -> None:
+    """
+    Reject an appreciation factor <= 0 before valuing terminal equity.
+
+    ``value_N = initial_value * (1 + g) ** years``: when ``1 + g < 0`` the power
+    flips sign by the parity of ``years``, producing garbage terminal equity
+    (config validation rejects value_growth_rate <= -1; this is the defense for
+    directly-constructed params that bypass config).
+    """
+    if 1 + effective_growth <= 0:
+        raise ValueError(
+            f"{label} value_growth_rate implies a non-positive appreciation factor "
+            f"(1+g={1 + effective_growth:.4f}); growth <= -100% cannot be valued")
+
+
 def _financing_pv(
     initial_value: float,
     down_payment: Optional[float],
@@ -74,6 +89,17 @@ def _financing_pv(
         mortgage_pv = 0.0
         balance_N = 0.0
     else:
+        # Fail-loud on impossible mortgage blocks that would otherwise compute
+        # silent garbage: down_payment > initial_value drives the loan negative,
+        # and mortgage_payment() returns 0.0 for non-positive principal.
+        if not (0 <= down_payment <= initial_value):
+            raise ValueError(
+                f"owned option down_payment must be in [0, initial_value], "
+                f"got down_payment={down_payment}, initial_value={initial_value}")
+        if mortgage_rate < 0:
+            raise ValueError(f"owned option mortgage_rate must be >= 0, got {mortgage_rate}")
+        if mortgage_term_years <= 0:
+            raise ValueError(f"owned option mortgage_term_years must be > 0, got {mortgage_term_years}")
         downpayment_pv = down_payment
         loan = initial_value - down_payment
         payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
@@ -280,6 +306,7 @@ def _compute_condo_option(
                 reserve_pv -= pv_single(covered, discount_rate, year)
 
     condo_value_growth = _effective_growth_rate(condo.value_growth_rate, econ)
+    _require_valued_growth(condo_value_growth, "condo")
     value_N = condo.initial_value * (1 + condo_value_growth) ** sim.years
     downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
@@ -319,6 +346,7 @@ def _compute_house_option(
     """
     discount_rate = sim.discount_rate
     house_value_growth = _effective_growth_rate(house.value_growth_rate, econ)
+    _require_valued_growth(house_value_growth, "house")
 
     other_cost_growth = [
         _effective_growth_rate(c.escalation_rate, econ)

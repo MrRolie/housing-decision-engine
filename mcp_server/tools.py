@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from hde.config import load_config_dict, ConfigValidationError
+from hde.config import load_config_dict, validate_config, ConfigValidationError
 from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
 from hde.models import (
@@ -212,6 +212,15 @@ def sweep_param(scenario_name: str, param_path: str, values: list[float]) -> dic
     if section in {"condo", "house", "rent"} and getattr(entry.spec, section) is None:
         return {"error": f"scenario '{safe_name}' has no {section} section; cannot sweep {param_path}"}
 
+    # Guard: sweeping a mortgage field on an all_cash owned option is a silent no-op
+    # (the financing engine ignores the mortgage block when all_cash=True). Reject loudly.
+    MORTGAGE_FIELDS = {"down_payment", "mortgage_rate", "mortgage_term_years"}
+    if section in {"condo", "house"} and field in MORTGAGE_FIELDS:
+        opt = getattr(entry.spec, section)
+        if opt is not None and opt.all_cash:
+            return {"error": f"cannot sweep {param_path}: {section} is all_cash, so mortgage "
+                             f"fields are ignored and the sweep would be a no-op"}
+
     # Coerce integer fields — JSON delivers all numbers as float (e.g. 10.0),
     # but SimulationParams.years: int — range(1, sim.years + 1) crashes on float.
     INT_FIELDS = {"years", "num_sims", "random_seed", "mortgage_term_years"}
@@ -229,6 +238,13 @@ def sweep_param(scenario_name: str, param_path: str, values: list[float]) -> dic
             new_section = dc.replace(section_obj, **{field: v})
             spec_copy = dc.replace(spec_copy, **{section: new_section})
         try:
+            # Re-validate the swept config: dc.replace bypasses load_config_dict's
+            # validation, so an out-of-range swept value would otherwise compute
+            # garbage. Surface any violation as this sweep point's failure.
+            sweep_warnings = validate_config(spec_copy)
+            if sweep_warnings:
+                raise ConfigValidationError(
+                    "swept config invalid:\n" + "\n".join(sweep_warnings))
             det = compute_deterministic(spec_copy)
             row = {"value": v}
             if det.condo is not None:

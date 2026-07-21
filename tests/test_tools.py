@@ -188,12 +188,15 @@ def test_sweep_does_not_mutate_registry_config():
 def test_sweep_paths_resolve_against_live_dataclass_fields():
     """Drift guard: each _SWEEP_PATHS entry must produce a valid config that load_config_dict accepts."""
     from mcp_server.tools import _SWEEP_PATHS
+    # Owned options use mortgage blocks (not all_cash) so the down_payment/mortgage_rate/
+    # mortgage_term_years sweep paths resolve — all_cash XOR mortgage block is now enforced.
     base = {
         "years": 20, "discount_rate": 0.03,
         "condo": {"monthly_fee": 500, "fee_escalation_rate": 0.02, "reserve_contribution_rate": 0.01,
-                  "initial_value": 300_000, "all_cash": True},
+                  "initial_value": 300_000, "down_payment": 60_000,
+                  "mortgage_rate": 0.05, "mortgage_term_years": 25},
         "house": {"initial_value": 400_000, "value_growth_rate": 0.01, "annual_maintenance_rate": 0.015,
-                  "all_cash": True},
+                  "down_payment": 80_000, "mortgage_rate": 0.05, "mortgage_term_years": 25},
         "rent": {"monthly_rent": 2000, "invested_down_payment": 100_000, "investment_return_rate": 0.07},
         "simulation": {"house_maintenance_vol": 0.3, "condo_fee_vol": 0.05},
         "economic": {"inflation_rate": 0.02},
@@ -315,3 +318,42 @@ def test_sweep_param_rent_path_no_rent_section():
     result = sweep_param("s1", "rent.monthly_rent", [2000.0, 2500.0])
     assert "error" in result
     assert "no rent section" in result["error"]
+
+
+# --- PR #4 external-review findings ---
+
+MORTGAGE_CONFIG = {
+    "years": 20,
+    "discount_rate": 0.03,
+    "house": {"initial_value": 400_000, "down_payment": 80_000,
+              "mortgage_rate": 0.05, "mortgage_term_years": 25},
+}
+
+
+def test_sweep_mortgage_field_on_all_cash_section_rejected():
+    """Finding #5: sweeping a mortgage field while all_cash=True is a silent no-op — reject loudly."""
+    define_scenario("s1", BASIC_CONFIG)  # house is all_cash
+    result = sweep_param("s1", "house.down_payment", [50_000.0, 80_000.0])
+    assert "error" in result
+    assert "all_cash" in result["error"]
+    assert "rows" not in result
+
+
+def test_sweep_mortgage_field_on_financed_section_ok():
+    """A financed (non-all_cash) section still sweeps mortgage fields normally."""
+    define_scenario("s1", MORTGAGE_CONFIG)
+    result = sweep_param("s1", "house.down_payment", [60_000.0, 100_000.0])
+    assert "rows" in result
+    assert len(result["rows"]) == 2
+    assert all("error" not in r for r in result["rows"])
+
+
+def test_sweep_revalidates_each_swept_config():
+    """Finding #7: each swept config is re-validated; an out-of-range value surfaces as a
+    per-row error. selling_cost_rate must be in [0, 1) — enforced only by validate_config,
+    not by the compute engine, so this fails without the re-validation."""
+    define_scenario("s1", BASIC_CONFIG)
+    result = sweep_param("s1", "condo.selling_cost_rate", [1.5])
+    assert len(result["rows"]) == 1
+    assert "error" in result["rows"][0]
+    assert result["rows"][0]["value"] == 1.5

@@ -29,6 +29,27 @@ class ConfigValidationError(Exception):
     pass
 
 
+def _parse_bool(value: Any, field_name: str) -> bool:
+    """
+    Strictly parse a boolean config value.
+
+    Accepts real booleans, and the exact strings "true"/"false" (any case) for
+    YAML round-trip tolerance. Everything else raises — notably guarding the
+    ``bool("false") is True`` trap where any non-empty string coerces to True.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    raise ConfigValidationError(
+        f"{field_name} must be a boolean (true/false), got {value!r}"
+    )
+
+
 def _parse_event(event_data: Dict[str, Any], years: int) -> EventConfig:
     """
     Parse an event configuration from YAML data.
@@ -149,7 +170,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         down_payment=(None if "down_payment" not in condo_data else float(condo_data["down_payment"])),
         mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
-        all_cash=bool(condo_data.get("all_cash", False)),
+        all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
         selling_cost_rate=float(condo_data.get("selling_cost_rate", 0.05)),
     )
 
@@ -189,7 +210,7 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         down_payment=(None if "down_payment" not in house_data else float(house_data["down_payment"])),
         mortgage_rate=(None if "mortgage_rate" not in house_data else float(house_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
-        all_cash=bool(house_data.get("all_cash", False)),
+        all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
         selling_cost_rate=float(house_data.get("selling_cost_rate", 0.05)),
     )
 
@@ -318,11 +339,16 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             warnings.append(f"condo.reserve_initial_balance should be >= 0, got {condo.reserve_initial_balance}")
         if condo.reserve_growth_rate < -1:
             warnings.append(f"condo.reserve_growth_rate should be > -1, got {condo.reserve_growth_rate}")
+        if condo.value_growth_rate <= -1:
+            warnings.append(f"condo.value_growth_rate must be > -1 (> -100%), got {condo.value_growth_rate}")
 
     if spec.house is not None:
         house = spec.house
         if house.initial_value < 0:
             warnings.append(f"house.initial_value should be >= 0, got {house.initial_value}")
+
+        if house.value_growth_rate <= -1:
+            warnings.append(f"house.value_growth_rate must be > -1 (> -100%), got {house.value_growth_rate}")
 
         if house.annual_maintenance_rate < 0 or house.annual_maintenance_rate > 1:
             warnings.append(
@@ -385,7 +411,19 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             return
         if name == "condo" and (opt.initial_value is None or opt.initial_value <= 0):
             warnings.append(f"{name}: initial_value must be > 0 in the net-wealth model")
-        if not opt.all_cash:
+        mortgage_fields_set = (
+            opt.down_payment is not None
+            or opt.mortgage_rate is not None
+            or opt.mortgage_term_years is not None
+        )
+        if opt.all_cash:
+            # all_cash XOR mortgage block: a mortgage field alongside all_cash is
+            # ambiguous intent and must be rejected, not silently ignored.
+            if mortgage_fields_set:
+                warnings.append(
+                    f"{name}: all_cash: true is set together with mortgage fields "
+                    f"(down_payment / mortgage_rate / mortgage_term_years); declare exactly one")
+        else:
             if opt.down_payment is None or opt.mortgage_rate is None or opt.mortgage_term_years is None:
                 warnings.append(
                     f"{name}: declare all_cash: true OR a mortgage block "
