@@ -126,15 +126,20 @@ mortality is counted exactly once,** via the CPM2014/CPM-B decrement below; no i
 embeds mortality (ISQ *household* projections, all-cause retention rates) may enter the roll-forward.
 
 **Initialization — unit-preserving persons→households conversion (codex r1-F1, r2-F1):** at base
-year, per (geography, age, sex), private-household persons partition into exactly THREE buckets:
-`Solo_s(a) = pop_s(a) × living_alone_rate(a)` (person-denominated; each is one household);
-`Couple(a) = [Σ_s pop_s(a) × (1 − living_alone_rate(a)) × couple_share(a)] / 2` (÷2: two persons
-per couple household); and the RESIDUAL `Other(a) = Σ_s pop_s(a) × (1 − living_alone_rate(a)) ×
-(1 − couple_share(a))` — persons living with others (family/roommates, incl. seniors living with
-adult children) — who are EXPLICITLY EXCLUDED from the cohort's owner-unit stock as presumptive
-non-maintainers (a conservative undercount of senior-held units, carried as a labeled assumption;
-collective-dwelling/institutional persons are removed before the partition via the Census
-collective share). Person conservation is asserted: Solo persons + 2×Couple + Other = private pop.
+year, per (geography, age, sex), private-household persons partition into exactly THREE buckets
+using SEX-SPECIFIC rates (codex r3-F1 — a pooled couple rate is not sex-conserving: 20 men + 100
+women at couple_share=1 would fabricate 40 husbands, and at 85+ the female surplus is the ACTUAL
+population structure): `Solo_s(a) = pop_s(a) × living_alone_rate_s(a)`;
+`coupled_s(a) = pop_s(a) × (1 − living_alone_rate_s(a)) × couple_share_s(a)`;
+`Other_s(a) = pop_s(a) × (1 − living_alone_rate_s(a)) × (1 − couple_share_s(a))` — persons living
+with others (family/roommates, incl. seniors with adult children), EXPLICITLY EXCLUDED from the
+cohort's owner-unit stock as presumptive non-maintainers (conservative undercount, labeled
+assumption; collective/institutional persons removed before the partition via the Census collective
+share). Couples form only from matched pairs: `Couple(a) = [coupled_m(a) + coupled_f(a)] / 2` with
+a FAIL-LOUD balance constraint `|coupled_m − coupled_f| / max(coupled_m, coupled_f) ≤ 0.25` —
+per-sex Census rates should nearly balance the two by construction; a breach means the rate inputs
+are wrong (raise CalibrationError), never silently manufacture partners. Person conservation
+asserted per sex: `Solo_s + coupled_s + Other_s = private pop_s`.
 Ownership rates are HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD
 counts, never person counts. Fixtures (§10): (a) 100 men + 100 women all coupled, 60% household
 ownership → exactly 60 Couple owner units, 0 Solo, 0 Other; (b) GENERAL case — 200 persons,
@@ -148,7 +153,12 @@ Post-entry, stocks evolve ONLY by our decrements; the roll-forward is NEVER re-a
 projected 75+ stocks in later years (those stocks embed deaths — re-anchor + decrement = the
 double-count). The plan writes the t→t+1 stock-flow equation with every death term appearing exactly
 once, plus a mutation test: applying the CPM decrement twice must breach the reconciliation envelope
-across the allowed (q_live, age-shape, state-mix) sweep.
+across the allowed (q_live, age-shape, state-mix) sweep. **Named omission (codex r3-F2, deliberate
+altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
+omitted (senior migration flows are thin; the `compo-*` workbooks bound the magnitude — record the
+75+ net-migration share there as the assumption's evidence in a probe note). This is a stated
+assumption with a sensitivity remark in outputs, not a modeled mechanism; adding a reconciled
+post-entry migration term without reintroducing ISQ-embedded mortality is a v1 item.
 
 **Household states, tracked per (geography, age, year, scenario):**
 `Couple`, `Solo_m`, `Solo_f` — owner-households, age = reference person (couples: same-age
@@ -222,7 +232,12 @@ high} mapped at load from ISQ labels {D2026, A2026, E2026}). The `geography` fie
 Geography enum's **string value** — the enum never crosses the file boundary:
 
 ```
-schema_version, mapping_version, data_vintage {isq_edition, census_year, constants_as_of},
+schema_version, mapping_version,
+data_vintage {isq_edition, census_year, constants_as_of,
+              source_hashes: {<source>: sha256-of-raw-response, extracted_at}},
+              # codex r3-F6: census_year is not a PIT vintage — StatCan tables get corrected
+              # in place; every non-ISQ source's RAW RESPONSE is hashed at extract time and
+              # the hash is part of artifact identity (ISQ files are already byte-pinned)
 assumptions_hash, geography, dwelling_type, horizon_year, scenario,
 demo_drift_mean, demo_drift_p10, demo_drift_p90,   # REAL (CPI-deflated) annualized price-drift
                                                     # prior, decimal/yr — matches hde's real-terms
@@ -253,9 +268,13 @@ consumes drift bands as priors on its price-drift generator and the tilt on its 
 conditional inputs; S4b self-computes its shocks (locus rule: substrate supplies raw inputs,
 consumer derives).
 
-**ED→prior mapping (the danger zone, isolated — TRANCHE 2):** `balance/mapping.py`, version-stamped;
-monotone piecewise-linear real-drift response with slope band β ∈ [1.0, 4.0] (%/yr per unit ED
-fraction); p10/p90 spans INCLUDE β uncertainty (not just input scenarios). Every artifact row carries
+**ED→prior mapping (the danger zone, isolated — TRANCHE 2; units PINNED NOW, codex r3-F7 — the
+ambiguity was worth 100×):** `balance/mapping.py`, version-stamped; v0 form is LINEAR THROUGH THE
+ORIGIN: `demo_drift = β × ED`, where ED is the dimensionless fraction of §7 and β converts to
+DECIMAL real drift per year per unit ED — worked fixture: `ED = 0.01, β = 2.0 → demo_drift = 0.02
+decimal/yr = 2%/yr real`. β band [1.0, 4.0] in these units; zero intercept by construction (no
+demographic tilt at flow balance); any knots/saturation are a Tranche-2 decision made WITH the S4b
+sketch, never improvised. p10/p90 spans INCLUDE β uncertainty (not just input scenarios). Every artifact row carries
 `mapping_version`; changing the mapping without a version bump fails a test. β is unvalidatable
 until the consumer exists — a further reason this whole layer waits for the S4b sketch.
 
@@ -267,7 +286,12 @@ annual, household-denominated, per (geography g, year t, scenario s):**
     D = native owner-household formation (headship deltas × ownership propensity)
       + immigrant-cohort formation (arrival flows × immigrant-differential propensity)   # §6
     S = Σ_cause exits(cause) × φ_market(cause), with estate exits lagged L years          # §5
-    OwnerStock = total owner-households in g at t (all ages, same run)
+    OwnerStock(g,t,s) = Σ_over_all_ages pop(a,g,t,s) × headship(a) × ownership(a)
+      — DEFINED (codex r3-F3): annual re-estimation from ISQ scenario population with BASE-YEAR
+      Census headship and ownership rates held constant (PIT-fixed, labeled assumption). This is a
+      stock LEVEL estimate; ISQ-embedded mortality is correct here and does not conflict with I1,
+      which governs the 75+ exit FLOW model only. No carried-forward under-75 stock exists — the
+      denominator has exactly one defining equation.
 
 Zero/near-zero denominator → raise (never emit an unbounded fraction). ED is scale-invariant
 (households/households); a hand-worked fixture (§10) pins one unique ED value from the spec alone,
@@ -298,12 +322,17 @@ sign, annual ISQ release). **Fail-safe contract (this is a verification gate —
 never false-green):** each indicator's result ∈ {OK, CROSSED, UNKNOWN(reason)}; UNKNOWN fires on
 source-unavailable, operator-input-missing, or `as_of` older than the indicator's declared
 freshness limit — a stale baseline is NEVER reported as within-band. Threshold endpoints evaluate
-as CROSSED (closed bands). **Completeness integrity (codex r2-F4 — no vacuous green):** the
-required-indicator set is VERSIONED in the baseline file; the evaluator asserts exact-key equality
-against it — an empty registry, a missing required indicator, or a duplicate key is itself
-UNKNOWN/nonzero, so "all OK" can never be vacuously true over a partial set. Exit code: 0 only when
-every REQUIRED indicator is present exactly once and OK; nonzero on any CROSSED, UNKNOWN, missing,
-duplicate, or empty registry. Scheduling is out of scope v0.
+as CROSSED (closed bands). **Completeness integrity (codex r2-F4 + r3-F4 — no vacuous green, no
+co-deletion):** the required-indicator set is a VERSIONED CONSTANT IN DEMOFLOW SOURCE CODE, not in
+the baseline file it validates (a self-declared set dies to co-deletion: removing an indicator from
+both the declaration and the records leaves an internally consistent partial registry). The
+evaluator asserts exact-key equality of the baseline's records against the code-owned set — empty
+registry, missing required indicator, or duplicate key ⇒ UNKNOWN/nonzero. **Value integrity (codex
+r3-F5):** a present, fresh indicator whose current value is NaN/±Inf/non-numeric, whose `as_of` is
+in the future, or whose band is inverted (lower > upper) ⇒ UNKNOWN, never within-band (naive
+comparisons classify NaN as inside every band — both boundary checks are False); tripwire JSON is
+emitted with `allow_nan=False` too. Exit code: 0 only when every code-required indicator is present
+exactly once, finite, fresh, well-banded, and OK; nonzero otherwise. Scheduling is out of scope v0.
 
 ## 8. Junction table (typed, per 9b)
 
@@ -338,9 +367,11 @@ TDD throughout (mm-spine discipline). Anchors:
   partition (0.20/0.08/0.72, sums to 1); dimensional headship test (100 arrivals as 50 couples vs
   100 singles → DIFFERENT D); hand-worked ED fixture (unique value, estate-lag boundary crossing) +
   ranking fixture (unique ordering, exact tie, scenario crossing); sex-code orientation guard RED
-  (swapped 1↔2 map must raise on the 85+ female-excess check) + code-3 exclusion test; tripwire
-  completeness REDs (empty registry, missing required indicator, duplicate key → nonzero, never
-  exit 0); Tranche 2 adds one RED fixture per ScenarioPrior integrity rule (missing row, duplicate
+  (swapped 1↔2 map must raise on the 85+ female-excess check) + code-3 exclusion test; couple
+  balance RED (20 men + 100 women, couple_share=1 → CalibrationError, never 60 fabricated couples
+  — codex r3-F1); tripwire completeness + value-integrity REDs (empty registry, missing required
+  indicator vs the CODE-owned set, duplicate key, NaN/±Inf/non-numeric current value, future
+  as_of, inverted band → nonzero, never exit 0); Tranche 2 adds one RED fixture per ScenarioPrior integrity rule (missing row, duplicate
   key, NaN, inverted band, negative tilt, unknown enum, value-bearing/unknown flag string). The
   double-decrement mutation test rides the cohort-engine build task.
 - **Loader pins**: recorded sha256 fixtures; schema-drift fixture (mutated sheet) MUST raise; the
@@ -362,7 +393,9 @@ TDD throughout (mm-spine discipline). Anchors:
    the QC basis (in-repo proven; cross-env install mechanical but unproven).
 2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total (the
    HORS_RMR rate derives as the province-net-of-CMAs residual, codex F8).
-3. Census living-arrangement cross-tab hunt (fallback: vitrine 28% + widened band).
+3. Census living-arrangement cross-tab hunt — SEX-SPECIFIC rates required (living-alone and
+   couple shares by age × sex; the r3-F1 balance constraint depends on them). Fallback: vitrine
+   28% + widened band applied per-sex with the balance constraint relaxed to a labeled assumption.
 4. Census immigrant vs non-immigrant homeownership by CMA (the Tranche-1 coarse-netting
    differential — Census-covered for Québec, unlike CHSP).
 5. IRCC PR-by-CMA CSV download + schema record.
