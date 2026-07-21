@@ -116,6 +116,10 @@ day one), otherwise a flat module.
 Degenerate policy (load-bearing-claim scope, applies to every loader): empty sheet, missing scenario
 label, unknown geography label, negative or NON-FINITE (NaN/±Inf) values in ANY numeric input —
 populations, headship/ownership/living-arrangement rates, immigrant propensities, hazards q —
+(signed-FLOW carve-out, codex r9-F2: indicators that are legitimately signed — natural increase,
+net migration components — are exempt from the negativity gate and bind finite-only; the nonneg
+rule governs stocks and rates, never signed flows: the natural-increase tripwire's whole job is to
+evaluate a negative value, not raise on it) —
 non-monotone year index → **raise**, never impute, never warn-and-continue (codex r4-F3: the finite
 contract is END-TO-END — every emitted JSON in every tranche, rankings and tripwires included,
 serializes with `allow_nan=False` and asserts field finiteness pre-write). Two further loader
@@ -206,12 +210,16 @@ CPM2014+CPM-B (year-projected) and q_live survivor-conditional:
 `1−(1−0.36)^{1/5} ≈ 8.5%/yr`, band **[6%, 11%]/yr**, age-shape (flat vs rising) as a sensitivity
 axis. The Myers all-cause retention numbers are NEVER a calibration target.
 
-**Reconciliation gate (I1's aggregate backstop — honest claim, codex F2):** roll a 75-year-old owner
-cohort forward one decade; all-cause retention (survivors still owning / initial) must land in
-**[0.20, 0.40]** (Myers 0.26–0.31 envelope, widened). Outside → **raise CalibrationError**. This
-catches GROSS mortality double-counting; it is an aggregate band, not a proof of exactly-once — the
-exactly-once guarantee lives in the stock-flow equation + mutation test above. Both together are the
-enforcement.
+**Reconciliation gate (I1's aggregate backstop — honest claim, codex F2; composition PINNED
+r9-F4 — retention is state-dependent, so an unpinned cohort mix makes the gate ambiguous):** roll
+a 75-year-old owner cohort forward one decade, where the cohort's household-state and sex
+composition is the one the INITIALIZATION EQUATIONS produce on the committed data vintage for
+MTL_RMR (pinned by construction, recorded in the fixture); all-cause retention (survivors still
+owning / initial) must land in **[0.20, 0.40]** (Myers 0.26–0.31 envelope, widened). Outside →
+**raise CalibrationError**. Per-state retention paths (Solo_m, Solo_f, Couple) are additionally
+pinned in the oracle fixture. This catches GROSS mortality double-counting; it is an aggregate
+band, not a proof of exactly-once — the exactly-once guarantee lives in the stock-flow equation +
+mutation test above. Both together are the enforcement.
 
 **Transfer-vs-market split:** exits carry cause; `φ_market(cause)` fractions with estate-lag
 convolution — voluntary exits list promptly (φ≈0.9, band [0.7,1.0]); death/estate exits convert to
@@ -361,7 +369,9 @@ annual, household-denominated, per (geography g, year t, scenario s):**
       which governs the 75+ exit FLOW model only. No carried-forward under-75 stock exists — the
       denominator has exactly one defining equation.
 
-Zero/near-zero denominator → raise (never emit an unbounded fraction). ED is scale-invariant
+Denominator guard with a NUMERIC boundary (codex r9-F5): `OwnerStock < 1,000` households → raise
+(no modeled geography legitimately carries fewer; fixtures at 999 / 1,000 / 1,001) — never emit an
+unbounded fraction, and never leave "near-zero" to implementation taste. ED is scale-invariant
 (households/households); a hand-worked fixture (§10) pins one unique ED value from the spec alone,
 including a delayed estate listing crossing a horizon boundary.
 
@@ -379,10 +389,19 @@ just defined):** rankings and tripwire JSON each open with the same top-level en
 consumer (and the same-vintage refusal check) reads identity from the envelope and rejects
 mixed-identity row sets; contract-tested with a two-vintage mixing RED.
 
+**No open string anywhere — the GENERAL rule (codex r9-F3, closing the side-channel class rather
+than the next instance):** EVERY string-typed position in every emitted artifact — field values,
+enum members, map KEYS (source_hashes keys are drawn from the code-owned source registry; values
+must be 64-hex), timestamps (ISO-8601-validated) — is either registry/enum-bound or
+format-validated. No free-form string exists in any demoflow artifact; a validator walks the full
+document tree asserting this, so a future field addition cannot silently reopen the channel.
+
 **Tranche-1 output allowlists (codex r5-F5, value channels closed r6-F4 — the prohibition must
 bind SHIPPED formats AND their string fields):** the rankings JSON and tripwire JSON each carry an
 exact nested field allowlist — rankings row: {geography, mean_ed_reference, mean_ed_low,
-mean_ed_high, rank, flags[]} with `flags[]` a CLOSED enum {borrowed_prior, ra_proxy} (scenario
+mean_ed_high, rank, rank_stable, flags[]} with `rank_stable` a TYPED boolean carrying the r8-F1
+robustness-sweep verdict (codex r9-F1 — the mandated stability result needs a schema home, never a
+flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy} (scenario
 semantics per the collapse rule below); tripwire record: {indicator, current_value, source, as_of,
 band_low, band_high, status, reason?} with `reason` drawn from a CLOSED machine-token enum {stale,
 source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
