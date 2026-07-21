@@ -133,7 +133,11 @@ age-block) with duplicates → raise AND a CONTIGUOUS year lattice pinned to the
 (codex r5-F2 + r6-F3): consecutive year differences exactly 1 AND endpoints equal to the file
 family's declared span (2021–2051 for the RMR/RA workbooks) AND an identical year domain across
 every geography × scenario × sex series — a missing terminal year for one geography must raise,
-never silently shorten that geography's ranking mean. Cause-owner: all of
+never silently shorten that geography's ranking mean. The `Statut` SUB-LATTICE is validated too
+(codex r10-F5 — the raw lattice can be intact while a proj→est relabel silently shortens a ranking
+mean): values ∈ {r, p, j-family per the metadata}, exactly ONE est→proj transition per series, and
+an IDENTICAL projected-year domain across every geography × scenario × sex — deviation raises;
+RED fixture relabels one geography's 2051 from proj to est. Cause-owner: all of
 these are data/environment state → explicit named
 error. Error classes follow hde's convention (sole precedent: `ConfigValidationError(Exception)`):
 `LoaderError(Exception)` and `CalibrationError(Exception)`, flat, no hierarchy unless the degenerate
@@ -263,11 +267,13 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 **Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
 decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
 senior release):** `D_native(g,t,s) = Σ_{a_min < a < 75} max(0, H_resident(a,t) −
-H_resident(a−1, t−1)) × ownership(a)`, with the LOWER BOUNDARY pinned (codex r7-F7 — `a−1` must
-never leave the domain or wrap): `a_min = 18` (household formation floor); at `a = a_min` the term
-is `max(0, H_resident(18, t)) × ownership(18)` — new entrants at the youngest modeled age form
-against zero prior stock, by equation, never by array wraparound (fixture exercises a_min with a
-distinctive terminal-age value planted to catch negative-index reads). GROSS formations from the
+H_resident(a−1, t−1)) × ownership(a)` **summed over 19 ≤ a < 75, PLUS the explicit age-18 term**
+(codex r7-F7 boundary, summation corrected r10-F4 — the earlier strict inequality excluded the very
+term the boundary rule requires): `D_native = max(0, H_resident(18, t)) × ownership(18) +
+Σ_{19 ≤ a < 75} max(0, H_resident(a,t) − H_resident(a−1, t−1)) × ownership(a)` — new entrants at 18
+form against zero prior stock, by equation, never by array wraparound (fixture: nonzero
+H_resident(18), zero elsewhere → D = H(18)×ownership(18), not zero; plus the planted terminal-age
+wraparound catch). GROSS formations from the
 UNDER-75 resident base only (cohort-followed headship gains, floored at zero). All 75+ stock dynamics — dissolution, downsizing, estate release — live
 EXCLUSIVELY in S via the cohort engine; the age-75 boundary makes D and S structurally disjoint.
 Reconciliation fixture: a two-year run with no arrivals, one 75+ cohort declining in headship, and
@@ -405,18 +411,26 @@ flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy} (scenario
 semantics per the collapse rule below); tripwire record: {indicator, current_value, source, as_of,
 band_low, band_high, status, reason?} with `reason` drawn from a CLOSED machine-token enum {stale,
 source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
-missing_indicator, duplicate_indicator, empty_registry} AND `source` BOUND to the code-owned
+missing_indicator, duplicate_indicator} AND `source` BOUND to the code-owned
 registry (codex r7-F1 — each indicator's source string is declared in the registry constant; the
 record must equal it exactly, so `source` cannot carry smuggled content) — NO free-text string
-field exists in either format. **UNKNOWN-branch nullability (codex r7-F2 — a first-run failure has
+field exists in either format (an open string is the same serialization side-channel the
+ScenarioPrior flags enum closes). **UNKNOWN-branch nullability (codex r7-F2 — a first-run failure has
 no honest measurement):** `current_value` and `as_of` are NULLABLE exactly when status=UNKNOWN with
 reason ∈ {source_unavailable, operator_input_missing, missing_indicator, **non_finite** (codex
 r8-F2 — a NaN/Inf measurement cannot ride a finite-only JSON: current_value is null, the offending
 raw value goes to the run log, never the artifact)} — null, NEVER a fabricated finite value; every
-other status requires all fields non-null; contract-tested both ways (an open string is the same serialization side-channel the ScenarioPrior flags enum
-closes). Contract tests assert field sets equal the allowlists exactly AND every enum-typed value
-is a member, with RED fixtures adding a `crash_probability` field AND smuggling
-`"crash_probability=0.35"` through flags[]/reason — all independent of the goldens.
+other status requires all fields non-null; contract-tested both ways. **empty_registry is a
+RUN-level terminal error, not a per-indicator reason (codex r10-F6 — with no indicators there is
+nothing to attach an UNKNOWN record to):** removed from the per-indicator reason enum; an empty
+baseline emits NO artifact and exits nonzero with the named error. Contract tests assert field
+sets equal the allowlists exactly AND every enum-typed value is a member, with RED fixtures adding
+a `crash_probability` field AND smuggling `"crash_probability=0.35"` through flags[]/reason — all
+independent of the goldens. Epistemic limit (codex r10-F1, same class as r4-F4): field allowlists
+bind VOCABULARY, not value semantics — no schema proves a number in an allowed field was derived
+conditionally; that guarantee lives in the single derivation path (the version-stamped mapping
+module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
+plus review. Named, not hand-waved.
 
 **Scenario-named fan fields (codex r6-F6 — scenario identity vs min/max are DIFFERENT semantics
 and can cross):** `mean_ed_low` / `mean_ed_high` are SCENARIO-NAMED — the Faible (D2026) and Fort
@@ -477,7 +491,7 @@ PR-visible act, which is review's job to catch, not the runtime's. Scheduling is
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — codex r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is excluded from the immigrant-demand channel with a `borrowed_prior`-class flag and participates in rankings on the supply/population side only — never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
+| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — codex r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is **EXCLUDED FROM RANKINGS ENTIRELY — no ED is computed for it** (codex r10-F2: a supply-side-only ED would have to feed P_ISQ to native formation, omit a demand term, or invent arrivals — each contradicts a stated contract); the run emits a run-level exclusion record naming the unresolved input, and the rankings cover the remaining members — never a partial ED, never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
 | Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (codex r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
 | Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
@@ -578,7 +592,11 @@ Handed off Opus-main per steering routing.
 
 **Tranche 2 (gated on S4b input-slot sketch):** ScenarioPrior emitter; ED→drift mapping (β band);
 immigrant YSL S-curve + ROC-CHSP borrowing + QC-discount multiplier [0.60, 0.85];
-`never_relax_stress` contract enforcement (rides the emitter).
+`never_relax_stress` contract enforcement (rides the emitter). **Named contract DEBTS the sketch
+session inherits (codex r10-F3 — the emitter is not functionally determined without them):** the
+ED-trajectory → horizon_year-row aggregation rule (endpoint vs period-mean — pinned with a
+distinguishing fixture), and the ED → drawdown_weight_tilt mapping (currently unspecified; the β
+rule determines drift only).
 **v1+:** MRC-level couronne split (pending source); plex demand compute + supply stock from rôle
 CUBF (2A mod 2 — operator may pull forward with a named decision it informs); StatCan paid custom
 tabulation (CT-level immigrant tenure); >2051 horizon tail (only QC-total reaches 2071 — any
