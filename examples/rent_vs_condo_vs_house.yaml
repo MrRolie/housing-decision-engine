@@ -30,7 +30,11 @@ house:
 rent:
   monthly_rent: 2800
   rent_escalation_rate: 0.04
-  invested_down_payment: 150000
+  # Equalized with the condo's all-cash purchase capital (480k): a renter who
+  # skips buying invests that capital instead. A single scalar can't match both
+  # owned options (condo 480k, house 550k); matched to the condo, so against the
+  # 550k house the renter is still ~70k under-credited.
+  invested_down_payment: 480000
   investment_return_rate: 0.07
   events:
     - name: "moving_costs"
