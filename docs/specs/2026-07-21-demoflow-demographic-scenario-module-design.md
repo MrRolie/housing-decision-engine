@@ -119,10 +119,12 @@ populations, headship/ownership/living-arrangement rates, immigrant propensities
 non-monotone year index → **raise**, never impute, never warn-and-continue (codex r4-F3: the finite
 contract is END-TO-END — every emitted JSON in every tranche, rankings and tripwires included,
 serializes with `allow_nan=False` and asserts field finiteness pre-write). Two further loader
-contracts (codex r5-F1/F2): every FRACTION-valued input — living-alone, couple-share,
-collective-share, headship, ownership, immigrant ratio/propensity, φ_market, q — is asserted
-∈ [0, 1] (1+ε passes a mere finite/negative gate while producing negative buckets or owners >
-households); and every loaded series declares its PRIMARY KEY (geography × year × scenario × sex ×
+contracts (codex r5-F1/F2, ratio carve-out r7-F8): every FRACTION-valued input — living-alone,
+couple-share, collective-share, headship, ownership, the immigrant PROPENSITY p_imm, φ_market, q —
+is asserted ∈ [0, 1] (1+ε passes a mere finite/negative gate while producing negative buckets or
+owners > households); the immigrant/non-immigrant ownership RATIO is a ratio, not a fraction —
+asserted nonnegative-finite only (immigrants CAN out-own non-immigrants in a cell; ratio 1.2 with
+p_nonimm 0.6 is a valid p_imm 0.72) — the [0,1] probability constraint binds the PRODUCT p_imm; and every loaded series declares its PRIMARY KEY (geography × year × scenario × sex ×
 age-block) with duplicates → raise AND a CONTIGUOUS year lattice pinned to the EXPECTED DOMAIN
 (codex r5-F2 + r6-F3): consecutive year differences exactly 1 AND endpoints equal to the file
 family's declared span (2021–2051 for the RMR/RA workbooks) AND an identical year domain across
@@ -173,8 +175,11 @@ entrants from ISQ cohort aging; their pre-75 mortality is ISQ's, disjoint from o
 Post-entry, stocks evolve ONLY by our decrements; the roll-forward is NEVER re-anchored to ISQ's
 projected 75+ stocks in later years (those stocks embed deaths — re-anchor + decrement = the
 double-count). The plan writes the t→t+1 stock-flow equation with every death term appearing exactly
-once, plus a mutation test: applying the CPM decrement twice must breach the reconciliation envelope
-across the allowed (q_live, age-shape, state-mix) sweep. **Named omission (codex r3-F2, deliberate
+once, plus a mutation test — **asserted against the ORACLE fixture's exact pinned numbers, NOT the
+aggregate envelope (codex r7-F5: the envelope cannot carry this — at q_live's low end, doubled
+mortality still retains ≈0.25, inside [0.20, 0.40]):** applying the CPM decrement twice must change
+the hand-computed oracle values (exact inequality against the pinned expectations); the envelope
+remains a coarse gross-error backstop only. **Named omission (codex r3-F2, deliberate
 altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
 omitted (senior migration flows are thin; the `compo-*` workbooks bound the magnitude — record the
 75+ net-migration share there as the assumption's evidence in a probe note). This is a stated
@@ -231,7 +236,11 @@ double-entry mutation test operates at the PIPELINE level: with arrivals > 0,
 `D_native(P_resident) ≠ D_native(P_ISQ)` in the fixture, and the emitted demand must equal the
 P_resident evaluation — feeding P_ISQ at the call site changes the output and fails the
 integration assertion. The decomposition-identity gate remains as the data-side check; the
-operand assertion is the consumer-side check; both run.
+operand assertion is the consumer-side check; both run. **Nonnegativity (codex r7-F3 — the
+identity is tautological when P_resident is DERIVED from it):** `P_resident(a,g,s,t) ≥ 0` is
+asserted per cell BEFORE any consumer — surviving arrivals exceeding P_ISQ in a cell means the
+arrival-survival assumptions contradict the scenario population (CalibrationError), never a
+negative resident base flowing into formation.
 
 **Tranche 1 (core) — COARSE netting, dimensionally explicit (codex r2-F2):** ISQ component
 arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
@@ -245,9 +254,13 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 
 **Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
 decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
-senior release):** `D_native(g,t,s) = Σ_{a < 75} max(0, H_resident(a,t) − H_resident(a−1, t−1)) ×
-ownership(a)` — GROSS formations from the UNDER-75 resident base only (cohort-followed headship
-gains, floored at zero). All 75+ stock dynamics — dissolution, downsizing, estate release — live
+senior release):** `D_native(g,t,s) = Σ_{a_min < a < 75} max(0, H_resident(a,t) −
+H_resident(a−1, t−1)) × ownership(a)`, with the LOWER BOUNDARY pinned (codex r7-F7 — `a−1` must
+never leave the domain or wrap): `a_min = 18` (household formation floor); at `a = a_min` the term
+is `max(0, H_resident(18, t)) × ownership(18)` — new entrants at the youngest modeled age form
+against zero prior stock, by equation, never by array wraparound (fixture exercises a_min with a
+distinctive terminal-age value planted to catch negative-index reads). GROSS formations from the
+UNDER-75 resident base only (cohort-followed headship gains, floored at zero). All 75+ stock dynamics — dissolution, downsizing, estate release — live
 EXCLUSIVELY in S via the cohort engine; the age-75 boundary makes D and S structurally disjoint.
 Reconciliation fixture: a two-year run with no arrivals, one 75+ cohort declining in headship, and
 one supply-side exit must show the decline in S only, D unchanged. **Full-geography join for the
@@ -360,6 +373,12 @@ skeptic's strongest-honest-output), NOT participants in any balance identity (v0
 cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
 `ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
 not data quality.
+**Identity envelope on SHIPPED files (codex r7-F6 — §9's artifact identity must be carried, not
+just defined):** rankings and tripwire JSON each open with the same top-level envelope
+{schema_version, data_vintage (incl. source_hashes), assumptions_hash} above their rows; a
+consumer (and the same-vintage refusal check) reads identity from the envelope and rejects
+mixed-identity row sets; contract-tested with a two-vintage mixing RED.
+
 **Tranche-1 output allowlists (codex r5-F5, value channels closed r6-F4 — the prohibition must
 bind SHIPPED formats AND their string fields):** the rankings JSON and tripwire JSON each carry an
 exact nested field allowlist — rankings row: {geography, mean_ed_reference, mean_ed_low,
@@ -367,8 +386,13 @@ mean_ed_high, rank, flags[]} with `flags[]` a CLOSED enum {borrowed_prior, ra_pr
 semantics per the collapse rule below); tripwire record: {indicator, current_value, source, as_of,
 band_low, band_high, status, reason?} with `reason` drawn from a CLOSED machine-token enum {stale,
 source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
-missing_indicator, duplicate_indicator, empty_registry} — NO free-text string field exists in
-either format (an open string is the same serialization side-channel the ScenarioPrior flags enum
+missing_indicator, duplicate_indicator, empty_registry} AND `source` BOUND to the code-owned
+registry (codex r7-F1 — each indicator's source string is declared in the registry constant; the
+record must equal it exactly, so `source` cannot carry smuggled content) — NO free-text string
+field exists in either format. **UNKNOWN-branch nullability (codex r7-F2 — a first-run failure has
+no honest measurement):** `current_value` and `as_of` are NULLABLE exactly when status=UNKNOWN with
+reason ∈ {source_unavailable, operator_input_missing, missing_indicator} — null, NEVER a fabricated
+finite value; every other status requires all fields non-null; contract-tested both ways (an open string is the same serialization side-channel the ScenarioPrior flags enum
 closes). Contract tests assert field sets equal the allowlists exactly AND every enum-typed value
 is a member, with RED fixtures adding a `crash_probability` field AND smuggling
 `"crash_probability=0.35"` through flags[]/reason — all independent of the goldens.
@@ -416,7 +440,7 @@ PR-visible act, which is review's job to catch, not the runtime's. Scheduling is
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): modeled labels → their enum member; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
+| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — codex r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is excluded from the immigrant-demand channel with a `borrowed_prior`-class flag and participates in rankings on the supply/population side only — never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source) |
 | Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and DUPLICATE `100+` column names** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (duplicates exist); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (codex r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
 | Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
