@@ -51,7 +51,7 @@ def test_comparison_spec_all_none_options_is_valid_at_model_level():
 
 
 def test_comparison_spec_with_options():
-    condo = CondoParams(monthly_fee=800.0)
+    condo = CondoParams(monthly_fee=800.0, all_cash=True)
     spec = ComparisonSpec(simulation=_sim(), economic=_econ(), condo=condo)
     assert spec.condo is condo
 
@@ -96,3 +96,28 @@ def test_breakdown_key_constants():
     assert "maintenance_pv" in HOUSE_BREAKDOWN_KEYS
     assert "rent_pv" in RENT_BREAKDOWN_KEYS
     assert "invested_dp_benefit_pv" in RENT_BREAKDOWN_KEYS
+
+
+def test_house_params_capital_structure_fields():
+    from hde.models import HouseParams
+    h = HouseParams(initial_value=400_000)
+    assert h.down_payment is None
+    assert h.mortgage_rate is None
+    assert h.mortgage_term_years is None
+    assert h.all_cash is False
+    assert h.selling_cost_rate == 0.05
+
+def test_condo_params_value_and_capital_structure_fields():
+    from hde.models import CondoParams
+    c = CondoParams(monthly_fee=400)
+    assert c.initial_value == 0.0
+    assert c.value_growth_rate == 0.0
+    assert c.down_payment is None
+    assert c.all_cash is False
+    assert c.selling_cost_rate == 0.05
+
+def test_breakdown_keys_include_financing():
+    from hde.models import HOUSE_BREAKDOWN_KEYS, CONDO_BREAKDOWN_KEYS
+    for k in ("downpayment_pv", "mortgage_pv", "terminal_equity_pv"):
+        assert k in HOUSE_BREAKDOWN_KEYS
+        assert k in CONDO_BREAKDOWN_KEYS

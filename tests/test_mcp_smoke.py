@@ -16,8 +16,8 @@ from mcp_server.tools import (
 BASIC_CONFIG = {
     "years": 20,
     "discount_rate": 0.03,
-    "condo": {"monthly_fee": 500, "fee_escalation_rate": 0.02},
-    "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.015},
+    "condo": {"monthly_fee": 500, "fee_escalation_rate": 0.02, "initial_value": 300_000, "all_cash": True},
+    "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.015, "all_cash": True},
 }
 
 
@@ -66,8 +66,8 @@ def test_full_chain(tmp_path, monkeypatch):
 def test_two_scenario_session(tmp_path, monkeypatch):
     monkeypatch.setattr(tools_module, "FIGURE_CACHE_DIR", tmp_path)
 
-    config_a = {**BASIC_CONFIG, "condo": {"monthly_fee": 400}}
-    config_b = {**BASIC_CONFIG, "condo": {"monthly_fee": 800}}
+    config_a = {**BASIC_CONFIG, "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True}}
+    config_b = {**BASIC_CONFIG, "condo": {"monthly_fee": 800, "initial_value": 300_000, "all_cash": True}}
 
     define_scenario("cheap_condo", config_a)
     define_scenario("expensive_condo", config_b)

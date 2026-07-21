@@ -2,9 +2,9 @@
 
 ## Status
 
-**Overall:** In progress (S3 complete)
+**Overall:** S4a complete (PR #4, pending merge); S4b not started — its brainstorm will consume the demoflow ScenarioPrior contract (`docs/specs/2026-07-21-demoflow-demographic-scenario-module-design.md`, Tranche 2) and must author the one-page S4b demographic-input-slot sketch that gates demoflow's emitter
 **Created:** 2026-06-07
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-06-09
 **Slug:** `housing-decision-engine`
 
 ### Session Status
@@ -14,7 +14,8 @@
 | 1 | decisive | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine` — commit `daf9503` | Rename + uv + AGENTS.md/CLAUDE.md + docs structure |
 | 2 | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
-| 4 | brainstorm-to-execute | `not_started` | (will be produced by S4) | Market scenario layer + Monte Carlo extensions |
+| 4a | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
+| 4b | brainstorm-to-execute | `not_started` | (will be produced by S4b) | Market scenario layer: price-drop events, discount-rate sensitivity, correlated market+income shocks, crisis/forced-sell, sensitivity_sweep/stress_test tools, + 4 S3-deferred items. Depends on S4a. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
 A `completed` row MUST carry a real, stat-able **absolute** artifact path.
@@ -40,6 +41,7 @@ A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 - **2026-06-07:** Scope expanded beyond original cost-sim to include employment cash flow modeling and real estate market scenario/sensitivity analysis — making this a personal financial scenario engine, not just a cost comparator.
 - **2026-06-07 (S1 complete):** `src/cvh_cost/` → `src/hde/`, setuptools → hatchling, entry point `cvh-cost` → `hde`, Python floor bumped 3.9→3.10. 76 tests pass; `uv.lock` committed.
 - **2026-06-08 (S2 complete):** FastMCP server with 6 tools (define_scenario, run_comparison, sweep_param, save_figure, list_scenarios, delete_scenario). Session registry with total-replace store_results semantics. 11 PR review findings addressed (path traversal, stale MC, mode validation, backend import order). 115 tests pass. PR #2 merged.
+- **2026-06-08 (S4 design — split + leverage re-scope):** Code inspection found the engine is carrying-cost-only — `house_value` compounds but is never harvested as equity, no mortgage/interest rate, and the rent side is one-sidedly credited the invested-DP benefit. Price-drop scenarios were therefore wrong-signed/inert. Operator decisions: (D1) net-wealth comparator; (D2) **full mortgage/amortization DCF** ("full-value − financing carry", the long-term-correct model) — **re-opens the "mortgage/leverage modeling" out-of-scope boundary** (in-conversation instruction overrides roadmap, Authority Hierarchy #1); (D3) "interest rate shock" reinterpreted as discount-rate sensitivity (S4b); (D4) **split S4 → S4a foundation + S4b scenario layer**; (D5) net-wealth canonical (no legacy mode; affected tests rewritten against an independent oracle); (D6) required explicit capital structure (mortgage XOR all_cash) on owned options. Elegance-gate (architectural + strategic) both PROCEED-WITH-MODIFICATIONS, no second split; mods folded (pv_annuity reuse + closed-form balance, shared `_financing_pv`, compositional oracle-anchored test assertions, oracle-first ordering, 74-fixture `all_cash` stub pass, dual-layer fail-loud, AGENTS.md "do not add mortgage" line struck). Spec: `docs/specs/2026-06-08-net-wealth-foundation-design.md`.
 
 ### Next Recommended Action
 

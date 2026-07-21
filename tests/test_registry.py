@@ -14,8 +14,8 @@ def _spec(**overrides):
     config = {
         "years": 20,
         "discount_rate": 0.03,
-        "condo": {"monthly_fee": 500},
-        "house": {"initial_value": 400_000},
+        "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True},
+        "house": {"initial_value": 400_000, "all_cash": True},
     }
     config.update(overrides)
     return load_config_dict(config)
@@ -33,8 +33,8 @@ def test_define_and_get():
 
 
 def test_define_overwrites_silently():
-    spec_a = _spec(condo={"monthly_fee": 500})
-    spec_b = _spec(condo={"monthly_fee": 900})
+    spec_a = _spec(condo={"monthly_fee": 500, "initial_value": 300_000, "all_cash": True})
+    spec_b = _spec(condo={"monthly_fee": 900, "initial_value": 300_000, "all_cash": True})
     registry.define("s1", {}, spec_a)
     registry.define("s1", {}, spec_b)
     assert registry.get("s1").spec is spec_b

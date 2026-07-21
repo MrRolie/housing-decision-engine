@@ -43,20 +43,27 @@ directly via MCP — no YAML file required.
 ## As a Library
 
 ```python
-from hde.models import CondoParams, HouseParams, SimulationParams, EconomicParams
+from hde.models import CondoParams, HouseParams, SimulationParams, EconomicParams, ComparisonSpec
 from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
 
-condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02)
-house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015)
+# Owned options need a capital structure: all_cash=True OR a mortgage block
+# (down_payment + mortgage_rate + mortgage_term_years). Condo needs initial_value > 0.
+condo = CondoParams(monthly_fee=400, fee_escalation_rate=0.02,
+                    initial_value=350_000, all_cash=True)
+house = HouseParams(initial_value=400_000, annual_maintenance_rate=0.015, all_cash=True)
 sim = SimulationParams(years=20, discount_rate=0.03)
 econ = EconomicParams()
 
-det = compute_deterministic(condo, house, sim, econ)
-mc = run_monte_carlo(condo, house, sim, econ)
+# All engines take a single ComparisonSpec (condo/house/rent/income are optional).
+spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house)
 
-print(f"Deterministic difference: ${det.diff_pv:,.0f}")
-print(f"P(House more expensive): {mc.prob_house_more_expensive:.1%}")
+det = compute_deterministic(spec)
+mc = run_monte_carlo(spec)
+
+print(f"Condo net-wealth PV: ${det.condo.total_pv:,.0f}")
+print(f"House net-wealth PV: ${det.house.total_pv:,.0f}")
+print(f"P(condo cheapest):   {mc.prob_condo_cheapest:.1%}")
 ```
 
 ## Configuration
@@ -70,10 +77,14 @@ discount_rate: 0.03
 condo:
   monthly_fee: 400
   fee_escalation_rate: 0.02
+  initial_value: 350000   # required (> 0) in the net-wealth model
+  all_cash: true          # declare all_cash OR a mortgage block
+                          # (down_payment + mortgage_rate + mortgage_term_years)
 
 house:
   initial_value: 400000
   annual_maintenance_rate: 0.015
+  all_cash: true
   events:
     - name: "roof"
       base_cost: 12000

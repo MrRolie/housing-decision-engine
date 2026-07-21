@@ -73,7 +73,7 @@ uv run hde examples/basic_config.yaml
 - **MC numpy arrays** never cross the MCP boundary; only `MonteCarloSummary` scalars + `prob_X_cheapest` returned.
 - **store_results** uses total-replace semantics — running deterministic-only clears cached MC results.
 - **Scenario names** are sanitized via `Path(name).name` before joining figure paths.
-- **sweep_param** whitelist has 14 paths; rent paths require `spec.rent is not None`.
+- **sweep_param** whitelist has 24 paths; rent paths require `spec.rent is not None`.
 - **Breakdown keys** centralized as `CONDO_BREAKDOWN_KEYS`, `HOUSE_BREAKDOWN_KEYS`, `RENT_BREAKDOWN_KEYS` frozensets.
 
 ## Roadmap
@@ -89,5 +89,5 @@ Sessions:
 ## Do not
 
 - Add geographic tax rules (explicitly out of scope — see roadmap)
-- Add mortgage optimization / leverage modeling (out of scope)
+- Add mortgage *optimization* / refinancing / variable-rate modeling (out of scope). NOTE: mortgage amortization + terminal equity ARE modeled as of S4a (2026-06-08); the rent-vs-buy DCF is leveraged.
 - Import from fund repos (`mm-infra`, `mm-strategies`, etc.) — this is standalone personal tooling

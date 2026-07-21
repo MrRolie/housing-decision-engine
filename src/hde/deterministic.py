@@ -6,7 +6,7 @@ ownership costs using deterministic (fixed) parameters, without
 any randomness or Monte Carlo simulation.
 """
 
-from typing import List
+from typing import List, Optional, Tuple
 
 from .models import (
     CondoParams,
@@ -31,6 +31,8 @@ from .pv import (
     pv_annuity,
     pv_growth_annuity,
     pv_recurring_with_escalation,
+    mortgage_payment,
+    outstanding_balance,
 )
 
 
@@ -41,6 +43,73 @@ def _effective_growth_rate(base_rate: float, econ: EconomicParams) -> float:
     if econ.mode == "nominal":
         return (1 + base_rate) * (1 + econ.inflation_rate) - 1
     return base_rate
+
+
+def _require_valued_growth(effective_growth: float, label: str) -> None:
+    """
+    Reject an appreciation factor <= 0 before valuing terminal equity.
+
+    ``value_N = initial_value * (1 + g) ** years``: when ``1 + g < 0`` the power
+    flips sign by the parity of ``years``, producing garbage terminal equity
+    (config validation rejects value_growth_rate <= -1; this is the defense for
+    directly-constructed params that bypass config).
+    """
+    if 1 + effective_growth <= 0:
+        raise ValueError(
+            f"{label} value_growth_rate implies a non-positive appreciation factor "
+            f"(1+g={1 + effective_growth:.4f}); growth <= -100% cannot be valued")
+
+
+def _financing_pv(
+    initial_value: float,
+    down_payment: Optional[float],
+    mortgage_rate: Optional[float],
+    mortgage_term_years: Optional[int],
+    all_cash: bool,
+    selling_cost_rate: float,
+    value_N: float,
+    dr: float,
+    n_years: int,
+) -> Tuple[float, float, float]:
+    """
+    (downpayment_pv, mortgage_pv, terminal_equity_pv) for an owned option.
+
+    Fail-loud (strategic Mod 5): direct-construction callers that declare neither
+    all_cash nor a complete mortgage block raise here, not compute silent garbage.
+    """
+    if not all_cash and (
+        down_payment is None or mortgage_rate is None or mortgage_term_years is None
+    ):
+        raise ValueError(
+            "owned option requires all_cash=True OR a full mortgage block "
+            "(down_payment + mortgage_rate + mortgage_term_years)"
+        )
+    if all_cash:
+        downpayment_pv = initial_value
+        mortgage_pv = 0.0
+        balance_N = 0.0
+    else:
+        # Fail-loud on impossible mortgage blocks that would otherwise compute
+        # silent garbage: down_payment > initial_value drives the loan negative,
+        # and mortgage_payment() returns 0.0 for non-positive principal.
+        if not (0 <= down_payment <= initial_value):
+            raise ValueError(
+                f"owned option down_payment must be in [0, initial_value], "
+                f"got down_payment={down_payment}, initial_value={initial_value}")
+        if mortgage_rate < 0:
+            raise ValueError(f"owned option mortgage_rate must be >= 0, got {mortgage_rate}")
+        if mortgage_term_years <= 0:
+            raise ValueError(f"owned option mortgage_term_years must be > 0, got {mortgage_term_years}")
+        downpayment_pv = down_payment
+        loan = initial_value - down_payment
+        payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
+        mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
+        balance_N = outstanding_balance(
+            loan, mortgage_rate, mortgage_term_years, n_years, payment
+        )
+    equity_N = value_N * (1 - selling_cost_rate) - balance_N
+    terminal_equity_pv = -pv_single(equity_N, dr, n_years)
+    return downpayment_pv, mortgage_pv, terminal_equity_pv
 
 
 def _maintenance_rate_for_year(house: HouseParams, year: int) -> float:
@@ -236,12 +305,24 @@ def _compute_condo_option(
                 events_pv += pv_single(event_cost, discount_rate, year)
                 reserve_pv -= pv_single(covered, discount_rate, year)
 
-    total_pv = fee_pv + events_pv + other_pv + reserve_pv
+    condo_value_growth = _effective_growth_rate(condo.value_growth_rate, econ)
+    _require_valued_growth(condo_value_growth, "condo")
+    value_N = condo.initial_value * (1 + condo_value_growth) ** sim.years
+    downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
+        condo.initial_value, condo.down_payment, condo.mortgage_rate,
+        condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
+        value_N, discount_rate, sim.years,
+    )
+    total_pv = (fee_pv + events_pv + other_pv + reserve_pv
+                + downpayment_pv + mortgage_pv + terminal_equity_pv)
     breakdown = {
         "fee_pv": fee_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
         "reserve_pv": reserve_pv,
+        "downpayment_pv": downpayment_pv,
+        "mortgage_pv": mortgage_pv,
+        "terminal_equity_pv": terminal_equity_pv,
     }
     assert set(breakdown.keys()) == CONDO_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
@@ -265,6 +346,7 @@ def _compute_house_option(
     """
     discount_rate = sim.discount_rate
     house_value_growth = _effective_growth_rate(house.value_growth_rate, econ)
+    _require_valued_growth(house_value_growth, "house")
 
     other_cost_growth = [
         _effective_growth_rate(c.escalation_rate, econ)
@@ -299,11 +381,21 @@ def _compute_house_option(
             if event_years[event.name] == year:
                 events_pv += pv_single(event.base_cost, discount_rate, year)
 
-    total_pv = maintenance_pv + events_pv + other_pv
+    value_N = house.initial_value * (1 + house_value_growth) ** sim.years
+    downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
+        house.initial_value, house.down_payment, house.mortgage_rate,
+        house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
+        value_N, discount_rate, sim.years,
+    )
+    total_pv = (maintenance_pv + events_pv + other_pv
+                + downpayment_pv + mortgage_pv + terminal_equity_pv)
     breakdown = {
         "maintenance_pv": maintenance_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
+        "downpayment_pv": downpayment_pv,
+        "mortgage_pv": mortgage_pv,
+        "terminal_equity_pv": terminal_equity_pv,
     }
     assert set(breakdown.keys()) == HOUSE_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
@@ -387,9 +479,21 @@ def _annual_costs_for_option(
     Note: these are nominal/undiscounted cash outflows (not PVs); they are
     divided by the year's income to form an affordability ratio.
     """
+    # Compute the level mortgage payment once (0 if all_cash or no mortgage block)
+    mort_payment = 0.0
+    mort_term = 0
+    if option_type in ("house", "condo") and not getattr(params, "all_cash", False):
+        if (params.down_payment is not None and params.mortgage_rate is not None
+                and params.mortgage_term_years is not None):
+            from .pv import mortgage_payment as _mortgage_payment
+            loan = params.initial_value - params.down_payment
+            mort_payment = _mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
+            mort_term = params.mortgage_term_years
+
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
+        mort_t = mort_payment if year <= mort_term else 0.0
         if option_type == "condo":
             base = params.monthly_fee * 12 * ((1 + params.fee_escalation_rate) ** t)
             ev_cost = sum(
@@ -400,7 +504,7 @@ def _annual_costs_for_option(
                 c.annual_amount * ((1 + c.escalation_rate) ** t)
                 for c in params.other_recurring_costs
             )
-            costs.append(base + ev_cost + other_cost)
+            costs.append(base + ev_cost + other_cost + mort_t)
         elif option_type == "house":
             house_val = params.initial_value * ((1 + params.value_growth_rate) ** t)
             maint_rate = _maintenance_rate_for_year(params, year)
@@ -412,7 +516,7 @@ def _annual_costs_for_option(
                 c.annual_amount * ((1 + c.escalation_rate) ** t)
                 for c in params.other_recurring_costs
             )
-            costs.append(house_val * maint_rate + ev_cost + other_cost)
+            costs.append(house_val * maint_rate + ev_cost + other_cost + mort_t)
         elif option_type == "rent":
             base = params.monthly_rent * 12 * ((1 + params.rent_escalation_rate) ** t)
             ev_cost = sum(

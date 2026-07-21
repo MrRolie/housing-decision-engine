@@ -149,6 +149,36 @@ def pv_recurring_with_escalation(
         return pv_growth_annuity(first_payment, discount_rate, escalation_rate, n_years)
 
 
+def mortgage_payment(principal: float, rate: float, term_years: int) -> float:
+    """
+    Level (constant) annual mortgage payment that amortizes `principal` over
+    `term_years` at annual `rate`. M = P*r / (1 - (1+r)^-T); P/T when r == 0.
+    """
+    if term_years <= 0:
+        raise ValueError(f"term_years must be positive, got {term_years}")
+    if principal <= 0:
+        return 0.0
+    if rate == 0:
+        return principal / term_years
+    return principal * rate / (1 - (1 + rate) ** -term_years)
+
+
+def outstanding_balance(
+    principal: float, rate: float, term_years: int, year: int, payment: float
+) -> float:
+    """
+    Remaining mortgage balance at the END of `year`, closed form (no loop).
+    Zero at/after the term. B = L0*(1+r)^y - M*[(1+r)^y - 1]/r; L0 - M*y when r==0.
+    """
+    if year >= term_years:
+        return 0.0
+    if year <= 0:
+        return principal
+    if rate == 0:
+        return max(0.0, principal - payment * year)
+    return principal * (1 + rate) ** year - payment * ((1 + rate) ** year - 1) / rate
+
+
 def pv_to_monthly_savings(pv: float, rate: float, n_years: int) -> float:
     """
     Convert a present value to equivalent monthly savings needed.

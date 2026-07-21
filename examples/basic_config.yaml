@@ -11,6 +11,8 @@ economic:
 condo:
   monthly_fee: 450
   fee_escalation_rate: 0.02
+  initial_value: 350000
+  all_cash: true
   events: []
   other_recurring_costs: []
 
@@ -18,6 +20,7 @@ house:
   initial_value: 400000
   value_growth_rate: 0.01
   annual_maintenance_rate: 0.012
+  all_cash: true
   events:
     - name: "roof"
       base_cost: 10000

@@ -20,9 +20,12 @@ class TestLoadConfigFromFile:
             "discount_rate": 0.03,
             "condo": {
                 "monthly_fee": 400,
+                "initial_value": 300_000,
+                "all_cash": True,
             },
             "house": {
                 "initial_value": 400000,
+                "all_cash": True,
             },
         }
         
@@ -52,6 +55,8 @@ class TestLoadConfigFromFile:
             "condo": {
                 "monthly_fee": 550,
                 "fee_escalation_rate": 0.02,
+                "initial_value": 350_000,
+                "all_cash": True,
                 "events": [
                     {
                         "name": "assessment",
@@ -73,6 +78,7 @@ class TestLoadConfigFromFile:
                 "initial_value": 500000,
                 "value_growth_rate": 0.02,
                 "annual_maintenance_rate": 0.015,
+                "all_cash": True,
                 "events": [
                     {
                         "name": "roof",
@@ -129,10 +135,10 @@ class TestLoadConfigDict:
         config = {
             "years": 20,
             "discount_rate": 0.03,
-            "condo": {"monthly_fee": 400},
-            "house": {"initial_value": 400000},
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True},
+            "house": {"initial_value": 400000, "all_cash": True},
         }
-        
+
         spec = load_config_dict(config)
 
         assert spec.condo.monthly_fee == 400
@@ -143,8 +149,8 @@ class TestLoadConfigDict:
         config = {
             "years": 20,
             "discount_rate": 0.03,
-            "condo": {"monthly_fee": 400},
-            "house": {"initial_value": 400000},
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True},
+            "house": {"initial_value": 400000, "all_cash": True},
         }
 
         spec = load_config_dict(config)
@@ -188,7 +194,7 @@ class TestValidation:
         config = {
             "years": 20,
             "discount_rate": 0.03,
-            "house": {"initial_value": 400000},
+            "house": {"initial_value": 400000, "all_cash": True},
         }
         spec = load_config_dict(config)
         assert spec.condo is None
@@ -199,7 +205,7 @@ class TestValidation:
         config = {
             "years": 20,
             "discount_rate": 0.03,
-            "condo": {"monthly_fee": 400},
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True},
         }
         spec = load_config_dict(config)
         assert spec.house is None
@@ -251,9 +257,10 @@ class TestEventParsing:
         config = {
             "years": 25,
             "discount_rate": 0.03,
-            "condo": {"monthly_fee": 400},
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True},
             "house": {
                 "initial_value": 400000,
+                "all_cash": True,
                 "events": [
                     {
                         "name": "roof",
@@ -284,9 +291,10 @@ class TestEventParsing:
         config = {
             "years": 25,
             "discount_rate": 0.03,
-            "condo": {"monthly_fee": 400},
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True},
             "house": {
                 "initial_value": 400000,
+                "all_cash": True,
                 "events": [
                     {
                         "name": "roof",
@@ -314,12 +322,15 @@ class TestEventParsing:
             "discount_rate": 0.03,
             "condo": {
                 "monthly_fee": 500,
+                "initial_value": 300_000,
+                "all_cash": True,
                 "reserve_contribution_rate": 0.1,
                 "reserve_initial_balance": 1000,
                 "reserve_growth_rate": 0.02,
             },
             "house": {
                 "initial_value": 300_000,
+                "all_cash": True,
                 "maintenance_curve": [
                     {"year": 1, "rate": 0.01},
                     {"year": 10, "rate": 0.02},
@@ -366,6 +377,8 @@ class TestRecurringCostParsing:
             "discount_rate": 0.03,
             "condo": {
                 "monthly_fee": 400,
+                "initial_value": 300_000,
+                "all_cash": True,
                 "other_recurring_costs": [
                     {
                         "name": "insurance",
@@ -374,7 +387,7 @@ class TestRecurringCostParsing:
                     }
                 ],
             },
-            "house": {"initial_value": 400000},
+            "house": {"initial_value": 400000, "all_cash": True},
         }
         
         spec = load_config_dict(config)
@@ -391,6 +404,8 @@ class TestRecurringCostParsing:
             "discount_rate": 0.03,
             "condo": {
                 "monthly_fee": 400,
+                "initial_value": 300_000,
+                "all_cash": True,
                 "other_recurring_costs": [
                     {
                         "name": "insurance",
@@ -398,7 +413,7 @@ class TestRecurringCostParsing:
                     }
                 ],
             },
-            "house": {"initial_value": 400000},
+            "house": {"initial_value": 400000, "all_cash": True},
         }
         
         spec = load_config_dict(config)
@@ -414,8 +429,8 @@ class TestComparisonSpecReturn:
         from hde.models import ComparisonSpec
         config = {
             "years": 10, "discount_rate": 0.05,
-            "condo": {"monthly_fee": 500},
-            "house": {"initial_value": 300_000},
+            "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True},
+            "house": {"initial_value": 300_000, "all_cash": True},
         }
         spec = load_config_dict(config)
         assert isinstance(spec, ComparisonSpec)
@@ -460,7 +475,7 @@ class TestComparisonSpecReturn:
     def test_income_params_parsed_correctly(self):
         config = {
             "years": 10, "discount_rate": 0.05,
-            "condo": {"monthly_fee": 500},
+            "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True},
             "income": {
                 "annual_income": 120_000,
                 "income_growth_rate": 0.03,
@@ -492,3 +507,91 @@ class TestComparisonSpecReturn:
         }
         with pytest.raises(ConfigValidationError):
             load_config_dict(config)
+
+
+# --- Task 8: capital-structure validation ---
+
+def test_config_house_requires_capital_structure():
+    from hde.config import load_config_dict, ConfigValidationError
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.01}}
+    with pytest.raises(ConfigValidationError):
+        load_config_dict(cfg)  # neither all_cash nor mortgage block
+
+
+def test_config_house_all_cash_ok():
+    from hde.config import load_config_dict
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.01, "all_cash": True}}
+    spec = load_config_dict(cfg)
+    assert spec.house.all_cash is True
+
+
+def test_config_house_mortgage_block_ok():
+    from hde.config import load_config_dict
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "down_payment": 80_000,
+                     "mortgage_rate": 0.05, "mortgage_term_years": 25}}
+    spec = load_config_dict(cfg)
+    assert spec.house.down_payment == 80_000
+
+
+def test_config_condo_requires_initial_value_and_capital_structure():
+    from hde.config import load_config_dict, ConfigValidationError
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "all_cash": True}}  # missing initial_value
+    with pytest.raises(ConfigValidationError):
+        load_config_dict(cfg)
+
+
+# --- PR #4 external-review findings ---
+
+def test_config_rejects_all_cash_with_mortgage_block():
+    """Finding #1: all_cash=True AND a mortgage field set is ambiguous intent — reject."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "all_cash": True,
+                     "down_payment": 80_000, "mortgage_rate": 0.05, "mortgage_term_years": 25}}
+    with pytest.raises(ConfigValidationError, match="all_cash"):
+        load_config_dict(cfg)
+
+
+def test_config_rejects_condo_value_growth_at_or_below_neg_one():
+    """Finding #2/#4: value_growth_rate <= -1 flips terminal-equity sign by year parity — reject."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": True,
+                     "value_growth_rate": -1.5}}
+    with pytest.raises(ConfigValidationError, match="value_growth_rate"):
+        load_config_dict(cfg)
+
+
+def test_config_rejects_house_value_growth_at_or_below_neg_one():
+    """Finding #4 (house side): value_growth_rate <= -1 rejected at config level."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "house": {"initial_value": 400_000, "all_cash": True, "value_growth_rate": -1.0}}
+    with pytest.raises(ConfigValidationError, match="value_growth_rate"):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_string_false_parses_to_false():
+    """Finding #6: bool('false') is True — 'false' must parse to False, not True.
+    With all_cash correctly False and no mortgage block, capital-structure validation must fire."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "false"}}
+    with pytest.raises(ConfigValidationError):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_invalid_string_rejected():
+    """Finding #6: a non-boolean all_cash value is rejected at parse time."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "maybe"}}
+    with pytest.raises(ConfigValidationError, match="all_cash"):
+        load_config_dict(cfg)
+
+
+def test_config_all_cash_string_true_still_accepted():
+    """Finding #6: exact 'true'/'false' strings remain valid for YAML round-trip tolerance."""
+    cfg = {"years": 10, "discount_rate": 0.04,
+           "condo": {"monthly_fee": 500, "initial_value": 300_000, "all_cash": "true"}}
+    spec = load_config_dict(cfg)
+    assert spec.condo.all_cash is True
