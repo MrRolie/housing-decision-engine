@@ -451,11 +451,13 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             "population structure — exactly what spec §5's `Couple(a) = min(coupled_m, coupled_f)`",
             "matching plus `max - min -> Other` was written to absorb.",
             "",
-            "**Load-bearing for Task 15b:** calibrating toward balance can only move the LARGER",
-            "side DOWN. Raising `couple_share_f` to match the male side needs values above 1.0",
-            "(Montréal CMA 75-84 would need ~1.02), which violates the spec's assert that every",
-            "fraction lies in [0, 1]. P3 records the raw cited rates; the gate's placement and any",
-            "downward calibration are Task 15b's call, not this probe's.",
+            "**Open for Task 15b — stated, deliberately NOT resolved here.** The rows above are",
+            "the raw cited Census values; P3 neither calibrates them nor rules on where the gate",
+            "belongs. The tension 15b inherits: the gate is a TOLERANCE (<= 0.25), not an",
+            "equality, so it is satisfiable from either side within [0, 1] — but every such",
+            "adjustment moves a rate away from the cited Census figure, which sits against",
+            "§11.3's cited-or-raise rule. Choosing among calibrating, re-placing the gate, and",
+            "accepting the breach is 15b's call, not this probe's.",
             "",
         ]
 
