@@ -1,7 +1,9 @@
 # P3 — Census living-arrangement cross-tab hunt (RECORDED OBSERVATION)
 
-Written by `probes/run_p3.py`. Every number and every DECISION token below is derived
-from a live WDS response in the run that wrote this file — nothing here is hand-edited.
+Written by `probes/run_p3.py`; nothing in this file is hand-edited.
+
+Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.
+Of the 6 narrative figures in §5, 6 are DERIVED (computed from live responses in this same run, each naming its source) and 0 are CITED (external to this run, printed with the citation inline).
 
 ## 1. Catalogue sweep (so a NOT-FOUND would be credible)
 
@@ -230,20 +232,21 @@ measurement supersedes it for every geography in the table above.
 ## 5. Universe, vintage, and the re-derivation recipe (for Task 15b)
 
 - productId `98100134` = StatCan Table **98-10-0134-01**, 2021 Census, released
-  2022-07-13. Vintage pinned here; a re-pull must reproduce these counts.
-- **Universe is persons in PRIVATE households.** Independently confirmed: this cube's
+  2022-07-13T08:30. Vintage pinned here; a re-pull must reproduce these counts.
+- **Universe is persons in PRIVATE households.** Measured, not assumed: this cube's
   Québec all-ages/all-genders total is 8,308,475 against the published 2021 Census
-  Québec population of 8,501,833 — a 2.27% gap that is the collective/non-private
-  household population. So the rate denominators already exclude collectives, which
-  is what spec §5's partition requires. (A 75+-SPECIFIC collective share is NOT
-  derivable from this cube alone — it needs a total-population-by-age source — so
+  Québec population of 8,501,833 — a 2.27% gap that is the collective /
+  non-private-household population. So the rate denominators already exclude
+  collectives, which is what spec §5's partition requires. (A 75+-SPECIFIC collective
+  share is NOT derivable from this cube alone — it needs total population BY AGE — so
   Task 15's `collective_share_75plus` keeps its existing flag; P3 does not land it.)
-- Two independent definitions of living-alone AGREE EXACTLY in this cube: the
-  `Persons living alone` member of the living-arrangements dimension and the
-  `In a one-person household` member of `Household type of person` return identical
-  counts on every cell checked.
-- Dimension additivity reconciles to within +/-10 persons (Census random rounding to
-  base 5) — Task 15b must NOT assert exact component sums.
+- The cube's two independent definitions of living-alone **AGREE on every cell compared**: `Persons living alone`
+  (living-arrangements dimension) vs `In a one-person household` (household-type dimension)
+  — compared cell by cell, 42/42 geography x sex x age cells match.
+- Living-arrangements hierarchy additivity: worst deviation 10 persons across the
+  126 identities checked (21 component cells carry no published
+  value and were counted as zero). Census random-rounds to base 5, so a small non-zero
+  residual is EXPECTED — Task 15b must reconcile with a tolerance, never exact sums.
 - Recipe: POST `getDataFromCubePidCoordAndLatestNPeriods` with a coordinate whose
   slots are the dimension-position-ordered member ids; hold `Census year` = 2021 and
   `Household type of person` = its Total member; vary geography, gender, age group,
@@ -275,7 +278,7 @@ measurement supersedes it for every geography in the table above.
     fallback is likewise not needed: the cross-tab resolves at CMA granularity.
 
 - `DECISION-COUPLE-SHARE-SOURCE: StatCan Table 98-10-0134-01 (WDS productId 98100134), member "Married spouses and common-law partners" over the not-living-alone population, by age group x gender x geography, 2021 Census`
-- `DECISION-COUPLE-SHARE-CITATION: Statistics Canada. Table 98-10-0134-01, "Census family status and household living arrangements, household type of person, age group and gender: Canada, provinces and territories, census metropolitan areas and census agglomerations", 2021 Census, released 2022-07-13. https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810013401`
+- `DECISION-COUPLE-SHARE-CITATION: Statistics Canada. Table 98-10-0134-01, "Census family status and household living arrangements, household type of person, age group and gender: Canada, provinces and territories, census metropolitan areas and census agglomerations", 2021 Census, released 2022-07-13T08:30. https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810013401`
   * Quebec / 75 to 84 years: couple_share M=0.9170 F=0.7756 | living_alone M=0.2293 F=0.4293
   * Quebec / 85 years and over: couple_share M=0.8481 F=0.4291 | living_alone M=0.2971 F=0.5674
   * Montréal (CMA), Que. / 75 to 84 years: couple_share M=0.9077 F=0.7295 | living_alone M=0.2150 F=0.4344

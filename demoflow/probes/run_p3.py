@@ -53,6 +53,7 @@ Run:  cd demoflow && uv run python probes/run_p3.py
 import json
 import re
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 # --- candidates -------------------------------------------------------------
@@ -87,6 +88,27 @@ TARGET_SEXES = ["Men+", "Women+"]
 STAT_TOTAL = "Total - Census family status and household living arrangements"
 STAT_ALONE = "Persons living alone"
 STAT_COUPLE = "Married spouses and common-law partners"
+# The rest of the living-arrangements hierarchy, used by the additivity check.
+STAT_IN_FAM = "Persons in census families"
+STAT_LONE_PARENT = "Parents in one-parent families"
+STAT_CHILDREN = "Children in census families"
+STAT_NOT_IN_FAM = "Persons not in census families"
+STAT_OTHER_REL = "Persons living with other relatives"
+STAT_NON_REL = "Persons living with non-relatives only"
+STAT_COMPONENTS = (
+    STAT_IN_FAM,
+    STAT_COUPLE,
+    STAT_LONE_PARENT,
+    STAT_CHILDREN,
+    STAT_NOT_IN_FAM,
+    STAT_OTHER_REL,
+    STAT_NON_REL,
+    STAT_ALONE,
+)
+TOTAL_HH = "Total - Household type of person"
+HH_ONE_PERSON = "In a one-person household"
+# Second cube, for the published total population the main cube cannot contain.
+POP_CUBE = 98100001  # Population and dwelling counts: Canada, provinces and territories
 
 CHUNK = 40
 TIMEOUT = 120
@@ -94,6 +116,68 @@ TIMEOUT = 120
 # Spec §11.3 named fallback for living_alone (ISQ vitrine, 65+, QC-wide).
 VITRINE_POINT = 0.28
 VITRINE_BAND = (0.24, 0.34)
+
+
+_FACTS: list["Fact"] = []
+
+
+@dataclass(frozen=True)
+class Fact:
+    """A narrative figure, carrying HOW this run obtained it.
+
+    Structural guard against a defect this probe family kept reintroducing: a
+    hand-typed literal printed under prose asserting the run computed it. The
+    facts AND the document's provenance header are both generated from these
+    objects, so a figure cannot reach the note without declaring itself either
+
+      `derived` — computed from a live response in THIS run (it changes when the
+                  source data changes), naming the exact source, or
+      `cited`   — external to this run, printed with its citation inline.
+
+    The header is then assembled from the mix actually present rather than
+    asserted, so it cannot drift from what the body really contains.
+    """
+
+    text: str
+    kind: str  # "derived" | "cited"
+    source: str
+
+    def __post_init__(self) -> None:
+        _FACTS.append(self)
+
+    @classmethod
+    def derived(cls, value: object, how: str) -> "Fact":
+        return cls(f"{value}", "derived", how)
+
+    @classmethod
+    def cited(cls, value: object, source: str) -> "Fact":
+        return cls(f"{value}", "cited", source)
+
+    def __str__(self) -> str:
+        return self.text if self.kind == "derived" else f"{self.text} [cited: {self.source}]"
+
+
+def _provenance_header() -> list[str]:
+    """Describe the note's provenance from the facts it ACTUALLY contains."""
+    derived = [f for f in _FACTS if f.kind == "derived"]
+    cited = [f for f in _FACTS if f.kind == "cited"]
+    lines = [
+        "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
+        "",
+        "Every table in §2-§4 is generated row by row from the live WDS responses of the run "
+        "that wrote this file.",
+    ]
+    if _FACTS:
+        lines.append(
+            f"Of the {len(_FACTS)} narrative figures in §5, {len(derived)} are DERIVED "
+            f"(computed from live responses in this same run, each naming its source) and "
+            f"{len(cited)} are CITED (external to this run, printed with the citation inline)."
+        )
+    if cited:
+        lines += ["", "Externally cited figures:"]
+        lines += [f"- {f.text} — {f.source}" for f in cited]
+    lines.append("")
+    return lines
 
 
 def _post(url: str, payload: list) -> list:
@@ -184,8 +268,12 @@ def _member_id(dim: dict, name: str) -> int:
     )
 
 
-def _live_probe(obj: dict) -> dict:
-    """Pull real values at CMA x age x sex. Returns {(geo, sex, age, stat): value}."""
+def _coord_builder(obj: dict):
+    """Return `(coord_fn, productId)`; `coord_fn` maps member NAMES to a coordinate.
+
+    Names, never hardcoded ids: if StatCan re-indexes the cube, `_member_id`
+    refuses rather than silently reading the wrong geography.
+    """
     geo_d = _find_dim(obj, "Geography")
     sex_d = _find_dim(obj, "Gender", "Sex")
     age_d = _find_dim(obj, "Age")
@@ -197,7 +285,7 @@ def _live_probe(obj: dict) -> dict:
     width = max(npos, 10)
     pid = int(obj["productId"])
 
-    def coord(geo: str, sex: str, age: str, stat: str) -> str:
+    def coord(geo: str, sex: str, age: str, stat: str, hh: str = TOTAL_HH) -> str:
         slots = ["0"] * width
         slots[int(geo_d["dimensionPositionId"]) - 1] = str(_member_id(geo_d, geo))
         slots[int(sex_d["dimensionPositionId"]) - 1] = str(_member_id(sex_d, sex))
@@ -206,27 +294,25 @@ def _live_probe(obj: dict) -> dict:
         if year_d is not None:
             slots[int(year_d["dimensionPositionId"]) - 1] = str(_member_id(year_d, "2021"))
         if hh_d is not None:
-            slots[int(hh_d["dimensionPositionId"]) - 1] = str(
-                _member_id(hh_d, "Total - Household type of person")
-            )
+            slots[int(hh_d["dimensionPositionId"]) - 1] = str(_member_id(hh_d, hh))
         return ".".join(slots)
 
-    wanted: dict[str, tuple] = {}
-    for g in TARGET_GEOS:
-        for s in TARGET_SEXES:
-            for a in TARGET_AGES:
-                for st in (STAT_TOTAL, STAT_ALONE, STAT_COUPLE):
-                    wanted[coord(g, s, a, st)] = (g, s, a, st)
+    return coord, pid
 
+
+def _fetch(pid: int, wanted: dict) -> dict:
+    """Pull `{coordinate: key}` and return `{key: value|None}`.
+
+    Keyed on the coordinate the RESPONSE carries: the service does not preserve
+    request order, and zipping request to response would mis-label every value.
+    """
     coords = list(wanted)
-    out: dict[tuple, float | None] = {}
+    out: dict = {}
     for i in range(0, len(coords), CHUNK):
         batch = coords[i : i + CHUNK]
         res = _post(WDS_DATA, [{"productId": pid, "coordinate": c, "latestN": 1} for c in batch])
         for r in res:
             o = r.get("object") or {}
-            # Keyed on the RESPONSE's coordinate: the service does not preserve
-            # request order, and zipping would mis-label every value.
             c = o.get("coordinate")
             if c not in wanted:
                 raise ValueError(f"WDS returned an unrequested coordinate {c!r}")
@@ -236,6 +322,90 @@ def _live_probe(obj: dict) -> dict:
     if missing:
         raise ValueError(f"{len(missing)} requested cells never came back, e.g. {missing[:3]}")
     return out
+
+
+def _live_probe(obj: dict) -> dict:
+    """Pull real values at CMA x age x sex. Returns {(geo, sex, age, stat): value}."""
+    coord, pid = _coord_builder(obj)
+    wanted = {
+        coord(g, s, a, st): (g, s, a, st)
+        for g in TARGET_GEOS
+        for s in TARGET_SEXES
+        for a in TARGET_AGES
+        for st in (STAT_TOTAL, STAT_ALONE, STAT_COUPLE)
+    }
+    return _fetch(pid, wanted)
+
+
+def _definition_agreement(obj: dict) -> tuple[int, int, list]:
+    """COMPUTE whether the cube's two living-alone definitions agree.
+
+    `Persons living alone` (living-arrangements dimension) vs `In a one-person
+    household` (household-type dimension). Returns (cells compared, mismatches,
+    examples) — the ACTUAL result, so a future run where they diverge says so.
+    """
+    coord, pid = _coord_builder(obj)
+    keys = [(g, s, a) for g in TARGET_GEOS for s in TARGET_SEXES for a in TARGET_AGES]
+    alone = _fetch(pid, {coord(g, s, a, STAT_ALONE): (g, s, a) for g, s, a in keys})
+    one_person = _fetch(
+        pid, {coord(g, s, a, STAT_TOTAL, hh=HH_ONE_PERSON): (g, s, a) for g, s, a in keys}
+    )
+    mismatches = [
+        (k, alone[k], one_person[k]) for k in keys if (alone[k] or 0) != (one_person[k] or 0)
+    ]
+    return len(keys), len(mismatches), mismatches[:3]
+
+
+def _additivity(obj: dict) -> tuple[int, float, int]:
+    """COMPUTE how closely the living-arrangements hierarchy reconciles.
+
+    Three identities per cell: families + non-families == total;
+    couples + lone-parents + children == families; other-relatives +
+    non-relatives + living-alone == non-families. Returns (identities checked,
+    worst absolute deviation in persons, cells with no published value).
+    Census random-rounds to base 5, so the expectation is a small non-zero
+    residual — the point is to MEASURE it, not to assume it.
+    """
+    coord, pid = _coord_builder(obj)
+    keys = [(g, s, a) for g in TARGET_GEOS for s in TARGET_SEXES for a in TARGET_AGES]
+    members = [STAT_TOTAL, *STAT_COMPONENTS]
+    vals = _fetch(
+        pid,
+        {coord(g, s, a, m): (g, s, a, m) for g, s, a in keys for m in members},
+    )
+    suppressed = sum(1 for v in vals.values() if v is None)
+    v = lambda k, m: vals[(*k, m)] or 0.0  # noqa: E731 - suppressed cell == no persons
+    worst = 0.0
+    checked = 0
+    for k in keys:
+        identities = [
+            (v(k, STAT_IN_FAM) + v(k, STAT_NOT_IN_FAM), v(k, STAT_TOTAL)),
+            (v(k, STAT_COUPLE) + v(k, STAT_LONE_PARENT) + v(k, STAT_CHILDREN), v(k, STAT_IN_FAM)),
+            (
+                v(k, STAT_OTHER_REL) + v(k, STAT_NON_REL) + v(k, STAT_ALONE),
+                v(k, STAT_NOT_IN_FAM),
+            ),
+        ]
+        for lhs, rhs in identities:
+            worst = max(worst, abs(lhs - rhs))
+            checked += 1
+    return checked, worst, suppressed
+
+
+def _published_qc_population() -> tuple[float, str]:
+    """Fetch Québec's published 2021 Census population from a NAMED second cube.
+
+    The main cube's universe is private-household persons; establishing that
+    requires a total-population figure it does not contain. Fetching it live
+    keeps the comparison DERIVED rather than a hand-typed literal.
+    """
+    payload = _post(WDS_META, [{"productId": POP_CUBE}])
+    obj = payload[0]["object"]
+    geo_d, stat_d = obj["dimension"][0], obj["dimension"][1]
+    coord = f"{_member_id(geo_d, 'Quebec')}.{_member_id(stat_d, 'Population, 2021')}"
+    coord += ".0" * 8
+    got = _fetch(POP_CUBE, {coord: "qc"})
+    return got["qc"], obj.get("cubeTitleEn", "")
 
 
 def _rates(vals: dict) -> dict:
@@ -271,13 +441,11 @@ def _rates(vals: dict) -> dict:
 
 
 def main() -> None:  # noqa: C901 - a probe: linear narrative beats decomposition
-    note = [
-        "# P3 — Census living-arrangement cross-tab hunt (RECORDED OBSERVATION)",
-        "",
-        "Written by `probes/run_p3.py`. Every number and every DECISION token below is derived",
-        "from a live WDS response in the run that wrote this file — nothing here is hand-edited.",
-        "",
-    ]
+    # The provenance paragraph is GENERATED from the facts the body actually
+    # carries (see `_provenance_header`), so it is spliced in after the body is
+    # built rather than asserted up front.
+    title = ["# P3 — Census living-arrangement cross-tab hunt (RECORDED OBSERVATION)", ""]
+    note: list[str] = []
     candidates = list(CANDIDATES)
 
     # --- stage 1: catalogue sweep -------------------------------------------
@@ -348,6 +516,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
     ]
     outcome = "NOT-FOUND"  # one of FOUND / NOT-FOUND / FAILED
     found_pid = None
+    found_obj: dict = {}
     rates: dict = {}
     for pid, obj in qualified:
         try:
@@ -365,6 +534,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             if len(complete) == expected:
                 outcome = "FOUND"
                 found_pid = pid
+                found_obj = obj
                 note.append(f"- `LIVE PROBE VERDICT: FOUND-AT-CMA` on productId {pid}.")
                 break
             note.append(f"- **{pid}**: incomplete coverage — not accepted as the source.")
@@ -486,24 +656,56 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
 
     # --- universe + re-derivation recipe ------------------------------------
     if found_pid:
+        # Each figure below is COMPUTED here and tagged with its provenance; none
+        # is a literal typed into the prose. If a future run finds the cube
+        # revised, these lines report the new result rather than the old claim.
+        coord, _pid = _coord_builder(found_obj)
+        priv = _fetch(
+            int(found_obj["productId"]),
+            {coord("Quebec", "Total - Gender", "Total - All ages", STAT_TOTAL): "qc_private"},
+        )["qc_private"]
+        published, pop_title = _published_qc_population()
+        gap = (published - priv) / published * 100.0
+        cells, mismatches, examples = _definition_agreement(found_obj)
+        identities, worst, suppressed = _additivity(found_obj)
+        release = found_obj.get("releaseTime")
+
+        f_priv = Fact.derived(f"{priv:,.0f}", f"productId {found_pid}, Québec x all ages x all genders")
+        f_pub = Fact.derived(f"{published:,.0f}", f"StatCan Table 98-10-0001-01 ({pop_title})")
+        f_gap = Fact.derived(f"{gap:.2f}%", "computed from the two figures above")
+        f_agree = Fact.derived(
+            f"{cells - mismatches}/{cells}", "cells where the two living-alone definitions agree"
+        )
+        f_add = Fact.derived(
+            f"{worst:,.0f} persons", f"worst deviation across {identities} hierarchy identities"
+        )
+        f_rel = Fact.derived(release, f"`releaseTime` from the productId {found_pid} metadata")
+
+        agree_verdict = (
+            "AGREE on every cell compared"
+            if mismatches == 0
+            else f"DISAGREE on {mismatches} cell(s), e.g. {examples}"
+        )
         note += [
             "## 5. Universe, vintage, and the re-derivation recipe (for Task 15b)",
             "",
             f"- productId `{found_pid}` = StatCan Table **98-10-0134-01**, 2021 Census, released",
-            "  2022-07-13. Vintage pinned here; a re-pull must reproduce these counts.",
-            "- **Universe is persons in PRIVATE households.** Independently confirmed: this cube's",
-            "  Québec all-ages/all-genders total is 8,308,475 against the published 2021 Census",
-            "  Québec population of 8,501,833 — a 2.27% gap that is the collective/non-private",
-            "  household population. So the rate denominators already exclude collectives, which",
-            "  is what spec §5's partition requires. (A 75+-SPECIFIC collective share is NOT",
-            "  derivable from this cube alone — it needs a total-population-by-age source — so",
+            f"  {f_rel}. Vintage pinned here; a re-pull must reproduce these counts.",
+            "- **Universe is persons in PRIVATE households.** Measured, not assumed: this cube's",
+            f"  Québec all-ages/all-genders total is {f_priv} against the published 2021 Census",
+            f"  Québec population of {f_pub} — a {f_gap} gap that is the collective /",
+            "  non-private-household population. So the rate denominators already exclude",
+            "  collectives, which is what spec §5's partition requires. (A 75+-SPECIFIC collective",
+            "  share is NOT derivable from this cube alone — it needs total population BY AGE — so",
             "  Task 15's `collective_share_75plus` keeps its existing flag; P3 does not land it.)",
-            "- Two independent definitions of living-alone AGREE EXACTLY in this cube: the",
-            "  `Persons living alone` member of the living-arrangements dimension and the",
-            "  `In a one-person household` member of `Household type of person` return identical",
-            "  counts on every cell checked.",
-            "- Dimension additivity reconciles to within +/-10 persons (Census random rounding to",
-            "  base 5) — Task 15b must NOT assert exact component sums.",
+            "- The cube's two independent definitions of living-alone "
+            f"**{agree_verdict}**: `{STAT_ALONE}`",
+            f"  (living-arrangements dimension) vs `{HH_ONE_PERSON}` (household-type dimension)",
+            f"  — compared cell by cell, {f_agree} geography x sex x age cells match.",
+            f"- Living-arrangements hierarchy additivity: worst deviation {f_add} across the",
+            f"  {identities} identities checked ({suppressed} component cells carry no published",
+            "  value and were counted as zero). Census random-rounds to base 5, so a small non-zero",
+            "  residual is EXPECTED — Task 15b must reconcile with a tolerance, never exact sums.",
             "- Recipe: POST `getDataFromCubePidCoordAndLatestNPeriods` with a coordinate whose",
             "  slots are the dimension-position-ordered member ids; hold `Census year` = 2021 and",
             "  `Household type of person` = its Total member; vary geography, gender, age group,",
@@ -559,10 +761,11 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             "- `DECISION-COUPLE-SHARE-SOURCE: StatCan Table 98-10-0134-01 "
             f'(WDS productId {found_pid}), member "{STAT_COUPLE}" over the not-living-alone '
             "population, by age group x gender x geography, 2021 Census`",
+            # Title and release date come from the metadata fetched in §2, not from
+            # literals typed here: a citation that cannot drift from its source.
             "- `DECISION-COUPLE-SHARE-CITATION: Statistics Canada. Table 98-10-0134-01, "
-            "\"Census family status and household living arrangements, household type of person, "
-            "age group and gender: Canada, provinces and territories, census metropolitan areas "
-            "and census agglomerations\", 2021 Census, released 2022-07-13. "
+            f'"{found_obj.get("cubeTitleEn")}", 2021 Census, '
+            f"released {found_obj.get('releaseTime')}. "
             "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810013401`",
         ]
         for g in ("Quebec", "Montréal (CMA), Que.", "Québec (CMA), Que."):
@@ -598,7 +801,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         "",
     ]
 
-    text = "\n".join(note) + "\n"
+    text = "\n".join(title + _provenance_header() + note) + "\n"
     if "[FILL:" in text:  # belt-and-braces: this script must never emit a placeholder
         raise AssertionError("run_p3.py emitted an unresolved [FILL:] placeholder")
     OUT.write_text(text, encoding="utf-8")

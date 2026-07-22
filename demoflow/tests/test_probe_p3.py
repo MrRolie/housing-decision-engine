@@ -92,8 +92,18 @@ def _note_text() -> str:
 
 
 def _token(text: str, name: str) -> str | None:
-    """The value of a `DECISION-...: value` token, or None if the token is absent."""
-    found = re.search(rf"{re.escape(name)}:\s*(.+)", text)
+    """The value of a `DECISION-...: value` token, or None if the token is absent.
+
+    Prefers the backtick-delimited code span, which is how run_p3.py emits every
+    token. A greedy to-end-of-line parse would swallow anything trailing the
+    closing backtick, so an unresolved token followed by leftover prose could
+    read as resolved — the parser must not be the thing that launders a
+    placeholder into an answer.
+    """
+    span = re.search(rf"`{re.escape(name)}:\s*(.*?)`", text)
+    if span:
+        return span.group(1).strip()
+    found = re.search(rf"{re.escape(name)}:\s*(.*)", text)
     return found.group(1).strip().rstrip("`").strip() if found else None
 
 
