@@ -168,16 +168,41 @@ def _provenance_header() -> list[str]:
         "that wrote this file.",
     ]
     if _FACTS:
+        # States exactly what it counts: registered Fact objects. Saying "the
+        # narrative figures in §5" would be a category substitution — §5 also
+        # carries product ids, member counts and labels that never enter the
+        # registry, so that count would be false as written.
         lines.append(
-            f"Of the {len(_FACTS)} narrative figures in §5, {len(derived)} are DERIVED "
-            f"(computed from live responses in this same run, each naming its source) and "
-            f"{len(cited)} are CITED (external to this run, printed with the citation inline)."
+            f"§5 additionally tags its measured figures with provenance. This run registered "
+            f"{len(_FACTS)} such figures: {len(derived)} DERIVED (computed from live responses "
+            f"in this same run, each naming its source) and {len(cited)} CITED (external to "
+            f"this run, printed with the citation inline). Untagged numerals in the surrounding "
+            f"prose are product ids, dimension labels and counts of what was checked."
         )
     if cited:
         lines += ["", "Externally cited figures:"]
         lines += [f"- {f.text} — {f.source}" for f in cited]
     lines.append("")
     return lines
+
+
+def _table_number(pid: object) -> str:
+    """`98100134` -> `98-10-0134-01`, StatCan's published table-number form.
+
+    Derived, never typed: the note interpolates a dynamic `found_pid` beside this
+    string, so a hardcoded table number would mislabel whichever cube actually
+    won. (98100137 carries both required members and fails only the age
+    predicate — had it won, a literal would have printed the wrong table.)
+    """
+    p = str(pid)
+    if len(p) != 8 or not p.isdigit():
+        raise ValueError(f"unexpected productId shape {pid!r}; cannot derive a table number")
+    return f"{p[0:2]}-{p[2:4]}-{p[4:8]}-01"
+
+
+def _table_url(pid: object) -> str:
+    """The public table URL for a product id (the `pid` query arg appends `01`)."""
+    return f"https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid={pid}01"
 
 
 def _post(url: str, payload: list) -> list:
@@ -441,6 +466,9 @@ def _rates(vals: dict) -> dict:
 
 
 def main() -> None:  # noqa: C901 - a probe: linear narrative beats decomposition
+    # Per-run registry. A module global that never clears would make a second
+    # main() in one process report "12 figures" while §5 still showed 6.
+    _FACTS.clear()
     # The provenance paragraph is GENERATED from the facts the body actually
     # carries (see `_provenance_header`), so it is spliced in after the body is
     # built rather than asserted up front.
@@ -537,11 +565,21 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
                 found_obj = obj
                 note.append(f"- `LIVE PROBE VERDICT: FOUND-AT-CMA` on productId {pid}.")
                 break
+            # Rejected cube: DROP its rates. Leaving them behind publishes a §4
+            # table of measured numbers under `productId None` beside a recorded
+            # DECISION of NO — a note that simultaneously reports rates and says
+            # none was found.
+            rates = {}
             note.append(f"- **{pid}**: incomplete coverage — not accepted as the source.")
         except Exception as exc:
             # An exception is NOT evidence of absence. It downgrades the run to
             # FAILED so the gate can refuse rather than publish a false NOT-FOUND.
-            probe_error = probe_error or f"{type(exc).__name__}: {exc}"
+            # Records the exception that ACTUALLY aborted the pull, overwriting any
+            # earlier metadata-stage error: first-error-wins would let a transient
+            # URLError on an earlier candidate stand in for a code fault here, and
+            # the gate excuses network-class names when the source is unreachable.
+            rates = {}
+            probe_error = f"{type(exc).__name__}: {exc}"
             outcome = "FAILED"
             note.append(f"- **{pid}**: `LIVE PROBE FAILED: {probe_error}`")
             break
@@ -562,7 +600,9 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
     note.append("")
 
     # --- derived rates -------------------------------------------------------
-    if rates:
+    # Gated on found_pid, never on `rates` alone: §4 may only exist when a cube
+    # was actually ACCEPTED as the source.
+    if found_pid and rates:
         note += [
             f"## 4. Derived per-sex rates — Census 2021, productId {found_pid}",
             "",
@@ -642,15 +682,27 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         if den:
             qc65 = num / den
             inside = VITRINE_BAND[0] <= qc65 <= VITRINE_BAND[1]
+            # The verdict must follow the boolean. Printed unconditionally it once
+            # emitted "inside that band: **False** — the widened band was correctly
+            # specified", which is the note contradicting its own measurement.
+            band_verdict = (
+                "the widened band CONTAINS the direct Census measurement, so the spec's "
+                "fallback was correctly specified"
+                if inside
+                else "the direct Census measurement falls OUTSIDE the widened band — the "
+                "spec's fallback band does NOT cover the observed value, which is a finding "
+                "for Task 15b wherever that fallback is still applied"
+            )
             note += [
                 "### 4c. Cross-check against the spec's named living_alone fallback",
                 "",
-                f"Census-derived Québec-province 65+ living-alone rate (both sexes pooled, the",
+                "Census-derived Québec-province 65+ living-alone rate (both sexes pooled, the",
                 f"vitrine's own universe): **{qc65:.4f}** ({qc65 * 100:.1f}%).",
                 f"The spec's ISQ vitrine point estimate is {VITRINE_POINT:.2f} with widened band",
                 f"[{VITRINE_BAND[0]}, {VITRINE_BAND[1]}]. Observed value inside that band: "
-                f"**{inside}** — the widened band was correctly specified, and the direct Census",
-                "measurement supersedes it for every geography in the table above.",
+                f"**{inside}** — {band_verdict}.",
+                "The direct Census measurement supersedes the fallback for every geography in",
+                "the table above either way.",
                 "",
             ]
 
@@ -671,7 +723,9 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         release = found_obj.get("releaseTime")
 
         f_priv = Fact.derived(f"{priv:,.0f}", f"productId {found_pid}, Québec x all ages x all genders")
-        f_pub = Fact.derived(f"{published:,.0f}", f"StatCan Table 98-10-0001-01 ({pop_title})")
+        f_pub = Fact.derived(
+            f"{published:,.0f}", f"StatCan Table {_table_number(POP_CUBE)} ({pop_title})"
+        )
         f_gap = Fact.derived(f"{gap:.2f}%", "computed from the two figures above")
         f_agree = Fact.derived(
             f"{cells - mismatches}/{cells}", "cells where the two living-alone definitions agree"
@@ -680,6 +734,8 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             f"{worst:,.0f} persons", f"worst deviation across {identities} hierarchy identities"
         )
         f_rel = Fact.derived(release, f"`releaseTime` from the productId {found_pid} metadata")
+        f_ident = Fact.derived(identities, "hierarchy identities evaluated")
+        f_supp = Fact.derived(suppressed, "component cells with no published value, counted as zero")
 
         agree_verdict = (
             "AGREE on every cell compared"
@@ -689,8 +745,8 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         note += [
             "## 5. Universe, vintage, and the re-derivation recipe (for Task 15b)",
             "",
-            f"- productId `{found_pid}` = StatCan Table **98-10-0134-01**, 2021 Census, released",
-            f"  {f_rel}. Vintage pinned here; a re-pull must reproduce these counts.",
+            f"- productId `{found_pid}` = StatCan Table **{_table_number(found_pid)}**, 2021",
+            f"  Census, released {f_rel}. Vintage pinned here; a re-pull must reproduce these counts.",
             "- **Universe is persons in PRIVATE households.** Measured, not assumed: this cube's",
             f"  Québec all-ages/all-genders total is {f_priv} against the published 2021 Census",
             f"  Québec population of {f_pub} — a {f_gap} gap that is the collective /",
@@ -703,7 +759,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             f"  (living-arrangements dimension) vs `{HH_ONE_PERSON}` (household-type dimension)",
             f"  — compared cell by cell, {f_agree} geography x sex x age cells match.",
             f"- Living-arrangements hierarchy additivity: worst deviation {f_add} across the",
-            f"  {identities} identities checked ({suppressed} component cells carry no published",
+            f"  {f_ident} identities checked ({f_supp} component cells carry no published",
             "  value and were counted as zero). Census random-rounds to base 5, so a small non-zero",
             "  residual is EXPECTED — Task 15b must reconcile with a tolerance, never exact sums.",
             "- Recipe: POST `getDataFromCubePidCoordAndLatestNPeriods` with a coordinate whose",
@@ -742,7 +798,8 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         ]
     elif found_yes:
         note += [
-            f"  FOUND at CMA granularity: productId `{found_pid}` (StatCan Table 98-10-0134-01)",
+            f"  FOUND at CMA granularity: productId `{found_pid}` "
+            f"(StatCan Table {_table_number(found_pid)})",
             "  publishes living arrangements x age group x GENDER x geography, and the live pull",
             "  returned non-suppressed values for all 7 wholly-Québec geographies at 75-84 and 85+",
             "  for both Men+ and Women+. Both required rates come from this ONE table.",
@@ -758,15 +815,16 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             "  * `couple_share` -> pinned at probe time WITH CITATION, below. The province-level",
             "    fallback is likewise not needed: the cross-tab resolves at CMA granularity.",
             "",
-            "- `DECISION-COUPLE-SHARE-SOURCE: StatCan Table 98-10-0134-01 "
+            f"- `DECISION-COUPLE-SHARE-SOURCE: StatCan Table {_table_number(found_pid)} "
             f'(WDS productId {found_pid}), member "{STAT_COUPLE}" over the not-living-alone '
             "population, by age group x gender x geography, 2021 Census`",
-            # Title and release date come from the metadata fetched in §2, not from
-            # literals typed here: a citation that cannot drift from its source.
-            "- `DECISION-COUPLE-SHARE-CITATION: Statistics Canada. Table 98-10-0134-01, "
+            # Every element of this citation is derived: title and release date from the
+            # metadata fetched in §2, table number and URL from found_pid. No literal here
+            # can name a different cube than the one the run actually accepted.
+            f"- `DECISION-COUPLE-SHARE-CITATION: Statistics Canada. Table {_table_number(found_pid)}, "
             f'"{found_obj.get("cubeTitleEn")}", 2021 Census, '
             f"released {found_obj.get('releaseTime')}. "
-            "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810013401`",
+            f"{_table_url(found_pid)}`",
         ]
         for g in ("Quebec", "Montréal (CMA), Que.", "Québec (CMA), Que."):
             for a in ("75 to 84 years", "85 years and over"):

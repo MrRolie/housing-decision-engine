@@ -3,7 +3,7 @@
 Written by `probes/run_p3.py`; nothing in this file is hand-edited.
 
 Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.
-Of the 6 narrative figures in §5, 6 are DERIVED (computed from live responses in this same run, each naming its source) and 0 are CITED (external to this run, printed with the citation inline).
+§5 additionally tags its measured figures with provenance. This run registered 8 such figures: 8 DERIVED (computed from live responses in this same run, each naming its source) and 0 CITED (external to this run, printed with the citation inline). Untagged numerals in the surrounding prose are product ids, dimension labels and counts of what was checked.
 
 ## 1. Catalogue sweep (so a NOT-FOUND would be credible)
 
@@ -226,13 +226,14 @@ accepting the breach is 15b's call, not this probe's.
 Census-derived Québec-province 65+ living-alone rate (both sexes pooled, the
 vitrine's own universe): **0.3091** (30.9%).
 The spec's ISQ vitrine point estimate is 0.28 with widened band
-[0.24, 0.34]. Observed value inside that band: **True** — the widened band was correctly specified, and the direct Census
-measurement supersedes it for every geography in the table above.
+[0.24, 0.34]. Observed value inside that band: **True** — the widened band CONTAINS the direct Census measurement, so the spec's fallback was correctly specified.
+The direct Census measurement supersedes the fallback for every geography in
+the table above either way.
 
 ## 5. Universe, vintage, and the re-derivation recipe (for Task 15b)
 
-- productId `98100134` = StatCan Table **98-10-0134-01**, 2021 Census, released
-  2022-07-13T08:30. Vintage pinned here; a re-pull must reproduce these counts.
+- productId `98100134` = StatCan Table **98-10-0134-01**, 2021
+  Census, released 2022-07-13T08:30. Vintage pinned here; a re-pull must reproduce these counts.
 - **Universe is persons in PRIVATE households.** Measured, not assumed: this cube's
   Québec all-ages/all-genders total is 8,308,475 against the published 2021 Census
   Québec population of 8,501,833 — a 2.27% gap that is the collective /
