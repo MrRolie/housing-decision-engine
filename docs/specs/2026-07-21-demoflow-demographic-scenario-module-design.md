@@ -166,9 +166,14 @@ r4-F1 — averaging 100 vs 80 coupled persons emits 90 couples when at most 80 m
 `max − min` persons, routes to `Other` (they are real coupled persons whose partners fall outside
 the same-age band — the same-age approximation makes them unmatchable here; routing to Other keeps
 them excluded conservatively and preserves person conservation BY SEX exactly). Zero-zero branch:
-`coupled_m = coupled_f = 0 → Couple = 0`, no ratio evaluated. The balance check
-`|coupled_m − coupled_f| / max(...) ≤ 0.25` (evaluated only when `max > 0`) remains as a DATA-SANITY
-gate on the rate inputs (breach ⇒ CalibrationError — per-sex Census rates should nearly balance).
+`coupled_m = coupled_f = 0 → Couple = 0`, no ratio evaluated. Per-age-band coupled-count imbalance is EXPECTED under the same-age approximation (cross-age
+coupling: older men partner younger; women outlive men — live Census breached the old 0.25 band
+gate on 13/21 correct rows, refuting its premise; execution ruling 2026-07-25). Hard gates keep only
+the invariants reality preserves: coupled_s ≥ 0; coupled_s ≤ its sex pool; and at the 75+ AGGREGATE,
+coupled_m ≥ coupled_f (a reversal beyond |diff|/max > 0.25 at the aggregate ⇒ CalibrationError — that
+direction IS invariant). The per-band imbalance profile is RECORDED in run artifacts as a diagnostic,
+never a gate. min() matching + excess→Other are unchanged; couple_share values stay EXACTLY as cited
+(§11.3 wins over any gate).
 Person conservation asserted per sex: `Solo_s + coupled_s + Other_s = private pop_s`, and
 post-match: `min + excess = coupled_larger` (nothing fabricated, nothing dropped).
 Ownership rates are HOUSEHOLD-maintainer-denominated (Census tenure tables) and multiply HOUSEHOLD
