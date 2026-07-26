@@ -1850,9 +1850,10 @@ git commit -m "feat(demoflow): ISQ compo loader (classify+IGNORED) + closed-coho
 ### Task 13: Census ownership + headship loaders (HORS_RMR = province net of ALL CMAs)
 
 **Files:**
-- Create: `demoflow/src/demoflow/loaders/census.py`
-- Create: `demoflow/data/ownership_by_geo_age.json` (committed ownership fixture)
-- Create: `demoflow/data/headship_by_age.json` (committed base-year headship fixture)
+- Create: `demoflow/src/demoflow/loaders/census.py` (loader + `derive_ownership_from_csv`)
+- Create: `demoflow/scripts/gen_ownership.py` (thin committed generator wrapper)
+- Create (BY RUNNING the generator, never by hand): `demoflow/data/ownership_by_geo_age.json`
+- Create: `demoflow/data/headship_by_age.json` (committed base-year headship fixture — see Step 1b)
 - Test: `demoflow/tests/test_census_ownership.py`
 
 Ownership is a HARD input (no silent fallback), provenance-verified (56.2% owner, 75+, MTL CMA).
@@ -1861,32 +1862,54 @@ neither MTL/QC nor hors-RMR; codex r4-F2); CA caveat recorded (r5-F7). Ownership
 are fractions asserted ∈[0,1] (r5-F1). Headship (households/person by age) is the base-year Census
 curve the OwnerStock equation and native formation consume, held PIT-fixed (spec §7 r3-F3).
 
-- [ ] **Step 1a: Create the committed ownership fixture**
+> **STEERING RULING B (2026-07-25) — ownership is COMPUTED from the committed P2 CSV, never
+> hand-authored.** A hand-typed rate table is a second, silently-divergeable copy of what
+> `demoflow/data/census_tenure_age_98100231.csv` (the pinned P2 extract, Task-8 checksummed)
+> already carries, and it breaks the PIT chain (raw response → filter predicate → committed
+> extract → derived rates). So the rates come from a **derivation function in the package**
+> (`derive_ownership_from_csv`), the JSON is a build artifact a test proves equal to
+> `derive_ownership_from_csv(CSV)` (no-drift, the P2 content-gate pattern), and **no rate is
+> hand-written**. Headship is NOT reached by this ruling — its persons-denominator comes from
+> the ISQ pop loader, not the P2 CSV — so `headship_by_age.json` stays as Step 1b has it (a
+> separate `borrowed_prior` input a later task may derive once the pop loader lands).
+>
+> **Dispatch `mm-spine:data-integrity-validator` on this task** — the re-triage debt in
+> `docs/audits/dispatch/2026-07-21-feat-demoflow-tranche1.md`. This is the first CONSUMER read of
+> the pinned P2 extract: PIT semantics of the `extracted_at` vintage, schema-drift on the CSV's
+> columns, and the derivation's blast radius are its surface.
 
-`demoflow/data/ownership_by_geo_age.json`:
-```json
-{
-  "_provenance": {
-    "source": "StatCan Census 2021, Table 98-10-0231-01 (tenure x age of primary maintainer)",
-    "as_of": "2021",
-    "hors_rmr_method": "province_net_of_ALL_QC_CMAs",
-    "hors_rmr_ca_caveat": "P2 pulls province + EVERY QC CMA (codex r4-F2); a published non-CMA/CA row EXCLUDES Census Agglomerations while province-minus-CMAs INCLUDES them (r5-F7) — use the published row only if it reconciles exactly against the computed residual, else compute the residual and record what HORS_RMR denotes",
-    "notes": "MTL/QC CMA rates verified (MTL 75+ = 0.562). Populate from data/census_tenure_age_98100231.csv when the P2 pull committed it; else verified anchors + borrowed_prior."
-  },
-  "rates": {
-    "MTL_RMR":  {"25-54": 0.48, "55-64": 0.66, "65-74": 0.63, "75+": 0.562},
-    "QC_RMR":   {"25-54": 0.52, "55-64": 0.68, "65-74": 0.66, "75+": 0.60},
-    "HORS_RMR": {"25-54": 0.60, "55-64": 0.75, "65-74": 0.73, "75+": 0.68, "_flag": "borrowed_prior"},
-    "MTL_ISLAND_RA06": {"25-54": 0.34, "55-64": 0.50, "65-74": 0.48, "75+": 0.44, "_flag": "borrowed_prior"},
-    "LAVAL_RA13": {"25-54": 0.55, "55-64": 0.72, "65-74": 0.70, "75+": 0.65, "_flag": "borrowed_prior"},
-    "LANAUDIERE_RA14_PROXY": {"25-54": 0.62, "55-64": 0.78, "65-74": 0.76, "75+": 0.71, "_flag": "borrowed_prior"},
-    "LAURENTIDES_RA15_PROXY": {"25-54": 0.61, "55-64": 0.77, "65-74": 0.75, "75+": 0.70, "_flag": "borrowed_prior"},
-    "MONTEREGIE_RA16_PROXY": {"25-54": 0.60, "55-64": 0.76, "65-74": 0.74, "75+": 0.69, "_flag": "borrowed_prior"}
-  }
-}
-```
-Non-anchor rates are `borrowed_prior` until the P2 pull refines them; only MTL 75+ = 0.562 is
-verified. The golden artifact (Task 30) pins whatever vintage is committed here.
+- [ ] **Step 1a: Write `derive_ownership_from_csv` (TDD, against the LIVE committed CSV) + a thin generator**
+
+Put the derivation in `census.py` as `derive_ownership_from_csv(csv_path) -> dict`;
+`scripts/gen_ownership.py` is a thin wrapper that calls it and writes
+`demoflow/data/ownership_by_geo_age.json`. **Hardcode no rate.** The derivation:
+
+- **Read POSITIONALLY, never `csv.DictReader`.** The extract preserves 4 duplicate `Symbol`
+  columns verbatim; a dict reader collapses them and mangles the tenure columns. Bind the `GEO`,
+  age, `Statistics`, `Tenure:Total`, and `Tenure:Owner` columns by their integer header positions,
+  read live at generation time — assert the header names at those positions match expectations or
+  raise (schema drift is fail-loud; this is the DIV surface).
+- **Owner rate = Σ Owner / Σ Total** over the cube's fine age members inside each model band. Bands
+  are `25-54`, `55-64`, `65-74`, `75+`; the cube carries finer members, so SUM owner and total
+  counts across the constituents THEN divide — never average rates. **`75+` has NO single member**
+  — sum `75 to 84 years` + `85 years and over`; assert both present or raise.
+- **StatCan rounds counts to the nearest 5**, so components do not reconcile exactly to the total.
+  Compute Owner/Total directly; do NOT assert exact component reconciliation, do NOT "correct" it.
+- **Geography derivation** (the CSV carries province + 6 QC CMAs only): `MTL_RMR` ← `Montréal (CMA),
+  Que.`; `QC_RMR` ← `Québec (CMA), Que.`; `HORS_RMR` ← `Quebec` province Σ-counts NET of ALL 6 QC
+  CMA Σ-counts (owner and total each netted THEN divided — never a rate difference; codex r4-F2;
+  record the CA-caveat denotation, §11 item 2). The RA members (`MTL_ISLAND_RA06`, `LAVAL_RA13`,
+  the three `*_PROXY`) are NOT in this CMA-level table, so each **borrows its parent CMA's computed
+  rate with `_flag: borrowed_prior`** (spec §8: RA rows reuse the parent CMA rate) — all five borrow
+  `MTL_RMR`; this understates island vs overstates couronne ownership, a known v0 imprecision the
+  flag documents (couronne precision deferred — P6 MRC hunt 404'd).
+- Emit `_provenance` naming the CSV + its sha256 (from `pins`), `hors_rmr_method`, the CA-caveat,
+  and per-geo `_flag: borrowed_prior` where borrowed. Every emitted rate ∈[0,1] or raise.
+
+Run: `cd demoflow && uv run python scripts/gen_ownership.py` — writes the JSON from the live CSV.
+The committed JSON is whatever the generator emits; **never hand-edit it** (Step 2 pins this with a
+regeneration-equality test, and the MTL 75+ = 0.562 anchor test then VERIFIES the derivation, rather
+than asserting a typed value).
 
 - [ ] **Step 1b: Create the committed base-year headship fixture**
 
@@ -1915,9 +1938,13 @@ from demoflow.loaders.census import (
 from demoflow.errors import LoaderError
 
 
-def test_mtl_rmr_75plus_matches_verified_anchor():
+def test_mtl_rmr_75plus_derivation_matches_spec_oracle():
+    # The DERIVED MTL 75+ owner rate must reproduce the spec's provenance figure at its stated
+    # precision: 56.2% = 113,730 / 202,535 = 0.56153…  (abs=1e-6 against a TYPED 0.562 would FAIL
+    # the true derivation — the spec figure is 3 sig figs, so round to compare, never hand-tune
+    # the CSV to hit an over-precise literal).
     rates = load_ownership_rates()
-    assert ownership_rate(rates, Geography.MTL_RMR, age=78) == pytest.approx(0.562, abs=1e-6)
+    assert round(ownership_rate(rates, Geography.MTL_RMR, age=78), 3) == 0.562
 
 
 def test_every_enum_geography_has_a_rate():
@@ -1944,6 +1971,18 @@ def test_headship_curve_covers_all_ages_and_is_fraction():
     hs = load_headship_rates()
     for age in (10, 30, 45, 60, 70, 90):
         assert 0.0 <= headship_rate(hs, age) <= 1.0
+
+
+def test_committed_ownership_json_equals_generator_output():
+    # No-drift gate (steering ruling B): the committed JSON must equal a fresh derivation from
+    # the pinned P2 CSV. A hand-edit, a stale vintage, or a schema drift fails here — the P2
+    # content-gate pattern applied to the ownership artifact.
+    import json as _json
+    from demoflow.loaders.census import derive_ownership_from_csv
+    from demoflow.loaders.pins import DATA_DIR
+    committed = _json.loads((DATA_DIR / "ownership_by_geo_age.json").read_text())
+    fresh = derive_ownership_from_csv(DATA_DIR / "census_tenure_age_98100231.csv")
+    assert committed["rates"] == fresh["rates"]
 ```
 
 - [ ] **Step 3: Write the implementation**
@@ -2015,8 +2054,8 @@ Expected: 5 PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add demoflow/src/demoflow/loaders/census.py demoflow/data/ownership_by_geo_age.json demoflow/data/headship_by_age.json demoflow/tests/test_census_ownership.py
-git commit -m "feat(demoflow): Census ownership + headship loaders (HORS_RMR=province-net-of-all-CMAs, fractions; §8/§7)"
+git add demoflow/src/demoflow/loaders/census.py demoflow/scripts/gen_ownership.py demoflow/data/ownership_by_geo_age.json demoflow/data/headship_by_age.json demoflow/tests/test_census_ownership.py
+git commit -m "feat(demoflow): Census ownership (derived from P2 CSV per ruling B) + headship loaders (HORS_RMR=province-net-of-all-CMAs; §8/§7)"
 ```
 
 ---
