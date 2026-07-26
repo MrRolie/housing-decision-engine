@@ -56,9 +56,14 @@ uv run hde-mcp                         # stdio transport (Claude Code)
 
 ```bash
 uv sync --extra dev
-uv run python -m pytest
+./scripts/test-all.sh          # CANONICAL full-suite check (hde + demoflow) — run this before any PR
+uv run python -m pytest        # hde suite ONLY: root testpaths excludes demoflow/tests/ (a separate uv project)
 uv run hde examples/basic_config.yaml
 ```
+
+`demoflow/` is a self-contained uv project (own env, own tests); the repo-root `pytest` never
+runs it. `scripts/test-all.sh` runs BOTH suites and fails if either fails — it is the canonical
+full-suite invocation.
 
 ## Key design decisions (stable)
 
