@@ -129,6 +129,28 @@ def test_fact_outside_a_run_raises():
     contextvars.Context().run(_attempt)
 
 
+def test_fact_refuses_a_kind_outside_the_pair():
+    """A typo'd kind must RAISE, not publish a header whose arithmetic does not close.
+
+    Unreachable through `Fact.derived`/`Fact.cited`, but the 3-arg constructor is a live
+    surface (this very file uses it to build the golden mixes). Before the guard:
+    `registered 3: 1 DERIVED and 1 CITED` — 3 != 1 + 1 — with the typo'd figure rendered
+    in the body's CITED form but absent from the cited list.
+    """
+    _wds = _wds_module()
+    _wds.new_run()
+    with pytest.raises(ValueError, match="not one of"):
+        _wds.Fact("3", "derivd", "typo")
+    for bad in ("", "DERIVED", "Derived", None, 0):
+        with pytest.raises(ValueError):
+            _wds.Fact("x", bad, "src")
+    # The guard must not have swallowed the valid pair.
+    log = _wds.new_run()
+    _wds.Fact("1", "derived", "a")
+    _wds.Fact("2", "cited", "b")
+    assert [f.kind for f in log.facts] == ["derived", "cited"]
+
+
 def test_new_run_yields_a_fresh_isolated_log():
     _wds = _wds_module()
     first = _wds.new_run()
@@ -219,11 +241,64 @@ def test_shared_network_exceptions_did_not_widen():
         assert fault not in NETWORK_EXCEPTIONS, f"{fault} would excuse a code fault as an outage"
     assert recorded_failure_type("… LIVE PROBE FAILED: KeyError: 'Men+'") == "KeyError"
 
-    # The per-probe UNRESOLVED sets stay SEPARATE — p3's legitimately excludes
-    # NOT-FOUND (a recorded not-found is a valid outcome there, spec §11.3), so
-    # merging them would break its legitimate-NOT-FOUND branch.
-    assert "NOT-FOUND" not in t3.UNRESOLVED and len(t3.UNRESOLVED) == 7
+
+def test_per_probe_unresolved_sets_are_pinned_by_contents():
+    """The UNRESOLVED sets stay SEPARATE and are pinned member-by-member.
+
+    Separate because they legitimately differ: p3's excludes NOT-FOUND (a recorded
+    not-found is a valid outcome there, spec §11.3), so a merged set would break its
+    legitimate-NOT-FOUND branch. Pinned by CONTENTS, not `len(...) == 7`, for the same
+    reason NETWORK_EXCEPTIONS is — a count pins the SIZE, so swapping "NONE" -> "ZZZ"
+    passes while a note emitting `DECISION-COUPLE-SHARE-SOURCE: NONE` would then be
+    accepted as a resolved answer.
+
+    Enumerated rather than glob-discovered on purpose: a new probe's markers cannot be
+    predicted, so there are no literals to assert. The glob-discovered contracts live in
+    test_probe_contracts.py.
+    """
+    assert t3.UNRESOLVED == {
+        "", "UNRESOLVED-PROBE-FAILED", "TBD", "FILL", "[FILL]", "N/A", "NONE",
+    }
+    assert t4.UNRESOLVED == {
+        "", "UNRESOLVED-PROBE-FAILED", "UNCONFIRMED-PROBE-FAILED", "TBD", "FILL",
+        "[FILL]", "N/A", "NONE", "NOT-FOUND",
+    }
+    assert t5.UNRESOLVED == {
+        "", "UNKNOWN-PROBE-FAILED", "UNRESOLVED-PROBE-FAILED", "TBD", "FILL", "[FILL]",
+        "N/A", "NONE", "NOT-FOUND", "?",
+    }
+    # The load-bearing asymmetry, stated once more as intent.
+    assert "NOT-FOUND" not in t3.UNRESOLVED
     assert "NOT-FOUND" in t4.UNRESOLVED and "NOT-FOUND" in t5.UNRESOLVED
+
+
+def test_provenance_header_reads_only_the_log_it_is_handed():
+    """The invariant the accepted `_ACTIVE` residual rests on — pinned, not asserted.
+
+    `_wds`'s module docstring accepts that `_ACTIVE` is never reset after `main()` on the
+    stated ground that a stray fact "can never reach another run's note, because
+    provenance_header reads only the log it is handed — never a free variable." Inserting
+    `log = _ACTIVE.get() or log` at the top of the function survived the entire suite, so
+    the property justifying the residual had no test of its own.
+    """
+    _wds = _wds_module()
+    handed = _wds.new_run()
+    _wds.Fact("solo", "derived", "the one fact that should be counted")
+
+    ambient = _wds.new_run()  # a DIFFERENT log is now active
+    _wds.Fact("ghost-a", "cited", "must not appear")
+    _wds.Fact("ghost-b", "derived", "must not appear")
+    assert _wds._ACTIVE.get() is ambient and len(handed.facts) == 1
+
+    out = _wds.provenance_header(
+        handed, written_by="run_px.py", scope="scope.",
+        summary=lambda *, total, derived, cited: f"registered {total}/{derived}/{cited}",
+        cited_label="Cited:",
+    )
+    joined = "\n".join(out)
+    assert "registered 1/1/0" in joined, f"header reflected the ambient log, not the argument: {out}"
+    assert "Cited:" not in joined, "the ambient log's cited fact leaked into the handed log's header"
+    assert "ghost" not in joined
 
 
 class _FakeResponse:

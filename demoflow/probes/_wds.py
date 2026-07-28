@@ -62,6 +62,28 @@ def new_run() -> FactLog:
     return log
 
 
+KINDS = frozenset({"derived", "cited"})
+
+
+def require_valid_kind(kind: object) -> None:
+    """Refuse a `Fact` kind outside {"derived", "cited"}.
+
+    A typo does not fail loudly on its own — it publishes a header whose arithmetic does
+    not close. `__str__` renders anything that is not exactly "derived" in the CITED form,
+    while `provenance_header` counts it in NEITHER bucket, so three facts with one typo
+    print as `registered 3: 1 DERIVED and 1 CITED` (3 != 1 + 1) and the typo'd figure
+    appears in the body but not in the "Externally cited figures:" list. Every probe's
+    `_summary` is worded as a decomposition, so that is a false claim inside a generated
+    artifact — house rule #1. Same fail-loud posture as the no-active-run branch below.
+    """
+    if kind not in KINDS:
+        raise ValueError(
+            f"Fact kind {kind!r} is not one of {sorted(KINDS)}. A kind outside the pair is "
+            "counted in neither bucket, so the provenance header would publish a "
+            "decomposition that does not add up."
+        )
+
+
 @dataclass(frozen=True)
 class Fact:
     """A narrative figure, carrying HOW this run obtained it.
@@ -100,6 +122,7 @@ class Fact:
     source: str
 
     def __post_init__(self) -> None:
+        require_valid_kind(self.kind)
         log = _ACTIVE.get()
         if log is None:
             raise RuntimeError(
