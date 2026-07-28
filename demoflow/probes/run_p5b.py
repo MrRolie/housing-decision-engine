@@ -112,6 +112,12 @@ ABBREV_TRAP_TERM = "npr"
 # would still hunt "Quebec" and still claim it contained them. Declaring it means the claim
 # moves with the constant it depends on.
 MODELED_CMA_PROVINCE = {"Montréal": "Quebec", "Québec": "Quebec"}
+# How many leading characters of the declared province must match the province abbreviation
+# StatCan puts in the CMA member's OWN name ("Montréal (CMA), Que." -> "Que."). That suffix
+# comes from the live response, so it is evidence INDEPENDENT of the declaration above and
+# a flipped declaration ("Ontario" -> "Ont") stops corroborating. A prefix agreement test,
+# NOT a proof of containment — named so in the note.
+PROVINCE_PREFIX_CHARS = 3
 # A cube TITLE saying "census metropolitan areas" is NOT evidence its members contain these
 # — only the live member search is.
 MODELED_CMAS = tuple(MODELED_CMA_PROVINCE)
@@ -302,6 +308,35 @@ def _cma_hits(members: list[str], name: str) -> tuple[list[str], list[str]]:
     return named, marked
 
 
+def _member_province_token(member: str) -> str:
+    """The province abbreviation StatCan appends to a CMA member name.
+
+    "Montréal (CMA), Que." -> "que". Read off the LIVE member name, so it is evidence
+    independent of anything this file declares. "" when the name carries no such suffix.
+    """
+    if "," not in member:
+        return ""
+    return _norm(member.rsplit(",", 1)[1]).strip(". ")
+
+
+def _province_corroborated(members: list[str], declared: str) -> bool | None:
+    """Does the CMA members' own province suffix agree with the DECLARED province?
+
+    Returns True/False, or None when no member carries a province suffix to check against
+    (unknown, NOT a pass — the caller must report it as uncorroborated rather than green).
+
+    This exists because declaring `MODELED_CMA_PROVINCE` made the containment claim honest
+    about its provenance but still unfalsifiable: flipping it to "Ontario" republished a
+    false geography claim with the whole suite green, because the searched member "Ontario"
+    exists too. The member-name suffix is the one independent witness in the response.
+    """
+    tokens = [t for m in members if (t := _member_province_token(m))]
+    if not tokens:
+        return None
+    want = _norm(declared)[:PROVINCE_PREFIX_CHARS]
+    return all(t[:PROVINCE_PREFIX_CHARS] == want for t in tokens)
+
+
 def _footnote_quote(obj: dict, *, all_of=(), any_of=()) -> str:
     """The first live English footnote matching the predicate, verbatim. "" if none."""
     for f in obj.get("footnote") or []:
@@ -429,11 +464,18 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     pool = [s for s in swept if s[2]]  # matched >=1 POPULATION term
     _guard_sweep(cubes, swept, pool)  # RAISES (wds-list)
 
-    # What a bare-abbreviation predicate would have matched instead — MEASURED, so the
-    # phrase predicate's choice is evidenced rather than asserted.
+    # What a bare-abbreviation predicate matches that the phrase sweep did NOT catch.
+    #
+    # The measurement that BEARS on the question. The earlier version counted npr-hits that
+    # ALSO matched a population phrase — i.e. cubes the phrase predicate had ALREADY caught
+    # — and then concluded from a zero that nothing was missed. That inference is inverted:
+    # the set that could be missed is the complement, the npr-hits absent from the swept
+    # set. (A cube titled "Estimates of NPR stock by province" matches no phrase, so it
+    # would have been silently missed while the note announced that nothing was.)
+    swept_pids = {s[0] for s in swept}
     abbrev_hits = [(str(c.get("productId") or ""), c.get("cubeTitleEn") or "")
                    for c in cubes if ABBREV_TRAP_TERM in (c.get("cubeTitleEn") or "").lower()]
-    abbrev_pop = [h for h in abbrev_hits if _lower_terms(h[1], POPULATION_TERMS)]
+    abbrev_missed = sorted(h for h in abbrev_hits if h[0] not in swept_pids)
 
     f_cat = Fact.derived(str(len(cubes)), "cubes returned by the live getAllCubesListLite")
     f_swept = Fact.derived(str(len(swept)), "catalogue titles matching the sweep predicate")
@@ -448,18 +490,20 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"{list(PERIPHERAL_TERMS)} are swept too, so every absence claim below is scoped to a "
         f"WIDER population than the pick pool.",
         f"- **{f_swept}** titles matched; **{f_pool}** of those matched a POPULATION term.",
-        f"- Abbreviation check (why the predicate uses phrases, MEASURED not assumed): a bare "
-        f"`\"{ABBREV_TRAP_TERM}\"` substring predicate matches **{len(abbrev_hits)}** catalogue "
-        f"titles, of which **{len(abbrev_pop)}** also match a population term"
-        + (" — so it surfaces no population cube the phrase predicate misses. What it DID match "
-           "is emitted verbatim below rather than glossed by naming the enclosing word by hand "
-           "(that gloss was true only by accident of today's catalogue):"
-           if not abbrev_pop
-           else " — so it DOES surface population cubes the phrase predicate would miss; those "
-                "are folded into the swept list above. What it matched:"),
+        f"- Abbreviation cross-check — does a bare `\"{ABBREV_TRAP_TERM}\"` substring predicate "
+        f"reach any title the phrase sweep did NOT? It matches **{len(abbrev_hits)}** catalogue "
+        f"titles in total, of which **{len(abbrev_missed)}** are ABSENT from the swept set above"
+        + (" — so the bare abbreviation reaches nothing the phrase predicate missed."
+           if not abbrev_missed else
+           f" — those {len(abbrev_missed)} are the ONLY titles this cross-check could add. This "
+           f"note draws no conclusion about what they are: every npr-matching title is listed "
+           f"below with whether the phrase sweep caught it, so the reader judges directly."),
         "",
+        "  | productId | title | swept by the phrase predicate? |",
+        "  |---|---|---|",
     ]
-    note += [f"  - `{pid}` {title}" for pid, title in sorted(abbrev_hits)]
+    note += [f"  | `{pid}` | {title} | {'YES' if pid in swept_pids else 'NO'} |"
+             for pid, title in sorted(abbrev_hits)]
     note += [
         "",
         "**Every swept candidate, with the measured attributes the pick is decided on:**",
@@ -577,8 +621,9 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "",
         "Marker columns are the RAW HITS, not a classification: a one-token match is a weak "
         "classifier and must not read as a stated measure type. The pick's measure type is "
-        "decided in §3 on its title plus a verbatim footnote, and is the only measure-type "
-        "claim this note makes about a swept cube.",
+        "decided in §3 on its title plus a verbatim footnote. (No blanket claim about where "
+        "else this note discusses measure type: the rejection reasons below cite flow markers "
+        "too, and §5 classifies the ISQ column. Each says what it measured.)",
         "",
         "**Why each non-pick candidate was rejected (computed from the row above, not typed "
         "per product):**",
@@ -651,8 +696,15 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
            f"those members before reading this as a plain absence."
            if name_only_discrepancy else ""),
         f"- **Measure type: {f_measure}.** "
-        + (f"Title stock markers {title_stock}. " if title_stock else "No title stock marker. ")
-        + (f"Flow markers {p['flow_hits']}. " if p["flow_hits"] else "No flow markers. ")
+        + (f"Stock markers in the TITLE only {title_stock}. " if title_stock
+           else "No stock marker in the TITLE. ")
+        + (f"Flow markers across TITLE + dimension names + member names {p['flow_hits']}. "
+           if p["flow_hits"] else
+           "No flow markers across TITLE + dimension names + member names. ")
+        + "(The two scopes are deliberately ASYMMETRIC — the stock side is title-only while "
+        "the flow side reads the whole cube — so the formula can downgrade a STOCK claim on "
+        "flow evidence but can never manufacture one. Stated because the asymmetry is not "
+        "visible from the formula.) "
         + ("Point-in-time reference dates, quoted verbatim from the live footnotes: "
            f"\"{q_point}\""
            + (" — a value stated AT a reference date is a level, not a movement, which is "
@@ -683,6 +735,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     cma_bearers = [pid for pid in cand
                    if pid != pick and cand[pid]["eligible"]
                    and all(len(cand[pid]["cma_marked"][k]) > 0 for k in MODELED_CMAS)]
+    # Corroborate the DECLARED containing province against the CMA members' own province
+    # suffix, wherever a swept cube actually carries those members. Emitted whatever the
+    # result: a declaration that stops corroborating must SAY so, not fall silent.
+    corrob: dict[str, object] = {}
+    for pid in cma_bearers:
+        for k in MODELED_CMAS:
+            hits = cand[pid]["cma_marked"][k]
+            if hits:
+                corrob[k] = _province_corroborated(hits, MODELED_CMA_PROVINCE[k])
+
     note += ["## 3b. Does any swept candidate carry the modeled CMAs?", ""]
     if cma_bearers:
         for pid in cma_bearers:
@@ -702,6 +764,21 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
                 + f" Its archive status is \"{c['archive']}\".",
             ]
         note += [
+            "",
+            "- **Declared-province corroboration** (`MODELED_CMA_PROVINCE`, checked against the "
+            "province abbreviation in each CMA member's OWN live name — independent evidence, a "
+            f"{PROVINCE_PREFIX_CHARS}-character prefix agreement test, NOT a proof of "
+            "containment): "
+            + "; ".join(
+                f"**{k}** declared *{MODELED_CMA_PROVINCE[k]}* vs member suffix "
+                f"{sorted({_member_province_token(m) for pid in cma_bearers for m in cand[pid]['cma_marked'][k] if _member_province_token(m)}) or 'none present'} -> "
+                + ("CORROBORATED" if corrob.get(k) is True
+                   else "**NOT CORROBORATED — the declared province disagrees with the live "
+                        "member name; treat every containment statement in this note as "
+                        "UNSUPPORTED until reconciled**" if corrob.get(k) is False
+                   else "NOT CHECKABLE (no province suffix on the matched members)")
+                for k in MODELED_CMAS)
+            + ".",
             "",
             "**This note proposes NO combination of the two.** They are separate products with "
             "separate reference periods and methods; nothing here licenses disaggregating or "
@@ -921,8 +998,10 @@ def _record_isq(note: list[str]) -> dict:
                 if numeric else
                 f", and the first data cell is non-numeric ({value!r}), so the FLOW reading "
                 f"rests on the label alone — weaker evidence, recorded as such."))
-            + " spec:473 consumes a STOCK, so this column is recorded as a complement (it is "
-            "already the demand model's NPR input), never as the stock indicator.",
+            + " spec:473 consumes a STOCK, so this column is recorded as a complement (spec §6 "
+            "routes this NPR flow into the demand model; no demand model is implemented in "
+            "demoflow yet, so that is the SPECIFIED consumer, not an existing one), never as "
+            "the stock indicator.",
             "",
         ]
         return {"measured": True, "col": col, "label": label, "value": value,
@@ -1063,9 +1142,10 @@ def main() -> None:
             "",
             "- Standing rule (spec:473): this source feeds the TRIPWIRE BASELINE registry's "
             "temporary-resident-stock indicator (current value + as_of + freshness limit), NOT "
-            "the demand model — the demand model's NPR input is the ISQ compo net-flow column"
+            "the demand model, whose NPR input spec §6 routes to the ISQ compo net-flow column"
             + (" measured in §5" if isq["measured"]
                else " (NOT measured this run — see §5)")
+            + " — a SPECIFIED consumer, not yet implemented in demoflow"
             + ". The two are different quantities and this note proposes no substitution "
             "between them.",
             "",

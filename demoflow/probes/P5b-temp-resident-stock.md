@@ -15,12 +15,14 @@ Quoted verbatim from the live response:
 - `getAllCubesListLite` -> **8214** cubes in the live StatCan catalogue.
 - Sweep predicate over `cubeTitleEn` (case-insensitive phrase match). POPULATION terms ['non-permanent resident', 'non permanent resident', 'temporary resident'] make a cube PICK-ELIGIBLE; PERIPHERAL terms ['temporary foreign worker', 'study permit', 'work permit'] are swept too, so every absence claim below is scoped to a WIDER population than the pick pool.
 - **10** titles matched; **5** of those matched a POPULATION term.
-- Abbreviation check (why the predicate uses phrases, MEASURED not assumed): a bare `"npr"` substring predicate matches **4** catalogue titles, of which **0** also match a population term — so it surfaces no population cube the phrase predicate misses. What it DID match is emitted verbatim below rather than glossed by naming the enclosing word by hand (that gloss was true only by accident of today's catalogue):
+- Abbreviation cross-check — does a bare `"npr"` substring predicate reach any title the phrase sweep did NOT? It matches **4** catalogue titles in total, of which **4** are ABSENT from the swept set above — those 4 are the ONLY titles this cross-check could add. This note draws no conclusion about what they are: every npr-matching title is listed below with whether the phrase sweep caught it, so the reader judges directly.
 
-  - `14100274` Hours volunteered by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000
-  - `36100362` Production, income and outlay accounts of nonprofit institutions and volunteering, annual, 1997 - 2008
-  - `36100363` Income and gross domestic product (GDP) by primary area of activity, nonprofit institutions and volunteering, annual, 1997 - 2008
-  - `36100364` Labour services by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000
+  | productId | title | swept by the phrase predicate? |
+  |---|---|---|
+  | `14100274` | Hours volunteered by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000 | NO |
+  | `36100362` | Production, income and outlay accounts of nonprofit institutions and volunteering, annual, 1997 - 2008 | NO |
+  | `36100363` | Income and gross domestic product (GDP) by primary area of activity, nonprofit institutions and volunteering, annual, 1997 - 2008 | NO |
+  | `36100364` | Labour services by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000 | NO |
 
 **Every swept candidate, with the measured attributes the pick is decided on:**
 
@@ -54,7 +56,7 @@ Quoted verbatim from the live response:
 | `33100678` | Occasional (18) | 2023-01-01..2023-01-01 | CURRENT - a cube available to the public and that is current | 14 | 0 | Montréal:0, Québec:0 | count | none |
 | `98100361` | Occasional (18) | 2021-01-01..2021-01-01 | CURRENT - a cube available to the public and that is current | 174 | 43 | Montréal:1, Québec:1 | count, stock | none |
 
-Marker columns are the RAW HITS, not a classification: a one-token match is a weak classifier and must not read as a stated measure type. The pick's measure type is decided in §3 on its title plus a verbatim footnote, and is the only measure-type claim this note makes about a swept cube.
+Marker columns are the RAW HITS, not a classification: a one-token match is a weak classifier and must not read as a stated measure type. The pick's measure type is decided in §3 on its title plus a verbatim footnote. (No blanket claim about where else this note discusses measure type: the rejection reasons below cite flow markers too, and §5 classifies the ISQ column. Each says what it measured.)
 
 **Why each non-pick candidate was rejected (computed from the row above, not typed per product):**
 
@@ -91,7 +93,7 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
   14. Nunavut
 
 - **Modeled-CMA search: NO.** Searched the 14 members BY NAME for **Montréal** (name hits 0, of which 0 carry a CMA marker), **Québec** (name hits 0, of which 0 carry a CMA marker). A cube title is never treated as evidence of its members; only this search is.
-- **Measure type: STOCK.** Title stock markers ['number of']. No flow markers. Point-in-time reference dates, quoted verbatim from the live footnotes: "Estimates of the number of non-permanent residents: Q1 = January 1; Q2 = April 1; Q3 = July 1; Q4 = October 1." — a value stated AT a reference date is a level, not a movement, which is what spec:473 consumes.
+- **Measure type: STOCK.** Stock markers in the TITLE only ['number of']. No flow markers across TITLE + dimension names + member names. (The two scopes are deliberately ASYMMETRIC — the stock side is title-only while the flow side reads the whole cube — so the formula can downgrade a STOCK claim on flow evidence but can never manufacture one. Stated because the asymmetry is not visible from the formula.) Point-in-time reference dates, quoted verbatim from the live footnotes: "Estimates of the number of non-permanent residents: Q1 = January 1; Q2 = April 1; Q3 = July 1; Q4 = October 1." — a value stated AT a reference date is a level, not a movement, which is what spec:473 consumes.
 
 - Schema (dimensions and member counts, live):
 
@@ -106,6 +108,8 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 
 - **`98100361`** *"Non-permanent resident type by place of birth: Canada, provinces and territories, census metropolitan areas and census agglomerations with parts"* DOES carry both modeled CMAs: Montréal -> ['Montréal (CMA), Que.']; Québec -> ['Québec (CMA), Que.'] (among 174 geography members, 43 CMA-marked and 117 CA-marked).
   - Measured disqualifier for the tripwire slot: cadence **Occasional** (18), reference span **2021-01-01..2021-01-01** — cubeStartDate EQUALS cubeEndDate, i.e. a single reference period, so it cannot supply the fresh current value spec:473 requires. Its archive status is "CURRENT - a cube available to the public and that is current".
+
+- **Declared-province corroboration** (`MODELED_CMA_PROVINCE`, checked against the province abbreviation in each CMA member's OWN live name — independent evidence, a 3-character prefix agreement test, NOT a proof of containment): **Montréal** declared *Quebec* vs member suffix ['que'] -> CORROBORATED; **Québec** declared *Quebec* vs member suffix ['que'] -> CORROBORATED.
 
 **This note proposes NO combination of the two.** They are separate products with separate reference periods and methods; nothing here licenses disaggregating or benchmarking the pick's province total to a CMA using the cube above. The pick's own live footnotes carry the programme-comparison caution: "Statistics Canada collaborates closely with Immigration, Refugees and Citizenship Canada (IRCC) and other federal departments to estimate the number of non-permanent residents (NPRs) living in Canada. The demographic estimates from Statistics Canada are updated on an ongoing basis, as new or revised data become available from its partners. Caution should be exercised before comparing data on non-permanent residents from Statistics Canada's Demographic Estimates Program with temporary residents and asylum claimants from IRCC, due to the different objectives of the two data sources." The CMA absence in the pick is a RECORDED LIMIT, not a gap to fill.
 
@@ -136,7 +140,7 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 - NPR column LOCATED at 0-indexed column **18** (matches the plan's pinned column 18).
 - Label read from the workbook: **"Solde de résidents non permanents n"**.
 - First data row (10, 0-indexed) value: **-72314**.
-- **Measured reason it does not fill the STOCK slot:** the label CONTAINS "Solde" (a net balance) — the predicate is a substring test, not a prefix test, and the first data value -72314 is NEGATIVE — a population STOCK cannot be below zero, so this column is a net FLOW over the year, not a level. spec:473 consumes a STOCK, so this column is recorded as a complement (it is already the demand model's NPR input), never as the stock indicator.
+- **Measured reason it does not fill the STOCK slot:** the label CONTAINS "Solde" (a net balance) — the predicate is a substring test, not a prefix test, and the first data value -72314 is NEGATIVE — a population STOCK cannot be below zero, so this column is a net FLOW over the year, not a level. spec:473 consumes a STOCK, so this column is recorded as a complement (spec §6 routes this NPR flow into the demand model; no demand model is implemented in demoflow yet, so that is the SPECIFIED consumer, not an existing one), never as the stock indicator.
 
 ## DECISION
 
@@ -152,5 +156,5 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 - `DECISION-PICK-LIMIT: no CMA breakdown — the modeled CMAs Montréal (name hits 0, CMA-marked 0), Québec (name hits 0, CMA-marked 0) are ABSENT from the pick's 14 geography members; their DECLARED containing province(s) ['Quebec'] — declared beside MODELED_CMAS, not inferred here — ARE present as member(s) ['Quebec'], so that is the finest geography this source offers for them; the only swept cube carrying both is ['98100361'], disqualified in §3b and NOT combinable with the pick`
 - `DECISION-TRIPWIRE-STATUS: UNKNOWN — the source is RECORDED here, not yet wired; per spec:473 the temporary-resident-stock indicator reports UNKNOWN until wired, never a stale within-band`
 
-- Standing rule (spec:473): this source feeds the TRIPWIRE BASELINE registry's temporary-resident-stock indicator (current value + as_of + freshness limit), NOT the demand model — the demand model's NPR input is the ISQ compo net-flow column measured in §5. The two are different quantities and this note proposes no substitution between them.
+- Standing rule (spec:473): this source feeds the TRIPWIRE BASELINE registry's temporary-resident-stock indicator (current value + as_of + freshness limit), NOT the demand model, whose NPR input spec §6 routes to the ISQ compo net-flow column measured in §5 — a SPECIFIED consumer, not yet implemented in demoflow. The two are different quantities and this note proposes no substitution between them.
 

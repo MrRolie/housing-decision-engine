@@ -287,20 +287,20 @@ def _load_run_p5b():
 
 
 PID = "17100121"
+POP_TITLE = "Estimates of the number of non-permanent residents by type, quarterly"
 
 _FAKE_CODESETS = {"object": {"frequency": [{"frequencyCode": 9, "frequencyDescEn": "Quarterly"}]}}
-_FAKE_CATALOGUE = [{
-    "productId": int(PID),
-    "cubeTitleEn": "Estimates of the number of non-permanent residents by type, quarterly",
-    "frequencyCode": 9,
-}]
+_FAKE_CATALOGUE = [{"productId": int(PID), "cubeTitleEn": POP_TITLE, "frequencyCode": 9}]
 
 
 _GEO_DIM = [{"dimensionPositionId": 1, "dimensionNameEn": "Geography",
              "member": [{"memberNameEn": "Canada"}, {"memberNameEn": "Quebec"}]}]
 
 
-def _fake_meta_object(*, dimension) -> dict:
+def _fake_meta_object(*, dimension, pid: str = PID, title: str | None = None,
+                      end: str = "2026-04-01",
+                      archive: str = "CURRENT - a cube available to the public and that is "
+                                     "current") -> dict:
     """A metadata object that is STRUCTURALLY COMPLETE except for its `dimension` list.
 
     This is the vacuous body that matters: everything the pick rule reads (title, cadence,
@@ -309,12 +309,12 @@ def _fake_meta_object(*, dimension) -> dict:
     exactly what `_guard_pick` exists to refuse, and what the mutation below proves.
     """
     return {
-        "productId": int(PID),
-        "cubeTitleEn": "Estimates of the number of non-permanent residents by type, quarterly",
+        "productId": int(pid),
+        "cubeTitleEn": title or POP_TITLE,
         "frequencyCode": 9,
         "cubeStartDate": "2021-07-01",
-        "cubeEndDate": "2026-04-01",
-        "archiveStatusEn": "CURRENT - a cube available to the public and that is current",
+        "cubeEndDate": end,
+        "archiveStatusEn": archive,
         "releaseTime": "2026-06-17T08:30",
         "nbSeriesCube": 154,
         "footnote": [{"footnotesEn": "Estimates of the number of non-permanent residents: "
@@ -343,11 +343,17 @@ def test_p5b_floor_guard_earns_verdict(tmp_path):
     the verdict honest.
 
     Which guard each scenario proves, stated honestly (p5's pattern):
-      * `_guard_pick` is SAFETY-load-bearing — neutered, the run publishes LOCATED over a
-        cube with zero geography members, `CMA-AVAILABLE: NO` computed from an empty list
-        and a cadence resolved for a code the run never verified. That is the mutation.
-      * `_guard_codesets` is ALSO safety-load-bearing on the cadence axis: neutered, an
-        empty code set yields `DECISION-CADENCE: (frequencyCode 9 …)` with an EMPTY label.
+      * `_guard_pick` is the ONLY SAFETY-load-bearing guard here — neutered, the run
+        publishes LOCATED over a cube with zero geography members, `CMA-AVAILABLE: NO`
+        computed from an empty list. That is the mutation at the end of this test.
+      * `_guard_codesets` is ATTRIBUTION-ONLY, and structurally cannot be otherwise: it
+        fires only when `freq_map` is EMPTY, and an empty map makes `_guard_pick`'s
+        `code not in freq_map` True for EVERY code. Neutering it therefore leaves the
+        verdict UNKNOWN and moves only `FAILED-AT` (verified: wds-codesets -> wds-meta,
+        both scenarios). An earlier version of this docstring called it "ALSO safety-load-
+        bearing on the cadence axis" — that was wrong, and a wrong self-grade propagates
+        into every risk list that reads it. This file grades `_guard_sweep` honestly
+        below, so the standard was set here and missed one guard over.
       * `_guard_sweep` is MESSAGE-QUALITY only: neutered, the empty-catalogue case still
         reaches the `eligible_current` emptiness check and raises there, so safety holds
         without it; it exists to attribute the failure to the `wds-list` boundary rather
@@ -517,6 +523,197 @@ def test_p5b_non_stock_pick_gets_its_own_verdict(tmp_path):
         "the note quoted a point-in-time footnote and concluded the value is a level while its "
         "own measure type computed AMBIGUOUS — the gloss must be conditioned on the MEASURE, "
         "not merely on the footnote being found."
+    )
+
+
+def test_p5b_pick_rule_discriminators_are_load_bearing(tmp_path):
+    """Gate 6 — ELIGIBILITY and CURRENCY actually DECIDE the pick (runs OFFLINE).
+
+    Both are claimed load-bearing by run_p5b.py's own comments ("the eligibility filter runs
+    FIRST so the freshness ranking cannot be hijacked by a cube that is not a temporary-
+    resident population source at all") and both were UNPINNED: dropping `eligible` published
+    an agriculture temporary-foreign-worker cube as the temporary-resident STOCK source under
+    a plain LOCATED, whole suite green.
+
+    Why no earlier test caught it: the LIVE pick happens to hold the latest `cubeEndDate`, so
+    neither discriminator changes today's outcome and both mutants are invisible. This
+    fixture inverts that — it makes the NON-eligible and the NON-current cubes the FRESHEST
+    in the catalogue, so a pick rule that skips either filter must pick the wrong cube.
+    """
+    peripheral_pid, archived_pid = "32100220", "17100023"
+    cat = [
+        {"productId": int(PID), "cubeTitleEn": POP_TITLE, "frequencyCode": 9},
+        # NOT eligible (peripheral term only) and FRESHER than the population cube.
+        {"productId": int(peripheral_pid), "frequencyCode": 12,
+         "cubeTitleEn": "Temporary foreign workers in the agriculture sector, by category of "
+                        "farm revenue"},
+        # Eligible but ARCHIVED, and the freshest of all.
+        {"productId": int(archived_pid), "frequencyCode": 9,
+         "cubeTitleEn": "Estimates of non-permanent residents, quarterly, inactive"},
+    ]
+    meta = {
+        PID: _fake_meta_object(dimension=_GEO_DIM, end="2026-04-01"),
+        peripheral_pid: _fake_meta_object(
+            dimension=_GEO_DIM, pid=peripheral_pid, end="2027-01-01",
+            title="Temporary foreign workers in the agriculture sector, by category of farm "
+                  "revenue"),
+        archived_pid: _fake_meta_object(
+            dimension=_GEO_DIM, pid=archived_pid, end="2028-01-01",
+            title="Estimates of non-permanent residents, quarterly, inactive",
+            archive="ARCHIVED -  a cube publicly available but no longer being updated"),
+    }
+
+    mod = _load_run_p5b()
+    mod.OUT = tmp_path / "note_pickrule.md"
+    _neutralise_non_gating(mod)
+    mod._codesets = lambda: _FAKE_CODESETS
+    mod._catalogue = lambda: cat
+    mod._meta = lambda pids: meta
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+
+    # Guard against a vacuous fixture: the decoys must really be the fresher ones, or this
+    # gate proves nothing about either discriminator.
+    assert meta[peripheral_pid]["cubeEndDate"] > meta[PID]["cubeEndDate"]
+    assert meta[archived_pid]["cubeEndDate"] > meta[peripheral_pid]["cubeEndDate"]
+
+    assert _token(text, "DECISION-SOURCE-PID") == PID, (
+        f"the pick rule chose {_token(text, 'DECISION-SOURCE-PID')!r} over the eligible, "
+        f"current cube {PID}. A cube that is not a temporary-resident population source "
+        f"({peripheral_pid}, agriculture TFW) or is ARCHIVED ({archived_pid}) must never win "
+        f"the freshness ranking — the eligibility and currency filters run FIRST precisely so "
+        f"the ranking cannot be hijacked."
+    )
+    assert _token(text, "DECISION-VERDICT") == "LOCATED"
+
+
+def test_p5b_declared_province_must_be_corroborated(tmp_path):
+    """Gate 7 — the DECLARED containing province is falsifiable (runs OFFLINE).
+
+    Declaring `MODELED_CMA_PROVINCE` made the containment claim honest about its provenance
+    but left it unfalsifiable: flipping it to "Ontario" republished a false geography claim
+    with the whole suite green, because a member named "Ontario" exists in the response too.
+    The independent witness is the province abbreviation in each CMA member's OWN live name
+    ("Montréal (CMA), Que."), which no declaration in this file controls.
+    """
+    bearer = "98100361"
+    cma_dim = [{"dimensionPositionId": 1, "dimensionNameEn": "Geography", "member": [
+        {"memberNameEn": "Canada"}, {"memberNameEn": "Quebec"}, {"memberNameEn": "Ontario"},
+        {"memberNameEn": "Montréal (CMA), Que."}, {"memberNameEn": "Québec (CMA), Que."},
+    ]}]
+    cat = [
+        {"productId": int(PID), "cubeTitleEn": POP_TITLE, "frequencyCode": 9},
+        {"productId": int(bearer), "frequencyCode": 18,
+         "cubeTitleEn": "Non-permanent resident type by place of birth: Canada, provinces and "
+                        "territories, census metropolitan areas"},
+    ]
+    meta = {
+        PID: _fake_meta_object(dimension=_GEO_DIM, end="2026-04-01"),
+        bearer: _fake_meta_object(
+            dimension=cma_dim, pid=bearer, end="2021-01-01",
+            title="Non-permanent resident type by place of birth: Canada, provinces and "
+                  "territories, census metropolitan areas"),
+    }
+    mod = _load_run_p5b()
+    mod.OUT = tmp_path / "note_province.md"
+    _neutralise_non_gating(mod)
+    mod._codesets = lambda: _FAKE_CODESETS
+    mod._catalogue = lambda: cat
+    mod._meta = lambda pids: meta
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+
+    # Fixture guard: the bearer must actually have been recognised, or there is nothing to
+    # corroborate and this gate would pass vacuously.
+    assert "Declared-province corroboration" in text, (
+        "the fixture did not produce a CMA-bearing cube, so the corroboration never ran"
+    )
+    assert "NOT CORROBORATED" not in text, (
+        "the declared containing province disagrees with the province abbreviation in the CMA "
+        "members' own live names — the note would publish a false containment claim."
+    )
+    assert "NOT CHECKABLE" not in text, (
+        "no CMA member carried a province suffix, so the declaration was not actually checked "
+        "— an unchecked declaration must not read as a corroborated one."
+    )
+    assert text.count("CORROBORATED") >= len(mod.MODELED_CMAS), (
+        "every modeled CMA must have its declared province corroborated, not just one"
+    )
+
+    # The FAILURE behaviour is what proves the check works (NS #1: the live run's failure,
+    # not its pass, is the teacher). Without this half, `_province_corroborated -> True` and
+    # deleting its call site BOTH survive — verified: the positive assertions above hold
+    # under either mutation, because a check that always says CORROBORATED never says NOT.
+    mod2 = _load_run_p5b()
+    mod2.OUT = tmp_path / "note_province_wrong.md"
+    _neutralise_non_gating(mod2)
+    mod2._codesets = lambda: _FAKE_CODESETS
+    mod2._catalogue = lambda: cat
+    mod2._meta = lambda pids: meta
+    mod2.MODELED_CMA_PROVINCE = {k: "Ontario" for k in mod2.MODELED_CMAS}
+    mod2.main()
+    wrong = mod2.OUT.read_text(encoding="utf-8")
+    assert "NOT CORROBORATED" in wrong, (
+        "a DELIBERATELY WRONG declared province ('Ontario' for Québec CMAs, whose live member "
+        "names carry ', Que.') was still reported as corroborated. The check cannot detect a "
+        "false declaration, so the corroboration above proves nothing."
+    )
+
+
+def _abbrev_missed_count(text: str) -> int:
+    """The count the note STATES for npr-titles absent from the swept set."""
+    found = re.search(r"of which \*\*(\d+)\*\* are ABSENT from the swept set", text)
+    assert found, "the note states no abbreviation-cross-check missed-count"
+    return int(found.group(1))
+
+
+def test_p5b_abbreviation_check_measures_what_it_concludes(tmp_path):
+    """Gate 8 — the abbreviation cross-check counts the set that BEARS on its conclusion.
+
+    The original counted npr-titles that ALSO matched a population phrase — i.e. the ones the
+    phrase predicate had ALREADY caught — then concluded from a zero that nothing was missed.
+    That inference is inverted: the set that could be missed is the COMPLEMENT. Both branches
+    stated the opposite of what the number meant, and no test looked at this section at all.
+
+    Two fixtures, one per direction (the audit's):
+      * a cube the phrase predicate genuinely MISSES must be counted as missed;
+      * a cube the phrase predicate CATCHES must not be.
+    """
+    def run(dest, extra_cat, extra_meta):
+        mod = _load_run_p5b()
+        mod.OUT = tmp_path / dest
+        _neutralise_non_gating(mod)
+        mod._codesets = lambda: _FAKE_CODESETS
+        mod._catalogue = lambda: [
+            {"productId": int(PID), "cubeTitleEn": POP_TITLE, "frequencyCode": 9}, extra_cat]
+        mod._meta = lambda pids: {PID: _fake_meta_object(dimension=_GEO_DIM), **extra_meta}
+        mod.main()
+        return mod.OUT.read_text(encoding="utf-8")
+
+    # (a) MISSED: matches "npr" but no population/peripheral phrase -> never swept.
+    missed_title = "Estimates of NPR stock by province, quarterly"
+    a = run("note_abbrev_missed.md",
+            {"productId": 17109999, "cubeTitleEn": missed_title, "frequencyCode": 9}, {})
+    assert _abbrev_missed_count(a) == 1, (
+        f"a cube titled {missed_title!r} is matched by the bare abbreviation and swept by NO "
+        f"phrase, so it IS a title the phrase predicate misses — the note counted "
+        f"{_abbrev_missed_count(a)}. Counting the cubes the predicate already caught cannot "
+        f"support a claim about the ones it missed."
+    )
+    assert "| `17109999` |" in a and "| NO |" in a, (
+        "the missed cube must appear in the emitted table marked as NOT swept, so a reader "
+        "can check the count rather than take it"
+    )
+
+    # (b) CAUGHT: matches "npr" AND a population phrase -> swept, so NOT missed.
+    caught_title = "Estimates of non-permanent residents (NPR), monthly"
+    b = run("note_abbrev_caught.md",
+            {"productId": 17108888, "cubeTitleEn": caught_title, "frequencyCode": 9},
+            {"17108888": _fake_meta_object(dimension=_GEO_DIM, pid="17108888",
+                                           title=caught_title, end="2020-01-01")})
+    assert _abbrev_missed_count(b) == 0, (
+        f"a cube titled {caught_title!r} IS swept by the phrase predicate, so it is not a "
+        f"title the abbreviation adds — the note counted {_abbrev_missed_count(b)}."
     )
 
 
