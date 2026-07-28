@@ -146,9 +146,10 @@ def test_p5b_records_pick_or_unknown():
     """
     text = _note_text()
     verdict = _token(text, "DECISION-VERDICT")
-    assert verdict in {"LOCATED", "UNKNOWN-PROBE-FAILED"}, (
+    assert verdict in {"LOCATED", "LOCATED-NOT-STOCK", "UNKNOWN-PROBE-FAILED"}, (
         f"{NOTE} records no resolved `DECISION-VERDICT` (got {verdict!r}). It must be LOCATED "
-        f"(with ALL evidence) or UNKNOWN-PROBE-FAILED (with a reason)."
+        f"(with ALL evidence), LOCATED-NOT-STOCK (a real source whose measure type is not a "
+        f"stock), or UNKNOWN-PROBE-FAILED (with a reason)."
     )
 
     if verdict == "UNKNOWN-PROBE-FAILED":
@@ -187,9 +188,10 @@ def test_p5b_records_pick_or_unknown():
     assert geo is not None and geo.upper() not in UNRESOLVED, (
         f"{NOTE} claims LOCATED but records no `DECISION-GEO-LEVEL` (got {geo!r})."
     )
-    assert re.search(r"\d+ members", geo), (
-        f"{NOTE}'s DECISION-GEO-LEVEL states no geography MEMBER COUNT: {geo!r}. A level named "
-        f"without a member count is a gloss, not a measurement."
+    assert re.search(r"[1-9]\d* members", geo), (
+        f"{NOTE}'s DECISION-GEO-LEVEL states no NON-ZERO geography MEMBER COUNT: {geo!r}. A "
+        f"level named without a member count is a gloss; '0 members' is the fabrication "
+        f"signature the floor-guard mutation asserts on, so it must not pass here either."
     )
 
     cma = _token(text, "DECISION-CMA-AVAILABLE")
@@ -200,9 +202,23 @@ def test_p5b_records_pick_or_unknown():
 
     measure = _token(text, "DECISION-MEASURE-TYPE")
     assert measure in {"STOCK", "FLOW", "AMBIGUOUS"}, (
-        f"{NOTE} claims LOCATED but `DECISION-MEASURE-TYPE` is unresolved ({measure!r}). "
-        f"spec:473 consumes a STOCK, so stock-vs-flow must be STATED, never elided."
+        f"{NOTE} claims a located source but `DECISION-MEASURE-TYPE` is unresolved "
+        f"({measure!r}). spec:473 consumes a STOCK, so stock-vs-flow must be STATED."
     )
+    # The DISCRIMINATOR, enforced rather than displayed: a plain LOCATED asserts the pick is
+    # the stock source spec:473 consumes, so it must actually compute as STOCK. A non-stock
+    # pick is a real finding and gets its own token — but it must NOT ride in under LOCATED.
+    if verdict == "LOCATED":
+        assert measure == "STOCK", (
+            f"{NOTE} records DECISION-VERDICT: LOCATED with DECISION-MEASURE-TYPE: {measure!r}. "
+            f"spec:473 consumes a STOCK; a pick that does not compute as one must be published "
+            f"as LOCATED-NOT-STOCK, never laundered through the plain LOCATED token."
+        )
+    else:
+        assert measure != "STOCK", (
+            f"{NOTE} records DECISION-VERDICT: LOCATED-NOT-STOCK while the measure type IS "
+            f"STOCK — the verdict contradicts its own evidence."
+        )
 
     currency = _token(text, "DECISION-CURRENCY")
     assert currency is not None and currency.upper() not in UNRESOLVED and len(currency) >= 10, (
@@ -280,6 +296,10 @@ _FAKE_CATALOGUE = [{
 }]
 
 
+_GEO_DIM = [{"dimensionPositionId": 1, "dimensionNameEn": "Geography",
+             "member": [{"memberNameEn": "Canada"}, {"memberNameEn": "Quebec"}]}]
+
+
 def _fake_meta_object(*, dimension) -> dict:
     """A metadata object that is STRUCTURALLY COMPLETE except for its `dimension` list.
 
@@ -317,7 +337,7 @@ def _neutralise_non_gating(mod) -> None:
 
 def test_p5b_floor_guard_earns_verdict(tmp_path):
     """Gate 3 — a LOCATED must be EARNED over a non-empty, plausibly-shaped response
-    (NS #1). Four vacuous-but-200 responses that never RAISE on their own must each route
+    (NS #1). Seven vacuous-but-200 responses that never RAISE on their own must each route
     to UNKNOWN-PROBE-FAILED at the right boundary; then NEUTERING `_guard_pick` must FLIP
     the empty-dimension case into a FABRICATED LOCATED — proving that guard is what keeps
     the verdict honest.
@@ -356,6 +376,31 @@ def test_p5b_floor_guard_earns_verdict(tmp_path):
             lambda pids: {PID: _fake_meta_object(
                 dimension=[{"dimensionPositionId": 1, "dimensionNameEn": "Geography",
                             "member": []}])},
+            "wds-meta",
+        ),
+        # The proven false-green, in BOTH of its real shapes. A code set that DEFINES the
+        # pick's code but gives it no description used to pass `_guard_codesets` (map
+        # non-empty) AND `_guard_pick` (`code in freq_map`), publishing a LOCATED whose
+        # cadence label was the empty string — the exact claim `_guard_codesets`'s docstring
+        # says it prevents. Dropping label-less codes from the map closes it, and WHICH
+        # guard catches it depends on whether any labelled code survives:
+        #   (a) the label-less code is the ONLY one -> map empties -> `wds-codesets`;
+        #   (b) other codes are labelled -> map non-empty, so `_guard_codesets` passes and
+        #       `_guard_pick`'s `code not in freq_map` is the one that must catch it.
+        # (b) is the reviewer's exact repro shape; without it, only (a) would be covered and
+        # the guard that actually does the work here would go untested.
+        "(a) code set whose ONLY code has no description": (
+            lambda: {"object": {"frequency": [{"frequencyCode": 9}]}},
+            lambda: _FAKE_CATALOGUE,
+            lambda pids: {PID: _fake_meta_object(dimension=_GEO_DIM)},
+            "wds-codesets",
+        ),
+        "(b) code set where OTHER codes are labelled but the pick's code 9 is not": (
+            lambda: {"object": {"frequency": [{"frequencyCode": 12,
+                                               "frequencyDescEn": "Annual"},
+                                              {"frequencyCode": 9, "frequencyDescEn": "  "}]}},
+            lambda: _FAKE_CATALOGUE,
+            lambda pids: {PID: _fake_meta_object(dimension=_GEO_DIM)},
             "wds-meta",
         ),
     }
@@ -401,6 +446,77 @@ def test_p5b_floor_guard_earns_verdict(tmp_path):
     assert "0 members" in (_token(neutered, "DECISION-GEO-LEVEL") or ""), (
         "the neutered run must publish a geography level over ZERO members — that is the "
         "fabricated claim `_guard_pick` refuses."
+    )
+
+
+def test_p5b_non_stock_pick_gets_its_own_verdict(tmp_path):
+    """Gate 5 — the STOCK discriminator is ENFORCED, not displayed (runs OFFLINE).
+
+    The committed note computes STOCK, so nothing in the green path ever reaches the
+    non-stock branch — which is exactly how a discriminator becomes decoration. This drives
+    a pick whose markers compute FLOW and asserts the verdict token changes.
+
+    Deliberately NOT routed through `VacuousProbeError`: every boundary answered correctly
+    here, so recording a boundary failure would put a false statement in a generated note.
+    The limit is in the ANSWER, and R6's vocabulary exists to say so.
+    """
+    flow_title = ("Solde: net migration of non-permanent residents, quarterly")
+    mod = _load_run_p5b()
+    mod.OUT = tmp_path / "note_flow.md"
+    _neutralise_non_gating(mod)
+    mod._codesets = lambda: _FAKE_CODESETS
+    mod._catalogue = lambda: [{"productId": int(PID), "cubeTitleEn": flow_title,
+                               "frequencyCode": 9}]
+    obj = _fake_meta_object(dimension=_GEO_DIM)
+    obj["cubeTitleEn"] = flow_title
+    obj["footnote"] = []  # no point-in-time footnote, so nothing argues for a level
+    mod._meta = lambda pids: {PID: obj}
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+
+    assert _token(text, "DECISION-MEASURE-TYPE") == "FLOW", (
+        "the fixture must actually compute FLOW, or this gate proves nothing about the "
+        f"discriminator: got {_token(text, 'DECISION-MEASURE-TYPE')!r}"
+    )
+    assert _token(text, "DECISION-VERDICT") == "LOCATED-NOT-STOCK", (
+        "a pick whose measure type computes FLOW was published under a verdict other than "
+        "LOCATED-NOT-STOCK. spec:473 consumes a STOCK, so the discriminator must GATE the "
+        "verdict — otherwise it is prose beside a value it cannot affect."
+    )
+    # And the level-vs-movement gloss must NOT appear: it is the sentence that would make
+    # the note assert a stock while the token says otherwise.
+    assert "not a movement" not in text, (
+        "the note asserted the value is a level while its own measure type computed FLOW — "
+        "a gloss contradicting the token beside it."
+    )
+
+    # SECOND fixture — the one that actually reaches the gloss. Above, no point-in-time
+    # footnote exists, so the gloss branch is never entered and un-conditioning it would go
+    # UNCAUGHT (verified: that mutation survived until this case was added). Here the
+    # footnote IS found while flow markers are ALSO present, so the measure computes
+    # AMBIGUOUS and the gloss branch is reached with a non-STOCK token beside it.
+    mod2 = _load_run_p5b()
+    mod2.OUT = tmp_path / "note_ambiguous.md"
+    _neutralise_non_gating(mod2)
+    mod2._codesets = lambda: _FAKE_CODESETS
+    mod2._catalogue = lambda: [{"productId": int(PID), "cubeTitleEn": flow_title,
+                                "frequencyCode": 9}]
+    obj2 = _fake_meta_object(dimension=_GEO_DIM)   # keeps the "Q1 = January 1; …" footnote
+    obj2["cubeTitleEn"] = flow_title
+    mod2._meta = lambda pids: {PID: obj2}
+    mod2.main()
+    text2 = mod2.OUT.read_text(encoding="utf-8")
+
+    assert _token(text2, "DECISION-MEASURE-TYPE") == "AMBIGUOUS", (
+        "the fixture must compute AMBIGUOUS (point-in-time footnote AND flow markers), or it "
+        f"does not reach the gloss: got {_token(text2, 'DECISION-MEASURE-TYPE')!r}"
+    )
+    assert "Q1 = January 1" in text2, "the fixture must actually surface the point-in-time quote"
+    assert _token(text2, "DECISION-VERDICT") == "LOCATED-NOT-STOCK"
+    assert "not a movement" not in text2, (
+        "the note quoted a point-in-time footnote and concluded the value is a level while its "
+        "own measure type computed AMBIGUOUS — the gloss must be conditioned on the MEASURE, "
+        "not merely on the footnote being found."
     )
 
 

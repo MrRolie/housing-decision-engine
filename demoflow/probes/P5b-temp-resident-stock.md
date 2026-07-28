@@ -15,7 +15,12 @@ Quoted verbatim from the live response:
 - `getAllCubesListLite` -> **8214** cubes in the live StatCan catalogue.
 - Sweep predicate over `cubeTitleEn` (case-insensitive phrase match). POPULATION terms ['non-permanent resident', 'non permanent resident', 'temporary resident'] make a cube PICK-ELIGIBLE; PERIPHERAL terms ['temporary foreign worker', 'study permit', 'work permit'] are swept too, so every absence claim below is scoped to a WIDER population than the pick pool.
 - **10** titles matched; **5** of those matched a POPULATION term.
-- Abbreviation check (why the predicate uses phrases, MEASURED not assumed): a bare `"npr"` substring predicate matches **4** catalogue titles, of which **0** also match a population term — so it contributes only term-collision noise (it matches the letters inside "nonprofit"), and no cube in this catalogue names the population by abbreviation alone.
+- Abbreviation check (why the predicate uses phrases, MEASURED not assumed): a bare `"npr"` substring predicate matches **4** catalogue titles, of which **0** also match a population term — so it surfaces no population cube the phrase predicate misses. What it DID match is emitted verbatim below rather than glossed by naming the enclosing word by hand (that gloss was true only by accident of today's catalogue):
+
+  - `14100274` Hours volunteered by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000
+  - `36100362` Production, income and outlay accounts of nonprofit institutions and volunteering, annual, 1997 - 2008
+  - `36100363` Income and gross domestic product (GDP) by primary area of activity, nonprofit institutions and volunteering, annual, 1997 - 2008
+  - `36100364` Labour services by primary area of activity, nonprofit institutions and volunteering, annual, 1997, 2000
 
 **Every swept candidate, with the measured attributes the pick is decided on:**
 
@@ -49,7 +54,7 @@ Quoted verbatim from the live response:
 | `33100678` | Occasional (18) | 2023-01-01..2023-01-01 | CURRENT - a cube available to the public and that is current | 14 | 0 | Montréal:0, Québec:0 | count | none |
 | `98100361` | Occasional (18) | 2021-01-01..2021-01-01 | CURRENT - a cube available to the public and that is current | 174 | 43 | Montréal:1, Québec:1 | count, stock | none |
 
-Marker columns are the RAW HITS, not a classification: a one-token match is a weak classifier and must not read as a stated measure type. The pick's measure type is decided in §3 on its title plus a verbatim footnote, and is the only measure-type claim this note makes.
+Marker columns are the RAW HITS, not a classification: a one-token match is a weak classifier and must not read as a stated measure type. The pick's measure type is decided in §3 on its title plus a verbatim footnote, and is the only measure-type claim this note makes about a swept cube.
 
 **Why each non-pick candidate was rejected (computed from the row above, not typed per product):**
 
@@ -123,7 +128,7 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 | Transition from Temporary Resident to Permanent Resident Status – Monthly IRCC Updates | P1M | 12 | 0 | 0 | 0 | total (no class term) |
 | [ARCHIVED] Temporary Resident Application Processing – Quarterly IRCC Updates | as_needed | 10 | 0 | 0 | 0 | application |
 
-- **Measured reason the IRCC family is not picked:** **0** of the 11 swept IRCC temporary-resident packages satisfy ALL THREE of (a) a CMA-named resource that is not [ARCHIVED]-labelled, (b) a point-in-time-named resource, (c) a total scope rather than a single permit class — 6 of the 11 are titled for a permit class ['study permit', 'work permit', 'visa', 'application'], which publishes a SUBSET of the temporary-resident population, not the total spec:473 consumes. So none of them offers a maintained, CMA-level, point-in-time count of the temporary-resident total. The counts above are what this run measured, scoped to this query — not a claim about IRCC holdings outside it.
+- **Measured reason the IRCC family is not picked:** **0** of the 11 swept IRCC temporary-resident packages satisfy ALL THREE of (a) a CMA-named resource that is not [ARCHIVED]-labelled, (b) a point-in-time-named resource, (c) a total scope rather than a single permit class — 6 of the 11 are titled for a permit class ['study permit', 'work permit', 'visa', 'application'], which publishes a SUBSET of the temporary-resident population, not the total spec:473 consumes. So none of them offers a CMA-level, point-in-time count of the temporary-resident total. (Maintenance is NOT among the three tested conditions — the frequency column above is displayed, not asserted on.) The counts above are what this run measured, scoped to this query — not a claim about IRCC holdings outside it.
 
 ## 5. The in-repo alternative — ISQ compo NPR column (RECORDED, non-gating)
 
@@ -131,7 +136,7 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 - NPR column LOCATED at 0-indexed column **18** (matches the plan's pinned column 18).
 - Label read from the workbook: **"Solde de résidents non permanents n"**.
 - First data row (10, 0-indexed) value: **-72314**.
-- **Measured reason it does not fill the STOCK slot:** the label leads with "Solde" (a net balance), and the first data value -72314 is NEGATIVE — a population STOCK cannot be below zero, so this column is a net FLOW over the year, not a level. spec:473 consumes a STOCK, so this column is recorded as a complement (it is already the demand model's NPR input), never as the stock indicator.
+- **Measured reason it does not fill the STOCK slot:** the label CONTAINS "Solde" (a net balance) — the predicate is a substring test, not a prefix test, and the first data value -72314 is NEGATIVE — a population STOCK cannot be below zero, so this column is a net FLOW over the year, not a level. spec:473 consumes a STOCK, so this column is recorded as a complement (it is already the demand model's NPR input), never as the stock indicator.
 
 ## DECISION
 
@@ -143,8 +148,8 @@ Marker columns are the RAW HITS, not a classification: a one-token match is a we
 - `DECISION-CMA-AVAILABLE: NO`  (computed by searching the pick's 14 live geography members BY NAME for Montréal: 0 CMA-marked hit(s) of 0 name hit(s), Québec: 0 CMA-marked hit(s) of 0 name hit(s) — never inferred from the cube title)
 - `DECISION-MEASURE-TYPE: STOCK`  (title stock markers ['number of']; flow markers none; the live footnote states point-in-time reference dates, so the value is a level at a date, not a movement — which is what spec:473 consumes)
 - `DECISION-CURRENCY: CURRENT - a cube available to the public and that is current; last released 2026-06-17T08:30; series runs to 2026-04-01`
-- `DECISION-PICK: StatCan 17-10-0121-01 (productId 17100121) — chosen over the 10 StatCan cubes swept in §1, the 11 IRCC temporary-resident packages swept in §4, the in-repo ISQ compo NPR column measured in §5`
-- `DECISION-PICK-LIMIT: no CMA breakdown — the modeled CMAs Montréal (name hits 0, CMA-marked 0), Québec (name hits 0, CMA-marked 0) are ABSENT from the pick's 14 geography members; the coarsest geography containing them that IS present is ['Quebec']; the only swept cube carrying both is ['98100361'], disqualified in §3b and NOT combinable with the pick`
+- `DECISION-PICK: StatCan 17-10-0121-01 (productId 17100121) — chosen from the 10 StatCan cubes swept in §1 (the pick is one of them), the 11 IRCC temporary-resident packages swept in §4, the in-repo ISQ compo NPR column measured in §5`
+- `DECISION-PICK-LIMIT: no CMA breakdown — the modeled CMAs Montréal (name hits 0, CMA-marked 0), Québec (name hits 0, CMA-marked 0) are ABSENT from the pick's 14 geography members; their DECLARED containing province(s) ['Quebec'] — declared beside MODELED_CMAS, not inferred here — ARE present as member(s) ['Quebec'], so that is the finest geography this source offers for them; the only swept cube carrying both is ['98100361'], disqualified in §3b and NOT combinable with the pick`
 - `DECISION-TRIPWIRE-STATUS: UNKNOWN — the source is RECORDED here, not yet wired; per spec:473 the temporary-resident-stock indicator reports UNKNOWN until wired, never a stale within-band`
 
 - Standing rule (spec:473): this source feeds the TRIPWIRE BASELINE registry's temporary-resident-stock indicator (current value + as_of + freshness limit), NOT the demand model — the demand model's NPR input is the ISQ compo net-flow column measured in §5. The two are different quantities and this note proposes no substitution between them.

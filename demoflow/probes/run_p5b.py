@@ -10,7 +10,12 @@ THE DISCRIMINATOR, stated before the hunt so the verdict cannot drift to fit the
 a candidate must carry temporary-resident **STOCK** (a count of persons present at a
 reference date — spec:473 consumes a level, not a movement), at a stated **GEOGRAPHY**,
 at a stated **CADENCE**, and be **CURRENTLY MAINTAINED** (a tripwire needs a fresh
-current value). All four are computed below from live responses.
+current value). All four are computed below from live responses AND all four GATE the
+verdict: geography, cadence and currency are enforced by the pick rule and the floor
+guard, and the STOCK discriminator decides between the `LOCATED` and `LOCATED-NOT-STOCK`
+tokens. (It did not always: `measure` was once computed AFTER the pick and could not
+affect the verdict, leaving this very sentence an untied claim in the file that lectures
+about them.)
 
 WHAT THE HUNT ESTABLISHED (recorded live, so a re-run re-derives it):
   * The pick is resolved by a SWEEP over the full StatCan cube catalogue
@@ -35,8 +40,11 @@ verbatim footnote quotes are CITED, resolved from the live footnote list by pred
 FLOOR GUARD (NS #1 — a verification gate must REFUSE when it cannot verify). The WDS
 answers 200 with vacuous bodies: an empty catalogue, a sweep matching zero candidates, a
 `getCubeMetadata` object carrying no `dimension` list, a geography dimension with zero
-members, or a `frequencyCode` absent from the live code set (which would publish a raw
-integer beside a hand-typed cadence label). None may launder into a LOCATED. The guard
+members, or a `frequencyCode` the live code set does not define WITH A NON-EMPTY LABEL
+(a code present but described by a blank string published `DECISION-CADENCE: (frequencyCode
+9, ...)` with an empty label under a LOCATED — a proven false-green on this guard's own
+declared axis, closed by dropping label-less codes from the map). None may launder into
+a LOCATED. The guard
 RAISES `VacuousProbeError` -> UNKNOWN-PROBE-FAILED with the failing boundary recorded.
 
 TWO COMPARISONS ARE RECORDED BUT DO NOT GATE THE VERDICT (§4, §5): the spec-named IRCC
@@ -95,10 +103,18 @@ POPULATION_TERMS = ("non-permanent resident", "non permanent resident", "tempora
 PERIPHERAL_TERMS = ("temporary foreign worker", "study permit", "work permit")
 ABBREV_TRAP_TERM = "npr"
 
-# The two CMAs demoflow models, searched BY NAME in each candidate's live geography
-# members. A cube TITLE saying "census metropolitan areas" is NOT evidence its members
-# contain them — only this search is.
-MODELED_CMAS = ("Montréal", "Québec")
+# The two CMAs demoflow models, mapped to the province that CONTAINS each. The map is the
+# single datum: MODELED_CMAS is derived from its keys, so the two cannot drift apart.
+#
+# The containment is DECLARED here rather than asserted in prose downstream. The note used
+# to call a member "the coarsest geography containing them that IS present" — a containment
+# relation nothing computed or cited: swap these keys for Toronto/Vancouver and the note
+# would still hunt "Quebec" and still claim it contained them. Declaring it means the claim
+# moves with the constant it depends on.
+MODELED_CMA_PROVINCE = {"Montréal": "Quebec", "Québec": "Quebec"}
+# A cube TITLE saying "census metropolitan areas" is NOT evidence its members contain these
+# — only the live member search is.
+MODELED_CMAS = tuple(MODELED_CMA_PROVINCE)
 CMA_MARKERS = ("(CMA)", "census metropolitan", "RMR")
 CA_MARKER = "(CA)"
 
@@ -210,9 +226,41 @@ def _isq_rows() -> list[tuple]:
 
 
 # --- small computed helpers ---------------------------------------------------------
+def _norm(text: str) -> str:
+    """The ONE name-normalisation rule in this file.
+
+    `_cma_hits` and the containing-province search previously used two different rules for
+    the same names (substring-lower vs strip-lower against an accent-variant tuple). Two
+    rules for one job is what a later probe copies wrongly; both now call this.
+    """
+    return (text or "").strip().lower()
+
+
 def _lower_terms(text: str, terms) -> list[str]:
-    low = (text or "").lower()
+    low = _norm(text)
     return [t for t in terms if t.lower() in low]
+
+
+def _count_str(result: dict) -> str:
+    """CKAN's total-match count, or an explicit marker when the key is absent.
+
+    `result.get("count")` printed a bare `None` into the note if CKAN omitted the key — a
+    missing measurement rendered as if it were one.
+    """
+    n = result.get("count")
+    return str(n) if isinstance(n, int) else "an UNREPORTED number of"
+
+
+def _trunc_str(result: dict, results: list) -> str:
+    """Says so when `rows=100` truncated the population the sweep actually saw.
+
+    Without this, a sweep over the first 100 of N results reads as a sweep over all N —
+    which would silently widen every absence claim scoped to it.
+    """
+    n = result.get("count")
+    if isinstance(n, int) and n > len(results):
+        return f" (TRUNCATED: {len(results)} of {n} — absence claims below cover only these)"
+    return ""
 
 
 def _dimensions(obj: dict) -> list[dict]:
@@ -248,9 +296,9 @@ def _cma_hits(members: list[str], name: str) -> tuple[list[str], list[str]]:
     whose CMA members are formatted WITHOUT a "(CMA)" marker surfaces as a visible
     discrepancy (name hits > 0 while marker hits == 0) instead of a silent NO.
     """
-    low = name.lower()
-    named = [m for m in members if low in m.lower()]
-    marked = [m for m in named if any(k.lower() in m.lower() for k in CMA_MARKERS)]
+    low = _norm(name)
+    named = [m for m in members if low in _norm(m)]
+    marked = [m for m in named if any(k.lower() in _norm(m) for k in CMA_MARKERS)]
     return named, marked
 
 
@@ -354,8 +402,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     # ============ boundary 1: getCodeSets (cadence labels, resolved live) ============
     stage["at"] = "wds-codesets"
     cs = (_codesets().get("object") or {})
-    freq_map = {f.get("frequencyCode"): (f.get("frequencyDescEn") or "")
-                for f in (cs.get("frequency") or []) if f.get("frequencyCode") is not None}
+    # A code whose DESCRIPTION is missing/blank is DROPPED, not mapped to "". Coercing it
+    # to "" put a code in the map with no label, so `_guard_codesets` (map non-empty) and
+    # `_guard_pick` (`code in freq_map`) both passed while the note published
+    # "DECISION-CADENCE: (frequencyCode 9, label from the live getCodeSets)" with an EMPTY
+    # label — a false-green on the exact axis `_guard_codesets` exists to defend. Dropping
+    # the entry makes the existing `code not in freq_map` check cover it for free.
+    freq_map = {f.get("frequencyCode"): (f.get("frequencyDescEn") or "").strip()
+                for f in (cs.get("frequency") or [])
+                if f.get("frequencyCode") is not None
+                and (f.get("frequencyDescEn") or "").strip()}
     _guard_codesets(freq_map)  # RAISES (wds-codesets)
 
     # ============ boundary 2: getAllCubesListLite (the enumerated sweep) =============
@@ -395,11 +451,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"- Abbreviation check (why the predicate uses phrases, MEASURED not assumed): a bare "
         f"`\"{ABBREV_TRAP_TERM}\"` substring predicate matches **{len(abbrev_hits)}** catalogue "
         f"titles, of which **{len(abbrev_pop)}** also match a population term"
-        + (" — so it contributes only term-collision noise (it matches the letters inside "
-           "\"nonprofit\"), and no cube in this catalogue names the population by abbreviation "
-           "alone." if not abbrev_pop
+        + (" — so it surfaces no population cube the phrase predicate misses. What it DID match "
+           "is emitted verbatim below rather than glossed by naming the enclosing word by hand "
+           "(that gloss was true only by accident of today's catalogue):"
+           if not abbrev_pop
            else " — so it DOES surface population cubes the phrase predicate would miss; those "
-                "are folded into the swept list above."),
+                "are folded into the swept list above. What it matched:"),
+        "",
+    ]
+    note += [f"  - `{pid}` {title}" for pid, title in sorted(abbrev_hits)]
+    note += [
         "",
         "**Every swept candidate, with the measured attributes the pick is decided on:**",
         "",
@@ -517,7 +578,7 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "Marker columns are the RAW HITS, not a classification: a one-token match is a weak "
         "classifier and must not read as a stated measure type. The pick's measure type is "
         "decided in §3 on its title plus a verbatim footnote, and is the only measure-type "
-        "claim this note makes.",
+        "claim this note makes about a swept cube.",
         "",
         "**Why each non-pick candidate was rejected (computed from the row above, not typed "
         "per product):**",
@@ -593,8 +654,13 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         + (f"Title stock markers {title_stock}. " if title_stock else "No title stock marker. ")
         + (f"Flow markers {p['flow_hits']}. " if p["flow_hits"] else "No flow markers. ")
         + ("Point-in-time reference dates, quoted verbatim from the live footnotes: "
-           f"\"{q_point}\" — a value stated AT a reference date is a level, not a movement, "
-           "which is what spec:473 consumes."
+           f"\"{q_point}\""
+           + (" — a value stated AT a reference date is a level, not a movement, which is "
+              "what spec:473 consumes."
+              if measure == "STOCK" else
+              f" — but the measure type computed {measure}, so this note does NOT conclude "
+              f"the value is a level; the marker evidence above is mixed and must be "
+              f"resolved before the source is wired.")
            if q_point else
            "NO point-in-time footnote was found in the live footnote list, so the measure type "
            "rests on the title markers alone — weaker evidence, recorded as such."),
@@ -682,7 +748,14 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "dims": [(d.get("dimensionNameEn"), len(d.get("member") or []))
                  for d in _dimensions(p["obj"])],
     }
-    return "LOCATED", evidence
+    # The STOCK discriminator is ENFORCED, not decorative. spec:473 consumes a stock, so a
+    # pick that does not compute as one cannot be published under a bare LOCATED — that
+    # would leave three of the four declared discriminators gating the verdict and the
+    # fourth as prose. It is a DISTINCT verdict token, deliberately NOT a VacuousProbeError:
+    # the boundary answered perfectly well, so routing it through the failure path would
+    # record a boundary failure THAT DID NOT HAPPEN — a false statement in a generated note.
+    # R6's vocabulary exists precisely to express "located, with a limit".
+    return ("LOCATED" if measure == "STOCK" else "LOCATED-NOT-STOCK"), evidence
 
 
 # --- §4 / §5: RECORDED comparisons that do NOT gate the verdict ---------------------
@@ -699,6 +772,21 @@ def _record_ircc(note: list[str]) -> dict:
         payload = _ckan_search()
         result = payload.get("result") or {}
         results = result.get("results") or []
+        # An empty-but-200 CKAN body is NOT a measured comparison. Reported as measured, it
+        # inflated the pick's scope clause into "chosen over the 0 IRCC packages swept" — a
+        # claimed comparison against a set of zero, the vacuous-absence shape in miniature.
+        if not results:
+            note += [
+                "- `IRCC COMPARISON NOT MEASURED THIS RUN: EmptyPopulation: package_search "
+                "answered but returned zero results`",
+                "",
+                "  A zero-result search is not a comparison. It does NOT change the verdict — "
+                "the pick is earned from the StatCan sweep in §1-§3 — and the DECISION block "
+                "below therefore does not count the IRCC family among what the pick was "
+                "compared against.",
+                "",
+            ]
+            return {"measured": False, "n_pkgs": 0, "n_combined": 0}
         pkgs = []
         for pkg in results:
             org = ((pkg.get("organization") or {}).get("title") or "").lower()
@@ -734,9 +822,9 @@ def _record_ircc(note: list[str]) -> dict:
                     if p["n_cma_live"] > 0 and p["n_stock"] > 0 and not p["class_scoped"]]
         note += [
             f"- Live query: `{CKAN_SEARCH}`",
-            f"- `package_search` -> {result.get('count')} total matches, {len(results)} "
-            f"returned and swept; **{len(pkgs)}** are IRCC packages whose title names "
-            f"temporary residents.",
+            f"- `package_search` -> {_count_str(result)} total matches, {len(results)} "
+            f"returned and swept{_trunc_str(result, results)}; **{len(pkgs)}** are IRCC "
+            f"packages whose title names temporary residents.",
             "",
             "| package | frequency | resources | CMA-named | CMA-named & not [ARCHIVED] "
             "| point-in-time-named | permit-class scope |",
@@ -756,8 +844,9 @@ def _record_ircc(note: list[str]) -> dict:
             f"class — {n_class} of the {len(pkgs)} are titled for a permit class "
             f"{list(PERMIT_CLASS_TERMS)}, which publishes a SUBSET of the temporary-resident "
             f"population, not the total spec:473 consumes"
-            + (". So none of them offers a maintained, CMA-level, point-in-time count of the "
-               "temporary-resident total."
+            + (". So none of them offers a CMA-level, point-in-time count of the "
+               "temporary-resident total. (Maintenance is NOT among the three tested "
+               "conditions — the frequency column above is displayed, not asserted on.)"
                if not combined else
                f": {[c['title'] for c in combined]} — inspect these before treating the "
                f"StatCan pick as the only maintained option.")
@@ -822,8 +911,8 @@ def _record_isq(note: list[str]) -> dict:
                     f"{col}. The searched index is what this run read."),
             f"- Label read from the workbook: **\"{label}\"**.",
             f"- First data row ({ISQ_FIRST_DATA_ROW}, 0-indexed) value: **{value}**.",
-            "- **Measured reason it does not fill the STOCK slot:** the label leads with "
-            "\"Solde\" (a net balance)"
+            "- **Measured reason it does not fill the STOCK slot:** the label CONTAINS "
+            "\"Solde\" (a net balance) — the predicate is a substring test, not a prefix test"
             + (f", and the first data value {value} is NEGATIVE — a population STOCK cannot be "
                f"below zero, so this column is a net FLOW over the year, not a level."
                if negative else
@@ -884,11 +973,11 @@ def main() -> None:
     isq = _record_isq(body)
 
     body += ["## DECISION", ""]
-    if verdict == "LOCATED":
+    if verdict in ("LOCATED", "LOCATED-NOT-STOCK"):
         e = evidence
         # The comparison scope is a FUNCTION of which comparisons actually ran, so the pick
         # can never claim to have been chosen over an alternative nobody measured.
-        scope_bits = [f"the {e['n_swept']} StatCan cubes swept in §1"]
+        scope_bits = [f"the {e['n_swept']} StatCan cubes swept in §1 (the pick is one of them)"]
         if ircc["measured"]:
             scope_bits.append(f"the {ircc['n_pkgs']} IRCC temporary-resident packages swept in §4")
         if isq["measured"]:
@@ -905,21 +994,25 @@ def main() -> None:
                       f"a {CA_MARKER} marker, "
                       f"{e['n_geo'] - n_canada - e['n_cma_marked'] - e['n_ca_marked']} other; "
                       f"the full member list is emitted verbatim in §3")
-        # The COARSEST present geography that contains the modeled CMAs, COUNTED off the live
-        # member list — never the typed "province-level (Quebec)" gloss it replaces. That
-        # gloss read as true on today's data while surviving a run with ZERO geography
-        # members (caught by the floor-guard mutation), which is exactly the untied claim
-        # house rule #1 forbids: a gloss must be a FUNCTION of what was measured.
-        qc_members = [m for m in e["members"] if m.strip().lower() in ("quebec", "québec")]
+        # The DECLARED containing provinces (MODELED_CMA_PROVINCE), matched against the live
+        # member list. Both halves are now tied: the value half is counted off the response,
+        # and the containment half is a declared datum that moves with MODELED_CMAS rather
+        # than a relation asserted in prose. (Two earlier glosses died here: a hand-typed
+        # "PROVINCE-level (Quebec)" that survived ZERO geography members, and a "coarsest
+        # geography containing them" that would have survived swapping in Toronto.)
+        want_prov = sorted({MODELED_CMA_PROVINCE[k] for k in MODELED_CMAS})
+        prov_members = [m for m in e["members"] if _norm(m) in {_norm(x) for x in want_prov}]
         limit = (
             f"no CMA breakdown — the modeled CMAs "
             + ", ".join(f"{k} (name hits {e['n_named'][k]}, CMA-marked {e['n_marked'][k]})"
                         for k in MODELED_CMAS)
             + f" are ABSENT from the pick's {e['n_geo']} geography members"
-            + (f"; the coarsest geography containing them that IS present is {qc_members}"
-               if qc_members else
-               "; no member matching the Quebec province name is present either, so the "
-               "indicator's geography is whatever §3's member list shows and nothing finer")
+            + (f"; their DECLARED containing province(s) {want_prov} — declared beside "
+               f"MODELED_CMAS, not inferred here — ARE present as member(s) {prov_members}, "
+               f"so that is the finest geography this source offers for them"
+               if prov_members else
+               f"; no member matches their DECLARED containing province(s) {want_prov} either, "
+               f"so this source offers no geography for them at all")
             + (f"; the only swept cube carrying both is {e['cma_bearers']}, disqualified in §3b "
                f"and NOT combinable with the pick"
                if e["cma_bearers"] else
@@ -927,7 +1020,12 @@ def main() -> None:
         ) if not e["cma_available"] else "none"
 
         body += [
-            "- `DECISION-VERDICT: LOCATED`",
+            f"- `DECISION-VERDICT: {verdict}`"
+            + ("" if verdict == "LOCATED" else
+               "  (a source WAS located and every field below is measured, but its measure type "
+               "did NOT compute as STOCK — spec:473 consumes a stock, so this pick must not be "
+               "wired until the mismatch in §3 is resolved. The boundaries all answered; this "
+               "is a limit on the ANSWER, not a probe failure.)"),
             f"- `DECISION-SOURCE-PID: {e['pick']}`  (StatCan table {table_number(e['pick'])}; "
             f"resolved from the live sweep of {e['n_cubes']} catalogue cubes, not typed)",
             f"- `DECISION-SOURCE-TITLE: {e['title']}`  (cubeTitleEn from the live "
@@ -943,15 +1041,19 @@ def main() -> None:
             f"- `DECISION-MEASURE-TYPE: {e['measure']}`  "
             + (f"(title stock markers {e['title_stock']}; flow markers "
                f"{e['flow_hits'] or 'none'}; "
-               + ("the live footnote states point-in-time reference dates, so the value is a "
-                  "level at a date, not a movement — which is what spec:473 consumes"
+               + ("the live footnote states point-in-time reference dates"
+                  + (", so the value is a level at a date, not a movement — which is what "
+                     "spec:473 consumes"
+                     if e["measure"] == "STOCK" else
+                     f", but the computed measure type is {e['measure']}, so this note draws NO "
+                     f"level-vs-movement conclusion")
                   if e["q_point"] else
                   "NO point-in-time footnote was found, so this rests on title markers alone")
                + ")"),
             f"- `DECISION-CURRENCY: {e['archive']}; last released {e['release']}; series runs to "
             f"{e['end']}`",
             f"- `DECISION-PICK: StatCan {table_number(e['pick'])} (productId {e['pick']}) — "
-            f"chosen over {', '.join(scope_bits)}`"
+            f"chosen from {', '.join(scope_bits)}`"
             + (f"  (NOT MEASURED this run, so NOT part of the comparison: "
                f"{', '.join(unmeasured)})" if unmeasured else ""),
             f"- `DECISION-PICK-LIMIT: {limit}`",
