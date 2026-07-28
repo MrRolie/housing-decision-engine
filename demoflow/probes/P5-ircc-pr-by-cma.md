@@ -47,6 +47,7 @@ Quoted verbatim from the live package metadata:
 - Convention (quoted verbatim from the live package notes): "Please note that in these datasets, the figures have been suppressed or rounded to prevent the identification of individuals when the datasets are compiled and compared with other publicly available statistics. Values between 0 and 5 are shown as “--“ and all other values are rounded to the nearest multiple of 5."
 - Tallied over the live TOTAL column: **4678** suppressed (`--`) cells of 21217 total; **16539** numeric cells, of which **0** are NOT multiples of 5 (0 confirms base-5 rounding).
 - **Handling (spec §4):** a suppressed `--` cell is treated as a **0-band** (the true value is 0–5). For the TWO modeled CMAs this convention is **immaterial**: Montréal has **0** suppressed cells, Québec has **0** suppressed cells — 0 suppressed across both, so only base-5 rounding (±2.5 per monthly cell) applies to the tripwire's targets, negligible against the MIFI plan level (~45k/yr, a spec §4 constant).
+- **Rounding floor — no unrounded source in this package.** MEASURED on the fetched CSV: 0 of 16539 numeric TOTAL cells are non-multiples of 5 (base-5 rounding confirmed), plus 4678 `--` suppressed cells — so ±2.5 per cell is this resource's irreducible rounding floor. CITED (package-wide): the notes above state rounding + `--` suppression apply to "these datasets" (the whole package), 16 of 16 CSV resources carry the "[rounded... not for calculations]" label, and 0 resource(s) claim to be unrounded. The XLSX sibling lacks the "[rounded]" name-prefix but is one of "these datasets" the notes cover, so it is NOT an unrounded escape — this probe records no source it verified to be unrounded and asserts none. (The earlier "unrounded XLSX" label was an unmeasured inference from the missing prefix; removed.)
 
 ## 4. Category axis (recorded divergence from spec §4 'by CMA + category')
 
@@ -63,12 +64,13 @@ Quoted verbatim from the live package metadata:
 - `DECISION-VERDICT: LOCATED`
 - `DECISION-PACKAGE-ID: f7e5498e-0ad8-4417-85c9-9b8aff9b9eda`
 - `DECISION-CSV-URL: https://www.ircc.canada.ca/opendata-donneesouvertes/data/ODP-PR-PT_CMA.csv`
-- `DECISION-CSV-XLSX-UNROUNDED-URL: https://www.ircc.canada.ca/opendata-donneesouvertes/data/EN_ODP-PR-CMA.xlsx`  (the unrounded XLSX source, for when base-5 rounding matters)
+- `DECISION-ROUNDING-FLOOR: ±2.5 per cell (base-5 confirmed); no unrounded source in this package`  (MEASURED on the fetched CSV: 0 of 16539 numeric TOTAL cells are non-multiples of 5, 4678 `--` suppressed. CITED: the package notes apply rounding + `--` suppression to all its datasets, and 16 of 16 CSV resources carry the "[rounded... not for calculations]" label. Task 28: ±2.5/cell is the irreducible floor — there is NO unrounded escape source; the earlier "unrounded XLSX" claim was an unmeasured inference and is removed)
+- `DECISION-CMA-XLSX-URL: https://www.ircc.canada.ca/opendata-donneesouvertes/data/EN_ODP-PR-CMA.xlsx`  (the same CMA PR data in a quarterly-pivot XLSX form; per the package notes it carries the SAME `--` suppression + base-5 rounding as the CSV — NOT a rounding-escape source)
 - `DECISION-DELIMITER: tab`
 - `DECISION-COLUMNS: EN_YEAR | EN_QUARTER | EN_MONTH | FR_ANNEÉ | FR_TRIMESTRE | FR_MOIS | EN_CENSUS_METROPOLITAN_AREA | FR_RÉGION_MÉTROPOLITAINE_DE_RECENSEMENT | EN_PROVINCE_TERRITORY | FR_PROVINCE_TERRITOIRE | TOTAL`
 - `DECISION-SUPPRESSED-CONVENTION: cells shown as "--" are values 0-5 (suppressed); treat as a 0-band per spec §4. All other values are rounded to the nearest multiple of 5.`
 - `DECISION-FOUND-AT-CMA: YES`  (numeric monthly rows in the live pull: Montréal 137, Québec 137 — both present)
-- `DECISION-CATEGORY-AT-CMA: NOT-IN-PACKAGE`  (0 of 52 resources in this package cross a CMA term with an immigration-category term — see §4; category is Province/Territory only: `https://www.ircc.canada.ca/opendata-donneesouvertes/data/ODP-PR-PT_IMMCAT.csv`; the tripwire needs TOTAL only)
+- `DECISION-CATEGORY-AT-CMA: NOT-IN-PACKAGE`  (0 of 52 resources in this package cross a CMA term with an immigration-category term — see §4; category is at the Province/Territory level (`https://www.ircc.canada.ca/opendata-donneesouvertes/data/ODP-PR-PT_IMMCAT.csv`); the tripwire needs TOTAL only)
 
 - Standing rule (spec §7): this source feeds the PR-landings TRIPWIRE (realized PR landings vs the MIFI plan level), NOT the demand model (which uses ISQ compo "Immigrants permanents"). If the source becomes unavailable the tripwire reports UNKNOWN — never a stale within-band.
 

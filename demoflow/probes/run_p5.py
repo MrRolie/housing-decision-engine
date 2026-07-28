@@ -299,6 +299,18 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     cat_url = cat_res.get("url") or ""
     cat_cma_cross = _category_cma_cross_count(pkg)
 
+    # Rounding-provenance from the package's OWN resource labels (CITED evidence, not an
+    # empirical measurement): every CSV is labelled "[rounded... not for calculations]",
+    # and NO resource claims to be unrounded. Combined with the base-5 measurement over the
+    # fetched CSV (§3) this is the honest basis for "no unrounded source" — the XLSX is NOT
+    # asserted unrounded (that was an unmeasured inference from a missing label, now removed).
+    csv_res_all = [r for r in all_res if (r.get("format") or "").upper() == "CSV"]
+    rounded_labeled = [r for r in csv_res_all if "rounded" in (r.get("name") or "").lower()]
+    unrounded_labeled = [r for r in all_res
+                         if "unrounded" in (r.get("name") or "").lower()
+                         or "un-rounded" in (r.get("name") or "").lower()
+                         or "not rounded" in (r.get("name") or "").lower()]
+
     notes_text = pkg.get("notes") or ""
 
     id_match = resolved_id == EXPECTED_PKG_ID
@@ -450,6 +462,19 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
            else f" — {modeled_supp_total} suppressed across both, each a 0-band (0–5) that Task "
            f"28 MUST apply explicitly to the tripwire's targets (base-5 rounding, ±2.5 per cell, "
            f"is then secondary)."),
+        f"- **Rounding floor — no unrounded source in this package.** MEASURED on the fetched "
+        f"CSV: {n_nonmult5} of {len(numeric)} numeric TOTAL cells are non-multiples of 5 "
+        + ("(base-5 rounding confirmed)" if n_nonmult5 == 0
+           else "(base-5 rounding VIOLATED — investigate)")
+        + f", plus {n_supp} `--` suppressed cells — so ±2.5 per cell is this resource's "
+        f"irreducible rounding floor. CITED (package-wide): the notes above state rounding + "
+        f"`--` suppression apply to \"these datasets\" (the whole package), {len(rounded_labeled)} "
+        f"of {len(csv_res_all)} CSV resources carry the \"[rounded... not for calculations]\" "
+        f"label, and {len(unrounded_labeled)} resource(s) claim to be unrounded. The XLSX sibling "
+        f"lacks the \"[rounded]\" name-prefix but is one of \"these datasets\" the notes cover, so "
+        f"it is NOT an unrounded escape — this probe records no source it verified to be unrounded "
+        f"and asserts none. (The earlier \"unrounded XLSX\" label was an unmeasured inference from "
+        f"the missing prefix; removed.)",
         "",
         "## 4. Category axis (recorded divergence from spec §4 'by CMA + category')",
         "",
@@ -457,8 +482,10 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"with an immigration-category term (enumerated live). The CMA table above is "
         f"geography × month × TOTAL only — no category dimension.",
         f"- Immigration category is published at the **Province/Territory** level in a sibling "
-        f"resource: `{cat_url or 'not resolved this run'}`. This is scoped to THIS package's "
-        f"resources — it is NOT a claim that category×CMA exists nowhere in IRCC open data.",
+        + (f"resource: `{cat_url}`." if cat_url
+           else "resource (its url did not resolve this run).")
+        + " This is scoped to THIS package's resources — it is NOT a claim that category×CMA "
+        "exists nowhere in IRCC open data.",
         "- The PR-landings tripwire (spec §7) compares realized landings vs the MIFI plan "
         "level, which needs `TOTAL` only; the category axis is not required for it.",
         "",
@@ -486,6 +513,12 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "cat_url": cat_url,
         "cat_cma_cross": cat_cma_cross,
         "n_resources": len(all_res),
+        "n_nonmult5": n_nonmult5,
+        "n_numeric": len(numeric),
+        "n_supp": n_supp,
+        "csv_count": len(csv_res_all),
+        "rounded_labeled": len(rounded_labeled),
+        "unrounded_count": len(unrounded_labeled),
     }
     return "LOCATED", evidence
 
@@ -525,8 +558,25 @@ def main() -> None:
             "- `DECISION-VERDICT: LOCATED`",
             f"- `DECISION-PACKAGE-ID: {evidence['resolved_id']}`",
             f"- `DECISION-CSV-URL: {evidence['csv_url']}`",
-            f"- `DECISION-CSV-XLSX-UNROUNDED-URL: {evidence['xlsx_url']}`  "
-            "(the unrounded XLSX source, for when base-5 rounding matters)",
+            f"- `DECISION-ROUNDING-FLOOR: ±2.5 per cell (base-5 "
+            f"{'confirmed' if evidence['n_nonmult5'] == 0 else 'VIOLATED'}); "
+            + ("no unrounded source in this package"
+               if evidence['unrounded_count'] == 0
+               else f"{evidence['unrounded_count']} resource(s) LABELED unrounded — verify")
+            + "`  (MEASURED on the fetched CSV: "
+            f"{evidence['n_nonmult5']} of {evidence['n_numeric']} numeric TOTAL cells are "
+            f"non-multiples of 5, {evidence['n_supp']} `--` suppressed. CITED: the package notes "
+            f"apply rounding + `--` suppression to all its datasets, and "
+            f"{evidence['rounded_labeled']} of {evidence['csv_count']} CSV resources carry the "
+            "\"[rounded... not for calculations]\" label. Task 28: ±2.5/cell is the irreducible "
+            "floor — there is NO unrounded escape source; the earlier \"unrounded XLSX\" claim "
+            "was an unmeasured inference and is removed)",
+            (f"- `DECISION-CMA-XLSX-URL: {evidence['xlsx_url']}`  (the same CMA PR data in a "
+             "quarterly-pivot XLSX form; per the package notes it carries the SAME `--` "
+             "suppression + base-5 rounding as the CSV — NOT a rounding-escape source)")
+            if evidence['xlsx_url'] else
+            "- `DECISION-CMA-XLSX-URL: none resolved this run`  (no XLSX CMA sibling matched; the "
+            "CSV above is the machine-readable source)",
             f"- `DECISION-DELIMITER: {evidence['delim']}`",
             f"- `DECISION-COLUMNS: {cols}`",
             "- `DECISION-SUPPRESSED-CONVENTION: cells shown as \"--\" are values 0-5 "
@@ -543,8 +593,9 @@ def main() -> None:
             f"{'NOT-IN-PACKAGE' if evidence['cat_cma_cross'] == 0 else 'PRESENT'}`  "
             + f"({evidence['cat_cma_cross']} of {evidence['n_resources']} resources in this "
             f"package cross a CMA term with an immigration-category term — see §4; "
-            + (f"category is Province/Territory only: "
-               f"`{evidence.get('cat_url') or 'sibling resource'}`; "
+            + (("category is at the Province/Territory level "
+                + (f"(`{evidence['cat_url']}`); " if evidence['cat_url']
+                   else "(sibling resource url not resolved this run); "))
                if evidence['cat_cma_cross'] == 0
                else "pull that cross-tab before relying on category-at-CMA; ")
             + "the tripwire needs TOTAL only)",
