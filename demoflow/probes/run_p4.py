@@ -51,7 +51,8 @@ from pathlib import Path
 
 # Flat, NOT `probes._wds`: probes/ is deliberately not a package, so in script mode
 # sys.path[0] IS probes/ and this resolves natively. See probes/_wds.py.
-from _wds import TIMEOUT, WDS_LIST, WDS_META, Fact, new_run, post as _post, provenance_header
+from _wds import (WDS_LIST, WDS_META, WDS_TIMEOUT, Fact, new_run, post as _post,
+                  provenance_header)
 
 OUT = Path(__file__).resolve().parent / "P4-immigrant-ownership-diff.md"
 # NOT the same constant as run_p3.py's `CHUNK = 40`: different endpoint, different
@@ -129,6 +130,12 @@ S2_RECENT_OWNED_PER_1000 = 115.0       # recent immigrants, 0 to 5 years
 
 
 # --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+# The filename this note must attribute itself to. DERIVED from __file__, never
+# typed: `written_by` is the one header field a copy-pasted call block carries
+# forward silently — a p6 cloned from p5 would publish "Written by run_p5.py"
+# over p6's own computed body, which is exactly the untied claim this registry
+# exists to stop. Module-level so the golden-equivalence test can read it.
+_WRITTEN_BY = Path(__file__).name
 _SCOPE = ("The catalogue sweep and dimension-level audit in §1-§3 are generated from the live "
           "WDS responses of the run that wrote this file. The fallback band in §4 is computed "
           "from CITED published rates: the input homeownership rates are external (each printed "
@@ -153,7 +160,7 @@ def _summary(*, total: int, derived: int, cited: int) -> str:
 
 # --- live hunt --------------------------------------------------------------
 def _catalogue() -> list[dict]:
-    raw = urllib.request.urlopen(WDS_LIST, timeout=TIMEOUT).read()
+    raw = urllib.request.urlopen(WDS_LIST, timeout=WDS_TIMEOUT).read()
     return json.loads(raw)
 
 
@@ -630,7 +637,7 @@ def main() -> None:
         "",
     ]
 
-    header = provenance_header(facts, written_by="run_p4.py", scope=_SCOPE,
+    header = provenance_header(facts, written_by=_WRITTEN_BY, scope=_SCOPE,
                                summary=_summary, cited_label=_CITED_LABEL)
     text = "\n".join(title + header + body) + "\n"
     for placeholder in ("[FILL:", "[FILL]", "[FILL "):

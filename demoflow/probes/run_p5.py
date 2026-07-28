@@ -68,6 +68,12 @@ TIMEOUT = 120
 
 
 # --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+# The filename this note must attribute itself to. DERIVED from __file__, never
+# typed: `written_by` is the one header field a copy-pasted call block carries
+# forward silently — a p6 cloned from p5 would publish "Written by run_p5.py"
+# over p6's own computed body, which is exactly the untied claim this registry
+# exists to stop. Module-level so the golden-equivalence test can read it.
+_WRITTEN_BY = Path(__file__).name
 _SCOPE = ("SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package "
           "id, the CSV resource url, the observed column list, and every row / CMA / year / "
           "suppression / rounding count in §1-§3 are emitted by this run from the live CKAN "
@@ -576,7 +582,7 @@ def main() -> None:
             "",
         ]
 
-    header = provenance_header(facts, written_by="run_p5.py", scope=_SCOPE,
+    header = provenance_header(facts, written_by=_WRITTEN_BY, scope=_SCOPE,
                                summary=_summary, cited_label=_CITED_LABEL)
     text = "\n".join(title + header + body) + "\n"
     for placeholder in ("[FILL:", "[FILL]", "[FILL "):

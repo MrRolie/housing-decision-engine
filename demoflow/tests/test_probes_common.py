@@ -89,9 +89,16 @@ def test_provenance_header_matches_pinned_goldens(stem, mix_name):
     for text, kind, source in MIXES[mix_name]:
         _wds.Fact(text, kind, source)
 
+    # `mod._WRITTEN_BY`, NOT a synthesized f"run_{stem}.py": the filename is the one
+    # header field that a copy-pasted call block carries forward silently, so the test
+    # must read what the probe would actually publish, not reconstruct what it should.
+    assert mod._WRITTEN_BY == f"run_{stem}.py", (
+        f"{stem} would attribute its note to {mod._WRITTEN_BY!r} — a generated artifact "
+        f"must name the file that generated it."
+    )
     got = _wds.provenance_header(
         log,
-        written_by=f"run_{stem}.py",
+        written_by=mod._WRITTEN_BY,
         scope=mod._SCOPE,
         summary=mod._summary,
         cited_label=mod._CITED_LABEL,
@@ -176,9 +183,16 @@ def test_cross_probe_runs_do_not_share_a_registry(tmp_path):
     after = _registered_line(run_p5(tmp_path / "p5_after_p4.md"))
 
     # Guard against a vacuous pass: both runs must actually have registered figures,
-    # otherwise two empty headers would compare equal and prove nothing.
-    assert re.search(r"\b[1-9]\d*\b", alone), f"p5 registered nothing: {alone!r}"
-    assert re.search(r"\b[1-9]\d*\b", _registered_line(p4_text)), "p4 registered nothing"
+    # otherwise two zero-count headers would compare equal and prove nothing. Parse the
+    # COUNT — a bare "is there a nonzero digit" test matches the 5 in p5's own
+    # "the base-5 rounding step" and so can never fire.
+    def _count(line: str) -> int:
+        found = re.search(r"registered (\d+)", line)
+        assert found, f"no parseable registered-count in {line!r}"
+        return int(found.group(1))
+
+    assert _count(alone) > 0, f"p5 registered nothing: {alone!r}"
+    assert _count(_registered_line(p4_text)) > 0, "p4 registered nothing"
 
     assert after == alone, (
         "p5's provenance header changed because p4 ran first in the same process — the "
@@ -192,8 +206,15 @@ def test_shared_network_exceptions_did_not_widen():
     A code fault must never launder into `pytest.skip`: the set is exactly the 18
     members p3/p4/p5 already agreed on, and a non-network type stays outside it.
     """
-    assert len(NETWORK_EXCEPTIONS) == 18, sorted(NETWORK_EXCEPTIONS)
-    assert "NoResponse" in NETWORK_EXCEPTIONS
+    # Full-set equality, not a length check plus a denylist: a count pins the SIZE, so
+    # any member could be swapped for any other string (e.g. SSLEOFError -> OSError)
+    # without a red. This is the one set deciding fail-vs-skip for three probes.
+    assert NETWORK_EXCEPTIONS == frozenset({
+        "URLError", "HTTPError", "ContentTooShortError", "TimeoutError", "timeout",
+        "socket.timeout", "gaierror", "herror", "ConnectionError", "ConnectionResetError",
+        "ConnectionRefusedError", "ConnectionAbortedError", "RemoteDisconnected",
+        "IncompleteRead", "BadStatusLine", "SSLError", "SSLEOFError", "NoResponse",
+    }), sorted(NETWORK_EXCEPTIONS)
     for fault in ("KeyError", "IndexError", "ValueError", "JSONDecodeError", "AssertionError"):
         assert fault not in NETWORK_EXCEPTIONS, f"{fault} would excuse a code fault as an outage"
     assert recorded_failure_type("… LIVE PROBE FAILED: KeyError: 'Men+'") == "KeyError"

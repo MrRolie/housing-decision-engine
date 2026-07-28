@@ -51,15 +51,18 @@ def source_reachable(
     url: str,
     *,
     timeout: float,
-    method: str = "GET",
+    method: str,
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
     ok_statuses: tuple[int, ...] = (200,),
 ) -> bool:
     """Cheap liveness probe. Any exception means unreachable.
 
-    `method` is an EXPLICIT parameter, never inferred: the reachability probe must
-    use the SAME HTTP method as the real call it stands in for. `getCubeMetadata`
+    `method` is an EXPLICIT parameter with NO DEFAULT, never inferred: the
+    reachability probe must use the SAME HTTP method as the real call it stands in
+    for, and a default IS inference — a future wrapper that omitted `method=` would
+    silently get GET, which is the failure recorded below as having already happened
+    once. Omitting it is now a `TypeError` at the call site. `getCubeMetadata`
     rejects GET, so a GET-based check reports 'unreachable' against a perfectly
     healthy service and every recorded failure then launders itself into a skip —
     the cheap all-clear these gates exist to prevent (caught for real once: with a

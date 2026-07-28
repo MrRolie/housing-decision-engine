@@ -58,10 +58,10 @@ from pathlib import Path
 # Flat, NOT `probes._wds`: probes/ is deliberately not a package, so in script mode
 # sys.path[0] IS probes/ and this resolves natively. See probes/_wds.py.
 from _wds import (
-    TIMEOUT,
     WDS_DATA,
     WDS_LIST,
     WDS_META,
+    WDS_TIMEOUT,
     Fact,
     new_run,
     post as _post,
@@ -131,6 +131,12 @@ VITRINE_BAND = (0.24, 0.34)
 
 
 # --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+# The filename this note must attribute itself to. DERIVED from __file__, never
+# typed: `written_by` is the one header field a copy-pasted call block carries
+# forward silently — a p6 cloned from p5 would publish "Written by run_p5.py"
+# over p6's own computed body, which is exactly the untied claim this registry
+# exists to stop. Module-level so the golden-equivalence test can read it.
+_WRITTEN_BY = Path(__file__).name
 _SCOPE = ("Every table in §2-§4 is generated row by row from the live WDS responses of the run "
           "that wrote this file.")
 _CITED_LABEL = "Externally cited figures:"
@@ -155,7 +161,7 @@ def _summary(*, total: int, derived: int, cited: int) -> str:
 
 def _sweep() -> tuple[list[str], str]:
     """Shortlist Census cubes whose titles mention living arrangements."""
-    raw = urllib.request.urlopen(WDS_LIST, timeout=TIMEOUT).read()
+    raw = urllib.request.urlopen(WDS_LIST, timeout=WDS_TIMEOUT).read()
     cubes = json.loads(raw)
     hits = []
     for c in cubes:
@@ -801,7 +807,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         "",
     ]
 
-    header = provenance_header(facts, written_by="run_p3.py", scope=_SCOPE,
+    header = provenance_header(facts, written_by=_WRITTEN_BY, scope=_SCOPE,
                                summary=_summary, cited_label=_CITED_LABEL)
     text = "\n".join(title + header + note) + "\n"
     if "[FILL:" in text:  # belt-and-braces: this script must never emit a placeholder

@@ -26,7 +26,10 @@ from typing import Callable
 WDS_META = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"  # POST [{"productId": int}]
 WDS_LIST = "https://www150.statcan.gc.ca/t1/wds/rest/getAllCubesListLite"
 WDS_DATA = "https://www150.statcan.gc.ca/t1/wds/rest/getDataFromCubePidCoordAndLatestNPeriods"
-TIMEOUT = 120
+# Named for its boundary, not generically: run_p5.py deliberately keeps its OWN
+# `TIMEOUT = 120` for the CKAN/CSV hosts. Two identical-looking constants governing
+# different boundaries is an invitation to "de-duplicate" them wrongly.
+WDS_TIMEOUT = 120
 
 
 # --- Fact provenance registry -----------------------------------------------
@@ -68,17 +71,28 @@ class Fact:
     AND the document's provenance header are both generated from these objects, so a
     figure cannot reach a note without declaring itself either
 
-      `derived` — computed from a live response in THIS run (it changes when the
-                  source data changes), naming the exact source, or
-      `cited`   — external to this run, printed with its citation inline.
+      `derived` — computed in THIS run from inputs it names (a live response, or
+                  the cited rates it printed) — it changes when those inputs
+                  change, or
+      `cited`   — not computed here: an external published figure, or a string
+                  quoted verbatim from live metadata, printed with its source
+                  inline.
+
+    The two halves of `derived` are BOTH live in this codebase and the wording must
+    stay wide enough for both: p3/p5 derive from live responses, while ALL of p4's
+    derived facts are arithmetic over hardcoded published rates (`S1_YEAR5`,
+    `S2_CDNBORN_OWNED_PER_1000`, …) — no live response is involved and they do not
+    move when source data moves. This class is now the single authority on what the
+    tag means, so a definition true of only one probe would be a false claim about a
+    third of its call sites.
 
     The header is then assembled from the mix actually present rather than asserted,
     so it cannot drift from what the body really contains.
 
     Known weakness: `derived` does NOT verify the value was computed — the tag is
     author-chosen. So the discipline is enforced by CODE: every value tagged
-    `derived` in the probes is a live expression over the fetched response, never a
-    literal handed to `Fact.derived`.
+    `derived` in the probes is a live arithmetic expression over the inputs its
+    `how` string names, never a literal handed to `Fact.derived`.
     """
 
     text: str
@@ -89,7 +103,8 @@ class Fact:
         log = _ACTIVE.get()
         if log is None:
             raise RuntimeError(
-                "Fact created with no active run: call _wds.new_run() first. A registry "
+                f"Fact({self.kind}) {self.text!r} created with no active run: call "
+                "_wds.new_run() first. A registry "
                 "that silently accepted it would let one run's figures inflate another "
                 "run's provenance count — the exact defect this registry exists to stop."
             )
@@ -161,7 +176,7 @@ def post(url: str, payload: list) -> list:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
     )
-    return json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
+    return json.loads(urllib.request.urlopen(req, timeout=WDS_TIMEOUT).read())
 
 
 # --- StatCan table-number derivation ----------------------------------------
