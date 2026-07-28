@@ -47,14 +47,15 @@ Run:  cd demoflow && uv run python probes/run_p4.py
 
 import json
 import urllib.request
-from dataclasses import dataclass
 from pathlib import Path
 
-# --- WDS endpoints ----------------------------------------------------------
-WDS_LIST = "https://www150.statcan.gc.ca/t1/wds/rest/getAllCubesListLite"
-WDS_META = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"  # POST [{"productId": int}]
+# Flat, NOT `probes._wds`: probes/ is deliberately not a package, so in script mode
+# sys.path[0] IS probes/ and this resolves natively. See probes/_wds.py.
+from _wds import TIMEOUT, WDS_LIST, WDS_META, Fact, new_run, post as _post, provenance_header
+
 OUT = Path(__file__).resolve().parent / "P4-immigrant-ownership-diff.md"
-TIMEOUT = 120
+# NOT the same constant as run_p3.py's `CHUNK = 40`: different endpoint, different
+# batch semantics. Never merge them.
 META_CHUNK = 30
 
 # --- catalogue-sweep keys ---------------------------------------------------
@@ -127,92 +128,27 @@ S2_CDNBORN_OWNED_PER_1000 = 271.0
 S2_RECENT_OWNED_PER_1000 = 115.0       # recent immigrants, 0 to 5 years
 
 
-# --- Fact provenance registry (reused verbatim from run_p3.py) --------------
-_FACTS: list["Fact"] = []
+# --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+_SCOPE = ("The catalogue sweep and dimension-level audit in §1-§3 are generated from the live "
+          "WDS responses of the run that wrote this file. The fallback band in §4 is computed "
+          "from CITED published rates: the input homeownership rates are external (each printed "
+          "with its source and a verbatim quote); every RATIO and band endpoint is computed in "
+          "code from those rates — no ratio is hand-typed.")
+_CITED_LABEL = "Externally cited figures:"
 
 
-@dataclass(frozen=True)
-class Fact:
-    """A narrative figure carrying HOW this run obtained it.
-
-    `derived` — computed from a CITED rate in THIS run (it changes when the source
-                data changes), naming its inputs; `cited` — external, printed with
-                its citation inline. The header is assembled from the mix actually
-                present, so it cannot drift from the body.
-
-    Known weakness (unchanged from P3): `derived` does NOT verify the value was
-    computed — the tag is author-chosen. So the discipline is enforced by CODE:
-    every ratio/band below is a live arithmetic expression over the cited rates,
-    not a literal handed to `Fact.derived`.
-    """
-
-    text: str
-    kind: str  # "derived" | "cited"
-    source: str
-
-    def __post_init__(self) -> None:
-        _FACTS.append(self)
-
-    @classmethod
-    def derived(cls, value: object, how: str) -> "Fact":
-        return cls(f"{value}", "derived", how)
-
-    @classmethod
-    def cited(cls, value: object, source: str) -> "Fact":
-        return cls(f"{value}", "cited", source)
-
-    def __str__(self) -> str:
-        return self.text if self.kind == "derived" else f"{self.text} [cited: {self.source}]"
-
-
-def _provenance_header() -> list[str]:
-    derived = [f for f in _FACTS if f.kind == "derived"]
-    cited = [f for f in _FACTS if f.kind == "cited"]
-    lines = [
-        "Written by `probes/run_p4.py`; nothing in this file is hand-edited.",
-        "",
-        "The catalogue sweep and dimension-level audit in §1-§3 are generated from the live "
-        "WDS responses of the run that wrote this file. The fallback band in §4 is computed "
-        "from CITED published rates: the input homeownership rates are external (each printed "
-        "with its source and a verbatim quote); every RATIO and band endpoint is computed in "
-        "code from those rates — no ratio is hand-typed.",
-    ]
-    if _FACTS:
-        lines.append(
-            f"§4 tags its headline figures with provenance. This run registered {len(_FACTS)}: "
-            f"{len(derived)} DERIVED (computed from the cited rates in this same run) and "
-            f"{len(cited)} CITED (external published rates, printed with the citation inline). "
-            f"Untagged numerals elsewhere are: §1-§3 audit metadata (product ids, dimension "
-            f"labels, counts of what was checked); the cited source rates and figures shown in "
-            f"the §4 tables and verbatim quotes (traceable to the named articles); reference "
-            f"labels (census/horizon years, age ranges); and the per-row ratios and inline "
-            f"ranges computed beside those cited rates."
-        )
-    if cited:
-        lines += ["", "Externally cited figures:"]
-        lines += [f"- {f.text} — {f.source}" for f in cited]
-    lines.append("")
-    return lines
-
-
-# --- helpers reused from run_p3.py ------------------------------------------
-def _table_number(pid: object) -> str:
-    """`98100231` -> `98-10-0231-01`, StatCan's published table-number form."""
-    p = str(pid)
-    if len(p) != 8 or not p.isdigit():
-        raise ValueError(f"unexpected productId shape {pid!r}; cannot derive a table number")
-    return f"{p[0:2]}-{p[2:4]}-{p[4:8]}-01"
-
-
-def _table_url(pid: object) -> str:
-    return f"https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid={pid}01"
-
-
-def _post(url: str, payload: list) -> list:
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+def _summary(*, total: int, derived: int, cited: int) -> str:
+    """The §4 provenance sentence, sized to what this run actually registered."""
+    return (
+        f"§4 tags its headline figures with provenance. This run registered {total}: "
+        f"{derived} DERIVED (computed from the cited rates in this same run) and "
+        f"{cited} CITED (external published rates, printed with the citation inline). "
+        f"Untagged numerals elsewhere are: §1-§3 audit metadata (product ids, dimension "
+        f"labels, counts of what was checked); the cited source rates and figures shown in "
+        f"the §4 tables and verbatim quotes (traceable to the named articles); reference "
+        f"labels (census/horizon years, age ranges); and the per-row ratios and inline "
+        f"ranges computed beside those cited rates."
     )
-    return json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
 
 
 # --- live hunt --------------------------------------------------------------
@@ -625,7 +561,9 @@ def _fallback_band(note: list[str]) -> tuple[float, ...]:
 
 
 def main() -> None:
-    _FACTS.clear()
+    # Per-run registry (see run_p3.py): `_wds` is one cached module shared by every
+    # probe, so a module-global list would let one run's figures inflate another's.
+    facts = new_run()
     title = [
         "# P4 — Immigrant/non-immigrant ownership ratio (Tranche-1 coarse-netting multiplier)",
         "",
@@ -692,7 +630,9 @@ def main() -> None:
         "",
     ]
 
-    text = "\n".join(title + _provenance_header() + body) + "\n"
+    header = provenance_header(facts, written_by="run_p4.py", scope=_SCOPE,
+                               summary=_summary, cited_label=_CITED_LABEL)
+    text = "\n".join(title + header + body) + "\n"
     for placeholder in ("[FILL:", "[FILL]", "[FILL "):
         if placeholder in text:
             raise AssertionError(f"run_p4.py emitted an unresolved {placeholder!r} placeholder")

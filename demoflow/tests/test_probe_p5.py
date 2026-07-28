@@ -29,10 +29,16 @@ assert the OUTCOME (RULING-2):
 
 import json
 import re
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+from ._probe_asserts import (
+    NETWORK_EXCEPTIONS,
+    recorded_failure_type as _recorded_failure_type,
+    source_reachable,
+    token as _token,
+)
 
 NOTE = Path(__file__).resolve().parent.parent / "probes" / "P5-ircc-pr-by-cma.md"
 
@@ -46,39 +52,10 @@ REACHABILITY_TIMEOUT = 15
 UNRESOLVED = {"", "UNKNOWN-PROBE-FAILED", "UNRESOLVED-PROBE-FAILED", "TBD",
               "FILL", "[FILL]", "N/A", "NONE", "NOT-FOUND", "?"}
 
-# Exception types that may legitimately excuse a recorded failure. Anything outside is
-# a code/structural fault (e.g. a JSON/parse error, a KeyError) and FAILS even when the
-# source is unreachable — an outage must never launder a real bug into a skip.
-NETWORK_EXCEPTIONS = frozenset({
-    "URLError", "HTTPError", "ContentTooShortError", "TimeoutError", "timeout",
-    "socket.timeout", "gaierror", "herror", "ConnectionError", "ConnectionResetError",
-    "ConnectionRefusedError", "ConnectionAbortedError", "RemoteDisconnected",
-    "IncompleteRead", "BadStatusLine", "SSLError", "SSLEOFError", "NoResponse",
-})
-
 
 def _note_text() -> str:
     assert NOTE.exists(), f"{NOTE} is missing — run `uv run python probes/run_p5.py` first"
     return NOTE.read_text(encoding="utf-8")
-
-
-def _token(text: str, name: str) -> str | None:
-    """Value of a backtick-delimited `NAME: value` token, or None if absent.
-
-    Prefers the code span, which is how run_p5.py emits every DECISION token; the
-    to-end-of-line fallback is used only when no backtick span exists, so trailing
-    prose cannot launder an unresolved token into a resolved one.
-    """
-    span = re.search(rf"`{re.escape(name)}:\s*(.*?)`", text)
-    if span:
-        return span.group(1).strip()
-    found = re.search(rf"{re.escape(name)}:\s*(.*)", text)
-    return found.group(1).strip().rstrip("`").strip() if found else None
-
-
-def _recorded_failure_type(text: str) -> str | None:
-    found = re.search(r"LIVE PROBE FAILED:\s*([A-Za-z_][A-Za-z0-9_.]*)\s*:", text)
-    return found.group(1) if found else None
 
 
 def _recorded_failure_boundary(text: str) -> str | None:
@@ -94,13 +71,13 @@ def _source_reachable(boundary: str) -> bool:
     a server that ignores it answers 200, one that honors it answers 206 — both live.
     Any exception means unreachable.
     """
-    url = CSV_LIVENESS if boundary == "csv" else CKAN_LIVENESS
-    try:
-        req = urllib.request.Request(url, headers={"Range": "bytes=0-1024"})
-        with urllib.request.urlopen(req, timeout=REACHABILITY_TIMEOUT) as resp:
-            return resp.status in (200, 206)
-    except Exception:
-        return False
+    return source_reachable(
+        CSV_LIVENESS if boundary == "csv" else CKAN_LIVENESS,
+        timeout=REACHABILITY_TIMEOUT,
+        method="GET",
+        headers={"Range": "bytes=0-1024"},
+        ok_statuses=(200, 206),
+    )
 
 
 def _fail_or_skip_on_recorded_failure(text: str) -> None:
@@ -192,9 +169,20 @@ def test_p5_records_located_or_unknown():
 # Gate 3 — the floor guard is load-bearing (mutation test, runs OFFLINE).
 # ---------------------------------------------------------------------------
 def _load_run_p5():
-    """Import run_p5.py as a fresh module (probes/ is not an importable package)."""
-    import importlib.util
+    """Import run_p5.py as a fresh module (probes/ is not an importable package).
 
+    The `sys.path` insert is load-bearing, not tidiness: run_p5.py imports its shared
+    machinery FLAT (`from _wds import …`) because probes/ is deliberately not a
+    package and script mode resolves it via `sys.path[0]`. `spec_from_file_location`
+    does NOT put the file's directory on the path, so without this `exec_module` dies
+    `ModuleNotFoundError: No module named '_wds'`.
+    """
+    import importlib.util
+    import sys
+
+    probes_dir = str(NOTE.parent)
+    if probes_dir not in sys.path:
+        sys.path.insert(0, probes_dir)
     spec = importlib.util.spec_from_file_location("run_p5_under_test", NOTE.parent / "run_p5.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

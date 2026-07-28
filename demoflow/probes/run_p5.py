@@ -40,8 +40,11 @@ Run:  cd demoflow && uv run python probes/run_p5.py
 
 import json
 import urllib.request
-from dataclasses import dataclass
 from pathlib import Path
+
+# Flat, NOT `probes._wds`: probes/ is deliberately not a package, so in script mode
+# sys.path[0] IS probes/ and this resolves natively. See probes/_wds.py.
+from _wds import Fact, new_run, provenance_header
 
 # --- CKAN discovery boundary (open.canada.ca) -------------------------------
 # The plan's package_search query, verbatim. The probe SHOWS it searched, so a
@@ -64,70 +67,26 @@ OUT = Path(__file__).resolve().parent / "P5-ircc-pr-by-cma.md"
 TIMEOUT = 120
 
 
-# --- Fact provenance registry (reused from run_p4.py; CKAN nav is written fresh) ---
-_FACTS: list["Fact"] = []
+# --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+_SCOPE = ("SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package "
+          "id, the CSV resource url, the observed column list, and every row / CMA / year / "
+          "suppression / rounding count in §1-§3 are emitted by this run from the live CKAN "
+          "search response and the live CSV pull — the column list is split from the fetched "
+          "header, never a literal. The suppression/rounding CONVENTION is quoted verbatim "
+          "from the live package notes (cited below). The expected package id is a cross-check "
+          "constant; the run asserts the live-resolved id equals it and prints both.")
+_CITED_LABEL = "Quoted verbatim from the live package metadata:"
 
 
-@dataclass(frozen=True)
-class Fact:
-    """A figure carrying HOW this run obtained it.
-
-    `derived` — computed FROM the live response in THIS run (it changes when the
-                live data changes), naming what produced it; `cited` — quoted
-                verbatim from the live package metadata, printed with its source.
-
-    Known weakness (unchanged from P3/P4): the `derived` tag is author-chosen and
-    does NOT by itself prove the value was computed. So the discipline is enforced
-    by CODE — every value tagged `derived` below is a live expression over the
-    fetched response, never a literal handed to `Fact.derived`.
-    """
-
-    text: str
-    kind: str  # "derived" | "cited"
-    source: str
-
-    def __post_init__(self) -> None:
-        _FACTS.append(self)
-
-    @classmethod
-    def derived(cls, value: object, how: str) -> "Fact":
-        return cls(f"{value}", "derived", how)
-
-    @classmethod
-    def cited(cls, value: object, source: str) -> "Fact":
-        return cls(f"{value}", "cited", source)
-
-    def __str__(self) -> str:
-        return self.text if self.kind == "derived" else f"{self.text} [cited: {self.source}]"
-
-
-def _provenance_header() -> list[str]:
-    derived = [f for f in _FACTS if f.kind == "derived"]
-    cited = [f for f in _FACTS if f.kind == "cited"]
-    lines = [
-        "Written by `probes/run_p5.py`; nothing in this file is hand-edited.",
-        "",
-        "SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package "
-        "id, the CSV resource url, the observed column list, and every row / CMA / year / "
-        "suppression / rounding count in §1-§3 are emitted by this run from the live CKAN "
-        "search response and the live CSV pull — the column list is split from the fetched "
-        "header, never a literal. The suppression/rounding CONVENTION is quoted verbatim "
-        "from the live package notes (cited below). The expected package id is a cross-check "
-        "constant; the run asserts the live-resolved id equals it and prints both.",
-    ]
-    if _FACTS:
-        lines.append(
-            f"This run registered {len(_FACTS)} provenance-tagged figures: {len(derived)} "
-            f"DERIVED (computed from the live response this run) and {len(cited)} CITED "
-            f"(verbatim from the live package metadata). Untagged numerals elsewhere are "
-            f"audit metadata (result counts, resource counts, column positions) and reference "
-            f"labels (years, the base-5 rounding step), each traceable to the live response."
-        )
-    if cited:
-        lines += ["", "Quoted verbatim from the live package metadata:"]
-        lines += [f"- {f.text} — {f.source}" for f in cited]
-    lines.append("")
-    return lines
+def _summary(*, total: int, derived: int, cited: int) -> str:
+    """The provenance sentence, sized to what this run actually registered."""
+    return (
+        f"This run registered {total} provenance-tagged figures: {derived} "
+        f"DERIVED (computed from the live response this run) and {cited} CITED "
+        f"(verbatim from the live package metadata). Untagged numerals elsewhere are "
+        f"audit metadata (result counts, resource counts, column positions) and reference "
+        f"labels (years, the base-5 rounding step), each traceable to the live response."
+    )
 
 
 # --- network boundaries (injectable seams so the floor-guard test runs OFFLINE) ---
@@ -524,7 +483,9 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
 
 
 def main() -> None:
-    _FACTS.clear()
+    # Per-run registry (see run_p3.py): `_wds` is one cached module shared by every
+    # probe, so a module-global list would let one run's figures inflate another's.
+    facts = new_run()
     title = ["# P5 — IRCC PR admissions by CMA (RECORDED OBSERVATION)", ""]
     body: list[str] = []
     stage = {"at": "ckan"}
@@ -615,7 +576,9 @@ def main() -> None:
             "",
         ]
 
-    text = "\n".join(title + _provenance_header() + body) + "\n"
+    header = provenance_header(facts, written_by="run_p5.py", scope=_SCOPE,
+                               summary=_summary, cited_label=_CITED_LABEL)
+    text = "\n".join(title + header + body) + "\n"
     for placeholder in ("[FILL:", "[FILL]", "[FILL "):
         if placeholder in text:
             raise AssertionError(f"run_p5.py emitted an unresolved {placeholder!r} placeholder")

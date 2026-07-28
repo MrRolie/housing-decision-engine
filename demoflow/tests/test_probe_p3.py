@@ -44,10 +44,16 @@ One gate per question so a red names its own cause.
 
 import json
 import re
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+from ._probe_asserts import (
+    NETWORK_EXCEPTIONS,
+    recorded_failure_type as _recorded_failure_type,
+    source_reachable,
+    token as _token,
+)
 
 NOTE = Path(__file__).resolve().parent.parent / "probes" / "P3-living-arrangement.md"
 WDS = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
@@ -60,56 +66,10 @@ REACHABILITY_TIMEOUT = 10
 # DECISION slot is not an answer, and must never be accepted as one.
 UNRESOLVED = {"", "UNRESOLVED-PROBE-FAILED", "TBD", "FILL", "[FILL]", "N/A", "NONE"}
 
-# Exception types that may legitimately excuse a recorded failure. Anything outside this
-# set is a code/structural fault and must FAIL even when the source is unreachable.
-NETWORK_EXCEPTIONS = frozenset(
-    {
-        "URLError",
-        "HTTPError",
-        "ContentTooShortError",
-        "TimeoutError",
-        "timeout",
-        "socket.timeout",
-        "gaierror",
-        "herror",
-        "ConnectionError",
-        "ConnectionResetError",
-        "ConnectionRefusedError",
-        "ConnectionAbortedError",
-        "RemoteDisconnected",
-        "IncompleteRead",
-        "BadStatusLine",
-        "SSLError",
-        "SSLEOFError",
-        "NoResponse",  # run_p3's own marker for "nothing answered at all"
-    }
-)
-
 
 def _note_text() -> str:
     assert NOTE.exists(), f"{NOTE} is missing — run `uv run python probes/run_p3.py` first"
     return NOTE.read_text(encoding="utf-8")
-
-
-def _token(text: str, name: str) -> str | None:
-    """The value of a `DECISION-...: value` token, or None if the token is absent.
-
-    Prefers the backtick-delimited code span, which is how run_p3.py emits every
-    token. A greedy to-end-of-line parse would swallow anything trailing the
-    closing backtick, so an unresolved token followed by leftover prose could
-    read as resolved — the parser must not be the thing that launders a
-    placeholder into an answer.
-    """
-    span = re.search(rf"`{re.escape(name)}:\s*(.*?)`", text)
-    if span:
-        return span.group(1).strip()
-    found = re.search(rf"{re.escape(name)}:\s*(.*)", text)
-    return found.group(1).strip().rstrip("`").strip() if found else None
-
-
-def _recorded_failure_type(text: str) -> str | None:
-    found = re.search(r"LIVE PROBE FAILED:\s*([A-Za-z_][A-Za-z0-9_.]*)\s*:", text)
-    return found.group(1) if found else None
 
 
 def _source_reachable() -> bool:
@@ -123,16 +83,13 @@ def _source_reachable() -> bool:
 
     Any exception means unreachable.
     """
-    try:
-        req = urllib.request.Request(
-            WDS,
-            data=json.dumps([{"productId": LIVENESS_PID}]).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=REACHABILITY_TIMEOUT) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+    return source_reachable(
+        WDS,
+        timeout=REACHABILITY_TIMEOUT,
+        method="POST",
+        data=json.dumps([{"productId": LIVENESS_PID}]).encode(),
+        headers={"Content-Type": "application/json"},
+    )
 
 
 def _fail_or_skip_on_recorded_failure(text: str) -> None:

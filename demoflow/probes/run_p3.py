@@ -53,8 +53,22 @@ Run:  cd demoflow && uv run python probes/run_p3.py
 import json
 import re
 import urllib.request
-from dataclasses import dataclass
 from pathlib import Path
+
+# Flat, NOT `probes._wds`: probes/ is deliberately not a package, so in script mode
+# sys.path[0] IS probes/ and this resolves natively. See probes/_wds.py.
+from _wds import (
+    TIMEOUT,
+    WDS_DATA,
+    WDS_LIST,
+    WDS_META,
+    Fact,
+    new_run,
+    post as _post,
+    provenance_header,
+    table_number as _table_number,
+    table_url as _table_url,
+)
 
 # --- candidates -------------------------------------------------------------
 # The three the plan named (author's guesses, kept so the note records how they
@@ -63,9 +77,6 @@ CANDIDATES = ["98100134", "98100026", "98100040"]
 SWEEP_TITLE_KEYS = ("living arrangement", "household living", "household type of person")
 SWEEP_PID_PREFIX = "981"  # 2021 Census product family
 
-WDS_META = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"  # POST [{"productId": int}]
-WDS_LIST = "https://www150.statcan.gc.ca/t1/wds/rest/getAllCubesListLite"
-WDS_DATA = "https://www150.statcan.gc.ca/t1/wds/rest/getDataFromCubePidCoordAndLatestNPeriods"
 OUT = Path(__file__).resolve().parent / "P3-living-arrangement.md"
 
 # The 7 wholly-Québec geographies — the same set P2 pinned, so the two probes
@@ -110,106 +121,36 @@ HH_ONE_PERSON = "In a one-person household"
 # Second cube, for the published total population the main cube cannot contain.
 POP_CUBE = 98100001  # Population and dwelling counts: Canada, provinces and territories
 
+# NOT the same constant as run_p4.py's `META_CHUNK = 30`: different endpoint,
+# different batch semantics. Never merge them.
 CHUNK = 40
-TIMEOUT = 120
 
 # Spec §11.3 named fallback for living_alone (ISQ vitrine, 65+, QC-wide).
 VITRINE_POINT = 0.28
 VITRINE_BAND = (0.24, 0.34)
 
 
-_FACTS: list["Fact"] = []
+# --- this note's provenance prose (the shared header skeleton lives in _wds) ---
+_SCOPE = ("Every table in §2-§4 is generated row by row from the live WDS responses of the run "
+          "that wrote this file.")
+_CITED_LABEL = "Externally cited figures:"
 
 
-@dataclass(frozen=True)
-class Fact:
-    """A narrative figure, carrying HOW this run obtained it.
+def _summary(*, total: int, derived: int, cited: int) -> str:
+    """The §5 provenance sentence, sized to what this run actually registered.
 
-    Structural guard against a defect this probe family kept reintroducing: a
-    hand-typed literal printed under prose asserting the run computed it. The
-    facts AND the document's provenance header are both generated from these
-    objects, so a figure cannot reach the note without declaring itself either
-
-      `derived` — computed from a live response in THIS run (it changes when the
-                  source data changes), naming the exact source, or
-      `cited`   — external to this run, printed with its citation inline.
-
-    The header is then assembled from the mix actually present rather than
-    asserted, so it cannot drift from what the body really contains.
+    States exactly what it counts: registered Fact objects. Saying "the narrative
+    figures in §5" would be a category substitution — §5 also carries product ids,
+    member counts and labels that never enter the registry, so that count would be
+    false as written.
     """
-
-    text: str
-    kind: str  # "derived" | "cited"
-    source: str
-
-    def __post_init__(self) -> None:
-        _FACTS.append(self)
-
-    @classmethod
-    def derived(cls, value: object, how: str) -> "Fact":
-        return cls(f"{value}", "derived", how)
-
-    @classmethod
-    def cited(cls, value: object, source: str) -> "Fact":
-        return cls(f"{value}", "cited", source)
-
-    def __str__(self) -> str:
-        return self.text if self.kind == "derived" else f"{self.text} [cited: {self.source}]"
-
-
-def _provenance_header() -> list[str]:
-    """Describe the note's provenance from the facts it ACTUALLY contains."""
-    derived = [f for f in _FACTS if f.kind == "derived"]
-    cited = [f for f in _FACTS if f.kind == "cited"]
-    lines = [
-        "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
-        "",
-        "Every table in §2-§4 is generated row by row from the live WDS responses of the run "
-        "that wrote this file.",
-    ]
-    if _FACTS:
-        # States exactly what it counts: registered Fact objects. Saying "the
-        # narrative figures in §5" would be a category substitution — §5 also
-        # carries product ids, member counts and labels that never enter the
-        # registry, so that count would be false as written.
-        lines.append(
-            f"§5 additionally tags its measured figures with provenance. This run registered "
-            f"{len(_FACTS)} such figures: {len(derived)} DERIVED (computed from live responses "
-            f"in this same run, each naming its source) and {len(cited)} CITED (external to "
-            f"this run, printed with the citation inline). Untagged numerals in the surrounding "
-            f"prose are product ids, dimension labels and counts of what was checked."
-        )
-    if cited:
-        lines += ["", "Externally cited figures:"]
-        lines += [f"- {f.text} — {f.source}" for f in cited]
-    lines.append("")
-    return lines
-
-
-def _table_number(pid: object) -> str:
-    """`98100134` -> `98-10-0134-01`, StatCan's published table-number form.
-
-    Derived, never typed: the note interpolates a dynamic `found_pid` beside this
-    string, so a hardcoded table number would mislabel whichever cube actually
-    won. (98100137 carries both required members and fails only the age
-    predicate — had it won, a literal would have printed the wrong table.)
-    """
-    p = str(pid)
-    if len(p) != 8 or not p.isdigit():
-        raise ValueError(f"unexpected productId shape {pid!r}; cannot derive a table number")
-    return f"{p[0:2]}-{p[2:4]}-{p[4:8]}-01"
-
-
-def _table_url(pid: object) -> str:
-    """The public table URL for a product id (the `pid` query arg appends `01`)."""
-    return f"https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid={pid}01"
-
-
-def _post(url: str, payload: list) -> list:
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+    return (
+        f"§5 additionally tags its measured figures with provenance. This run registered "
+        f"{total} such figures: {derived} DERIVED (computed from live responses "
+        f"in this same run, each naming its source) and {cited} CITED (external to "
+        f"this run, printed with the citation inline). Untagged numerals in the surrounding "
+        f"prose are product ids, dimension labels and counts of what was checked."
     )
-    return json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
 
 
 def _sweep() -> tuple[list[str], str]:
@@ -466,12 +407,13 @@ def _rates(vals: dict) -> dict:
 
 
 def main() -> None:  # noqa: C901 - a probe: linear narrative beats decomposition
-    # Per-run registry. A module global that never clears would make a second
-    # main() in one process report "12 figures" while §5 still showed 6.
-    _FACTS.clear()
+    # Per-run registry, bound here rather than at module scope: `_wds` is one cached
+    # module shared by every probe, so a module-global list would make a second run in
+    # one process report "12 figures" while §5 still showed 6.
+    facts = new_run()
     # The provenance paragraph is GENERATED from the facts the body actually
-    # carries (see `_provenance_header`), so it is spliced in after the body is
-    # built rather than asserted up front.
+    # carries (see `_wds.provenance_header`), so it is spliced in after the body
+    # is built rather than asserted up front.
     title = ["# P3 — Census living-arrangement cross-tab hunt (RECORDED OBSERVATION)", ""]
     note: list[str] = []
     candidates = list(CANDIDATES)
@@ -859,7 +801,9 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
         "",
     ]
 
-    text = "\n".join(title + _provenance_header() + note) + "\n"
+    header = provenance_header(facts, written_by="run_p3.py", scope=_SCOPE,
+                               summary=_summary, cited_label=_CITED_LABEL)
+    text = "\n".join(title + header + note) + "\n"
     if "[FILL:" in text:  # belt-and-braces: this script must never emit a placeholder
         raise AssertionError("run_p3.py emitted an unresolved [FILL:] placeholder")
     OUT.write_text(text, encoding="utf-8")

@@ -28,10 +28,16 @@ differential nor a cited band.
 import json
 import math
 import re
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+from ._probe_asserts import (
+    NETWORK_EXCEPTIONS,
+    recorded_failure_type as _recorded_failure_type,
+    source_reachable,
+    token as _token,
+)
 
 NOTE = Path(__file__).resolve().parent.parent / "probes" / "P4-immigrant-ownership-diff.md"
 WDS = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
@@ -42,33 +48,10 @@ REACHABILITY_TIMEOUT = 10
 UNRESOLVED = {"", "UNRESOLVED-PROBE-FAILED", "UNCONFIRMED-PROBE-FAILED", "TBD",
               "FILL", "[FILL]", "N/A", "NONE", "NOT-FOUND"}
 
-# Exception types that may legitimately excuse a recorded failure. Anything outside
-# is a code/structural fault and FAILS even when the source is unreachable.
-NETWORK_EXCEPTIONS = frozenset({
-    "URLError", "HTTPError", "ContentTooShortError", "TimeoutError", "timeout",
-    "socket.timeout", "gaierror", "herror", "ConnectionError", "ConnectionResetError",
-    "ConnectionRefusedError", "ConnectionAbortedError", "RemoteDisconnected",
-    "IncompleteRead", "BadStatusLine", "SSLError", "SSLEOFError", "NoResponse",
-})
-
 
 def _note_text() -> str:
     assert NOTE.exists(), f"{NOTE} is missing — run `uv run python probes/run_p4.py` first"
     return NOTE.read_text(encoding="utf-8")
-
-
-def _token(text: str, name: str) -> str | None:
-    """Value of a backtick-delimited `NAME: value` token, or None if absent.
-
-    Prefers the code span, which is how run_p4.py emits every DECISION token; a
-    greedy to-end-of-line fallback is used only when no backtick span exists, so
-    trailing prose cannot launder an unresolved token into a resolved one.
-    """
-    span = re.search(rf"`{re.escape(name)}:\s*(.*?)`", text)
-    if span:
-        return span.group(1).strip()
-    found = re.search(rf"{re.escape(name)}:\s*(.*)", text)
-    return found.group(1).strip().rstrip("`").strip() if found else None
 
 
 def _parse_band(text: str) -> tuple[float, float, float] | None:
@@ -106,11 +89,6 @@ def _has_cma_numbers(text: str) -> bool:
                 and re.search(r"(Québec|Quebec).{0,60}\d", text))
 
 
-def _recorded_failure_type(text: str) -> str | None:
-    found = re.search(r"LIVE PROBE FAILED:\s*([A-Za-z_][A-Za-z0-9_.]*)\s*:", text)
-    return found.group(1) if found else None
-
-
 def _source_reachable() -> bool:
     """POST-parity liveness probe against the exact endpoint the hunt uses.
 
@@ -118,16 +96,13 @@ def _source_reachable() -> bool:
     'unreachable' against a healthy service and let every recorded failure launder
     itself into a skip. Any exception means unreachable.
     """
-    try:
-        req = urllib.request.Request(
-            WDS,
-            data=json.dumps([{"productId": LIVENESS_PID}]).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=REACHABILITY_TIMEOUT) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+    return source_reachable(
+        WDS,
+        timeout=REACHABILITY_TIMEOUT,
+        method="POST",
+        data=json.dumps([{"productId": LIVENESS_PID}]).encode(),
+        headers={"Content-Type": "application/json"},
+    )
 
 
 def _fail_or_skip_when_no_deliverable(text: str) -> None:
@@ -268,9 +243,20 @@ def test_p4_verdict_and_content():
 
 
 def _load_run_p4():
-    """Import run_p4.py as a fresh module (probes/ is not an importable package)."""
-    import importlib.util
+    """Import run_p4.py as a fresh module (probes/ is not an importable package).
 
+    The `sys.path` insert is load-bearing, not tidiness: run_p4.py imports its shared
+    machinery FLAT (`from _wds import …`) because probes/ is deliberately not a
+    package and script mode resolves it via `sys.path[0]`. `spec_from_file_location`
+    does NOT put the file's directory on the path, so without this `exec_module` dies
+    `ModuleNotFoundError: No module named '_wds'`.
+    """
+    import importlib.util
+    import sys
+
+    probes_dir = str(NOTE.parent)
+    if probes_dir not in sys.path:
+        sys.path.insert(0, probes_dir)
     spec = importlib.util.spec_from_file_location("run_p4_under_test", NOTE.parent / "run_p4.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
