@@ -1272,12 +1272,17 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     # markers partition the has-axis group from the no-axis group. Emitted only when the
     # separation is PERFECT in this population, and labelled as co-occurrence — a marker that
     # sorts 15 files is not thereby a cause, and this run tests no causal claim.
+    # Counted across ALL THREE groups, not two. An earlier version compared only
+    # `ra_separate` against `ra_absent` — 12 of the 15 files — and then described the result
+    # as "a perfect separation across the 15 files opened": a two-state measurement glossed
+    # over a three-state population, by the very edit that created the third state.
     cooccur = []
     for marker in EDITION_CAPTION_MARKERS:
-        in_sep = {e["url"] for e in ra_separate if marker in _norm(e["caption"])}
-        in_abs = {e["url"] for e in ra_absent if marker in _norm(e["caption"])}
-        if in_abs and len(in_abs) == len(ra_absent) and not in_sep:
-            cooccur.append((marker, len(in_abs)))
+        n_sep = sum(1 for e in ra_separate if marker in _norm(e["caption"]))
+        n_named = sum(1 for e in ra_named_only if marker in _norm(e["caption"]))
+        n_abs = sum(1 for e in ra_absent if marker in _norm(e["caption"]))
+        if ra_absent and n_abs == len(ra_absent) and not n_sep:
+            cooccur.append((marker, n_sep, n_named, n_abs))
 
     note += [
         "",
@@ -1297,12 +1302,19 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
            f"NO opened candidate publishes a separate RA column. If the picked workbook is "
            f"among them this CONTRADICTS §3's corroboration — inspect before relying on "
            f"either."),
-        (f"- **Caption co-occurrence (computed, NOT a recency ranking).** Every one of the "
-         f"{len(ra_absent)} no-axis candidates carries the caption marker(s) "
-         f"{[m for m, _ in cooccur]}, and NO candidate with a separate RA column does — a "
-         f"perfect separation across the {len(opened)} files opened. This run tests only the "
-         f"CO-OCCURRENCE: it does not claim the marker causes the absence, does not rank the "
-         f"editions, and says nothing about files outside the swept set."
+        (f"- **Caption co-occurrence (computed over ALL THREE groups, NOT a recency "
+         f"ranking).** Marker(s) {[m for m, _, _, _ in cooccur]}: carried by "
+         + "; ".join(
+             f"{n_abs}/{len(ra_absent)} of the no-axis files, {n_sep}/{len(ra_separate)} of "
+             f"the separate-RA-column files and {n_named}/{len(ra_named_only)} of the "
+             f"header-named-only files (marker `{m}`)"
+             for m, n_sep, n_named, n_abs in cooccur)
+         + f". The separation is between the no-axis and separate-column groups; the "
+           f"header-named-only group's counts are printed rather than folded into that claim, "
+           f"because it is a THIRD state and a two-group separation says nothing about it. "
+           f"This run tests only CO-OCCURRENCE: it does not claim the marker causes the "
+           f"absence, does not rank the editions, and says nothing about files outside the "
+           f"swept set."
          if cooccur else
          f"- **Caption co-occurrence:** no caption marker in {list(EDITION_CAPTION_MARKERS)} "
          f"separates the no-axis group from the separate-RA-column group in this population, "
@@ -1549,10 +1561,22 @@ def main() -> None:
                + (f"; DISAGREEING: {e['ra_disagree']}" if e["ra_disagree"] else "")
                if e["ra_col"] >= 0 else
                "NOT CHECKABLE — the opened workbook publishes no administrative-region column")
-            + "`  (MEMBERSHIP only — each declared target is present and carries the RA code "
-            "this file declares for it. EXHAUSTION is a different question and is computed "
-            "separately in §3c; the RMR-couronne composition is measured there to be "
-            "unanswerable from this workbook. See DECISION-RESIDUAL-II below)",
+            # MEMBERSHIP is stated as a FUNCTION of what §3 measured. This gloss used to
+            # assert "each declared target is present and carries the RA code" flat out —
+            # and an offline fixture published it beside `2 of 10` and `NOT CHECKABLE`, with
+            # the whole suite green. A gloss beside a conditional value must be conditional.
+            + "`  (MEMBERSHIP only, and only what was measured: "
+            + (f"all {e['n_targets']} declared targets present"
+               if e["couronne_complete"] else
+               f"{len(e['hits'])} of {e['n_targets']} declared targets present")
+            + (f", each carrying the RA code this file declares for it"
+               if e["ra_col"] >= 0 and not e["ra_disagree"] and e["n_ra_checked"] else
+               f", and the RA code was NOT CHECKABLE for {e['n_targets'] - e['n_ra_checked']} "
+               f"of them" if e["n_ra_checked"] < e["n_targets"] else
+               f", with {len(e['ra_disagree'])} RA disagreement(s)")
+            + ". EXHAUSTION is a different question and is computed separately in §3c; the "
+            "RMR-couronne composition is measured there to be unanswerable from this "
+            "workbook. See DECISION-RESIDUAL-II below)",
             f"- `DECISION-SWEPT-POPULATION: {scope}`",
             f"- `DECISION-SPEC-PREMISE: {premise_token}`  (state read LIVE from the spec in "
             f"§4 — {spec['why'] or 'not measured'}. MEASURED THIS RUN: the plan's guessed "
@@ -1573,7 +1597,10 @@ def main() -> None:
                "; no edition-specificity found across the candidates opened")
             + "`  (RECORDED OBSERVATION — see §3b; changes no verdict. This run does not rank "
             "the editions by recency: no live response states which is current)",
-            f"- `DECISION-RESIDUAL-II-PARTITION: membership YES (§3); exhaustion "
+            # `membership` is COUNTED, never the literal "YES": the same offline fixture that
+            # falsified the gloss above published `membership YES` beside `2 of 10`.
+            f"- `DECISION-RESIDUAL-II-PARTITION: membership {len(e['hits'])} of "
+            f"{e['n_targets']} (§3); exhaustion "
             + "; ".join(f"{k} -> {_relation_head(v)}" for k, v in e["ra_relation"].items())
             + f"; RMR-couronne composition NOT ANSWERABLE from this workbook "
             f"({e['n_rmr_cells']} header cells and {e['n_rmr_labels']} geography labels match "

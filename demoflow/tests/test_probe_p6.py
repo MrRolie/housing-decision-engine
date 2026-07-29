@@ -338,6 +338,18 @@ def test_p6_records_a_resolved_verdict():
     )
     # Every exhaustion relation must come from the COMPUTED set-algebra vocabulary — a word
     # outside it is prose that no set operation produced.
+    # The membership figure must equal the couronne count it summarises — the two used to be
+    # a computed count and a flat literal "YES" sitting in different tokens.
+    membership = re.search(r"membership (\d+) of (\d+) \(§3\)", residual_ii)
+    assert membership, (
+        f"{NOTE}'s residual-(ii) states no COUNTED membership figure: {residual_ii!r}. A flat "
+        f"'membership YES' is a literal that no measurement can falsify."
+    )
+    assert (membership.group(1), membership.group(2)) == (found.group(1), found.group(2)), (
+        f"{NOTE}'s residual-(ii) membership {membership.group(0)!r} disagrees with "
+        f"DECISION-COURONNE-TARGETS ({couronne!r})."
+    )
+
     relations = re.findall(r"-> ([A-Z ]+?)(?=;|$)", residual_ii)
     assert relations, f"{NOTE}'s residual-(ii) states no exhaustion relation: {residual_ii!r}"
     allowed = {"EQUAL", "PROPER SUBSET", "PROPER SUPERSET", "OVERLAPPING", "DISJOINT",
@@ -773,8 +785,34 @@ def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
             f"{_token(text, 'DECISION-VERDICT')!r}. Ruling G: the residuals are RECORDED "
             f"OBSERVATIONS — a find is a find regardless of what they compute."
         )
-        seen[label] = (_token(text, "DECISION-RESIDUAL-I-RA-AXIS"),
-                       _token(text, "DECISION-RESIDUAL-II-PARTITION"))
+        # The MEMBERSHIP glosses must follow what §3 actually measured on THIS shape. Two
+        # unconditional literals shipped here and this suite stayed green while emitting
+        # them: an RA-correspondence gloss asserting "each declared target is present and
+        # carries the RA code" beside `NOT CHECKABLE` and `2 of 10`, and a flat
+        # `membership YES` beside the same count. These fixtures carry only 2 of the 10
+        # declared targets, so they falsify both — which is exactly why they belong here.
+        couronne = _token(text, "DECISION-COURONNE-TARGETS") or ""
+        hit = re.match(r"^(\d+) of (\d+)", couronne)
+        assert hit and hit.group(1) != hit.group(2), (
+            f"[{label}] the fixture must NOT find every declared target, or it cannot "
+            f"falsify an unconditional membership gloss: {couronne!r}"
+        )
+        ra_tok = _token(text, "DECISION-RA-CORRESPONDENCE") or ""
+        assert "all 10 declared targets present" not in ra_tok, (
+            f"[{label}] DECISION-RA-CORRESPONDENCE asserts every declared target is present "
+            f"while DECISION-COURONNE-TARGETS reports {couronne!r}: {ra_tok!r}"
+        )
+        residual_ii = _token(text, "DECISION-RESIDUAL-II-PARTITION") or ""
+        assert "membership YES" not in residual_ii, (
+            f"[{label}] DECISION-RESIDUAL-II-PARTITION states a flat `membership YES` beside "
+            f"a measured {couronne!r}: {residual_ii!r}"
+        )
+        assert f"membership {hit.group(1)} of {hit.group(2)}" in residual_ii, (
+            f"[{label}] the residual's membership figure does not match "
+            f"DECISION-COURONNE-TARGETS ({couronne!r}): {residual_ii!r}"
+        )
+
+        seen[label] = (_token(text, "DECISION-RESIDUAL-I-RA-AXIS"), residual_ii)
 
     sep = seen["separate RA column"]
     named = seen["RA named in the geography header only"]
