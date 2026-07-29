@@ -193,7 +193,9 @@ def test_p6_records_a_resolved_verdict():
         )
         assert premise.upper().startswith("NOT CONTRADICTED"), (
             f"{NOTE} records NOT-FOUND but `DECISION-SPEC-PREMISE` is {premise!r} — a run that "
-            f"located nothing cannot contradict the spec's 'no MRC workbook exists'."
+            f"located nothing cannot contradict any premise. (The premise TEXT is never "
+            f"quoted here — §4 reads it live; see the cross-artifact-staleness note in "
+            f"run_p6.py's docstring.)"
         )
         return
 
@@ -215,12 +217,18 @@ def test_p6_records_a_resolved_verdict():
     assert shape is not None and shape.upper() not in UNRESOLVED and len(shape) >= 40, (
         f"{NOTE} claims LOCATED but records no substantive `DECISION-BODY-SHAPE` ({shape!r})."
     )
-    # A bare 200 must NOT be able to earn a LOCATED (R7). The body-shape token must show the
-    # bytes were actually inspected, not merely fetched.
+    # PRESENCE-ONLY, and labelled as such. The LOCATED branch writes the literal
+    # "magic-byte prefix matches" unconditionally, so this assertion cannot fail on a bad run
+    # and it does NOT enforce "a bare 200 cannot earn a LOCATED" — it pins the token's SHAPE
+    # so a later edit cannot quietly drop the magic-byte evidence from the note. The rule
+    # itself is enforced where it can actually fail: `_is_workbook_response` screens the
+    # candidate, `_guard_body` refuses the shape, and mutation 1 in
+    # test_p6_floor_guard_earns_verdict shows the LOCATED is fabricated without the guard.
+    # (Contrast the NEXT assertion, which is genuinely falsifiable: a zero label count is a
+    # value the note can really emit, and the neutered-guard run does emit it.)
     assert "magic-byte prefix matches" in shape, (
-        f"{NOTE}'s DECISION-BODY-SHAPE does not record a magic-byte check: {shape!r}. A 200 "
-        f"serving an HTML error page is exactly the wrong-body case, and status alone cannot "
-        f"tell it from a workbook."
+        f"{NOTE}'s DECISION-BODY-SHAPE no longer records a magic-byte check at all: "
+        f"{shape!r} — the token's shape changed, not the run's outcome."
     )
     assert re.search(r"[1-9]\d* distinct geography labels", shape), (
         f"{NOTE}'s DECISION-BODY-SHAPE states no NON-ZERO geography label count: {shape!r}. "
@@ -746,6 +754,16 @@ _HEADER_NAMED_ROWS = [
     ("62", "Les Moulins", "1"),
     ("77", "Mirabel", "2"),
 ]
+# A workbook that DOES carry a metropolitan-area marker. Without this shape no fixture ever
+# drives §3c's "a marker DOES appear" branch, so the unconditional NOT-ANSWERABLE clause was
+# unreachable by any gate — verified: the mutation restoring it passed the whole suite.
+_RMR_MARKER_ROWS = [
+    ("Population projetée, MRC du Québec",),
+    (None,),
+    ("Code", "MRC", "RA1", "RMR de rattachement", "Population"),
+    ("62", "Les Moulins", "14", "Montréal", "1"),
+    ("77", "Mirabel", "15", "Montréal", "2"),
+]
 _NO_RA_ROWS = [
     ("Population totale, scénarios de 2025, MRC du Québec, 2021-2051",),
     (None,),
@@ -774,7 +792,8 @@ def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
     seen = {}
     for label, rows in (("separate RA column", _GOOD_ROWS),
                         ("RA named in the geography header only", _HEADER_NAMED_ROWS),
-                        ("no RA axis at all", _NO_RA_ROWS)):
+                        ("no RA axis at all", _NO_RA_ROWS),
+                        ("a metropolitan-area marker IS present", _RMR_MARKER_ROWS)):
         mod = _load_run_p6()
         mod.OUT = tmp_path / f"note_{abs(hash(label))}.md"
         _wire(mod, sitemap=_SITEMAP_HIT, rows=rows)
@@ -798,11 +817,59 @@ def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
             f"falsify an unconditional membership gloss: {couronne!r}"
         )
         ra_tok = _token(text, "DECISION-RA-CORRESPONDENCE") or ""
+        # THE #2 DEFECT, as a cross-token check: a claimed SEPARATE RA column may never sit at
+        # the geography column's own index. With the loose `ra_col >= 0` test the token read
+        # "corroborated against the opened workbook's own SEPARATE RA column (column 1 …)" on
+        # the header-named-only fixture — column 1 IS the geography column, i.e. exactly the
+        # machine-readable axis the three-state split exists to deny.
+        geo = re.search(r"MRC header cell at row \d+ column (\d+)",
+                        _token(text, "DECISION-BODY-SHAPE") or "")
+        ra_claim = re.search(r"SEPARATE RA column \(column (\d+)", ra_tok)
+        if ra_claim:
+            assert geo and ra_claim.group(1) != geo.group(1), (
+                f"[{label}] DECISION-RA-CORRESPONDENCE claims a SEPARATE RA column at column "
+                f"{ra_claim.group(1)}, which is the GEOGRAPHY column — that is a header that "
+                f"names the grouping, not a per-MRC code: {ra_tok!r}"
+            )
         assert "all 10 declared targets present" not in ra_tok, (
             f"[{label}] DECISION-RA-CORRESPONDENCE asserts every declared target is present "
             f"while DECISION-COURONNE-TARGETS reports {couronne!r}: {ra_tok!r}"
         )
+        # AIMED AT §3's BULLET, not at the token. The membership defect lived in §3's prose
+        # ("What this establishes is MEMBERSHIP — each declared target is present…"), one
+        # clause away from the token this loop was reading, and so went uncaught. A gate must
+        # point at the sentence that can be wrong.
+        bullet = re.search(r"What this establishes is MEMBERSHIP[^\n]*", text)
+        assert bullet, f"[{label}] §3 emits no MEMBERSHIP bullet to check"
+        assert "each declared target is present and sits under" not in bullet.group(0), (
+            f"[{label}] §3's MEMBERSHIP bullet asserts every declared target is present and "
+            f"placed, while §3 measured {couronne!r}: {bullet.group(0)[:200]!r}"
+        )
+        assert f"{hit.group(1)} of {hit.group(2)} declared targets are present" in bullet.group(0), (
+            f"[{label}] §3's MEMBERSHIP bullet does not state the measured count "
+            f"{couronne!r}: {bullet.group(0)[:200]!r}"
+        )
         residual_ii = _token(text, "DECISION-RESIDUAL-II-PARTITION") or ""
+        # AIMED AT THE PROSE AFTER THE CLOSING BACKTICK — `token()` stops at the backtick, so
+        # the clauses that follow it are invisible to every token-based assertion here. Two
+        # unconditional claims lived there and no gate could see them.
+        after = re.search(r"DECISION-RA-CORRESPONDENCE:[^\n]*", text).group(0).split("`")[-1]
+        if "measured there to be unanswerable" in after:
+            assert "0 header cells and 0 geography labels" in residual_ii, (
+                f"[{label}] the prose after DECISION-RA-CORRESPONDENCE asserts §3c measured "
+                f"the composition unanswerable, but §3c reported {residual_ii[:160]!r}"
+            )
+        # #5 ON A FIXTURE: the NOT-ANSWERABLE conclusion must agree with the counts printed
+        # inside its own parenthesis. Gate 2 enforces this on the COMMITTED note, which is
+        # always the zero-marker case — so without this copy the RMR shape reached no gate.
+        marker = re.search(r"NOT ANSWERABLE from what this run read of this workbook "
+                           r"\((\d+) header cells and (\d+) geography labels", residual_ii)
+        if marker:
+            assert marker.group(1) == "0" and marker.group(2) == "0", (
+                f"[{label}] residual-(ii) claims NOT ANSWERABLE while reporting "
+                f"{marker.group(1)} header cells and {marker.group(2)} labels that DO match a "
+                f"metropolitan-area marker: {residual_ii!r}"
+            )
         assert "membership YES" not in residual_ii, (
             f"[{label}] DECISION-RESIDUAL-II-PARTITION states a flat `membership YES` beside "
             f"a measured {couronne!r}: {residual_ii!r}"
@@ -817,7 +884,7 @@ def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
     sep = seen["separate RA column"]
     named = seen["RA named in the geography header only"]
     none = seen["no RA axis at all"]
-    assert len({s[0] for s in seen.values()}) == 3, (
+    assert len({s[0] for s in seen.values()}) >= 3, (
         f"residual (i) reported the same axis token for three different RA shapes — it is "
         f"not computed from the workbook: {seen}"
     )
@@ -862,6 +929,8 @@ def test_p6_spec_premise_is_read_live_not_typed(tmp_path):
     """
     cases = {
         "premise still stands": (
+            # SYNTHETIC input, not a quote of the real spec: this string exists to drive the
+            # premise-stands branch, which the live spec no longer reaches.
             "| couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404) |",
             "PREMISE STANDS", "CONTRADICTED — ESCALATION"),
         "amended": (

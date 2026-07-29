@@ -3,10 +3,17 @@
 WHO USES THIS (spec §8, Geography junction): the `Geography` enum carries
 LANAUDIERE_RA14_PROXY / LAURENTIDES_RA15_PROXY / MONTEREGIE_RA16_PROXY, flagged `ra_proxy`
 — exact administrative-region data standing in for the finer couronne geography demoflow
-would rather model. §8 records the reason: *"couronne-nord precision is DEFERRED (no MRC
-workbook exists — probed 404, 2026-07-21; plan task hunts an MRC source)"*. This probe is
-that hunt. **v0 PROCEEDS REGARDLESS** — a find enables a v1 Geography-enum extension only,
-never a v0 change (that sentence is written unconditionally, so no gate may rest on it).
+would rather model. §8 defers couronne-nord precision to v1 and this probe is the hunt that
+§11.6 charters. **v0 PROCEEDS REGARDLESS** — a find enables a v1 Geography-enum extension
+only, never a v0 change (that sentence is written unconditionally, so no gate may rest on
+it).
+
+WHY NO §8 SENTENCE IS QUOTED ANYWHERE IN THIS FILE. Reproducing another artifact's TEXT
+creates a dependency nothing checks, and amending the cited text is exactly when it breaks
+— the CROSS-ARTIFACT STALENESS class, which bit this probe once already. So §8's premise is
+quoted in exactly ONE place: §4 of the note, read live out of the spec at run time by
+`_record_spec_premise`, which computes the premise's STATE rather than restating it. Every
+other reference in this file names the section and never reproduces its words.
 
 THE DISCRIMINATOR, stated before the hunt so the verdict cannot drift to fit the answer.
 A LOCATED needs THREE pieces of evidence about ONE resource, all computed here:
@@ -157,6 +164,25 @@ RMR_MARKERS = ("rmr", "cma", "métropolitaine", "metropolitaine", "metropolitan"
 # separation is perfect — never as a cause, and never as a recency ranking.
 EDITION_CAPTION_MARKERS = ("scénarios de 2025", "scenarios de 2025", "scénario référence",
                            "a2021")
+# One gloss per set-algebra verdict, selected by the relations a run ACTUALLY computed. A
+# single unconditional paragraph explaining PROPER SUBSET asserts about "this file" under a
+# hypothesis that is false whenever the computed relation is PROPER SUPERSET or EMPTY.
+RELATION_GLOSS = {
+    "EQUAL": "An EQUAL relation says the declared targets are exactly the MRCs this workbook "
+             "puts under that RA — the declared set exhausts it.",
+    "PROPER SUBSET": "A PROPER SUBSET says the declared targets are SOME of the MRCs this "
+                     "workbook puts under that RA, so this file's own RA grouping is WIDER "
+                     "than the couronne set declared here and the declared set does NOT "
+                     "exhaust the RA.",
+    "PROPER SUPERSET": "A PROPER SUPERSET says this file declares MRCs the workbook does not "
+                       "place under that RA — the declaration reaches past the workbook's "
+                       "own grouping.",
+    "OVERLAPPING": "An OVERLAPPING relation says neither set contains the other.",
+    "DISJOINT": "A DISJOINT relation says no declared target sits under that RA here.",
+    "EMPTY": "An EMPTY relation says this workbook assigns no MRC at all to that RA number.",
+    "NOT COMPUTABLE": "NOT COMPUTABLE says this workbook publishes no separate RA column, so "
+                      "no exhaustion relation exists to compute from it.",
+}
 
 # --- the spec premise this hunt was launched against (READ-ONLY cross-check) ---------
 # The note used to QUOTE spec §8's premise as a typed string. Steering amended §8 after this
@@ -192,25 +218,34 @@ ISQ_TIMEOUT = 180  # the sitemap is ~13MB; WDS_TIMEOUT governs a different bound
 # a probe cloned from run_p5b.py would publish "Written by run_p5b.py" over its own
 # computed body, exactly the untied claim this registry exists to stop.
 _WRITTEN_BY = Path(__file__).name
-_SCOPE = ("SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved ISQ "
-          "organization slug, the CKAN catalogue and swept-package counts, the sitemap loc "
-          "and .xlsx counts, the swept and eligible candidate lists, every candidate's "
-          "observed HTTP status / content-type / declared length / magic-byte result, the "
-          "HEAD-vs-GET comparison, the opened workbook's sheet names, header position, "
-          "geography-label count and label list, its scenario column, the per-target "
-          "couronne name search, the per-target administrative-region corroboration, the "
-          "per-edition RA-column probe of §3b, the per-RA membership sets of §3c and the "
-          "spec-premise state of §4 are ALL emitted by this run from live reads. The quoted "
-          "strings are verbatim. Every absence claim is scoped to what was actually swept — "
-          "never to what exists. What this run does NOT compute, and therefore does not "
-          "claim: which of the swept editions is CURRENT (no live response states it, so "
-          "§3b ranks none and emits each caption instead); that any cross-edition join is "
-          "VALID (§3b tests no label-set agreement or vintage compatibility between two "
-          "workbooks); and whether the declared MRCs compose the Montréal RMR couronne (§3c "
-          "measures that this file carries no metropolitan-area axis and records the limit "
-          "rather than reaching for a second source). ONE workbook is opened in full; §3b "
-          "opens the others' HEADER ROWS ONLY, so its rows carry header-scoped evidence and "
-          "say nothing about those files' data below the header.")
+# The header must claim only what the note it heads actually CONTAINS. Written as a flat
+# inventory it forward-referenced §3/§3b/§3c — sections three of the four verdict branches
+# never write — so on a NOT-FOUND or UNKNOWN run it promised evidence the file did not hold.
+# run_p5b.py:152-162 already solved this in wording ("each states either its measured result
+# or an explicit NOT MEASURED THIS RUN"); that is the pattern adopted here: the header
+# describes the CONTRACT every section satisfies, and names no section it cannot guarantee.
+_SCOPE = ("SCOPE OF THIS HEADER (it claims only what it can enforce): EVERY figure, list, "
+          "status, header position, label and per-target result this note states as observed "
+          "is emitted by this run from a live read — the CKAN organization list and package "
+          "counts, the sitemap loc and .xlsx counts, the swept and eligible candidate lists, "
+          "each candidate's observed HTTP status / content-type / declared length / "
+          "magic-byte result, the HEAD-vs-GET comparison, and, for whichever workbooks this "
+          "run actually opened, their sheet names, header rows, geography labels, scenario "
+          "and administrative-region columns, per-target couronne search and per-RA "
+          "membership sets. Quoted strings are verbatim and contiguous. A section whose "
+          "boundary did not answer states an explicit NOT MEASURED THIS RUN rather than "
+          "falling silent, and a run that reached no workbook writes no body-shape section "
+          "at all — so this header promises no section the file does not contain. Every "
+          "absence claim is scoped to what was actually swept, never to what exists. What "
+          "this run does NOT compute, and therefore does not claim: which of the swept "
+          "editions is CURRENT (no live response states it — captions are emitted, none "
+          "ranked); that any cross-edition join is VALID (no label-set agreement or vintage "
+          "compatibility is tested between two workbooks); and whether the declared MRCs "
+          "compose the Montréal RMR couronne (measured only against the header row and "
+          "geography column this run read of one file, and recorded as a limit rather than "
+          "closed from a second source). AT MOST ONE workbook is opened in full; any others "
+          "are opened HEADER ROW ONLY, so their rows carry header-scoped evidence and say "
+          "nothing about their data below the header.")
 _CITED_LABEL = "Quoted verbatim from the live responses:"
 
 
@@ -383,7 +418,7 @@ def _relation_head(relation: str) -> str:
     """The set-algebra VERDICT of a relation string, without its explanatory tail.
 
     `_ra_membership` returns e.g. `"PROPER SUBSET — declared targets do NOT exhaust this RA"`
-    and `"NOT COMPUTABLE (no administrative-region column in this workbook)"`. The DECISION
+    and `"NOT COMPUTABLE (no separate administrative-region column in this workbook)"`. The DECISION
     token needs the verdict alone, and it must come out the same way for BOTH tail forms —
     otherwise the token is machine-checkable on one shape and free prose on the other, which
     is how a gate ends up unable to see the case that matters.
@@ -597,7 +632,7 @@ def _ra_membership(rows: list[tuple], header_row: int, geo_col: int, ra_col: int
             members[ra_key] = {"members": [], "declared": declared, "excluded": 0,
                                "undeclared": [], "missing": sorted(declared)}
             relation[ra_key] = (
-                "NOT COMPUTABLE (no administrative-region column in this workbook)"
+                "NOT COMPUTABLE (no separate administrative-region column in this workbook)"
                 if ra_col < 0 else
                 "NOT COMPUTABLE (this workbook names its RA grouping in the geography header "
                 "only — there is no separate column carrying a per-MRC RA code)")
@@ -654,6 +689,11 @@ def _record_spec_premise(note: list[str]) -> dict:
     note += ["## 4. Spec-premise cross-check (RECORDED, non-gating, READ-ONLY)", ""]
     out = {"measured": False, "state": "NOT MEASURED THIS RUN", "why": "", "quote": ""}
     try:
+        # EVERY matching line is kept and the count is reported. `SPEC_ROW_MARK` also occurs
+        # in the spec's §11.6 line, so `rows[0]` is the §8 Geography row only because §8
+        # precedes §11 in file order — a positional assumption. Reporting how many lines
+        # matched makes that assumption visible instead of silent: a second match is a signal
+        # to look, not something the reader is left to discover.
         rows = [ln for ln in _spec_text().splitlines() if SPEC_ROW_MARK in _norm(ln)]
         if not rows:
             out.update(measured=True, state="INDETERMINATE",
@@ -663,11 +703,25 @@ def _record_spec_premise(note: list[str]) -> dict:
             low = _norm(line)
             old = SPEC_OLD_PREMISE_MARK in low
             amended = SPEC_AMENDED_MARK in low
-            # The sentences of that row that actually discuss the premise, quoted verbatim.
-            quote = ". ".join(
-                s.strip() for s in line.split(". ")
-                if "mrc" in _norm(s) or SPEC_ROW_MARK in _norm(s)
-            )
+            # The premise sentences of that row — quoted as a CONTIGUOUS SPAN from the
+            # first match to the last, never as a filtered re-join. `". ".join(filter(...))`
+            # keeps only matching sentences and re-joins them, which is a true substring
+            # ONLY while the matches happen to be adjacent; the moment it keeps 1 and 3 and
+            # drops 2 it splices non-adjacent text and publishes the splice under "Quoted
+            # verbatim", registered via `Fact.cited`. In a family where "verbatim" is
+            # load-bearing that is a latent depth-1, so the span is taken by INDEX and any
+            # dropped interior sentence is marked with an explicit ellipsis.
+            parts = line.split(". ")
+            keep = [i for i, sent in enumerate(parts)
+                    if "mrc" in _norm(sent) or SPEC_ROW_MARK in _norm(sent)]
+            if keep:
+                span = parts[keep[0]:keep[-1] + 1]
+                dropped = (keep[-1] - keep[0] + 1) - len(keep)
+                quote = ". ".join(span)
+                if dropped:
+                    quote += f"  [contiguous span; {dropped} interior sentence(s) not matched]"
+            else:
+                quote = ""
             out.update(
                 measured=True, quote=quote,
                 state=("PREMISE STANDS" if old and not amended else
@@ -682,7 +736,10 @@ def _record_spec_premise(note: list[str]) -> dict:
                        f"{SPEC_PATH.name}: \"{out['quote']}\"")
         note += [
             f"- Read live from `{SPEC_PATH.relative_to(_REPO_ROOT)}` (READ-ONLY; this probe "
-            f"never writes there). Row located by the marker `{SPEC_ROW_MARK!r}`.",
+            f"never writes there). Marker `{SPEC_ROW_MARK!r}` matched **{len(rows)}** line(s); "
+            f"the FIRST is read, which is the §8 Geography row only because §8 precedes §11 "
+            f"in file order — a positional assumption, stated so a second match is visible "
+            f"rather than silently outranked.",
             f"- **State: {out['state']}** — {out['why']}.",
             (f"- Quoted verbatim from the spec as it stands NOW: *\"{out['quote']}\"*"
              if out["quote"] else
@@ -744,8 +801,12 @@ def _sweep_ckan(note: list[str]) -> dict:
         for pkg in term_res.get("results") or []:
             swept.setdefault(pkg.get("id") or pkg.get("name") or "", pkg)
 
-        # The same two-term predicate the ISQ-side sweep uses, over title + notes + every
-        # resource name and url — so the two boundaries' absence claims mean the same thing.
+        # A SINGLE three-way conjunction over title + notes + every resource name and url.
+        # This is NOT "the same two-tier predicate boundary B uses": B has two tiers (SWEPT =
+        # MRC AND population; ELIGIBLE = swept AND projection) and scopes its absence claims
+        # to the WIDER swept tier, while this conjunction equals B's NARROWER eligible tier
+        # only. The two boundaries' absence claims therefore do NOT mean the same thing, and
+        # the note below says so instead of asserting a symmetry that does not hold.
         matches = []
         for pkg in swept.values():
             text = _pkg_text(pkg)
@@ -793,18 +854,22 @@ def _sweep_ckan(note: list[str]) -> dict:
             f"- Swept: **{f_swept}** distinct packages — {n_isq} from "
             + (f"`organization:{slug}`" if slug else "no org-scoped query")
             + f" and the remainder from the live term query `{CKAN_TERM_SEARCH}`.",
-            f"- Candidate predicate (the SAME two-tier predicate boundary B uses, applied to "
-            f"title + notes + every resource name and url): an MRC term {list(MRC_TERMS)} AND "
-            f"a projection term {list(PROJECTION_TERMS)} AND a population term "
-            f"{list(POPULATION_TERMS)}. **{len(matches)}** of the {len(swept)} swept packages "
-            f"matched"
+            f"- Candidate predicate — a SINGLE three-way conjunction over title + notes + "
+            f"every resource name and url: an MRC term {list(MRC_TERMS)} AND a projection "
+            f"term {list(PROJECTION_TERMS)} AND a population term {list(POPULATION_TERMS)}. "
+            f"**{len(matches)}** of the {len(swept)} swept packages matched"
             + (f": {sorted(m['title'] for m in matches)}." if matches else "."),
+            f"  Note the ASYMMETRY with boundary B rather than assuming the two match: this "
+            f"conjunction is equivalent to B's NARROWER *eligible* tier, whereas B scopes its "
+            f"absence claims to its WIDER *swept* tier (MRC AND population, projection term "
+            f"not required). So the two boundaries' absence claims do not cover the same "
+            f"thing, and neither is used to reinforce the other.",
             "",
             # A FUNCTION of `matches`, not an unconditional sentence: with a match present,
             # calling this an absence would contradict the count one line above it — the
             # exact adjective-beside-a-correct-value defect this family keeps reintroducing.
             (f"  This boundary is therefore NOT an absence: {len(matches)} swept package(s) "
-             f"matched the slug predicate. None of them is opened or body-checked here — "
+             f"matched the candidate predicate. None of them is opened or body-checked here — "
              f"this boundary contributes the second searched population, and the verdict is "
              f"earned on boundary B below, where a candidate's bytes are actually inspected. "
              f"Whether a match is a real MRC-projection dataset or a slug-predicate false "
@@ -842,135 +907,19 @@ def _sweep_ckan(note: list[str]) -> dict:
 
 
 # --- the live hunt ------------------------------------------------------------------
-def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
-    """Run the live two-boundary hunt, append its record to `note`, return
-    (verdict, evidence). `stage["at"]` tracks the current boundary so a raise can be
-    attributed. Any raise is handled by main() -> UNKNOWN-PROBE-FAILED.
+def _section_3_body_shape(note: list[str], observed: dict, verified: list[str],
+                          eligible: list[str]) -> dict:
+    """§3 — pick ONE verified candidate, open it, and prove its body is MRC-level.
+
+    Extracted from `_hunt`, which had grown past 600 lines. That length was not cosmetic:
+    every gloss defect this file has shipped lived in a long run of nested conditional
+    string concatenation, where a conditional clause and an unconditional one are visually
+    identical. Sections that can be read whole can be reviewed whole.
+
+    RAISES `VacuousProbeError` (boundary `isq-file`) via `_guard_body`. Returns the opened
+    workbook's measured state; the caller passes it to §3b and §3c so all three read the
+    SAME numbers rather than recomputing them.
     """
-    # ============ boundary A: the CKAN catalogue (searched population #2) ============
-    stage["at"] = "ckan"
-    ckan = _sweep_ckan(note)
-
-    # ============ boundary B1: the ISQ sitemap (searched population #1) ==============
-    stage["at"] = "isq-sitemap"
-    xml = _sitemap()
-    locs = _locs(xml)
-    _guard_sitemap(xml, locs)  # RAISES (isq-sitemap)
-
-    xlsx = [u for u in locs if u.lower().endswith(".xlsx")]
-    # DEDUPED BY FILE, not by url: the sitemap publishes `/fr/fichier/<slug>` and
-    # `/en/fichier/<slug>` as separate locs pointing at the SAME workbook. Counting both
-    # would double every candidate figure below and print visibly duplicated table rows,
-    # inflating the population the verdict is scoped over with files that do not exist.
-    # The surviving url prefers PREFERRED_LANG_PATH — a DECLARED preference, not an
-    # arbitrary sort artifact: the ISQ workbooks demoflow already pins are `/fr/` urls, so a
-    # v1 extension pinning the url this note publishes stays on the repo's own convention.
-    by_slug: dict[str, str] = {}
-    for url in sorted(xlsx):
-        if _terms(url, MRC_TERMS) and _terms(url, POPULATION_TERMS):
-            slug = _slug(url)
-            if slug not in by_slug or (PREFERRED_LANG_PATH in url
-                                       and PREFERRED_LANG_PATH not in by_slug[slug]):
-                by_slug[slug] = url
-    swept = sorted(by_slug.values(), key=_slug)
-    n_swept_urls = sum(1 for u in xlsx if _terms(u, MRC_TERMS) and _terms(u, POPULATION_TERMS))
-    eligible = [u for u in swept if _terms(u, PROJECTION_TERMS)]
-
-    f_locs = Fact.derived(str(len(locs)), "distinct <loc> entries in the live ISQ sitemap.xml")
-    f_xlsx = Fact.derived(str(len(xlsx)), "of those locs that are .xlsx download urls")
-    f_swept = Fact.derived(str(len(swept)), "swept: distinct .xlsx FILES (deduped by slug "
-                                            "across language paths) naming an MRC term AND a "
-                                            "population term")
-    f_elig = Fact.derived(str(len(eligible)), "of the swept that ALSO name a projection term "
-                                              "(pick-eligible)")
-
-    note += [
-        "## 2. Boundary B — ISQ's own product pages / full-edition downloads",
-        "",
-        f"- `{ISQ_SITEMAP}` -> **{f_locs}** distinct `<loc>` entries (deduped: the raw "
-        f"document repeats each url once per hreflang alternate, so an un-deduped count would "
-        f"overstate the population every absence claim below is scoped to), of which "
-        f"**{f_xlsx}** are `.xlsx` download urls.",
-        f"- Sweep predicate over the url slug (case-insensitive substring): an MRC term "
-        f"{list(MRC_TERMS)} AND a population term {list(POPULATION_TERMS)} makes a url SWEPT; "
-        f"a projection term {list(PROJECTION_TERMS)} additionally makes it ELIGIBLE (spec §8's "
-        f"junction consumes projected population by scenario, so an estimates workbook is a "
-        f"different product). **{f_swept}** swept, **{f_elig}** eligible — every absence claim "
-        f"is therefore scoped to the WIDER swept set.",
-        f"- The swept count is DEDUPED BY FILE: {n_swept_urls} matching locs collapse to "
-        f"{len(swept)} distinct slugs, because the sitemap lists `/fr/fichier/<slug>` and "
-        f"`/en/fichier/<slug>` separately for the same workbook.",
-        "",
-    ]
-
-    # ============ boundary B2: observe every eligible candidate =====================
-    stage["at"] = "isq-file"
-    observed: dict[str, dict] = {u: _probe_url(u) for u in eligible}
-    verified = sorted(u for u in eligible if _is_workbook_response(observed[u]))
-
-    note += [
-        f"**Every eligible candidate, observed live by GET** (status, content-type, declared "
-        f"length and the first {PREFIX_BYTES} bytes — only a prefix is read, so a 17MB "
-        f"candidate costs a handshake rather than a download). A bare 200 is NOT treated as "
-        f"evidence: the magic-byte column is what separates a workbook from an HTML page "
-        f"served at 200.",
-        "",
-        "| candidate (slug) | HTTP | content-type | Content-Length | magic bytes | "
-        "workbook prefix? |",
-        "|---|---:|---|---:|---|---|",
-    ]
-    for url in sorted(eligible):
-        o = observed[url]
-        note.append(
-            f"| `{_slug(url)}` | {o['status']} | {o['ctype'] or '?'} | {o['length'] or '?'} "
-            f"| `{o['prefix'].hex() or 'none'}` "
-            f"| {'YES' if o['prefix'].startswith(XLSX_MAGIC) else 'no'} |"
-        )
-    note += [
-        "",
-        f"- **{len(verified)}** of the {len(eligible)} eligible candidates answered 200 with a "
-        f"workbook magic-byte prefix. Note the exact scope of that number: it is a "
-        f"STATUS-AND-PREFIX result, not a body-shape result"
-        # Conditioned on `verified`: §3 exists only when a candidate survives to be opened.
-        # Written unconditionally, this sentence promised a section that a NOT-FOUND or an
-        # UNKNOWN run never writes — a forward reference to evidence that is not in the file.
-        + (" — exactly ONE candidate is opened and shape-checked in §3, and only that one "
-           "carries the three evidence pieces a LOCATED requires."
-           if verified else
-           ". NO candidate survived this screen, so this run opens NOTHING and there is no "
-           "body-shape section below: no resource here carries the three evidence pieces a "
-           "LOCATED requires."),
-        "",
-        f"**The plan body's two GUESSED slugs, probed live by this run** (so the comparison in "
-        f"§4 is measured here rather than recalled):",
-        "",
-        "| guessed slug | HTTP (GET) |",
-        "|---|---:|",
-    ]
-    guessed = {u: _probe_url(u, nbytes=0) for u in PLAN_GUESSED_SLUGS}
-    for url in PLAN_GUESSED_SLUGS:
-        note.append(f"| `{_slug(url)}` | {guessed[url]['status']} |")
-    note.append("")
-
-    if not verified:
-        # An earned NOT-FOUND: both populations were swept and non-empty, and the ISQ sweep
-        # resolved NO eligible candidate at all. The guard refuses every other shape —
-        # notably candidates that exist but do not serve a workbook body.
-        _guard_not_found(locs, eligible, verified, ckan)  # RAISES (isq-file) if unearned
-        note += [
-            f"- **The sweep resolved no eligible MRC-projection candidate.** Scoped exactly: "
-            f"not among the {len(locs)} sitemap locs ({len(swept)} swept, {len(eligible)} "
-            f"eligible) and the {ckan['n_swept']} CKAN packages swept from a "
-            f"{ckan['n_catalogue']}-package catalogue. This is NOT a claim that no MRC-level "
-            f"ISQ source exists.",
-            "",
-        ]
-        return "NOT-FOUND", {
-            "ckan": ckan, "n_locs": len(locs), "n_xlsx": len(xlsx), "n_swept": len(swept),
-            "n_eligible": len(eligible), "n_verified": 0, "eligible": sorted(eligible),
-            "guessed": {u: guessed[u]["status"] for u in PLAN_GUESSED_SLUGS},
-        }
-
     # ============ §3 the body-shape check on ONE candidate ==========================
     # SELECTION RULE, stated before its result so it cannot drift to fit the answer:
     #   1. restrict to verified candidates matching a DECLARED demoflow family
@@ -1098,7 +1047,8 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "declared couronne targets whose DECLARED RA number equals the administrative-region "
         "code the opened workbook puts beside that MRC"
         + (f" (column {ra_col}, header {ra_head!r})" if ra_usable
-           else " — this edition publishes no RA column, so NONE was checkable"))
+           else " — this edition publishes no SEPARATE RA column (a geography header that "
+                "merely NAMES the grouping carries no per-MRC code), so NONE was checkable"))
 
     note += [
         f"## 3. Body-shape check — is `{_slug(picked)}` really MRC-level?",
@@ -1134,9 +1084,12 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"- Geography column located by a header cell BEGINNING `{MRC_HEADER_PREFIX.upper()}` "
         f"at row {header_row}, column {header_col} (0-indexed); the cell reads "
         f"`{header_cells[header_col] if header_col < len(header_cells) else '?'}`. Prefix, not "
-        f"equality and not substring — measured reason: equality misses the 2016-2041 edition "
-        f"(whose header reads \"MRC par région administrative\") and a substring test locks "
-        f"onto the caption row, which also contains \"mrc\", and counts zero labels below it.",
+        f"equality and not substring, and the reason is visible in this run's own evidence: "
+        f"the §3b table lists the geography header EVERY opened candidate publishes, and the "
+        f"editions heading it with an RA qualifier would be missed by an equality test, while "
+        f"a substring test locks onto the caption row (cell A1 above, which also contains "
+        f"\"mrc\") and counts zero labels below it. No edition or year is named here — the "
+        f"table is what states which files have which header.",
         f"- Full header row (verbatim): {header_cells}.",
         f"- **{f_nlabels} distinct geography labels** below that header, which decompose as "
         f"**{f_ndecomp}**: labels in the `NN  Name` administrative-region-SUBTOTAL form, plus "
@@ -1154,7 +1107,8 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         + (f"**{f_scen}** distinct labels in column {scen_col} (header `{scen_head}`): "
            f"{scenarios}."
            if scen_col >= 0 else
-           f"**{f_scen}** — no cell in this sheet's header row names a scenario axis. The "
+           f"NONE — no cell in this sheet's header row names a scenario axis (so the "
+           f"{f_scen} labels counted for it are counted over nothing). The "
            f"sheet-name list above is emitted verbatim; this note draws no conclusion from it "
            f"about how this edition separates its scenarios."),
         "",
@@ -1199,12 +1153,27 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
            "This edition publishes NO SEPARATE administrative-region column — its header row is listed "
            "verbatim above — so NO target was checkable here and this run corroborates no RA "
            "grouping at all.")
-        + " What this establishes is MEMBERSHIP — each declared target is present and sits "
-          "under the RA number this file declares for it. It is NOT a partition, and this "
-          "section makes no partition claim: §3c computes what the workbook can actually say "
-          "about exhaustion. Scoped to the ONE workbook opened here; §3b opens the other "
-          "verified candidates and reports the RA axis across them, so the edition scope of "
-          "this corroboration is measured rather than assumed.",
+        # CONDITIONAL, like the DECISION-side gloss it is the sibling of. Concatenated flat,
+        # this sentence followed "NO target was checkable here" with "each declared target is
+        # present and sits under the RA number this file declares for it" — self-contradictory
+        # in one breath, and false twice on the header-named-only fixture (2 of 10 present,
+        # none checkable). Every clause below is now a function of what §3 measured.
+        + " What this establishes is MEMBERSHIP, and only as far as it was measured: "
+        + (f"all {n_targets} declared targets are present in this workbook's labels"
+           if couronne_complete else
+           f"{len(hits)} of {n_targets} declared targets are present in this workbook's "
+           f"labels ({len(misses)} absent)")
+        + (f", and each of the {len(ra_checked)} checkable ones sits under the RA number this "
+           f"file declares for it"
+           if ra_checked and not ra_disagree else
+           f", and of those, {len(ra_checked)} had a checkable RA code with "
+           f"{len(ra_disagree)} DISAGREEING" if ra_disagree else
+           ", and NONE had a checkable RA code, so this section corroborates no RA grouping")
+        + ". It is NOT a partition, and this section makes no partition claim: §3c computes "
+          "what the workbook can actually say about exhaustion. Scoped to the ONE workbook "
+          "opened here; §3b opens the other verified candidates and reports the RA axis "
+          "across them, so the edition scope of this corroboration is measured rather than "
+          "assumed.",
         "",
         f"- **Which swept files would feed a v1 extension.** demoflow consumes two ISQ families "
         f"at RMR level; the DECLARED term map {({k: list(v) for k, v in DEMOFLOW_RMR_FAMILY.items()})} "
@@ -1217,6 +1186,25 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         note.append(f"  - **{family}** -> {len(fam)} eligible slug(s) match: {fam or 'none'}")
     note.append("")
 
+
+    return {
+        "picked": picked, "picked_family": picked_family, "data": data, "sheets": sheets,
+        "rows": rows, "header_row": header_row, "header_col": header_col,
+        "header_cells": header_cells, "labels": labels, "aggregate_labels": aggregate_labels,
+        "fine_labels": fine_labels, "scenarios": scenarios, "scen_col": scen_col,
+        "scen_head": scen_head, "caption": caption, "diffusion": diffusion,
+        "ra_col": ra_col, "ra_head": ra_head, "ra_usable": ra_usable,
+        "ra_observed": ra_observed, "ra_agrees": ra_agrees, "ra_checked": ra_checked,
+        "ra_disagree": ra_disagree, "found": found, "hits": hits, "misses": misses,
+        "n_targets": n_targets, "couronne_complete": couronne_complete,
+        "head": head, "head_disagrees": head_disagrees,
+        "family_verified": family_verified,
+    }
+
+
+def _section_3b_editions(note: list[str], verified: list[str], wb: dict) -> dict:
+    """§3b — residual (i): is the RA↔MRC axis edition-specific? RECORDED, never verdict-moving."""
+    picked, data = wb["picked"], wb["data"]
     # ===== §3b — RESIDUAL (i): is the RA↔MRC axis EDITION-SPECIFIC? =================
     # A RECORDED OBSERVATION (steering ruling G), not a verdict: nothing below can move
     # DECISION-VERDICT. Every verified candidate is opened — the picked one reuses the bytes
@@ -1242,11 +1230,20 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"question its own header row answers. The split is **{f_editions}** — a SEPARATE RA "
         f"column / an RA grouping NAMED in the geography header only / neither.",
         "",
-        "That middle state is kept distinct on purpose. Three editions head their GEOGRAPHY "
-        "column `MRC par région administrative`: that cell NAMES an RA grouping, but there is "
-        "no second column, so **no RA code can be read per MRC** from those files. Counting "
-        "them with the `RA1` editions would report a machine-readable axis where none exists "
-        "— and the v1 constraint turns on exactly that difference.",
+        # A RATIONALE paragraph, carrying NO population count and no header literal. It used
+        # to open "Three editions head their GEOGRAPHY column `MRC par région administrative`"
+        # — both typed, and both true only by coincidence: forced to a 1/0/0 or 0/1/0 split
+        # the paragraph still read "Three editions", one paragraph above the correctly
+        # computed token. The class-level fix is that a rationale states the RULE and the
+        # table beneath states the population; a count here can only ever duplicate a
+        # computed one, and duplication is what goes stale.
+        "That middle state is kept distinct on purpose. When an edition heads its GEOGRAPHY "
+        "column with an RA grouping rather than publishing a second column, that cell NAMES "
+        "the grouping but carries **no per-MRC RA code** — so nothing in such a file assigns "
+        "an individual MRC to a region. Counting those together with the editions that do "
+        "publish a separate column would report a machine-readable axis where none exists, "
+        "and the v1 constraint turns on exactly that difference. Which candidates fall in "
+        "which state is the table below, computed per file.",
         "",
         "Each row's edition is its OWN caption cell, verbatim. This run does NOT rank the "
         "editions by recency: no live response states which is current, so that judgment is "
@@ -1328,6 +1325,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "",
     ]
 
+
+    return {"editions": editions, "opened": opened, "ra_separate": ra_separate,
+            "ra_named_only": ra_named_only, "ra_absent": ra_absent}
+
+
+def _section_3c_membership(note: list[str], wb: dict) -> dict:
+    """§3c — residual (ii): membership vs partition. RECORDED, never verdict-moving."""
+    rows, header_row, header_col = wb["rows"], wb["header_row"], wb["header_col"]
+    ra_col, ra_head, ra_usable = wb["ra_col"], wb["ra_head"], wb["ra_usable"]
+    labels, header_cells = wb["labels"], wb["header_cells"]
     # ===== §3c — RESIDUAL (ii): membership vs partition ============================
     # Also a RECORDED OBSERVATION. §3 established MEMBERSHIP (each declared target is
     # present). The question here is EXHAUSTION: what is the FULL set of MRCs this workbook
@@ -1358,7 +1365,7 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     if not ra_usable:
         note += [
             "- **NOT COMPUTABLE from this workbook**: "
-            + ("it publishes no administrative-region column at all"
+            + ("it publishes no separate administrative-region column at all"
                if ra_col < 0 else
                f"its RA grouping is NAMED in the geography header (`{ra_head}`, column "
                f"{ra_col}) but there is no SEPARATE column, so no per-MRC RA code exists to "
@@ -1399,12 +1406,15 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
                             f"this RA: {m['missing']}")
         note += [
             "",
-            f"- **What the relation means, and only that.** A `PROPER SUBSET` says the declared "
-            f"targets are SOME of the MRCs this workbook puts under that RA — so this file's "
-            f"own RA grouping is WIDER than the couronne set declared here, and the declared "
-            f"set therefore does NOT exhaust the RA. That is a statement about this file's RA "
-            f"assignment; it is NOT a statement about which MRCs belong to the couronne, which "
-            f"nothing here measures.",
+            # Explains the relations this run ACTUALLY computed. Written flat it explained
+            # `PROPER SUBSET` unconditionally — asserting about "this file" under a hypothesis
+            # that is false whenever the computed relation is PROPER SUPERSET or EMPTY.
+            f"- **What the computed relation(s) mean, and only that.** This run computed "
+            + ", ".join(sorted({_relation_head(v) for v in ra_relation.values()}))
+            + ". " + " ".join(RELATION_GLOSS[r] for r in sorted({
+                _relation_head(v) for v in ra_relation.values()}) if r in RELATION_GLOSS)
+            + " Each is a statement about THIS FILE's RA assignment; none is a statement "
+            "about which MRCs belong to the couronne, which nothing here measures.",
             "",
         ]
     note += [
@@ -1412,11 +1422,14 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"declared MRCs exactly COMPOSE the Montréal RMR couronne is a metropolitan-area "
         f"question. Matching the metropolitan-area markers {list(RMR_MARKERS)} against this "
         f"file's own header cells and geography labels yields **{f_rmr}** hits respectively"
-        + (f" — with zero of each, nothing in this file's geography axis names a metropolitan "
-           f"area, so the file supplies no RMR membership for any MRC and the couronne-"
-           f"composition question is NOT ANSWERABLE from it. Per steering ruling G this run "
-           f"deliberately does NOT consult a second source to close it: the limit is the "
-           f"result."
+        + (f" — with zero of each, nothing **this run read of this file** (its header row and "
+           f"its geography column) names a metropolitan area, so nothing it read supplies RMR "
+           f"membership for any MRC and the couronne-composition question is NOT ANSWERABLE "
+           f"from it. Stated at that scope deliberately: an unnamed column carrying RMR codes, "
+           f"or a footnote row below the header block, is OUTSIDE what this run inspected, so "
+           f"a flat \"this file cannot answer it\" would claim more than the search covers. "
+           f"Per steering ruling G this run does NOT consult a second source to close it: the "
+           f"limit is the result."
            if not rmr_cells and not rmr_labels else
            f" — a metropolitan-area marker DOES appear here, so this file may carry an RMR "
            f"axis after all; inspect the hits above before treating the couronne question as "
@@ -1425,29 +1438,177 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         "",
     ]
 
+
+    return {"ra_members": ra_members, "ra_relation": ra_relation,
+            "rmr_cells": rmr_cells, "rmr_labels": rmr_labels}
+
+
+def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
+    """Run the live two-boundary hunt, append its record to `note`, return
+    (verdict, evidence). `stage["at"]` tracks the current boundary so a raise can be
+    attributed. Any raise is handled by main() -> UNKNOWN-PROBE-FAILED.
+    """
+    # ============ boundary A: the CKAN catalogue (searched population #2) ============
+    stage["at"] = "ckan"
+    ckan = _sweep_ckan(note)
+
+    # ============ boundary B1: the ISQ sitemap (searched population #1) ==============
+    stage["at"] = "isq-sitemap"
+    xml = _sitemap()
+    locs = _locs(xml)
+    _guard_sitemap(xml, locs)  # RAISES (isq-sitemap)
+
+    xlsx = [u for u in locs if u.lower().endswith(".xlsx")]
+    # DEDUPED BY FILE, not by url: the sitemap publishes `/fr/fichier/<slug>` and
+    # `/en/fichier/<slug>` as separate locs pointing at the SAME workbook. Counting both
+    # would double every candidate figure below and print visibly duplicated table rows,
+    # inflating the population the verdict is scoped over with files that do not exist.
+    # The surviving url prefers PREFERRED_LANG_PATH — a DECLARED preference, not an
+    # arbitrary sort artifact: the ISQ workbooks demoflow already pins are `/fr/` urls, so a
+    # v1 extension pinning the url this note publishes stays on the repo's own convention.
+    by_slug: dict[str, str] = {}
+    for url in sorted(xlsx):
+        if _terms(url, MRC_TERMS) and _terms(url, POPULATION_TERMS):
+            slug = _slug(url)
+            if slug not in by_slug or (PREFERRED_LANG_PATH in url
+                                       and PREFERRED_LANG_PATH not in by_slug[slug]):
+                by_slug[slug] = url
+    swept = sorted(by_slug.values(), key=_slug)
+    n_swept_urls = sum(1 for u in xlsx if _terms(u, MRC_TERMS) and _terms(u, POPULATION_TERMS))
+    eligible = [u for u in swept if _terms(u, PROJECTION_TERMS)]
+
+    f_locs = Fact.derived(str(len(locs)), "distinct <loc> entries in the live ISQ sitemap.xml")
+    f_xlsx = Fact.derived(str(len(xlsx)), "of those locs that are .xlsx download urls")
+    f_swept = Fact.derived(str(len(swept)), "swept: distinct .xlsx FILES (deduped by slug "
+                                            "across language paths) naming an MRC term AND a "
+                                            "population term")
+    f_elig = Fact.derived(str(len(eligible)), "of the swept that ALSO name a projection term "
+                                              "(pick-eligible)")
+
+    note += [
+        "## 2. Boundary B — ISQ's own product pages / full-edition downloads",
+        "",
+        f"- `{ISQ_SITEMAP}` -> **{f_locs}** distinct `<loc>` entries (deduped: the raw "
+        f"document repeats each url once per hreflang alternate, so an un-deduped count would "
+        f"overstate the population every absence claim below is scoped to), of which "
+        f"**{f_xlsx}** are `.xlsx` download urls.",
+        f"- Sweep predicate over the url slug (case-insensitive substring): an MRC term "
+        f"{list(MRC_TERMS)} AND a population term {list(POPULATION_TERMS)} makes a url SWEPT; "
+        f"a projection term {list(PROJECTION_TERMS)} additionally makes it ELIGIBLE (spec §8's "
+        f"junction consumes projected population by scenario, so an estimates workbook is a "
+        f"different product). **{f_swept}** swept, **{f_elig}** eligible — every absence claim "
+        f"is therefore scoped to the WIDER swept set.",
+        f"- The swept count is DEDUPED BY FILE: {n_swept_urls} matching locs collapse to "
+        f"{len(swept)} distinct slugs, because the sitemap lists `/fr/fichier/<slug>` and "
+        f"`/en/fichier/<slug>` separately for the same workbook.",
+        "",
+    ]
+
+    # ============ boundary B2: observe every eligible candidate =====================
+    stage["at"] = "isq-file"
+    observed: dict[str, dict] = {u: _probe_url(u) for u in eligible}
+    verified = sorted(u for u in eligible if _is_workbook_response(observed[u]))
+
+    note += [
+        f"**Every eligible candidate, observed live by GET** (status, content-type, declared "
+        f"length and the first {PREFIX_BYTES} bytes — only that prefix is read and the "
+        f"connection is then closed, so a candidate costs a handshake rather than its full "
+        f"body whatever its size; the declared lengths are in the table). A bare 200 is NOT "
+        f"treated as evidence: the magic-byte column is what separates a workbook from an "
+        f"HTML page served at 200.",
+        "",
+        "",
+        "| candidate (slug) | HTTP | content-type | Content-Length | magic bytes | "
+        "workbook prefix? |",
+        "|---|---:|---|---:|---|---|",
+    ]
+    for url in sorted(eligible):
+        o = observed[url]
+        note.append(
+            f"| `{_slug(url)}` | {o['status']} | {o['ctype'] or '?'} | {o['length'] or '?'} "
+            f"| `{o['prefix'].hex() or 'none'}` "
+            f"| {'YES' if o['prefix'].startswith(XLSX_MAGIC) else 'no'} |"
+        )
+    note += [
+        "",
+        f"- **{len(verified)}** of the {len(eligible)} eligible candidates answered 200 with a "
+        f"workbook magic-byte prefix. Note the exact scope of that number: it is a "
+        f"STATUS-AND-PREFIX result, not a body-shape result"
+        # Conditioned on `verified`: §3 exists only when a candidate survives to be opened.
+        # Written unconditionally, this sentence promised a section that a NOT-FOUND or an
+        # UNKNOWN run never writes — a forward reference to evidence that is not in the file.
+        + (" — exactly ONE candidate is opened and shape-checked in §3, and only that one "
+           "carries the three evidence pieces a LOCATED requires."
+           if verified else
+           ". NO candidate survived this screen, so this run opens NOTHING and there is no "
+           "body-shape section below: no resource here carries the three evidence pieces a "
+           "LOCATED requires."),
+        "",
+        f"**The plan body's two GUESSED slugs, probed live by this run** (so the comparison in "
+        f"§4 is measured here rather than recalled):",
+        "",
+        "| guessed slug | HTTP (GET) |",
+        "|---|---:|",
+    ]
+    guessed = {u: _probe_url(u, nbytes=0) for u in PLAN_GUESSED_SLUGS}
+    for url in PLAN_GUESSED_SLUGS:
+        note.append(f"| `{_slug(url)}` | {guessed[url]['status']} |")
+    note.append("")
+
+    if not verified:
+        # An earned NOT-FOUND: both populations were swept and non-empty, and the ISQ sweep
+        # resolved NO eligible candidate at all. The guard refuses every other shape —
+        # notably candidates that exist but do not serve a workbook body.
+        _guard_not_found(locs, eligible, verified, ckan)  # RAISES (isq-file) if unearned
+        note += [
+            f"- **The sweep resolved no eligible MRC-projection candidate.** Scoped exactly: "
+            f"not among the {len(locs)} sitemap locs ({len(swept)} swept, {len(eligible)} "
+            f"eligible) and the {ckan['n_swept']} CKAN packages swept from a "
+            f"{ckan['n_catalogue']}-package catalogue. This is NOT a claim that no MRC-level "
+            f"ISQ source exists.",
+            "",
+        ]
+        return "NOT-FOUND", {
+            "ckan": ckan, "n_locs": len(locs), "n_xlsx": len(xlsx), "n_swept": len(swept),
+            "n_eligible": len(eligible), "n_verified": 0, "eligible": sorted(eligible),
+            "guessed": {u: guessed[u]["status"] for u in PLAN_GUESSED_SLUGS},
+        }
+
+    wb = _section_3_body_shape(note, observed, verified, eligible)
+    ed = _section_3b_editions(note, verified, wb)
+    mem = _section_3c_membership(note, wb)
+
+    picked = wb["picked"]
     evidence = {
-        "editions": editions, "n_editions_opened": len(opened),
-        "n_ra_separate": len(ra_separate), "n_ra_named_only": len(ra_named_only),
-        "n_ra_absent": len(ra_absent),
-        "ra_members": ra_members, "ra_relation": ra_relation,
-        "n_rmr_cells": len(rmr_cells), "n_rmr_labels": len(rmr_labels),
+        # §3b / §3c residual state
+        "editions": ed["editions"], "n_editions_opened": len(ed["opened"]),
+        "n_ra_separate": len(ed["ra_separate"]),
+        "n_ra_named_only": len(ed["ra_named_only"]),
+        "n_ra_absent": len(ed["ra_absent"]),
+        "ra_members": mem["ra_members"], "ra_relation": mem["ra_relation"],
+        "n_rmr_cells": len(mem["rmr_cells"]), "n_rmr_labels": len(mem["rmr_labels"]),
+        # sweep state
         "ckan": ckan,
         "n_locs": len(locs), "n_xlsx": len(xlsx), "n_swept": len(swept),
         "n_eligible": len(eligible), "n_verified": len(verified),
         "eligible": sorted(eligible), "verified": verified,
-        "url": picked, "status": observed[picked]["status"],
-        "head_status": head["status"], "head_disagrees": head_disagrees,
-        "ctype": observed[picked]["ctype"], "length": observed[picked]["length"],
-        "nbytes": len(data), "sheets": sheets, "header_row": header_row,
-        "header_col": header_col, "labels": labels, "n_labels": len(labels),
-        "n_aggregate": len(aggregate_labels), "n_fine": len(fine_labels),
-        "scenarios": scenarios, "scen_col": scen_col, "scen_head": scen_head,
-        "caption": caption, "diffusion": diffusion, "family": picked_family,
-        "hits": hits, "misses": misses, "n_targets": n_targets,
-        "couronne_complete": couronne_complete,
-        "ra_col": ra_col, "ra_head": ra_head, "ra_observed": ra_observed,
-        "n_ra_checked": len(ra_checked), "ra_disagree": ra_disagree,
         "guessed": {u: guessed[u]["status"] for u in PLAN_GUESSED_SLUGS},
+        # the opened workbook (§3)
+        "url": picked, "status": observed[picked]["status"],
+        "head_status": wb["head"]["status"], "head_disagrees": wb["head_disagrees"],
+        "ctype": observed[picked]["ctype"], "length": observed[picked]["length"],
+        "nbytes": len(wb["data"]), "sheets": wb["sheets"],
+        "header_row": wb["header_row"], "header_col": wb["header_col"],
+        "labels": wb["labels"], "n_labels": len(wb["labels"]),
+        "n_aggregate": len(wb["aggregate_labels"]), "n_fine": len(wb["fine_labels"]),
+        "scenarios": wb["scenarios"], "scen_col": wb["scen_col"],
+        "scen_head": wb["scen_head"], "caption": wb["caption"],
+        "diffusion": wb["diffusion"], "family": wb["picked_family"],
+        "hits": wb["hits"], "misses": wb["misses"], "n_targets": wb["n_targets"],
+        "couronne_complete": wb["couronne_complete"],
+        "ra_col": wb["ra_col"], "ra_head": wb["ra_head"], "ra_usable": wb["ra_usable"],
+        "ra_observed": wb["ra_observed"],
+        "n_ra_checked": len(wb["ra_checked"]), "ra_disagree": wb["ra_disagree"],
     }
     return "LOCATED", evidence
 
@@ -1464,6 +1625,164 @@ def _guessed_str(evidence: dict) -> str:
         f"`{_slug(url)}` -> HTTP {status}"
         for url, status in (evidence.get("guessed") or {}).items()
     ) or "not probed this run"
+
+
+def _premise_token(state: str) -> str:
+    """The DECISION clause for a spec-premise STATE. One table, so the LOCATED branch and any
+    other consumer cannot drift apart — and a state outside the four raises here rather than
+    printing an unmapped verdict into a generated note."""
+    return {
+        "PREMISE STANDS": "CONTRADICTED — ESCALATION",
+        "AMENDED": "ALREADY AMENDED — no live conflict remains",
+        "INDETERMINATE": "INDETERMINATE — the spec row did not match either marker",
+        "NOT MEASURED THIS RUN": "NOT CHECKED — the spec file was not read this run",
+    }[state]
+
+
+def _decision_located(e: dict, spec: dict, guessed_str: str) -> list[str]:
+    """The DECISION block for a LOCATED verdict.
+
+    Extracted from `main()` for the same reason `_hunt` was split: four of this review's
+    findings (#2 #3 #4 #5) lived inside this one ~100-line run of nested conditional string
+    concatenation, where a conditional gloss and an unconditional one look identical. As its
+    own function it is readable end to end, and each clause is reachable from a fixture.
+
+    Takes `spec` (the LIVE §4 read) and `guessed_str` rather than closing over them, so no
+    clause here can quietly depend on state `main()` happens to have in scope.
+    """
+    body: list[str] = []
+    ck = e["ckan"]
+    premise_token = _premise_token(spec["state"])
+    scope = (f"the {e['n_locs']} ISQ sitemap locs swept in §2 ({e['n_swept']} matched the "
+             f"MRC×population predicate, {e['n_eligible']} eligible)")
+    if ck["measured"]:
+        scope += (f" and the {ck['n_swept']} CKAN packages swept in §1 from a "
+                  f"{ck['n_catalogue']}-package catalogue")
+    else:
+        scope += " (the CKAN boundary was NOT MEASURED this run — see §1)"
+    # Every clause below is a FUNCTION of a computed value, so a gloss cannot contradict
+    # the number it sits beside.
+    couronne = (f"{len(e['hits'])} of {e['n_targets']} declared couronne MRC targets found "
+                f"by exact name search")
+    couronne += (" — ALL declared targets present" if e["couronne_complete"]
+                 else f" — MISSING: {e['misses']}")
+    body += [
+        "- `DECISION-VERDICT: LOCATED`",
+        f"- `DECISION-RESOURCE-URL: {e['url']}`",
+        f"- `DECISION-HTTP-STATUS: {e['status']} ({e['ctype'] or 'no content-type'}, "
+        f"Content-Length {e['length'] or 'unreported'})`  (observed by GET this run; the "
+        f"same url answered HTTP {e['head_status']} to HEAD"
+        + (" — the methods DISAGREE here, so a HEAD-only hunt would miss this file)"
+           if e["head_disagrees"] else " — the methods agree here)"),
+        f"- `DECISION-BODY-SHAPE: {e['nbytes']} bytes downloaded, magic-byte prefix "
+        f"matches {XLSX_MAGIC.hex()}, opened to sheets {e['sheets']}, MRC header cell at "
+        f"row {e['header_row']} column {e['header_col']}, {e['n_labels']} distinct "
+        f"geography labels, "
+        + (f"{len(e['scenarios'])} scenario labels {e['scenarios']}"
+           if e["scen_col"] >= 0 else "no scenario column in this sheet")
+        + "`",
+        # NO backticks inside the token value: `_probe_asserts.token` parses the
+        # backtick-delimited span non-greedily, so an inner backtick truncates the value
+        # and the gate would read a decomposition as a bare number.
+        f"- `DECISION-MRC-LABEL-COUNT: {e['n_labels']} ({e['n_aggregate']} of them in the "
+        f"NN-Name administrative-region-subtotal form + {e['n_fine']} others)`  "
+        f"(distinct labels below the MRC-named header of the opened workbook. Precisely: "
+        f"the header NAMES an MRC axis and this count says that column is populated. It "
+        f"is NOT an MRC count — the column interleaves RA subtotals, hence the split; the "
+        f"full label list is emitted verbatim in §3. And it says NOTHING about the "
+        f"couronne — a large label set is equally consistent with the couronne being "
+        f"absent — which is why the per-target search below is a separate token)",
+        f"- `DECISION-COURONNE-TARGETS: {couronne}`",
+        f"- `DECISION-RA-CORRESPONDENCE: "
+        # Branches on `ra_usable` — the SHARED predicate — never on `ra_col >= 0`.
+        # With the loose test this token read "0 of 0 declared targets corroborated
+        # against the opened workbook's own RA column (column 1, header 'MRC par région
+        # administrative')" on the header-named-only fixture: claiming an RA column at the
+        # GEOGRAPHY column, i.e. exactly the machine-readable axis the three-state split
+        # exists to deny, and contradicting §3's own prose in the same note.
+        + (f"{e['n_ra_checked'] - len(e['ra_disagree'])} of {e['n_ra_checked']} declared "
+           f"targets corroborated against the opened workbook's own SEPARATE RA column "
+           f"(column {e['ra_col']}, header {e['ra_head']!r})"
+           + (f"; DISAGREEING: {e['ra_disagree']}" if e["ra_disagree"] else "")
+           if e["ra_usable"] else
+           f"NOT CHECKABLE — the opened workbook publishes no SEPARATE administrative-"
+           f"region column"
+           + (f" (its geography header {e['ra_head']!r} NAMES an RA grouping but carries "
+              f"no per-MRC code)" if e["ra_col"] >= 0 else ""))
+        # MEMBERSHIP is stated as a FUNCTION of what §3 measured. This gloss used to
+        # assert "each declared target is present and carries the RA code" flat out —
+        # and an offline fixture published it beside `2 of 10` and `NOT CHECKABLE`, with
+        # the whole suite green. A gloss beside a conditional value must be conditional.
+        + "`  (MEMBERSHIP only, and only what was measured: "
+        + (f"all {e['n_targets']} declared targets present"
+           if e["couronne_complete"] else
+           f"{len(e['hits'])} of {e['n_targets']} declared targets present")
+        + (f", each carrying the RA code this file declares for it"
+           if e["ra_usable"] and not e["ra_disagree"] and e["n_ra_checked"] else
+           f", and the RA code was NOT CHECKABLE for {e['n_targets'] - e['n_ra_checked']} "
+           f"of them" if e["n_ra_checked"] < e["n_targets"] else
+           f", with {len(e['ra_disagree'])} RA disagreement(s)")
+        # These clauses sit AFTER the closing backtick, so `token()` never returns them
+        # and the residual-II gate cannot see them — which is exactly why they must be
+        # conditional at the source rather than merely gated. Flat, they asserted that
+        # §3c "measured" the composition "unanswerable" on runs where §3c computed NOT
+        # COMPUTABLE (middle-state fixture) or found a metropolitan marker (RMR fixture).
+        + ". EXHAUSTION is a different question, computed separately in §3c: "
+        + ("; ".join(f"{k} -> {_relation_head(v)}" for k, v in e["ra_relation"].items()))
+        + ". The RMR-couronne composition is "
+        + ("measured there to be unanswerable from this workbook"
+           if not e["n_rmr_cells"] and not e["n_rmr_labels"] else
+           f"NOT settled there: {e['n_rmr_cells']} header cell(s) and "
+           f"{e['n_rmr_labels']} label(s) DO match a metropolitan-area marker")
+        + ". See DECISION-RESIDUAL-II below)",
+        f"- `DECISION-SWEPT-POPULATION: {scope}`",
+        f"- `DECISION-SPEC-PREMISE: {premise_token}`  (state read LIVE from the spec in "
+        f"§4 — {spec['why'] or 'not measured'}. MEASURED THIS RUN: the plan's guessed "
+        f"slugs {guessed_str}, while the resource above answers {e['status']} with a body "
+        f"this run opened and shape-checked. The two together say the 404 was a property "
+        f"of the GUESSED SLUG CONVENTION, not of the data. This note never edits the "
+        f"spec.)",
+        # --- the two RESIDUALS, recorded per steering ruling G. They are OBSERVATIONS:
+        # neither appears in any verdict expression, and §11.6 stands either way.
+        f"- `DECISION-RESIDUAL-I-RA-AXIS: of {e['n_editions_opened']} candidate workbooks "
+        f"opened, {e['n_ra_separate']} publish a SEPARATE administrative-region column, "
+        f"{e['n_ra_named_only']} name the grouping in the geography header ONLY (no "
+        f"per-MRC RA code), {e['n_ra_absent']} carry neither"
+        + ("; the axis is EDITION-SPECIFIC, so a v1 pinning an edition from the latter "
+           "two groups must source it from a different workbook — an unvalidated "
+           "cross-edition join"
+           if e["n_ra_separate"] and (e["n_ra_named_only"] or e["n_ra_absent"]) else
+           "; no edition-specificity found across the candidates opened")
+        + "`  (RECORDED OBSERVATION — see §3b; changes no verdict. This run does not rank "
+        "the editions by recency: no live response states which is current)",
+        # `membership` is COUNTED, never the literal "YES": the same offline fixture that
+        # falsified the gloss above published `membership YES` beside `2 of 10`.
+        f"- `DECISION-RESIDUAL-II-PARTITION: membership {len(e['hits'])} of "
+        f"{e['n_targets']} (§3); exhaustion "
+        + "; ".join(f"{k} -> {_relation_head(v)}" for k, v in e["ra_relation"].items())
+        # The conclusion FOLLOWS the counts inside its own parenthesis. Written flat, an
+        # RMR-marker fixture published "NOT ANSWERABLE ... (1 header cells ... match)" —
+        # detectably dishonest (a gate caught it), but the artifact must be written
+        # honest, not merely written so that a test can catch the lie.
+        + "; RMR-couronne composition "
+        + (f"NOT ANSWERABLE from what this run read of this workbook "
+           f"({e['n_rmr_cells']} header cells and {e['n_rmr_labels']} geography labels "
+           f"match a metropolitan-area marker)"
+           if not e["n_rmr_cells"] and not e["n_rmr_labels"] else
+           f"UNSETTLED — {e['n_rmr_cells']} header cell(s) and {e['n_rmr_labels']} "
+           f"geography label(s) DO match a metropolitan-area marker; inspect them before "
+           f"treating the question as unanswerable from this file")
+        + "`  (RECORDED OBSERVATION — see §3c; changes no "
+        "verdict. No second source was consulted to close it, per steering ruling G)",
+        "",
+        "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
+        "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "
+        "the RA14/15/16 rows keep their `ra_proxy` flag (spec §8): they remain ranking "
+        "members, never balance participants, never emitted in `ScenarioPrior`. Nothing in "
+        "this note licenses a v0 loader change.",
+        "",
+    ]
+    return body
 
 
 def main() -> None:
@@ -1504,116 +1823,8 @@ def main() -> None:
     # The premise clause, a FUNCTION of the live read. A LOCATED contradicts the premise only
     # while the premise is actually in the spec; once amended, "CONTRADICTED" would be the
     # note asserting a conflict with text that no longer exists.
-    premise_token = {
-        "PREMISE STANDS": "CONTRADICTED — ESCALATION",
-        "AMENDED": "ALREADY AMENDED — no live conflict remains",
-        "INDETERMINATE": "INDETERMINATE — the spec row did not match either marker",
-        "NOT MEASURED THIS RUN": "NOT CHECKED — the spec file was not read this run",
-    }[spec["state"]]
-
     if verdict == "LOCATED":
-        e = evidence
-        ck = e["ckan"]
-        scope = (f"the {e['n_locs']} ISQ sitemap locs swept in §2 ({e['n_swept']} matched the "
-                 f"MRC×population predicate, {e['n_eligible']} eligible)")
-        if ck["measured"]:
-            scope += (f" and the {ck['n_swept']} CKAN packages swept in §1 from a "
-                      f"{ck['n_catalogue']}-package catalogue")
-        else:
-            scope += " (the CKAN boundary was NOT MEASURED this run — see §1)"
-        # Every clause below is a FUNCTION of a computed value, so a gloss cannot contradict
-        # the number it sits beside.
-        couronne = (f"{len(e['hits'])} of {e['n_targets']} declared couronne MRC targets found "
-                    f"by exact name search")
-        couronne += (" — ALL declared targets present" if e["couronne_complete"]
-                     else f" — MISSING: {e['misses']}")
-        body += [
-            "- `DECISION-VERDICT: LOCATED`",
-            f"- `DECISION-RESOURCE-URL: {e['url']}`",
-            f"- `DECISION-HTTP-STATUS: {e['status']} ({e['ctype'] or 'no content-type'}, "
-            f"Content-Length {e['length'] or 'unreported'})`  (observed by GET this run; the "
-            f"same url answered HTTP {e['head_status']} to HEAD"
-            + (" — the methods DISAGREE here, so a HEAD-only hunt would miss this file)"
-               if e["head_disagrees"] else " — the methods agree here)"),
-            f"- `DECISION-BODY-SHAPE: {e['nbytes']} bytes downloaded, magic-byte prefix "
-            f"matches {XLSX_MAGIC.hex()}, opened to sheets {e['sheets']}, MRC header cell at "
-            f"row {e['header_row']} column {e['header_col']}, {e['n_labels']} distinct "
-            f"geography labels, "
-            + (f"{len(e['scenarios'])} scenario labels {e['scenarios']}"
-               if e["scen_col"] >= 0 else "no scenario column in this sheet")
-            + "`",
-            # NO backticks inside the token value: `_probe_asserts.token` parses the
-            # backtick-delimited span non-greedily, so an inner backtick truncates the value
-            # and the gate would read a decomposition as a bare number.
-            f"- `DECISION-MRC-LABEL-COUNT: {e['n_labels']} ({e['n_aggregate']} of them in the "
-            f"NN-Name administrative-region-subtotal form + {e['n_fine']} others)`  "
-            f"(distinct labels below the MRC-named header of the opened workbook. Precisely: "
-            f"the header NAMES an MRC axis and this count says that column is populated. It "
-            f"is NOT an MRC count — the column interleaves RA subtotals, hence the split; the "
-            f"full label list is emitted verbatim in §3. And it says NOTHING about the "
-            f"couronne — a large label set is equally consistent with the couronne being "
-            f"absent — which is why the per-target search below is a separate token)",
-            f"- `DECISION-COURONNE-TARGETS: {couronne}`",
-            f"- `DECISION-RA-CORRESPONDENCE: "
-            + (f"{e['n_ra_checked'] - len(e['ra_disagree'])} of {e['n_ra_checked']} declared "
-               f"targets corroborated against the opened workbook's own RA column "
-               f"(column {e['ra_col']}, header {e['ra_head']!r})"
-               + (f"; DISAGREEING: {e['ra_disagree']}" if e["ra_disagree"] else "")
-               if e["ra_col"] >= 0 else
-               "NOT CHECKABLE — the opened workbook publishes no administrative-region column")
-            # MEMBERSHIP is stated as a FUNCTION of what §3 measured. This gloss used to
-            # assert "each declared target is present and carries the RA code" flat out —
-            # and an offline fixture published it beside `2 of 10` and `NOT CHECKABLE`, with
-            # the whole suite green. A gloss beside a conditional value must be conditional.
-            + "`  (MEMBERSHIP only, and only what was measured: "
-            + (f"all {e['n_targets']} declared targets present"
-               if e["couronne_complete"] else
-               f"{len(e['hits'])} of {e['n_targets']} declared targets present")
-            + (f", each carrying the RA code this file declares for it"
-               if e["ra_col"] >= 0 and not e["ra_disagree"] and e["n_ra_checked"] else
-               f", and the RA code was NOT CHECKABLE for {e['n_targets'] - e['n_ra_checked']} "
-               f"of them" if e["n_ra_checked"] < e["n_targets"] else
-               f", with {len(e['ra_disagree'])} RA disagreement(s)")
-            + ". EXHAUSTION is a different question and is computed separately in §3c; the "
-            "RMR-couronne composition is measured there to be unanswerable from this "
-            "workbook. See DECISION-RESIDUAL-II below)",
-            f"- `DECISION-SWEPT-POPULATION: {scope}`",
-            f"- `DECISION-SPEC-PREMISE: {premise_token}`  (state read LIVE from the spec in "
-            f"§4 — {spec['why'] or 'not measured'}. MEASURED THIS RUN: the plan's guessed "
-            f"slugs {guessed_str}, while the resource above answers {e['status']} with a body "
-            f"this run opened and shape-checked. The two together say the 404 was a property "
-            f"of the GUESSED SLUG CONVENTION, not of the data. This note never edits the "
-            f"spec.)",
-            # --- the two RESIDUALS, recorded per steering ruling G. They are OBSERVATIONS:
-            # neither appears in any verdict expression, and §11.6 stands either way.
-            f"- `DECISION-RESIDUAL-I-RA-AXIS: of {e['n_editions_opened']} candidate workbooks "
-            f"opened, {e['n_ra_separate']} publish a SEPARATE administrative-region column, "
-            f"{e['n_ra_named_only']} name the grouping in the geography header ONLY (no "
-            f"per-MRC RA code), {e['n_ra_absent']} carry neither"
-            + ("; the axis is EDITION-SPECIFIC, so a v1 pinning an edition from the latter "
-               "two groups must source it from a different workbook — an unvalidated "
-               "cross-edition join"
-               if e["n_ra_separate"] and (e["n_ra_named_only"] or e["n_ra_absent"]) else
-               "; no edition-specificity found across the candidates opened")
-            + "`  (RECORDED OBSERVATION — see §3b; changes no verdict. This run does not rank "
-            "the editions by recency: no live response states which is current)",
-            # `membership` is COUNTED, never the literal "YES": the same offline fixture that
-            # falsified the gloss above published `membership YES` beside `2 of 10`.
-            f"- `DECISION-RESIDUAL-II-PARTITION: membership {len(e['hits'])} of "
-            f"{e['n_targets']} (§3); exhaustion "
-            + "; ".join(f"{k} -> {_relation_head(v)}" for k, v in e["ra_relation"].items())
-            + f"; RMR-couronne composition NOT ANSWERABLE from this workbook "
-            f"({e['n_rmr_cells']} header cells and {e['n_rmr_labels']} geography labels match "
-            f"a metropolitan-area marker)`  (RECORDED OBSERVATION — see §3c; changes no "
-            "verdict. No second source was consulted to close it, per steering ruling G)",
-            "",
-            "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
-            "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "
-            "the RA14/15/16 rows keep their `ra_proxy` flag (spec §8): they remain ranking "
-            "members, never balance participants, never emitted in `ScenarioPrior`. Nothing in "
-            "this note licenses a v0 loader change.",
-            "",
-        ]
+        body += _decision_located(evidence, spec, guessed_str)
     elif verdict == "NOT-FOUND":
         e = evidence
         ck = e["ckan"]
