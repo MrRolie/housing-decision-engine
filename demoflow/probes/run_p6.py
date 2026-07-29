@@ -148,6 +148,34 @@ HEADER_SCAN_ROWS = 12
 # rows. The label count alone would therefore read as an MRC count and be wrong. This
 # pattern splits the two so the decomposition is emitted instead of the raw total.
 AGGREGATE_LABEL_PATTERN = re.compile(r"^\d{2}\s")
+# Residual (ii) asks whether the declared couronne MRCs COMPOSE the Montréal RMR couronne.
+# That is a metropolitan-area question, so the note must MEASURE whether this file carries a
+# metropolitan axis at all before saying it cannot answer — "no RMR column" is itself a claim.
+RMR_MARKERS = ("rmr", "cma", "métropolitaine", "metropolitaine", "metropolitan")
+# Candidate caption markers §3b tests for CO-OCCURRENCE with the presence/absence of the RA
+# axis. Declared here, tested against the live captions, and reported only when the
+# separation is perfect — never as a cause, and never as a recency ranking.
+EDITION_CAPTION_MARKERS = ("scénarios de 2025", "scenarios de 2025", "scénario référence",
+                           "a2021")
+
+# --- the spec premise this hunt was launched against (READ-ONLY cross-check) ---------
+# The note used to QUOTE spec §8's premise as a typed string. Steering amended §8 after this
+# probe's first run, which turned that quote into a claim about a locked artifact that the
+# artifact no longer made. The premise is therefore READ LIVE from the spec file and the
+# DECISION token is a function of what is found — so the note cannot go stale against the
+# document it cites. Read-only: this probe never writes to docs/specs.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+SPEC_PATH = (_REPO_ROOT / "docs" / "specs"
+             / "2026-07-21-demoflow-demographic-scenario-module-design.md")
+SPEC_ROW_MARK = "couronne-nord precision"
+# Two markers, not one, so the check is three-valued. Absence of the old marker alone would
+# not distinguish "amended" from "the row was rewritten in a way this predicate cannot read";
+# the second marker makes the amended state POSITIVELY identified and leaves a third,
+# honestly-labelled INDETERMINATE branch. The old marker is the FULL phrase "no MRC workbook
+# EXISTS": the amended text quotes "'no MRC workbook (404)' finding", so a shorter marker
+# would match the amendment itself and report the premise as still standing.
+SPEC_OLD_PREMISE_MARK = "no mrc workbook exists"
+SPEC_AMENDED_MARK = "mrc-level isq projection workbooks exist"
 # ZIP local-file-header magic. An HTML error page served at 200 — the wrong-body case R7
 # names — cannot start with these four bytes.
 XLSX_MAGIC = b"PK\x03\x04"
@@ -170,15 +198,19 @@ _SCOPE = ("SCOPE OF THIS HEADER (it claims only what it can enforce): the resolv
           "observed HTTP status / content-type / declared length / magic-byte result, the "
           "HEAD-vs-GET comparison, the opened workbook's sheet names, header position, "
           "geography-label count and label list, its scenario column, the per-target "
-          "couronne name search AND the per-target administrative-region corroboration are "
-          "ALL emitted by this run from live responses. The quoted strings are verbatim "
-          "from live responses. Every absence claim is scoped to what was actually swept — "
+          "couronne name search, the per-target administrative-region corroboration, the "
+          "per-edition RA-column probe of §3b, the per-RA membership sets of §3c and the "
+          "spec-premise state of §4 are ALL emitted by this run from live reads. The quoted "
+          "strings are verbatim. Every absence claim is scoped to what was actually swept — "
           "never to what exists. What this run does NOT compute, and therefore does not "
-          "claim: that the declared couronne MRCs EXHAUST RA14/15/16, or that they exactly "
-          "compose the Montréal RMR's couronne — the RA check establishes MEMBERSHIP, not a "
-          "partition. Nor does it claim anything about the candidates it did not open: "
-          "exactly ONE workbook is opened and shape-checked, and the §2 table's other rows "
-          "carry status-and-prefix evidence only.")
+          "claim: which of the swept editions is CURRENT (no live response states it, so "
+          "§3b ranks none and emits each caption instead); that any cross-edition join is "
+          "VALID (§3b tests no label-set agreement or vintage compatibility between two "
+          "workbooks); and whether the declared MRCs compose the Montréal RMR couronne (§3c "
+          "measures that this file carries no metropolitan-area axis and records the limit "
+          "rather than reaching for a second source). ONE workbook is opened in full; §3b "
+          "opens the others' HEADER ROWS ONLY, so its rows carry header-scoped evidence and "
+          "say nothing about those files' data below the header.")
 _CITED_LABEL = "Quoted verbatim from the live responses:"
 
 
@@ -239,6 +271,11 @@ def _probe_url(url: str, *, method: str = "GET", nbytes: int = PREFIX_BYTES) -> 
                 if exc.headers else "",
                 "length": (exc.headers.get("Content-Length") or "") if exc.headers else "",
                 "prefix": b"", "error": f"HTTPError {exc.code}"}
+
+
+def _spec_text() -> str:
+    """The spec file's text. NON-GATING boundary (a committed, READ-ONLY repo artifact)."""
+    return SPEC_PATH.read_text(encoding="utf-8")
 
 
 def _download(url: str) -> bytes:
@@ -327,6 +364,31 @@ def _find_column(rows: list[tuple], header_row: int, predicate) -> tuple[int, st
         if text and predicate(_norm(text)):
             return c, text
     return -1, ""
+
+
+def _ra_axis_usable(ra_col: int, geo_col: int) -> bool:
+    """Is there a SEPARATE administrative-region column, i.e. a per-MRC RA code?
+
+    ONE rule, three call sites (§3's corroboration, §3b's per-edition probe, §3c's
+    membership sets). Some editions head their GEOGRAPHY column "MRC par région
+    administrative": that cell NAMES the grouping but carries no code, so treating it as
+    an RA column compares every label against itself — which reports NOT CORROBORATED for
+    a file that simply does not publish the axis, and manufactures a DISJOINT relation in
+    §3c. Three copies of this test is exactly the "two rules for one job" defect a later
+    probe copies wrongly (run_p5b.py's `_norm`), so it lives here."""
+    return ra_col >= 0 and ra_col != geo_col
+
+
+def _relation_head(relation: str) -> str:
+    """The set-algebra VERDICT of a relation string, without its explanatory tail.
+
+    `_ra_membership` returns e.g. `"PROPER SUBSET — declared targets do NOT exhaust this RA"`
+    and `"NOT COMPUTABLE (no administrative-region column in this workbook)"`. The DECISION
+    token needs the verdict alone, and it must come out the same way for BOTH tail forms —
+    otherwise the token is machine-checkable on one shape and free prose on the other, which
+    is how a gate ends up unable to see the case that matters.
+    """
+    return re.split(r"\s+[—(]", relation, maxsplit=1)[0].strip()
 
 
 def _declared_ra_number(key: str) -> str:
@@ -465,6 +527,184 @@ def _guard_not_found(locs: list[str], eligible: list, verified: list, ckan: dict
             f"enumerated {ckan['n_swept']} — an absence claim over an EMPTY catalogue is the "
             f"vacuous-absence shape, not a NOT-FOUND"
         )
+
+
+# --- residual probes (RECORDED OBSERVATIONS — steering ruling G; never verdict-moving) ---
+def _probe_editions(verified: list[str], picked: str, picked_data: bytes) -> list[dict]:
+    """Open every verified candidate and record whether it carries an RA column.
+
+    Residual (i). Only the first `HEADER_SCAN_ROWS` rows are materialised — the question is
+    about the HEADER, so a 17MB candidate costs its download and a dozen rows, not a full
+    parse. The picked workbook REUSES the bytes already downloaded rather than fetching them
+    twice, so the two sections cannot disagree about the same file.
+
+    A candidate that fails to open is recorded as `opened: False` WITH its exception type and
+    message, never silently dropped: a workbook this run could not read is a real observation
+    about that candidate, and dropping it would shrink the population the §3b counts are
+    scoped to without saying so. This cannot mask a fault in the picked workbook — that one
+    is already open and guarded before this runs.
+    """
+    out: list[dict] = []
+    for url in verified:
+        row = {"url": url, "opened": False, "error": "", "caption": "", "mrc_head": "",
+               "ra_head": "", "ra_col": -1, "geo_col": -1, "ra_separate": False,
+               "sheets": []}
+        try:
+            raw = picked_data if url == picked else _download(url)
+            sheets, rows = _workbook_rows(raw, max_rows=HEADER_SCAN_ROWS)
+            hr, hc = _find_header(rows)
+            row["sheets"] = sheets
+            row["caption"] = (str(rows[0][0]).strip()
+                              if rows and rows[0] and rows[0][0] else "")
+            if hr is not None and hc is not None:
+                row["mrc_head"] = str(rows[hr][hc]).strip()
+                row["geo_col"] = hc
+                col, head = _find_column(
+                    rows, hr,
+                    lambda t: bool(RA_HEADER_PATTERN.match(t))
+                    or any(k in t for k in RA_HEADER_MARKS))
+                row["ra_col"], row["ra_head"] = col, head
+                # THE DISTINCTION THAT MATTERS, and the one a symmetric gloss would destroy:
+                # some editions head their GEOGRAPHY column "MRC par région administrative".
+                # That cell NAMES an RA grouping; it is not a separate RA column, and no RA
+                # code can be read from it per MRC. Counting those together with the editions
+                # that publish a real `RA1` column would report a machine-readable axis where
+                # none exists — the v1 constraint turns on exactly this difference.
+                row["ra_separate"] = _ra_axis_usable(col, hc)
+            row["opened"] = True
+        except Exception as exc:
+            row["error"] = f"{type(exc).__name__}: {exc}"
+        out.append(row)
+    return out
+
+
+def _ra_membership(rows: list[tuple], header_row: int, geo_col: int, ra_col: int, *,
+                   usable: bool) -> tuple[dict, dict]:
+    """For each DECLARED RA, the full MRC set this workbook assigns to it, and the relation
+    the declared targets bear to that set.
+
+    Residual (ii). The relation is computed with set algebra over the two sets — never
+    described in prose — so the word printed in the note cannot disagree with the members
+    printed beside it. `usable` is `_ra_axis_usable`'s verdict, passed in rather than
+    re-derived: everything here reports `NOT COMPUTABLE` when it is False, and re-deriving
+    the rule would let this section and §3 drift into disagreeing about the same workbook.
+    """
+    members: dict[str, dict] = {}
+    relation: dict[str, str] = {}
+    for ra_key, targets in COURONNE_MRC_BY_RA.items():
+        declared = set(targets)
+        if not usable:
+            members[ra_key] = {"members": [], "declared": declared, "excluded": 0,
+                               "undeclared": [], "missing": sorted(declared)}
+            relation[ra_key] = (
+                "NOT COMPUTABLE (no administrative-region column in this workbook)"
+                if ra_col < 0 else
+                "NOT COMPUTABLE (this workbook names its RA grouping in the geography header "
+                "only — there is no separate column carrying a per-MRC RA code)")
+            continue
+        want = _declared_ra_number(ra_key)
+        found_set, excluded = set(), 0
+        for row in rows[header_row + 1:]:
+            if geo_col >= len(row) or ra_col >= len(row):
+                continue
+            if row[geo_col] is None or row[ra_col] is None:
+                continue
+            label = str(row[geo_col]).strip()
+            if not label or str(row[ra_col]).strip() != want:
+                continue
+            # The RA's OWN subtotal line carries the same RA code as its MRCs. Counting it as
+            # a member would inflate every set by one and make an EQUAL relation unreachable.
+            if AGGREGATE_LABEL_PATTERN.match(label):
+                excluded += 1
+                continue
+            found_set.add(label)
+        members[ra_key] = {
+            "members": sorted(found_set), "declared": declared, "excluded": excluded,
+            "undeclared": sorted(found_set - declared),
+            "missing": sorted(declared - found_set),
+        }
+        if not found_set:
+            relation[ra_key] = "EMPTY (this workbook assigns no MRC to that RA number)"
+        elif declared == found_set:
+            relation[ra_key] = "EQUAL — the declared set exhausts this RA"
+        elif declared < found_set:
+            relation[ra_key] = "PROPER SUBSET — declared targets do NOT exhaust this RA"
+        elif found_set < declared:
+            relation[ra_key] = "PROPER SUPERSET — this file declares MRCs the workbook does " \
+                               "not put under that RA"
+        elif declared & found_set:
+            relation[ra_key] = "OVERLAPPING — neither contains the other"
+        else:
+            relation[ra_key] = "DISJOINT — no declared target is under that RA here"
+    return members, relation
+
+
+def _record_spec_premise(note: list[str]) -> dict:
+    """Read spec §8's CURRENT text and compute the state of the premise this hunt tested.
+
+    NON-GATING, and READ-ONLY. This exists because the note previously quoted the premise as
+    a typed string; steering then amended §8, and the quote became a claim about a locked
+    artifact that the artifact no longer made. Reading it live means the note cannot go stale
+    against the document it cites.
+
+    Three-valued on purpose. Absence of the old marker alone cannot distinguish "amended"
+    from "rewritten in a way this predicate cannot read", so the amended state is identified
+    POSITIVELY and anything else is reported as INDETERMINATE rather than guessed.
+    """
+    note += ["## 4. Spec-premise cross-check (RECORDED, non-gating, READ-ONLY)", ""]
+    out = {"measured": False, "state": "NOT MEASURED THIS RUN", "why": "", "quote": ""}
+    try:
+        rows = [ln for ln in _spec_text().splitlines() if SPEC_ROW_MARK in _norm(ln)]
+        if not rows:
+            out.update(measured=True, state="INDETERMINATE",
+                       why=f"no line in the spec contains {SPEC_ROW_MARK!r}")
+        else:
+            line = rows[0]
+            low = _norm(line)
+            old = SPEC_OLD_PREMISE_MARK in low
+            amended = SPEC_AMENDED_MARK in low
+            # The sentences of that row that actually discuss the premise, quoted verbatim.
+            quote = ". ".join(
+                s.strip() for s in line.split(". ")
+                if "mrc" in _norm(s) or SPEC_ROW_MARK in _norm(s)
+            )
+            out.update(
+                measured=True, quote=quote,
+                state=("PREMISE STANDS" if old and not amended else
+                       "AMENDED" if amended and not old else
+                       "INDETERMINATE"),
+                why=(f"old-premise marker {SPEC_OLD_PREMISE_MARK!r} "
+                     f"{'PRESENT' if old else 'absent'}; amended marker "
+                     f"{SPEC_AMENDED_MARK!r} {'PRESENT' if amended else 'absent'}"),
+            )
+        if out["quote"]:
+            Fact.cited("spec §8's CURRENT text on the MRC premise",
+                       f"{SPEC_PATH.name}: \"{out['quote']}\"")
+        note += [
+            f"- Read live from `{SPEC_PATH.relative_to(_REPO_ROOT)}` (READ-ONLY; this probe "
+            f"never writes there). Row located by the marker `{SPEC_ROW_MARK!r}`.",
+            f"- **State: {out['state']}** — {out['why']}.",
+            (f"- Quoted verbatim from the spec as it stands NOW: *\"{out['quote']}\"*"
+             if out["quote"] else
+             "- No premise sentence could be quoted from that row this run."),
+            "",
+            "  Why this is read rather than typed: this note's DECISION block cites spec §8. "
+            "A typed quote of a locked artifact goes stale the moment the artifact is amended "
+            "— which is exactly what happened here — and a stale quote is a claim nothing "
+            "computed. Nothing in this section moves the verdict.",
+            "",
+        ]
+        return out
+    except Exception as exc:
+        out["why"] = f"{type(exc).__name__}: {exc}"
+        note += [
+            f"- `SPEC CROSS-CHECK NOT MEASURED THIS RUN: {out['why']}`",
+            "",
+            "  The spec file could not be read. The DECISION block below therefore states "
+            "that the premise was NOT CHECKED rather than asserting anything about it.",
+            "",
+        ]
+        return out
 
 
 # --- boundary A: Données Québec CKAN ------------------------------------------------
@@ -804,6 +1044,10 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     ra_col, ra_head = _find_column(
         rows, header_row,
         lambda t: bool(RA_HEADER_PATTERN.match(t)) or any(k in t for k in RA_HEADER_MARKS))
+    # Whether the axis is READABLE here — see `_ra_axis_usable`, which is the single rule
+    # §3, §3b and §3c all consult, so none of the three can disagree with the others about
+    # whether this workbook publishes a per-MRC RA code.
+    ra_usable = _ra_axis_usable(ra_col, header_col)
 
     # The DECLARED RA number of each target, checked against the code the LIVE response puts
     # beside that MRC — an independent witness this file does not control (P5b's
@@ -814,7 +1058,7 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     for ra_key, targets in COURONNE_MRC_BY_RA.items():
         want = _declared_ra_number(ra_key)
         for target in targets:
-            if ra_col < 0 or not found[target]:
+            if not ra_usable or not found[target]:
                 ra_observed[target], ra_agrees[target] = [], None
                 continue
             codes = sorted({
@@ -853,7 +1097,7 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         f"{len(ra_checked) - len(ra_disagree)} of {len(ra_checked)}",
         "declared couronne targets whose DECLARED RA number equals the administrative-region "
         "code the opened workbook puts beside that MRC"
-        + (f" (column {ra_col}, header {ra_head!r})" if ra_col >= 0
+        + (f" (column {ra_col}, header {ra_head!r})" if ra_usable
            else " — this edition publishes no RA column, so NONE was checkable"))
 
     note += [
@@ -943,7 +1187,7 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         + ("(none missed this run)." if couronne_complete
            else f"— MISSING this run: {misses}."),
         f"- **The RA↔MRC correspondence — {f_ra} declared targets corroborated.** "
-        + (f"This edition DOES publish an administrative-region column (column {ra_col}, header "
+        + (f"This edition DOES publish a SEPARATE administrative-region column (column {ra_col}, header "
            f"`{ra_head}`), so the RA number this file DECLARES for each target is checked "
            f"against the code the live response puts beside that MRC — an independent witness "
            f"nothing here controls. Flip a declared key to the wrong RA and the check stops "
@@ -951,15 +1195,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
            + (f" **{len(ra_disagree)} target(s) DISAGREE: {ra_disagree} — treat every RA "
               f"grouping in this note as UNSUPPORTED until reconciled.**" if ra_disagree
               else "")
-           if ra_col >= 0 else
-           "This edition publishes NO administrative-region column — its header row is listed "
+           if ra_usable else
+           "This edition publishes NO SEPARATE administrative-region column — its header row is listed "
            "verbatim above — so NO target was checkable here and this run corroborates no RA "
            "grouping at all.")
-        + " Membership is what this establishes; it is NOT a partition. This run does not "
-          "compute whether these MRCs EXHAUST RA14/15/16, nor whether they exactly compose the "
-          "Montréal RMR's couronne — a v1 Geography-enum extension needs both, and they remain "
-          "open. Scoped to the ONE workbook opened here: nothing is claimed about the RA column "
-          "of the other candidates in the §2 table, which were not opened.",
+        + " What this establishes is MEMBERSHIP — each declared target is present and sits "
+          "under the RA number this file declares for it. It is NOT a partition, and this "
+          "section makes no partition claim: §3c computes what the workbook can actually say "
+          "about exhaustion. Scoped to the ONE workbook opened here; §3b opens the other "
+          "verified candidates and reports the RA axis across them, so the edition scope of "
+          "this corroboration is measured rather than assumed.",
         "",
         f"- **Which swept files would feed a v1 extension.** demoflow consumes two ISQ families "
         f"at RMR level; the DECLARED term map {({k: list(v) for k, v in DEMOFLOW_RMR_FAMILY.items()})} "
@@ -972,7 +1217,208 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
         note.append(f"  - **{family}** -> {len(fam)} eligible slug(s) match: {fam or 'none'}")
     note.append("")
 
+    # ===== §3b — RESIDUAL (i): is the RA↔MRC axis EDITION-SPECIFIC? =================
+    # A RECORDED OBSERVATION (steering ruling G), not a verdict: nothing below can move
+    # DECISION-VERDICT. Every verified candidate is opened — the picked one reuses the bytes
+    # already downloaded — and each is asked the SAME two questions its own header answers.
+    editions = _probe_editions(verified, picked, data)
+    opened = [e for e in editions if e["opened"]]
+    # THREE states, not two. Collapsing the middle one would report a machine-readable axis
+    # where the edition merely NAMES the grouping in its geography header.
+    ra_separate = [e for e in opened if e["ra_separate"]]
+    ra_named_only = [e for e in opened if e["ra_col"] >= 0 and not e["ra_separate"]]
+    ra_absent = [e for e in opened if e["ra_col"] < 0]
+
+    f_editions = Fact.derived(
+        f"{len(ra_separate)} / {len(ra_named_only)} / {len(ra_absent)}",
+        f"of the {len(opened)} candidate workbooks opened this run: those with a SEPARATE "
+        f"administrative-region column, those whose GEOGRAPHY header merely names an RA "
+        f"grouping, and those with neither")
+
+    note += [
+        "## 3b. Residual (i) — is the RA↔MRC axis EDITION-SPECIFIC? (RECORDED, non-gating)",
+        "",
+        f"Every one of the {len(verified)} verified candidates is opened and asked the same "
+        f"question its own header row answers. The split is **{f_editions}** — a SEPARATE RA "
+        f"column / an RA grouping NAMED in the geography header only / neither.",
+        "",
+        "That middle state is kept distinct on purpose. Three editions head their GEOGRAPHY "
+        "column `MRC par région administrative`: that cell NAMES an RA grouping, but there is "
+        "no second column, so **no RA code can be read per MRC** from those files. Counting "
+        "them with the `RA1` editions would report a machine-readable axis where none exists "
+        "— and the v1 constraint turns on exactly that difference.",
+        "",
+        "Each row's edition is its OWN caption cell, verbatim. This run does NOT rank the "
+        "editions by recency: no live response states which is current, so that judgment is "
+        "left to the reader with the captions in front of them.",
+        "",
+        "| candidate (slug) | opened? | geography header | RA axis | caption cell A1 "
+        "(verbatim) |",
+        "|---|---|---|---|---|",
+    ]
+    for e in editions:
+        note.append(
+            f"| `{_slug(e['url'])}` | "
+            + ("yes" if e["opened"] else f"**NO — {e['error']}**") + " | "
+            + (f"`{e['mrc_head']}`" if e["opened"] else "—") + " | "
+            + (f"**SEPARATE column `{e['ra_head']}`** (col {e['ra_col']})" if e["ra_separate"]
+               else f"NAMED IN THE GEOGRAPHY HEADER ONLY (`{e['ra_head']}`, col {e['ra_col']} "
+                    f"= the geography column) — no per-MRC RA code" if e["ra_col"] >= 0
+               else ("**none**" if e["opened"] else "—")) + " | "
+            + (f"*{e['caption']}*" if e["caption"] else "(no caption cell)") + " |"
+        )
+
+    # A computed CO-OCCURRENCE over the caption text, not a recency ranking: which caption
+    # markers partition the has-axis group from the no-axis group. Emitted only when the
+    # separation is PERFECT in this population, and labelled as co-occurrence — a marker that
+    # sorts 15 files is not thereby a cause, and this run tests no causal claim.
+    cooccur = []
+    for marker in EDITION_CAPTION_MARKERS:
+        in_sep = {e["url"] for e in ra_separate if marker in _norm(e["caption"])}
+        in_abs = {e["url"] for e in ra_absent if marker in _norm(e["caption"])}
+        if in_abs and len(in_abs) == len(ra_absent) and not in_sep:
+            cooccur.append((marker, len(in_abs)))
+
+    note += [
+        "",
+        f"- **Measured consequence for a v1 extension.** "
+        + (f"The axis IS edition-specific: {len(ra_separate)} opened candidate(s) publish a "
+           f"separate RA column, {len(ra_named_only)} name the grouping in the geography "
+           f"header only, and {len(ra_absent)} carry neither. So a v1 that pins a workbook "
+           f"from either of the latter two groups would get its projection values and its "
+           f"machine-readable RA↔MRC axis from DIFFERENT workbooks — a cross-edition join. "
+           f"This run does NOT validate such a join: it tests no label-set agreement, no "
+           f"vintage compatibility and no reconciliation between any two editions. That is a "
+           f"v1 design constraint, recorded here."
+           if ra_separate and (ra_named_only or ra_absent) else
+           f"All {len(opened)} opened candidate(s) publish a separate RA column, so this run "
+           f"finds NO edition-specificity across the population it opened."
+           if ra_separate else
+           f"NO opened candidate publishes a separate RA column. If the picked workbook is "
+           f"among them this CONTRADICTS §3's corroboration — inspect before relying on "
+           f"either."),
+        (f"- **Caption co-occurrence (computed, NOT a recency ranking).** Every one of the "
+         f"{len(ra_absent)} no-axis candidates carries the caption marker(s) "
+         f"{[m for m, _ in cooccur]}, and NO candidate with a separate RA column does — a "
+         f"perfect separation across the {len(opened)} files opened. This run tests only the "
+         f"CO-OCCURRENCE: it does not claim the marker causes the absence, does not rank the "
+         f"editions, and says nothing about files outside the swept set."
+         if cooccur else
+         f"- **Caption co-occurrence:** no caption marker in {list(EDITION_CAPTION_MARKERS)} "
+         f"separates the no-axis group from the separate-RA-column group in this population, "
+         f"so this run offers no caption-level explanation of the split."),
+        "- Scope asymmetry, stated because the two halves differ: the *candidate population* "
+        "is sweep-scoped (every verified candidate in §2), while each *edition label* is "
+        "file-scoped (that workbook's own caption). And this whole section is "
+        "HEADER-ROW-scoped — only the first "
+        f"{HEADER_SCAN_ROWS} rows of each non-picked candidate were read, so it says nothing "
+        "about their data below the header.",
+        "",
+    ]
+
+    # ===== §3c — RESIDUAL (ii): membership vs partition ============================
+    # Also a RECORDED OBSERVATION. §3 established MEMBERSHIP (each declared target is
+    # present). The question here is EXHAUSTION: what is the FULL set of MRCs this workbook
+    # assigns to each declared RA, and how do the declared targets relate to it?
+    ra_members, ra_relation = _ra_membership(rows, header_row, header_col, ra_col,
+                                             usable=ra_usable)
+    # Can this file answer the OTHER half — whether those MRCs compose the Montréal RMR
+    # couronne? That is a metropolitan-area question, so MEASURE whether the file carries a
+    # metropolitan axis at all rather than asserting it does not.
+    rmr_cells = [h for h in header_cells if any(k in _norm(h) for k in RMR_MARKERS)]
+    rmr_labels = [m for m in labels if any(k in _norm(m) for k in RMR_MARKERS)]
+    f_rmr = Fact.derived(
+        f"{len(rmr_cells)} + {len(rmr_labels)}",
+        "header cells and geography labels of the opened workbook matching a metropolitan-area "
+        f"marker {list(RMR_MARKERS)}")
+
+    note += [
+        "## 3c. Residual (ii) — membership vs partition (RECORDED, non-gating)",
+        "",
+        f"§3 established MEMBERSHIP: each declared target is present, under the RA number this "
+        f"file declares for it. This section asks the harder question — **EXHAUSTION**: what is "
+        f"the FULL set of MRCs the opened workbook assigns to each declared RA, and how do the "
+        f"declared targets relate to it? Rows in the `NN  Name` administrative-region-SUBTOTAL "
+        f"form are EXCLUDED from these sets (they are the RA's own subtotal line, not one of "
+        f"its MRCs); the exclusion count is printed per RA so it can be checked.",
+        "",
+    ]
+    if not ra_usable:
+        note += [
+            "- **NOT COMPUTABLE from this workbook**: "
+            + ("it publishes no administrative-region column at all"
+               if ra_col < 0 else
+               f"its RA grouping is NAMED in the geography header (`{ra_head}`, column "
+               f"{ra_col}) but there is no SEPARATE column, so no per-MRC RA code exists to "
+               f"read")
+            + ". No MRC can be assigned to an RA here and no exhaustion relation exists to "
+            "compute. Recorded as a limit, not resolved elsewhere.",
+            "",
+        ]
+    else:
+        note += [
+            "| declared RA | MRCs the workbook assigns to it | declared targets | relation "
+            "| RA-subtotal rows excluded |",
+            "|---|---:|---:|---|---:|",
+        ]
+        for ra_key in COURONNE_MRC_BY_RA:
+            m = ra_members[ra_key]
+            note.append(
+                f"| {ra_key} | {len(m['members'])} | {len(m['declared'])} | "
+                f"**{ra_relation[ra_key]}** | {m['excluded']} |"
+            )
+        note += [
+            "",
+            "The MRCs each declared RA carries, verbatim, with the declared targets marked — "
+            "so the relation above is checkable rather than taken:",
+            "",
+        ]
+        for ra_key in COURONNE_MRC_BY_RA:
+            m = ra_members[ra_key]
+            marked = ", ".join(
+                f"**{x}**" if x in m["declared"] else x for x in m["members"]
+            ) or "none"
+            note.append(f"- **{ra_key}** -> {marked}")
+            if m["undeclared"]:
+                note.append(f"  - present in the workbook but NOT declared by this file: "
+                            f"{m['undeclared']}")
+            if m["missing"]:
+                note.append(f"  - declared by this file but ABSENT from the workbook's set for "
+                            f"this RA: {m['missing']}")
+        note += [
+            "",
+            f"- **What the relation means, and only that.** A `PROPER SUBSET` says the declared "
+            f"targets are SOME of the MRCs this workbook puts under that RA — so this file's "
+            f"own RA grouping is WIDER than the couronne set declared here, and the declared "
+            f"set therefore does NOT exhaust the RA. That is a statement about this file's RA "
+            f"assignment; it is NOT a statement about which MRCs belong to the couronne, which "
+            f"nothing here measures.",
+            "",
+        ]
+    note += [
+        f"- **What this workbook CANNOT answer, measured rather than asserted.** Whether the "
+        f"declared MRCs exactly COMPOSE the Montréal RMR couronne is a metropolitan-area "
+        f"question. Matching the metropolitan-area markers {list(RMR_MARKERS)} against this "
+        f"file's own header cells and geography labels yields **{f_rmr}** hits respectively"
+        + (f" — with zero of each, nothing in this file's geography axis names a metropolitan "
+           f"area, so the file supplies no RMR membership for any MRC and the couronne-"
+           f"composition question is NOT ANSWERABLE from it. Per steering ruling G this run "
+           f"deliberately does NOT consult a second source to close it: the limit is the "
+           f"result."
+           if not rmr_cells and not rmr_labels else
+           f" — a metropolitan-area marker DOES appear here, so this file may carry an RMR "
+           f"axis after all; inspect the hits above before treating the couronne question as "
+           f"unanswerable from it. Cells: {rmr_cells}; labels: {rmr_labels[:10]}.")
+        + " Either way this changes no verdict: §11.6 stands — a find enables v1, never v0.",
+        "",
+    ]
+
     evidence = {
+        "editions": editions, "n_editions_opened": len(opened),
+        "n_ra_separate": len(ra_separate), "n_ra_named_only": len(ra_named_only),
+        "n_ra_absent": len(ra_absent),
+        "ra_members": ra_members, "ra_relation": ra_relation,
+        "n_rmr_cells": len(rmr_cells), "n_rmr_labels": len(rmr_labels),
         "ckan": ckan,
         "n_locs": len(locs), "n_xlsx": len(xlsx), "n_swept": len(swept),
         "n_eligible": len(eligible), "n_verified": len(verified),
@@ -1037,8 +1483,21 @@ def main() -> None:
             "",
         ]
 
-    body += ["## 4. DECISION", ""]
+    # NON-GATING and runs on EVERY branch, so the DECISION block's premise statement is a
+    # function of the spec as it stands rather than of what this run happened to find.
+    spec = _record_spec_premise(body)
+
+    body += ["## 5. DECISION", ""]
     guessed_str = _guessed_str(evidence)
+    # The premise clause, a FUNCTION of the live read. A LOCATED contradicts the premise only
+    # while the premise is actually in the spec; once amended, "CONTRADICTED" would be the
+    # note asserting a conflict with text that no longer exists.
+    premise_token = {
+        "PREMISE STANDS": "CONTRADICTED — ESCALATION",
+        "AMENDED": "ALREADY AMENDED — no live conflict remains",
+        "INDETERMINATE": "INDETERMINATE — the spec row did not match either marker",
+        "NOT MEASURED THIS RUN": "NOT CHECKED — the spec file was not read this run",
+    }[spec["state"]]
 
     if verdict == "LOCATED":
         e = evidence
@@ -1090,16 +1549,36 @@ def main() -> None:
                + (f"; DISAGREEING: {e['ra_disagree']}" if e["ra_disagree"] else "")
                if e["ra_col"] >= 0 else
                "NOT CHECKABLE — the opened workbook publishes no administrative-region column")
-            + "`  (MEMBERSHIP only. This run does NOT compute whether these MRCs partition "
-            "RA14/15/16 or exactly compose the Montréal RMR's couronne — a v1 Geography-enum "
-            "extension needs both and they remain open)",
+            + "`  (MEMBERSHIP only — each declared target is present and carries the RA code "
+            "this file declares for it. EXHAUSTION is a different question and is computed "
+            "separately in §3c; the RMR-couronne composition is measured there to be "
+            "unanswerable from this workbook. See DECISION-RESIDUAL-II below)",
             f"- `DECISION-SWEPT-POPULATION: {scope}`",
-            f"- `DECISION-SPEC-PREMISE: CONTRADICTED — ESCALATION`  (spec §8 records "
-            f"\"no MRC workbook exists — probed 404, 2026-07-21\". MEASURED THIS RUN: the "
-            f"plan's guessed slugs {guessed_str}, while the resource above answers "
-            f"{e['status']} with a body this run opened and shape-checked. The two together "
-            f"say the 404 was a property of the GUESSED SLUG CONVENTION, not of the data. This "
-            f"note does NOT edit the spec — the contradiction is escalated, per envelope.)",
+            f"- `DECISION-SPEC-PREMISE: {premise_token}`  (state read LIVE from the spec in "
+            f"§4 — {spec['why'] or 'not measured'}. MEASURED THIS RUN: the plan's guessed "
+            f"slugs {guessed_str}, while the resource above answers {e['status']} with a body "
+            f"this run opened and shape-checked. The two together say the 404 was a property "
+            f"of the GUESSED SLUG CONVENTION, not of the data. This note never edits the "
+            f"spec.)",
+            # --- the two RESIDUALS, recorded per steering ruling G. They are OBSERVATIONS:
+            # neither appears in any verdict expression, and §11.6 stands either way.
+            f"- `DECISION-RESIDUAL-I-RA-AXIS: of {e['n_editions_opened']} candidate workbooks "
+            f"opened, {e['n_ra_separate']} publish a SEPARATE administrative-region column, "
+            f"{e['n_ra_named_only']} name the grouping in the geography header ONLY (no "
+            f"per-MRC RA code), {e['n_ra_absent']} carry neither"
+            + ("; the axis is EDITION-SPECIFIC, so a v1 pinning an edition from the latter "
+               "two groups must source it from a different workbook — an unvalidated "
+               "cross-edition join"
+               if e["n_ra_separate"] and (e["n_ra_named_only"] or e["n_ra_absent"]) else
+               "; no edition-specificity found across the candidates opened")
+            + "`  (RECORDED OBSERVATION — see §3b; changes no verdict. This run does not rank "
+            "the editions by recency: no live response states which is current)",
+            f"- `DECISION-RESIDUAL-II-PARTITION: membership YES (§3); exhaustion "
+            + "; ".join(f"{k} -> {_relation_head(v)}" for k, v in e["ra_relation"].items())
+            + f"; RMR-couronne composition NOT ANSWERABLE from this workbook "
+            f"({e['n_rmr_cells']} header cells and {e['n_rmr_labels']} geography labels match "
+            f"a metropolitan-area marker)`  (RECORDED OBSERVATION — see §3c; changes no "
+            "verdict. No second source was consulted to close it, per steering ruling G)",
             "",
             "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
             "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "
@@ -1119,9 +1598,15 @@ def main() -> None:
             f"from a {ck['n_catalogue']}-package catalogue`",
             "- `DECISION-NOT-FOUND-SCOPE: an absence AMONG THE POPULATIONS NAMED ABOVE — this "
             "run does NOT claim that no MRC-level ISQ source exists`",
-            f"- `DECISION-SPEC-PREMISE: NOT CONTRADICTED BY THIS RUN`  (spec §8's \"no MRC "
-            f"workbook exists\" stands unchallenged by this sweep; the plan's guessed slugs "
-            f"answered {guessed_str})",
+            "- `DECISION-RESIDUAL-I-RA-AXIS: NOT MEASURED THIS RUN`  (no candidate workbook "
+            "was opened, so the RA axis was not read in any edition)",
+            "- `DECISION-RESIDUAL-II-PARTITION: NOT MEASURED THIS RUN`  (same reason)",
+            # Two DIFFERENT facts, kept apart: what THIS RUN did (located nothing, so it
+            # contradicts nothing) and what the spec CURRENTLY says (read live in §4). Fusing
+            # them would let a run report the spec's state as its own finding.
+            f"- `DECISION-SPEC-PREMISE: NOT CONTRADICTED BY THIS RUN (spec state read live: "
+            f"{spec['state']})`  (this sweep located nothing, so it challenges no premise; the "
+            f"plan's guessed slugs answered {guessed_str})",
             "",
             "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
             "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "
@@ -1137,6 +1622,11 @@ def main() -> None:
             "boundary failure above). The searched population was too thin, or a boundary "
             "answered with a body that cannot support a verdict — either way this is a "
             "recorded observation, not an invented find and not a hollow not-found.",
+            f"- `DECISION-SPEC-PREMISE: NOT CONTRADICTED BY THIS RUN (spec state read live: "
+            f"{spec['state']})`  (a run that recorded no finding challenges no premise)",
+            "- `DECISION-RESIDUAL-I-RA-AXIS: NOT MEASURED THIS RUN`  (the hunt failed before "
+            "any candidate workbook was opened — see the boundary failure above)",
+            "- `DECISION-RESIDUAL-II-PARTITION: NOT MEASURED THIS RUN`  (same reason)",
             "",
             "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
             "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "

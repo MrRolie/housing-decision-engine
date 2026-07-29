@@ -281,11 +281,82 @@ def test_p6_records_a_resolved_verdict():
             f"table contradict each other."
         )
 
-    assert premise.upper().startswith("CONTRADICTED"), (
-        f"{NOTE} records LOCATED but `DECISION-SPEC-PREMISE` is {premise!r}. A body-verified "
-        f"MRC workbook contradicts spec §8's 'no MRC workbook exists', and the note must say "
-        f"so — an escalation that goes unstated is the finding being lost."
+    # The premise token must AGREE with the state §4 read live out of the spec file. The
+    # note used to TYPE the premise as a quoted string; steering then amended §8 and the
+    # quote became a claim about a locked artifact the artifact no longer made. This gate is
+    # what keeps the DECISION line and the live read from drifting apart again.
+    state = re.search(r"\*\*State: ([A-Z ]+)\*\*", text)
+    assert state, f"{NOTE} records no §4 spec-premise state line."
+    expected = {
+        "PREMISE STANDS": "CONTRADICTED — ESCALATION",
+        "AMENDED": "ALREADY AMENDED — no live conflict remains",
+        "INDETERMINATE": "INDETERMINATE — the spec row did not match either marker",
+        "NOT MEASURED THIS RUN": "NOT CHECKED — the spec file was not read this run",
+    }[state.group(1).strip()]
+    assert premise == expected, (
+        f"{NOTE}'s DECISION-SPEC-PREMISE is {premise!r} but §4 read the spec state as "
+        f"{state.group(1).strip()!r}, which requires {expected!r}. A LOCATED contradicts the "
+        f"premise only while the premise is actually IN the spec — once amended, "
+        f"'CONTRADICTED' would assert a conflict with text that no longer exists."
     )
+
+    # --- the two RESIDUALS (steering ruling G): recorded, computed, self-consistent ------
+    residual_i = _token(text, "DECISION-RESIDUAL-I-RA-AXIS")
+    assert residual_i is not None and residual_i.upper() not in UNRESOLVED, (
+        f"{NOTE} claims LOCATED but records no `DECISION-RESIDUAL-I-RA-AXIS` ({residual_i!r})."
+    )
+    split = re.search(r"of (\d+) candidate workbooks opened, (\d+) publish a SEPARATE "
+                      r"administrative-region column, (\d+) name the grouping in the "
+                      r"geography header ONLY \(no per-MRC RA code\), (\d+) carry neither",
+                      residual_i)
+    assert split, (
+        f"{NOTE}'s DECISION-RESIDUAL-I-RA-AXIS states no three-way split: {residual_i!r}. "
+        f"Two states would fuse the editions that publish a real RA column with those whose "
+        f"GEOGRAPHY header merely names the grouping — reporting a machine-readable axis "
+        f"where none exists."
+    )
+    n_opened, n_sep, n_named, n_none = (int(g) for g in split.groups())
+    assert n_sep + n_named + n_none == n_opened, (
+        f"{NOTE}'s residual-(i) split does not add up: {residual_i!r}."
+    )
+    # The counts must agree with the §3b TABLE they summarise. This is the gate for a defect
+    # that actually shipped here: the split read `0 / 0 / 0` while the table one line below
+    # it showed `SEPARATE column RA1` rows. Nothing compared the two.
+    table = text.split("## 3b.")[1].split("## 3c.")[0]
+    rows_sep = len(re.findall(r"^\| .*\| \*\*SEPARATE column ", table, re.M))
+    rows_named = len(re.findall(r"^\| .*\| NAMED IN THE GEOGRAPHY HEADER ONLY", table, re.M))
+    assert (rows_sep, rows_named) == (n_sep, n_named), (
+        f"{NOTE}'s residual-(i) counts ({n_sep} separate, {n_named} header-named) disagree "
+        f"with its own §3b table ({rows_sep} separate, {rows_named} header-named). A summary "
+        f"that contradicts the evidence printed under it is the defect this gate exists for."
+    )
+
+    residual_ii = _token(text, "DECISION-RESIDUAL-II-PARTITION")
+    assert residual_ii is not None and residual_ii.upper() not in UNRESOLVED, (
+        f"{NOTE} claims LOCATED but records no `DECISION-RESIDUAL-II-PARTITION` "
+        f"({residual_ii!r})."
+    )
+    # Every exhaustion relation must come from the COMPUTED set-algebra vocabulary — a word
+    # outside it is prose that no set operation produced.
+    relations = re.findall(r"-> ([A-Z ]+?)(?=;|$)", residual_ii)
+    assert relations, f"{NOTE}'s residual-(ii) states no exhaustion relation: {residual_ii!r}"
+    allowed = {"EQUAL", "PROPER SUBSET", "PROPER SUPERSET", "OVERLAPPING", "DISJOINT",
+               "EMPTY", "NOT COMPUTABLE"}
+    for rel in relations:
+        assert rel.strip() in allowed, (
+            f"{NOTE}'s residual-(ii) reports the relation {rel.strip()!r}, which is outside "
+            f"the computed set-algebra vocabulary {sorted(allowed)}."
+        )
+    # The unanswerable claim must agree with the marker counts printed beside it.
+    marker = re.search(r"NOT ANSWERABLE from this workbook \((\d+) header cells and (\d+) "
+                       r"geography labels match", residual_ii)
+    if marker:
+        assert marker.group(1) == "0" and marker.group(2) == "0", (
+            f"{NOTE} claims the RMR-couronne question is NOT ANSWERABLE while reporting "
+            f"{marker.group(1)} header cells and {marker.group(2)} labels that DO match a "
+            f"metropolitan-area marker: {residual_ii!r}. The conclusion contradicts the count "
+            f"it is drawn from."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +721,151 @@ def test_p6_ra_corroboration_is_falsifiable(tmp_path):
         "the body marks targets NOT CORROBORATED while the DECISION token stays silent — a "
         "reader of the decision block would never learn the grouping failed."
     )
+
+
+# The three RA-axis shapes these editions actually publish, as fixtures. The middle one is
+# the trap: its geography header NAMES an RA grouping, so a predicate that only asked "is
+# there an RA-ish header cell?" would read it as a usable axis and compare labels to
+# themselves.
+_HEADER_NAMED_ROWS = [
+    ("Population projetée des MRC du Québec, scénario Référence (A), 2016-2041",),
+    (None,),
+    ("Code", "MRC par région administrative", "Population"),
+    ("62", "Les Moulins", "1"),
+    ("77", "Mirabel", "2"),
+]
+_NO_RA_ROWS = [
+    ("Population totale, scénarios de 2025, MRC du Québec, 2021-2051",),
+    (None,),
+    ("Scénario", "Code", "MRC", "2021"),
+    ("Référence (A2025)", "62", "Les Moulins", "1"),
+    ("Référence (A2025)", "77", "Mirabel", "2"),
+]
+
+
+def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
+    """Gate 7 — the two residuals are COMPUTED, and they CANNOT move the verdict (ruling G).
+
+    Two failure modes in one test, because either alone is escapable:
+
+      * a hardcoded residual token would satisfy any presence check — so the SAME probe is
+        driven over three genuinely different RA-axis shapes and the tokens must DIFFER;
+      * a residual wired into the verdict would silently turn a recorded observation into a
+        gate — so DECISION-VERDICT must stay LOCATED across all three.
+
+    The middle shape is the one that matters most: a workbook whose GEOGRAPHY header reads
+    "MRC par région administrative" names an RA grouping but publishes no per-MRC code.
+    Before `_ra_axis_usable` it was read as a usable axis, which made §3 report NOT
+    CORROBORATED and §3c manufacture a DISJOINT relation for a file that simply does not
+    carry the axis. Runs OFFLINE.
+    """
+    seen = {}
+    for label, rows in (("separate RA column", _GOOD_ROWS),
+                        ("RA named in the geography header only", _HEADER_NAMED_ROWS),
+                        ("no RA axis at all", _NO_RA_ROWS)):
+        mod = _load_run_p6()
+        mod.OUT = tmp_path / f"note_{abs(hash(label))}.md"
+        _wire(mod, sitemap=_SITEMAP_HIT, rows=rows)
+        mod.main()
+        text = mod.OUT.read_text(encoding="utf-8")
+        assert _token(text, "DECISION-VERDICT") == "LOCATED", (
+            f"[{label}] the residual shape changed DECISION-VERDICT to "
+            f"{_token(text, 'DECISION-VERDICT')!r}. Ruling G: the residuals are RECORDED "
+            f"OBSERVATIONS — a find is a find regardless of what they compute."
+        )
+        seen[label] = (_token(text, "DECISION-RESIDUAL-I-RA-AXIS"),
+                       _token(text, "DECISION-RESIDUAL-II-PARTITION"))
+
+    sep = seen["separate RA column"]
+    named = seen["RA named in the geography header only"]
+    none = seen["no RA axis at all"]
+    assert len({s[0] for s in seen.values()}) == 3, (
+        f"residual (i) reported the same axis token for three different RA shapes — it is "
+        f"not computed from the workbook: {seen}"
+    )
+    # The middle shape must NOT be counted as a separate column, and its exhaustion relation
+    # must be NOT COMPUTABLE rather than a manufactured set relation.
+    assert "1 publish a SEPARATE administrative-region column" in sep[0]
+    assert "0 publish a SEPARATE administrative-region column" in named[0], (
+        f"a workbook that only NAMES its RA grouping in the geography header was counted as "
+        f"publishing a separate RA column: {named[0]!r}"
+    )
+    assert "1 name the grouping in the geography header ONLY" in named[0]
+    assert "NOT COMPUTABLE" in named[1], (
+        f"the header-named-only shape produced a computed exhaustion relation ({named[1]!r}) "
+        f"— reading that column as RA codes compares every label against itself, so any "
+        f"relation it yields is manufactured."
+    )
+    assert "NOT COMPUTABLE" in none[1], (
+        f"a workbook with no RA axis produced a computed exhaustion relation: {none[1]!r}"
+    )
+    # The separate-RA shape must produce an actual SET RELATION — the specific word depends
+    # on the fixture's rows (this one declares more targets than it carries, so PROPER
+    # SUPERSET is the correct answer), so the assertion is that a relation was COMPUTED at
+    # all, not which one. Pinning the word here would make the gate a fixture snapshot.
+    assert "NOT COMPUTABLE" not in sep[1], (
+        f"the separate-RA-column shape reported NOT COMPUTABLE ({sep[1]!r}) — the axis IS "
+        f"readable there, so the exhaustion relation must actually be computed."
+    )
+    assert any(w in sep[1] for w in ("EQUAL", "PROPER SUBSET", "PROPER SUPERSET",
+                                     "OVERLAPPING", "DISJOINT", "EMPTY")), (
+        f"the separate-RA-column shape produced no set relation at all: {sep[1]!r}"
+    )
+
+
+def test_p6_spec_premise_is_read_live_not_typed(tmp_path):
+    """Gate 8 — the spec premise is READ, and the DECISION token FOLLOWS what was read.
+
+    The note's premise statement was a typed quote until steering amended §8 and the quote
+    went stale — a claim about a locked artifact that the artifact no longer made. Driving
+    three synthetic spec texts proves the token is a function of the file rather than of
+    this run's outcome, and that an unreadable spec degrades to NOT CHECKED instead of
+    asserting either way. Runs OFFLINE.
+    """
+    cases = {
+        "premise still stands": (
+            "| couronne-nord precision is DEFERRED (no MRC workbook exists — probed 404) |",
+            "PREMISE STANDS", "CONTRADICTED — ESCALATION"),
+        "amended": (
+            "| couronne-nord precision is DEFERRED to v1. MRC-level ISQ projection workbooks "
+            "EXIST — the 404 was a method artifact. |",
+            "AMENDED", "ALREADY AMENDED — no live conflict remains"),
+        "row rewritten past both markers": (
+            "| couronne-nord precision is handled elsewhere now. |",
+            "INDETERMINATE", "INDETERMINATE — the spec row did not match either marker"),
+    }
+    for label, (spec_line, state, token_value) in cases.items():
+        mod = _load_run_p6()
+        mod.OUT = tmp_path / f"spec_{abs(hash(label))}.md"
+        _wire(mod, sitemap=_SITEMAP_HIT)
+        mod._spec_text = lambda line=spec_line: f"# spec\n\n{line}\n"
+        mod.main()
+        text = mod.OUT.read_text(encoding="utf-8")
+        assert f"**State: {state}**" in text, (
+            f"[{label}] §4 read the spec state as something other than {state!r}"
+        )
+        assert _token(text, "DECISION-SPEC-PREMISE") == token_value, (
+            f"[{label}] the DECISION token is "
+            f"{_token(text, 'DECISION-SPEC-PREMISE')!r}, not {token_value!r} — the token does "
+            f"not follow the live read, so it is effectively typed."
+        )
+        assert _token(text, "DECISION-VERDICT") == "LOCATED", (
+            f"[{label}] the spec cross-check moved the verdict; it is NON-GATING."
+        )
+
+    # An unreadable spec must degrade to NOT CHECKED — never to an assertion either way.
+    mod = _load_run_p6()
+    mod.OUT = tmp_path / "spec_unreadable.md"
+    _wire(mod, sitemap=_SITEMAP_HIT)
+    mod._spec_text = lambda: (_ for _ in ()).throw(FileNotFoundError("patched out"))
+    mod.main()
+    unreadable = mod.OUT.read_text(encoding="utf-8")
+    assert _token(unreadable, "DECISION-SPEC-PREMISE") == (
+        "NOT CHECKED — the spec file was not read this run"), (
+        f"an unreadable spec produced {_token(unreadable, 'DECISION-SPEC-PREMISE')!r} — a "
+        f"premise claim on the strength of a read that did not happen."
+    )
+    assert _token(unreadable, "DECISION-VERDICT") == "LOCATED"
 
 
 def test_p6_records_v0_framing():
