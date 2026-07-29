@@ -11,9 +11,10 @@ it).
 WHY NO §8 SENTENCE IS QUOTED ANYWHERE IN THIS FILE. Reproducing another artifact's TEXT
 creates a dependency nothing checks, and amending the cited text is exactly when it breaks
 — the CROSS-ARTIFACT STALENESS class, which bit this probe once already. So §8's premise is
-quoted in exactly ONE place: §4 of the note, read live out of the spec at run time by
-`_record_spec_premise`, which computes the premise's STATE rather than restating it. Every
-other reference in this file names the section and never reproduces its words.
+reproduced in exactly ONE place — §4 of the note, where `_record_spec_premise` READS the
+spec at run time and quotes the span it actually found, on every verdict branch. That
+reproduction is live by construction and cannot go stale. Every other reference in this
+file, and every hand-written string in it, names the section instead of restating it.
 
 THE DISCRIMINATOR, stated before the hunt so the verdict cannot drift to fit the answer.
 A LOCATED needs THREE pieces of evidence about ONE resource, all computed here:
@@ -155,6 +156,20 @@ HEADER_SCAN_ROWS = 12
 # rows. The label count alone would therefore read as an MRC count and be wrong. This
 # pattern splits the two so the decomposition is emitted instead of the raw total.
 AGGREGATE_LABEL_PATTERN = re.compile(r"^\d{2}\s")
+# A geography column carries NAMES. The prefix header search can still land on a numeric
+# column if a sheet ever heads its code column with an MRC token, and the resulting LOCATED
+# would publish codes as geography labels. MEASURED on the live picked workbook: the correct
+# (prefix) column is 0/122 numeric, while the column a substring search reaches is 106/109 —
+# so the two are separated by an enormous margin and a half threshold is not a close call.
+# Refusing a genuinely numeric geography column is the SAFE direction: digits cannot evidence
+# MRC-level, so a gate that cannot verify must refuse rather than pass.
+GEO_LABEL_MAX_NUMERIC_FRACTION = 0.5
+# An administrative-region CODE is a short integer (Québec publishes 01..17). A column whose
+# values are longer or non-numeric is not a per-MRC RA code column whatever its header says.
+RA_CODE_MAX_DIGITS = 3
+# How many rows past the header block the per-edition probe reads, so the RA VALUE check has
+# data to sample. Small: the question is what KIND of value the column holds, not its range.
+RA_VALUE_SAMPLE_ROWS = 5
 # Residual (ii) asks whether the declared couronne MRCs COMPOSE the Montréal RMR couronne.
 # That is a metropolitan-area question, so the note must MEASURE whether this file carries a
 # metropolitan axis at all before saying it cannot answer — "no RMR column" is itself a claim.
@@ -371,10 +386,16 @@ def _pkg_text(pkg: dict) -> str:
 
 
 def _locs(xml: str) -> list[str]:
-    """Every `<loc>` in the sitemap, DEDUPED and sorted. The raw document repeats a url
-    once per hreflang alternate, so an un-deduped count would overstate the population an
-    absence claim is scoped to."""
-    return sorted(set(re.findall(r"<loc>(.*?)</loc>", xml)))
+    """Every `<loc>` in the sitemap, IN DOCUMENT ORDER and NOT deduped.
+
+    The caller dedupes and reports the measured effect. This used to return the deduped set
+    behind the explanation "the raw document repeats each url once per hreflang alternate" —
+    which the document refutes: there is exactly one `<loc>` per `<url>`, and the hreflang
+    alternates are `<xhtml:link href=...>` attributes this regex never sees. The repeats
+    that DO exist are a small number of genuinely duplicated page urls. Returning the raw
+    list forces the note to state what deduping actually removed rather than why.
+    """
+    return re.findall(r"<loc>(.*?)</loc>", xml)
 
 
 def _find_header(rows: list[tuple]) -> tuple[int | None, int | None]:
@@ -414,6 +435,25 @@ def _ra_axis_usable(ra_col: int, geo_col: int) -> bool:
     return ra_col >= 0 and ra_col != geo_col
 
 
+def _ra_values_are_codes(rows: list[tuple], header_row: int, col: int) -> bool:
+    """Does this column actually carry per-MRC RA CODES, or does its header merely say so?
+
+    `_ra_axis_usable` tests INDICES — that the RA column is not the geography column. That is
+    necessary and it survived mutation, but it is a PROXY: a column headed e.g. "Population de
+    la région administrative" satisfies the header predicate at a non-geography index and
+    would be read as RA codes, silently comparing populations against declared RA numbers.
+    So the column is verified by its CONTENT, not by its name: every non-empty value below the
+    header must be a short numeric code (the live workbook's are '11'..'17'), and a column
+    with no sampled value at all cannot be confirmed and is REFUSED — the fail-safe direction,
+    since an unverifiable axis must not read as a verified one.
+    """
+    if col < 0:
+        return False
+    values = [str(r[col]).strip() for r in rows[header_row + 1:]
+              if col < len(r) and r[col] is not None and str(r[col]).strip()]
+    return bool(values) and all(v.isdigit() and len(v) <= RA_CODE_MAX_DIGITS for v in values)
+
+
 def _relation_head(relation: str) -> str:
     """The set-algebra VERDICT of a relation string, without its explanatory tail.
 
@@ -431,6 +471,12 @@ def _declared_ra_number(key: str) -> str:
     checked against the live response cannot drift from the key it is grouped under."""
     found = re.search(r"ra\s*(\d+)", key, re.IGNORECASE)
     return found.group(1) if found else ""
+
+
+def _is_numeric_label(label: str) -> bool:
+    """Is this geography label just a number? One rule, used by the wrong-column guard and by
+    the note's own reporting, so the guard and the sentence describing it cannot disagree."""
+    return label.replace(".", "", 1).strip().isdigit()
 
 
 def _labels(rows: list[tuple], header_row: int, col: int) -> list[str]:
@@ -521,6 +567,18 @@ def _guard_body(url: str, probe: dict, sheets: list[str], header_row: int | None
             f"{url}'s MRC column (row {header_row}, column {col}) carries ZERO labels — an "
             f"MRC-level answer over an empty column is unearned"
         )
+    # THE WRONG-COLUMN CASE, which zero-label checking does NOT cover. A header search that
+    # lands on a CODE column yields plenty of labels — they are just digits — so it sails
+    # through every emptiness test and publishes a LOCATED whose "geography labels" are
+    # numbers. Measured on the live workbook: the correct column is 0/122 numeric, the code
+    # column reachable by a looser header search is 106/109. Refuse on digits.
+    numeric = sum(1 for lb in labels if _is_numeric_label(lb))
+    if numeric / len(labels) > GEO_LABEL_MAX_NUMERIC_FRACTION:
+        raise VacuousProbeError(
+            f"{url}'s geography column (row {header_row}, column {col}) is "
+            f"{numeric}/{len(labels)} numeric labels — that is a CODE column, not a geography "
+            f"column, and an MRC-level claim over digits is unearned. Sample: {labels[:5]}"
+        )
 
 
 def _guard_not_found(locs: list[str], eligible: list, verified: list, ckan: dict) -> None:
@@ -586,7 +644,9 @@ def _probe_editions(verified: list[str], picked: str, picked_data: bytes) -> lis
                "sheets": []}
         try:
             raw = picked_data if url == picked else _download(url)
-            sheets, rows = _workbook_rows(raw, max_rows=HEADER_SCAN_ROWS)
+            # A few rows PAST the header block, so the RA value check has something to
+            # sample; a header-only read could not tell a code column from a population one.
+            sheets, rows = _workbook_rows(raw, max_rows=HEADER_SCAN_ROWS + RA_VALUE_SAMPLE_ROWS)
             hr, hc = _find_header(rows)
             row["sheets"] = sheets
             row["caption"] = (str(rows[0][0]).strip()
@@ -605,7 +665,10 @@ def _probe_editions(verified: list[str], picked: str, picked_data: bytes) -> lis
                 # code can be read from it per MRC. Counting those together with the editions
                 # that publish a real `RA1` column would report a machine-readable axis where
                 # none exists — the v1 constraint turns on exactly this difference.
-                row["ra_separate"] = _ra_axis_usable(col, hc)
+                # Same two rules as §3, over the SAMPLED rows this header-only read holds —
+                # stated in the note as header/sample-scoped, not whole-file-scoped.
+                row["ra_separate"] = (_ra_axis_usable(col, hc)
+                                      and _ra_values_are_codes(rows, hr, col))
             row["opened"] = True
         except Exception as exc:
             row["error"] = f"{type(exc).__name__}: {exc}"
@@ -647,8 +710,14 @@ def _ra_membership(rows: list[tuple], header_row: int, geo_col: int, ra_col: int
             label = str(row[geo_col]).strip()
             if not label or str(row[ra_col]).strip() != want:
                 continue
-            # The RA's OWN subtotal line carries the same RA code as its MRCs. Counting it as
-            # a member would inflate every set by one and make an EQUAL relation unreachable.
+            # A defensive exclusion, and UNEXERCISED on this data — say so rather than imply
+            # it is doing work. MEASURED on the live workbook: all 17 RA-subtotal-form rows
+            # carry an EMPTY RA cell, so they are already filtered out by the RA-code test
+            # above and never reach this branch (the per-RA "excluded" count the note prints
+            # is 0 for every RA, which is how a reader can see that). It is kept because an
+            # edition that DOES code its subtotal rows would otherwise inflate every member
+            # set by one and make an EQUAL relation unreachable — a silent wrong answer,
+            # where the cost of the guard is one comparison.
             if AGGREGATE_LABEL_PATTERN.match(label):
                 excluded += 1
                 continue
@@ -989,6 +1058,22 @@ def _section_3_body_shape(note: list[str], observed: dict, verified: list[str],
     # the RA↔MRC correspondence is the one thing spec §8's `ra_proxy` rows turn on: its
     # presence AND its absence both have to be measured to be stated. Editions differ — the
     # A2021 components sheet heads this column `RA1`; the 2025 sheets publish none.
+    # WHAT THE REJECTED PREDICATES ACTUALLY DO — run, not asserted. The note used to claim a
+    # substring search "counts zero labels below it"; on the live workbook it returns 109
+    # labels from the CODE column, which is strictly WORSE than zero: zero trips the
+    # empty-column guard and fails safe, while a populated wrong column sails through it. The
+    # rejected predicate is therefore EXECUTED here and its real outcome published.
+    sub_row, sub_col = None, None
+    for _r, _row in enumerate(rows[:HEADER_SCAN_ROWS]):
+        for _c, _v in enumerate(_row):
+            if _v is not None and MRC_HEADER_PREFIX in _norm(_v):
+                sub_row, sub_col = _r, _c
+                break
+        if sub_row is not None:
+            break
+    sub_labels = _labels(rows, sub_row, sub_col) if sub_row is not None else []
+    sub_numeric = sum(1 for lb in sub_labels if _is_numeric_label(lb))
+
     header_cells = [str(v).strip() for v in rows[header_row] if v is not None and str(v).strip()]
     ra_col, ra_head = _find_column(
         rows, header_row,
@@ -996,7 +1081,10 @@ def _section_3_body_shape(note: list[str], observed: dict, verified: list[str],
     # Whether the axis is READABLE here — see `_ra_axis_usable`, which is the single rule
     # §3, §3b and §3c all consult, so none of the three can disagree with the others about
     # whether this workbook publishes a per-MRC RA code.
-    ra_usable = _ra_axis_usable(ra_col, header_col)
+    # Index rule AND value rule. The index rule alone is a proxy — see `_ra_values_are_codes`.
+    # Scope here: the FULL sheet, every data row below the header.
+    ra_usable = (_ra_axis_usable(ra_col, header_col)
+                 and _ra_values_are_codes(rows, header_row, ra_col))
 
     # The DECLARED RA number of each target, checked against the code the LIVE response puts
     # beside that MRC — an independent witness this file does not control (P5b's
@@ -1064,8 +1152,13 @@ def _section_3_body_shape(note: list[str], observed: dict, verified: list[str],
            f"witness is therefore weaker evidence about what a v1 extension could consume, "
            f"and this note says so rather than implying a family match.")
         + " A shape witness only has to be sufficient; the note does NOT claim this is the "
-          "newest edition — the caption and release line below are read from its own bytes "
-          "and state which edition it is.",
+          "newest edition — "
+        + ("the caption and release line below are read from its own bytes and state which "
+           "edition it is." if caption and diffusion else
+           "the caption below is read from its own bytes and states which edition it is (this "
+           "workbook publishes NO release line — see below)." if caption else
+           "this workbook publishes no release line, and cell A1 carries no caption either, "
+           "so nothing in its own bytes states which edition it is."),
         f"- Full GET -> {len(data)} bytes; prefix `{observed[picked]['prefix'].hex()}` matches "
         f"the `{XLSX_MAGIC.hex()}` workbook magic; opened with {len(sheets)} sheet(s): "
         f"{sheets}.",
@@ -1084,12 +1177,22 @@ def _section_3_body_shape(note: list[str], observed: dict, verified: list[str],
         f"- Geography column located by a header cell BEGINNING `{MRC_HEADER_PREFIX.upper()}` "
         f"at row {header_row}, column {header_col} (0-indexed); the cell reads "
         f"`{header_cells[header_col] if header_col < len(header_cells) else '?'}`. Prefix, not "
-        f"equality and not substring, and the reason is visible in this run's own evidence: "
-        f"the §3b table lists the geography header EVERY opened candidate publishes, and the "
-        f"editions heading it with an RA qualifier would be missed by an equality test, while "
-        f"a substring test locks onto the caption row (cell A1 above, which also contains "
-        f"\"mrc\") and counts zero labels below it. No edition or year is named here — the "
-        f"table is what states which files have which header.",
+        f"equality and not substring, and BOTH rejected predicates were RUN on this workbook "
+        f"so the reason is measured rather than asserted: an equality test would miss the "
+        f"editions whose geography header carries an RA qualifier (the §3b table lists every "
+        f"opened candidate's header), while a substring test locks onto row {sub_row} column "
+        f"{sub_col} and returns **{len(sub_labels)}** labels of which **{sub_numeric}** are "
+        f"numeric"
+        + (f" — e.g. {sub_labels[:5]}. That is the CODE column, and it is strictly more "
+           f"dangerous than an empty one: zero labels trip the empty-column guard and fail "
+           f"safe, whereas a populated wrong column would sail through it. `_guard_body` "
+           f"therefore also refuses a geography column that is more than "
+           f"{GEO_LABEL_MAX_NUMERIC_FRACTION:.0%} numeric."
+           if sub_labels and sub_numeric / len(sub_labels) > GEO_LABEL_MAX_NUMERIC_FRACTION
+           else f" — this run records no numeric-column hazard from the substring path on "
+                f"this workbook.")
+        + " No edition or year is named here; the §3b table is what states which files have "
+          "which header.",
         f"- Full header row (verbatim): {header_cells}.",
         f"- **{f_nlabels} distinct geography labels** below that header, which decompose as "
         f"**{f_ndecomp}**: labels in the `NN  Name` administrative-region-SUBTOTAL form, plus "
@@ -1226,9 +1329,14 @@ def _section_3b_editions(note: list[str], verified: list[str], wb: dict) -> dict
     note += [
         "## 3b. Residual (i) — is the RA↔MRC axis EDITION-SPECIFIC? (RECORDED, non-gating)",
         "",
-        f"Every one of the {len(verified)} verified candidates is opened and asked the same "
-        f"question its own header row answers. The split is **{f_editions}** — a SEPARATE RA "
-        f"column / an RA grouping NAMED in the geography header only / neither.",
+        (f"All {len(verified)} verified candidates were opened and asked the same question "
+         f"their own header rows answer."
+         if len(opened) == len(editions) else
+         f"Of the {len(verified)} verified candidates, **{len(opened)} opened** and "
+         f"{len(editions) - len(opened)} did NOT — the failures are named in the table below "
+         f"and every count in this section covers the opened ones only.")
+        + f" The split is **{f_editions}** — a SEPARATE RA column / an RA grouping NAMED in "
+          f"the geography header only / neither.",
         "",
         # A RATIONALE paragraph, carrying NO population count and no header literal. It used
         # to open "Three editions head their GEOGRAPHY column `MRC par région administrative`"
@@ -1319,9 +1427,11 @@ def _section_3b_editions(note: list[str], verified: list[str], wb: dict) -> dict
         "- Scope asymmetry, stated because the two halves differ: the *candidate population* "
         "is sweep-scoped (every verified candidate in §2), while each *edition label* is "
         "file-scoped (that workbook's own caption). And this whole section is "
-        "HEADER-ROW-scoped — only the first "
-        f"{HEADER_SCAN_ROWS} rows of each non-picked candidate were read, so it says nothing "
-        "about their data below the header.",
+        f"HEADER-AND-SAMPLE-scoped — only the first "
+        f"{HEADER_SCAN_ROWS + RA_VALUE_SAMPLE_ROWS} rows of each non-picked candidate were "
+        f"read: enough to locate the header row and to sample whether an RA column holds "
+        f"short numeric CODES rather than merely carrying an RA-shaped name, but nothing "
+        f"about the rest of their data. The picked workbook alone was read in full.",
         "",
     ]
 
@@ -1455,7 +1565,9 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     # ============ boundary B1: the ISQ sitemap (searched population #1) ==============
     stage["at"] = "isq-sitemap"
     xml = _sitemap()
-    locs = _locs(xml)
+    raw_locs = _locs(xml)
+    locs = sorted(set(raw_locs))
+    n_repeated = len(raw_locs) - len(locs)
     _guard_sitemap(xml, locs)  # RAISES (isq-sitemap)
 
     xlsx = [u for u in locs if u.lower().endswith(".xlsx")]
@@ -1488,13 +1600,16 @@ def _hunt(note: list[str], stage: dict) -> tuple[str, dict]:
     note += [
         "## 2. Boundary B — ISQ's own product pages / full-edition downloads",
         "",
-        f"- `{ISQ_SITEMAP}` -> **{f_locs}** distinct `<loc>` entries (deduped: the raw "
-        f"document repeats each url once per hreflang alternate, so an un-deduped count would "
-        f"overstate the population every absence claim below is scoped to), of which "
-        f"**{f_xlsx}** are `.xlsx` download urls.",
-        f"- Sweep predicate over the url slug (case-insensitive substring): an MRC term "
-        f"{list(MRC_TERMS)} AND a population term {list(POPULATION_TERMS)} makes a url SWEPT; "
-        f"a projection term {list(PROJECTION_TERMS)} additionally makes it ELIGIBLE (spec §8's "
+        f"- `{ISQ_SITEMAP}` -> **{len(raw_locs)}** `<loc>` entries, **{f_locs}** of them "
+        f"distinct ({n_repeated} duplicate entr{'y' if n_repeated == 1 else 'ies'} removed). "
+        f"That is the MEASURED effect of deduping, stated instead of a mechanism: this run "
+        f"parses `<loc>` elements only, and makes no claim about why any url repeats. Of the "
+        f"distinct urls, **{f_xlsx}** are `.xlsx` download urls.",
+        f"- Sweep predicate, stated in full so the swept population is exactly what it says: "
+        f"a url is SWEPT iff it ends `.xlsx` AND its slug carries (case-insensitive "
+        f"substring) an MRC term "
+        f"{list(MRC_TERMS)} AND a population term {list(POPULATION_TERMS)}. "
+        f"A projection term {list(PROJECTION_TERMS)} additionally makes it ELIGIBLE (spec §8's "
         f"junction consumes projected population by scenario, so an estimates workbook is a "
         f"different product). **{f_swept}** swept, **{f_elig}** eligible — every absence claim "
         f"is therefore scoped to the WIDER swept set.",

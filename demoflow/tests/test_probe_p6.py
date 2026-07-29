@@ -70,6 +70,38 @@ UNRESOLVED = {"", "UNKNOWN-PROBE-FAILED", "UNRESOLVED-PROBE-FAILED", "TBD", "FIL
 BOUNDARIES = ("ckan", "isq-sitemap", "isq-file")
 
 
+def _assert_unanswerable_agrees(residual_ii: str, where: str) -> None:
+    """The NOT-ANSWERABLE conclusion must agree with the counts printed beside it.
+
+    ANCHORED ON THE VERDICT WORD, never on a prose prefix. The previous version keyed on
+    "NOT ANSWERABLE from this workbook (" — and a REWORDING ordered by the last review
+    ("...from what this run read of this workbook") silently made the regex unmatchable, so
+    `marker` was always None and the assertion under it never ran while a comment above it
+    claimed coverage. That is the generator/test staleness class: a correction to emitted
+    wording killed the gate watching that wording. The anchor below is the load-bearing word
+    itself, which cannot change without changing the meaning, plus the digits in the
+    parenthetical — no intervening prose is depended on.
+    """
+    assert ("NOT ANSWERABLE" in residual_ii) or ("UNSETTLED" in residual_ii), (
+        f"{where}: residual-(ii) states neither computed verdict (NOT ANSWERABLE / "
+        f"UNSETTLED): {residual_ii!r}. If the vocabulary changed, this gate is watching "
+        f"nothing — which is exactly how it died once already."
+    )
+    if "NOT ANSWERABLE" not in residual_ii:
+        return
+    tail = residual_ii.split("NOT ANSWERABLE", 1)[1]
+    nums = re.findall(r"\d+", tail.split(")")[0])
+    assert nums, (
+        f"{where}: residual-(ii) claims NOT ANSWERABLE but prints no counts to justify it: "
+        f"{residual_ii!r}"
+    )
+    assert all(n == "0" for n in nums), (
+        f"{where}: residual-(ii) claims NOT ANSWERABLE while reporting {nums} "
+        f"metropolitan-area marker hits — the conclusion contradicts the counts it is drawn "
+        f"from: {residual_ii!r}"
+    )
+
+
 def _note_text() -> str:
     assert NOTE.exists(), f"{NOTE} is missing — run `uv run python probes/run_p6.py` first"
     return NOTE.read_text(encoding="utf-8")
@@ -180,8 +212,10 @@ def test_p6_records_a_resolved_verdict():
 
     premise = _token(text, "DECISION-SPEC-PREMISE")
     assert premise is not None and premise.upper() not in UNRESOLVED, (
-        f"{NOTE} records no `DECISION-SPEC-PREMISE` (got {premise!r}) — spec §8 asserts \"no "
-        f"MRC workbook exists\", so this run must state whether it stands."
+        f"{NOTE} records no `DECISION-SPEC-PREMISE` (got {premise!r}) — §4 reads spec §8's "
+        f"premise live, so this run must state what that read found. (The premise TEXT is "
+        f"deliberately not quoted here: it is a locked artifact's wording and steering has "
+        f"already amended it once.)"
     )
 
     if verdict == "NOT-FOUND":
@@ -367,16 +401,7 @@ def test_p6_records_a_resolved_verdict():
             f"{NOTE}'s residual-(ii) reports the relation {rel.strip()!r}, which is outside "
             f"the computed set-algebra vocabulary {sorted(allowed)}."
         )
-    # The unanswerable claim must agree with the marker counts printed beside it.
-    marker = re.search(r"NOT ANSWERABLE from this workbook \((\d+) header cells and (\d+) "
-                       r"geography labels match", residual_ii)
-    if marker:
-        assert marker.group(1) == "0" and marker.group(2) == "0", (
-            f"{NOTE} claims the RMR-couronne question is NOT ANSWERABLE while reporting "
-            f"{marker.group(1)} header cells and {marker.group(2)} labels that DO match a "
-            f"metropolitan-area marker: {residual_ii!r}. The conclusion contradicts the count "
-            f"it is drawn from."
-        )
+    _assert_unanswerable_agrees(residual_ii, str(NOTE))
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +476,41 @@ _EMPTY_COLUMN_ROWS = [
     ("Composantes démographiques projetées",),
     (None,),
     ("Code", "MRC", "RA1", "Année (t)", "Population"),
+]
+
+
+# --- a MULTI-candidate sitemap ---------------------------------------------------------
+# Every other fixture sitemap yields exactly ONE candidate and contains no `/en/` loc, which
+# left three real branches unreachable by any test (adversarial pass M10/M11/M15): the
+# co-occurrence's `and not n_sep` guard needs BOTH an RA-separate and an RA-absent edition;
+# `PREFERRED_LANG_PATH` needs the same slug published under two language paths; and the
+# unopenable-candidate row needs a candidate whose open actually raises.
+_CAND_SEP = ("https://statistique.quebec.ca/fr/fichier/"
+             "composantes-demographiques-projetees-mrc-du-quebec.xlsx")
+_CAND_ABS_FR = ("https://statistique.quebec.ca/fr/fichier/"
+                "population-totale-projetee-scenarios-mrc-quebec.xlsx")
+_CAND_ABS_EN = ("https://statistique.quebec.ca/en/fichier/"
+                "population-totale-projetee-scenarios-mrc-quebec.xlsx")
+_CAND_SEP_EN = ("https://statistique.quebec.ca/en/fichier/"
+                "composantes-demographiques-projetees-mrc-du-quebec.xlsx")
+_CAND_BROKEN = ("https://statistique.quebec.ca/fr/fichier/"
+                "nombre-total-menages-prives-projetes-mrc.xlsx")
+# `/en/` deliberately FIRST, so a language preference that stopped working would change the
+# published url rather than coincide with sort order.
+_SITEMAP_MULTI = ("<urlset>"
+                  + "".join(f"<url><loc>{u}</loc></url>" for u in
+                            (_CAND_SEP_EN, _CAND_ABS_EN, _CAND_ABS_FR, _CAND_SEP,
+                             _CAND_BROKEN))
+                  + "</urlset>")
+# Same grid as _GOOD_ROWS (separate RA column) but captioned with the SAME edition marker the
+# no-axis fixture carries — so the marker sits in both groups and the co-occurrence guard is
+# the only thing preventing it from being reported as a clean separation.
+_SEP_RA_2025_ROWS = [
+    ("Composantes démographiques projetées, scénarios de 2025, MRC du Québec, 2024-2051",),
+    (None,),
+    ("Code", "MRC", "RA1", "Année (t)", "Population"),
+    ("62", "Les Moulins", "14", "2024", "1"),
+    ("77", "Mirabel", "15", "2024", "2"),
 ]
 
 
@@ -757,6 +817,54 @@ _HEADER_NAMED_ROWS = [
 # A workbook that DOES carry a metropolitan-area marker. Without this shape no fixture ever
 # drives §3c's "a marker DOES appear" branch, so the unconditional NOT-ANSWERABLE clause was
 # unreachable by any gate — verified: the mutation restoring it passed the whole suite.
+# The WRONG-COLUMN shape: an MRC-token header sitting above numeric CODES. This is what a
+# looser header search reaches on the live workbook (109 labels, 106 numeric), and it is
+# strictly more dangerous than an empty column — zero labels fail safe, a populated wrong
+# column does not. Without this fixture the new guard would have no reachable path.
+_CODE_COLUMN_ROWS = [
+    ("Composantes démographiques projetées, MRC du Québec",),
+    (None,),
+    ("MRC", "RA1", "Population"),
+    ("1", "14", "10"),
+    ("2", "15", "20"),
+    ("3", "16", "30"),
+]
+# M18: the live "122 distinct" depends on DISTINCTNESS, and no other fixture column repeats a
+# label — so deleting the de-duplication in `_labels` was unobservable. Les Moulins appears
+# twice (a real workbook repeats each MRC once per projection year).
+_DUPLICATE_LABEL_ROWS = [
+    ("Composantes démographiques projetées, MRC du Québec",),
+    (None,),
+    ("Code", "MRC", "RA1", "Année", "Population"),
+    ("62", "Les Moulins", "14", "2024", "1"),
+    ("62", "Les Moulins", "14", "2025", "2"),
+    ("77", "Mirabel", "15", "2024", "3"),
+]
+# F9's shape: a column at a NON-geography index whose header contains "région administrative"
+# but whose values are populations, not RA codes. The index rule alone reads this as a
+# machine-readable RA axis; only a VALUE check can tell it apart. Without this fixture
+# `_ra_values_are_codes` would be unreachable — the same "new gate no fixture can reach"
+# defect the adversarial pass reported.
+# A subtotal row that DOES carry its RA code. On the live workbook all 17 `NN  Name` rows
+# have an EMPTY RA cell, so they are filtered out a branch earlier and the aggregate-exclusion
+# never fires — leaving it unexercised in both the fixtures and reality (adversarial M16).
+# This shape is what an edition that codes its subtotals would look like, and it is the only
+# thing that can prove the exclusion works.
+_CODED_SUBTOTAL_ROWS = [
+    ("Composantes démographiques projetées, MRC du Québec",),
+    (None,),
+    ("Code", "MRC", "RA1", "Population"),
+    ("14", "14  Lanaudière", "14", "999"),
+    ("62", "Les Moulins", "14", "1"),
+    ("77", "Mirabel", "15", "2"),
+]
+_RA_PROXY_ROWS = [
+    ("Composantes démographiques projetées, MRC du Québec",),
+    (None,),
+    ("Code", "MRC", "Population de la région administrative"),
+    ("62", "Les Moulins", "512000"),
+    ("77", "Mirabel", "648000"),
+]
 _RMR_MARKER_ROWS = [
     ("Population projetée, MRC du Québec",),
     (None,),
@@ -859,17 +967,7 @@ def test_p6_residuals_are_recorded_observations_not_verdicts(tmp_path):
                 f"[{label}] the prose after DECISION-RA-CORRESPONDENCE asserts §3c measured "
                 f"the composition unanswerable, but §3c reported {residual_ii[:160]!r}"
             )
-        # #5 ON A FIXTURE: the NOT-ANSWERABLE conclusion must agree with the counts printed
-        # inside its own parenthesis. Gate 2 enforces this on the COMMITTED note, which is
-        # always the zero-marker case — so without this copy the RMR shape reached no gate.
-        marker = re.search(r"NOT ANSWERABLE from what this run read of this workbook "
-                           r"\((\d+) header cells and (\d+) geography labels", residual_ii)
-        if marker:
-            assert marker.group(1) == "0" and marker.group(2) == "0", (
-                f"[{label}] residual-(ii) claims NOT ANSWERABLE while reporting "
-                f"{marker.group(1)} header cells and {marker.group(2)} labels that DO match a "
-                f"metropolitan-area marker: {residual_ii!r}"
-            )
+        _assert_unanswerable_agrees(residual_ii, f"[{label}]")
         assert "membership YES" not in residual_ii, (
             f"[{label}] DECISION-RESIDUAL-II-PARTITION states a flat `membership YES` beside "
             f"a measured {couronne!r}: {residual_ii!r}"
@@ -973,6 +1071,225 @@ def test_p6_spec_premise_is_read_live_not_typed(tmp_path):
         f"premise claim on the strength of a read that did not happen."
     )
     assert _token(unreadable, "DECISION-VERDICT") == "LOCATED"
+
+
+def test_p6_wrong_column_located_is_refused(tmp_path):
+    """Gate 9 — a geography column of CODES must not earn a LOCATED (runs OFFLINE).
+
+    The note used to claim a substring header search "counts zero labels below it". Measured
+    on the live workbook it returns 109 labels, 106 of them numeric — the `Code` column. Zero
+    labels trip the empty-column branch and fail safe; a POPULATED wrong column sails straight
+    through it and publishes digits as geography evidence. This drives that shape and asserts
+    the run refuses.
+
+    REACHABILITY: `_CODE_COLUMN_ROWS` reaches this branch — its header row is `MRC | RA1 |
+    Population` with numeric values below `MRC`, so `_find_header` picks column 0 and every
+    label is a digit. Asserted below before the verdict is checked, so a fixture that stopped
+    reaching the guard would fail loudly rather than pass vacuously.
+    """
+    mod = _load_run_p6()
+    mod.OUT = tmp_path / "note_codecol.md"
+    _wire(mod, sitemap=_SITEMAP_HIT, rows=_CODE_COLUMN_ROWS)
+    # Fixture guard: the shape must really BE the hazard, or this proves nothing.
+    hr, hc = mod._find_header(_CODE_COLUMN_ROWS)
+    labels = mod._labels(_CODE_COLUMN_ROWS, hr, hc)
+    numeric = sum(1 for lb in labels if mod._is_numeric_label(lb))
+    assert labels and numeric == len(labels), (
+        f"the fixture is not a numeric column ({labels!r}) — it cannot reach the guard"
+    )
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+    assert _token(text, "DECISION-VERDICT") == "UNKNOWN-PROBE-FAILED", (
+        f"a geography column of pure CODES was published as "
+        f"{_token(text, 'DECISION-VERDICT')!r} — an MRC-level claim over digits is unearned, "
+        f"and this is the wrong-column LOCATED the empty-column check cannot catch."
+    )
+    assert _recorded_failure_boundary(text) == "isq-file"
+    assert "CODE column" in text, "the refusal must name what it refused and why"
+
+
+def test_p6_geography_labels_are_deduplicated(tmp_path):
+    """Gate 10 — the geography label count is DISTINCT labels (runs OFFLINE).
+
+    M18 from the adversarial pass: every existing fixture had a unique label per row, so the
+    de-duplication in `_labels` was unobservable — deleting it changed nothing anywhere. The
+    live "122 distinct labels" depends on it entirely (a real workbook repeats each MRC once
+    per projection year), so the property was load-bearing and untested.
+
+    REACHABILITY: `_DUPLICATE_LABEL_ROWS` repeats "Les Moulins" across two year rows; the
+    fixture guard below asserts the repeat is present before the count is checked.
+    """
+    col = [r[1] for r in _DUPLICATE_LABEL_ROWS[3:]]
+    assert len(col) != len(set(col)), "the fixture carries no duplicate label to collapse"
+
+    mod = _load_run_p6()
+    mod.OUT = tmp_path / "note_dupes.md"
+    _wire(mod, sitemap=_SITEMAP_HIT, rows=_DUPLICATE_LABEL_ROWS)
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+    assert _token(text, "DECISION-VERDICT") == "LOCATED"
+    count = _token(text, "DECISION-MRC-LABEL-COUNT") or ""
+    assert count.startswith(f"{len(set(col))} "), (
+        f"the label count is {count!r} over a column of {len(col)} rows carrying "
+        f"{len(set(col))} DISTINCT labels — a count that includes repeats is a row count "
+        f"wearing a geography count's name."
+    )
+
+
+def test_p6_ra_column_must_carry_codes_not_just_an_ra_name(tmp_path):
+    """Gate 11 — the RA axis is verified by its VALUES, not by its header (runs OFFLINE).
+
+    `_ra_axis_usable` tests indices, and it survived every mutation the adversarial pass
+    threw at it — but it is a PROXY. A column headed "Population de la région administrative"
+    sits at a non-geography index and satisfies the header predicate, so the index rule alone
+    reads populations as RA codes: the note would publish a false NOT CORROBORATED for all
+    ten targets and §3c would compute set relations over garbage.
+
+    REACHABILITY, asserted before the outcome: the fixture's RA-shaped column must actually
+    be selected by the header predicate and must NOT hold codes, or this proves nothing.
+    """
+    mod = _load_run_p6()
+    hr, hc = mod._find_header(_RA_PROXY_ROWS)
+    col, head = mod._find_column(
+        _RA_PROXY_ROWS, hr,
+        lambda t: bool(mod.RA_HEADER_PATTERN.match(t))
+        or any(k in t for k in mod.RA_HEADER_MARKS))
+    assert col >= 0 and col != hc, "the fixture's RA-shaped column is not even selected"
+    assert mod._ra_axis_usable(col, hc), "the INDEX rule must accept it — that is the proxy"
+    assert not mod._ra_values_are_codes(_RA_PROXY_ROWS, hr, col), (
+        "the fixture's column holds RA codes after all, so it cannot expose the proxy"
+    )
+
+    mod.OUT = tmp_path / "note_raproxy.md"
+    _wire(mod, sitemap=_SITEMAP_HIT, rows=_RA_PROXY_ROWS)
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+    ra_tok = _token(text, "DECISION-RA-CORRESPONDENCE") or ""
+    assert ra_tok.startswith("NOT CHECKABLE"), (
+        f"a column of POPULATIONS headed 'Population de la région administrative' was read as "
+        f"a per-MRC RA code column: {ra_tok!r}"
+    )
+    assert "NOT CORROBORATED" not in text, (
+        "reading populations as RA codes raised a FALSE corroboration failure — a wrong alarm "
+        "about a real declaration, which is worse than silence"
+    )
+    assert _token(text, "DECISION-VERDICT") == "LOCATED", (
+        "the RA axis is a RECORDED observation; its absence must not move the verdict"
+    )
+
+
+def test_p6_multi_candidate_branches_are_reachable(tmp_path):
+    """Gate 12 — three branches no fixture could reach, driven at last (runs OFFLINE).
+
+    The adversarial pass found five mutants surviving because nothing could exercise them.
+    Three shared one cause: every fixture sitemap yielded a single candidate and contained no
+    `/en/` loc. This fixture supplies four candidates across two language paths, one of which
+    fails to open, and pins:
+
+      * the CO-OCCURRENCE guard (`and not n_sep`) — the caption marker here appears in BOTH
+        the RA-separate and the RA-absent edition, so a marker that does not separate the
+        groups must NOT be reported as separating them;
+      * `PREFERRED_LANG_PATH` — the same slug is published under `/en/` and `/fr/`, `/en/`
+        listed first, so the published url proves the preference is applied and not a sort
+        artifact;
+      * the UNOPENABLE-candidate row — one candidate raises on open, and must appear in the
+        §3b table as a named failure rather than being silently dropped from the counts.
+    """
+    mod = _load_run_p6()
+    mod.OUT = tmp_path / "note_multi.md"
+    mod._ckan_get = _fake_ckan()
+    mod._sitemap = lambda: _SITEMAP_MULTI
+    mod._probe_url = lambda url, **kw: dict(_XLSX_PROBE)
+    mod._download = lambda url: b"PK\x03\x04" + url.encode()
+
+    def rows_for(data, **kw):
+        u = data.decode("utf-8", errors="replace")
+        if "composantes" in u:
+            return (["Référence A2021"], list(_SEP_RA_2025_ROWS))
+        if "population-totale" in u:
+            return (["Scénarios de 2025"], list(_NO_RA_ROWS))
+        raise ValueError("patched: this candidate cannot be opened")
+
+    mod._workbook_rows = rows_for
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+    assert _token(text, "DECISION-VERDICT") == "LOCATED", _token(text, "DECISION-VERDICT")
+
+    # --- PREFERRED_LANG_PATH is applied (M11) ---------------------------------------
+    # The PICKED candidate is the one whose url the note publishes, so the preference is
+    # only observable if the pair is on that candidate — and the /en/ twin must be listed
+    # FIRST, or a passing assertion would just be sort order.
+    assert _SITEMAP_MULTI.index(_CAND_SEP_EN) < _SITEMAP_MULTI.index(_CAND_SEP), (
+        "the /en/ twin of the picked candidate must be listed first or this proves nothing"
+    )
+    url = _token(text, "DECISION-RESOURCE-URL")
+    assert url == _CAND_SEP, (
+        f"the note published {url!r}; the same workbook is listed under both language paths "
+        f"with /en/ first, so publishing anything but the /fr/ url means PREFERRED_LANG_PATH "
+        f"is not being applied."
+    )
+
+    # --- the unopenable candidate is NAMED, not dropped (M15) -----------------------
+    assert "**NO — ValueError" in text, (
+        "a candidate that failed to open is missing from the §3b table — dropping it shrinks "
+        "the population every count in that section is scoped to, without saying so"
+    )
+    split = re.search(r"of (\d+) candidate workbooks opened, ", text)
+    assert split and int(split.group(1)) == 2, (
+        f"the opened count must cover only the candidates that opened: {split and split.group(1)}"
+    )
+    assert "did NOT" in text, "the note must say some candidates failed to open"
+
+    # --- the co-occurrence guard holds (M10) ----------------------------------------
+    # The marker is in BOTH groups here, so it separates nothing and must not be reported as
+    # separating them. Fixture guard first: both groups must be non-empty, or the branch the
+    # mutation targets is still unreachable and this assertion is vacuous.
+    assert "1 publish a SEPARATE administrative-region column" in text
+    assert "1 carry neither" in text
+    assert "no caption marker in" in text, (
+        "a marker present in BOTH the RA-separate and RA-absent groups was reported as a "
+        "perfect separation — the `and not n_sep` guard is what prevents that claim"
+    )
+
+
+def test_p6_ra_subtotal_rows_are_excluded_from_member_sets(tmp_path):
+    """Gate 13 — an RA's own SUBTOTAL row is not counted as one of its MRCs (runs OFFLINE).
+
+    Unexercised until now in both directions (adversarial M16): no fixture carried an
+    `NN  Name` label, and on the live workbook all 17 such rows have an EMPTY RA cell, so the
+    RA-code test drops them a branch earlier and the exclusion never fires. That made a real
+    guard look like dead code. This fixture is the edition that DOES code its subtotals — the
+    case the exclusion exists for — so the branch is finally reachable.
+
+    REACHABILITY is asserted before the outcome: the fixture must actually produce a subtotal
+    row carrying the RA code being collected.
+    """
+    mod = _load_run_p6()
+    sub = [r for r in _CODED_SUBTOTAL_ROWS[3:]
+           if mod.AGGREGATE_LABEL_PATTERN.match(r[1]) and r[2] == "14"]
+    assert sub, "the fixture has no CODED subtotal row, so the exclusion cannot be reached"
+
+    mod.OUT = tmp_path / "note_subtotal.md"
+    _wire(mod, sitemap=_SITEMAP_HIT, rows=_CODED_SUBTOTAL_ROWS)
+    mod.main()
+    text = mod.OUT.read_text(encoding="utf-8")
+    assert _token(text, "DECISION-VERDICT") == "LOCATED"
+
+    row = re.search(r"^\| RA14 Lanaudière \| (\d+) \| (\d+) \| .*?\| (\d+) \|$", text, re.M)
+    assert row, "§3c emits no RA14 membership row"
+    members, _declared, excluded = (int(g) for g in row.groups())
+    assert excluded == 1, (
+        f"the coded subtotal row was not excluded (excluded count {excluded}) — an RA's own "
+        f"subtotal line counted as one of its MRCs inflates every member set by one and makes "
+        f"an EQUAL relation unreachable."
+    )
+    assert members == 1, (
+        f"RA14's member set has {members} entries; only 'Les Moulins' is an MRC here — the "
+        f"subtotal row must not be among them."
+    )
+    assert "14  Lanaudière" not in text.split("## 3c.")[1], (
+        "the RA subtotal label appears in §3c's member list; it is a subtotal, not an MRC"
+    )
 
 
 def test_p6_records_v0_framing():
