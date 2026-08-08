@@ -10,5 +10,5 @@
 - models: opus/opus; load_bearing both; money_path: false; WAVE-0 vacuous
 - preconditions: T20/T21 committed + pushed; T22 mechanism inherited uncommitted with its
   one deliberately-RED line
-- run id: (appended at dispatch)
+- run id: wf_bca5d968-b3b (dispatched 2026-08-08)
 - outcome: (appended at run close)
