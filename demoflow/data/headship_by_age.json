@@ -1,0 +1,5 @@
+{
+  "_provenance": {"source": "Census 2021 QC headship (maintainers/persons) by age; base-year PIT-fixed",
+                  "as_of": "2021", "flag": "borrowed_prior"},
+  "headship": {"0-19": 0.02, "20-34": 0.40, "35-54": 0.48, "55-64": 0.52, "65-74": 0.56, "75+": 0.62}
+}

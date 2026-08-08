@@ -1,0 +1,80 @@
+{
+  "_provenance": {
+    "source": "census_tenure_age_98100231.csv",
+    "sha256": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+    "statcan_table": "98-10-0231-01",
+    "ref_date": "2021",
+    "extracted_at": "2026-07-21",
+    "derived_by": "demoflow.loaders.census.derive_ownership_from_csv",
+    "generator": "demoflow/scripts/gen_ownership.py",
+    "measure": "owner-maintainer households / total private households, at the `Total -` member of every non-age dimension",
+    "hors_rmr_method": "Québec-province counts NET of all six WHOLLY-QUÉBEC CMA counts; owner and total netted separately THEN divided (codex r4-F2)",
+    "netted_cmas": [
+      "Drummondville (CMA), Que.",
+      "Montréal (CMA), Que.",
+      "Québec (CMA), Que.",
+      "Saguenay (CMA), Que.",
+      "Sherbrooke (CMA), Que.",
+      "Trois-Rivières (CMA), Que."
+    ],
+    "ca_caveat": "HORS_RMR here denotes: Québec outside the six WHOLLY-QUÉBEC CMAs — INCLUDING all 23 Census Agglomerations AND the Québec side of Ottawa-Gatineau, plus the Québec parts of the two cross-border CAs (Campbellton, N.B./Que.; Hawkesbury, Ont./Que.). Ottawa-Gatineau is parented to Ontario in 98-10-0231-01's own metadata and the table publishes no separable Québec-part row, so its Québec side is INSEPARABLE here and falls inside the residual; the same holds for the two cross-border CAs. A published StatCan 'non-CMA/CA' row would EXCLUDE the Census Agglomerations, but no such row is carried for Québec, so the residual is COMPUTED and the sentence above is the geography HORS_RMR actually denotes (spec §11 item 2, codex r5-F7; probe P2 §4 verbatim denotation).",
+    "isq_territory_note": "TERRITORY MISMATCH, MEASURED 2026-08-08 — this rate's territory is NOT the territory of the HORS_RMR population it will multiply. ISQ's pop-as-rmr-base.xlsx publishes \"RMR d'Ottawa-Gatineau\" as Québec-part-only (workbook footnote 2, 'Partie québécoise uniquement'), so its literal 'Territoire hors des RMR' row EXCLUDES the Québec side of Ottawa-Gatineau — while this Census residual INCLUDES it, because the Census table cannot separate it. Ottawa-Gatineau is therefore SEPARABLE on the ISQ side and INSEPARABLE on the Census side: the mismatch is structural, not incidental. Magnitudes (2021, Référence (A2026), both sexes, pop-as-rmr-base.xlsx): Le Québec 8,572,020 minus the six wholly-QC RMRs 5,831,474 = 2,740,546 persons (this rate's territory) vs the ISQ literal row 2,384,575 persons (the population the rate multiplies); the 355,971-person gap is exactly the ISQ Ottawa-Gatineau Québec-part row = 12.99% of the Census residual territory / 14.93% of the ISQ hors-RMR population. RECORDED, NOT RESOLVED: the rate x population join is downstream of this loader, and reconciling the two territories is a decision for that task, not a silent correction here.",
+    "rounding_note": "StatCan rounds counts to the nearest 5, so dimension components do not reconcile exactly to their totals. Owner/Total is computed directly from the banded sums; no reconciliation is asserted and no correction is applied.",
+    "borrowed_prior": "RA-level members are absent from this CMA-level table; each reuses its parent CMA's computed rate and carries `_flag: borrowed_prior` inline (spec §8). All five borrow MTL_RMR — understates island, overstates couronne (v0)."
+  },
+  "rates": {
+    "MTL_RMR": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329
+    },
+    "MTL_ISLAND_RA06": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329,
+      "_flag": "borrowed_prior"
+    },
+    "LAVAL_RA13": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329,
+      "_flag": "borrowed_prior"
+    },
+    "QC_RMR": {
+      "25-54": 0.5775769888793841,
+      "55-64": 0.6698551700909398,
+      "65-74": 0.6359171955273496,
+      "75+": 0.5338550157591566
+    },
+    "HORS_RMR": {
+      "25-54": 0.6804520271369382,
+      "55-64": 0.7475585405699764,
+      "65-74": 0.7307020099038741,
+      "75+": 0.6512090204001825
+    },
+    "LANAUDIERE_RA14_PROXY": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329,
+      "_flag": "borrowed_prior"
+    },
+    "LAURENTIDES_RA15_PROXY": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329,
+      "_flag": "borrowed_prior"
+    },
+    "MONTEREGIE_RA16_PROXY": {
+      "25-54": 0.5119964493642796,
+      "55-64": 0.6419119324663473,
+      "65-74": 0.6067113592649997,
+      "75+": 0.5615325746167329,
+      "_flag": "borrowed_prior"
+    }
+  }
+}

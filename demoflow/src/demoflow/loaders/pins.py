@@ -1,7 +1,14 @@
-"""sha256 pins for the committed ISQ workbooks. The loader loads from a
-configurable path defaulting to demoflow/data/; a pinned re-download (spec §4
-slug URLs) is a FALLBACK only, and any drift (404/size/checksum) raises
-LoaderError."""
+"""sha256 pins for every committed data source — the ISQ workbooks AND the P2 Census
+tenure x age extract. The loader loads from a configurable path defaulting to
+demoflow/data/; a pinned re-download (spec §4 slug URLs) is a FALLBACK only, and any
+drift (404/size/checksum) raises LoaderError.
+
+The registry name is historical (`WORKBOOK_SHA256`); its contract is "committed source
+file -> sha256", not "workbook". The Census extract joined it at Task 13, the first
+CONSUMER read of that file: `derive_ownership_from_csv` verifies the extract against
+this pin before deriving a single rate, so the PIT chain (raw response -> filter
+predicate -> committed extract -> derived rates) is enforced in code rather than only
+recorded in probes/P2-census-tenure-age.md."""
 import hashlib
 from pathlib import Path
 
@@ -15,6 +22,10 @@ WORKBOOK_SHA256 = {
     "pop-as-qc-base.xlsx": "1d286d252a75195db6ab66ac767e352d9f74e4e2359c68eba4a43301c9c61fd4",
     "compo-rmr-base.xlsx": "096246df47a95f729d46bacdb655cf297f4779163d62ee25e95254b5cc23844b",
     "compo-ra-base.xlsx": "1b81a82b0f0588a3217eb93b74d37044addf08934731dfd612e846e6de7b728f",
+    # P2 Census extract (StatCan 98-10-0231-01, extracted_at 2026-07-21). Digest recomputed
+    # from the committed file at Task 13 and cross-checked against the identity chain
+    # recorded in probes/P2-census-tenure-age.md §2.
+    "census_tenure_age_98100231.csv": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
 }
 
 ISQ_SLUG_URL = "https://statistique.quebec.ca/fr/fichier/{slug}.xlsx"
