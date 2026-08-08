@@ -10,5 +10,5 @@
   wrapper sha256 `02797cfde157cd7724de9d9a5efb878cf2b9e13f7615dcba8c1b3a529e04155f`
 - models: opus/opus; load_bearing: T13b-completion; money_path: false; WAVE-0 vacuous
 - preconditions: T13b delivery inherited UNCOMMITTED (191+274 at halt); worktree unoccupied
-- run id: (appended at dispatch)
+- run id: wf_d83d9d90-c1c (dispatched 2026-08-08)
 - outcome: (appended at run close)
