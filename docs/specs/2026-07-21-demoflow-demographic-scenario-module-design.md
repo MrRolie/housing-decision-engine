@@ -204,7 +204,17 @@ rate (|75+ net migration| / 75+ population, per modeled geography) recorded in t
 MATERIALITY TRIPWIRE: a measured rate above 1%/yr in any modeled geography×scenario ESCALATES
 the closed-cohort altitude call back to the operator (rationale: 75+ all-cause exit hazards run
 ≥10%/yr, so a 1%/yr cap keeps the omission's relative distortion near or under 10%). Until that
-probe lands, the note carries the omission as UNEVIDENCED-PENDING — never as bounded. This is a stated
+probe lands, the note carries the omission as UNEVIDENCED-PENDING — never as bounded.
+**RESOLVED 2026-08-07 (steering ruling K; operator-ruled at the tripwire escalation):** the
+probe ran (StatCan 17-10-0149/0151 components + 17-10-0148/0150 populations; identity
+verified exact at All-ages) and the tripwire FIRED — Laval (RA13) 75+ net-migration reached
+1.672% / 1.156% / 1.041% per year in 2007/08–2009/10 (full published span 2001/02–2024/25;
+every other covered geography ≤ 0.81%; latest-5-period max 0.774%). THE OMISSION STANDS for
+Tranche 1: the note's verdict form is EVIDENCED-WITH-NAMED-EXCEEDANCE (full-span per-geography
+table; HORS_RMR recorded NOT-COVERED by the source, never approximated), and every ranking
+row of an exceeding geography carries the `closed_cohort_exceedance` flag (enum amended
+above; wired at the rankings task). The tripwire is evaluated on the FULL published span — a
+window whose sole visible effect is to remove the exceedance is not evidence. This is a stated
 assumption with a sensitivity remark in outputs, not a modeled mechanism; adding a reconciled
 post-entry migration term without reintroducing ISQ-embedded mortality is a v1 item.
 
@@ -421,7 +431,11 @@ bind SHIPPED formats AND their string fields):** the rankings JSON and tripwire 
 exact nested field allowlist — rankings row: {geography, mean_ed_reference, mean_ed_low,
 mean_ed_high, rank, rank_stable, flags[]} with `rank_stable` a TYPED boolean carrying the r8-F1
 robustness-sweep verdict (codex r9-F1 — the mandated stability result needs a schema home, never a
-flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy} (scenario
+flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy, closed_cohort_exceedance
+— **added by steering ruling K, 2026-08-07 (operator-resolved): rides every ranking row of a
+geography whose measured 75+ net-migration rate historically exceeded the 1%/yr materiality
+cap (currently: LAVAL_RA13), marking its rank lower-confidence under the closed-cohort
+assumption**} (scenario
 semantics per the collapse rule below); tripwire record: {indicator, current_value, source, as_of,
 band_low, band_high, status, reason?} with `reason` drawn from a CLOSED machine-token enum {stale,
 source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
