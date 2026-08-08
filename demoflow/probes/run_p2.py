@@ -45,6 +45,8 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
+from demoflow.loaders.pins import verify_raw_anchor
+
 WDS = "https://www150.statcan.gc.ca/t1/wds/rest/getFullTableDownloadCSV/98100231/en"
 
 # PINNED VINTAGE, deliberately NOT clock-derived. `data_vintage.extracted_at` (spec:315-316)
@@ -364,6 +366,17 @@ def main() -> None:
                 meta_member = [n for n in names if "MetaData" in n][0]
                 with zf.open(member) as fh:
                     raw_sha, raw_bytes = _sha256_stream(fh.read)
+                # UPSTREAM ANCHOR GATE (T13b PART 2, DIV F2 2026-08-08). Every check
+                # downstream of here compares CO-MOVING objects: re-cut the extract and
+                # its own pin, the derived artifacts and a fresh derivation all move with
+                # it, so the whole legitimate-refresh motion passed on a materially
+                # different vintage. This is the one check a re-extract cannot dodge, and
+                # it fires BEFORE `_filter_to_extract` writes the committed file: a new
+                # upstream vintage cannot overwrite the extract at all until the anchor in
+                # pins.RAW_SOURCE_SHA256 is DELIBERATELY re-pinned. `raw_sha` is what a
+                # re-pull must reproduce (the zip's own digest is not stable — archive
+                # metadata shifts without the data changing).
+                verify_raw_anchor(raw_sha, OUT_CSV.name)
                 universe = _geography_universe(zf, meta_member)
                 collisions = _label_collisions(zf, meta_member)
                 obs = _filter_to_extract(zf, member, OUT_CSV)

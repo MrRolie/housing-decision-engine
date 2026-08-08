@@ -1,5 +1,76 @@
 {
-  "_provenance": {"source": "Census 2021 QC headship (maintainers/persons) by age; base-year PIT-fixed",
-                  "as_of": "2021", "flag": "borrowed_prior"},
-  "headship": {"0-19": 0.02, "20-34": 0.40, "35-54": 0.48, "55-64": 0.52, "65-74": 0.56, "75+": 0.62}
+  "_provenance": {
+    "as_of": "2021",
+    "source": "Census 2021 QC private-household PRIMARY MAINTAINERS by age (StatCan 98-10-0231-01, committed extract census_tenure_age_98100231.csv, `Total -` member of every non-age dimension at statistic 'Number of private households') DIVIDED BY ISQ 2021 Le Québec Référence (A2026) persons by single year of age (committed pop-as-qc-base.xlsx, both sexes) — DERIVED, never transcribed (steering ruling B); the denominator is PERSONS because the use site (spec:395 OwnerStock) multiplies ISQ scenario population",
+    "sources": {
+      "census_tenure_age_98100231.csv": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+      "pop-as-qc-base.xlsx": "1d286d252a75195db6ab66ac767e352d9f74e4e2359c68eba4a43301c9c61fd4"
+    },
+    "raw_source_sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b",
+    "raw_source_member": "98100231.csv",
+    "statcan_table": "98-10-0231-01",
+    "isq_scenario": "Référence (A2026)",
+    "isq_geography": "Le Québec",
+    "base_year_status": "r (réel — an observation, not a projection)",
+    "extracted_at": "2026-07-21",
+    "derived_by": "demoflow.loaders.census.derive_headship_from_sources",
+    "generator": "demoflow/scripts/gen_headship.py",
+    "measure": "private-household primary maintainers in the band / persons in the SAME band — households formed per PERSON, PIT-fixed at the base year (spec §7 r3-F3)",
+    "band_members": {
+      "0-19": [
+        "15 to 19 years"
+      ],
+      "20-34": [
+        "20 to 24 years",
+        "25 to 29 years",
+        "30 to 34 years"
+      ],
+      "35-54": [
+        "35 to 39 years",
+        "40 to 44 years",
+        "45 to 49 years",
+        "50 to 54 years"
+      ],
+      "55-64": [
+        "55 to 59 years",
+        "60 to 64 years"
+      ],
+      "65-74": [
+        "65 to 69 years",
+        "70 to 74 years"
+      ],
+      "75+": [
+        "75 to 84 years",
+        "85 years and over"
+      ]
+    },
+    "band_persons": {
+      "0-19": 1794061.0,
+      "20-34": 1598646.0,
+      "35-54": 2207591.0,
+      "55-64": 1244430.0,
+      "65-74": 984254.0,
+      "75+": 743038.0
+    },
+    "band_maintainers": {
+      "0-19": 10920,
+      "20-34": 632140,
+      "35-54": 1275805,
+      "55-64": 760400,
+      "65-74": 629965,
+      "75+": 439810
+    },
+    "numerator_closure": "banded maintainers 3,749,040 vs the extract's published 'Total - Age of primary household maintainer' member 3,749,035; delta +5 inside the round-to-5 bound 2.5 x (14 members + 1 total) = 37.5",
+    "zero_support_note": "THE 0-19 BAND, KEPT DELIBERATELY (T13b 2026-08-08): its numerator has support only at 15-19 — there is no published maintainer member under 15 in 98-10-0231-01 — so the band rate is 10,920 maintainers aged 15-19 over 1,794,061 persons aged 0-19. That IS the use-site rate and it is aggregate-consistent: spec:395 sums pop(a) x headship(a) x ownership(a) over ages, so this rate multiplied by the band's own population reproduces the published maintainer count exactly. It is NOT an age-resolved rate — a consumer multiplying a SINGLE age inside the band (spec §6's age-18 D_native term) must land an age-resolved curve rather than reuse this one. The band is kept rather than dropped because the pipeline builds a per-single-year curve over range(0, 101) (plan:4675), where a missing band RAISES, and because every consumer today pairs it with ownership(a) — undefined, hence contributing nothing, below the ownership lattice's floor of 25.",
+    "rounding_note": "StatCan rounds household counts to the nearest 5, so the banded maintainer constituents do not reconcile exactly to their published total (see numerator_closure). The ISQ person denominators carry no such rounding. No correction is applied to either side.",
+    "supersedes": "the six TYPED rates carried until 2026-08-08 (0-19 0.02, 20-34 0.40, 35-54 0.48, 55-64 0.52, 65-74 0.56, 75+ 0.62). The DIV re-triage measured them at this use site: 35-54 was 16.9% low, the 65-74 -> 75+ shape was INVERTED, and the aggregate understated QC households by 9.5%. Their `borrowed_prior` flag is RETIRED — these values are derived, not borrowed"
+  },
+  "headship": {
+    "0-19": 0.006086749558682787,
+    "20-34": 0.3954221259741056,
+    "35-54": 0.5779172863089223,
+    "55-64": 0.6110428067468641,
+    "65-74": 0.6400431189510025,
+    "75+": 0.5919078162893419
+  }
 }

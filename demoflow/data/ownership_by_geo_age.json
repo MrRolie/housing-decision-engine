@@ -2,6 +2,8 @@
   "_provenance": {
     "source": "census_tenure_age_98100231.csv",
     "sha256": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+    "raw_source_sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b",
+    "raw_source_member": "98100231.csv",
     "statcan_table": "98-10-0231-01",
     "ref_date": "2021",
     "extracted_at": "2026-07-21",

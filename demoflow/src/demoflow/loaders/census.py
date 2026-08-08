@@ -5,34 +5,68 @@ precise denotation, and NOT the same territory as ISQ's literal hors-RMR populat
 row, both recorded in _provenance. Headship: base-year households/person by age band
 (PIT-fixed, §7 r3-F3).
 
-DERIVATION, NEVER TRANSCRIPTION (steering ruling B, 2026-07-25): every rate is computed
-by `derive_ownership_from_csv` from the pinned P2 extract; `data/ownership_by_geo_age.json`
-is a BUILD ARTIFACT of `scripts/gen_ownership.py`, never hand-edited, and
-`test_committed_ownership_json_equals_generator_output` proves the two equal. No OWNERSHIP
-rate is hand-written anywhere in this package. Headship is explicitly OUT of ruling B's scope
-(plan §Task 13 Step 1b — its persons-denominator comes from the ISQ pop loader, not the P2
-CSV): `data/headship_by_age.json` carries six TYPED rates and is the one rate surface here
-that is still transcription — a `borrowed_prior` input a later task derives once the pop
-loader lands.
+DERIVATION, NEVER TRANSCRIPTION (steering ruling B, 2026-07-25): every rate is computed —
+ownership by `derive_ownership_from_csv` from the pinned P2 extract, headship by
+`derive_headship_from_sources` from that extract AND the pinned ISQ QC-total pop workbook.
+Both JSONs under `data/` are BUILD ARTIFACTS of `scripts/gen_ownership.py` /
+`scripts/gen_headship.py`, never hand-edited, and a regen-equality gate proves each equals a
+fresh derivation. NO rate is hand-written anywhere in this package.
 
-STALENESS REFUSES AT LOAD (steering ruling L, 2026-08-08): that no-drift gate is a TEST —
-it defends the repo, not a runtime load. So `load_ownership_rates` independently checks the
-artifact's recorded `_provenance.sha256` against the pins registry on EVERY load and raises
-on an absent or mismatched digest. Two legs, neither subsuming the other: CI compares
-CONTENT (artifact vs fresh derivation), the load path compares IDENTITY (recorded source
-digest vs the pin). A stale or unprovenanced artifact never serves rates.
+HEADSHIP IS DERIVED AT ITS USE SITE (T13b, 2026-08-08 — DIV F1 was a LIVE DEFECT). Until
+then `data/headship_by_age.json` carried six TYPED `borrowed_prior` rates, on the theory that
+their persons-denominator was out of ruling B's reach until the pop loader landed (plan Task 13
+Step 1b). Measured against the pinned sources they did not reproduce: 35-54 was 16.9% low, the
+65-74 -> 75+ shape was INVERTED, and the aggregate understated QC households by 9.5%
+(3,393,953 vs the published 3,749,035) — adverse in BOTH directions, overstating 75+ release
+while understating the absorbers. The USE SITE settles the semantics: spec:395
+`OwnerStock(g,t,s) = Σ_over_all_ages pop(a,g,t,s) × headship(a) × ownership(a)` multiplies ISQ
+scenario POPULATION, so headship(a) is
+    QC private-household PRIMARY MAINTAINERS in band a  (committed P2 Census extract)
+    ÷ ISQ 2021 Le Québec Référence (A2026) PERSONS in band a  (committed pop-as-qc-base.xlsx)
+and nothing else. Both sources are sha256-pinned and read at derivation.
+
+STALENESS REFUSES AT LOAD (steering ruling L, 2026-08-08): a no-drift gate is a TEST — it
+defends the repo, not a runtime load. So `load_ownership_rates` and `load_headship_rates`
+independently check the artifact's recorded source digests against the pins registry on EVERY
+load and raise on an absent or mismatched one. Two legs, neither subsuming the other: CI
+compares CONTENT (artifact vs fresh derivation), the load path compares IDENTITY (recorded
+source digests vs the pins). A stale or unprovenanced artifact never serves rates.
+
+THE UPSTREAM RAW ANCHOR (T13b PART 2, DIV F2): all of the above compares CO-MOVING objects —
+re-cut the extract and its pin, the artifacts and a fresh derivation all move with it. So both
+artifacts also carry `pins.raw_anchor(CENSUS_EXTRACT)`, the digest of the 850MB raw StatCan
+member the extract was filtered from, which a re-extract CANNOT move without a deliberate
+re-pin (pins.py carries the full argument).
+
+ANCHOR-TYPED PROVENANCE: constants.py's charter rule — "every constant carries its documented
+anchor (source + figure + date); a constant without an anchor is a defect" — is ENFORCED here,
+not stated: every headship rate is instantiated as a `constants.Anchor` built from the
+artifact's OWN `as_of`/`source`, at derivation and again at load, so an undated or uncited
+curve serves nothing.
 """
 import csv
 import json
+import math
 from pathlib import Path
 
 from demoflow.errors import LoaderError
 from demoflow.geography import Geography
-from demoflow.loaders.pins import DATA_DIR, WORKBOOK_SHA256, verify_pin
+from demoflow.loaders.constants import Anchor
+from demoflow.loaders.isq_ages import build_single_year_long
+from demoflow.loaders.pins import (
+    DATA_DIR,
+    RAW_SOURCE_MEMBER,
+    WORKBOOK_SHA256,
+    raw_anchor,
+    raw_member,
+    verify_pin,
+)
 from demoflow.loaders.validate import assert_fraction
 
 CENSUS_EXTRACT = "census_tenure_age_98100231.csv"
+POP_QC_WORKBOOK = "pop-as-qc-base.xlsx"
 OWNERSHIP_ARTIFACT = "ownership_by_geo_age.json"
+HEADSHIP_ARTIFACT = "headship_by_age.json"
 
 # --- P2 extract structure -----------------------------------------------------------
 # POSITIONAL bindings, never csv.DictReader: the extract re-emits StatCan's raw header
@@ -102,8 +136,36 @@ _AGE_BAND_SPEC = (
 # for lookup but absent from the derivation, or vice versa, is unrepresentable).
 _AGE_BANDS = tuple((label, lo, hi) for label, lo, hi, _ in _AGE_BAND_SPEC)
 
-_HEADSHIP_BANDS = (("0-19", 0, 19), ("20-34", 20, 34), ("35-54", 35, 54),
-                   ("55-64", 55, 64), ("65-74", 65, 74), ("75+", 75, 200))
+# Headship band -> (lo, hi, maintainer-age members). SAME shape as _AGE_BAND_SPEC and for the
+# same reason (one source of truth: a band present for lookup but absent from the derivation is
+# unrepresentable). The 0-19 band carries ONE constituent because the table publishes no
+# maintainer member under 15 — see _ZERO_SUPPORT_NOTE for why the band is kept anyway.
+_HEADSHIP_BAND_SPEC = (
+    ("0-19", 0, 19, ("15 to 19 years",)),
+    ("20-34", 20, 34, ("20 to 24 years", "25 to 29 years", "30 to 34 years")),
+    ("35-54", 35, 54, ("35 to 39 years", "40 to 44 years",
+                       "45 to 49 years", "50 to 54 years")),
+    ("55-64", 55, 64, ("55 to 59 years", "60 to 64 years")),
+    ("65-74", 65, 74, ("65 to 69 years", "70 to 74 years")),
+    ("75+", 75, 200, ("75 to 84 years", "85 years and over")),
+)
+_HEADSHIP_BANDS = tuple((label, lo, hi) for label, lo, hi, _ in _HEADSHIP_BAND_SPEC)
+
+# The extract's own published all-ages maintainer count — an INDEPENDENT aggregate the banded
+# sum must close against (a dropped or duplicated constituent moves the sum by >= 10,920, the
+# smallest member, while every rate stays a plausible fraction).
+_MAINTAINER_TOTAL_MEMBER = "Total - Age of primary household maintainer"
+
+# ISQ denominator selection. The base year is the PIT anchor (spec §7 r3-F3: base-year Census
+# rates held constant), and `Référence (A2026)` is the reference fan; sex code 3 is ISQ's
+# published both-sexes row and is cross-checked against codes 1+2 at read time.
+_POP_LABEL = "Le Québec"
+_POP_SCENARIO = "Référence (A2026)"
+_POP_BASE_YEAR = 2021
+_POP_BASE_STATUS = "r"                      # réel — measured 2026-08-08 for 2021
+_POP_SEX_TOTAL = 3
+_POP_SEX_PARTS = (1, 2)
+_POP_TERMINAL_AGE = 100                     # single-year block span (isq_ages: 100+ capped)
 
 # RA-level rows are not in this CMA-level table, so each borrows its parent CMA's COMPUTED
 # rate (spec §8). All five borrow MTL_RMR: this understates island vs overstates couronne
@@ -180,11 +242,45 @@ def _check_header(header: list[str], csv_path: Path) -> None:
                 f"expected {expected!r} (schema drift?)")
 
 
+def _raise_for_empty_slice(csv_path: Path, seen_statistics: set, seen_members: dict) -> None:
+    """The slice predicate matched NOTHING — name the member that is actually absent.
+
+    MEASURED 2026-08-08 (DIV F3): a renamed `Statistics (3C)` member or a renamed `Total -`
+    member skips every row, and the only surviving check was the GEO-set gate, which then
+    raised "GEO set is [], expected [the seven geographies]" — sending the reader to the
+    geography map and the netting rule for a fault in a DIFFERENT dimension's member label.
+    Diagnosis order follows the filter order: the statistic gates the member observations, so
+    a renamed statistic must be reported as itself and not as an absent `Total -` member.
+    """
+    if _STATISTIC not in seen_statistics:
+        raise LoaderError(
+            f"{csv_path.name}: no row carries the statistic {_STATISTIC!r} — the extract's "
+            f"'Statistics (3C)' members are {sorted(seen_statistics)}. The rate slice is empty "
+            "because THAT member is absent (renamed upstream?), not because a geography is "
+            "missing")
+    for col, member in _TOTAL_MEMBERS.items():
+        if member not in seen_members[col]:
+            observed = sorted(seen_members[col])
+            raise LoaderError(
+                f"{csv_path.name}: no row carries {member!r} in column {col} "
+                f"({_EXPECTED_HEADER[col]!r}) — {len(observed)} member(s) seen there, e.g. "
+                f"{observed[:4]}. The rate slice is empty because THAT `Total -` member is "
+                "absent (renamed upstream?), not because a geography is missing")
+    raise LoaderError(
+        f"{csv_path.name}: the rate slice matched no rows although every slice member IS "
+        "present — the extract carries no data rows for that cell (truncated extract?)")
+
+
 def _read_totals_cube(csv_path: Path) -> dict[tuple[str, str], tuple[int, int]]:
     """{(GEO, age member): (owner, total)} over the `Total -` member of every non-age
     dimension. Positional read; duplicate keys raise (a duplicated or copied row would
     otherwise be silently absorbed into a rate)."""
     cube: dict[tuple[str, str], tuple[int, int]] = {}
+    # Slice-member observations, kept so an EMPTY cube can name its own cause rather than
+    # surfacing as an absent-geography error (see `_raise_for_empty_slice`). Cardinality is
+    # bounded by the dimensions' member counts (3 statistics, 10/3/16 members), not by rows.
+    seen_statistics: set[str] = set()
+    seen_members: dict[int, set[str]] = {col: set() for col in _TOTAL_MEMBERS}
     with csv_path.open(encoding="utf-8-sig", newline="") as fh:
         rows = csv.reader(fh)
         try:
@@ -197,8 +293,11 @@ def _read_totals_cube(csv_path: Path) -> dict[tuple[str, str], tuple[int, int]]:
                 raise LoaderError(
                     f"{csv_path.name}:{lineno}: ragged row ({len(row)} fields, need "
                     f"> {_COL_OWNER})")
+            seen_statistics.add(row[_COL_STAT])
             if row[_COL_STAT] != _STATISTIC:
                 continue
+            for col in _TOTAL_MEMBERS:
+                seen_members[col].add(row[col])
             if any(row[col] != member for col, member in _TOTAL_MEMBERS.items()):
                 continue
             key = (row[_COL_GEO], row[_COL_AGE])
@@ -208,6 +307,8 @@ def _read_totals_cube(csv_path: Path) -> dict[tuple[str, str], tuple[int, int]]:
                     "dimension address is not unique (row duplicated or payload copied?)")
             ctx = f"{csv_path.name}:{lineno} {key}"
             cube[key] = (_count(row[_COL_OWNER], ctx), _count(row[_COL_TOTAL], ctx))
+    if not cube:
+        _raise_for_empty_slice(csv_path, seen_statistics, seen_members)
     found_geos = {geo for geo, _ in cube}
     expected_geos = {_PROVINCE, *_QC_CMAS}
     if found_geos != expected_geos:
@@ -289,6 +390,12 @@ def derive_ownership_from_csv(csv_path: Path | str) -> dict:
         "_provenance": {
             "source": CENSUS_EXTRACT,
             "sha256": WORKBOOK_SHA256[CENSUS_EXTRACT],
+            # The one anchor a re-extract cannot move with (DIV F2). BOTH accessors RAISE on an
+            # unregistered extract, so the derivation refuses rather than emitting an artifact
+            # whose upstream vintage is unpinned — or half-pinned: a digest with no member name
+            # records a hash of an unidentified object.
+            "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
+            "raw_source_member": raw_member(CENSUS_EXTRACT),
             "statcan_table": "98-10-0231-01",
             "ref_date": "2021",
             "extracted_at": "2026-07-21",
@@ -357,6 +464,21 @@ def _verify_artifact_provenance(payload, path: Path) -> None:
             f"{recorded} does not match the pinned {CENSUS_EXTRACT} digest {expected}. "
             "Regenerate with `uv run python scripts/gen_ownership.py`; never hand-edit it.")
 
+    # The UPSTREAM leg (DIV F2): the extract's own digest co-moves with a re-extract, the raw
+    # member's does not. An artifact recording a different upstream vintage than the registry
+    # pins was cut from a table this repo has not reviewed.
+    raw_expected = raw_anchor(CENSUS_EXTRACT)
+    raw_recorded = provenance.get("raw_source_sha256")
+    if raw_recorded != raw_expected:
+        raise LoaderError(
+            f"{path.name}: recorded `_provenance.raw_source_sha256` {raw_recorded} does not "
+            f"match the pinned upstream anchor {raw_expected} for "
+            # `.get`, never the raising accessor: this message is already refusing for the
+            # better reason (vintage drift), and a half-registered member must not replace it.
+            f"{RAW_SOURCE_MEMBER.get(CENSUS_EXTRACT, '?')} — this artifact was derived from an "
+            "extract cut from a DIFFERENT upstream vintage (or the anchor was dropped); "
+            "regenerate with `uv run python scripts/gen_ownership.py`")
+
 
 def load_ownership_rates(data_dir: Path | None = None) -> dict:
     path = (data_dir or DATA_DIR) / OWNERSHIP_ARTIFACT
@@ -389,8 +511,272 @@ def ownership_rate(rates: dict, geography: Geography, age: int) -> float:
     return assert_fraction(f"ownership[{geography.value},{band}]", geo_rates[band])
 
 
+# --- headship derivation (T13b: ruling B applied at the use site) --------------------
+
+def _qc_persons_by_age(workbook_path: Path) -> dict[int, float]:
+    """{single year of age: persons} — the base-year QC reference population denominator.
+
+    Reads the pinned QC-total workbook through the shared single-year builder (header-GROUP
+    selection, spec §8), then gates the SELECTION hard: the workbook is a fan of
+    scenarios x years x statuses x sexes, and quietly picking or pooling the wrong slice would
+    produce a perfectly plausible denominator and a wrong curve. `load_population` cannot serve
+    this file — every one of its rows classifies IGNORED under the modeled-geography map, so
+    that loader refuses it by design (isq.py gate 3).
+    """
+    verify_pin(workbook_path, workbook_path.name)
+    frame = build_single_year_long(workbook_path)
+    selected = frame[(frame["label"] == _POP_LABEL)
+                     & (frame["scenario_label"] == _POP_SCENARIO)
+                     & (frame["year"] == _POP_BASE_YEAR)]
+    if selected.empty:
+        raise LoaderError(
+            f"{workbook_path.name}: no rows for {_POP_LABEL!r} / {_POP_SCENARIO!r} / "
+            f"{_POP_BASE_YEAR} — the headship denominator's slice is absent (edition drift?)")
+
+    # The base year must still be OBSERVED. A vintage in which 2021 becomes provisoire or
+    # projeté changes what the denominator IS (spec §7 pins base-year rates to an observation),
+    # and nothing else in this function could notice.
+    statuses = sorted({str(s).strip() for s in selected["status"]})
+    if statuses != [_POP_BASE_STATUS]:
+        raise LoaderError(
+            f"{workbook_path.name}: base year {_POP_BASE_YEAR} carries status(es) {statuses}, "
+            f"expected exactly ['{_POP_BASE_STATUS}'] (réel) — the headship denominator would "
+            "no longer be a base-year observation")
+
+    by_code: dict[int, dict[int, float]] = {}
+    for code in (_POP_SEX_TOTAL, *_POP_SEX_PARTS):
+        rows = selected[selected["sex_code"] == code]
+        ages = {int(a): float(p) for a, p in zip(rows["age"], rows["population"])}
+        if sorted(ages) != list(range(0, _POP_TERMINAL_AGE + 1)):
+            raise LoaderError(
+                f"{workbook_path.name}: sex code {code} covers {len(ages)} single-year ages, "
+                f"expected the full 0..{_POP_TERMINAL_AGE} span (schema drift)")
+        for age, persons in ages.items():
+            if not math.isfinite(persons) or persons < 0:
+                raise LoaderError(
+                    f"{workbook_path.name}: sex code {code} age {age} population {persons} is "
+                    "not finite and non-negative")
+        by_code[code] = ages
+
+    # Sex additivity — the same guard isq.py applies to the modeled workbooks (gate 7). Here it
+    # is the ONLY check on the both-sexes row this function returns.
+    total = by_code[_POP_SEX_TOTAL]
+    for age, persons in total.items():
+        parts = sum(by_code[code][age] for code in _POP_SEX_PARTS)
+        if not math.isclose(persons, parts, rel_tol=1e-9, abs_tol=1e-6):
+            raise LoaderError(
+                f"{workbook_path.name}: sex additivity fails at age {age} — code "
+                f"{_POP_SEX_TOTAL} is {persons} but codes {list(_POP_SEX_PARTS)} sum to {parts}")
+    return total
+
+
+def _headship_value(maintainers: int, persons: float, ctx: str) -> float:
+    """maintainers / persons with every degenerate named BEFORE the division."""
+    if not math.isfinite(persons) or persons <= 0:
+        raise LoaderError(f"{ctx}: non-positive person denominator {persons}")
+    if maintainers < 0:
+        raise LoaderError(f"{ctx}: negative maintainer count {maintainers}")
+    if maintainers > persons:
+        raise LoaderError(
+            f"{ctx}: {maintainers} maintainers exceed {persons} persons — a headship rate "
+            "above 1 means the numerator and denominator are not the same population")
+    return assert_fraction(ctx, maintainers / persons)
+
+
+def _assert_anchor_typed(rates: dict, provenance: dict, where: str) -> None:
+    """Instantiate every rate as a `constants.Anchor` built from the payload's OWN as_of and
+    source — constants.py's "an undated/uncited constant is a defect" rule, enforced instead of
+    stated. Runs at derivation AND at load, so a de-dated artifact serves nothing."""
+    for band, value in rates.items():
+        try:
+            Anchor(value=value, as_of=provenance.get("as_of", ""),
+                   source=provenance.get("source", ""), unit="fraction")
+        except LoaderError as exc:
+            raise LoaderError(f"{where}: headship[{band}] is not a valid Anchor — {exc}") from exc
+
+
+def _zero_support_note(maintainers: int, persons: float) -> str:
+    return (
+        "THE 0-19 BAND, KEPT DELIBERATELY (T13b 2026-08-08): its numerator has support only at "
+        "15-19 — there is no published maintainer member under 15 in 98-10-0231-01 — so the "
+        f"band rate is {maintainers:,} maintainers aged 15-19 over {persons:,.0f} persons aged "
+        "0-19. That IS the use-site rate and it is aggregate-consistent: spec:395 sums pop(a) x "
+        "headship(a) x ownership(a) over ages, so this rate multiplied by the band's own "
+        "population reproduces the published maintainer count exactly. It is NOT an "
+        "age-resolved rate — a consumer multiplying a SINGLE age inside the band (spec §6's "
+        "age-18 D_native term) must land an age-resolved curve rather than reuse this one. The "
+        "band is kept rather than dropped because the pipeline builds a per-single-year curve "
+        "over range(0, 101) (plan:4675), where a missing band RAISES, and because every "
+        "consumer today pairs it with ownership(a) — undefined, hence contributing nothing, "
+        "below the ownership lattice's floor of 25."
+    )
+
+
+def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str) -> dict:
+    """Compute the base-year headship curve from the TWO pinned sources.
+
+    The ONLY producer of headship rates in this package. USE-SITE SEMANTICS (spec:395):
+    `OwnerStock = Σ pop(a,g,t,s) × headship(a) × ownership(a)` multiplies ISQ scenario
+    POPULATION, so headship(a) = QC private-household primary maintainers in band a ÷ ISQ
+    persons in band a. Both sources are verified against their pins before a single value is
+    computed — a curve derived from an unpinned vintage breaks the PIT chain while emitting
+    perfectly plausible fractions (that is precisely how the retired typed curve survived).
+    """
+    csv_path, workbook_path = Path(csv_path), Path(workbook_path)
+    verify_pin(csv_path, csv_path.name)
+    cube = _read_totals_cube(csv_path)
+    persons_by_age = _qc_persons_by_age(workbook_path)      # verifies its own pin
+
+    maintainers: dict[str, int] = {}
+    for label, _lo, _hi, members in _HEADSHIP_BAND_SPEC:
+        ctx = f"headship[{label}]"
+        total = 0
+        for member in members:
+            try:
+                # index 1 = `Tenure (4):Total - Tenure[1]`: ALL private households in the cell.
+                # The age dimension IS the maintainer's age, so that count is the numerator;
+                # index 0 (owner households) belongs to the ownership rate, never to headship.
+                total += cube[(_PROVINCE, member)][1]
+            except KeyError as exc:
+                raise LoaderError(
+                    f"{ctx}: age member {member!r} absent for {_PROVINCE!r} — the band cannot "
+                    "be summed (schema drift?)") from exc
+        maintainers[label] = total
+
+    published = cube.get((_PROVINCE, _MAINTAINER_TOTAL_MEMBER))
+    if published is None:
+        raise LoaderError(
+            f"{csv_path.name}: the published {_MAINTAINER_TOTAL_MEMBER!r} member is absent for "
+            f"{_PROVINCE!r} — the banded numerator has nothing independent to close against")
+    published_total = published[1]
+    banded = sum(maintainers.values())
+    # StatCan rounds every cell to the nearest 5, so the banded constituents and the published
+    # total each carry <= 2.5 of rounding error: the bound is 2.5 x (members + 1), DERIVED from
+    # the member count rather than tuned to the observed delta (5 on the 2026-07-21 vintage) —
+    # a gate tuned to today's value reds on a legitimate re-extract. It still catches a dropped
+    # or duplicated constituent by three orders of magnitude (smallest member: 10,920).
+    n_members = sum(len(members) for *_, members in _HEADSHIP_BAND_SPEC)
+    tolerance = 2.5 * (n_members + 1)
+    closure = (f"banded maintainers {banded:,} vs the extract's published "
+               f"{_MAINTAINER_TOTAL_MEMBER!r} member {published_total:,}; delta "
+               f"{banded - published_total:+,} inside the round-to-5 bound 2.5 x "
+               f"({n_members} members + 1 total) = {tolerance:g}")
+    if abs(banded - published_total) > tolerance:
+        raise LoaderError(f"{csv_path.name}: headship numerator does not close — {closure}")
+
+    rates: dict[str, float] = {}
+    band_persons: dict[str, float] = {}
+    for label, lo, hi, _members in _HEADSHIP_BAND_SPEC:
+        band_persons[label] = sum(p for age, p in persons_by_age.items() if lo <= age <= hi)
+        rates[label] = _headship_value(maintainers[label], band_persons[label],
+                                       f"headship[{label}]")
+
+    provenance = {
+        "as_of": str(_POP_BASE_YEAR),
+        "source": (
+            f"Census 2021 QC private-household PRIMARY MAINTAINERS by age (StatCan "
+            f"98-10-0231-01, committed extract {CENSUS_EXTRACT}, `Total -` member of every "
+            f"non-age dimension at statistic {_STATISTIC!r}) DIVIDED BY ISQ "
+            f"{_POP_BASE_YEAR} {_POP_LABEL} {_POP_SCENARIO} persons by single year of age "
+            f"(committed {POP_QC_WORKBOOK}, both sexes) — DERIVED, never transcribed "
+            "(steering ruling B); the denominator is PERSONS because the use site (spec:395 "
+            "OwnerStock) multiplies ISQ scenario population"),
+        "sources": {
+            CENSUS_EXTRACT: WORKBOOK_SHA256[CENSUS_EXTRACT],
+            POP_QC_WORKBOOK: WORKBOOK_SHA256[POP_QC_WORKBOOK],
+        },
+        "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
+        "raw_source_member": raw_member(CENSUS_EXTRACT),
+        "statcan_table": "98-10-0231-01",
+        "isq_scenario": _POP_SCENARIO,
+        "isq_geography": _POP_LABEL,
+        "base_year_status": f"{_POP_BASE_STATUS} (réel — an observation, not a projection)",
+        "extracted_at": "2026-07-21",
+        "derived_by": "demoflow.loaders.census.derive_headship_from_sources",
+        "generator": "demoflow/scripts/gen_headship.py",
+        "measure": ("private-household primary maintainers in the band / persons in the SAME "
+                    "band — households formed per PERSON, PIT-fixed at the base year (spec §7 "
+                    "r3-F3)"),
+        "band_members": {label: list(members) for label, _lo, _hi, members in _HEADSHIP_BAND_SPEC},
+        "band_persons": {label: band_persons[label] for label, *_ in _HEADSHIP_BAND_SPEC},
+        "band_maintainers": {label: maintainers[label] for label, *_ in _HEADSHIP_BAND_SPEC},
+        "numerator_closure": closure,
+        "zero_support_note": _zero_support_note(maintainers["0-19"], band_persons["0-19"]),
+        # NOT `_ROUNDING_NOTE`: that sentence describes the OWNERSHIP rate's numerator and
+        # denominator, both of which are round-to-5 household counts. Here only the numerator
+        # is — the ISQ person denominators are not rounded that way, and a reader told
+        # otherwise would mis-attribute the +5 delta.
+        "rounding_note": (
+            "StatCan rounds household counts to the nearest 5, so the banded maintainer "
+            "constituents do not reconcile exactly to their published total (see "
+            "numerator_closure). The ISQ person denominators carry no such rounding. No "
+            "correction is applied to either side."),
+        "supersedes": (
+            "the six TYPED rates carried until 2026-08-08 (0-19 0.02, 20-34 0.40, 35-54 0.48, "
+            "55-64 0.52, 65-74 0.56, 75+ 0.62). The DIV re-triage measured them at this use "
+            "site: 35-54 was 16.9% low, the 65-74 -> 75+ shape was INVERTED, and the aggregate "
+            "understated QC households by 9.5%. Their `borrowed_prior` flag is RETIRED — these "
+            "values are derived, not borrowed"),
+    }
+    _assert_anchor_typed(rates, provenance, "derive_headship_from_sources")
+    return {"_provenance": provenance, "headship": rates}
+
+
+# --- headship loaders ----------------------------------------------------------------
+
+def _verify_headship_provenance(payload: dict, path: Path) -> None:
+    """STEERING RULING L for headship — identity checked on EVERY load, all three digests.
+
+    Headship has TWO committed sources plus the upstream raw anchor, and an artifact derived
+    from a stale POP workbook is exactly as wrong as one derived from a stale extract — so a
+    single-digest check (ownership's shape) would leave two of the three unexecuted. Every
+    message NAMES the digest at fault: "this artifact is stale" without saying which source
+    moved sends the reader to the wrong file.
+    """
+    provenance = payload.get("_provenance") if isinstance(payload, dict) else None
+    if not isinstance(provenance, dict):
+        raise LoaderError(
+            f"{path.name}: no `_provenance` block — an artifact that records no source sha256 "
+            "cannot be shown to derive from the pinned sources, so it is indistinguishable "
+            "from a hand-authored curve (steering ruling B) and is refused (ruling L)")
+    sources = provenance.get("sources")
+    if not isinstance(sources, dict):
+        raise LoaderError(
+            f"{path.name}: no `_provenance.sources` map of source file -> sha256 — the "
+            "artifact records no source identity at all and is refused (steering ruling L)")
+    for name in (CENSUS_EXTRACT, POP_QC_WORKBOOK):
+        expected = WORKBOOK_SHA256.get(name)
+        if expected is None:
+            raise LoaderError(
+                f"{path.name}: no sha256 pin registered for {name!r} — the headship artifact "
+                "cannot be checked against its source (PIT chain unpinned)")
+        recorded = sources.get(name)
+        if recorded is None:
+            raise LoaderError(
+                f"{path.name}: `_provenance.sources` records no sha256 for {name!r} — one of "
+                "the two derivation inputs is unaccounted for, so a stale vintage of it could "
+                "not be detected (steering ruling L)")
+        if recorded != expected:
+            raise LoaderError(
+                f"{path.name}: STALE headship artifact — recorded sha256 for {name} "
+                f"{recorded} does not match the pinned digest {expected}. Regenerate with "
+                "`uv run python scripts/gen_headship.py`; never hand-edit it.")
+
+    raw_expected = raw_anchor(CENSUS_EXTRACT)
+    if provenance.get("raw_source_sha256") != raw_expected:
+        raise LoaderError(
+            f"{path.name}: recorded `_provenance.raw_source_sha256` "
+            f"{provenance.get('raw_source_sha256')} does not match the pinned upstream anchor "
+            # `.get` for the same reason as the ownership leg above: drift is the finding.
+            f"{raw_expected} for {RAW_SOURCE_MEMBER.get(CENSUS_EXTRACT, '?')} — the numerator "
+            "was cut from a DIFFERENT upstream vintage (or the anchor was dropped); regenerate "
+            "with `uv run python scripts/gen_headship.py`")
+
+    _assert_anchor_typed(payload["headship"], provenance, path.name)
+
+
 def load_headship_rates(data_dir: Path | None = None) -> dict:
-    path = (data_dir or DATA_DIR) / "headship_by_age.json"
+    path = (data_dir or DATA_DIR) / HEADSHIP_ARTIFACT
     if not path.exists():
         raise LoaderError(f"headship fixture not found: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -402,7 +788,12 @@ def load_headship_rates(data_dir: Path | None = None) -> dict:
     # reader to the lattice instead of to the file.
     if "headship" not in payload:
         raise LoaderError(f"{path.name}: no 'headship' key (keys: {sorted(payload)})")
-    return payload["headship"]
+    _verify_headship_provenance(payload, path)
+    curve = payload["headship"]
+    missing = [label for label, _lo, _hi in _HEADSHIP_BANDS if label not in curve]
+    if missing:
+        raise LoaderError(f"{path.name}: headship rate missing for bands: {missing} (strict join)")
+    return curve
 
 
 def headship_rate(headship: dict, age: int) -> float:
