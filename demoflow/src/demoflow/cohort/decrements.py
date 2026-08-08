@@ -27,8 +27,15 @@ ANCHOR PROVENANCE, deliberately NOT imported: the literals below are pinned agai
 loudly. The import is not taken here because `demoflow.loaders.constants` pulls pandas
 transitively (via `loaders/validate.py`, measured) and this module is pure arithmetic.
 
-Task 20 appends the competing-risk partition algebra (death-first, survivor-conditional,
-widow-retained) to this module; the calibration half lands first.
+THE OTHER HALF OF THIS MODULE is the competing-risk partition algebra (`partition_solo`,
+`partition_couple`) — spec §5's PINNED branch structure: death resolves FIRST, living exit is
+survivor-conditional on the no-death branch, and widowhood RETAINS the unit (a couple losing
+one spouse becomes `Solo` of the surviving sex; the new widow is not living-exit-eligible in
+the transition year). Calibration and partition sit together because they share the one
+quantity — `q_live` is the hazard the partition splits on — and share `CalibrationError` as
+the single fail-loud channel for an out-of-domain probability. Note the two guards use
+DIFFERENT domains on purpose: `annualize_q_live` is `[0,1)` (a certain 5-year sale is a data
+defect), `_check_unit` is `[0,1]` closed (a certain decrement is degenerate but valid).
 """
 from demoflow.errors import CalibrationError
 
@@ -53,3 +60,35 @@ def annualize_q_live(five_year_rate: float = 0.36) -> float:
     if not 0.0 <= five_year_rate < 1.0:
         raise CalibrationError(f"five_year_rate out of [0,1): {five_year_rate}")
     return 1.0 - (1.0 - five_year_rate) ** (1.0 / 5.0)
+
+
+def _check_unit(*qs: float) -> None:
+    for q in qs:
+        if not 0.0 <= q <= 1.0:
+            raise CalibrationError(f"probability outside [0,1]: {q}")
+
+
+def partition_solo(q_s: float, q_live: float) -> dict[str, float]:
+    """Solo owner: death (estate) resolves first; survivors split living-exit vs remain."""
+    _check_unit(q_s, q_live)
+    surv = 1.0 - q_s
+    return {"death": q_s, "living_exit": surv * q_live, "remain": surv * (1.0 - q_live)}
+
+
+def partition_couple(q_m: float, q_f: float, q_live: float) -> dict[str, float]:
+    """Couple owner (spec §5, codex F3): both-die -> estate; exactly-one-dies -> widowed
+    Solo of the surviving sex, UNIT RETAINED (widow NOT living-exit-eligible in the
+    transition year — the widow branch is disjoint from the no-death branch that splits
+    q_live); no-death splits q_live -> living exit vs remain. Branches partition to 1."""
+    _check_unit(q_m, q_f, q_live)
+    both_die = q_m * q_f
+    widow_to_solo_f = q_m * (1.0 - q_f)   # male dies -> surviving female Solo_f
+    widow_to_solo_m = q_f * (1.0 - q_m)   # female dies -> surviving male Solo_m
+    no_death = (1.0 - q_m) * (1.0 - q_f)
+    return {
+        "both_die": both_die,
+        "widow_to_solo_f": widow_to_solo_f,
+        "widow_to_solo_m": widow_to_solo_m,
+        "living_exit": no_death * q_live,
+        "remain": no_death * (1.0 - q_live),
+    }
