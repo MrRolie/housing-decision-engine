@@ -687,6 +687,303 @@ def test_duplicate_extract_cell_raises(tmp_path, monkeypatch):
                                 lambda p: p["cells"].append(dict(p["cells"][0])))
 
 
+# --- the SOURCE-GEOGRAPHY arm of the direction gate -----------------------------------
+#
+# The direction check first saw only the three DERIVED geographies, and a Men+/Women+
+# transposition confined to ONE SMALL published CMA slipped through every gate:
+#   * the swap is internally consistent (pop, alone and coupled move together), so no rate
+#     leaves [0,1] and no degenerate guard fires;
+#   * gender additivity is untouched — the two counts merely change sides;
+#   * the derived geographies' 75+ direction survives, because one small CMA cannot reverse a
+#     province-net residual.
+# It DOES move the served HORS_RMR rates (measured below), which is the defect.
+#
+# WHAT THE SOURCE ARM ADDS, EXACTLY — measured 2026-08-08, and stated narrowly because this
+# file's own history punishes overclaiming a gate's reach: the FOUR SMALL CMAs, and nothing else.
+# The other three published geographies already refused, by DIFFERENT gates:
+#   Quebec (province) only, and Montréal (CMA) only: `_rates_from_counts`' degenerate guards —
+#     the residual then nets Men+ counts out of a Women+ province total and coupled persons
+#     exceed the not-living-alone population. They REFUSE, but the message points at the
+#     residual, not at the transposed junction. Recorded rather than fixed: the rates-before-
+#     direction ordering that produces it is itself a measured choice (see the derivation's own
+#     note — a degenerate published cell reaches the aggregate as a fake reversal, so a
+#     direction-first pass misdirects the other way).
+#   Québec (CMA) only: the PRE-EXISTING derived arm — QC_RMR IS that CMA, so the reversal is in
+#     the derived counts too. (The MESSAGE now names the published row, because the published arm
+#     is checked first inside the merged mapping; coverage is therefore asserted on the derived
+#     counts, not on which arm's message wins.)
+# All three facts are asserted below, so the scope claim is executable, not prose.
+
+_SMALL_CMAS = ("Drummondville (CMA), Que.", "Saguenay (CMA), Que.",
+               "Sherbrooke (CMA), Que.", "Trois-Rivières (CMA), Que.")
+
+# 75+ AGGREGATE coupled counts (coupled_M, coupled_F) per PUBLISHED geography, transcribed from
+# probe P3 §4b's per-band rows (`75 to 84 years` + `85 years and over`) — TEST-OWNED, never
+# imported. A transposition confined to ONE geography turns that geography's OWN margin into the
+# reversal the gate measures, so this table IS the gate's power, geography by geography.
+_P3_75PLUS_COUPLED = {
+    "Quebec": (160_525 + 31_905, 115_760 + 14_905),
+    "Montréal (CMA), Que.": (70_150 + 16_295, 50_195 + 7_390),
+    "Québec (CMA), Que.": (16_870 + 2_920, 12_535 + 1_470),
+    "Saguenay (CMA), Que.": (3_665 + 645, 2_745 + 325),
+    "Sherbrooke (CMA), Que.": (4_680 + 885, 3_475 + 445),
+    "Trois-Rivières (CMA), Que.": (3_620 + 620, 2_745 + 325),
+    "Drummondville (CMA), Que.": (1_985 + 285, 1_480 + 140),
+}
+# Spec §5's own reversal bound, transcribed rather than imported so a change to the module's
+# constant reds here instead of moving this test with it.
+_SPEC_REVERSAL_BOUND = 0.25
+
+
+def _swap_genders(payload: dict, geographies) -> None:
+    """Transpose Men+/Women+ inside the named PUBLISHED geographies, and nowhere else."""
+    swap = {_P_SEX["M"]: _P_SEX["F"], _P_SEX["F"]: _P_SEX["M"]}
+    targets = set(geographies)
+    for cell in payload["cells"]:
+        if cell["geography"] in targets and cell["gender"] in swap:
+            cell["gender"] = swap[cell["gender"]]
+
+
+def _derived_counts_from(payload: dict) -> dict:
+    """{derived geography: {sex: {cube member: (pop, alone, coupled)}}} — TEST-OWNED netting.
+
+    The producer's own view of the three derived geographies, rebuilt here so a claim about what
+    the DERIVED arm can and cannot see is checkable without disabling the code under test, and
+    without depending on which arm's message wins the race inside the merged mapping.
+    """
+    cube = {(c["geography"], c["gender"], c["age_group"], c["arrangement"]): c["value"]
+            for c in payload["cells"]}
+
+    def net(source: str, gender: str, member: str, arrangement: str) -> int:
+        if source != "HORS_RMR":
+            return cube[(source, gender, member, arrangement)]
+        return (cube[(_P_PROVINCE, gender, member, arrangement)]
+                - sum(cube[(c, gender, member, arrangement)] for c in _P_CMAS))
+
+    return {
+        name: {sex: {member: tuple(net(source, _P_SEX[sex], member, a)
+                                   for a in (_P_TOTAL, _P_ALONE, _P_COUPLED))
+                     for member in _P_BANDS.values()}
+               for sex in _P_SEX}
+        for name, source in (("MTL_RMR", "Montréal (CMA), Que."),
+                             ("QC_RMR", "Québec (CMA), Que."),
+                             ("HORS_RMR", "HORS_RMR"))
+    }
+
+
+def _derived_75plus_coupled(payload: dict, geography: str) -> tuple[int, int]:
+    per_sex = _derived_counts_from(payload)[geography]
+    return tuple(sum(per_sex[sex][member][2] for member in _P_BANDS.values())
+                 for sex in ("M", "F"))
+
+
+def test_a_transposition_confined_to_one_small_cma_is_refused_at_derivation(
+        tmp_path, monkeypatch):
+    """THE HOLE: each of the four small CMAs, transposed alone, must red — and name itself.
+
+    Naming matters here: the message sends a reader to the geography whose junction is
+    suspect, and a source-level reversal is a claim about ONE published row, not about the
+    derived residual that happens to contain it.
+    """
+    for cma in _SMALL_CMAS:
+        with pytest.raises(LoaderError, match="direction reversed") as exc:
+            _derive_mutated_extract(tmp_path, monkeypatch,
+                                    lambda p, cma=cma: _swap_genders(p, {cma}))
+        assert cma in str(exc.value), (
+            f"the message does not name {cma}, the geography whose junction is transposed")
+
+
+def test_the_published_geographies_the_source_arm_does_not_add_are_covered_elsewhere(
+        tmp_path, monkeypatch):
+    """The scope claim above, executable — measured, not assumed. Two arms, two DIFFERENT gates.
+
+    A gate credited with coverage it does not supply is worse than a missing one, so the
+    province-wide and big-CMA transpositions are fed in and the arm that refuses each is
+    identified. The degenerate arm is asserted by what the message is NOT rather than by the
+    guard's exact wording (which would be brittle for no gain), and by the fact that it points
+    at the RESIDUAL — the honest cost of keeping the recorded rates-before-direction ordering.
+    """
+    for geo in (_P_PROVINCE, "Montréal (CMA), Que."):
+        with pytest.raises(LoaderError) as exc:
+            _derive_mutated_extract(tmp_path, monkeypatch,
+                                    lambda p, geo=geo: _swap_genders(p, {geo}))
+        # This negative also pins ARM ORDER, deliberately: the published arm WOULD red on either
+        # of these (Quebec's own margin is 0.3210), so what keeps the degenerate guards in front
+        # is the rates-before-direction ordering the derivation records as a measured choice.
+        # Read a failure here as "that ordering moved", not as a missing gate.
+        assert "direction reversed" not in str(exc.value), (
+            f"a {geo}-only transposition is refused by the degenerate-count guards (the residual "
+            "nets Men+ out of a Women+ total), not by the direction gate")
+        assert "exceed" in str(exc.value) and "HORS_RMR" in str(exc.value), (
+            "the message points at the residual rather than at the transposed junction — "
+            "recorded, not fixed")
+
+    # Québec (CMA) only: refused BEFORE this task too, because QC_RMR IS that CMA — so the
+    # reversal is present in the DERIVED counts. Asserted THERE rather than through the message,
+    # which now names the published row: the merged mapping checks the published arm first, so a
+    # message assertion would be reading arm ORDER, not coverage.
+    payload = copy.deepcopy(_committed_extract())
+    _swap_genders(payload, {"Québec (CMA), Que."})
+    m, f = _derived_75plus_coupled(payload, "QC_RMR")
+    assert f > m and (f - m) / f > _SPEC_REVERSAL_BOUND, (
+        f"the DERIVED arm no longer sees a Québec-CMA transposition (coupled_M={m:,} "
+        f"coupled_F={f:,}) — this geography's coverage would rest on the new arm alone")
+    with pytest.raises(LoaderError, match="direction reversed") as exc:
+        _derive_mutated_extract(tmp_path, monkeypatch,
+                                lambda p: _swap_genders(p, {"Québec (CMA), Que."}))
+    assert "Québec (CMA), Que." in str(exc.value)
+
+
+def test_the_derived_arm_is_blind_to_a_small_cma_transposition():
+    """WHY THE SOURCE ARM IS NOT DECORATION: under a small-CMA transposition every DERIVED cell
+    stays non-degenerate and every derived 75+ direction stays M>F, so the whole pre-existing
+    battery — the degenerate guards, `assert_fraction`, and the derived direction arm — sees
+    nothing. Checked on the derived counts themselves rather than by disabling a gate."""
+    for cma in _SMALL_CMAS:
+        payload = copy.deepcopy(_committed_extract())
+        _swap_genders(payload, {cma})
+        for name, per_sex in _derived_counts_from(payload).items():
+            for sex, bands in per_sex.items():
+                for member, (pop, alone, coupled) in bands.items():
+                    assert pop > 0 and alone <= pop and coupled <= pop - alone, (
+                        f"{cma} transposed: {name} {sex} {member} is degenerate — a different "
+                        "guard would fire and this mutant would prove nothing about the new arm")
+            m, f = _derived_75plus_coupled(payload, name)
+            assert m > f, (
+                f"{cma} transposed: the DERIVED arm already sees a reversal at {name} "
+                f"(coupled_M={m:,} coupled_F={f:,}) — the source arm is not what catches this")
+
+
+def test_the_source_direction_gate_has_measured_power_at_every_published_geography():
+    """The gate's power is a MEASUREMENT per geography, and the weakest one is recorded.
+
+    A transposition confined to geography X reds iff X's own 75+ coupled margin exceeds spec
+    §5's bound — the swap makes the observed reversal EQUAL that margin. So a re-pull that
+    narrows the weakest margin under the bound does not false-positive; it goes BLIND, silently.
+    Pinning the weakest margin here is what turns that into a red: read a failure as "the source
+    arm lost its power at this geography", never as a derivation bug.
+    """
+    cube = _extract_cube()
+    margins = {}
+    for geo, cited in _P3_75PLUS_COUPLED.items():
+        m, f = (sum(cube[(geo, gender, member, _P_COUPLED)] for member in _P_BANDS.values())
+                for gender in (_P_SEX["M"], _P_SEX["F"]))
+        assert (m, f) == cited, f"{geo}: the extract disagrees with probe P3 §4b's coupled counts"
+        assert m > f, (
+            f"{geo}: coupled_M {m:,} no longer exceeds coupled_F {f:,} at 75+ — the direction "
+            "this gate asserts is a property of the DATA (P3 §4: M>F at 75+ in every published "
+            "Québec geography); if it has changed, the gate's premise has changed")
+        margins[geo] = (m - f) / max(m, f)
+
+    assert set(margins) == set(living_arrangement.SOURCE_GEOGRAPHIES), (
+        "this table no longer covers every geography the derivation reads — the power claim "
+        "would be silently partial")
+    assert set(living_arrangement.SOURCE_GEOGRAPHIES).isdisjoint(
+        {geo.value for geo in Geography}), (
+        "a published geography label now collides with a Geography value — the published and "
+        "derived arms are handed to the gate as ONE mapping, so a collision drops the published "
+        "arm silently and this whole gate loses that geography")
+    weakest = min(margins, key=margins.get)
+    assert margins[weakest] > _SPEC_REVERSAL_BOUND, (
+        f"the weakest 75+ margin is {weakest} at {margins[weakest]:.4f}, at or under the "
+        f"{_SPEC_REVERSAL_BOUND} reversal bound — a transposition confined to that geography no "
+        "longer reds, and the source arm is blind there")
+    assert (weakest, round(margins[weakest], 4)) == ("Trois-Rivières (CMA), Que.", 0.2759), (
+        f"the recorded weakest margin moved to {weakest} @ {margins[weakest]:.4f}; the headroom "
+        "over the bound was 0.0259 when this was measured")
+    assert living_arrangement._REVERSAL_BOUND == _SPEC_REVERSAL_BOUND, (
+        "the module's reversal bound is no longer spec §5's — a threshold change, not a refactor")
+
+
+def test_the_small_cma_transposition_moves_a_served_hors_rmr_rate():
+    """The mutant is CONSEQUENTIAL, so the gate above is not defending a distinction without a
+    difference. Recomputed test-side (the derivation now refuses to produce it): a Saguenay-only
+    transposition moves the served HORS_RMR 75-84 Men living_alone rate 0.244332 -> 0.230552.
+    That is 0.01378 — an order of magnitude above the 0.001637 separation the six-CMA netting
+    arm rests on, and it is a rate the model multiplies by a population."""
+    payload = copy.deepcopy(_committed_extract())
+    _swap_genders(payload, {"Saguenay (CMA), Que."})
+    cube = {(c["geography"], c["gender"], c["age_group"], c["arrangement"]): c["value"]
+            for c in payload["cells"]}
+
+    def net(arrangement: str) -> int:
+        member = _P_BANDS["75-84"]
+        return (cube[(_P_PROVINCE, _P_SEX["M"], member, arrangement)]
+                - sum(cube[(c, _P_SEX["M"], member, arrangement)] for c in _P_CMAS))
+
+    transposed = net(_P_ALONE) / net(_P_TOTAL)
+    served = living_alone_rate(load_living_arrangement(), Geography.HORS_RMR, age=80, sex="M")
+    assert served == pytest.approx(0.244332, abs=5e-6)
+    assert transposed == pytest.approx(0.230552, abs=5e-6)
+    assert abs(served - transposed) == pytest.approx(0.013780, abs=5e-6)
+    assert abs(served - transposed) > 1e-3, (
+        "the transposition no longer moves the served rate more than the netting arm's floor")
+
+
+def test_borrow_map_is_the_same_as_the_ownership_loaders():
+    """Same DRIFT CLASS as the `_QC_CMAS` equality above, and green on arrival for the same
+    reason: the fact is true today and nothing enforces it.
+
+    The two loaders' rates multiply the same population under one geography label. A member that
+    borrowed MTL_RMR for ownership but derived its own living-arrangement rates (or borrowed a
+    DIFFERENT parent) would pair a borrowed prior with a measured rate inside a single product,
+    with both still plausible fractions and both artifacts still regenerating cleanly. The two
+    modules keep their own maps deliberately (each is written against its own upstream table);
+    this asserts the equality that makes the join legitimate — at the CONSTANT and, because a
+    matching map flagged differently would be just as wrong, on the two shipped ARTIFACTS.
+    """
+    assert living_arrangement._BORROWS_FROM == census._BORROWS_FROM
+
+    borrowers = {geo.value for geo in living_arrangement._BORROWS_FROM}
+    assert borrowers == set(_P_BORROWERS)
+    flagged = {
+        name: {geo for geo, cells in table.items() if isinstance(cells, dict) and cells.get("_flag")}
+        for name, table in (("living_arrangement", load_living_arrangement()),
+                            ("ownership", census.load_ownership_rates()))
+    }
+    assert flagged["living_arrangement"] == flagged["ownership"] == borrowers, (
+        f"the two shipped artifacts flag different geographies as borrowed: {flagged}")
+
+
+def test_a_cell_the_acquisition_path_did_not_verify_is_refused_at_derivation(
+        tmp_path, monkeypatch):
+    """SIBLING OF THE PULLER'S TRAP 2, at the derivation.
+
+    The puller refuses a cell that came back with an EMPTY `vectorDataPoint`. A cell that came
+    back WITH a data point but a non-SUCCESS request status, or with a point-level `statusCode`
+    that is not 0, is written to the extract — and before this gate it divided straight into a
+    rate that stayed a plausible fraction (measured 2026-08-08). All 126 committed cells carry
+    `SUCCESS` / `0`, asserted first: that is what makes the committed artifact unaffected AND
+    makes the gate's expectation a fact about the source rather than a hope.
+
+    Four shapes, because they reach the guard through different operands — a failed request, a
+    flagged data point, and each field ABSENT. Absent is refused deliberately, and it is the
+    more dangerous case: a bad status announces itself, while an unrecorded one is
+    indistinguishable from a verified cell. Same posture `_verify_artifact_provenance` takes on
+    a missing digest.
+    """
+    cells = _committed_extract()["cells"]
+    assert len(cells) == 126
+    assert {(c["status"], c["status_code"]) for c in cells} == {("SUCCESS", 0)}
+
+    address = tuple(cells[0][k] for k in ("geography", "gender", "age_group", "arrangement"))
+    cases = (
+        ("failed request", lambda c: c.update(status="FAILED", status_code=0), "FAILED"),
+        ("flagged point", lambda c: c.update(status="SUCCESS", status_code=7), "7"),
+        ("status absent", lambda c: c.pop("status"), "None"),
+        ("status_code absent", lambda c: c.pop("status_code"), "None"),
+    )
+    for shape, mutate, needle in cases:
+        with pytest.raises(LoaderError, match="status") as exc:
+            _derive_mutated_extract(tmp_path, monkeypatch, lambda p: mutate(p["cells"][0]))
+        message = str(exc.value)
+        assert needle in message, f"{shape}: the message does not show what the cell recorded"
+        assert all(part in message for part in address), (
+            f"{shape}: the message does not name the cell — {address} is where to look")
+        assert str(cells[0]["value"]) in message, (
+            f"{shape}: a PRESENT value is exactly what makes this cell dangerous; show it")
+
+
 # --- recorded diagnostic (steering ruling A) -------------------------------------------
 
 def test_couple_balance_imbalance_is_recorded_and_not_gated():

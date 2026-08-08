@@ -238,6 +238,43 @@ def _count(raw: object, ctx: str) -> int:
 _REQUIRED_PULL_FIELDS = ("product_id", "statcan_table", "census_year", "release_time",
                          "pulled_at", "puller", "citation", "universe")
 
+# The only (status, status_code) pair the 126 committed cells carry — measured, not assumed
+# (`test_a_cell_the_acquisition_path_did_not_verify_is_refused_at_derivation` asserts it on the
+# extract). `status` is the WDS REQUEST status the puller recorded; `status_code` is the DATA
+# POINT's own code.
+_CELL_STATUS_OK = "SUCCESS"
+_CELL_STATUS_CODE_OK = 0
+
+
+def _check_cell_status(cell: dict, key: tuple, path: Path) -> None:
+    """SIBLING OF THE PULLER'S TRAP 2: a cell the acquisition path did not verify REFUSES.
+
+    The puller refuses a cell that came back with an EMPTY `vectorDataPoint`. It does NOT refuse
+    a cell that came back WITH a data point but a non-SUCCESS request status, or with a non-zero
+    point-level `statusCode` — that cell is written to the extract, and before this gate it
+    divided straight into a rate that stayed a plausible fraction (measured 2026-08-08).
+
+    What a non-zero code MEANS is deliberately not decoded here: all 126 committed cells carry
+    `SUCCESS` / `0`, so anything else is a cell whose number this package cannot account for —
+    which is the reason to refuse rather than to guess a codebook. An ABSENT status refuses too,
+    on this module's own `.get`-and-raise precedent (`_verify_artifact_provenance`): an
+    unrecorded status is not an all-clear, and it is the more dangerous shape, since a bad status
+    announces itself while a missing one is indistinguishable from a verified cell.
+
+    Checked BEFORE the value is parsed: a suppressed cell often carries a blanked value, and
+    `_count`'s "non-integer person count" would then send the reader to the number instead of to
+    the status that explains it.
+    """
+    status, code = cell.get("status"), cell.get("status_code")
+    if status == _CELL_STATUS_OK and code == _CELL_STATUS_CODE_OK:
+        return
+    raise LoaderError(
+        f"{path.name}: cell {key} records status {status!r} / status_code {code!r}, not "
+        f"{_CELL_STATUS_OK!r} / {_CELL_STATUS_CODE_OK} — and it carries a value "
+        f"({cell.get('value')!r}) anyway. A value the acquisition path did not verify divides "
+        "into a rate that stays a plausible fraction, so it is refused here rather than served: "
+        "re-pull the extract and inspect that cell (never hand-fix the value).")
+
 
 def _check_pull_provenance(payload: object, path: Path) -> dict:
     """The extract must carry the citation and vintage the ARTIFACT will publish.
@@ -286,6 +323,7 @@ def _read_cells(payload: object, path: Path) -> dict[tuple[str, str, str, str], 
             raise LoaderError(
                 f"{path.name}: duplicate cell for {key} — the extract's dimension address is not "
                 "unique (row duplicated or payload copied?)")
+        _check_cell_status(cell, key, path)
         cube[key] = _count(cell.get("value"), f"{path.name} {key}")
 
     found = {geo for geo, _g, _a, _m in cube}
@@ -369,6 +407,15 @@ def _residual_counts(cube: dict, gender: str, age: str) -> tuple[int, int, int]:
     return pop, alone, coupled
 
 
+def _source_counts(cube: dict) -> dict[str, dict[str, dict[str, tuple[int, int, int]]]]:
+    """Per-sex (pop, alone, coupled) for every PUBLISHED geography, in the shape the direction
+    gate reads. Keyed by the extract's own geography label, so a reversal reported against one
+    names the published row rather than a derived geography that merely contains it."""
+    return {label: {sex: {age: _counts_for(cube, label, gender, age) for age in AGE_MEMBERS}
+                    for gender, sex in _GENDER_TO_SEX.items()}
+            for label in SOURCE_GEOGRAPHIES}
+
+
 def _assert_coupled_direction(counts: dict, path: Path) -> None:
     """SOURCE-LEVEL direction check on the 75+ aggregate coupled counts.
 
@@ -386,6 +433,20 @@ def _assert_coupled_direction(counts: dict, path: Path) -> None:
     The bound is spec §5's OWN reversal bound (a reversal beyond |Δ|/max > 0.25 at the 75+
     aggregate is the error), reused verbatim: a mild reversal stays tolerated, exactly as the
     spec rules, and no new threshold is introduced here.
+
+    TWO ARMS, fed from one call site: the three DERIVED geographies AND the seven PUBLISHED ones
+    (`_source_counts`). The published arm is not redundant, and the hole it closes was measured
+    2026-08-08: a transposition confined to ONE SMALL CMA (Drummondville, Saguenay, Sherbrooke,
+    Trois-Rivières) passed every gate in this module — the swap is internally consistent so no
+    degenerate guard fires, additivity is untouched because the counts merely change sides, and
+    one small CMA cannot reverse a province-net residual — while moving the served HORS_RMR
+    75-84 Men living_alone rate by up to 0.019 (Saguenay alone: 0.2443 -> 0.2306). The DERIVED
+    arm still carries what the published arm cannot see: a reversal created by the netting
+    itself. Power is a per-geography measurement (P3 §4 shows M>F at 75+ in every published
+    Québec geography, weakest margin Trois-Rivières at 0.2759 — 0.0259 of headroom over the
+    bound), pinned in
+    `test_the_source_direction_gate_has_measured_power_at_every_published_geography` so a
+    re-pull that narrows it reds as lost power instead of going blind.
     """
     for geo, per_sex in counts.items():
         coupled_m = sum(per_sex["M"][age][2] for age in AGE_MEMBERS)
@@ -477,7 +538,10 @@ def derive_living_arrangement(extract_path: Path | str) -> dict:
                     for sex in SEXES}
             for label, _lo, _hi, member in _AGE_BAND_SPEC
         }
-    _assert_coupled_direction(counts, extract_path)
+    # Both arms, ONE call site — the ordering above is why. The PUBLISHED rows are merged in
+    # only here: `_couple_balance_diagnostic` below profiles the DERIVED counts and nothing else
+    # (its scope is asserted), so the merge must not leak into `counts` itself.
+    _assert_coupled_direction({**_source_counts(cube), **counts}, extract_path)
     for geo, parent in _BORROWS_FROM.items():
         rates[geo.value] = dict(rates[parent.value], _flag="borrowed_prior")
 
