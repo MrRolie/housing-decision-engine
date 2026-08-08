@@ -26,6 +26,14 @@ WORKBOOK_SHA256 = {
     # from the committed file at Task 13 and cross-checked against the identity chain
     # recorded in probes/P2-census-tenure-age.md §2.
     "census_tenure_age_98100231.csv": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+    # P3 living-arrangement WDS extract (StatCan 98-10-0134-01, pulled 2026-08-08 by
+    # scripts/pull_living_arrangement.py). Same PIT role as the P2 extract above:
+    # `derive_living_arrangement` verifies this pin before reading a single cell, and the
+    # generated artifact records the digest so the load path can refuse a stale vintage
+    # (steering ruling L). Two independent pulls of this cube produced byte-identical output,
+    # so re-pinning is only ever a VINTAGE change, never pull noise.
+    "living_arrangement_98100134.json":
+        "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
 }
 
 ISQ_SLUG_URL = "https://statistique.quebec.ca/fr/fichier/{slug}.xlsx"

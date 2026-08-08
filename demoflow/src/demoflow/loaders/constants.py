@@ -123,10 +123,14 @@ CONSTANTS = {
     "living_alone_vitrine": Anchor(
         0.28, "2021",
         "ISQ vitrine vieillissement (65+, QC-wide) — POOLED fallback the living-arrangement "
-        "loader applies per-sex when the Census cross-tab is absent. SUPERSEDED IN PRACTICE for "
-        "P3-covered geographies: probe P3 landed DIRECT per-sex living-alone at CMA level from "
-        "StatCan 98-10-0134-01 (DECISION-FOUND-AT-CMA: YES), so Task 15b must prefer the measured "
-        "rate and reach this fallback only for a geography the cube does not carry",
+        "loader applies per-sex when the Census cross-tab is absent. SUPERSEDED IN PRACTICE: probe "
+        "P3 landed DIRECT per-sex living-alone at CMA level from StatCan 98-10-0134-01 "
+        "(DECISION-FOUND-AT-CMA: YES), and Task 15b's loader serves EVERY modeled geography from "
+        "that measurement — so NO code path reads this anchor today. It is cited-or-raise there, "
+        "deliberately: an unreachable fallback branch would serve 0.28 for a malformed artifact "
+        "cell instead of refusing. Retained as the documented fallback (P3 §4c measured the direct "
+        "QC 65+ pooled rate at 0.3091, inside the widened band below) for a future geography "
+        "extension the cube does not carry",
         band=(0.24, 0.34), flag="borrowed_prior"),
     "collective_share_75plus": Anchor(
         0.04, "2021",
