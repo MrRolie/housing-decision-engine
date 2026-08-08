@@ -194,8 +194,17 @@ mortality still retains ≈0.25, inside [0.20, 0.40]):** applying the CPM decrem
 the hand-computed oracle values (exact inequality against the pinned expectations); the envelope
 remains a coarse gross-error backstop only. **Named omission (codex r3-F2, deliberate
 altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
-omitted (senior migration flows are thin; the `compo-*` workbooks bound the magnitude — record the
-75+ net-migration share there as the assumption's evidence in a probe note). This is a stated
+omitted. **AMENDED 2026-08-07 (steering ruling J):** the original evidence prescription ("the
+`compo-*` workbooks bound the magnitude — record the 75+ net-migration share there") is REFUTED
+for the committed vintage — both compo workbooks carry NO age axis (whole-sheet scan, zero `âge`
+header hits; region × scenario × year totals only), so no 75+ share is computable there. The
+evidence leg is RE-POINTED: an AGE-STRUCTURED migration source (ISQ interregional migration by
+age group; else StatCan components-of-growth by age) supplies the measured 75+ net-migration
+rate (|75+ net migration| / 75+ population, per modeled geography) recorded in the probe note.
+MATERIALITY TRIPWIRE: a measured rate above 1%/yr in any modeled geography×scenario ESCALATES
+the closed-cohort altitude call back to the operator (rationale: 75+ all-cause exit hazards run
+≥10%/yr, so a 1%/yr cap keeps the omission's relative distortion near or under 10%). Until that
+probe lands, the note carries the omission as UNEVIDENCED-PENDING — never as bounded. This is a stated
 assumption with a sensitivity remark in outputs, not a modeled mechanism; adding a reconciled
 post-entry migration term without reintroducing ISQ-embedded mortality is a v1 item.
 
