@@ -190,9 +190,9 @@ projected 75+ stocks in later years (those stocks embed deaths — re-anchor + d
 double-count). The plan writes the t→t+1 stock-flow equation with every death term appearing exactly
 once, plus a mutation test — **asserted against the ORACLE fixture's exact pinned numbers, NOT the
 aggregate envelope (codex r7-F5: the envelope cannot carry this — at q_live's low end, doubled
-mortality still retains ≈0.25, inside [0.20, 0.40]):** applying the CPM decrement twice must change
+mortality still retains ≈0.25, inside [0.20, 0.40] — FIGURE CORRECTED by ruling O 2026-08-08: measured on the spec-pinned cohort, a doubled decrement retains 0.3900 at the LOW q_live end and 0.2293 at the HIGH end, so ≈0.25 belongs to the HIGH end; the envelope's blindness to a doubled decrement is confirmed and WIDER than the original figure claimed):** applying the CPM decrement twice must change
 the hand-computed oracle values (exact inequality against the pinned expectations); the envelope
-remains a coarse gross-error backstop only. **Named omission (codex r3-F2, deliberate
+remains a coarse gross-error backstop only. **RULING O (steering amendment #6, 2026-08-08): the reconciliation gate binds the CENTRAL-ASSUMPTION run ONLY — sweep legs never re-run check_reconciliation.** The band's Myers anchor is central-only, and binding every leg makes the spec self-contradictory: measured at q_live = 0.06 (the sweep grid's own low endpoint), the spec-pinned cohort retains 0.4565 (gate RAISES on the CORRECT model) while a doubled decrement retains 0.3724 (gate PASSES) — inverted at 21/21 start years. The sweep's product is rank stability; the central run's gate is the calibration check (binds the Task-29 orchestrator). **Named omission (codex r3-F2, deliberate
 altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
 omitted. **AMENDED 2026-08-07 (steering ruling J):** the original evidence prescription ("the
 `compo-*` workbooks bound the magnitude — record the 75+ net-migration share there") is REFUTED
