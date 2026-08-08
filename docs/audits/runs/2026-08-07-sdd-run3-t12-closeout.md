@@ -13,5 +13,5 @@
 - WAVE-0: no board in this repo — vacuous
 - preconditions: T10/T11 landed (cc60c8e/c4023ff); T12 files present UNCOMMITTED (by
   design); suite 191+163 green (seat's own run); worktree unoccupied
-- run id: (appended at dispatch)
+- run id: wf_e13cf9ef-ecd (dispatched 2026-08-07)
 - outcome: (appended at run close)
