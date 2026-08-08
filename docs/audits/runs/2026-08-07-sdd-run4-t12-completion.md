@@ -10,5 +10,5 @@
 - models: opus/opus; load_bearing: true; money_path: false; WAVE-0 vacuous
 - preconditions: ruling K committed on the spec; T12 files present uncommitted; suite
   191+163 green at run-3 close (tree byte-identical through the escalation run)
-- run id: (appended at dispatch)
+- run id: wf_efe9552b-0b8 (dispatched 2026-08-07)
 - outcome: (appended at run close)
