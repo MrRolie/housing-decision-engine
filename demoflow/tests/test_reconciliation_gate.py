@@ -7,11 +7,23 @@ all-cause retention (survivors still owning / initial) must land in [0.20, 0.40]
 0.26–0.31 all-cause envelope WIDENED. Outside → CalibrationError.
 
 WHAT THE GATE DELIBERATELY DOES NOT DO (spec §5, codex r7-F5 — the reason this file pins the
-band and nothing else): at q_live's low end a DOUBLED mortality decrement still retains ≈0.25,
-INSIDE this band, so the envelope cannot carry exactly-once. That proof is the stock-flow
-equation plus the roll-forward's ORACLE-EXACT mutation test, which asserts the double-decrement
-strictly changes the hand-computed pinned values. This file therefore never asserts that the
-band detects a double-count — asserting it would encode the exact false claim the spec fenced.
+band and nothing else): a DOUBLED mortality decrement still lands INSIDE this band, so the
+envelope cannot carry exactly-once. FIGURE CORRECTED by ruling O (spec §5 amendment,
+2026-08-08) and re-measured on the spec-pinned cohort in tests/test_rollforward.py: the doubled
+per-sex hazard retains 0.3900 / 0.3001 / 0.2293 at q_live 0.06 / 0.085 / 0.11 — in band at
+EVERY leg, with the ≈0.25 this paragraph used to place at the LOW end actually belonging to the
+HIGH one. The blindness is wider than the original figure read; the conclusion is unchanged.
+That proof is the stock-flow equation plus the roll-forward's ORACLE-EXACT mutation test, which
+asserts the double-decrement strictly changes the hand-computed pinned values. This file
+therefore never asserts that the band detects a double-count — asserting it would encode the
+exact false claim the spec fenced.
+
+WHAT SCOPE THE GATE BINDS AT, recorded not asserted (ruling O, spec §5 amendment #6): the
+CENTRAL-ASSUMPTION run only — sweep legs never re-run `check_reconciliation`, because at the
+sweep grid's own low q_live endpoint the gate raises on the CORRECT model and passes the
+doubled one (21/21 start years). `check_reconciliation` takes a bare float and cannot see which
+run is calling, so no test here can enforce the scope; it is an orchestrator obligation (plan
+Task 29), stated in `gates.py` for the same reason the composition caveat below is.
 
 COMPOSITION CAVEAT, recorded not asserted (spec §5, codex r9-F4): retention is STATE-DEPENDENT,
 so the band is only well-defined against a PINNED cohort mix — the one the initialization

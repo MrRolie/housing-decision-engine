@@ -120,10 +120,21 @@ def test_out_of_domain_raises_before_the_complex_branch():
 
 def test_boundary_and_monotonicity():
     """0.0 is IN domain (a cohort that never sells → zero hazard); 1.0 is OUT by the strict
-    upper bound — a certain 5-year sale is a data defect, not a calibration input. Kept
-    explicit because Task 20 appends `_check_unit` to this same file with an INCLUSIVE
-    `<= 1.0` on probabilities; the two domains are deliberately different and a future
-    "harmonization" would silently admit the degenerate rate.
+    upper bound — a certain 5-year sale is a data defect, not a calibration input.
+
+    THE TWO DOMAINS IN `decrements.py` DIFFER ON PURPOSE, and neither is the other's typo:
+    `annualize_q_live` guards `[0,1)` — this test's side — while `_check_unit` guards the
+    branch probabilities on an INCLUSIVE `[0,1]`, fenced from its own side by
+    test_partition.py::test_check_unit_domain_is_inclusive_and_rejects_nonfinite. The
+    inclusive bound is NECESSARY, not merely permissive: the live engine returns EXACTLY 1.0
+    at its terminal age (`q_at(120, "M", 2035) == 1.0`, short-circuited before any table
+    lookup), so a strict `< 1.0` on branch probabilities would refuse a real mortality value on
+    a path the roll-forward can reach — its upper age end is deliberately unbounded. That is an
+    ASSERTION, not a recollection: test_rollforward.py::test_roll_one_year_guards_its_own_age_domain
+    pins both the terminal 1.0 and the age-120 roll it feeds, so an engine that stops returning
+    1.0 breaks there rather than quietly invalidating this paragraph. A "harmonization" of the
+    two guards breaks one of the pair whichever way it is done, and both fences exist so that it
+    breaks loudly rather than silently admitting the degenerate rate here.
     """
     assert annualize_q_live(0.0) == 0.0
     with pytest.raises(CalibrationError):
