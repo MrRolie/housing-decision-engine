@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-08
 **Session:** S4a (foundation half of the split S4; see Roadmap deviation below)
-**money-path:** no — personal tooling, no fund money-path globs touched.
+**Scope:** personal tooling — nothing here places trades or moves money.
 **Status:** DRAFT — awaiting operator review before plan.
 
 ---
@@ -351,4 +351,4 @@ split upfront. The default remains: finish both house and condo in one session
       assertions, new tests added); no integrated `total_pv` magic numbers.
 - [ ] Capital structure enforced at BOTH config and engine layers (fail-loud).
 - [ ] AGENTS.md "do not add mortgage/leverage" line struck and replaced.
-- [ ] `money-path: no` honored; no fund repo imports.
+- [ ] Scope honored; no dependencies on private or unpublished repos.

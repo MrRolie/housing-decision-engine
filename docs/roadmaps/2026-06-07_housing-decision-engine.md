@@ -11,10 +11,10 @@
 
 | Session | Type | Status | Artifact path(s) (resume contract) | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | decisive | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine` — commit `daf9503` | Rename + uv + AGENTS.md/CLAUDE.md + docs structure |
-| 2 | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
+| 1 | decisive | `completed` | the repo root — commit `daf9503` | Rename + uv + AGENTS.md/CLAUDE.md + docs structure |
+| 2 | brainstorm-to-execute | `completed` | `mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
-| 4a | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
+| 4a | brainstorm-to-execute | `completed` | `docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
 | 4b | brainstorm-to-execute | `not_started` | (will be produced by S4b) | Market scenario layer: price-drop events, discount-rate sensitivity, correlated market+income shocks, crisis/forced-sell, sensitivity_sweep/stress_test tools, + 4 S3-deferred items. Depends on S4a. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
@@ -24,11 +24,11 @@ A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 
 - **Next session:** Session 4
 - **Session type:** brainstorm-to-execute
-- **Next engine skill to invoke:** `mm-spine:brainstorming` — market scenario layer design
+- **Next step:** design the market scenario layer
 - **Input artifacts it consumes:**
-  - `/home/mm-mike/ai_system/projects/housing-decision-engine/src/hde/` — engine (ComparisonSpec, 3-way det + MC, AffordabilityReport)
-  - `/home/mm-mike/ai_system/projects/housing-decision-engine/mcp_server/` — MCP server (6 tools, inline affordability)
-  - `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/archive/2026-06/2026-06-08-rent-income-model-design.md` — S3 spec
+  - `src/hde/` — engine (ComparisonSpec, 3-way det + MC, AffordabilityReport)
+  - `mcp_server/` — MCP server (6 tools, inline affordability)
+  - `docs/specs/archive/2026-06/2026-06-08-rent-income-model-design.md` — S3 spec
 - **Session objective:** Design + implement market scenario layer: real estate price-drop events (year + magnitude + recovery), interest rate shocks, correlated market + income shocks in MC. Add `sensitivity_sweep` and `stress_test` MCP tools. Pre-canned scenario configs (market crash, rate spike, pay cut).
 - **Key open questions for S4 brainstorm:** (1) How are market shocks correlated with income shocks in MC? (2) What distribution for price-drop recovery? (3) Which pre-canned scenarios are most useful?
 - **S3 deferred items (carry into S4 design):** nominal-mode affordability cash-flow consistency; affordability MC using per-sim housing costs (not deterministic); rent event z_inf correlation; crisis event model (forced-sell on sustained income shock).
@@ -68,8 +68,8 @@ Start Session 1 (decisive). Pre-flight checklist:
 - **Intended end-state:** Claude can invoke MCP tools to run housing comparisons, model income trajectories with pay-drop events, stress-test scenarios against real estate market shocks, and produce structured decision reports — all without opening a notebook.
 - **Scope boundary:**
   - IN: 3-way comparison (rent / condo / house); employment cash flow with income-shock events; real estate market scenarios (price drops, rate shocks); MCP server with Claude-callable tools; CLI for standalone use; YAML scenario configs; repo aligned with projects/ conventions.
-  - OUT: Geographic tax rules; mortgage optimization / leverage modeling; investment portfolio returns (opportunity cost of down payment deferred to S3 design decision); multi-user / SaaS product concerns; production deployment beyond lain-node.
-- **Spine repo:** `/home/mm-mike/ai_system/projects/housing-decision-engine/` (will be renamed to `housing-decision-engine/` in S1) · **Target repo:** same
+  - OUT: Geographic tax rules; mortgage optimization / leverage modeling; investment portfolio returns (opportunity cost of down payment deferred to S3 design decision); multi-user / SaaS product concerns; production deployment beyond a single local host.
+- **Repo:** this repository (renamed to `housing-decision-engine` in S1) · **Target repo:** same
 
 ## Success Criteria
 
@@ -80,7 +80,7 @@ Start Session 1 (decisive). Pre-flight checklist:
 - [ ] Employment cash flow model: income trajectory, pay-drop events, and their effect on affordability/comparison scores
 - [ ] Market scenario layer: real estate price shock, interest rate sensitivity, correlated income + market shocks in Monte Carlo
 - [ ] No notebooks required for any comparison — MCP tools cover all prior notebook use cases
-- [ ] `money-path: no` — no fund money-path globs touched
+- [ ] Scope honored — personal tooling only
 
 ## Session Plan
 
@@ -93,7 +93,7 @@ internally runs the 5-phase arc collapsed per its type.
 
 **Pre-flight checklist (run at session start):**
 1. Confirm final Python package slug (`hde` vs `housing_decision_engine`) — one `AskUserQuestion` at session top
-2. `uv` installed on lain-node (`which uv`)
+2. `uv` installed locally (`which uv`)
 3. Current test suite green under existing setup (`pytest`)
 
 **Phase 4 Execute:**
@@ -118,17 +118,17 @@ internally runs the 5-phase arc collapsed per its type.
 
 **Type:** brainstorm-to-execute
 
-**Phase 2 Design (`mm-spine:brainstorming`):**
+**Phase 2 — Design:**
 - What tools should the MCP server expose? (e.g. `compare_housing`, `run_scenario`, `list_scenarios`, `sensitivity_sweep`, `explain_result`)
 - Input/output contract: structured JSON vs YAML passthrough vs natural language?
 - FastMCP vs raw MCP SDK (pattern from `actuarial-system`)
 - Tool granularity: one fat tool vs many thin tools
 
-**Phase 3 Plan (`mm-spine:writing-plans`):**
+**Phase 3 — Plan:**
 - Spec written to `docs/specs/YYYY-MM-DD-mcp-server-design.md`
 - Plan covers: `mcp_server/` directory structure, tool implementations, error handling, stdio transport config
 
-**Phase 4 Execute (`mm-spine:subagent-driven-development`):**
+**Phase 4 — Execute:**
 - Scaffold `mcp_server/` with FastMCP
 - Implement tools wrapping existing `deterministic.py` + `monte_carlo.py`
 - Add MCP entry point to `pyproject.toml`
@@ -147,17 +147,17 @@ internally runs the 5-phase arc collapsed per its type.
 
 **Type:** brainstorm-to-execute
 
-**Phase 2 Design (`mm-spine:brainstorming`):**
+**Phase 2 — Design:**
 - Rent model: `RentParams` dataclass — monthly rent, escalation rate, lease events (renewal shocks, moving costs), opportunity cost of down payment (include? defer?), lease optionality
 - Employment cash flow: `EmploymentParams` — income trajectory, pay-drop events (year + magnitude), employment gap events; how income integrates with the comparison (affordability ratio? affordability-adjusted PV?)
 - Does income affect the *cost comparison* or is it a separate affordability overlay?
 - 3-way comparison output shape: deterministic + MC for rent alongside condo + house
 
-**Phase 3 Plan (`mm-spine:writing-plans`):**
+**Phase 3 — Plan:**
 - Spec: `docs/specs/YYYY-MM-DD-rent-income-model-design.md`
 - Plan: `RentParams` + `EmploymentParams` dataclasses; `compute_deterministic` extended for 3-way; `run_monte_carlo` extended; new MCP tools (`compare_all_three`, `model_income_scenario`)
 
-**Phase 4 Execute (`mm-spine:subagent-driven-development`):**
+**Phase 4 — Execute:**
 - Add `RentParams` + rent PV logic to `deterministic.py` and `monte_carlo.py`
 - Add `EmploymentParams` + income shock modeling
 - Extend `reporting.py` for 3-way output
@@ -177,17 +177,17 @@ internally runs the 5-phase arc collapsed per its type.
 
 **Type:** brainstorm-to-execute
 
-**Phase 2 Design (`mm-spine:brainstorming`):**
+**Phase 2 — Design:**
 - Real estate market scenarios: price-drop events (year + magnitude + recovery rate), interest rate shocks, how correlated market + income shocks work in Monte Carlo
 - Sensitivity sweep API: which parameters to sweep, how results are returned for Claude to interpret
 - "What if market drops 20% in year 5?" — how does this change the PV comparison?
 - Stress-test surface: which scenarios should be pre-canned in example configs?
 
-**Phase 3 Plan (`mm-spine:writing-plans`):**
+**Phase 3 — Plan:**
 - Spec: `docs/specs/YYYY-MM-DD-market-scenario-design.md`
 - Plan: `MarketScenarioParams`; correlated shock model; `sensitivity_sweep` MCP tool; stress-test example configs
 
-**Phase 4 Execute (`mm-spine:subagent-driven-development`):**
+**Phase 4 — Execute:**
 - Add `MarketScenarioParams` + market shock logic to Monte Carlo
 - Implement correlated income + real estate shocks
 - Add `sensitivity_sweep` and `stress_test` MCP tools
@@ -197,9 +197,9 @@ internally runs the 5-phase arc collapsed per its type.
 - All tests green
 - Correlated shock sanity check: market drop + pay cut produces worse rent break-even than either alone
 - MCP `stress_test` callable; result is interpretable structured JSON
-- `mm-spine:verification-before-completion` pass
+- verification-before-completion pass
 
-**End-of-session gate:** Full scenario engine operational; `mm-spine:plan-completion-wrap-up` invoked after merge.
+**End-of-session gate:** Full scenario engine operational; wrap-up performed after merge.
 
 ---
 
@@ -220,7 +220,7 @@ internally runs the 5-phase arc collapsed per its type.
 
 **Why S2 is brainstorm-to-execute:** The MCP surface (tool granularity, input/output contracts, which tools Claude actually needs) requires real design work — it should not be decided on the fly during execution.
 
-**Executor calibration:** Opus 4.7 + 1M context + superpowers + subagent-driven-development. S3 and S4 fan out model + test work in parallel subagents; S2 MCP scaffolding is mostly serial. Estimates are conservative.
+**Executor calibration:** a large-context coding agent fanning work out to subagents. S3 and S4 fan out model + test work in parallel subagents; S2 MCP scaffolding is mostly serial. Estimates are conservative.
 
 ## Assumptions and Open Questions
 
@@ -229,7 +229,7 @@ internally runs the 5-phase arc collapsed per its type.
 - **Income → comparison integration:** does employment cash flow affect the *cost comparison* or is it an *affordability overlay*? Resolved in S3 design.
 - **Correlated shock model design:** how correlated are real estate price drops and income drops? What distribution? Resolved in S4 design.
 - **Repo dir rename timing:** `condo-vs-house-cost-sim/` → `housing-decision-engine/` may require a projects-level `mv` + git history note. If the GitHub remote needs updating too, surface that in S1.
-- **money-path: no** — no fund code touched; adversarial review not required.
+- **Scope: personal tooling** — adversarial review not required.
 
 ## Notes
 

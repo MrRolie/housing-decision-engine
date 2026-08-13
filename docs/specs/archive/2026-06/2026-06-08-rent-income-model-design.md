@@ -1,6 +1,6 @@
 # Rent + Income Model Design
 
-**money-path: no**
+**Scope:** personal tooling — nothing here places trades or moves money.
 
 **Status:** DRAFT  
 **Date:** 2026-06-08  

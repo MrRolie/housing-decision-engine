@@ -1,5 +1,8 @@
 # Developer Notes
 
+> **⚠ Out of date.** Written for the pre-rename `cvh_cost` package — the import and path examples
+> below no longer resolve (the package is `hde`). Current commands: `README.md` and `AGENTS.md`.
+
 Notes for developers and coding agents working on the `cvh_cost` package.
 
 ## Development Setup

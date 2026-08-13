@@ -1,6 +1,6 @@
 # Walking-Skeleton Verdict — 2026-07-21
 
-Skeleton-First step-zero probe, run live 2026-07-21 (background agent, steering session). Probe script
+Skeleton-First step-zero probe, run live 2026-07-21 (background agent). Probe script
 preserved as `skeleton_probe_mortality.py`; raw ISQ CSV (20.6MB) not retained — re-downloadable at the
 recorded URL below.
 
@@ -56,7 +56,7 @@ undercounts — see friction #4).
 
 1. **RMR-granularity multi-scenario data NOT machine-readable-in-hand.** ISQ's RMR age×scenario table
    is behind a client-rendered Next.js widget (`noRequete: "projections-pop-rmr-age"`); no static
-   download found; the data XHR never fired under headless capture (traceforge: page shell only, chart
+   download found; the data XHR never fired under headless capture (page shell only, chart
    component doesn't mount in that rendering path). Fallback fired: région 06 via the open CSV. This is
    the arc's TOP PROVISIONING ITEM — the scenario fan (low/ref/high) is the model's output axis.
 2. **The machine-readable CSV lives on the MSSS health-geography axis (RSS/RTS/RLS)**, not ISQ's

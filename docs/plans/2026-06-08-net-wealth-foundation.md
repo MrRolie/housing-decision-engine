@@ -1,6 +1,6 @@
 # S4a — Net-Wealth Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use mm-spine:subagent-driven-development (recommended) or mm-spine:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Implement this plan task-by-task, in order. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the carrying-cost comparison with a canonical net-wealth rent-vs-buy DCF — mortgage amortization + terminal home equity for house and condo, required explicit capital structure, oracle-anchored test rewrite.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, dataclasses, numpy, pytest, uv.
 
-**Spec:** `docs/specs/2026-06-08-net-wealth-foundation-design.md` (read §2.1 audit record + §3 model). **money-path: no** (per repo CLAUDE.md, no `audit-skipped` marker — this is a non-money-path personal-tooling repo). Elegance-gate verdict already recorded in spec §2.1 (architectural + strategic both PROCEED-WITH-MODIFICATIONS, no second split) — **cite, do not re-invoke**.
+**Spec:** `docs/specs/2026-06-08-net-wealth-foundation-design.md` (read §2.1 audit record + §3 model). **Scope: personal tooling** (per repo CLAUDE.md — nothing here places trades or moves money, so the heavier adversarial-review process is not required). Design-audit verdict already recorded in spec §2.1 (architectural + strategic both PROCEED-WITH-MODIFICATIONS, no second split) — **cite, do not re-invoke**.
 
 ---
 
@@ -962,4 +962,4 @@ git commit -m "test(s4a): full-suite green — net-wealth foundation complete"
 - **Maintenance basis unchanged:** `value_N` (terminal sale value, compounds N times) is computed SEPARATELY from the maintenance `house_value` (year-1 = initial). Do not refactor the maintenance loop.
 - **Condo initial_value=0 + all_cash → zero equity → old total:** this is the intentional low-churn path for financing-agnostic condo fixtures.
 - **RNG order:** no new `rng.normal()` draws in the MC simulators; `terminal_value` reuses the per-year `inflation_factor`. `test_reproducibility_with_seed` must stay green.
-- **money-path: no** — no `audit-skipped` marker (repo CLAUDE.md), no fund-repo imports.
+- **Scope: personal tooling** — no dependencies on private or unpublished repos.

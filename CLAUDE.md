@@ -2,21 +2,24 @@
 
 Claude-specific guidance. Operational rules are in `AGENTS.md`.
 
-## Skill reflexes for this repo
+## Working reflexes for this repo
 
-- New feature design → `mm-spine:brainstorming` first (always)
-- Multi-step implementation → `mm-spine:writing-plans` → `mm-spine:subagent-driven-development`
-- Bug / unexpected behavior → `mm-spine:systematic-debugging`
-- Completing a session → `mm-spine:finishing-a-development-branch`
-- MCP server questions → `mm-spine:mcp-builder` (FastMCP pattern)
+- New feature design → design doc in `docs/specs/` before code (always)
+- Multi-step implementation → write the plan in `docs/plans/` first, then execute it task-by-task
+- Bug / unexpected behavior → reproduce with a failing test before proposing a fix
+- MCP server questions → follow the existing FastMCP pattern in `mcp_server/main.py`
 
-## What the MCP server will expose (S2 target)
+## What the MCP server exposes
 
-Tools Claude can call to run housing comparisons without touching notebooks or configs by hand:
-- `compare_housing(config_path)` — run deterministic + MC on a named scenario
-- `run_scenario(params_dict)` — inline params, no file required
-- `sensitivity_sweep(param, range, config_path)` — sweep one parameter
-- More TBD in S2 brainstorming
+Six tools registered in `mcp_server/main.py`, implemented in `mcp_server/tools.py`. Scenarios are
+held in an in-process registry, so they reset when the server restarts.
+
+- `define_scenario_tool(name, config)` — define a named scenario from a config dict
+- `run_comparison_tool(name, mode)` — deterministic, monte_carlo, or both
+- `sweep_param_tool(name, param_path, values)` — sweep one whitelisted scalar parameter
+- `save_figure_tool(name, figure_type)` — write a figure to `~/.cache/hde/figures/`, return its path
+- `list_scenarios_tool()` — list session scenarios and whether results are cached
+- `delete_scenario_tool(name)` — drop a scenario from the registry
 
 ## Testing
 
@@ -25,7 +28,7 @@ uv run python -m pytest          # all tests
 uv run python -m pytest -x -q   # fail-fast
 ```
 
-## money-path: no
+## Scope
 
-No fund money-path code here. No adversarial-review audit tasks needed.
-Do NOT `audit-skipped` — just leave it out; it's not a money-path repo.
+Personal decision-support tooling. Nothing here places trades or moves money, so changes do not
+need the heavier adversarial-review process that live financial code would warrant.

@@ -1,5 +1,10 @@
 # Configuration Schema Reference
 
+> **⚠ Out of date — do not write a config from this file.** It predates the rent, income, and
+> mortgage/net-wealth features: a config built exactly to the schema below is now REJECTED
+> (owned options require `initial_value > 0` and either `all_cash: true` or a mortgage block).
+> Use `examples/*.yaml` as the working reference.
+
 This document describes the YAML configuration format for the `cvh_cost` package.
 
 ## Top-Level Structure

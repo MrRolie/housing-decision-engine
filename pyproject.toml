@@ -34,7 +34,7 @@ hde = "hde.cli:main"
 hde-mcp = "mcp_server.main:run"
 
 [project.urls]
-Repository = "https://github.com/mm-mike/housing-decision-engine"
+Repository = "https://github.com/MrRolie/housing-decision-engine"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hde", "mcp_server"]
