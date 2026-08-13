@@ -29,9 +29,9 @@ Myers all-cause retention (0.26–0.31/decade, sanity check only); exits modeled
 - `demo_data_landscape.md` — full free-data inventory (ISQ projections 3 variants to 2071 at RMR/MRC,
   Census tenure×age, IRCC PR-by-CMA, MIFI plans, CMHC HMIP, rôle d'évaluation, Registre foncier transfer
   stats). Decisive gap: CHSP excludes Québec — no owner-level age×immigration linkage exists for QC.
-- `demo_actuarial_system.md` — repo audit: CPM2014/CPM-B + Lee-Carter/CBD present and runnable (76 tests);
-  zero multi-state/decrement machinery; scalar single-life API; module-global mortality basis (v1
-  concurrency assumption).
+- Actuarial-dependency check (no separate file): the separate actuarial library supplies Québec CPM2014/
+  CPM-B mortality on a base-table × improvement-scale basis, with a single-life scalar API. It has no
+  multiple-decrement / competing-risks machinery — that leg is new build, not adaptation.
 - Prior-art check (no separate file): an earlier internal demographic model was reviewed for overlap and
   found disjoint — it projects equity-market behaviour, not housing supply/demand, and shares no code.
   Its age-cohort-projection-with-sensitivity-bands *method* is transplantable as a starting shape; nothing

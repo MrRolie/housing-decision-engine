@@ -1,5 +1,10 @@
 # API Contract
 
+> **⚠ Out of date — do not code against this file.** It documents the pre-rename `cvh_cost`
+> package and the original four-argument engine signature. The package is now `hde`, and
+> `compute_deterministic` / `run_monte_carlo` / `load_config` each take a single `ComparisonSpec`.
+> Read the docstrings in `src/hde/` for the current contract.
+
 This document describes the public API of the `cvh_cost` package.
 
 ## Core Functions

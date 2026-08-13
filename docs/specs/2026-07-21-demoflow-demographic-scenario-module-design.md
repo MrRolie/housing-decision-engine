@@ -64,7 +64,7 @@ flooring, if ever, is an operator decision at the S4b seam).
   `mcp_server.engine.mortality` public functions only: `set_active_mortality`, `active_mortality`,
   `get_qx`. No private reach-ins. Dependency weight (fastmcp/cvxpy/osqp ride along) accepted —
   local batch tool.
-- **Basis contract (gotcha codified in actuarial-system/CLAUDE.md):** the engine DEFAULTS to the US
+- **Basis contract:** the mortality engine DEFAULTS to the US
   RP2014+MP2021 basis. Every demoflow entry point sets
   `set_active_mortality("CPM2014_combined", "CPM-B")` and then CHECKS `active_mortality()` echoes the
   Québec basis before any `get_qx` call — an explicit `if`-check raising `BasisError(Exception)`,

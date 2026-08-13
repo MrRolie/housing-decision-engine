@@ -1,5 +1,9 @@
 # Architecture Overview
 
+> **⚠ Partly out of date.** Written for the pre-rename `cvh_cost` package, before the rent option,
+> income model, mortgage/net-wealth engine, and MCP server landed. The module-level design rationale
+> below still holds; the names, paths, and module list do not. Current layout: `AGENTS.md`.
+
 This document describes the high-level architecture of the `cvh_cost` package, a tool for comparing ownership costs between condos and houses using present value analysis.
 
 ## Module Overview

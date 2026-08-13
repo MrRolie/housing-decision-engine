@@ -105,11 +105,11 @@ Illustrative shape (Montréal plex, 2035): reference immigration → −0.5%/yr 
 **Imports FROM actuarial-system:** the Québec CPM2014/CPM-B tables + get_qx as the mortality leg; a NEW multiple-decrement primitive (below); the Lee-Carter/CBD surface-fitter as a *template* (copied pattern, not import) for fitting q_ltc/q_down hazard surfaces if data ever appears.
 
 **What actuarial-system must ADD (a genuine, reusable actuarial capability — "build the evolution layer, not the pipeline"):**
-- A **cause-agnostic multiple-decrement / competing-risks combinator** (`MultipleDecrementTable`) that takes cause-specific hazards (μ_mort from existing tables + externally-supplied μ_ltc, μ_down) and returns dependent decrement probabilities + a by-cause exit allocation. None exists today (grep-confirmed zero decrement/multi-state machinery).
+- A **cause-agnostic multiple-decrement / competing-risks combinator** (`MultipleDecrementTable`) that takes cause-specific hazards (μ_mort from existing tables + externally-supplied μ_ltc, μ_down) and returns dependent decrement probabilities + a by-cause exit allocation. No such primitive exists there today.
 - A **last-survivor / joint-life household wrapper** converting individual mortality to household-dissolution (current API is individual-scalar).
-- (Optional but honest) the vectorized cohort batch API + the ContextVar thread-safety fix already in its roadmap, since the model runs many cohorts × geographies × scenarios. Can be looped for v1.
+- (Optional but honest) a vectorized cohort batch API and a thread-safety fix for the module-global mortality basis, since the model runs many cohorts × geographies × scenarios. Can be looped for v1.
 - Boundary crisp: the cause-agnostic COMBINATOR lives in actuarial-system (genuinely reusable); the specific data-starved LTC/downsizing HAZARD CURVES live in the housing module (housing-specific).
-- **This is a charter/roadmap EXTENSION requiring explicit operator sign-off, not a silent in-scope expansion.** A housing decrement use is longevity-side (does not trip the P&C gate) but is NOT automatically in scope — no decrement primitive exists to reuse. Upside: it gives actuarial-system its first named external consumer, satisfying its charter's consumer gate positively.
+- **This is an EXTENSION to that library requiring explicit sign-off, not a silent in-scope expansion** — no decrement primitive exists there to reuse.
 
 **Why it must stay standalone:**
 - The earlier internal demographic model projects equity-market behaviour — disjoint on purpose by asset class (listed equities vs Québec real estate), geography, and mechanism. It was already ruled a directional signal with no dollar capture.
