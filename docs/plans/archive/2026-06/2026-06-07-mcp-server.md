@@ -1,8 +1,8 @@
 # MCP Server Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use mm-spine:subagent-driven-development (recommended) or mm-spine:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Implement this plan task-by-task, in order. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-audit-skipped: not money-path
+adversarial-review: not required (personal tooling)
 
 **Goal:** Build a FastMCP server exposing 6 tools (define_scenario, run_comparison, sweep_param, save_figure, list_scenarios, delete_scenario) so Claude can run housing comparisons interactively without touching YAML files.
 
@@ -142,7 +142,7 @@ def test_clear_empties_registry():
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-cd /home/mm-mike/ai_system/projects/housing-decision-engine
+cd /path/to/housing-decision-engine
 uv run python -m pytest tests/test_registry.py -v 2>&1 | head -20
 ```
 Expected: `ModuleNotFoundError: No module named 'mcp_server'`
@@ -1025,7 +1025,7 @@ with:
 # MCP server
 uv run hde-mcp                         # stdio transport (Claude Code)
 # Register with Claude Code:
-# claude mcp add hde -- uv --directory /home/mm-mike/ai_system/projects/housing-decision-engine run hde-mcp
+# claude mcp add hde -- uv --directory /path/to/housing-decision-engine run hde-mcp
 ```
 
 - [ ] **Step 5: Verify main.py imports cleanly**
@@ -1162,7 +1162,7 @@ git commit -m "test(mcp): add end-to-end smoke tests"
 ## Self-Review Notes
 
 **Spec coverage:**
-- `define_scenario` ✓ Task 2 | `run_comparison` ✓ Task 3 | `sweep_param` ✓ Task 4 | `save_figure` ✓ Task 5 | `list_scenarios` + `delete_scenario` ✓ Task 6 | `main.py` ✓ Task 7 | `hde-mcp` entry point ✓ Task 7 | `audit-skipped: not money-path` ✓ header
+- `define_scenario` ✓ Task 2 | `run_comparison` ✓ Task 3 | `sweep_param` ✓ Task 4 | `save_figure` ✓ Task 5 | `list_scenarios` + `delete_scenario` ✓ Task 6 | `main.py` ✓ Task 7 | `hde-mcp` entry point ✓ Task 7 | scope header ✓
 - `_SWEEP_PATHS` whitelist matches spec exactly (11 paths) ✓
 - `_mc_to_dict` explicit extraction (not `dataclasses.asdict`) ✓ — load-bearing per elegance audit
 - `compare_scenarios` intentionally absent (cut by elegance audit) ✓

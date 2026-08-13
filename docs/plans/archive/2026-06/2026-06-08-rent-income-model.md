@@ -1,8 +1,8 @@
 # Rent + Income Model Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use mm-spine:subagent-driven-development (recommended) or mm-spine:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Implement this plan task-by-task, in order. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-`audit-skipped: not money-path`
+adversarial-review: not required (personal tooling)
 
 **Goal:** Extend the housing decision engine from 2-way (condo/house) to 3-way (rent/condo/house) comparison with employment cash flow affordability modeling, using a ComparisonSpec value-object pattern.
 
@@ -150,7 +150,7 @@ def test_breakdown_key_constants():
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-cd /home/mm-mike/ai_system/projects/housing-decision-engine
+cd /path/to/housing-decision-engine
 uv run python -m pytest tests/test_models_new.py -v 2>&1 | head -40
 ```
 

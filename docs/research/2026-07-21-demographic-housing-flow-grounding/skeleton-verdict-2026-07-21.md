@@ -1,6 +1,6 @@
 # Walking-Skeleton Verdict — 2026-07-21
 
-Skeleton-First step-zero probe, run live 2026-07-21 (background agent, steering session). Probe script
+Skeleton-First step-zero probe, run live 2026-07-21 (background agent). Probe script
 preserved as `skeleton_probe_mortality.py`; raw ISQ CSV (20.6MB) not retained — re-downloadable at the
 recorded URL below.
 

@@ -1,8 +1,8 @@
 # Demographic Housing-Flow Model — Grounding Dossier (2026-07-21)
 
 Research pack behind the "boomer sell/transfer wave vs immigrant buy demand → crash likelihood?" question
-(operator ask, steering session 2026-07-21; workflow `wf_f6ad8333`, 6 agents, ~500k tokens).
-Uncommitted doc-only artifact; seed material for a future spec if the build is greenlit.
+(2026-07-21, 6 parallel research agents). Doc-only artifact; seed material for a future spec if the
+build is greenlit.
 
 ## Verdict (adjudicated in-session)
 
@@ -32,8 +32,10 @@ Myers all-cause retention (0.26–0.31/decade, sanity check only); exits modeled
 - `demo_actuarial_system.md` — repo audit: CPM2014/CPM-B + Lee-Carter/CBD present and runnable (76 tests);
   zero multi-state/decrement machinery; scalar single-life API; module-global mortality basis (v1
   concurrency assumption).
-- `demo_mm_infra_demographic_layer.md` — fund demographic layer is disjoint (equity fear-premium; Y1 memo
-  ruled no $/yr capture; Layer 1-3 code deleted from HEAD at c47f14d5). Pattern-copy only; never import.
+- Prior-art check (no separate file): an earlier internal demographic model was reviewed for overlap and
+  found disjoint — it projects equity-market behaviour, not housing supply/demand, and shares no code.
+  Its age-cohort-projection-with-sensitivity-bands *method* is transplantable as a starting shape; nothing
+  is reusable by import.
 - `demo_design.md` — full model design (flow identity, decrements, estate-lag convolution, immigrant
   YSL tenure curves, plex owner-occupier-landlord channel, S4b ScenarioPrior output contract, walking
   skeleton). Load-bearing skeleton boundary = actuarial-system get_qx firing live with QC CPM2014 basis.

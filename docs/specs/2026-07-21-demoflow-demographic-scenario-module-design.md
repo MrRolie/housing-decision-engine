@@ -9,10 +9,10 @@ enum→string serialization stated); 2C cross-CONTEXT arm WAIVED by operator 202
 is Fable; residual gap recorded: the arm's catch mechanism is independent context + hunt-NEW framing,
 not model tier — same-family folded-spec defects go unhunted by that arm; codex cross-FAMILY arm ran
 regardless, per doctrine the waiver never reaches it); spec pending operator review
-**money-path:** no (personal decision tooling; touches no fund globs)
+**Scope:** personal decision tooling — nothing here places trades or moves money
 **load-bearing-claim:** yes (stress-tester) — "fail-loud loaders, no silent fallback" and
 "schema-enforced output prohibition" are load-bearing correctness claims; stress-tester fires at
-PR time regardless of money-path.
+PR time regardless.
 
 **Grounding provenance (read before contesting any premise here):**
 `docs/research/2026-07-21-demographic-housing-flow-grounding/` — literature autopsy, data landscape,
@@ -59,11 +59,11 @@ flooring, if ever, is an operator decision at the S4b seam).
   artifact file only.
 - **actuarial-system dependency:** uv path dependency (`../../actuarial-system` from the
   `demoflow/` project directory — one level under the HDE repo root, so two levels up to the
-  sibling checkout; codex r6-F7 caught the §2/§3 contradiction — lain-local; showcase
-  runs need both repos present, accepted at the operator fork 2026-07-21). Import surface pinned to
+  sibling checkout; codex r6-F7 caught the §2/§3 contradiction; showcase
+  runs need both repos checked out side by side, accepted at the operator fork 2026-07-21). Import surface pinned to
   `mcp_server.engine.mortality` public functions only: `set_active_mortality`, `active_mortality`,
   `get_qx`. No private reach-ins. Dependency weight (fastmcp/cvxpy/osqp ride along) accepted —
-  lain-local batch tool.
+  local batch tool.
 - **Basis contract (gotcha codified in actuarial-system/CLAUDE.md):** the engine DEFAULTS to the US
   RP2014+MP2021 basis. Every demoflow entry point sets
   `set_active_mortality("CPM2014_combined", "CPM-B")` and then CHECKS `active_mortality()` echoes the
@@ -508,7 +508,7 @@ tripwires would be a new operational surface — explicitly out of scope of this
 
 ## 10. Testing
 
-TDD throughout (mm-spine discipline). Anchors:
+TDD throughout. Anchors:
 - **Oracle-anchored cohort math**: hand-computed 2-cohort, 3-year example (fixture with the full
   arithmetic in comments); transition identities (state mass conservation: every household ends in
   exactly one of {remain, widowed, dissolved, exited}).

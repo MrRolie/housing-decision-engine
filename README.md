@@ -6,18 +6,22 @@ and an MCP server so Claude can run comparisons directly.
 
 ## Features
 
-- **3-way PV comparison** — rent / condo / house (rent coming in S3)
+- **3-way PV comparison** — rent / condo / house, on a net-wealth basis
 - **Deterministic + Monte Carlo** — fixed-parameter estimate + full uncertainty distribution
-- **Employment cash flow** — model income trajectories and pay-drop events (S3)
-- **Market scenario analysis** — real estate price shocks, rate sensitivity (S4)
-- **MCP server** — Claude-callable tools, no notebooks required (S2)
+- **Leveraged purchases** — mortgage amortization and terminal equity, or all-cash
+- **Employment cash flow** — income trajectories, pay-drop events, per-year affordability ratios
+- **Parameter sensitivity** — sweep any of 24 whitelisted parameters (rates, growth, fees, financing)
+- **MCP server** — 6 Claude-callable tools, no notebooks required
 - **CLI** — `hde` command for standalone use
 - **YAML scenarios** — config files for reproducible comparisons
+
+A dedicated market-scenario layer (correlated price shocks driven by scenario priors) is designed
+but not built — see the roadmap.
 
 ## Installation
 
 ```bash
-git clone <repo>
+git clone https://github.com/MrRolie/housing-decision-engine.git
 cd housing-decision-engine
 uv sync --extra dev
 ```
@@ -37,8 +41,28 @@ uv run hde examples/basic_config.yaml --quiet
 
 ## MCP Server
 
-*Coming in Session 2.* Claude will be able to call housing comparison tools
-directly via MCP — no YAML file required.
+Claude can call the engine directly over MCP — no YAML file required. The server runs on stdio
+via FastMCP:
+
+```bash
+uv run hde-mcp
+
+# Register with Claude Code:
+claude mcp add hde -- uv --directory /path/to/housing-decision-engine run hde-mcp
+```
+
+Six tools are registered:
+
+| Tool | What it does |
+|------|--------------|
+| `define_scenario_tool(name, config)` | Define a named scenario from a config dict |
+| `run_comparison_tool(name, mode)` | Run `deterministic`, `monte_carlo`, or `both` |
+| `sweep_param_tool(name, param_path, values)` | Sweep one whitelisted scalar parameter |
+| `save_figure_tool(name, figure_type)` | Save a figure to `~/.cache/hde/figures/`, return its path |
+| `list_scenarios_tool()` | List session scenarios and their cached-result status |
+| `delete_scenario_tool(name)` | Remove a scenario from the registry |
+
+Scenarios live in an in-process registry — they reset when the server restarts.
 
 ## As a Library
 
@@ -110,13 +134,19 @@ src/hde/            # Core engine
   config.py         # YAML config loader
   reporting.py      # Reports + plots
   cli.py            # CLI entry point
-mcp_server/         # MCP server (S2 — coming)
+mcp_server/         # MCP server (FastMCP, stdio)
+  main.py           # Entry point + tool registrations
+  registry.py       # In-memory scenario store
+  tools.py          # Tool implementations
 examples/           # Scenario YAML files
-tests/              # Test suite (76 tests)
+tests/              # Test suite
 docs/
   roadmaps/         # Project roadmaps
-  specs/            # Session design docs
+  specs/            # Design docs
+  plans/            # Implementation plans
   reference/        # Architecture + API docs
+  research/         # Research dossiers
+  archive/          # Deprecated notebooks
 ```
 
 ## Tests
@@ -129,6 +159,7 @@ uv run python -m pytest
 
 See `docs/roadmaps/2026-06-07_housing-decision-engine.md` for the full arc:
 - S1 ✅ Repo foundation (rename, uv, AGENTS.md, CLAUDE.md)
-- S2 MCP server
-- S3 Rent option + employment cash flow
-- S4 Market scenario layer
+- S2 ✅ MCP server
+- S3 ✅ Rent option + employment cash flow
+- S4a ✅ Net-wealth foundation (mortgage amortization + terminal equity)
+- S4b Market scenario layer — not started

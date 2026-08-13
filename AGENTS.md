@@ -8,10 +8,10 @@ Present value comparison engine for housing decisions: rent vs condo vs house.
 Extends to employment cash flow modeling and real estate market scenario analysis.
 Surfaces as an MCP server — Claude calls tools directly, no notebooks needed.
 
-## Revenue stream / context
+## Scope
 
-Personal financial tooling (own use). Not fund money-path — no VRP, no equity rebalance.
-`money-path: no` on all work in this repo.
+Personal financial tooling, for the author's own use. Nothing here places trades or moves
+money — it computes present-value comparisons from parameters you supply.
 
 ## Package layout
 
@@ -28,7 +28,7 @@ mcp_server/         # MCP server (FastMCP, stdio transport)
   main.py           # FastMCP entry point + @mcp.tool wrappers
   registry.py       # In-memory ScenarioEntry store (spec: ComparisonSpec)
   tools.py          # 6 tool implementations + serialization helpers
-tests/              # pytest suite (151 tests)
+tests/              # pytest suite
 examples/           # Example YAML scenario configs
 docs/
   roadmaps/         # Roadmap spines (do not edit arc spine)
@@ -49,7 +49,7 @@ uv run python -m pytest
 # MCP server
 uv run hde-mcp                         # stdio transport (Claude Code)
 # Register with Claude Code:
-# claude mcp add hde -- uv --directory /home/mm-mike/ai_system/projects/housing-decision-engine run hde-mcp
+# claude mcp add hde -- uv --directory /path/to/housing-decision-engine run hde-mcp
 ```
 
 ## Development setup
@@ -82,12 +82,13 @@ Active roadmap: `docs/roadmaps/2026-06-07_housing-decision-engine.md`
 
 Sessions:
 - S1 ✅ Repo foundation (2026-06-07, PR #2)
-- S2 ✅ MCP server — 6 tools, 115 tests (2026-06-08, PR #2)
-- S3 ✅ 3-way comparison + income model — 151 tests (2026-06-08, PR #3)
-- S4 Market scenario layer + Monte Carlo extensions
+- S2 ✅ MCP server — 6 tools (2026-06-08, PR #2)
+- S3 ✅ 3-way comparison + income model (2026-06-08, PR #3)
+- S4a ✅ Net-wealth foundation: mortgage amortization + terminal equity (2026-07-21, PR #4)
+- S4b Market scenario layer + Monte Carlo extensions — not started
 
 ## Do not
 
 - Add geographic tax rules (explicitly out of scope — see roadmap)
 - Add mortgage *optimization* / refinancing / variable-rate modeling (out of scope). NOTE: mortgage amortization + terminal equity ARE modeled as of S4a (2026-06-08); the rent-vs-buy DCF is leveraged.
-- Import from fund repos (`mm-infra`, `mm-strategies`, etc.) — this is standalone personal tooling
+- Add dependencies on private or unpublished repos — this is standalone personal tooling

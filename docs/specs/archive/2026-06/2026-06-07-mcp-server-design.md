@@ -1,6 +1,6 @@
 # MCP Server Design — Housing Decision Engine (S2)
 
-**money-path: no**
+**Scope:** personal tooling — nothing here places trades or moves money.
 **Date:** 2026-06-07
 **Session:** S2 of `docs/roadmaps/2026-06-07_housing-decision-engine.md`
 
@@ -13,7 +13,7 @@ all without touching YAML files or notebooks.
 ## Intent / character
 
 Session-long exploration tool. Claude defines scenarios once by name, then runs
-what-ifs against them. Stateless per restart (acceptable for personal lain-node
+what-ifs against them. Stateless per restart (acceptable for personal single-host
 use). Figures saved to disk; Claude uses `SendUserFile` to show them.
 
 ## Architecture
@@ -154,7 +154,7 @@ must have been called first).
 Saves to `~/.cache/hde/figures/<name>_<figure_type>_<unix_ts>.png`. Creates dir on
 first use. Returns absolute path.
 
-**Returns:** `{"path": "/home/mm-mike/.cache/hde/figures/downtown_condo_diff_distribution_1749290000.png"}`
+**Returns:** `{"path": "~/.cache/hde/figures/downtown_condo_diff_distribution_1749290000.png"}`
 
 **Errors:** `{"error": "no MC results for scenario <name> — run run_comparison first"}`.
 

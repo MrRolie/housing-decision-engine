@@ -88,7 +88,7 @@ Emitted object — a versioned parquet/JSON the engine reads, one row per (geogr
 
 Illustrative shape (Montréal plex, 2035): reference immigration → −0.5%/yr [−2.0, +1.0]; low (the realized-2025 Québec drawdown path — natural decrease + NPR cuts) → −2.5%/yr [−5, 0]; high → +0.5%. S4b consumes demo_drift_* as priors on its price-drift generator and drawdown_prob_5yr as a tilt on its shock weights. The three ISQ variants ARE the scenario axis — the model deliberately hands S4b the full immigration-policy fan because immigration is the swing factor and, in Québec, the most exogenous/decision-relevant lever (provincially set, cuttable by fiat).
 
-**Discipline inherited from the mm-infra Y1 memo:** emit a thesis/conditioning signal with wide honest bands; never a captured-dollar or point number. This is a personal-buy-decision + mission-side ("land" vector) tool, not a fund revenue term.
+**Discipline inherited from a prior internal review:** emit a thesis/conditioning signal with wide honest bands; never a captured-dollar or point number. This is a personal-buy-decision tool, not a revenue model.
 
 ---
 
@@ -111,10 +111,10 @@ Illustrative shape (Montréal plex, 2035): reference immigration → −0.5%/yr 
 - Boundary crisp: the cause-agnostic COMBINATOR lives in actuarial-system (genuinely reusable); the specific data-starved LTC/downsizing HAZARD CURVES live in the housing module (housing-specific).
 - **This is a charter/roadmap EXTENSION requiring explicit operator sign-off, not a silent in-scope expansion.** A housing decrement use is longevity-side (does not trip the P&C gate) but is NOT automatically in scope — no decrement primitive exists to reuse. Upside: it gives actuarial-system its first named external consumer, satisfying its charter's consumer gate positively.
 
-**Why it must NOT couple into mm-infra:**
-- mm-infra's demographic-confidence layer is equity-fear-premium / VRP-demand — disjoint on purpose, asset class (US-listed equities vs Québec real estate), geography, and mechanism. The 2026-07-18 Y1 memo already ruled that layer a thesis-signal with NO $/yr capture.
-- mm-infra doctrine forbids packages/ importing research/; its demographic code is deleted from HEAD anyway — there is no shared library to couple into.
-- Coupling would invent a false money-path linkage (this is personal/mission-side, not a fund revenue term) and risk contaminating fund doctrine with a model that shares only demographic-projection ANCESTRY. Correct isolation = the same discipline the Y1 memo modeled. The only shared thing is method (age-cohort projection + sensitivity bands) — copy the pattern from git history if useful, never import.
+**Why it must stay standalone:**
+- The earlier internal demographic model projects equity-market behaviour — disjoint on purpose by asset class (listed equities vs Québec real estate), geography, and mechanism. It was already ruled a directional signal with no dollar capture.
+- There is no shared library to couple into; that model's code is not importable.
+- Coupling would invent a false linkage and risk contaminating one model with another that shares only demographic-projection ANCESTRY. The only shared thing is method (age-cohort projection + sensitivity bands) — copy the pattern if useful, never import.
 
 ---
 

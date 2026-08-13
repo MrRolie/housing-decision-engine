@@ -1,6 +1,6 @@
 # demoflow Tranche 1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use mm-spine:subagent-driven-development (recommended) or mm-spine:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Implement this plan task-by-task, in order. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Spec:** `docs/specs/2026-07-21-demoflow-demographic-scenario-module-design.md` — the why/intent lives here; read it before executing.
 
@@ -12,7 +12,7 @@
 
 **Execution precondition:** PR #4 (S4a) merged; execute from post-merge `main` in a worktree. The demoflow spec + committed ISQ workbooks (`docs/research/2026-07-21-demographic-housing-flow-grounding/data/`) ride that merge.
 
-**Not fund-money-path** (personal decision tooling; touches no fund globs) — but **load-bearing / decision-critical**: the spec's load-bearing-claim tag ("fail-loud loaders, no silent fallback"; the tripwire fail-safe gate) plus the demand/balance math make this audit-worthy. So **three pre-PR adversarial audit tasks ARE injected** — Task 31 (quant-financial-engineer), Task 32 (stress-tester), Task 33 (data-integrity-validator) — run after T1c, before the PR. `stress-tester` runs BOTH as Task 32 (pre-PR, findings foldable into the branch) AND again at PR time via the external review hook. The executor sets audit discipline off THIS line: audit tasks are present (no `audit-skipped` marker), not deferred.
+**Not a money-moving change** (personal decision tooling) — but **load-bearing / decision-critical**: the spec's load-bearing-claim tag ("fail-loud loaders, no silent fallback"; the tripwire fail-safe gate) plus the demand/balance math make this audit-worthy. So **three pre-PR adversarial audit tasks ARE injected** — Task 31 (quant-financial-engineer), Task 32 (stress-tester), Task 33 (data-integrity-validator) — run after T1c, before the PR. `stress-tester` runs BOTH as Task 32 (pre-PR, findings foldable into the branch) AND again at PR time via the external review hook. The executor sets audit discipline off THIS line: audit tasks are present, not deferred.
 
 **Session boundaries** (sub-lettered tasks 8b/15b/25b were inserted while folding codex rounds 1–6):
 - **T1a — Tasks 0–16 (incl. 8b, 15b)** (scaffold + probes + loader-validation contracts + loaders + junctions + per-sex living-arrangement + import-direction contract)
@@ -4899,8 +4899,7 @@ this plan, against the implemented code.
 - Write: `docs/audits/quant/2026-07-21-demoflow-tranche1.md`
 
 - [ ] **Step 1: Dispatch agent.** Use the `Agent` tool with
-  `subagent_type: mm-spine:quant-financial-engineer` (plugin prefix required — a bare name fails to
-  resolve). Hand it the plan path, the spec path, and this framing:
+  a quant / financial-engineering review agent. Hand it the plan path, the spec path, and this framing:
   > "For every formula, unit, and arithmetic claim in this plan: run dimensional-consistency +
   > limiting-cases on the plan's specifics — the q_live annualization 1−(1−0.36)^(1/5); the
   > competing-risk partition (branches sum to 1, all ≥0, incl. couple states); the persons→households
@@ -4959,7 +4958,7 @@ and staleness blind spots.
 - Write: `docs/audits/data/2026-07-21-demoflow-tranche1.md`
 
 - [ ] **Step 1: Dispatch agent.** Use the `Agent` tool with
-  `subagent_type: mm-spine:data-integrity-validator`. Hand it the plan path, the loader file paths,
+  a data-integrity review agent. Hand it the plan path, the loader file paths,
   and this framing:
   > "Attack the data layer: junction-type trace on every cross-source join (geography label
   > normalization incl. trailing-space/footnote-digit reality, sex-code orientation, age-block
@@ -5033,7 +5032,7 @@ and staleness blind spots.
 
 - [ ] **Probes recorded + committed:** `demoflow/probes/P1..P6` observation notes exist; each states a VERDICT or a recorded failure + the spec-named fallback (never a silent proceed).
 
-- [ ] **Adversarial audits — pre-PR (Tasks 31–33) AND PR-time.** The three injected pre-PR audits (Task 31 quant-financial-engineer, Task 32 stress-tester, Task 33 data-integrity-validator) run after T1c and BEFORE the PR — their findings fold into the branch. At PR time `stress-tester` fires AGAIN via the external review hook (alongside codex + DeepSeek). Land the branch via `mm-spine:finishing-a-development-branch`.
+- [ ] **Adversarial audits — pre-PR (Tasks 31–33) AND PR-time.** The three injected pre-PR audits (Task 31 quant-financial-engineer, Task 32 stress-tester, Task 33 data-integrity-validator) run after T1c and BEFORE the PR — their findings fold into the branch. At PR time `stress-tester` fires AGAIN via the external review hook (alongside codex + DeepSeek). Then land the branch.
 
 ## Out of scope (Tranche 2 — gated, do NOT build here)
 
