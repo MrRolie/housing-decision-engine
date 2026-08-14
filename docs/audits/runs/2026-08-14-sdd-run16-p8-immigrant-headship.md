@@ -80,5 +80,5 @@ is to frame it (what exists, at what dimensions, what each candidate costs in tr
    leg asserts nothing (negative arrivals → negative owner households); and the new cohort/demand →
    loaders import direction has no gate.
 
-- run id: (appended at dispatch)
+- run id: `wf_caef870f-16d` (dispatched 2026-08-14; task id wzpvfasjq)
 - outcome: (appended at run close)
