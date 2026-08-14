@@ -288,95 +288,124 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R — the immigrant inputs, RESOLVED (steering amendments #7 and #8;
-operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that
-did not survive being hit live. Both are settled below, and the lineage is kept short on purpose:
-P ruled the RATIO's reading, Q re-pointed the ratio's SOURCE after a second probe reached a cube
-the first could not, R rules HEADSHIP. What follows is the resolved present, not a history.
+**RULINGS P / Q / R / S — the immigrant inputs, RESOLVED (steering amendments #7, #8 and #9;
+operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
+not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
+single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
+kept short on purpose — P ruled the ratio's READING (eventual, not arrival-window); Q re-pointed the
+ratio's source when a second probe reached a cube the first could not; R ruled headship absent; S
+supersedes Q's values and REVERSES R's absence on a third measurement. What follows is the resolved
+present, not a history.
 
-**THE RATIO — source, values, and what is still borrowed.** Probe P4 found no immigrant × tenure
-cross-tab in the 98\* product family and pinned StatCan 46-28-0001's settled/fifth-year anchor
-(0.911, ROC provinces, `borrowed_prior` on three axes). Probe P8 then measured, live, a CURRENT
-free cube P4's scope could not reach: **StatCan 43-10-0060-01** — "Selected housing
-characteristics, low income indicators and knowledge of official languages, by visible minority and
-other characteristics for the population in private households" (2021 Census, released
-2023-01-23) — which crosses `Immigrant and generation status` with `Population living in a dwelling
-owned by some members of the household` at BOTH modeled CMAs, Québec included. P4's "0 of 80
-immigrant cubes carry tenure" was TRUE AS SCOPED and the conclusion drawn past it was not: 43-10-0060
-is a 43\* cube whose title carries a housing term but no immigrant or tenure token, so it fell
-outside both of P4's selection tiers. Recorded because the failure mode generalizes — a scoping
-clause can hide the answer, and this is the second time in this arc that an absence claim was a
-property of the search rather than of the data (see ruling F).
+**RULING S (amendment #9, operator-ruled 2026-08-14) — the values that bind.** Source:
+**StatCan 98-10-0621-01**, "Population groups by housing suitability and condition of dwelling"
+(2021 Census, released 2023-10-04, CURRENT), `Before 2016` member of its `Population
+characteristics` dimension — the SAME member for both quantities, because under I2's whole-residency
+argument a ratio and a headship drawn from two different immigrant-member definitions would mix two
+cohort definitions inside one product. Seat-verified live against the WDS coordinates:
 
-**RULING Q (amendment #8): the ratio takes 43-10-0060-01, per modeled geography, on the SETTLED
-member** — `Admitted to Canada more than 10 years ago` ÷ `Non-immigrants`, indicator "population
-living in a dwelling owned by some members of the household", 2021, seat-verified live against the
-WDS coordinates: **MTL_RMR 0.9682** (64.0/66.1), **QC_RMR 0.9223** (64.1/69.5), **province 0.9219**
-(64.9/70.4) for HORS_RMR; RA members borrow their parent CMA, `borrowed_prior`. Ruling P's
-SELECTION is CORROBORATED, not overturned — both CMA values fall inside its band and near its 0.911
-pin. What changed is provenance: three transport axes became ONE, and a single ROC-province anchor
-became per-geography Québec measurement. Same-cube readings recorded so no later reader has to
-guess: recent (<10y) 0.5734 / 0.5309, all-immigrant stock 0.8442 / 0.7353, non-permanent residents
-0.2057 / 0.1698.
+| geography | immigrant HEADSHIP (maintainers ÷ persons) | ownership RATIO (owner-maintainer propensity ÷ non-immigrant) |
+|---|---|---|
+| MTL_RMR | **0.5259** | **0.9634** |
+| QC_RMR | **0.5054** | **0.8910** |
+| HORS_RMR | **0.5169** | **0.9600** |
 
-The ONE remaining axis is **METRIC**: a person-weighted share of the population living in a dwelling
-owned by some household member, all ages, standing in for the owner-MAINTAINER propensity
-`p_nonimm(a)`. **Its direction is NOT measured and must not be asserted** — it turns on
-owned-vs-rented household-size differentials WITHIN each group, not between them, and it is the
-quant-financial-engineer's question at Task 26. GEOGRAPHY is CLOSED (both modeled CMAs measured
-directly — that axis is what forced ruling P, since CHSP excludes Québec). TENURE-PROFILE is closed
-for this reading by the member itself. Accordingly the r5-F4 join's **"CMA values direct" tier is
-LIVE for the ratio** (this supersedes amendment #7's empty-direct-tier clause, which was written
-when no CMA measurement was known): MTL_RMR/QC_RMR direct and CITED, RA members `borrowed_prior`,
-HORS_RMR the province value `borrowed_prior`, and an unresolved modeled member still RAISES. The
-sweep span stays **[0.155, 1.033] UNCHANGED** — robustness is not narrowed on the strength of one
-cube. P4's three 46-28-0001 anchors (year-1 0.210, year-3 0.614, year-5 0.911) therefore STAY as
-documented constants and are not to be culled in the re-point: `SWEEP_GRID` sources that very span
-from `CONSTANTS["immigrant_ownership_ratio_sweep_span"]`, so deleting them would break the sweep's
-own source, and they remain the cross-check against which the 43-10-0060 reading is read.
+RA members borrow their parent CMA, `borrowed_prior`. HORS_RMR is the province NET of the six
+wholly-QC CMAs — the tree's own documented residual method, computed here rather than borrowed
+(province-level readings are 0.5236 and 0.8993, and differ from the residual precisely because the
+province contains the CMAs).
 
-**Why the year-1 reading stays REFUSED, from this section's own equations:** I2 subtracts the FULL
-surviving arrival stock from P_resident in every year, while the demand chain credits each arrival
-cohort exactly ONCE, in its arrival year. Years 2+ of every cohort therefore belong to NEITHER
-channel, and the arrival-year credit necessarily stands in for the cohort's whole residency — an
-arrival-window rate would systematically undercount it. (This refutes the "the §6 netting target IS
-the recent-arrival stock" reading recorded against `immigrant_ownership_ratio_fresh_arrival`; that
-anchor keeps its place and gains the pointer, it is not deleted.)
+**Why this source and not the previous two.** `Primary household maintainer` × `Population
+characteristics` × `Tenure` at CMA level gives BOTH quantities as COUNTS, in one universe, with
+confidence-interval members published alongside. The ratio it yields is the owner-MAINTAINER
+propensity — *exactly* the quantity this section defines — so ruling Q's METRIC transport is not
+reduced but ELIMINATED. The universe is corroborated three independent ways: Québec total
+maintainers = **3,749,035**, the published private-household count already cited in
+`loaders/census.py`'s T13b docstring; total persons 8,308,480 against probe P3's independently
+measured 8,308,475 private-household persons; and the geography labels here carry no trailing
+non-breaking spaces, unlike 43-10-0060's.
 
-**RULING R (amendment #8): the immigrant HEADSHIP source premise is REFUTED; the value
-TRANSPORTS.** This section names the immigrant headship rate as "Census immigrant household size /
-maintainer rate, probe §11". P8 swept the catalogue live — 8,206 cubes, 994 title-selected,
-`getCubeMetadata` resolved on all 994: 156 carry an immigrant-status dimension, 16 carry a
-household-maintainer dimension, and the **INTERSECTION IS EMPTY**. No free source crosses immigrant
-status with household-maintainer status at any geography, and no household-SIZE dimension is
-crossed with immigrant status either, so the reciprocal-of-average route has no decomposition to
-stand on. That absence is SCOPED to the title-selected pool and is to be stated that way, never as
-"does not exist" — the 43-10-0060 find above is the live proof that the qualifier matters.
-Immigrant headship therefore takes **the model's own general headship curve** (the committed
-Census-derived `headship_by_age` surface), `borrowed_prior` on exactly ONE named axis: IMMIGRANT
-STATUS. Seat-computed as the POPULATION-WEIGHTED AGGREGATE of the banded `headship_by_age` curve
-over `pop-as-rmr-base.xlsx`, `Scenario.REFERENCE`, year 2026, per geography — the recipe is stated
-in full because the fan is a filter and not a default, and because an aggregate of a banded curve
-is a choice, not a lookup: **MTL_RMR 0.4332** (1,972,265 households / 4,553,296 persons),
-**QC_RMR 0.4394** (399,279 / 908,735), **HORS_RMR 0.4529** (1,128,257 / 2,491,200). NAMED CAVEAT,
-direction stated and magnitude NOT measured: immigrant households
-run larger than average, so a general rate plausibly OVERSTATES immigrant household formation.
-FLOOR GATE, free from the same cube: immigrant headship must EXCEED the immigrant living-alone
-share (0.134 MTL, 0.127 QC), since each person living alone maintains exactly one household — a
-value below that floor is a defect, not a datum.
+**The METRIC direction is now MEASURED, and this supersedes the instruction not to assert it.**
+Amendment #8 routed the direction to the Task-26 QFE as unmeasurable-here; it is measurable, and it
+runs one way: the person-weighted proxy OVERSTATES the maintainer-denominated ratio at every
+geography — MTL 0.9682 → 0.9634 (−0.5%), QC_RMR 0.9223 → 0.8910 (−3.4%), province 0.9219 → 0.8993.
+Small at Montréal, not at Québec. **The Task-26 QFE carry therefore NARROWS to adequacy review of
+the ruled inputs — it is no longer a direction-measurement task.**
 
-**Costs, recorded rather than argued away:** (i) at the settled reading the netting discount is
-~3-8%, smaller still than 0.911's ~9% — this section's "the netting IS the showcase's originality
-claim" holds STRUCTURALLY but is materially small, and is to be stated at that size and never
-louder (the stress-relaxation ban's sibling: a result is never promoted past what it measures). The
-large newcomer effect is real but lives in the RECENCY COMPOSITION the same cube measures (recent
-<10y at 0.53-0.57, NPR at 0.17-0.21), which is Tranche 2's years-since-landing S-curve, not v0.
-(ii) The credit is timing-biased EARLY, a whole cohort's formation landing in its arrival year —
-also Tranche 2's fix, not a v0 defect to patch. **Binds Task 25b:** no uncited literals (the plan's
-0.62/0.70/0.66 and 0.42/0.45/0.43 are all OUT); the plan's
-`resolve_immigrant_inputs(MTL_RMR).flag is None` assertion is RE-RULED — under Q the MTL ratio is
-direct and CITED while its headship is BORROWED, so `ImmigrantInputs` needs PER-FIELD provenance:
-one flag cannot describe that pair honestly.
+**What the earlier sources become.** 43-10-0060-01 is retained as the SIBLING CROSS-CHECK, not
+deleted — as a COARSE consistency check across two named axes, never a like-for-like agreement: its
+0.9682 and this ruling's 0.9634 differ in BOTH the member cut (>10 years vs ≥5 years) and the metric
+(person-weighted share vs maintainer propensity), so their closeness at Montréal bounds the combined
+size of those two differences and asserts nothing stronger. P4's three 46-28-0001 anchors likewise STAY — `SWEEP_GRID` sources
+the [0.155, 1.033] span from them, and the sweep span is UNCHANGED under this ruling. The layering
+is explicit: **measured (98-10-0621) > sibling-measured (43-10-0060) > borrowed (P4)**.
+
+**RULING R's ABSENCE CLAIM IS REVERSED, and the reason generalizes.** R stated that no free source
+crosses immigrant status with household-maintainer status. What reproduces is the MAINTAINER count
+(16) and the empty dimension-name intersection; the immigrant-dimension count is selection-rule
+dependent and did NOT reproduce (156 under run 16's rule, 175 under run 17's own). The conclusion is
+what fails. 98-10-0621-01 crosses them at both modeled CMAs **because it carries
+immigrant status as MEMBERS of a `Population characteristics (46)` dimension rather than as a
+dimension NAME** — and it sits INSIDE the sweep's own title-selected pool and INSIDE its 16-cube
+maintainer set. This is the third instance in this arc of an absence claim being a property of the
+SEARCH rather than of the data (ruling F: HEAD-vs-GET and guessed slugs; ruling Q: a product-family
+and title-tier scope; ruling S: dimension-name selection). R's named caveat — that a general rate
+"plausibly OVERSTATES" immigrant formation — is also refuted for the pooled stock, which measures
+HIGHER than the general population (0.4996 vs 0.4364 at MTL), and holds only for recent arrivals.
+The standing consequence: **an absence claim in this arc is provisional until the search itself has
+been closed at the level the claim is stated at**, and a scoped verdict must name its selection
+level, not merely its pool.
+
+**Why the arrival-window reading stays REFUSED, from this section's own equations** (ruling P's
+argument, unchanged by S and the reason `Before 2016` rather than `Recent immigrants` is the ruled
+member): I2 subtracts the FULL surviving arrival stock from P_resident in every year, while the
+demand chain credits each arrival cohort exactly ONCE, in its arrival year. Years 2+ of every cohort
+therefore belong to NEITHER channel, and the arrival-year credit necessarily stands in for the
+cohort's whole residency — an arrival-window rate would systematically undercount it. The
+flow-vs-stock gap this leaves is a MODELING CHOICE, deliberately taken and named here, not an
+unnamed transport: the operand is an arrival flow and the ruled member is a settled stock, and the
+same cube publishes the recent-arrival readings (headship 0.3604 / 0.3431 / 0.3143; ratio 0.4211 /
+0.3679 / 0.4472) so the size of that choice is visible rather than hidden.
+
+**The r5-F4 join, resolved:** MTL_RMR and QC_RMR are DIRECT and CITED for both quantities (this
+supersedes amendment #7's empty-direct-tier clause, written when no CMA measurement was known); RA
+members borrow the parent CMA, `borrowed_prior`; HORS_RMR is the province-net residual, computed;
+an unresolved modeled member still RAISES, and there is still no unstated default. **This also
+supersedes the r5-F4 parenthetical above** — "(a province-net residual for these cross-tabs is not
+cheaply available)" — which ruling S falsifies by computing exactly that residual from published
+counts, subtracting the six wholly-QC CMAs from the province in one query batch. The sweep span
+stays **[0.155, 1.033] UNCHANGED** — robustness is never narrowed on the strength of a new cube —
+and P4's three 46-28-0001 anchors (year-1 0.210, year-3 0.614, year-5 0.911) STAY as documented
+constants: `SWEEP_GRID` sources that very span from
+`CONSTANTS["immigrant_ownership_ratio_sweep_span"]`, so culling them would break the sweep's own
+source.
+
+**FLOOR GATE, retained from ruling R and still free — but it is a CROSS-CUBE gate and must be wired
+as one.** 98-10-0621-01 carries no living-alone indicator; the shares come from the sibling cube
+**43-10-0060-01, indicator 8**, and the member must match the ruled one rather than the pooled
+stock: the SETTLED living-alone shares are **0.154 MTL and 0.164 QC_RMR** (the pooled all-immigrant
+figures 0.134/0.127 that ruling R named belong to a different member and are the looser floor). Use
+the settled shares — nearer in definition and stricter as a bound. Immigrant headship must EXCEED
+them, since each person living alone maintains exactly one household; the ruled values clear with
+room (0.5259, 0.5054). A value below the floor is a defect, not a datum.
+
+**Costs, recorded rather than argued away:** (i) at the ruled settled reading the netting discount
+is ~4-11% — this section's "the netting IS the showcase's originality claim" holds STRUCTURALLY but
+is materially small, and is to be stated at that size and never louder (the stress-relaxation ban's
+sibling: a result is never promoted past what it measures). The large newcomer effect is real but
+lives in the RECENCY COMPOSITION the same cube measures, which is Tranche 2's years-since-landing
+S-curve, not v0. (ii) The credit is timing-biased EARLY, a whole cohort's formation landing in its
+arrival year — also Tranche 2's fix, not a v0 defect to patch. (iii) Immigrant headship measures
+HIGHER than the general population for the settled stock (0.5259 vs 0.4364 at MTL), so the
+immigrant channel contributes more household formation per person than a general-rate model would
+have credited — the direction is now measured rather than assumed either way.
+
+**Binds Task 25b:** no uncited literals — the plan's 0.62/0.70/0.66 and 0.42/0.45/0.43 are all OUT,
+superseded by the ruling-S table. The plan's `resolve_immigrant_inputs(MTL_RMR).flag is None`
+assertion is RE-RULED: under S both MTL quantities are direct and CITED, so that member's flag IS
+None — but `ImmigrantInputs` still needs PER-FIELD provenance, because RA members and HORS_RMR carry
+different provenance per field (a borrowed parent-CMA value beside a computed residual), and one
+flag cannot describe a pair honestly.
 
 **Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
 decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
