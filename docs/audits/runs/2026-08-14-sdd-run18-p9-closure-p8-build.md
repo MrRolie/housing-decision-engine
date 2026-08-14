@@ -65,5 +65,5 @@ misses make it obviously right. Reported rather than escalated.
    leg asserts nothing (negative arrivals → negative owner households); the new cohort/demand →
    loaders import direction has no gate.
 
-- run id: (appended at dispatch)
+- run id: `wf_0b36b300-bc8` (dispatched 2026-08-14; task id w6qrhywum)
 - outcome: (appended at run close)
