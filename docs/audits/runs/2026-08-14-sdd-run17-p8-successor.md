@@ -52,3 +52,40 @@ operator rulings Q and R, amended into spec §6 as amendment #8 (`1f6eacb`).
 
 - run id: `wf_025924cf-5fd` (dispatched 2026-08-14; task id w997opqt6)
 - outcome: (appended at run close)
+
+## API-529 death and resume (2026-08-14)
+
+First attempt died on `API Error: 529 Overloaded` — server-side transient, not a defect in the work.
+Here the IMPLEMENTER died (0 stages completed), leaving a partial `demoflow/probes/run_p8.py` (1,257
+lines, structurally complete with a `main()`, but never run to generate its note and never reviewed).
+
+**Seat call: the partial was MOVED to scratchpad (`died-run17/run_p8.partial.py`), not kept and not
+deleted.** Kept, it would have met the resumed implementer as a file it has no memory of writing,
+against a mandate that says CREATE — and worse, an unreviewed artifact from a died agent could have
+become the basis of a note whose provenance header claims live regeneration. Deleted, the bytes
+would be gone. Moving restores the recorded dispatch precondition (tree clean) while preserving them.
+
+Resumed under the SAME run id, args unchanged; the implementer re-runs live because it never
+completed. A died stage is not a findings-exit, so no successor is needed.
+
+- resumed: 2026-08-14 (task id wj3z2aaqa, same run id `wf_025924cf-5fd`)
+
+### Seat error at this fold, owned
+
+Writing the note above, the seat's first attempt ran the heredoc with the shell cwd still in
+`actuarial-system.cf1` — so this demoflow record was created and COMMITTED inside the actuarial
+repo (`3178d48`). This is the exact cwd-persistence trap logged as a near-miss at the 2026-08-08d
+fold, hit for real this time. Caught immediately by the push failing (`src refspec
+feat/demoflow-tranche1 does not match any` from the actuarial remote), which is the only reason it
+surfaced — the commit itself was silent and green.
+
+Repaired with the lowest-risk operation available, because that tree holds ~190 tests of
+UNCOMMITTED work: the 14 held paths were tar-snapshotted to scratchpad first, then `git reset
+--mixed HEAD~1` (which by definition does not touch the working tree) and `rm` of the stray file.
+Verified after: HEAD back to `0a115f1` and in sync with origin, 14 held paths still present, suite
+376 green. The stray commit was never pushed.
+
+Standing correction, stronger than the 08-08d habit that failed to prevent this: a heredoc block
+that writes into a repo states its `cd` **inside the same command**, never inheriting cwd from a
+prior call — and the `git add`/`commit` pair rides in that same block. Relative paths across repo
+boundaries are the hazard; `git -C` or an absolute path is the fix.
