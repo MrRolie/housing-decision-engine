@@ -40,9 +40,21 @@ re-pin (pins.py carries the full argument).
 
 ANCHOR-TYPED PROVENANCE: constants.py's charter rule — "every constant carries its documented
 anchor (source + figure + date); a constant without an anchor is a defect" — is ENFORCED here,
-not stated: every headship rate is instantiated as a `constants.Anchor` built from the
-artifact's OWN `as_of`/`source`, at derivation and again at load, so an undated or uncited
-curve serves nothing.
+not stated: every headship AND ownership rate is instantiated as a `constants.Anchor` built
+from the artifact's OWN `as_of`/`source`, at derivation and again at load, so an undated or
+uncited curve serves nothing. Ownership joined the rule on 2026-08-13 (DIV carry: it was the
+one rate surface without it, recording a `ref_date` that nothing read and typing nothing);
+`as_of` REPLACED that key rather than joining it — one date, spelled the way `Anchor` spells
+it, because two spellings of one field is a second declaration site and only one of them
+would have been load-bearing.
+
+VINTAGE AT THE BOUNDARY (run-6 carry, 2026-08-13): both loaders return their rate sub-tree
+and DROP `_provenance`, which is fine for a test and not fine for the first production
+consumer — spec §7's artifact envelope has to publish `data_vintage.source_hashes` for these
+exact surfaces. `load_ownership_vintage` / `load_headship_vintage` hand back the typed
+`RateVintage` for what was loaded, running the SAME verification the rate loaders run so the
+two can never disagree about a stale artifact (a stateable vintage for rates that would be
+refused is worse than no vintage at all).
 """
 import csv
 import json
@@ -62,6 +74,7 @@ from demoflow.loaders.pins import (
     verify_pin,
 )
 from demoflow.loaders.validate import assert_fraction
+from demoflow.loaders.vintage import RateVintage, vintage_from_provenance
 
 CENSUS_EXTRACT = "census_tenure_age_98100231.csv"
 POP_QC_WORKBOOK = "pop-as-qc-base.xlsx"
@@ -212,6 +225,37 @@ _ROUNDING_NOTE = (
     "reconciliation is asserted and no correction is applied."
 )
 
+# --- multiplicand notes (run-6 carry, 2026-08-13) -------------------------------------
+# THREE rate surfaces in this package take THREE different multiplicands, and every
+# difference is invisible in the numbers: each product stays a plausible magnitude under the
+# wrong operand. Demand (spec §6) is the first production consumer of two of them, so the
+# rule is recorded ON the artifacts rather than in a reader's head, and every use site states
+# which one it is using.
+_HEADSHIP_MULTIPLICAND_NOTE = (
+    "WHAT THIS CURVE MAY MULTIPLY: its denominator is RAW ISQ published persons by single "
+    "year of age (pop-as-qc-base.xlsx, Le Québec, Référence (A2026), base year 2021), which "
+    "INCLUDES COLLECTIVE/institutional residents — ISQ publishes them, and this rate was "
+    "derived over that denominator. So headship(a) must multiply population on that SAME raw "
+    "basis: the ISQ scenario population, or spec §6's P_resident decomposition of it (P_ISQ "
+    "minus surviving arrival cohorts, still raw). The collective share MUST NOT BE REMOVED "
+    "first — removing it understates households by construction, since those residents sit in "
+    "the denominator that produced the rate. This DIFFERS BY DESIGN from "
+    "living_arrangement.json, whose per-sex partition rates are denominated in "
+    "PRIVATE-HOUSEHOLD PERSONS and whose consumer therefore strips "
+    "CONSTANTS['collective_share_75plus'] FIRST (see that artifact's own multiplicand_note "
+    "and cohort/init.py). Two adjacent surfaces, two multiplicands: applying either rule to "
+    "the other surface is a silent double-count or a silent undercount."
+)
+_OWNERSHIP_MULTIPLICAND_NOTE = (
+    "WHAT THIS RATE MAY MULTIPLY: owner-maintainer HOUSEHOLDS / total private HOUSEHOLDS — a "
+    "household-denominated rate, so its multiplicand is a household count, never a person "
+    "count (spec §6, codex r2-F2: persons never multiply a household rate directly; the "
+    "person -> household step is headship's job, immigrant headship's on the arrival leg). "
+    "Both legs of demand hold to that: native formation multiplies a headship-converted "
+    "household gain, and the immigrant chain converts arriving PERSONS to HOUSEHOLDS before "
+    "any ownership propensity is applied."
+)
+
 
 # --- derivation (ruling B) ----------------------------------------------------------
 
@@ -346,6 +390,34 @@ def _rate(owner: int, total: int, ctx: str) -> float:
     return assert_fraction(ctx, owner / total)
 
 
+def _assert_anchor_typed(rates: dict, provenance: dict, where: str, kind: str) -> None:
+    """Instantiate every rate as a `constants.Anchor` built from the payload's OWN as_of and
+    source — constants.py's "an undated/uncited constant is a defect" rule, enforced instead of
+    stated. Runs at derivation AND at load for BOTH rate surfaces, so a de-dated artifact
+    serves nothing. `_flag` is skipped: the borrow marker lives inside `rates` (it is part of
+    what a consumer reads) and is not a rate."""
+    for band, value in rates.items():
+        if band == "_flag":
+            continue
+        try:
+            Anchor(value=value, as_of=provenance.get("as_of", ""),
+                   source=provenance.get("source", ""), unit="fraction")
+        except LoaderError as exc:
+            raise LoaderError(f"{where}: {kind}[{band}] is not a valid Anchor — {exc}") from exc
+
+
+def _assert_ownership_anchor_typed(rates: object, provenance: dict, where: str) -> None:
+    """Ownership is nested one level deeper than headship ({geography: {band: rate}}), so it
+    types per geography — every one of them, borrowed members included: five of the eight
+    modeled surfaces are borrows, and skipping them would leave most of the table untyped."""
+    if not isinstance(rates, dict):
+        raise LoaderError(f"{where}: `rates` is {type(rates).__name__}, expected an object")
+    for geo, bands in rates.items():
+        if not isinstance(bands, dict):
+            raise LoaderError(f"{where}: rates[{geo}] is {type(bands).__name__}, expected an object")
+        _assert_anchor_typed(bands, provenance, where, kind=f"ownership[{geo}]")
+
+
 def derive_ownership_from_csv(csv_path: Path | str) -> dict:
     """Compute the ownership rate table from the pinned P2 Census extract.
 
@@ -386,41 +458,46 @@ def derive_ownership_from_csv(csv_path: Path | str) -> dict:
     if missing:
         raise LoaderError(f"derivation emitted no rate for: {missing} (strict join)")
 
-    return {
-        "_provenance": {
-            "source": CENSUS_EXTRACT,
-            "sha256": WORKBOOK_SHA256[CENSUS_EXTRACT],
-            # The one anchor a re-extract cannot move with (DIV F2). BOTH accessors RAISE on an
-            # unregistered extract, so the derivation refuses rather than emitting an artifact
-            # whose upstream vintage is unpinned — or half-pinned: a digest with no member name
-            # records a hash of an unidentified object.
-            "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
-            "raw_source_member": raw_member(CENSUS_EXTRACT),
-            "statcan_table": "98-10-0231-01",
-            "ref_date": "2021",
-            "extracted_at": "2026-07-21",
-            "derived_by": "demoflow.loaders.census.derive_ownership_from_csv",
-            "generator": "demoflow/scripts/gen_ownership.py",
-            "measure": "owner-maintainer households / total private households, at the "
-                       "`Total -` member of every non-age dimension",
-            "hors_rmr_method": "Québec-province counts NET of all six WHOLLY-QUÉBEC CMA counts; "
-                               "owner and total netted separately THEN divided (codex r4-F2)",
-            "netted_cmas": list(_QC_CMAS),
-            "ca_caveat": _CA_CAVEAT,
-            "isq_territory_note": _ISQ_TERRITORY_NOTE,
-            "rounding_note": _ROUNDING_NOTE,
-            "borrowed_prior": "RA-level members are absent from this CMA-level table; each "
-                              "reuses its parent CMA's computed rate and carries "
-                              "`_flag: borrowed_prior` inline (spec §8). All five borrow "
-                              "MTL_RMR — understates island, overstates couronne (v0).",
-        },
-        # The borrow flags live INSIDE `rates` because they are part of the rate table a
-        # CONSUMER reads: `load_ownership_rates` returns this sub-tree and nothing else, so a
-        # flag recorded only in `_provenance` prose would be invisible to every caller. (The
-        # no-drift gate compares the WHOLE payload, `_provenance` included — it is not what
-        # scopes this.)
-        "rates": {geo.value: rates[geo.value] for geo in Geography},
+    provenance = {
+        "source": CENSUS_EXTRACT,
+        "sha256": WORKBOOK_SHA256[CENSUS_EXTRACT],
+        # The one anchor a re-extract cannot move with (DIV F2). BOTH accessors RAISE on an
+        # unregistered extract, so the derivation refuses rather than emitting an artifact
+        # whose upstream vintage is unpinned — or half-pinned: a digest with no member name
+        # records a hash of an unidentified object.
+        "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
+        "raw_source_member": raw_member(CENSUS_EXTRACT),
+        "statcan_table": "98-10-0231-01",
+        # `as_of` (was `ref_date` until 2026-08-13): the Census reference year, now spelled the
+        # way `constants.Anchor` spells it because every rate below is typed against it. One
+        # date field, and it is load-bearing — a de-dated artifact serves nothing.
+        "as_of": "2021",
+        "extracted_at": "2026-07-21",
+        "derived_by": "demoflow.loaders.census.derive_ownership_from_csv",
+        "generator": "demoflow/scripts/gen_ownership.py",
+        "measure": "owner-maintainer households / total private households, at the "
+                   "`Total -` member of every non-age dimension",
+        "multiplicand_note": _OWNERSHIP_MULTIPLICAND_NOTE,
+        "hors_rmr_method": "Québec-province counts NET of all six WHOLLY-QUÉBEC CMA counts; "
+                           "owner and total netted separately THEN divided (codex r4-F2)",
+        "netted_cmas": list(_QC_CMAS),
+        "ca_caveat": _CA_CAVEAT,
+        "isq_territory_note": _ISQ_TERRITORY_NOTE,
+        "rounding_note": _ROUNDING_NOTE,
+        "borrowed_prior": "RA-level members are absent from this CMA-level table; each "
+                          "reuses its parent CMA's computed rate and carries "
+                          "`_flag: borrowed_prior` inline (spec §8). All five borrow "
+                          "MTL_RMR — understates island, overstates couronne (v0).",
     }
+    # The borrow flags live INSIDE `rates` because they are part of the rate table a
+    # CONSUMER reads: `load_ownership_rates` returns this sub-tree and nothing else, so a
+    # flag recorded only in `_provenance` prose would be invisible to every caller. (The
+    # no-drift gate compares the WHOLE payload, `_provenance` included — it is not what
+    # scopes this.)
+    payload_rates = {geo.value: rates[geo.value] for geo in Geography}
+    # Headship's typing rule, now on this surface too (DIV carry 2026-08-13): derivation leg.
+    _assert_ownership_anchor_typed(payload_rates, provenance, "derive_ownership_from_csv")
+    return {"_provenance": provenance, "rates": payload_rates}
 
 
 # --- loaders ------------------------------------------------------------------------
@@ -479,8 +556,25 @@ def _verify_artifact_provenance(payload, path: Path) -> None:
             "extract cut from a DIFFERENT upstream vintage (or the anchor was dropped); "
             "regenerate with `uv run python scripts/gen_ownership.py`")
 
+    # Typing leg (DIV carry 2026-08-13): the identity checks above prove WHICH extract the
+    # artifact came from; this proves the artifact still states a date and a citation and that
+    # every rate it serves is a valid fraction under them. A digest-only check passes an
+    # artifact whose provenance was hand-trimmed of its date, or whose rates were hand-edited
+    # out of unit under an otherwise-correct digest.
+    _assert_ownership_anchor_typed(payload.get("rates", {}), provenance, path.name)
 
-def load_ownership_rates(data_dir: Path | None = None) -> dict:
+
+def _read_verified_ownership(data_dir: Path | None) -> tuple[dict, Path]:
+    """Read + FULLY verify the ownership artifact ONCE, for both the rate and vintage accessors.
+
+    Shared deliberately: a vintage accessor with its own lighter read could state a vintage for
+    an artifact `load_ownership_rates` refuses, which is worse than stating none. That
+    rationale only holds if EVERY refusal cause lives on the shared path — measured 2026-08-14,
+    with the strict join sitting in `load_ownership_rates`, a dropped geography (or a dropped
+    `rates` key) refused the rates and handed back a confident `RateVintage`, so three of the
+    four causes split the legs apart. The completeness check therefore lives HERE, not in the
+    rate accessor.
+    """
     path = (data_dir or DATA_DIR) / OWNERSHIP_ARTIFACT
     if not path.exists():
         raise LoaderError(f"ownership fixture not found: {path}")
@@ -493,7 +587,25 @@ def load_ownership_rates(data_dir: Path | None = None) -> dict:
     missing = [g.value for g in Geography if g.value not in rates]
     if missing:
         raise LoaderError(f"ownership rate missing for geographies: {missing} (strict join)")
-    return rates
+    return payload, path
+
+
+def load_ownership_rates(data_dir: Path | None = None) -> dict:
+    return _read_verified_ownership(data_dir)[0]["rates"]
+
+
+def load_ownership_vintage(data_dir: Path | None = None) -> RateVintage:
+    """The vintage of the ownership surface a consumer just loaded (run-6 carry).
+
+    `load_ownership_rates` returns rates and nothing else, so a consumer holding them cannot
+    say what produced them — and spec §7's envelope must publish exactly that. Read from the
+    artifact's OWN `_provenance`, so it names the upstream Census vintage rather than a hash
+    of the derived file. `raw_source_name` states WHICH source the recorded upstream anchor
+    belongs to, at the same site that verified it against `pins.raw_anchor` above.
+    """
+    payload, _path = _read_verified_ownership(data_dir)
+    return vintage_from_provenance(OWNERSHIP_ARTIFACT, payload["_provenance"],
+                                   raw_source_name=CENSUS_EXTRACT)
 
 
 def _band_for(age: int, bands) -> str:
@@ -581,18 +693,6 @@ def _headship_value(maintainers: int, persons: float, ctx: str) -> float:
             f"{ctx}: {maintainers} maintainers exceed {persons} persons — a headship rate "
             "above 1 means the numerator and denominator are not the same population")
     return assert_fraction(ctx, maintainers / persons)
-
-
-def _assert_anchor_typed(rates: dict, provenance: dict, where: str) -> None:
-    """Instantiate every rate as a `constants.Anchor` built from the payload's OWN as_of and
-    source — constants.py's "an undated/uncited constant is a defect" rule, enforced instead of
-    stated. Runs at derivation AND at load, so a de-dated artifact serves nothing."""
-    for band, value in rates.items():
-        try:
-            Anchor(value=value, as_of=provenance.get("as_of", ""),
-                   source=provenance.get("source", ""), unit="fraction")
-        except LoaderError as exc:
-            raise LoaderError(f"{where}: headship[{band}] is not a valid Anchor — {exc}") from exc
 
 
 def _zero_support_note(maintainers: int, persons: float) -> str:
@@ -697,6 +797,7 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
         "measure": ("private-household primary maintainers in the band / persons in the SAME "
                     "band — households formed per PERSON, PIT-fixed at the base year (spec §7 "
                     "r3-F3)"),
+        "multiplicand_note": _HEADSHIP_MULTIPLICAND_NOTE,
         "band_members": {label: list(members) for label, _lo, _hi, members in _HEADSHIP_BAND_SPEC},
         "band_persons": {label: band_persons[label] for label, *_ in _HEADSHIP_BAND_SPEC},
         "band_maintainers": {label: maintainers[label] for label, *_ in _HEADSHIP_BAND_SPEC},
@@ -718,7 +819,7 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
             "understated QC households by 9.5%. Their `borrowed_prior` flag is RETIRED — these "
             "values are derived, not borrowed"),
     }
-    _assert_anchor_typed(rates, provenance, "derive_headship_from_sources")
+    _assert_anchor_typed(rates, provenance, "derive_headship_from_sources", kind="headship")
     return {"_provenance": provenance, "headship": rates}
 
 
@@ -772,10 +873,12 @@ def _verify_headship_provenance(payload: dict, path: Path) -> None:
             "was cut from a DIFFERENT upstream vintage (or the anchor was dropped); regenerate "
             "with `uv run python scripts/gen_headship.py`")
 
-    _assert_anchor_typed(payload["headship"], provenance, path.name)
+    _assert_anchor_typed(payload["headship"], provenance, path.name, kind="headship")
 
 
-def load_headship_rates(data_dir: Path | None = None) -> dict:
+def _read_verified_headship(data_dir: Path | None) -> tuple[dict, Path]:
+    """Read + verify the headship artifact ONCE, for both the curve and the vintage accessor
+    (the ownership sibling above carries the argument for sharing the path)."""
     path = (data_dir or DATA_DIR) / HEADSHIP_ARTIFACT
     if not path.exists():
         raise LoaderError(f"headship fixture not found: {path}")
@@ -789,11 +892,32 @@ def load_headship_rates(data_dir: Path | None = None) -> dict:
     if "headship" not in payload:
         raise LoaderError(f"{path.name}: no 'headship' key (keys: {sorted(payload)})")
     _verify_headship_provenance(payload, path)
-    curve = payload["headship"]
-    missing = [label for label, _lo, _hi in _HEADSHIP_BANDS if label not in curve]
+    # Strict join on the SHARED path, for the reason the ownership sibling records: a
+    # completeness check that runs only in the rate accessor lets the vintage accessor state a
+    # confident vintage for a curve no run may use (measured 2026-08-14 on a dropped band).
+    missing = [label for label, _lo, _hi in _HEADSHIP_BANDS if label not in payload["headship"]]
     if missing:
         raise LoaderError(f"{path.name}: headship rate missing for bands: {missing} (strict join)")
-    return curve
+    return payload, path
+
+
+def load_headship_rates(data_dir: Path | None = None) -> dict:
+    return _read_verified_headship(data_dir)[0]["headship"]
+
+
+def load_headship_vintage(data_dir: Path | None = None) -> RateVintage:
+    """The vintage of the headship curve a consumer just loaded (run-6 carry).
+
+    TWO sources, not one: the Census extract (maintainer numerator) AND the ISQ QC population
+    workbook (person denominator). The record carries both, because an envelope that named
+    only the Census vintage would describe half of what produced the curve — and it is exactly
+    this two-source case that makes `raw_source_name` load-bearing: only the Census extract is
+    cut from an uncommittable upstream member, while the byte-pinned ISQ workbook IS its own
+    raw response, so the two entries of §7's map take their digests from different places.
+    """
+    payload, _path = _read_verified_headship(data_dir)
+    return vintage_from_provenance(HEADSHIP_ARTIFACT, payload["_provenance"],
+                                   raw_source_name=CENSUS_EXTRACT)
 
 
 def headship_rate(headship: dict, age: int) -> float:

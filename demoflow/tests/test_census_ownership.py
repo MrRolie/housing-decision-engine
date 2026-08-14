@@ -155,19 +155,21 @@ def test_unknown_age_band_raises():
         ownership_rate(rates, Geography.MTL_RMR, age=20)   # below the modeled 25+ bands
 
 
-def test_out_of_unit_ownership_rate_raises(tmp_path):
-    # `_provenance.sha256` added 2026-08-08 for steering ruling L, `raw_source_sha256` at T13b
-    # (the load path now refuses an unprovenanced artifact and one whose upstream vintage is
-    # unaccounted for). Both are scaffolding to REACH this gate, not the gate itself: the
-    # assertion below is unchanged — an out-of-unit rate must raise at `ownership_rate`, and it
-    # must raise THERE and not at load, which is exactly what a valid provenance block pins.
-    (tmp_path / "ownership_by_geo_age.json").write_text(json.dumps(
-        {"_provenance": {"sha256": pins.WORKBOOK_SHA256[CENSUS_EXTRACT],
-                         "raw_source_sha256": RAW_SOURCE_SHA256[CENSUS_EXTRACT]},
-         "rates": {g.value: {"75+": 1.5} for g in Geography}}))
-    rates = load_ownership_rates(data_dir=tmp_path)
+def test_out_of_unit_ownership_rate_raises():
+    """The LOOKUP gate: `ownership_rate` refuses an out-of-unit rate in the table it is handed.
+
+    RESHAPED 2026-08-13 (DIV carry), and the reshape is the finding, not a weakening. This
+    test used to reach the lookup by loading a hand-built artifact — which only worked
+    because the load path was PERMISSIVE about rate values. Ownership rates are now
+    Anchor-typed at load (`test_an_out_of_unit_ownership_rate_is_refused_AT_LOAD`), so that
+    route now refuses one step earlier and could no longer reach this gate. The lookup gate
+    still has a job the load gate cannot do: `ownership_rate` also serves tables a caller
+    assembled itself (fixtures, sweeps, a future consumer), which no loader ever validated.
+    So the two gates are asserted on the two routes that actually reach them — the hand-built
+    table here, the artifact there — and neither stands in for the other.
+    """
     with pytest.raises(LoaderError, match=r"\[0, ?1\]|fraction"):
-        ownership_rate(rates, Geography.MTL_RMR, age=80)
+        ownership_rate({g.value: {"75+": 1.5} for g in Geography}, Geography.MTL_RMR, age=80)
 
 
 def test_headship_curve_covers_all_ages_and_is_fraction():
@@ -584,6 +586,66 @@ def test_headship_zero_support_band_records_why_it_is_kept():
             f"persons aged 0-19" in note), f"zero_support_note lost its role-bound figures: {note!r}"
     assert "no published maintainer member under 15" in note
     assert "aggregate-consistent" in note and "age-resolved" in note
+
+
+def test_headship_provenance_states_WHICH_population_its_rate_multiplies():
+    """Run-6 carry (2026-08-13), the sibling of `living_arrangement`'s `multiplicand_note`.
+
+    Two adjacent rate surfaces in this package take DIFFERENT multiplicands by design, and
+    the difference is invisible in every number: headship's denominator is RAW ISQ published
+    persons (collective/institutional residents INCLUDED, because ISQ publishes them), while
+    the living-arrangement partition's denominator is PRIVATE-HOUSEHOLD persons, whose
+    consumer must strip `collective_share_75plus` FIRST (cohort/init.py does). Applying the
+    collective correction to headship understates households; omitting it on the partition
+    double-counts collectives — and the first production consumer of headship (demand §6)
+    landed in this run, so the rule is recorded ON the artifact rather than in a reader's
+    head. The contrast clause is asserted, not just the word "collective": a note that says
+    only "collectives are included" leaves the reader to guess whether the OTHER surface
+    behaves the same way, which is the confusion itself.
+    """
+    note = _committed_headship()["_provenance"]["multiplicand_note"]
+    lowered = note.casefold()
+    assert "raw isq" in lowered and "includes collective" in lowered
+    assert "must not be removed" in lowered, (
+        f"multiplicand_note does not forbid the collective correction outright: {note!r}")
+    assert "private-household persons" in lowered and "living_arrangement" in lowered, (
+        f"multiplicand_note does not contrast the OTHER surface's multiplicand: {note!r}")
+
+
+def test_ownership_provenance_must_be_dated_and_cited(tmp_path):
+    """DIV carry (2026-08-13): ownership was the ONE rate surface without Anchor typing.
+
+    Headship has enforced constants.py's charter rule since T13b — every rate instantiated as
+    a `constants.Anchor` built from the artifact's OWN `as_of`/`source`, at derivation and
+    again at load — while ownership recorded a `ref_date` that nothing read and typed
+    nothing, so a de-dated or uncited ownership artifact still served rates. Same rule, same
+    two legs, same message. (`as_of` REPLACED `ref_date` here rather than joining it: one
+    date, spelled the way `Anchor` spells it — two spellings of one field is a second
+    declaration site, and only one of them would have been load-bearing.)
+    """
+    for field in ("as_of", "source"):
+        for value in ("", "   "):
+            payload = _committed_artifact()
+            payload["_provenance"][field] = value
+            (tmp_path / census.OWNERSHIP_ARTIFACT).write_text(json.dumps(payload),
+                                                              encoding="utf-8")
+            with pytest.raises(LoaderError, match=f"empty {field}"):
+                load_ownership_rates(data_dir=tmp_path)
+
+
+def test_an_out_of_unit_ownership_rate_is_refused_AT_LOAD(tmp_path):
+    """Anchor typing's unit leg on the ownership surface, at the load path.
+
+    The committed artifact carries `_flag: borrowed_prior` markers inside `rates`; typing
+    must skip them and still type every RATE (a typing pass that tripped on the flag, or one
+    that skipped whole borrowed geographies, would leave five of eight surfaces unchecked —
+    so the fixture below mutates a rate under a DERIVED geography and the flags stay put).
+    """
+    payload = _committed_artifact()
+    payload["rates"][Geography.MTL_RMR.value]["75+"] = 1.5
+    (tmp_path / census.OWNERSHIP_ARTIFACT).write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(LoaderError, match=r"\[0, ?1\]|fraction"):
+        load_ownership_rates(data_dir=tmp_path)
 
 
 def test_headship_derivation_refuses_an_unpinned_source(tmp_path):

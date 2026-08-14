@@ -16,6 +16,7 @@
     "derived_by": "demoflow.loaders.census.derive_headship_from_sources",
     "generator": "demoflow/scripts/gen_headship.py",
     "measure": "private-household primary maintainers in the band / persons in the SAME band — households formed per PERSON, PIT-fixed at the base year (spec §7 r3-F3)",
+    "multiplicand_note": "WHAT THIS CURVE MAY MULTIPLY: its denominator is RAW ISQ published persons by single year of age (pop-as-qc-base.xlsx, Le Québec, Référence (A2026), base year 2021), which INCLUDES COLLECTIVE/institutional residents — ISQ publishes them, and this rate was derived over that denominator. So headship(a) must multiply population on that SAME raw basis: the ISQ scenario population, or spec §6's P_resident decomposition of it (P_ISQ minus surviving arrival cohorts, still raw). The collective share MUST NOT BE REMOVED first — removing it understates households by construction, since those residents sit in the denominator that produced the rate. This DIFFERS BY DESIGN from living_arrangement.json, whose per-sex partition rates are denominated in PRIVATE-HOUSEHOLD PERSONS and whose consumer therefore strips CONSTANTS['collective_share_75plus'] FIRST (see that artifact's own multiplicand_note and cohort/init.py). Two adjacent surfaces, two multiplicands: applying either rule to the other surface is a silent double-count or a silent undercount.",
     "band_members": {
       "0-19": [
         "15 to 19 years"
