@@ -53,5 +53,5 @@ without printing the numbers that establish it is precisely the depth-3 defect t
   (artifact-pending phrasing, composition framing, cited-not-borrowed flag, quantified territory
   gate). The standing probe discipline is cited from the charter, not re-decided.`
 
-- run id: (appended at dispatch)
+- run id: `wf_d4cb7125-576` (dispatched 2026-08-14; task id wz0ssltzu)
 - outcome: (appended at run close)
