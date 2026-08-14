@@ -67,3 +67,62 @@ misses make it obviously right. Reported rather than escalated.
 
 - run id: `wf_0b36b300-bc8` (dispatched 2026-08-14; task id w6qrhywum)
 - outcome: (appended at run close)
+
+---
+
+## OUTCOME — P9 SWEEP RAN AND MEASURED; halted fork-class on its FIRST criterion → RULING T
+
+Task 1 halted; task 2 never started. **The instrument worked as designed:** it was built to close a
+class of miss, and its first act was to surface the fourth instance of that class — a strictly
+better-geography source — which is the payoff, not another failure. The mandate's fork-class clause
+fired on its first named criterion ("richer geography"), so the agent stopped before writing the
+note, the index artifact or the pins rows.
+
+**THE SWEEP'S MEASUREMENTS (standing — a successor derives from them rather than re-pulling):**
+catalogue **8,226** cubes, metadata resolved **8,226/8,226**, zero non-SUCCESS, zero retries; pull
+1,211 s at batch 60; cache **5.29 GB**; **29,741** dimension names and **2,282,860** member names
+read; canonical raw-pull sha256 `ca18fcc7444ec5ec4de1fc01bd600f4c2bb0d86d83c55423009fa5b5cd46ff7a`.
+Class tally: 878 flagged (both vocabularies, ≥1 member-only), 9 both-at-dimension-level, 1,660
+single-vocabulary, 5,679 none. **Positive control PASSED** — 98100621 and 43100060, the two cubes
+previous searches missed, both land in the FLAGGED class. Of 24 flagged cubes reaching CMA, all 24
+were reviewed by hand; the `Canadian Business Counts` and `Access to public transport` hits are NAICS
+vocabulary coincidences. **Direct fork-class test over the whole pull: exactly FOUR cubes in 8,226
+carry a `household maintainer` DIMENSION together with any immigrant vocabulary — 98100621, 98100622,
+98100623, 98100624. Nothing else in the catalogue crosses those two axes at dimension level.**
+
+**CLOSURE STATUS — measured, NOT yet claimable.** The note, the committed index and the pins rows
+were deliberately not written, so "the search is closed" is currently a session measurement, which is
+the exact thing this task was written to prevent. It becomes a claim only when run 19 commits the
+index with its raw-pull sha. Say "closure measured, artifact pending" until then.
+
+**THE FIND → RULING T (amendment #10, `56dd381`).** `98-10-0622-01` carries the ruled cube's
+dimension list name for name, with Québec province rows BIT-IDENTICAL (persons 1,007,855,
+maintainers 527,710, owner-maintainers 298,100 — seat-verified in both cubes), at
+census-division/subdivision geography. MTL_ISLAND_RA06 = CD `Montréal` (1732) and LAVAL_RA13 = CD
+`Laval` (1730) are exact 1:1 matches; the operator ruled them MEASURED (headship 0.5555 / 0.4816,
+ratio 1.0757 / 1.1112) with a quantified territory gate, `cited` flags, and the nesting consequence
+stated. RA14/15/16 and HORS_RMR deliberately unchanged.
+
+**Boundary fact worth keeping (mm-spine harvest candidate, third of this session):**
+`getAllCubesListLite` types `productId` as an **int** while `getCubeMetadata` types the same id as a
+**string**. Comparing them raw makes every catalogue-vs-pull set operation vacuously disjoint — the
+completeness guard reported 8,226 unresolved AND 8,226 extraneous on the first full run, and in the
+pull loop every pid would read as missing from its own batch and be re-requested singly. Normalized
+at the boundary in `run_p9.product_id()`. Same WDS-junction class this arc keeps paying for.
+
+**Tree at the halt** (seat-verified on its own run): `run_p9.py` untracked and complete;
+`tests/test_probe_p9.py.parked` untracked and correctly NOT collected — the agent parked its own gate
+suite rather than let pytest collect gates on a note and artifact the halt correctly did not produce.
+Suites 191 + **398** (the +2 over 396 are P9's own glob contract gates); `test_probe_contracts.py`
+22 passed.
+
+- outcome: **task 1 HALTED (SEAT_QUESTION, fork-class), task 2 NOT STARTED → RULING T.** A fix/halt
+  has no resume: superseded by run 19, a fresh successor carrying [P9 completion, P8 build].
+- `ADVISOR RULING FIRED @p9-halt-disposition` — cost: transcript-scale proxy, full forward at ~600k.
+  Catches adopted, all four: the closure claim has a hole the halt itself names (artifact pending —
+  do not write "closed"); check `.parked` collection and re-bless the tree before touching it (done:
+  191+398, gates 22); size the sign-flip as COMPOSITION not contradiction (a Simpson's pattern — the
+  island's non-immigrant base is renter-heavy, so both readings are true at their own scale) or the
+  operator reads "the model was wrong" instead of "the model gains resolution"; and make the nesting
+  inconsistency plus the `cited`-not-`borrowed_prior` flag RULED rather than left for a reviewer to
+  file as a calibration finding three tasks later.
