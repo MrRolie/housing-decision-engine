@@ -257,6 +257,51 @@ def test_a_non_finite_population_raises_instead_of_vanishing_from_the_sum():
 def test_immigrant_households_is_persons_times_households_per_person():
     """The dimensional step on its own (the plan pins it only through `immigrant_formation`)."""
     assert immigrant_households(100.0, 0.5) == pytest.approx(50.0)
+    assert immigrant_households(0.0, 0.5) == 0.0        # a stated empty flow is a datum
+
+
+@pytest.mark.parametrize("arrivals, match", [
+    (-100.0, "negative"),
+    (float("nan"), "non-finite"),
+    (float("inf"), "non-finite"),
+])
+def test_a_negative_or_non_finite_ARRIVAL_COUNT_is_a_defect_not_a_datum(arrivals, match):
+    """The immigrant leg asserted NOTHING: `immigrant_households(-100, 0.5)` returned -50.0
+    and a NaN propagated to the emitter, while the NATIVE leg on the same page refuses both.
+    Arrivals are a gross INFLOW — the §4 signed-flow carve-out (natural increase, net
+    migration) does not reach them, so the stock/rate rule binds: nonneg and finite.
+
+    A negative arrival count would SUBTRACT owner demand, which no equation in §6 produces;
+    a NaN would be dropped or serialized, depending on which downstream form it met first."""
+    with pytest.raises(LoaderError, match=match):
+        immigrant_households(arrivals, 0.5)
+    with pytest.raises(LoaderError, match=match):
+        immigrant_formation(arrivals, immigrant_headship_rate=0.5, p_nonimm=0.6, ratio=1.0)
+
+
+@pytest.mark.parametrize("rate", [1.4, -0.1, float("nan")])
+def test_an_out_of_unit_immigrant_headship_RATE_raises(rate):
+    """Headship is a FRACTION (§4's [0,1] rule lists it by name). The join table already
+    refuses a bad table value at import; this closes the arithmetic door a caller could pass
+    one through — the same both-doors treatment `native_formation` got."""
+    with pytest.raises(LoaderError):
+        immigrant_households(100.0, rate)
+
+
+def test_the_i2_forward_reference_caveat_is_GONE_now_that_25b_HAS_LANDED():
+    """The caveat said P_resident's per-cell guard was "a FORWARD REFERENCE, not a live
+    guard: as of 2026-08-14 `demand/i2.py` does not exist ... When 25b lands, this
+    parenthetical becomes plain fact and this caveat gets deleted." 25b landing is exactly
+    what makes the sentence true, so the stale half must go — while the honest half stays:
+    nothing CALLS the guard until Task 29 wires the pipeline, and the docstring must not
+    claim production coverage it does not have."""
+    from demoflow.demand import i2                     # the module the caveat said was absent
+
+    text = Path(formation.__file__).read_text(encoding="utf-8")
+    assert "does not exist" not in text
+    assert "this caveat gets deleted" not in text
+    assert "demand/i2.py" in text, "the pointer to WHERE the guard lives must survive"
+    assert callable(i2.assert_p_resident_nonneg)
 
 
 def test_native_formation_has_no_import_path_to_the_population_loader():

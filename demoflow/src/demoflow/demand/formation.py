@@ -45,7 +45,7 @@ floor (see `OWNERSHIP_LATTICE_FLOOR`), which is a convention landed upstream, no
 import math
 
 from demoflow.errors import LoaderError
-from demoflow.loaders.validate import assert_fraction
+from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 
 AGE_MIN = 18        # household-formation floor (codex r7-F7 — a−1 must never leave the domain)
 AGE_BOUNDARY = 75
@@ -163,13 +163,11 @@ def native_formation(resident_pop_t: dict[int, float], resident_pop_tm1: dict[in
     ZERO prior stock, by equation, never by array wraparound (r7-F7). `resident_pop_*` is
     P_resident (§6 operand binding) — never total ISQ pop, and this module has no code path to
     the population loader that could reach it. P_resident ≥ 0 belongs UPSTREAM, asserted per
-    cell before any consumer (codex r7-F3, `demand/i2.py`) — read that as a FORWARD REFERENCE,
-    not a live guard: as of 2026-08-14 `demand/i2.py` does not exist. It lands at plan Task 25b,
-    which steering is HOLDING pending a ruling on the immigrant-input values, so today nothing
-    asserts it and nothing needs to — this module's only callers are its tests, and ISQ
-    populations are already refused non-finite and negative at load (`loaders/isq.py`). It is
-    not re-checked here because the spec assigns the check upstream, not because it has run.
-    When 25b lands, this parenthetical becomes plain fact and this caveat gets deleted.
+    cell before any consumer: `demand/i2.py`'s `assert_p_resident_nonneg` (codex r7-F3). It is
+    not re-checked here because the spec assigns the check upstream. WHAT IS STILL PENDING is
+    the WIRING, not the guard: the pipeline that calls it lands at Task 29, so no production
+    caller runs it today — this module's only callers are its tests, and ISQ populations are
+    already refused non-finite and negative at load (`loaders/isq.py`).
 
     GROSS under-75 formations only: negative gains floor at zero because ALL 75+ stock dynamics
     — dissolution, downsizing, estate release — live exclusively in S via the cohort engine.
@@ -194,8 +192,18 @@ def native_formation(resident_pop_t: dict[int, float], resident_pop_tm1: dict[in
 
 def immigrant_households(arrival_persons: float, immigrant_headship_rate: float) -> float:
     """Persons -> households (households per person). Encodes household size, so 100
-    persons as 50 two-person households (rate 0.5) != 100 one-person households (rate 1.0)."""
-    return arrival_persons * immigrant_headship_rate
+    persons as 50 two-person households (rate 0.5) != 100 one-person households (rate 1.0).
+
+    BOTH OPERANDS ARE GATED, in the same class as `native_formation`'s guards — this leg
+    asserted nothing until Task 25b, so `immigrant_households(-100, 0.5)` returned -50.0 and a
+    NaN rode straight through. Arrivals are a gross INFLOW: §4's signed-flow carve-out covers
+    natural increase and net-migration COMPONENTS, never this, so the stock rule binds
+    (nonneg + finite); a negative arrival count would SUBTRACT owner demand, which no equation
+    in §6 produces. The rate is a FRACTION (§4 names headship in its [0,1] list) — the join
+    table refuses a bad TABLE value at import, and this refuses one arriving by any other door.
+    """
+    return (assert_nonneg_finite("immigrant_arrival_persons", arrival_persons)
+            * assert_fraction("immigrant_headship_rate", immigrant_headship_rate))
 
 
 def p_imm(p_nonimm: float, ratio: float) -> float:

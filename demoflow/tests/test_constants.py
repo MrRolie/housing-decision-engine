@@ -17,8 +17,6 @@ them close gaps the plan's bodies left open, each named at its defect:
     robustness sweep grid must span BOTH axes, not the fifth-year cross-province spread
     alone" — the plan's SWEEP_GRID carried no immigrant-ratio axis at all.
 """
-import math
-
 import pytest
 
 from demoflow.errors import LoaderError
@@ -173,17 +171,23 @@ def test_immigrant_ratio_fork_lands_both_readings_with_citations():
         assert "46-28-0001" in a.source          # the controller-verified catalogue
 
 
-def test_immigrant_ratio_sweep_spans_the_full_tenure_range():
-    """P4 §4a/§4b instruct Task 15 by name: the sweep grid must span BOTH the tenure axis
-    and the cross-province axis — roughly [0.155, 1.033]. The plan's SWEEP_GRID omitted the
-    immigrant ratio entirely, which would have reported rank_stable against the DOMINANT
-    uncertainty untested."""
+def test_immigrant_ratio_sweep_span_survives_the_axis_move_to_the_join_table():
+    """P4 §4a/§4b instruct Task 15 by name: the sweep must span BOTH the tenure axis and the
+    cross-province axis — [0.155, 1.033]. The AXIS MOVED at Task 25b (rulings S/T): the ratio
+    is no longer one scalar in the run contract but a MEASURED PER-GEOGRAPHY value in
+    `demand/immigrant_inputs.py`, so Task 29 perturbs it as a uniform join-table override
+    rather than as a `SWEEP_GRID` member. The SPAN stays here and stays P4-sourced — culling
+    it would break the sweep's own source, which is why P4's three anchors also stay."""
     span = CONSTANTS["immigrant_ownership_ratio_sweep_span"]
     assert span.value == (0.155, 1.033)
-    assert SWEEP_GRID["immigrant_ratio_center"] == span.value      # one source of truth
     fresh = CONSTANTS["immigrant_ownership_ratio_fresh_arrival"]
     settled = CONSTANTS["immigrant_ownership_ratio_settled"]
     assert span.value[0] == fresh.band[0] and span.value[1] == settled.band[1]
+    # the endpoints Task 29's override must read — one source of truth, wherever it is applied
+    assert SWEEP_GRID.get("immigrant_ratio_center") is None, (
+        "the run contract must not carry an immigrant-ratio scalar beside the per-geography "
+        "join table — two declarations of one quantity is the drift this dict's own comment "
+        "forbids")
 
 
 # --------------------------------------------------- run-contract completeness + coherence
@@ -221,15 +225,61 @@ def test_every_central_assumption_has_documented_provenance():
         assert len(cite.strip()) > 20, f"{k}: provenance too thin: {cite!r}"
 
 
-def test_immigrant_ratio_center_is_declared_unruled():
-    """The plan pinned 0.62 PRE-P4; P4 then measured the tenure anchors (year-1 0.210 /
-    year-3 0.614 / year-5 0.911) and explicitly declined to rule between them. 0.62 is not
-    any of them (nearest: year-3 center 0.614, delta 0.006). This test PINS the honesty of
-    the record, not the value: the provenance must say the selection is unruled, so no
-    downstream reader mistakes 0.62 for a derived figure."""
-    cite = CENTRAL_PROVENANCE["immigrant_ratio_center"]
-    assert "UNRULED" in cite and "0.614" in cite
-    assert math.isclose(CENTRAL_ASSUMPTIONS["immigrant_ratio_center"], 0.62)
+def test_the_unruled_immigrant_ratio_center_is_GONE_from_the_run_contract():
+    """0.62 was pinned by the plan PRE-P4, matched none of P4's tenure anchors (year-1 0.210 /
+    year-3 0.614 / year-5 0.911), was read by no code, and is SUPERSEDED outright by rulings
+    S/T: the ratio is measured PER GEOGRAPHY and lives in the join table. It must be gone from
+    all THREE dicts at once — a half-deletion trips the keyset-equality gates below, and a
+    surviving scalar is the second declaration `CENTRAL_ASSUMPTIONS`'s own comment forbids
+    (`assumptions_hash` would then identify a selection nothing selects)."""
+    for dictionary in (CENTRAL_ASSUMPTIONS, SWEEP_GRID, CENTRAL_PROVENANCE):
+        assert "immigrant_ratio_center" not in dictionary
+
+    # and the quantity it stood in for really is served, per geography, from the join table
+    from demoflow.demand.immigrant_inputs import resolve_immigrant_inputs
+    from demoflow.geography import Geography
+
+    ratios = {g.value: resolve_immigrant_inputs(g).ownership_ratio for g in Geography}
+    assert ratios["MTL_RMR"] == 0.9634 and ratios["QC_RMR"] == 0.8910
+    assert len(set(ratios.values())) > 1, (
+        "a single ratio for every geography would be the scalar this deletion removed, "
+        "wearing the join table's clothes")
+
+
+def test_the_fresh_arrival_anchor_points_at_the_ruling_that_refuted_its_reading():
+    """Amendment #7 promised this pointer and nothing had yet made the edit. The anchor's own
+    text argues the arrival-window reading is "right if p_imm captures arrival-window
+    ownership" — §6 REFUSES that reading from its own equations (I2 subtracts the full
+    surviving arrival stock every year while the demand chain credits each cohort once, so
+    the arrival-year credit stands in for the cohort's whole residency and an arrival-window
+    rate would systematically undercount it). The constant STAYS — it is the sweep span's
+    floor and P4's measurement is untouched — but a reader meeting it must not meet only the
+    half that recommends it."""
+    cite = CONSTANTS["immigrant_ownership_ratio_fresh_arrival"].source
+    assert "§6" in cite
+    assert "REFUSED" in cite or "refuted" in cite.lower()
+    assert "46-28-0001" in cite                       # the measurement itself is undisturbed
+
+
+def test_the_central_dict_does_not_claim_a_single_reader_it_no_longer_has():
+    """Run-15 staleness, of the class this file already guards for the flag vocabulary: the
+    comment above CENTRAL_PROVENANCE said `q_live_per_year` was "the ONLY key read from this
+    dict". `cohort/listings.py` has bound THREE keys read-through since run 15. A wrong why
+    outdamages a missing one — and this one tells the next editor that deleting a member is
+    safe because nothing reads it."""
+    from pathlib import Path
+
+    import demoflow.cohort.listings as listings
+    import demoflow.loaders.constants as constants_module
+
+    source = Path(constants_module.__file__).read_text(encoding="utf-8")
+    assert "ONLY key read from this dict" not in source
+    # what the tree actually entails, asserted rather than described
+    read_through = {"phi_voluntary", "estate_eventual_fraction", "estate_lag_years"}
+    assert read_through <= set(CENTRAL_ASSUMPTIONS)
+    assert (listings.PHI_VOLUNTARY, listings.ESTATE_EVENTUAL_FRACTION, listings.ESTATE_LAG_YEARS) == (
+        CENTRAL_ASSUMPTIONS["phi_voluntary"], CENTRAL_ASSUMPTIONS["estate_eventual_fraction"],
+        CENTRAL_ASSUMPTIONS["estate_lag_years"])
 
 
 def test_module_docstring_does_not_misattribute_the_flag_vocabulary_to_spec_7():

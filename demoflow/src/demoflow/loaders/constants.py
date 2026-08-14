@@ -151,6 +151,13 @@ CONSTANTS = {
     # ---- immigrant/non-immigrant ownership RATIO: the tenure fork, BOTH readings (charter carry).
     # P4 (probes/P4-immigrant-ownership-diff.md) records three defensible tenure anchors and
     # "rules between NONE". Both forks land as documented constants; neither is promoted here.
+    #
+    # NONE OF THEM IS THE MODEL'S RATIO SOURCE, and that is a ruling, not a preference. Spec §6
+    # states the layering explicitly — measured (98-10-0621-01) > sibling-measured (43-10-0060-01)
+    # > borrowed (these) — so the ratio the demand chain multiplies is the MEASURED per-geography
+    # value in `demand/immigrant_inputs.py`. These three stay for the job they still do: the
+    # robustness SWEEP's span is sourced from them (immigrant_ownership_ratio_sweep_span below),
+    # and P8's measurement never narrows a robustness range.
     # All three are borrowed_prior on THREE stated transport axes (P4 §4c): GEOGRAPHY (Quebec is
     # not a covered province — CHSP homeownership coverage excludes it, so ROC provinces stand in
     # for the MTL/QC CMAs), METRIC (individual property ownership ages 25-54 vs the spec's
@@ -161,8 +168,15 @@ CONSTANTS = {
         "FRESH-ARRIVAL reading (P4 §4b #1): min/mean/max of the 7 province YEAR-1 "
         "recent-immigrant vs Canadian-born homeownership ratios. Statistics Canada, catalogue "
         "46-28-0001, 'The homeownership trajectories of recent immigrants', Chart 1, released "
-        "2026-06-16. Right if p_imm captures arrival-window ownership — the §6 netting target IS "
-        "the recent-arrival stock, which owns near the year-1 rate before accumulating tenure",
+        "2026-06-16. Its READING IS REFUSED by spec §6 (ruling P, carried unchanged through "
+        "rulings S/T): p_imm does NOT capture arrival-window ownership. §6's own equations "
+        "settle it — I2 subtracts the FULL surviving arrival stock from P_resident in every "
+        "year while the demand chain credits each arrival cohort exactly ONCE, in its arrival "
+        "year, so years 2+ of every cohort belong to NEITHER channel and the arrival-year "
+        "credit necessarily stands in for the cohort's whole residency; an arrival-window rate "
+        "would systematically undercount it. The MEASUREMENT is untouched and the anchor STAYS: "
+        "it is the sweep span's floor (see immigrant_ownership_ratio_sweep_span), and deleting "
+        "it would break the sweep's own source. What is refused is the reading, not the number",
         band=(0.155, 0.268), flag="borrowed_prior", unit="ratio"),
     "immigrant_ownership_ratio_year3": Anchor(
         0.614, "2021 (released 2026-06-16)",
@@ -208,19 +222,29 @@ CENTRAL_ASSUMPTIONS = {
     "phi_voluntary": 0.9,
     "estate_eventual_fraction": 0.725,
     "estate_lag_years": 2,
-    "immigrant_ratio_center": 0.62,    # per-geography ownership ratio band center — SEE PROVENANCE
+    # NO immigrant-ratio scalar. The plan's `immigrant_ratio_center` (0.62, pinned PRE-P4 and
+    # matching none of its anchors) was DELETED at Task 25b together with its SWEEP_GRID twin
+    # and its provenance entry: rulings S/T measure the ratio PER GEOGRAPHY, so it lives in
+    # `demand/immigrant_inputs.py` and a scalar here would be the second declaration this
+    # dict's own comment above forbids. The robustness axis survives UNCHANGED — Task 29
+    # perturbs the join table with a uniform override spanning
+    # `CONSTANTS["immigrant_ownership_ratio_sweep_span"]` = [0.155, 1.033], which is why P4's
+    # three anchors and that span stay above.
 }
 SWEEP_GRID = {                          # endpoints for the robustness sweep, never the headline
     "q_live_per_year": (0.06, 0.11),
     "phi_voluntary": (0.7, 1.0),
     "estate_eventual_fraction": (0.6, 0.85),
     "estate_lag_years": (1, 3),
-    "immigrant_ratio_center": CONSTANTS["immigrant_ownership_ratio_sweep_span"].value,
 }
 
-# The charter carry applies to these bare floats too. CENTRAL_ASSUMPTIONS cannot hold Anchors
-# (the pipeline reads a member as `CENTRAL_ASSUMPTIONS["q_live_per_year"]`, a float — plan Task 29,
-# today the ONLY key read from this dict), so the citation lives alongside, keyset-locked by test.
+# The charter carry applies to these bare floats too. CENTRAL_ASSUMPTIONS cannot hold Anchors —
+# a consumer reads a member as `CENTRAL_ASSUMPTIONS["phi_voluntary"]`, a float — so the citation
+# lives alongside, keyset-locked by test. WHAT READS IT TODAY (stated because a wrong why about
+# reach is what makes a member look safe to delete): `cohort/listings.py` binds THREE keys
+# read-through at import — phi_voluntary, estate_eventual_fraction, estate_lag_years;
+# `q_live_per_year` is read by the cohort tests and gate discharge, and by the Task-29 pipeline
+# when it lands.
 CENTRAL_PROVENANCE = {
     "q_live_per_year":
         "CONSTANTS['q_live_annual'] — CMHC 36%/5yr annualized, spec §5 band [0.06, 0.11]/yr; "
@@ -234,16 +258,6 @@ CENTRAL_PROVENANCE = {
     "estate_lag_years":
         "spec §5 estate-lag convolution L in [1, 3] years; central 2 = the exact band midpoint, the "
         "spec's central-value rule with no point estimate",
-    "immigrant_ratio_center":
-        "UNRULED — 0.62 was pinned by the plan on 2026-07-21, BEFORE probe P4 measured the tenure "
-        "anchors, and it is NOT derived from any of them: P4's three centers are year-1 0.210, "
-        "year-3 0.614 (nearest to 0.62, delta 0.006), year-5 0.911, and P4 states it 'rules between "
-        "NONE'. The charter landed both fork readings as CONSTANTS above; the headline SELECTION "
-        "between them is a seat/operator call, not this module's. Whatever is ruled, the sweep "
-        "already spans the full [0.155, 1.033] range, so rank_stable is honest either way. NOTE: "
-        "no code reads this key — the authoritative per-geography ratios live in the join table "
-        "(demand/immigrant_inputs.py, plan Task 25b; the plan's Task-15 prose calls it 'Task 24b', "
-        "which does not exist in the plan), which is where the fork bites materially",
 }
 
 
