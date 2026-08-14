@@ -125,3 +125,62 @@ instrument for that class is the synthetic `maintainer_only_as_member` case, and
   rather than a member name, and the P9 producer writes its own provenance string instead of calling
   `raw_member()` — a recorded deviation from the P2 precedent it cites, with both registry gates
   still holding.
+
+---
+
+## OUTCOME — task 1 APPROVE and LANDED; task 2 SEAT_QUESTION → amendment #11
+
+5 agents, 0 errors after the resume. Suites 191 + **427**.
+
+**Task 1 (P9 completion): APPROVE, 1 fix round → LANDED at `bb89161`** after the seat's own diff
+review. **The catalogue search is now CLOSED and CLAIMABLE** — the committed index carries the
+catalogue count, cube-list vintage, raw-pull sha256 and the exact vocabularies, pinned in the
+registry and gated on regen-equality, so the closure is reproducible rather than a session memory.
+The note's own decision block scopes it honestly: `CLOSED-AT-MEMBER-LEVEL`, residual
+"vocabulary-scoped; English member/dimension names only; StatCan WDS only" — the English-only limit
+is the note's own catch, not the mandate's.
+
+The MED was resolved structurally. Its shape is the lesson worth keeping: three MORE hand-typed
+figures contradicting the run's own measurement had survived in `run_p9.py` — including `:626`
+reusing the very "400 MB" figure the task was chartered to correct, in a new rhetorical role —
+while two sibling sites were already in the corrected measured form. Author discipline produced the
+slip; the review chain caught it.
+
+**Task 2 (P8 build): SEAT_QUESTION, nothing written — and it caught a SEAT ERROR.** Ruling T's
+territory gate, as amendment #10 worded it, compares a PRIVATE-HOUSEHOLD count against a
+TOTAL-POPULATION estimate. The agent measured all three available constructions instead of picking
+one, and ran the province as a CONTROL: the literal reading trips at both RAs (−2.804%, −2.482%)
+**and at the province (−3.074%), where territory identity is not in question.** A gate that fires
+where the answer is known is measuring the universe gap, not the territory. It correctly refused to
+write the note, on the grounds that doing so would embed an estimator choice into the generated
+artifact Task 25b consumes as the justification for the `cited` flags.
+
+**→ Amendment #11 (`67ab910`):** the gate becomes the PROVINCE-CONTROLLED SHARE RESIDUAL (RA06
++0.279%, RA13 +0.611%), using only ruling T's own two sources; the threshold is RE-DERIVED from
+innocent controls rather than inherited; code axes are recorded but do not carry the gate (ISQ keys
+RA codes 0-17, the census keys SGC 2466/2465, and no correspondence between the systems exists in
+this tree); census total population is retained as a second diagnostic, not as the gate. The
+lineage is recorded in the spec: advisor-recommended wording, seat-ruled without checking the two
+sides shared a universe, probe-refuted.
+
+Everything else in the P8 mandate REPRODUCED EXACTLY — the full ruling-S and ruling-T tables, the
+composition propensities, the recent-cohort figures, the cross-cube province identity, all three
+universe corroborations, the sibling readings and the floor gate. Only the gate construction was
+open.
+
+**Two facts carried into run 20** (the agent attached them as facts, not questions): (i) bit-identity
+across the two cubes holds for the RULED Before-2016 triple but NOT cube-wide — popchar 10/11/14 rows
+differ by ±5 from independent rounding per cube, so the note must assert identity on the ruled triple
+and REPORT the ±5 rows as measured, or the regen gate pins a cube-wide claim the data contradicts;
+(ii) 98-10-0622-01's 5,468 geography labels are NBSP-clean, extending the 0621 observation (against
+43-10-0060's 34 of 63 that do carry NBSP).
+
+- outcome: **task 1 APPROVE → landed `bb89161`; task 2 SEAT_QUESTION → amendment #11.** Superseded
+  by run 20 (P8 build alone, corrected gate).
+- `ADVISOR RULING FIRED @territory-gate` — cost: transcript-scale proxy, full forward at ~700k.
+  Catches adopted: check ISQ's code axis BEFORE ruling the estimator hierarchy (it exists — codes
+  0-17 — but in a different system from SGC, which settles that population must carry the gate);
+  choose the controlled residual over the census-total construction so no unnamed cube enters a
+  locked spec's gate; re-derive the threshold from innocent controls instead of inheriting a figure
+  calibrated against the refuted semantics; and own the refutation with its lineage in the
+  amendment rather than silently restating the gate.
