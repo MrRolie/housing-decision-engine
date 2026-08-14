@@ -36,5 +36,5 @@ T's territory gate. The spec is amended (#11); this run builds the note on the c
   verbatim; the estimator, threshold-derivation method and code-axis treatment were all decided in
   the @territory-gate FIRED call recorded in run 19's record.`
 
-- run id: (appended at dispatch)
+- run id: `wf_c8156a9e-c7f` (dispatched 2026-08-14; task id wl6c2yo59)
 - outcome: (appended at run close)
