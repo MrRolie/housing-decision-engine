@@ -288,6 +288,48 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
+**RULING P (steering amendment #7, operator-ruled 2026-08-13): the `ratio` SOURCE premise is
+REFUTED and the headline value is PINNED.** The paragraph above names `ratio` = "the Census
+immigrant/non-immigrant ownership RATIO at CMA level". Probe P4 established that no such FREE
+measurement exists — 0 of 80 StatCan immigrant cubes carry tenure, so an immigrant × tenure × CMA
+cube is not obtainable free (the killed-premise class of rulings F/I/J: a sentence written before
+the source was hit live; and the "free" qualifier is load-bearing, exactly as ruling D drew it for
+category-by-CMA). The source is RE-POINTED to StatCan catalogue 46-28-0001, "The homeownership
+trajectories of recent immigrants", Chart 1 (released 2026-06-16), `borrowed_prior` on P4's three
+named transport axes — GEOGRAPHY (CHSP excludes Québec, so ROC provinces stand in for the QC
+CMAs), METRIC (individual property ownership ages 25-54 standing in for household-maintainer
+propensity), and TENURE-PROFILE (a single year standing in for the arrival stock's tenure
+distribution). The headline central value is the **SETTLED / fifth-year anchor, ratio = 0.911,
+band [0.765, 1.033]** (`immigrant_ownership_ratio_settled`, `loaders/constants.py`); the year-1
+(0.210) and year-3 (0.614) anchors stay documented constants, and the robustness sweep continues
+to span BOTH uncertainty axes at [0.155, 1.033], so `rank_stable` is unaffected by the selection.
+
+**Reconciling the r5-F4 join below (this clause governs where the two disagree): for the RATIO the
+"CMA values direct" tier is EMPTY.** No CMA-level measurement exists, so MTL_RMR and QC_RMR resolve
+to the same pinned province-level anchor as everything else, flagged `borrowed_prior` — the
+geography axis of the join table stays live only for immigrant HEADSHIP, whose source is still
+unprobed. The raise-on-unresolved contract is UNCHANGED: every modeled member must still resolve
+or the run raises, and there is still no unstated default.
+
+**Why the year-1 reading is REFUSED, from this section's own equations:** I2 subtracts the FULL
+surviving arrival stock from P_resident in every year, while the demand chain credits each arrival
+cohort exactly ONCE, in its arrival year. Years 2+ of every cohort therefore belong to NEITHER
+channel, and the arrival-year credit necessarily stands in for the cohort's whole residency — an
+arrival-window rate would systematically undercount it. (This refutes the "the §6 netting target IS
+the recent-arrival stock" reading recorded against `immigrant_ownership_ratio_fresh_arrival`; that
+anchor keeps its place and gains the pointer, it is not deleted.)
+
+**Two costs, recorded rather than argued away:** (i) at 0.911 the netting discount is ~9%, so this
+section's "the netting IS the showcase's originality claim" holds STRUCTURALLY but is materially
+small — the claim is to be stated at that size and never louder (the stress-relaxation ban's
+sibling: a result is never promoted past what it measures); (ii) the credit is timing-biased EARLY,
+a whole cohort's formation landing in its arrival year — that is what the Tranche-2
+years-since-landing S-curve fixes, not a v0 defect to patch. **Binds Task 25b:** every
+per-geography ratio derives from the pinned anchor, no uncited literals (the plan's 0.62/0.70/0.66
+are OUT), and the plan's `resolve_immigrant_inputs(MTL_RMR).flag is None` assertion is RE-RULED by
+the empty-direct-tier clause above. Immigrant HEADSHIP is out of scope of this ruling — its own
+probe rules it.
+
 **Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
 decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
 senior release):** `D_native(g,t,s) = Σ_{a_min < a < 75} max(0, H_resident(a,t) −
