@@ -89,3 +89,50 @@ Standing correction, stronger than the 08-08d habit that failed to prevent this:
 that writes into a repo states its `cd` **inside the same command**, never inheriting cwd from a
 prior call — and the `git add`/`commit` pair rides in that same block. Relative paths across repo
 boundaries are the hazard; `git -C` or an absolute path is the fix.
+
+---
+
+## OUTCOME — SEAT_QUESTION halt (second one, again correct) → RULING S, amendment #9
+
+The resumed implementer built nothing and halted: mid-sweep it measured **ruling R's load-bearing
+absence claim FALSE** against a live free cube, and refused to write a gated note embedding a premise
+it had just disproved. Tree clean at `8cc5d72`, `git status --porcelain` empty, suites 191+396, and
+it left the died-run17 scratchpad partial untouched. Its own framing of why it stopped is the
+standard this arc wants: the cube sits INSIDE its title-selected pool AND inside its 16-cube
+maintainer set, so *even the mandate's required scoped verdict sentence* ("absent from the
+title-selected pool") could not have been written honestly by that run.
+
+**What it found:** **StatCan 98-10-0621-01** crosses `Primary household maintainer` ×
+`Population characteristics` × `Tenure` at CMA level — because it carries immigrant status as
+**MEMBERS of a `Population characteristics (46)` dimension, not as a dimension NAME**, which is
+precisely what the sweep's dimension-name selection could not see. Third instance in this arc of an
+absence claim being a property of the SEARCH.
+
+**Seat re-verification, live and independent, before any ruling:** cube metadata, all member ids, the
+maintainer/persons counts and the tenure leg all reproduced exactly. The universe corroborates three
+ways — Québec maintainers **3,749,035** = the published private-household count already cited in
+`census.py`'s T13b docstring; persons **8,308,480** vs probe P3's independently measured 8,308,475.
+The seat then computed what the probe had not: the HORS_RMR province-net residual for BOTH
+quantities (headship 0.5169 — matching the probe's own figure exactly — and ratio 0.9600), and the
+true owner-maintainer ratio, which showed the person-weighted proxy OVERSTATES it everywhere.
+
+**OPERATOR RULED (2026-08-14) → RULING S, amendment #9, `16561e0`:** both inputs take 98-10-0621-01
+on the `Before 2016` member — headship 0.5259/0.5054/0.5169, ratio 0.9634/0.8910/0.9600 — with ZERO
+geography and ZERO metric transport. Ruling Q's cube becomes the coarse sibling cross-check; P4's
+anchors still source the sweep span; ruling R's absence claim and its "general rate overstates"
+caveat are both reversed (the settled stock measures HIGHER than the general population).
+
+- outcome: **HALTED (SEAT_QUESTION), nothing built, no fix rounds — correct for the second time.**
+  Superseded by run 18, a FRESH successor (a halt has no resume, and run 17's own orientation block
+  is stale against post-#9 bytes).
+- `ADVISOR RULING FIRED @p8-second-halt` — cost: transcript-scale proxy, full forward at ~470k.
+  Catches adopted: partially refute my own earlier Task-26 routing rather than silently superseding
+  it (the METRIC direction I had called unmeasurable is measured); frame the member choice as
+  COHERENT across both quantities rather than per-quantity; layer the sources explicitly
+  (measured > sibling-measured > borrowed); and run the member-level sweep on seat authority with a
+  committed cache rather than asking for it.
+- `ADVISOR RATIFY FIRED @amendment-9` — caught four sentence-level defects in the seat's own
+  amendment text before commit: a claimed count reproduction the arc's own probe contradicts
+  (156 vs 175, selection-rule dependent); a floor gate silently mixing cubes and members; a sibling
+  cross-check overclaiming like-for-like agreement across two differing axes; and r5-F4's
+  now-falsified "province-net residual is not cheaply available" parenthetical left unsuperseded.

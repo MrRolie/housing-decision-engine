@@ -66,3 +66,20 @@ Task 29's sweep perturbs the ratio through a uniform join-table override spannin
 with the span still sourced from `CONSTANTS["immigrant_ownership_ratio_sweep_span"]` — which keeps
 the T29 "sweep ALL banded axes" carry satisfiable and keeps P4's anchors load-bearing rather than
 cullable.
+
+## SUPERSESSION PASS (2026-08-14, after RULING S / amendment #9)
+
+Marking this record's carries at their source, the same way carry #3 was marked:
+
+- **Carry 1 (ratio values 0.9682/0.9223/0.9219) is SUPERSEDED.** Ruling S re-points the ratio to
+  98-10-0621-01's owner-maintainer propensity on the `Before 2016` member: **0.9634 / 0.8910 /
+  0.9600**. The 43-10-0060 figures survive only as the coarse sibling cross-check.
+- **The ruling-R headship values (0.4332/0.4394/0.4529) are SUPERSEDED** by direct measurement:
+  **0.5259 / 0.5054 / 0.5169**. R's "general rate plausibly OVERSTATES" caveat is refuted for the
+  settled stock, which measures HIGHER than the general population.
+- **The floor gate moves member:** use 43-10-0060's SETTLED living-alone shares (0.154 MTL / 0.164
+  QC), not the pooled 0.134/0.127 recorded here — and wire it knowingly as a CROSS-CUBE gate, since
+  98-10-0621 carries no living-alone indicator.
+- Carry 2 (per-field provenance) STANDS and gains a case: under S both MTL quantities are cited, so
+  that member's flag is None, while RA members and HORS_RMR carry different provenance per field.
+- Carry 3 (delete `immigrant_ratio_center` from both dicts in one edit) STANDS unchanged.
