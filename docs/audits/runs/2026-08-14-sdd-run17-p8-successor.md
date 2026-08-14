@@ -50,5 +50,5 @@ operator rulings Q and R, amended into spec §6 as amendment #8 (`1f6eacb`).
   from. Both now explicit.
 - `ADVISOR RULING FIRED @p8-halt-disposition` — logged in run 16's record.
 
-- run id: (appended at dispatch)
+- run id: `wf_025924cf-5fd` (dispatched 2026-08-14; task id w997opqt6)
 - outcome: (appended at run close)
