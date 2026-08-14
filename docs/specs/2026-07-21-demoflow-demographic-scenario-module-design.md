@@ -288,7 +288,7 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R / S — the immigrant inputs, RESOLVED (steering amendments #7, #8 and #9;
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #10;
 operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
@@ -339,6 +339,48 @@ deleted — as a COARSE consistency check across two named axes, never a like-fo
 size of those two differences and asserts nothing stronger. P4's three 46-28-0001 anchors likewise STAY — `SWEEP_GRID` sources
 the [0.155, 1.033] span from them, and the sweep span is UNCHANGED under this ruling. The layering
 is explicit: **measured (98-10-0621) > sibling-measured (43-10-0060) > borrowed (P4)**.
+
+**RULING T (amendment #10, operator-ruled 2026-08-14) — RA06 and RA13 are MEASURED, not borrowed.**
+The catalogue-closure sweep (P9) found **StatCan 98-10-0622-01**, the census-division/subdivision
+sibling of the ruled cube: dimension list identical name for name, and the Québec province rows
+**BIT-IDENTICAL** across both cubes — persons 1,007,855, maintainers 527,710, owner-maintainers
+298,100, giving 0.5236 and 0.8993 in each, seat-verified live. This is ONE universe at two geography
+grains, not a second source. Two modeled geographies are exact 1:1 matches to its census divisions
+and take their own measured values on the same `Before 2016` member:
+
+| geography | census division | immigrant HEADSHIP | ownership RATIO |
+|---|---|---|---|
+| MTL_ISLAND_RA06 | `Montréal` (id 1732, geoLevel 3) | **0.5555** | **1.0757** |
+| LAVAL_RA13 | `Laval` (id 1730, geoLevel 3) | **0.4816** | **1.1112** |
+
+**GATE — quantified, never eyeballed.** Each 1:1 claim is verified by comparing the cube's
+population against the ISQ RA workbook for the same geography (both 2021 vintage) and REPORTING the
+delta; a gap above 1% is a SEAT_QUESTION, not a footnote (the Gatineau territory precedent at T13).
+A match that passes this gate is flagged **`cited`, NOT `borrowed_prior`** — a measured value at a
+verified-coincident territory is not a borrowing.
+
+**THE RATIO EXCEEDS 1 AT BOTH, and that is COMPOSITION, not contradiction.** On the island the
+NON-immigrant base is renter-heavy — its owner-maintainer propensity is only 0.4210 — so immigrants
+out-own LOCALLY while still under-owning CMA-wide at 0.9634. Both readings are true at their own
+scale, and the finer grain is the reason the CMA figure could not show it. **This is NOT the pooled-
+ratio anti-pattern** recorded in `loaders/constants.py`: that one pools ACROSS RECENCY and defeats
+the netting by construction, while this is a properly decomposed settled-member reading at a finer
+geography. The [0,1] assertion on the product is untouched — at Laval 0.6546 × 1.1112 = 0.727.
+
+**NESTING IS ACCEPTED AND STATED, not to be discovered later as a calibration finding.** With
+RA06/RA13 at census-division grain and MTL_RMR at CMA grain, the parts no longer reconcile to the
+whole. That is deliberate: the rankings compare geographies, each carried at its best available
+measurement, and invariants I1 and I2 are indifferent to it — I1 counts mortality once PER
+GEOGRAPHY, I2 binds P_resident PER GEOGRAPHY, and neither asserts that modeled geographies
+aggregate. A reviewer meeting this must read it as ruled, not as drift.
+
+**Deliberately NOT extended:** RA14/15/16 stay proxies and HORS_RMR stays the computed province-net
+residual. Building those from census-division unions needs a CD→RA correspondence that does not
+exist in this tree and re-opens P6's edition-specific RA↔MRC axis (a three-state split measured over
+15 editions), which is exactly what keeps the couronne build PARKED. Recorded as available, not
+used: `98-10-0623-01` (CMA, shelter cost) and `98-10-0624-01` (CD/CSD) carry the same
+`Primary household maintainer` × `Population characteristics` cross and would independently
+corroborate these quantities.
 
 **RULING R's ABSENCE CLAIM IS REVERSED, and the reason generalizes.** R stated that no free source
 crosses immigrant status with household-maintainer status. What reproduces is the MAINTAINER count
