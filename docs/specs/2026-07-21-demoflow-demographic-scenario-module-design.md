@@ -288,7 +288,7 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #10;
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #11;
 operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
@@ -353,11 +353,48 @@ and take their own measured values on the same `Before 2016` member:
 | MTL_ISLAND_RA06 | `Montréal` (id 1732, geoLevel 3) | **0.5555** | **1.0757** |
 | LAVAL_RA13 | `Laval` (id 1730, geoLevel 3) | **0.4816** | **1.1112** |
 
-**GATE — quantified, never eyeballed.** Each 1:1 claim is verified by comparing the cube's
-population against the ISQ RA workbook for the same geography (both 2021 vintage) and REPORTING the
-delta; a gap above 1% is a SEAT_QUESTION, not a footnote (the Gatineau territory precedent at T13).
-A match that passes this gate is flagged **`cited`, NOT `borrowed_prior`** — a measured value at a
-verified-coincident territory is not a borrowing.
+**GATE — quantified, never eyeballed; CONSTRUCTION CORRECTED BY AMENDMENT #11.** Each 1:1 claim is
+verified by a population comparison against the ISQ RA workbook for the same geography (both 2021
+vintage), with the delta REPORTED; above threshold it is a SEAT_QUESTION, not a footnote (the
+Gatineau territory precedent at T13). A match that passes is flagged **`cited`, NOT
+`borrowed_prior`** — a measured value at a verified-coincident territory is not a borrowing.
+
+**Amendment #11 (2026-08-14) — the gate's ESTIMATOR, after the literal construction was REFUTED BY
+ITS OWN CONTROL.** As first written this gate compared 98-10-0622-01's population against the ISQ RA
+total — a PRIVATE-HOUSEHOLD count against a TOTAL-POPULATION estimate. Measured, it trips at both
+RAs (−2.804%, −2.482%) **and at the Québec PROVINCE control (−3.074%), where territory identity is
+not in question.** A gate that fires where the answer is known is measuring the universe gap, not
+the territory; that gap is already recorded in this tree at `loaders/constants.py:139` ("8,308,475
+private-household persons vs 8,501,833 published"), and 98-10-0622-01 publishes no
+total-population statistic to compare against. The construction is therefore REFUSED and replaced:
+
+- **The gate is the PROVINCE-CONTROLLED SHARE RESIDUAL** — each geography's share of its own
+  source's provincial total, census against ISQ, so the universe offset cancels by construction
+  rather than being argued away. Measured: RA06 **+0.279%**, RA13 **+0.611%**. Only the two sources
+  ruling T already names are used; no additional cube enters the GATE.
+- **The threshold is DERIVED, not inherited.** The 1% of the original wording was calibrated against
+  the refuted construction's semantics and does not transfer. It is set from innocent controls
+  measured in the same construction — the six wholly-QC CMAs, whose ISQ populations
+  (`pop-as-rmr-base.xlsx`) and census CMA rows describe territories whose identity is not in
+  question — as the maximum innocent residual plus a stated margin, published in the P8 note beside
+  the RA residuals. A threshold with a measured basis is the point; an inherited figure would be a
+  hand-typed number one level up, which is the class this section keeps closing.
+- **Code axes are RECORDED, and deliberately do NOT carry the gate.** Both sides publish codes, but
+  in different systems: ISQ keys its rows on région-administrative codes 0-17 (Montréal 6, Laval 13,
+  "découpage géographique des régions administratives au 1ᵉʳ juillet 2025"), while the census
+  publishes SGC classification codes (CD Montréal 2466, CD Laval 2465, the CSD Laval 2465005
+  correctly avoided). The SGC codes agreeing across 98-10-0622-01 and 98-10-0007-01 establishes that
+  two CENSUS cubes mean the same census division — it does not establish that the division equals
+  the ISQ région administrative, and no correspondence between the two code systems exists in this
+  tree. So the population residual carries the gate and the code agreement is corroboration.
+- Census TOTAL population (98-10-0007-01: RA06 −0.576%, RA13 −0.482%, province −0.819%) is retained
+  as a SECOND DIAGNOSTIC in the note — a like-for-like universe check that also passes — but it is
+  not the gate, because admitting a cube ruling T never named in order to repair a gate is scope
+  creep with no discriminating power the controlled residual lacks.
+
+Lineage, recorded because a wrong why outdamages a missing one: the "quantified population
+comparison" wording was advisor-recommended, seat-ruled into amendment #10 without checking that the
+two sides shared a universe, and refuted by the probe that tried to execute it.
 
 **THE RATIO EXCEEDS 1 AT BOTH, and that is COMPOSITION, not contradiction.** On the island the
 NON-immigrant base is renter-heavy — its owner-maintainer propensity is only 0.4210 — so immigrants
