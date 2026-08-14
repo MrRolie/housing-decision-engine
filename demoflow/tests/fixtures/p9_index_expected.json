@@ -1,0 +1,270 @@
+{
+  "_provenance": {
+    "artifact": "catalogue_member_index_p9.json",
+    "generated_by": "probes/run_p9.py",
+    "run_date": "2026-08-14",
+    "cube_list_vintage": {
+      "pulled_at": "2026-08-14",
+      "pull_started_utc": "2026-08-14T17:10:00+00:00",
+      "catalogue_rows": 6,
+      "latest_release_time_in_catalogue": "2023-10-04T12:30:00Z"
+    },
+    "raw_pull_sha256": "dded57de4f6a57bec6b913733b6821a437ac4358135f81a13219448385096c2c",
+    "raw_pull_bytes": 804195,
+    "raw_pull_canonical_form": "sha256 over: canonical JSON of the catalogue array sorted by productId, newline, then one canonical getCubeMetadata response per line in ascending productId order (json.dumps sort_keys=True, ensure_ascii=False, separators (',',':')), each newline-terminated, UTF-8",
+    "endpoints": {
+      "catalogue": "https://www150.statcan.gc.ca/t1/wds/rest/getAllCubesListLite",
+      "metadata": "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
+    },
+    "vocabularies": {
+      "immigrant": [
+        "immigrant",
+        "immigration",
+        "generation status",
+        "admission category",
+        "period of immigration",
+        "place of birth",
+        "citizenship",
+        "landed",
+        "permanent resident",
+        "non-permanent resident",
+        "newcomer",
+        "birthplace",
+        "migrant"
+      ],
+      "household": [
+        "household maintainer",
+        "primary household maintainer",
+        "tenure",
+        "owner",
+        "renter",
+        "dwelling",
+        "housing",
+        "household size",
+        "persons per household",
+        "household type",
+        "shelter"
+      ]
+    },
+    "normalization": "NBSP->space, whitespace runs collapsed, casefold; English names only",
+    "cma_rule": {
+      "geo_levels": [
+        503,
+        505
+      ],
+      "name_markers": [
+        "(cma)",
+        "(rmr)"
+      ]
+    },
+    "scanned": {
+      "cubes": 6,
+      "dimensions": 24,
+      "members": 395
+    },
+    "class_counts": {
+      "flagged": 3,
+      "both-dimension-level": 1,
+      "single-vocabulary": 1,
+      "none": 1
+    },
+    "maintainer_cross": {
+      "rule": "cubes carrying a dimension whose name matches 'household maintainer' together with any immigrant-vocabulary match at dimension OR member level",
+      "product_ids": [
+        98100621
+      ]
+    },
+    "listing_rule": "every cube matching BOTH vocabularies is listed; single-vocabulary and non-matching cubes are counted in class_counts only"
+  },
+  "cubes": [
+    {
+      "pid": 33100532,
+      "table": "33-10-0532-01",
+      "title": "Private sector business counts by majority ownership, third quarter of 2022",
+      "class": "flagged",
+      "cma_reach": false,
+      "geo_levels": [
+        0,
+        2
+      ],
+      "immigrant": {
+        "level": "member-only",
+        "dimension_matches": {},
+        "member_matches": {
+          "Business characteristics": [
+            "Majority ownership, immigrant to Canada"
+          ]
+        }
+      },
+      "household": {
+        "level": "both",
+        "dimension_matches": {
+          "Private sector businesses by majority ownership": [
+            "owner"
+          ]
+        },
+        "member_matches": {
+          "Business characteristics": [
+            "Majority ownership, First Nations, Métis or Inuit",
+            "Majority ownership, all ownerships",
+            "Majority ownership, immigrant to Canada",
+            "Majority ownership, member of LGBTQ2 community",
+            "Majority ownership, person with a disability",
+            "Majority ownership, visible minority",
+            "Majority ownership, woman"
+          ]
+        }
+      }
+    },
+    {
+      "pid": 43100060,
+      "table": "43-10-0060-01",
+      "title": "Selected housing characteristics, low income indicators and knowledge of official languages, by visible minority and other characteristics for the population in private households",
+      "class": "flagged",
+      "cma_reach": true,
+      "geo_levels": [
+        0,
+        1,
+        2,
+        503,
+        505
+      ],
+      "immigrant": {
+        "level": "both",
+        "dimension_matches": {
+          "Immigrant and generation status": [
+            "immigrant",
+            "generation status",
+            "migrant"
+          ]
+        },
+        "member_matches": {
+          "Immigrant and generation status": [
+            "Immigrants",
+            "Non-immigrants",
+            "Non-permanent residents",
+            "Total – Immigrant and generation status"
+          ]
+        }
+      },
+      "household": {
+        "level": "member-only",
+        "dimension_matches": {},
+        "member_matches": {
+          "Indicators": [
+            "Population in core housing need",
+            "Population living in a dwelling owned by some members of the household",
+            "Population living in suitable dwelling"
+          ]
+        }
+      }
+    },
+    {
+      "pid": 46100032,
+      "table": "46-10-0032-01",
+      "title": "Immigrant status of residential property owners by period of immigration and number of properties owned",
+      "class": "both-dimension-level",
+      "cma_reach": false,
+      "geo_levels": [
+        2
+      ],
+      "immigrant": {
+        "level": "both",
+        "dimension_matches": {
+          "Immigrant status and period of immigration": [
+            "immigrant",
+            "immigration",
+            "period of immigration",
+            "migrant"
+          ]
+        },
+        "member_matches": {
+          "Immigrant status and period of immigration": [
+            "Immigrant",
+            "Non-immigrant",
+            "Non-recent immigrant (1980 to 2008)",
+            "Not applicable (Non-immigrant)",
+            "Recent immigrant (2009 to 2016)",
+            "Total, all immigrant status and period of immigration",
+            "Unspecified immigration status",
+            "Unspecified period of immigration"
+          ]
+        }
+      },
+      "household": {
+        "level": "both",
+        "dimension_matches": {
+          "Number of properties owned by the property owner": [
+            "owner"
+          ]
+        },
+        "member_matches": {
+          "Estimates": [
+            "Number of property owners"
+          ]
+        }
+      }
+    },
+    {
+      "pid": 98100621,
+      "table": "98-10-0621-01",
+      "title": "Population groups by housing suitability and condition of dwelling: Canada, provinces and territories, census metropolitan areas and census agglomerations",
+      "class": "flagged",
+      "cma_reach": true,
+      "geo_levels": [
+        0,
+        2,
+        503,
+        504
+      ],
+      "immigrant": {
+        "level": "member-only",
+        "dimension_matches": {},
+        "member_matches": {
+          "Population characteristics (46)": [
+            "Non-immigrants",
+            "Non-permanent residents",
+            "Recent immigrants: 2016 to 2021",
+            "Total - Immigrant status and period of immigration",
+            "Total immigrants"
+          ]
+        }
+      },
+      "household": {
+        "level": "both",
+        "dimension_matches": {
+          "Tenure including presence of mortgage payments and subsidized housing (totals include farm operators) (8)": [
+            "tenure",
+            "housing"
+          ],
+          "Primary household maintainer (2)": [
+            "household maintainer",
+            "primary household maintainer"
+          ],
+          "Housing suitability and dwelling condition (6)": [
+            "dwelling",
+            "housing"
+          ]
+        },
+        "member_matches": {
+          "Tenure including presence of mortgage payments and subsidized housing (totals include farm operators) (8)": [
+            "Dwelling provided by the local government, First Nation or Indian band",
+            "Not subsidized housing",
+            "Owner",
+            "Renter",
+            "Subsidized housing",
+            "Total - Tenure including presence of mortgage payments and subsidized housing (totals include farm operators)"
+          ],
+          "Primary household maintainer (2)": [
+            "Person is primary household maintainer",
+            "Total - Household maintainer"
+          ],
+          "Housing suitability and dwelling condition (6)": [
+            "Total - Dwelling condition",
+            "Total - Housing suitability"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -38,6 +38,15 @@ WORKBOOK_SHA256 = {
     # so re-pinning is only ever a VINTAGE change, never pull noise.
     "living_arrangement_98100134.json":
         "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
+    # P9 catalogue closure index (StatCan WDS full-catalogue member-level sweep, pulled
+    # 2026-08-14 by probes/run_p9.py). NOT loaded by the module — it is EVIDENCE, the
+    # compact derived form of a 5.29 GB pull that cannot be committed, and it is what turns
+    # "the search is closed at member level" from a session measurement into a re-checkable
+    # claim. Pinned here for the same reason the extracts are: this registry's rows are
+    # hashed off disk by test_pins.py, so a silent edit to the evidence reds, and its
+    # upstream anchor in RAW_SOURCE_SHA256 below fixes the pull the closure is scoped to.
+    "catalogue_member_index_p9.json":
+        "4e5f5bcff318cc7c25090582a2adbb1f85f3c23b9c2cf7ea429dde0c8e053fec",
 }
 
 # UPSTREAM RAW ANCHOR — committed extract -> sha256 of the RAW upstream member it was
@@ -61,6 +70,18 @@ RAW_SOURCE_SHA256 = {
     # without the data changing, so the inner member is what a re-pull must reproduce.
     "census_tenure_age_98100231.csv":
         "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b",
+    # P9: the FULL StatCan WDS catalogue metadata pull of 2026-08-14 (8,226 cubes,
+    # 5,292,400,322 bytes on disk), the value recorded in
+    # probes/P9-catalogue-closure.md's DECISION-RAW-PULL-SHA256. Same role as the P2 row
+    # and a sharper one: the committed index is a COUNT-bearing summary of that pull, and
+    # its whole product is a scoped NEGATIVE claim ("the search is closed at member level
+    # over this catalogue"). A scope with no identified pull behind it is a session memory,
+    # so this digest is what a re-derivation must reproduce before the closure may be
+    # republished. Taken over a CANONICAL re-serialization, not the wire bytes: batch
+    # boundaries and key order are not stable across pulls (the index's
+    # `raw_pull_canonical_form` states the exact form).
+    "catalogue_member_index_p9.json":
+        "ca18fcc7444ec5ec4de1fc01bd600f4c2bb0d86d83c55423009fa5b5cd46ff7a",
 }
 # The digest's OTHER half: which member inside the upstream download it was taken over. Kept
 # in its own dict rather than a record so `RAW_SOURCE_SHA256` stays a plain name->digest map
@@ -71,6 +92,14 @@ RAW_SOURCE_SHA256 = {
 # `KeyError` — the taxonomy escape this block's own argument names.
 RAW_SOURCE_MEMBER = {
     "census_tenure_age_98100231.csv": "98100231.csv",
+    # Not a file inside an archive, unlike the P2 row — the P9 pull is a stream of API
+    # responses, and what was hashed is their canonical re-serialization. Named as the
+    # OPERATION rather than as a filename so no reader looks for a member that never
+    # existed on any server.
+    "catalogue_member_index_p9.json":
+        "getAllCubesListLite + getCubeMetadata for every catalogue productId "
+        "(canonical re-serialization; the exact form is stated in the index's "
+        "_provenance.raw_pull_canonical_form)",
 }
 
 ISQ_SLUG_URL = "https://statistique.quebec.ca/fr/fichier/{slug}.xlsx"
