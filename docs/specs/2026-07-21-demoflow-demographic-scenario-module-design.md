@@ -264,8 +264,18 @@ principle: per (age, geography, scenario, year t),
     P_resident(t) = P_ISQ(t) − Σ_c SurvivingArrivalCohort_c(t)
 
 where arrival cohorts come from the `compo-*` annual flows and survive forward on the same CPM
-basis (mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the
-flow's). **Operand binding (codex r6-F1 — the identity alone cannot catch a mis-wired consumer,
+basis — **and "the same CPM basis" means MORTALITY ONLY, which amendment #12 states here because the
+omission is load-bearing on BOTH sides of this identity.** Interprovincial out-migration is not
+modeled: if real, the surviving-cohort term is too large, P_resident is too small, and native D is
+understated. The same unnamed assumption runs the other way in §6's demand chain, whose immigrant
+rate is measured on survivors AND stayers (persons present in Québec in 2021 who arrived before 2016)
+while its operand is a GROSS arrival flow — applying one to the other implies 100% retention and
+OVERSTATES the credit. The two errors partially offset with different magnitudes, and
+`assert_p_resident_nonneg` (r7-F3) only trips on a full-cell contradiction, so it is a coarse
+detector rather than a size check. No retention number is asserted. **What would settle it:** a Québec
+immigrant-retention rate by years-since-landing (IRCC IMDB longitudinal, or MIFI présence-au-Québec).
+The mortality leg this clause originally stated stands unchanged
+(mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the flow's). **Operand binding (codex r6-F1 — the identity alone cannot catch a mis-wired consumer,
 because it holds regardless of what native formation reads):** native formation's ONLY population
 parameter is P_resident by construction (single code path, no access to P_ISQ), and the
 double-entry mutation test operates at the PIPELINE level: with arrivals > 0,
@@ -288,7 +298,7 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #11;
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #12;
 operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
@@ -468,6 +478,54 @@ the settled shares — nearer in definition and stricter as a bound. Immigrant h
 them, since each person living alone maintains exactly one household; the ruled values clear with
 room (0.5259, 0.5054). A value below the floor is a defect, not a datum.
 
+**AMENDMENT #12 (2026-08-15, QFE-measured at the Task-26 fold) — three corrections to this block,
+none of which reopens the ruled source or member.**
+
+**(A) HORS_RMR's immigrant values are SUPERSEDED PENDING RECOMPUTE, on an OPERAND-ALIGNMENT defect.**
+The ruled table's HORS_RMR headship 0.5169 and ratio 0.9600 are measured over a census residual that
+INCLUDES the Québec side of Ottawa-Gatineau, while the flows they multiply come from ISQ's literal
+`Territoire hors des RMR` row, which EXCLUDES it — ISQ publishes `RMR d'Ottawa-Gatineau` separately
+(*Partie québécoise uniquement*), so the territory is separable on the ISQ side and inseparable on the
+census side. The ownership artifact's `isq_territory_note` recorded this mismatch on 2026-08-08 and
+deferred it to "the task that joins rate × population"; that task has now run. **The governing
+principle, ruled here: the rate's territory must match the flow's territory.** The recorded
+12.99%/14.93% person-weights UNDERSTATE the effect on these two quantities because they are
+immigrant-denominated, and CD Gatineau holds **40.42% of the residual's `Before 2016` stock against a
+10.35% person weight — 3.9×**. Net of CD Gatineau the values measure 0.5218 (+0.95%) and **1.0320
+(+7.50%), crossing 1.0**: shipped, settled immigrants under-own in hors-RMR; aligned, they out-own.
+Because headship and ratio MULTIPLY inside D_imm and their errors are same-signed, the immigrant
+demand leg is understated ≈7.6-8.5%, ED is understated, and since rank 1 is most-negative HORS_RMR is
+ranked MORE RISKY than truth — a single-geography distortion with no order-preservation protection.
+The recompute selects its residual construction by matching the ISQ row it aligns to (the ISQ
+Gatineau row converts to ≈345,000 private-household persons at this tree's measured universe ratio,
+between the CD-Gatineau and CD-Gatineau+Collines+Papineau brackets) and publishes the bracket as
+sensitivity. **The ruled SOURCE and MEMBER are untouched; only the territory arithmetic is corrected.**
+
+**(B) HORS_RMR's OWNERSHIP rate is NOT to be "fixed", and the reason must survive.** It carries the
+same contamination (+1.49% measured on the analogous all-households propensity) and it is SOUND
+anyway, because **a band-uniform relative scaling of the ownership propensity ρ CANCELS EXACTLY in
+ED** — verified linear end to end: OwnerStock ∝ ρ, D_native ∝ ρ, D_imm ∝ ρ through `p_nonimm`, and
+S ∝ ρ through initialization and roll-forward. Correcting it would be cost with no signal; a future
+reader who "fixes" it without this paragraph will not know the cancellation was what kept ED stable.
+The residual is second-order and named: `initialize_households` takes a single scalar (the 75+ band)
+while OwnerStock spans all bands and D_native spans 25-74, so a BAND-VARYING error does not fully
+cancel.
+
+**(C) The flow-vs-stock cost was stated at the wrong SIZE, and cost (i) below is now partly stale.**
+The equation multiplies headship × ratio, so the choice's cost is the PRODUCT, not either factor:
+settled vs recent is 0.5067/0.1518 at MTL_RMR (**3.34×**), 0.4503/0.1262 at QC_RMR (3.57×),
+0.4962/0.1406 at HORS_RMR (3.53×), 0.5976/0.1599 at RA06 (3.74×), 0.5352/0.1518 at RA13 (3.53×) — a
+3.3×-3.7× span with the ruled member at its top, which is roughly two orders of magnitude larger than
+the netting discount that cost (i) numbers. **Cost (i)'s "~4-11%" is `1 − ratio` and describes the
+THREE CMA-grain members only**: under ruling T the RA06 and RA13 ratios exceed 1, so for them it is
+not a discount but a PREMIUM of −7.6% and −11.1%. **Containment, recorded as the inheritance it is:**
+Task 29's uniform ratio override spans [0.155, 1.033], scaling each immigrant leg to 0.139×-0.174× of
+headline — below the recent-equivalent 0.268×-0.300× — so the downside is contained in MAGNITUDE, but
+by inheritance from P4's borrowed ROC-CHSP year-1 floor rather than by construction from the measured
+recent member, and in a different SHAPE (a uniform override compresses cross-geography differences;
+the recent reading moves both factors together). Immigrant HEADSHIP has no sweep axis at all, so a
+`rank_stable` verdict is evidence, not proof, on this axis.
+
 **Costs, recorded rather than argued away:** (i) at the ruled settled reading the netting discount
 is ~4-11% — this section's "the netting IS the showcase's originality claim" holds STRUCTURALLY but
 is materially small, and is to be stated at that size and never louder (the stress-relaxation ban's
@@ -599,9 +657,43 @@ annual, household-denominated, per (geography g, year t, scenario s):**
 
 Denominator guard with a NUMERIC boundary (codex r9-F5): `OwnerStock < 1,000` households → raise
 (no modeled geography legitimately carries fewer; fixtures at 999 / 1,000 / 1,001) — never emit an
-unbounded fraction, and never leave "near-zero" to implementation taste. ED is scale-invariant
-(households/households); a hand-worked fixture (§10) pins one unique ED value from the spec alone,
+unbounded fraction, and never leave "near-zero" to implementation taste. **ED is SCALE-INVARIANT but
+NOT dimensionless — amendment #12 corrects the label, not the equation.** D and S are annual FLOWS
+(households/yr) over a stock LEVEL (households), so ED composes as **yr⁻¹**, a net turnover rate. It
+is invariant to geography size, which is the property the rankings need, and no numeric error
+followed from the old wording because §7's β is stated as drift per year per unit ED and absorbs the
+yr⁻¹ either way — but "dimensionless" was a gloss beside a correct number, which is the class this
+document keeps closing. A hand-worked fixture (§10) pins one unique ED value from the spec alone,
 including a delayed estate listing crossing a horizon boundary.
+
+**The r9-F5 guard is a STRUCTURAL FLOOR, not a plausibility check (amendment #12).** Measured across
+the full frame — 744 cells, 8 geographies × 3 scenarios × 31 years — OwnerStock runs 99,692.3 to
+1,189,439.0, so 1,000 sits exactly 100× below any real value. It correctly bounds arithmetic
+pathology in a function that takes a bare float and cannot be geography-aware, and its zero detection
+power in the 1k-99k gap costs nothing because those defects (a truncated age lattice, a wrong
+scenario slice, a partly-built curve) are already refused upstream by `owner_stock`'s absent-rate
+raises and its nonneg-finite assertion. Do NOT read "no modeled geography legitimately carries fewer"
+as calibration — calibrated to this frame it would be ~50,000. A geography-aware plausibility band
+belongs at Task 29, where geography identity exists.
+
+**NAMED LIMIT — the sub-floor convention's cost on BOTH sides of ED (amendment #12, QFE-measured).**
+Ages below the Census ownership lattice floor contribute zero to OwnerStock AND their formation terms
+are zeroed in D_native. The QFE priced both legs in ED's own unit and the numerator leg DOMINATES by
+roughly 30×–200× (additive 0.195-0.337% of OwnerStock against the denominator's multiplicative
+0.96-1.65%); the two are equal only at |ED| ≈ 19-21%/yr, against an ISQ-implied stock movement of
+0.10-0.63%/yr. **Direction: for ED < 0 — the decline regime this module exists to measure — BOTH legs
+push PESSIMISTIC.** Any statement that the convention makes ED optimistic is priced on the smaller leg
+alone and is sign-wrong where it matters. The denominator leg's near-uniformity does NOT transfer to
+the numerator: an additive non-uniform shift can reorder where a multiplicative near-uniform one
+cannot. Tripwires have ZERO exposure — no §7(c) indicator consumes OwnerStock or ED. And the premise
+under all of this is itself false: the committed extract DOES publish owner-maintainer counts below
+25 (Québec 20-24: 17,170 owners of 106,605 households), so the floor is a choice in
+`census._AGE_BAND_SPEC`, not the data's silence — the fourth instance in this arc of an absence claim
+that was a property of the search, and the first inside our own code. **ORDERING CONSTRAINT, binding
+on any fix:** the convention is currently the only thing suppressing the age-20 band-entry artifact in
+D_native (21,353 households, 100% of computed D_native being band-entry mass), so extending the
+ownership curve below 25 BEFORE an age-resolved headship curve lands would multiply that artifact into
+demand instead of zeroing it. **Age-resolved headship first, then the floor.**
 
 **(b) Rankings table — TRANCHE 1 CORE OUTPUT.** Relative geography ordering by demographic-flow
 risk: per-geography excess-demand trajectories under the three scenarios, ranked, with the
