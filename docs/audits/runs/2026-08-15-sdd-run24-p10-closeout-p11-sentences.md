@@ -84,3 +84,75 @@ order would invert.
 
 - run id: `wf_67962903-589` (dispatched 2026-08-15; task id w1htxvp3a)
 - outcome: (appended at run close)
+
+---
+
+## ⚠ PROCESS INCIDENT — the seat created a second concurrent mutator by answering a message
+
+**What happened.** Run 24's task-2 implementer (P11) messaged the seat with a dependency question:
+had task 1 confirmed the membership? The seat answered **via SendMessage** — which RESUMES the
+agent. That produced a SECOND live instance of the same agent, in the same worktree, while the
+workflow's own instance was still building. Two producers then built the identical deliverable
+concurrently: one as a separate `hors_aligned` module with `census.py` refactored beneath it, the
+other as a ~630-line in-`census.py` extension referencing `_MAINTAINER_TOTAL_MEMBER` — a symbol the
+first had just renamed to `MAINTAINER_TOTAL_MEMBER`, so the second's work was both duplicative and
+broken against the tree it sat in.
+
+**The law violated is the prefab's own:** "args.worktree names the ONE checkout this run may mutate
+— tasks run SEQUENTIALLY, one mutating agent at a time (SDD mutating-reviewer law)". The seat has
+been careful about this at DISPATCH (checking occupancy before every run) and then broke it with a
+reply.
+
+**Root cause, stated so it generalizes: a SendMessage to a workflow-owned agent is not a reply, it
+is a resume.** The pipeline owns its agents' lifecycle; answering one out-of-band forks it outside
+the sequencing the pipeline exists to enforce. The seat read the SendMessage documentation's "a send
+resumes it from its transcript" and still treated the exchange as conversation.
+
+**CORRECT HANDLING, binding from here:** when a workflow-owned agent asks the seat a question, do
+NOT answer it with SendMessage. Either (a) let the pipeline's SEAT_QUESTION machinery carry it — a
+halt is the channel, a message is not — and answer in the successor's mandate, or (b) `TaskStop` the
+run and re-dispatch a successor carrying the answer. Both keep one mutator per checkout. The
+question P11 asked was a good one and deserved an answer; the channel was wrong, not the asking.
+
+**Damage: contained, and the agent's handling was exemplary.** The resumed instance detected the
+collision, stood down rather than racing, surgically removed exactly its own block (explicitly NOT
+`git checkout`, which would have destroyed the peer's work), moved its test file out of the suite,
+verified zero residue by grep, confirmed both modules import, and left 43 tests passing. The
+worktree carries the surviving producer's work only. Nothing of the peer's was lost.
+
+**What survives from the stood-down instance — and it is worth keeping:** an INDEPENDENT live
+reproduction of P10's ρ table, built with its own member resolution and coordinate builder (not
+P10's machinery, not the peer's), from a 272-cell live pull of 98-10-0232-01. **Every figure matches
+P10's table digit for digit** — all-ages +0.918%, 25-54 +1.425%, 55-64 +0.315%, 65-74 +0.304%, 75+
++0.223%, spread 1.2024 pp — and it adds the suppression-bound corner: **at the bound the spread
+WIDENS to 1.212 pp, so the adverse structure holds at both corners.** That is a genuine second
+measurement of the numbers about to be folded into §6, not a re-read of them.
+
+Three further facts it measured, each reusable by the surviving producer:
+- Membership re-derived live and clean: member 594 → 25 geoLevel-5 children, 16 Québec-side by SGC
+  prefix matching `PINNED_QC_PART_CODES` exactly, each resolving to a unique geoLevel-5 member in
+  98-10-0232-01, four contributing CDs (2480/2481/2482/2483) with three partial.
+- **ρ-side suppression, correctly scoped to its own cube and field set** (the task-1 carry applied):
+  13 withheld cells at 7 of the 16 subdivisions, ALL in the 75+ band, with the 7 derived from its own
+  pull rather than borrowed from the settled side's 7 — different sets. Two subdivisions have exactly
+  one field of a pair withheld, so field-wise discipline is load-bearing here, not hypothetical.
+  Holes return `status: FAILED` with an empty `vectorDataPoint`, never a null.
+- **A free external anchor for the cross-cube universe guard:** 98-10-0232-01's Québec all-ages row
+  is 3,749,035 households / 2,245,600 owners — bit-identical to 98-10-0231-01's and to the literals
+  already in `test_census_ownership.py`. Second anchor: CSD Gatineau 2481017 all-ages 126,480 /
+  76,090 (explicitly NOT P10 §4b's 17,465/10,190, which are `Before 2016` cells from a different
+  cube and member).
+
+Its scratchpad is preserved at `scratchpad/p11/` — `raw0232.json` (the full 272-cell pull, saving
+the surviving producer a live round trip), 18 numbered contract tests verified RED before backout,
+and the removed derivation.
+
+**The design fork needs no arbitration:** one producer remains, it chose the separate-module design,
+and the stood-down instance's own review of the alternatives found that design compatible with every
+constraint it had resolved — including the important one that `load_ownership_rates` must NOT be
+re-pointed, because the committed T13b external-anchor gates pin HORS_RMR's shipped residual at
+`rel=1e-12` and re-pointing would force an edit to ruled gates before §6 records the reversal.
+
+**Fourth mm-spine harvest candidate of this arc**, and the first about the seat's own tooling
+discipline rather than an agent's: *answering a workflow-owned agent with SendMessage forks a second
+mutator into the run's worktree.*
