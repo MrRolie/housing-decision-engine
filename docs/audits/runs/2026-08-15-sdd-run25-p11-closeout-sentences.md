@@ -49,5 +49,5 @@ refactor (including the `MAINTAINER_TOTAL_MEMBER` rename) must be shown to break
   closeout-not-rebuild disposition cites the arc's own precedent (T13b delivery, run-12 T22
   mechanism, P10 closeout) and the incident handling is recorded, not re-decided.`
 
-- run id: (appended at dispatch)
+- run id: `wf_523b798d-66d` (dispatched 2026-08-15; task id w82gzaoqz)
 - outcome: (appended at run close)
