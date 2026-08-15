@@ -209,11 +209,32 @@ def immigrant_households(arrival_persons: float, immigrant_headship_rate: float)
 def p_imm(p_nonimm: float, ratio: float) -> float:
     """p_imm(a) = p_nonimm(a) × ratio, asserted ∈ [0,1] (codex r4-F5 — never a bare ratio).
 
-    The PRODUCT binds, not the ratio: `ratio` > 1 is valid (immigrants can out-own
-    non-immigrants in a cell — codex r7-F8, measured at 1.033 in New Brunswick), and a
-    negative or non-finite input cannot pass the product's own [0,1] assertion.
+    THE PRODUCT STILL BINDS, and it is not the only thing that binds: each operand is asserted
+    in its OWN units FIRST. `p_nonimm` is a fraction; `ratio` is nonneg-finite and may validly
+    exceed 1 (immigrants can out-own non-immigrants in a cell — codex r7-F8, measured at 1.033
+    in New Brunswick), which is why only the product carries the [0,1] rule.
+
+    The earlier docstring claimed the product's [0,1] assertion alone stopped any negative or
+    non-finite input. That was FALSE FOR A PAIR and is retired (run-21 carry, measured
+    2026-08-15 — the sentence is paraphrased rather than quoted here, so the test that pins it
+    gone reads a live claim and not a museum label):
+    two negatives multiply into a perfectly valid-looking propensity — `p_imm(-0.5, -0.5)`
+    returned 0.25 and `immigrant_formation(100.0, 0.5, p_nonimm=-0.5, ratio=-0.5)` returned
+    12.5, neither raising — and `p_nonimm` above 1 against a small ratio passed just as
+    quietly. THE ESCAPE WAS WIDER THAN THE RUN-21 CARRY RECORDED (re-measured run 24 against
+    the verbatim old body, both legs): a SINGLE negative also escaped whenever its partner was
+    0.0, because the product is -0.0 and `0.0 <= -0.0 <= 1.0` holds — `p_imm(-0.6, 0.0)` and
+    `p_imm(0.0, -0.6)` each returned -0.0 unraised. Against a nonzero partner a single negative
+    did raise, and every non-finite input did (nan × 0 is nan), but on the PRODUCT's message,
+    which names the wrong quantity to whoever has to fix the input. Not a live bug:
+    the wired path feeds `p_nonimm` from fraction-asserted ownership rates and `ratio` from the
+    nonneg-asserted join table (and Task 29 is what wires it at all) — a defensive-guard gap
+    and a false sentence, closed together.
     """
-    return assert_fraction("p_imm", p_nonimm * ratio)
+    return assert_fraction(
+        "p_imm",
+        assert_fraction("p_nonimm", p_nonimm)
+        * assert_nonneg_finite("immigrant_ownership_ratio", ratio))
 
 
 def immigrant_formation(arrival_persons: float, immigrant_headship_rate: float,

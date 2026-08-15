@@ -288,6 +288,58 @@ def test_an_out_of_unit_immigrant_headship_RATE_raises(rate):
         immigrant_households(100.0, rate)
 
 
+@pytest.mark.parametrize("p_nonimm,ratio,match", [
+    (-0.5, -0.5, "p_nonimm"),                    # THE PAIR — the measured gap (see below)
+    (-0.6, 0.0, "p_nonimm"),                     # negative × 0.0 partner: product -0.0, ESCAPED
+    (0.0, -0.6, "immigrant_ownership_ratio"),    # the same escape, mirrored onto the ratio leg
+    (0.6, -0.5, "immigrant_ownership_ratio"),    # single negative on the ratio leg
+    (float("nan"), 0.5, "p_nonimm"),
+    (0.6, float("inf"), "immigrant_ownership_ratio"),
+    (1.4, 0.5, "p_nonimm"),                      # a fraction out of [0,1] before any product
+])
+def test_p_imm_asserts_BOTH_OPERANDS_because_a_NEGATIVE_PAIR_survives_the_product(
+        p_nonimm, ratio, match):
+    """The run-21 review's carry, measured before the fix: `p_imm(-0.5, -0.5)` returned 0.25
+    and `immigrant_formation(100.0, 0.5, p_nonimm=-0.5, ratio=-0.5)` returned 12.5, neither
+    raising. Two negatives multiply into a perfectly valid-looking propensity, so the
+    docstring's claim that "a negative or non-finite input cannot pass the product's own [0,1]
+    assertion" was FALSE for the pair.
+
+    IT WAS FALSE MORE WIDELY THAN THAT CARRY RECORDED, and cases 2-3 are the correction
+    (run-24 review; re-measured against the verbatim old body). A SINGLE negative escaped too
+    whenever its partner was 0.0 — the product is -0.0 and `0.0 <= -0.0 <= 1.0` holds — on
+    EITHER leg, which is why the mirrored case is here rather than left as a symmetry someone
+    assumes. The split, so no case is misread as one that already raised: cases 1-3 and 7 were
+    let STRAIGHT THROUGH by the old body (0.25, -0.0, -0.0, 0.7); cases 4-6 did raise, on the
+    product's message, and for those the fix changes nothing but WHICH quantity is named. Every
+    non-finite input raised pre-fix (nan × 0 is nan), which is what puts 5-6 in that group.
+
+    NOT a live bug — the wired path feeds `p_nonimm` from fraction-asserted ownership rates and
+    `ratio` from the nonneg-asserted join table, and Task 29 is what wires it at all. It is a
+    defensive-guard gap plus a false sentence, closed together: each operand is asserted in its
+    OWN units before the product (r7-F8: the ratio is nonneg-finite and may validly exceed 1;
+    only the product binds [0,1]), and the docstring now says what the code does.
+    """
+    with pytest.raises(LoaderError, match=match):
+        p_imm(p_nonimm, ratio)
+    with pytest.raises(LoaderError, match=match):
+        immigrant_formation(100.0, immigrant_headship_rate=0.5,
+                            p_nonimm=p_nonimm, ratio=ratio)
+
+
+def test_the_p_imm_docstring_no_longer_claims_the_product_alone_catches_a_negative():
+    """The false sentence itself, pinned gone — a guard added while the prose that motivated
+    its absence survives is how the next reader concludes the guard is redundant."""
+    text = Path(formation.__file__).read_text(encoding="utf-8")
+    assert "cannot pass the product's own" not in text
+    # Short unbroken fragments only: a longer phrase spans a line wrap and would red on a
+    # reflow rather than on the claim (the coupling `test_i2.py` makes on DIGITS, not prose).
+    assert "exceed 1" in text and "codex r7-F8" in text, (
+        "the r7-F8 ratio carve-out — the ratio may validly exceed 1, only the PRODUCT binds "
+        "[0,1] — must SURVIVE the narrowing; asserting each operand must not have quietly "
+        "turned the ratio into a fraction")
+
+
 def test_the_i2_forward_reference_caveat_is_GONE_now_that_25b_HAS_LANDED():
     """The caveat said P_resident's per-cell guard was "a FORWARD REFERENCE, not a live
     guard: as of 2026-08-14 `demand/i2.py` does not exist ... When 25b lands, this

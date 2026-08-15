@@ -84,7 +84,13 @@ def test_hde_source_does_not_import_demoflow():
 # Every other loaders module ACQUIRES data — workbooks, WDS responses, pinned files — and a
 # model module reaching one is how §6's operand binding gets broken quietly: an equation that
 # can open the population workbook can read P_ISQ where it was ruled to read P_resident.
-MODEL_TREES = (SRC / "cohort", SRC / "demand")
+# `balance/` ADDED at Task 26. The docstring above claims this gate holds "for the modules
+# 25b, 26 and 29 add" — true only for modules landing INSIDE the two trees named when it was
+# written. Task 26 lands a THIRD model package, so without this entry the newest equations in
+# the tree — the ED numerator's denominator and the fraction itself — were the only model code
+# free to import a data-acquiring loader. A tree, not a module, is the unit that must be
+# enrolled here, and enrolling it is what keeps the docstring's claim true.
+MODEL_TREES = (SRC / "cohort", SRC / "demand", SRC / "balance")
 LOADERS_ALLOWED_IN_MODEL = frozenset({"constants", "validate"})
 
 # The `from` form covers BOTH spellings of the same import in one branch — `demoflow.loaders`
