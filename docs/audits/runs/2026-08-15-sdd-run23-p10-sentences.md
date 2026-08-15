@@ -62,3 +62,44 @@ whose real minimum is 99,692.3.
 
 - run id: `wf_51deae84-be4` (dispatched 2026-08-15; task id wx1oodeok)
 - outcome: (appended at run close)
+
+---
+
+## OUTCOME — HALTED at task 1 with a SEAT_QUESTION that overturned a seat ruling
+
+1 agent. Task 2 (sentence corrections) NEVER STARTED and rides run 24. **P10's five delivered files
+are UNREVIEWED — the halt fired at the implementer, so the pipeline's reviewer never ran — and the
+seat is holding them uncommitted** (arc precedent: T13b's delivery, run 12's T22 mechanism).
+
+**Task 1(A) came back COMPLETE, and better than the mandate asked for.** The mandate ranked an exact
+construction first and a whole-CD bracket second; the probe got the exact one. 98-10-0003-01
+publishes the Ottawa-Gatineau CMA with its 25 constituent CSDs as geography children, closing exactly
+on the CMA total (1,488,307 = QC 353,293 + ON 1,135,014); 16 are Québec-side, dual-selected by SGC
+prefix AND census-tree ancestry in 98-10-0622-01, agreeing on all 25. Four CDs contribute — Gatineau
+entire, all 7 Les Collines, 7 of Papineau, 1 of La Vallée-de-la-Gatineau — **so no whole-CD union is
+this territory.** Aligned: 48,120 settled persons, headship **0.5234**, ratio **1.0248** (envelope
+0.5225-0.5236 / 1.0228-1.0264), immigrant demand leg **+8.083%**, ratio crossing 1.0 with both
+envelope ends above it. Membership gate −0.752% against a 1.109% threshold from the six wholly-QC
+CMAs; 18 of 48 settled counts suppressed at 7 tiny CSDs, bounded FIELD-WISE at ≤20 persons against a
+36,665-person subtraction.
+
+**The fallback my own amendment ranked second would have been wrong:** the whole-CD bracket does NOT
+enclose the exact headship (0.5234 sits above its 0.5218-0.5228 range), so it would have published a
+headship no member of its own range produces. Recorded because it is the second time this week a
+seat-authored fallback prescription was refuted by the measurement it was meant to stand in for.
+
+**Two of the seat's §6 figures corrected by the probe:** "10.35% person weight" is the MAINTAINER
+weight (10.336%) — the person weight is 10.770%; and "≈345,000" measures 347,875 at the recorded
+province ratio against 347,710 the resolved membership carries (local ratio 0.9842 vs 0.9773). Same
+class as this session's suite-count slips: seat-authored numbers a probe contradicted. They land in
+the spec at run 24's fold.
+
+**THE HALT'S QUESTION overturned amendment #12(B)** — see run 24's record for the ruling. In short:
+#12(B) cleared HORS_RMR's ownership rate because "a band-uniform relative scaling cancels EXACTLY",
+and P10 measured the scaling NOT band-uniform (spread 1.202 pp, same-signed) in the structurally
+worst arrangement — most-contaminated band feeds D_native, least feeds S — with ED's numerator being
+a difference of flows amplifying rather than averaging it. The seat RULED the extraction.
+
+- outcome: **HALTED (SEAT_QUESTION), task 1(A) complete but UNREVIEWED, task 2 never started.**
+  Superseded by run 24 = [P10 closeout/review, P11 aligned ρ extraction, sentence corrections].
+- `ADVISOR RULING FIRED @p10-fork` — recorded in run 24's record with its catches.
