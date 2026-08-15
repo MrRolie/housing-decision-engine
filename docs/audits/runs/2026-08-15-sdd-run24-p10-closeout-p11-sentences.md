@@ -82,5 +82,5 @@ order would invert.
   does not enclose the answer; and required the independence check above before pinning the wiring
   order.
 
-- run id: (appended at dispatch)
+- run id: `wf_67962903-589` (dispatched 2026-08-15; task id w1htxvp3a)
 - outcome: (appended at run close)
