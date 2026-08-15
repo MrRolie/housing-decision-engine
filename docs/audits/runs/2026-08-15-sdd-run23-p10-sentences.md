@@ -60,5 +60,5 @@ whose real minimum is 99,692.3.
   the measure-then-wire split and the fix-before-27 sequencing were both decided in the @qfe-verdict
   FIRED call recorded against amendment #12.`
 
-- run id: (appended at dispatch)
+- run id: `wf_51deae84-be4` (dispatched 2026-08-15; task id wx1oodeok)
 - outcome: (appended at run close)
