@@ -298,7 +298,7 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #13;
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #14;
 operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
@@ -318,10 +318,37 @@ cohort definitions inside one product. Seat-verified live against the WDS coordi
 |---|---|---|
 | MTL_RMR | **0.5259** | **0.9634** |
 | QC_RMR | **0.5054** | **0.8910** |
-| HORS_RMR | **0.5169** | **0.9600** |
+| HORS_RMR | **0.5234** | **1.0248** | ← SUPERSEDED BY AMENDMENT #13; the ruling-S values were 0.5169 / 0.9600
+
+**THE TABLE CARRIES THE RULED VALUES, AND THAT IS A RULE, NOT A COURTESY (amendment #14,
+2026-08-18).** HORS_RMR's row above was 0.5169 / 0.9600 under ruling S and is now the
+operand-aligned pair amendment #13 rules; the suppression envelope is 0.5225-0.5236 / 1.0228-1.0264
+and the superseded construction is described in #13(A). **Amendment #13 originally stated that
+supersession in PROSE and left this row untouched, which left the locked spec carrying two
+contradicting statements about the same ruled quantity for three days — and, worse, made the
+supersession INVISIBLE to the gates.** `_guard_s6_rows` / `_guard_rows_match_spec` key on these
+TABLE ROWS, so the §6 → P8 → join-table coupling that exists to stop a moved value landing quietly
+could not see the move: the seat's own run-26 premise "the coupling is RED right now" was measured
+FALSE by the implementer, because both the note and the join table still agreed with a table row
+nobody had changed.
+
+**AND THE COUPLING IS WEAKER THAN THAT DIAGNOSIS IMPLIED — measured by the seat at this amendment,
+by mutation.** Setting this row to garbage (0.9999 / 7.7777) DOES red exactly one gate, so the
+coupling is not decorative. But swapping the row between the two LEGITIMATE pairs — ruled
+0.5234 / 1.0248 against superseded 0.5169 / 0.9600 — reds NOTHING, in either direction, because the
+note carries both pairs and the gate is satisfied by PRESENCE in the note rather than by identity
+with the RULED pair. So the machinery can catch a typo and cannot catch a supersession, which is the
+one thing an amendment does. **This is recorded as an OPEN DEFECT with a named owner: the gate must
+bind this row to the note's DECISION-token pair specifically, and a swap between the ruled and
+superseded pairs must RED in both directions.** Until that lands, this table's correctness rests on
+the seat updating it, not on anything that fails. **STANDING RULE, binding on every future amendment: an amendment that moves a
+RULED VALUE must update this table in the same commit. Prose alone is not a supersession the
+machinery can see, and the other four rows are bound by exactly the same gates — a prose-only
+amendment moving MTL_RMR, QC_RMR, RA06 or RA13 would be invisible in exactly the same way.**
 
 RA members borrow their parent CMA, `borrowed_prior`. HORS_RMR is the province NET of the six
-wholly-QC CMAs — the tree's own documented residual method, computed here rather than borrowed
+wholly-QC CMAs NET OF the 16 Québec-side CSDs of the Ottawa-Gatineau CMA (amendment #13's
+operand-aligned construction) — computed rather than borrowed
 (province-level readings are 0.5236 and 0.8993, and differ from the residual precisely because the
 province contains the CMAs).
 
