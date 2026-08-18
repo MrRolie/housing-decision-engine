@@ -50,5 +50,5 @@ extraction and amendment #13 will all have changed nothing the model computes.
   verbatim; the Task-29 carry above states a consequence of #13 as already written and designs
   nothing new (the join map and its accessors already exist and are gate-verified).`
 
-- run id: (appended at dispatch)
+- run id: `wf_a594e264-ace` (dispatched 2026-08-18; task id wh16s0n8c)
 - outcome: (appended at run close)
