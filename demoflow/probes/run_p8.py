@@ -94,6 +94,13 @@ launder itself into `pytest.skip`):
   * `_guard_citation`  — every figure the record states is RECOMPUTED here and matches, keyed
                          on the DIGITS (a stable token) and never on a prose prefix. Two
                          records: §6 for the rates, P10's note for the aligned counts.
+  * `_guard_s6_ruled_columns` / `_guard_ruled_columns_match` — the ruled table's HEADSHIP and
+                         RATIO COLUMNS carry the pair this note publishes, by IDENTITY. The
+                         row-keyed gate above asks only whether a recomputed figure appears
+                         somewhere on its row, and HORS_RMR's row states TWO legitimate pairs
+                         — so swapping them reds nothing, and a supersession is precisely what
+                         an amendment does (measured at amendment #14, all five rows exposed
+                         the same way). Column-keyed identity fails on either side moving.
   * `_guard_amendment13` — §6 states HORS_RMR's pair TWICE, and the prose statement is the
                          operative one. A table-keyed parser cannot see it, which is exactly
                          how a superseded pair rode through a green suite; this reads #13 and
@@ -968,6 +975,122 @@ def _guard_s6_rows(s6: str) -> dict:
     return rows
 
 
+_RULED_COLUMNS = (("headship", "HEADSHIP"), ("ratio", "RATIO"))
+
+
+def _guard_s6_ruled_columns(s6: str) -> dict:
+    """Each ruled row's pair read from the HEADSHIP and RATIO COLUMNS THEMSELVES.
+
+    `_guard_s6_rows` reads a ROW — every figure anywhere on it. That is the right shape for a
+    presence check and the wrong one for an identity check, because §6 states TWO legitimate
+    pairs on the HORS_RMR row: the ruled pair in its columns and the superseded pair in the
+    prose beside them. A row-keyed read cannot tell those apart, so swapping them reds nothing
+    — measured at amendment #14, and the reason a supersession is exactly what this coupling
+    could not see.
+
+    So the columns are located by the table's OWN HEADER — the tokens `HEADSHIP` and `RATIO`,
+    which both ruled tables carry and which sit at different column indices in each, so an
+    index typed here would be a second place for the spec to disagree with itself. A row whose
+    ruled cell does not carry exactly one figure, a row reached with no header naming those
+    columns, a header naming one of them twice, and any of the five rows missing are all
+    REFUSALS: a parser that cannot fail would rebuild the same blind spot one level up.
+    """
+    columns: dict = {}
+    header: dict | None = None
+    for line in s6.splitlines():
+        if not line.strip().startswith("|"):
+            header = None          # a table's header does not reach past the table
+            continue
+        cells = [c.strip().strip("*` ") for c in line.strip().strip("|").split("|")]
+        if not cells:
+            continue
+        if cells[0] not in _GEO_ROW_TOKENS:
+            found = {name: [i for i, c in enumerate(cells) if token in c]
+                     for name, token in _RULED_COLUMNS}
+            if any(len(hits) > 1 for hits in found.values()):
+                raise ProbeRefusal(
+                    "spec",
+                    f"spec §6 carries a ruled-table header naming a ruled column more than "
+                    f"once ({line.strip()!r}) — which column rules is then a guess, and a "
+                    "coupling gate may not guess which figure it is binding.")
+            if all(len(hits) == 1 for hits in found.values()):
+                header = {name: hits[0] for name, hits in found.items()}
+                if header["headship"] == header["ratio"]:
+                    raise ProbeRefusal(
+                        "spec",
+                        f"spec §6 carries a ruled-table header whose HEADSHIP and RATIO are "
+                        f"the same column ({line.strip()!r}) — the two ruled quantities would "
+                        "be bound to one figure.")
+            continue
+        if header is None:
+            raise ProbeRefusal(
+                "spec",
+                f"spec §6 states a ruled row for {cells[0]} under no header naming its "
+                "HEADSHIP and RATIO columns, so which figure is which is unreadable. A "
+                "citation gate over a table it could not key passes vacuously.")
+        pair = []
+        for name, _header_token in _RULED_COLUMNS:
+            cell = cells[header[name]] if header[name] < len(cells) else ""
+            figures = _DIGITS.findall(cell)
+            if len(figures) != 1:
+                raise ProbeRefusal(
+                    "spec",
+                    f"spec §6's {name} column for {cells[0]} carries {len(figures)} figures "
+                    f"({cell!r}), not exactly one — a ruled column stating two values or none "
+                    "rules nothing, and binding to it would bind to whichever was read first.")
+            pair.append(figures[0])
+        if columns.get(cells[0], tuple(pair)) != tuple(pair):
+            raise ProbeRefusal(
+                "spec",
+                f"spec §6 states TWO different ruled pairs for {cells[0]} "
+                f"({columns[cells[0]]} and {tuple(pair)}) — last-row-wins would make this gate "
+                "bind to whichever the parser reached second, which is the same supersession "
+                "blind spot one table further along.")
+        columns[cells[0]] = tuple(pair)
+    missing = [g for g in _GEO_ROW_TOKENS if g not in columns]
+    if missing:
+        raise ProbeRefusal(
+            "spec",
+            f"spec §6 no longer yields RULED COLUMNS for {missing} (parsed {sorted(columns)}). "
+            "A row that vanished from the coupling is a row nothing holds to its ruled pair.")
+    return columns
+
+
+def _guard_ruled_columns_match(spec_columns: dict, published: dict) -> None:
+    """The pair §6's ruled COLUMNS carry must BE the pair this run publishes. Identity.
+
+    This is amendment #14's standing rule, mechanised: an amendment that moves a ruled value
+    must move this table in the same commit. `_guard_rows_match_spec` asks whether a recomputed
+    figure appears among the digits its row states — which a row carrying two legitimate pairs
+    answers YES to for both, so a swap between them lands silently. This asks the other
+    question, the one a supersession fails: is the figure in the ruled COLUMN the figure this
+    run publishes under `DECISION-HEADSHIP` / `DECISION-RATIO`?
+
+    Both directions are covered by construction, because either side moving breaks the same
+    equality: a table left behind by a prose-only amendment, and a note that regressed onto a
+    superseded pair against a correct table — the shape #13 had to be caught by hand.
+    """
+    for geography in _GEO_ROW_TOKENS:
+        stated, publishes = spec_columns.get(geography), published.get(geography)
+        if stated is None or publishes is None:
+            raise ProbeRefusal(
+                "citation",
+                f"{geography} is missing from the identity coupling "
+                f"(§6 columns: {stated}, published: {publishes}) — an unbound ruled row is a "
+                "row this gate cannot fail on.")
+        for index, (name, _header_token) in enumerate(_RULED_COLUMNS):
+            if publishes[index] != stated[index]:
+                raise ProbeRefusal(
+                    "citation",
+                    f"{geography} {name}: §6's ruled table column states {stated[index]}, this "
+                    f"run publishes {publishes[index]}. Both may be legitimate figures — that "
+                    "is exactly the case this gate exists for: the ruled table and the pair "
+                    "the model reads must be the SAME value, not two values that both appear "
+                    "in the record. Either a ruling moved and this table did not (amendment "
+                    "#14's standing rule), or this run contradicts the ruling — fork-class "
+                    "either way, and never a footnote.")
+
+
 def _guard_citation(source_name: str, text: str, coupled: list) -> None:
     """Every recomputed figure must match the digits the document it is checked against states.
 
@@ -1705,6 +1828,14 @@ def _sections(where: list) -> list:
                                             for g in modeled},
                                            HORS_RMR=(_r4(shipped_pair[0]),
                                                      _r4(shipped_pair[1]))))
+    # …and then the IDENTITY leg, which is a different question from the presence leg above.
+    # `ruled` here is the pair this note publishes as `DECISION-HEADSHIP`/`DECISION-RATIO` —
+    # HORS_RMR's ALIGNED pair, since #13 re-pointed it and #14 moved the table onto it. No
+    # HORS_RMR override: the shipped residual is what the ROW mentions, not what its ruled
+    # COLUMNS state, and binding the columns to it would re-open the blind spot from the other
+    # side.
+    _guard_ruled_columns_match(_guard_s6_ruled_columns(s6),
+                               {g: (_r4(ruled[g][0]), _r4(ruled[g][1])) for g in modeled})
     amd13 = _guard_amendment13(s6)
     _guard_amendment13_match(
         amd13, _r4(aligned[0]), _r4(aligned[1]),

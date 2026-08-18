@@ -1013,6 +1013,229 @@ def test_p8_citation_coupling_keys_rows_on_the_geography_token(offline):
         mod._guard_s6_rows(real.replace("| MTL_RMR |", "| MTL_CMA |"))
 
 
+# ===========================================================================
+# 6b. The RULED COLUMNS — IDENTITY with the pair this run publishes, never presence
+#
+# The gates above are keyed on PRESENCE: a recomputed figure has to appear among the digits
+# its §6 row carries. That catches a typo and cannot catch a SUPERSESSION, which is the one
+# thing an amendment does — measured at amendment #14 by mutation: setting HORS_RMR's row to
+# garbage reds exactly one gate, but swapping the row between the two LEGITIMATE pairs (ruled
+# 0.5234 / 1.0248 against superseded 0.5169 / 0.9600) reds NOTHING, in either direction,
+# because both pairs are stated on that row and in the note. The gates below bind the row's
+# ruled COLUMNS to the note's DECISION-token pair by identity, for all five ruled rows.
+# ===========================================================================
+_RULED_ROWS = ("MTL_RMR", "QC_RMR", "HORS_RMR", "MTL_ISLAND_RA06", "LAVAL_RA13")
+_SUPERSEDED_HORS = ("0.5169", "0.9600")
+# One OTHER pair per ruled row that §6 AND the note both already state, so a row moved onto it
+# is invisible to every presence-keyed gate. HORS_RMR's is its real superseded pair — the move
+# amendment #13 actually made; the other four borrow a sibling row's, which is the same shape
+# at rows that have no superseded twin of their own.
+_OTHER_LEGIT_PAIR = {
+    "MTL_RMR": ("0.5054", "0.8910"),
+    "QC_RMR": ("0.5259", "0.9634"),
+    "HORS_RMR": _SUPERSEDED_HORS,
+    "MTL_ISLAND_RA06": ("0.4816", "1.1112"),
+    "LAVAL_RA13": ("0.5555", "1.0757"),
+}
+
+
+def _note_ruled_pairs(note: str) -> dict:
+    """`{geography: (headship, ratio)}` from the note's own DECISION tokens.
+
+    These are the digits `demand/immigrant_inputs.py`'s join table reads, so they are the pair
+    §6's table has to agree with — not "some figure the note states somewhere".
+    """
+    pairs: dict = {}
+    for name, index in (("DECISION-HEADSHIP", 0), ("DECISION-RATIO", 1)):
+        value = _token(note, name)
+        assert value, f"the note carries no `{name}`"
+        for geography in _RULED_ROWS:
+            hit = re.search(rf"\b{geography}\s+([0-9]+\.[0-9]+)", value)
+            assert hit, f"`{name}` publishes no {geography} figure: {value!r}"
+            pairs.setdefault(geography, [None, None])[index] = hit.group(1)
+    return {geography: tuple(pair) for geography, pair in pairs.items()}
+
+
+def _row_line(s6: str, geography: str) -> str:
+    hits = [line for line in s6.splitlines()
+            if line.strip().startswith("|")
+            and line.strip().strip("|").split("|")[0].strip() == geography]
+    assert len(hits) == 1, f"§6 yields {len(hits)} rows for {geography}, not exactly one"
+    return hits[0]
+
+
+def _move_row(s6: str, geography: str, pair: tuple, *, keep_old: bool = True) -> str:
+    """Move a ruled row onto another pair the way a PROSE-ONLY AMENDMENT leaves it.
+
+    The two ruled COLUMNS change and — with `keep_old` — the displaced pair stays stated on the
+    row, which is exactly the shape amendment #13 left HORS_RMR in and exactly what makes the
+    move invisible to a gate satisfied by presence.
+    """
+    line = _row_line(s6, geography)
+    cells = line.split("|")
+    columns = [i for i, cell in enumerate(cells) if re.search(r"\d+\.\d+", cell)][:2]
+    assert len(columns) == 2, f"{geography}'s row carries fewer than two figures: {line!r}"
+    old = tuple(re.search(r"\d+\.\d+", cells[i]).group(0) for i in columns)
+    for index, value in zip(columns, pair):
+        cells[index] = re.sub(r"\d+\.\d+", value, cells[index], count=1)
+    moved = "|".join(cells)
+    if keep_old:
+        stated = re.sub(r"the ruling-S values were [\d.]+ / [\d.]+",
+                        f"the ruling-S values were {old[0]} / {old[1]}", moved)
+        moved = (stated if stated != moved else
+                 f"{moved.rstrip()} ← superseded; the earlier values were {old[0]} / {old[1]}")
+    assert moved != line, f"the {geography} mutant is identical to the real row"
+    return s6.replace(line, moved)
+
+
+def test_p8_the_ruled_columns_are_read_from_the_COLUMNS_not_from_the_row(offline):
+    """The pair is what the HEADSHIP and RATIO columns carry — not what the row mentions.
+
+    HORS_RMR's row states FOUR figures: the ruled pair in its columns and the superseded pair
+    in the prose beside them. A row-keyed read cannot tell those apart, which is the whole
+    defect; a column-keyed read must return the ruled pair and only the ruled pair.
+    """
+    mod, _tmp_path = offline
+    real = mod._spec_s6()
+    assert mod._guard_s6_ruled_columns(real) == {
+        "MTL_RMR": ("0.5259", "0.9634"),
+        "QC_RMR": ("0.5054", "0.8910"),
+        "HORS_RMR": ("0.5234", "1.0248"),
+        "MTL_ISLAND_RA06": ("0.5555", "1.0757"),
+        "LAVAL_RA13": ("0.4816", "1.1112"),
+    }
+    hors = _row_line(real, "HORS_RMR")
+    assert all(figure in hors for figure in _SUPERSEDED_HORS), (
+        "the HORS_RMR row no longer states the superseded pair — this test's premise, that a "
+        "row-keyed read sees two legitimate pairs on one row, has moved")
+    assert set(mod._guard_s6_ruled_columns(real)) == set(mod._GEO_ROW_TOKENS) == set(_RULED_ROWS)
+
+
+def test_p8_a_ruled_row_moved_between_two_LEGITIMATE_pairs_reds_IN_BOTH_DIRECTIONS(offline,
+                                                                                   note):
+    """Amendment #14's OPEN DEFECT, closed: the swap must red whichever side moved.
+
+    Both pairs are legitimate and both are stated in both documents, so nothing about their
+    PRESENCE separates them. What separates them is which one §6's ruled columns carry and
+    which one the note's DECISION tokens publish — so that is what is bound.
+    """
+    mod, tmp_path = offline
+    real = mod._spec_s6()
+    published = _note_ruled_pairs(note)
+    mod._guard_ruled_columns_match(mod._guard_s6_ruled_columns(real), published)
+
+    # DIRECTION 1 — the TABLE moves onto the superseded pair (what a prose-only amendment
+    # leaves behind). The PRODUCER must refuse rather than publish against it.
+    moved = _move_row(real, "HORS_RMR", _SUPERSEDED_HORS)
+    _wire(mod, tmp_path, spec=lambda: moved)
+    with pytest.raises(mod.ProbeRefusal) as exc:
+        mod._sections(["-"])
+    assert exc.value.boundary == "citation"
+    assert "HORS_RMR" in str(exc.value), "the refusal does not name the row that moved"
+    assert "0.5234" in str(exc.value) and "0.5169" in str(exc.value), (
+        "the refusal must state BOTH pairs — which one the table carries and which one this "
+        f"run publishes: {exc.value}")
+    # …and the very same text greens again the moment the row is moved back. The gate
+    # DISCRIMINATES between the two pairs; it does not red on any edit.
+    mod._guard_ruled_columns_match(
+        mod._guard_s6_ruled_columns(_move_row(moved, "HORS_RMR", published["HORS_RMR"])),
+        published)
+
+    # DIRECTION 2 — the NOTE moves onto the superseded pair against a correct table. This is
+    # the shape amendment #13 caught BY HAND after it had ridden through a green suite.
+    with pytest.raises(mod.ProbeRefusal) as exc:
+        mod._guard_ruled_columns_match(mod._guard_s6_ruled_columns(real),
+                                       dict(published, HORS_RMR=_SUPERSEDED_HORS))
+    assert exc.value.boundary == "citation" and "HORS_RMR" in str(exc.value)
+
+
+def test_p8_EVERY_ruled_row_reds_on_a_moved_pair_not_only_HORS_RMR(offline, note):
+    """The CLASS, not the instance. All five rows sit behind the same gates.
+
+    Three mutants per row, each keeping every digit LEGITIMATE and stated somewhere — the
+    prose-only move onto another real pair, the two columns traded, and the garbage pair the
+    old machinery already caught (a regression leg: strengthening must not lose it).
+    """
+    mod, _tmp_path = offline
+    real = mod._spec_s6()
+    published = _note_ruled_pairs(note)
+    for geography in _RULED_ROWS:
+        mutants = (
+            ("moved onto another legitimate pair",
+             _move_row(real, geography, _OTHER_LEGIT_PAIR[geography])),
+            ("columns traded",
+             _move_row(real, geography, tuple(reversed(published[geography])), keep_old=False)),
+            ("garbage", _move_row(real, geography, ("0.9999", "7.7777"), keep_old=False)),
+        )
+        for label, mutant in mutants:
+            with pytest.raises(mod.ProbeRefusal) as exc:
+                mod._guard_ruled_columns_match(mod._guard_s6_ruled_columns(mutant), published)
+            assert exc.value.boundary == "citation"
+            assert geography in str(exc.value), (
+                f"{geography} ({label}): the refusal does not name the row that moved")
+
+
+def test_p8_the_ruled_column_parser_refuses_what_it_could_not_read(probe):
+    """A parser that cannot fail rebuilds the defect one level up.
+
+    Every way of losing the columns — no table, no header naming them, a header naming one
+    twice, a ruled cell carrying two figures or none, a row gone missing — is a REFUSAL, never
+    a quietly smaller coupled set.
+    """
+    header = "| geography | immigrant HEADSHIP | ownership RATIO |\n|---|---|---|\n"
+    with pytest.raises(probe.ProbeRefusal):
+        probe._guard_s6_ruled_columns("")
+    with pytest.raises(probe.ProbeRefusal):
+        probe._guard_s6_ruled_columns("## 6. Demand side\n\nno tables here at all\n")
+    with pytest.raises(probe.ProbeRefusal) as exc:
+        probe._guard_s6_ruled_columns("| MTL_RMR | **0.5259** | **0.9634** |\n")
+    assert "MTL_RMR" in str(exc.value), "a row with no header must refuse BY NAME"
+    with pytest.raises(probe.ProbeRefusal):
+        probe._guard_s6_ruled_columns(
+            "| geography | HEADSHIP | HEADSHIP and RATIO |\n|---|---|---|\n"
+            "| MTL_RMR | **0.5259** | **0.9634** |\n")
+    with pytest.raises(probe.ProbeRefusal):
+        probe._guard_s6_ruled_columns(header + "| MTL_RMR | 0.5259 / 0.5169 | **0.9634** |\n")
+    with pytest.raises(probe.ProbeRefusal):
+        probe._guard_s6_ruled_columns(header + "| MTL_RMR | see the prose | **0.9634** |\n")
+    real = probe._spec_s6()
+    with pytest.raises(probe.ProbeRefusal) as exc:
+        probe._guard_s6_ruled_columns(real.replace("| MTL_RMR |", "| MTL_CMA |"))
+    assert "MTL_RMR" in str(exc.value), "a row that vanished must be named as missing"
+    # A SECOND row for the same geography stating a different pair: last-row-wins would move
+    # the blind spot one table along rather than close it.
+    twice = header + ("| MTL_RMR | **0.5259** | **0.9634** |\n"
+                      "| MTL_RMR | **0.5169** | **0.9600** |\n")
+    with pytest.raises(probe.ProbeRefusal) as exc:
+        probe._guard_s6_ruled_columns(twice)
+    assert "TWO different ruled pairs" in str(exc.value) and "MTL_RMR" in str(exc.value), (
+        "the duplicate row refused for another reason (the missing-rows leg fires on this "
+        f"fixture too) — that is not the property under test: {exc.value}")
+
+
+def test_p8_the_committed_notes_DECISION_pairs_ARE_the_ruled_columns(probe, note):
+    """The binding amendment #14 asks for, on the ARTIFACT: §6's ruled row against the note's
+    DECISION-token pair, all five rows, identity — checked without running the producer, so a
+    committed note and a moved table cannot agree by regeneration."""
+    published = _note_ruled_pairs(note)
+    assert set(published) == set(probe._GEO_ROW_TOKENS)
+    probe._guard_ruled_columns_match(probe._guard_s6_ruled_columns(probe._spec_s6()), published)
+
+
+def test_p8_the_presence_keyed_gates_are_still_wired_beside_the_identity_one(offline):
+    """The new binding is ADDITIVE. `_guard_rows_match_spec` still holds HORS_RMR's SHIPPED
+    residual to the figure §6's row states for it, and #13 still binds the aligned pair — a
+    strengthening that quietly dropped either would trade one blind spot for another."""
+    mod, _tmp_path = offline
+    real = mod._spec_s6()
+    rows = mod._guard_s6_rows(real)
+    mod._guard_rows_match_spec(rows, {"HORS_RMR": _SUPERSEDED_HORS})
+    with pytest.raises(mod.ProbeRefusal):
+        mod._guard_rows_match_spec(rows, {"HORS_RMR": ("0.5170", "0.9600")})
+    ruled = mod._guard_amendment13(real)
+    assert (ruled["headship"], ruled["ratio"]) == ("0.5234", "1.0248")
+
+
 def test_p8_the_aligned_territory_is_recomputed_and_bound_to_BOTH_records(offline):
     """The aligned pair is coupled to §6's amendment #13; its COUNTS to P10's note.
 
