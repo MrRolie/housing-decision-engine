@@ -1,0 +1,536 @@
+"""Tripwire baselines (spec §7c). Fail-safe gate: REFUSES (UNKNOWN) when it cannot
+verify; closed reason enum + `source`-bound-to-registry + record allowlist close the
+string side-channel; the required set is CODE-owned (defeats co-deletion). Exit 0 iff
+every required indicator is present-once, finite, fresh, well-banded, OK.
+
+TWO LAYERS. Above the fold: the generic gate — `evaluate_indicator` and the record
+contract, indicator-agnostic. Below it: `pr_landings_annual`, the one WIRED indicator
+whose realized value is COMPUTED FROM THE FEED. That half exists because a hand-typed
+realized value is not a weaker version of the gate, it is a defeat of it: a literal
+compared against a band is a constant compared against a constant, green forever, on any
+data, in any era. Five measured facts shape it, each stated at its gate below.
+
+THE BAND IS THE CALLER'S. No band literal lives in this module. A threshold typed here
+would be a parameter this module invented, and the same edit that widened it would silently
+re-verdict every past run; bands arrive from the constants/spec surface the run declares.
+`now` is injected for the same reason — a wall-clock read inside a verification gate makes
+its verdict unreproducible, and freshness is exactly what an auditor re-checks."""
+import math
+from dataclasses import dataclass, field
+from enum import Enum
+
+from demoflow.errors import LoaderError
+from demoflow.loaders.ircc import (
+    CMA_COLUMN, EN_MONTHS, MODELED_CMAS, MONTH_COLUMN, MONTH_INDEX, PROVINCE_COLUMN,
+    QUEBEC_PROVINCE, SUPPRESSED, TOTAL_COLUMN, YEAR_COLUMN, PRLandings,
+)
+
+
+class Status(str, Enum):
+    OK = "OK"
+    CROSSED = "CROSSED"
+    UNKNOWN = "UNKNOWN"
+
+
+class SourceKind(str, Enum):
+    WIRED = "wired"
+    OPERATOR_SUPPLIED = "operator_supplied"
+
+
+class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (codex r6-F4)
+    STALE = "stale"
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    OPERATOR_INPUT_MISSING = "operator_input_missing"
+    NON_FINITE = "non_finite"
+    MALFORMED_BAND = "malformed_band"
+    FUTURE_AS_OF = "future_as_of"
+    MISSING_INDICATOR = "missing_indicator"
+    DUPLICATE_INDICATOR = "duplicate_indicator"
+    # codex r10: `empty_registry` is NOT a per-indicator reason — an empty baseline is a RUN-level
+    # terminal error (check_registry raises; NO artifact is emitted; the run exits nonzero).
+
+
+# CODE-owned registry (spec §7c, codex r7-F1): indicator -> its DECLARED source string. The
+# emitted record's `source` must equal this exactly (no smuggled content). REQUIRED_INDICATORS
+# derives from it — one source of truth, NOT in the baseline file it validates.
+SOURCE_REGISTRY = {
+    "pr_landings_annual": "IRCC PR admissions by CMA (open.canada.ca monthly CSV)",
+    "temp_resident_stock": "StatCan NPR estimates 17-10-0121 family (or IRCC TR tables)",
+    "isq_edition_watch": "ISQ Perspectives demographiques edition watch (slug/pin)",
+    "registre_foncier_volume": "Registre foncier monthly transfer counts (operator-supplied)",
+    "cmhc_senior_sale_5yr": "CMHC senior-sale rate refresh (operator-supplied)",
+    "natural_increase_sign": "ISQ compo natural-increase sign, annual release (operator-supplied)",
+}
+REQUIRED_INDICATORS = frozenset(SOURCE_REGISTRY)
+
+# UNKNOWN-branch nullability (codex r7-F2/r8-F2): current_value + as_of are NULL exactly for these
+# reasons (no honest measurement; a non_finite raw value goes to the run log, never the JSON).
+NULLABLE_REASONS = frozenset({
+    Reason.SOURCE_UNAVAILABLE, Reason.OPERATOR_INPUT_MISSING, Reason.MISSING_INDICATOR, Reason.NON_FINITE})
+
+TRIPWIRE_RECORD_REQUIRED = frozenset(
+    {"indicator", "current_value", "source", "as_of", "band_low", "band_high", "status"})
+_OPTIONAL = {"reason"}
+
+
+@dataclass(frozen=True)
+class TripwireSpec:
+    indicator: str
+    band_low: float
+    band_high: float
+    as_of: int
+    freshness_years: int
+    source_kind: SourceKind   # coverage declaration (wired/operator) — internal, NOT emitted
+
+
+@dataclass(frozen=True)
+class TripwireResult:
+    indicator: str
+    current_value: float | None
+    source: str               # DECLARED source string (bound to SOURCE_REGISTRY), never SourceKind
+    as_of: int | None
+    band_low: float
+    band_high: float
+    status: Status
+    reason: Reason | None = None
+
+
+def _band_endpoints(indicator: str, band_low, band_high) -> tuple[float, float]:
+    """Coerce the caller's band, or refuse in the module's own taxonomy. A non-coercible
+    endpoint used to reach `spec.band_low > spec.band_high` and die with `TypeError: '>'
+    not supported between str and float` — a class no caller's handler catches, so the
+    verification gate CRASHED rather than refused. It cannot become an UNKNOWN either: the
+    endpoints ride the record's float-typed band fields, so a str endpoint has nowhere to
+    go. Named terminal, deterministic, independent of the data (review finding F2)."""
+    try:
+        return float(band_low), float(band_high)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"tripwire band for {indicator!r} must be two real numbers, got "
+            f"({band_low!r}, {band_high!r}) — a band endpoint that is not a float cannot "
+            "ride the record's band_low/band_high fields") from exc
+
+
+def _src(indicator: str) -> str:
+    return SOURCE_REGISTRY.get(indicator, "<unregistered>")
+
+
+def _unknown_nullable(spec: TripwireSpec, reason: Reason) -> TripwireResult:
+    # nullable-reason branch: no honest measurement -> current_value AND as_of null.
+    return TripwireResult(spec.indicator, None, _src(spec.indicator), None,
+                          spec.band_low, spec.band_high, Status.UNKNOWN, reason)
+
+
+def _unknown_measured(spec: TripwireSpec, v: float, reason: Reason) -> TripwireResult:
+    # a real (finite) measurement exists but is stale/future/malformed -> keep value + as_of.
+    return TripwireResult(spec.indicator, v, _src(spec.indicator), spec.as_of,
+                          spec.band_low, spec.band_high, Status.UNKNOWN, reason)
+
+
+def evaluate_indicator(spec: TripwireSpec, current_value, available: bool, now: int) -> TripwireResult:
+    lo, hi = _band_endpoints(spec.indicator, spec.band_low, spec.band_high)
+    if not available:
+        return _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE)
+    if current_value is None:
+        return _unknown_nullable(spec, Reason.OPERATOR_INPUT_MISSING)
+    try:
+        v = float(current_value)
+        if not math.isfinite(v):
+            raise ValueError
+    except (TypeError, ValueError):
+        return _unknown_nullable(spec, Reason.NON_FINITE)   # raw value -> run log, NEVER the JSON
+    if spec.as_of > now:
+        return _unknown_measured(spec, v, Reason.FUTURE_AS_OF)
+    # VALUE INTEGRITY APPLIES TO THE BAND, NOT ONLY TO THE VALUE (review finding F2). A
+    # non-finite endpoint makes BOTH boundary comparisons False, so every value classifies
+    # as within-band — the exact false-green mechanism spec §7c names in words on the value
+    # side. ±Inf joins NaN here on the spec's own terms, not by symmetry: the endpoints ride
+    # the emitted record and §7 emits tripwire JSON with `allow_nan=False`, which rejects
+    # Infinity too — an endpoint that cannot be serialized is not a threshold. Same closed
+    # reason token as inversion: the enum is spec-closed, so a new member would be fork-class.
+    if not (math.isfinite(lo) and math.isfinite(hi)) or lo > hi:
+        return _unknown_measured(spec, v, Reason.MALFORMED_BAND)
+    if now - spec.as_of > spec.freshness_years:
+        return _unknown_measured(spec, v, Reason.STALE)
+    status = Status.CROSSED if (v <= lo or v >= hi) else Status.OK
+    return TripwireResult(spec.indicator, v, _src(spec.indicator), spec.as_of,
+                          spec.band_low, spec.band_high, status, None)
+
+
+def check_registry(indicators: list[str]) -> list[TripwireResult]:
+    """Synthetic UNKNOWN results for completeness violations (missing/duplicate) — drive the
+    EXIT CODE (not emitted as JSON records in the normal path). Empty list => registry complete.
+
+    `required` is NOT a parameter. It was a caller-overridable default on the one function
+    whose entire premise is that the required set is CODE-owned and not co-deletable —
+    `check_registry(['x'], required=frozenset({'x'}))` returned "complete" (review finding F4).
+
+    TWO RUN-LEVEL TERMINALS, both raising rather than returning a record, and for the same
+    reason: the per-indicator reason enum is spec-closed and carries no token for either.
+    An EMPTY registry has nothing to attach an UNKNOWN to (codex r10). An UNREGISTERED key
+    is not a failing indicator at all — spec §7c asks for exact-key EQUALITY against the
+    code-owned set, and `required - set(indicators)` is one-directional, so an extra key
+    rode through as "complete" and, if OK, carried the run to exit 0."""
+    out: list[TripwireResult] = []
+    if not indicators:
+        # RUN-level terminal (codex r10): no artifact emitted; the run exits nonzero.
+        raise LoaderError("empty tripwire registry — NO artifact emitted, run exits nonzero")
+    unregistered = sorted(set(indicators) - REQUIRED_INDICATORS)
+    if unregistered:
+        raise LoaderError(
+            f"unregistered tripwire indicator(s) {unregistered} — the required set is "
+            f"CODE-owned {sorted(REQUIRED_INDICATORS)}; NO artifact is emitted and the run "
+            "exits nonzero (an extra key has no token in the closed reason enum)")
+    seen: set[str] = set()
+    for name in indicators:
+        if name in seen:
+            out.append(TripwireResult(name, None, _src(name), None, 0.0, 0.0,
+                                      Status.UNKNOWN, Reason.DUPLICATE_INDICATOR))
+        seen.add(name)
+    for missing in sorted(REQUIRED_INDICATORS - set(indicators)):
+        out.append(TripwireResult(missing, None, _src(missing), None, 0.0, 0.0,
+                                   Status.UNKNOWN, Reason.MISSING_INDICATOR))
+    return out
+
+
+def exit_code(results: list[TripwireResult]) -> int:
+    """Verdict-only gate: are ALL the results it was handed OK? It cannot answer the run's
+    question, because it never sees which indicators were supposed to be there."""
+    return 0 if results and all(r.status is Status.OK for r in results) else 1
+
+
+def run_exit_code(results: list[TripwireResult]) -> int:
+    """The RUN's exit code (spec §7c: "0 only when every code-required indicator is present
+    exactly once, finite, fresh, well-banded, and OK").
+
+    Composed on top of `exit_code` rather than folded into it, deliberately. `exit_code`
+    ranges over what it is HANDED — one OK result exits 0, however short of the required
+    set — and that semantics is pinned by contract above; changing it would silently
+    re-verdict every caller. The coverage question is a different question, so it gets its
+    own gate: the evaluated indicator multiset must EQUAL the code-owned required set (which
+    catches an omission, a duplicate, and an unregistered extra in one comparison), and only
+    then does the verdict gate get a say (review finding F4)."""
+    evaluated = sorted(r.indicator for r in results)
+    if evaluated != sorted(REQUIRED_INDICATORS):
+        return 1
+    return exit_code(results)
+
+
+def tripwire_record(r: TripwireResult) -> dict:
+    rec = {"indicator": r.indicator, "current_value": r.current_value, "source": r.source,
+           "as_of": r.as_of, "band_low": r.band_low, "band_high": r.band_high, "status": r.status.value}
+    if r.reason is not None:
+        rec["reason"] = r.reason.value
+    return rec
+
+
+def assert_tripwire_record_valid(record: dict) -> None:
+    """Contract: exact allowlist; EVERY string-typed position bound (spec §7's general "no
+    open string anywhere" rule, not just the one instance the plan body tested); numeric
+    fields finite; UNKNOWN-branch nullability (current_value/as_of null IFF a nullable
+    reason).
+
+    THE RECORD HAS FOUR STRING-TYPED POSITIONS and the shipped validator bound ONE. `status`
+    and `indicator` were free-form, and the `source` binding was CONDITIONAL on the indicator
+    being registered — so an unregistered indicator skipped it, and a record that literally
+    announces a crash probability passed the validator whose whole job is to make that
+    quantity inexpressible (review finding F3). Binding `indicator` to SOURCE_REGISTRY makes
+    the source check unconditional as a consequence, which is the actual repair."""
+    extra = set(record) - (set(TRIPWIRE_RECORD_REQUIRED) | _OPTIONAL)
+    if extra or not set(TRIPWIRE_RECORD_REQUIRED) <= set(record):
+        raise ValueError(f"tripwire record fields {sorted(record)} violate allowlist "
+                         f"{sorted(TRIPWIRE_RECORD_REQUIRED)}(+reason?); extra={sorted(extra)}")
+    reason = record.get("reason")
+    if reason is not None and reason not in {r.value for r in Reason}:
+        raise ValueError(f"tripwire reason {record['reason']!r} outside closed enum "
+                         f"{sorted(r.value for r in Reason)}")
+    status = record["status"]
+    if status not in {s.value for s in Status}:
+        raise ValueError(f"tripwire status {status!r} outside closed enum "
+                         f"{sorted(s.value for s in Status)}")
+    ind = record["indicator"]
+    if ind not in SOURCE_REGISTRY:
+        raise ValueError(f"tripwire indicator {ind!r} is not in the CODE-owned registry "
+                         f"{sorted(SOURCE_REGISTRY)} — an unregistered indicator skips the "
+                         "source binding entirely, reopening the string side-channel")
+    if record["source"] != SOURCE_REGISTRY[ind]:
+        raise ValueError(f"tripwire source {record['source']!r} != registry-declared "
+                         f"{SOURCE_REGISTRY[ind]!r} for {ind}")
+    # spec §7 writes the state as `UNKNOWN(reason)`: an UNKNOWN with no reason names no
+    # cause, and a CROSSED carrying `stale` is two incompatible verdicts in one record.
+    if (status == Status.UNKNOWN.value) != (reason is not None):
+        raise ValueError(f"tripwire reason must be present exactly when status=UNKNOWN; "
+                         f"status={status!r} reason={reason!r}")
+    # §7 emits this JSON with `allow_nan=False`. A non-finite number in ANY numeric field
+    # would only be discovered at serialization; the contract boundary is where it dies.
+    for numeric in ("current_value", "band_low", "band_high"):
+        value = record.get(numeric)
+        if value is None:
+            continue
+        # TYPE first, then finiteness. `float("40000")` succeeds, so a coercion-only check
+        # lets a STRING ride a numeric field — the same side-channel one position over.
+        # `bool` is excluded explicitly: it is an int subclass, and True is not a threshold.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"tripwire {numeric} {value!r} must be a number, not "
+                             f"{type(value).__name__}")
+        if not math.isfinite(value):
+            raise ValueError(f"tripwire {numeric} {value!r} must be a finite number "
+                             "(the artifact is emitted with allow_nan=False)")
+    nullable = (status == Status.UNKNOWN.value
+                and reason in {r.value for r in NULLABLE_REASONS})
+    for f in ("current_value", "as_of"):
+        if nullable and record.get(f) is not None:
+            raise ValueError(f"tripwire {f} must be NULL for status=UNKNOWN reason={reason}")
+        if not nullable and record.get(f) is None:
+            raise ValueError(f"tripwire {f} must be non-null for status={record['status']} reason={reason}")
+
+
+# =======================================================================================
+# `pr_landings_annual` — the one indicator whose realized value is MEASURED, not typed.
+# =======================================================================================
+#
+# SCOPE. The numerator is the PROVINCIAL sum, because the plan level it is compared against
+# is provincial. The Montréal+Québec CMA PAIR is a DIFFERENT QUANTITY and belongs to the
+# demand model, not here: measured on the 2026-08-18 vintage the pair is 44,310 (2023) /
+# 47,070 (2024) / 45,895 (2025) while the province is 52,615 / 59,225 / 60,010, and the
+# pair's provincial share DECAYS 0.842 -> 0.795 -> 0.765, ~4pp/yr. So no fixed offset
+# converts one into the other, and the near-match "45,895 ≈ 45,000 plan" is a coincidence of
+# mismatched scopes — the pair sits ~24% under the provincial level it appears to match.
+# `Not stated` province rows are excluded (admissions not attributable to Québec; measured
+# ≤20/yr, inside the rounding envelope below).
+#
+# ERA. The 45,000 level is the MIFI Plan d'immigration du Québec 2026-2029 (released
+# 2025-11-06) and it is a REDUCTION from the ~60k realized under its predecessor. Comparing a
+# pre-plan year against it is a cross-era artifact, not a crossing — so only years the plan in
+# force GOVERNS are evaluable, and the first of those is 2026 full-year.
+PLAN_GOVERNED_YEARS = range(2026, 2030)
+
+# FRESHNESS. Publication lag on this feed runs 1.5-4 months across three measured Wayback
+# vintages, so any limit tighter than ~5 months makes the indicator permanently UNKNOWN —
+# a gate that can never clear is not a gate. Five months admits the measured lag and still
+# discriminates an abandoned mirror.
+FEED_FRESHNESS_MONTHS = 5
+
+# COMPLETENESS. TWELVE DISTINCT MONTHS on the selected year (the loader's closed month
+# vocabulary is what makes "distinct" mean something) kills the partial-year false-CROSSED:
+# six months of 2026 sum to 21,720 against a 40k-50k band, a crash headline manufactured by a
+# publication calendar.
+#
+# IT DOES NOT, ON ITS OWN, KILL MEMBER GAPS — the earlier claim that it did was wrong and is
+# corrected here. `set(province_rows[EN_MONTH])` is a UNION over every member, satisfied by
+# two members alone: measured on the frozen slice, real 2025 has 355 of a 384-cell grid with
+# 11 of 32 members carrying interior gaps, and the province still shows twelve distinct
+# months. Drop Montréal's Jan-May and the year counts CLOSED at 46,640 — status OK, exit 0,
+# against a true 60,010 that is CROSSED. So coverage is checked PER MODELED MEMBER as well,
+# against the code-owned `MODELED_CMAS`. That rule is clearable (both modeled members are
+# 12/12 in the real data) where a whole-province "every member 12/12" rule never would be.
+# RESIDUAL, NAMED NOT PAPERED OVER: a feed truncated to the two modeled members alone still
+# passes — it publishes the CMA-pair total as the provincial one — and closing that needs a
+# pinned member set or a cell-count floor, i.e. a new measured constant. Not decided here.
+MONTHS_PER_CLOSED_YEAR = len(EN_MONTHS)
+
+# DEGENERATE FLOOR. A suppressed cell is `--`, which absorbs the whole 0-5 band; the feed has
+# NO zeros, so `--` must never be read as one. Two floors follow, both DERIVED from the feed's
+# own arithmetic rather than tuned: a member that reports nothing but markers contributes an
+# unknown, not a zero (an all-marker Montréal drops the provincial sum 62% and the CMA pair
+# 81% — comfortably CROSSED, on a feed that measured nothing), and a total no larger than what
+# the suppressed cells alone could carry is indistinguishable from silence.
+SUPPRESSED_CELL_MAX = 5.0
+# TOTAL is rounded to the nearest 5 (0 of 16,539 numeric cells are non-multiples), so every
+# published cell carries ±2.5 — 355 Québec cells in 2025 is the ±888/yr envelope, recorded
+# and never silently corrected.
+CELL_ROUNDING_HALFWIDTH = 2.5
+
+PR_LANDINGS_INDICATOR = "pr_landings_annual"
+# QUEBEC_PROVINCE is the LOADER's (imported above, beside MODELED_CMAS): it is a selection
+# key into the feed's vocabulary, so the schema gate that refuses a drifted token has to own
+# it. Re-exported here because this module is where its consumers read it.
+
+
+@dataclass(frozen=True)
+class RealizedLandings:
+    """What the feed actually says for one (province, year) — the arithmetic, plus the
+    facts the gates need to judge whether it is honest. Never a verdict."""
+
+    year: int
+    province: str
+    value: float
+    months: tuple[str, ...]
+    n_cells: int
+    n_numeric: int
+    n_suppressed: int
+    numeric_by_member: dict = field(default_factory=dict)
+
+    @property
+    def envelope(self) -> float:
+        """±(rounding + suppression) on the annual total: ±2.5 per published cell."""
+        return CELL_ROUNDING_HALFWIDTH * self.n_cells
+
+
+@dataclass(frozen=True)
+class PRLandingsEvaluation:
+    """`result` is the only thing that may reach the artifact. `realized` and
+    `vintage_sha256` ride the RUN, for the identity envelope (spec §7 puts data_vintage
+    above the rows — the tripwire record's field allowlist is closed and cannot carry it).
+    `log` is run-log detail: the record is a closed vocabulary, so every cause narrower
+    than the reason token is spoken here or nowhere."""
+
+    result: TripwireResult
+    realized: RealizedLandings | None
+    vintage_sha256: str | None
+    log: str
+
+
+def _province_rows(frame, year: int, province: str):
+    return frame[(frame[YEAR_COLUMN] == str(year)) & (frame[PROVINCE_COLUMN] == province)]
+
+
+def pr_landings_realized(frame, year: int, province: str = QUEBEC_PROVINCE) -> RealizedLandings:
+    """Sum the province's published cells for one year. A `--` contributes NOTHING to the
+    value and ONE to `n_suppressed` — it is an unknown in 0-5, and the difference between
+    those two treatments is the whole degenerate-feed defence."""
+    rows = _province_rows(frame, year, province)
+    value = 0.0
+    n_numeric = n_suppressed = 0
+    numeric_by_member: dict[str, int] = {}
+    for member, total in zip(rows[CMA_COLUMN], rows[TOTAL_COLUMN]):
+        numeric_by_member.setdefault(member, 0)
+        if total == SUPPRESSED:
+            n_suppressed += 1
+            continue
+        value += float(int(total))          # loader has already closed TOTAL's vocabulary
+        n_numeric += 1
+        numeric_by_member[member] += 1
+    months = tuple(sorted(set(rows[MONTH_COLUMN]), key=MONTH_INDEX.__getitem__))
+    return RealizedLandings(year=year, province=province, value=value, months=months,
+                            n_cells=len(rows), n_numeric=n_numeric, n_suppressed=n_suppressed,
+                            numeric_by_member=numeric_by_member)
+
+
+def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
+    """Years the plan in force GOVERNS that the feed has CLOSED — all twelve month tokens
+    present province-wide AND all twelve present for each MODELED member. A partial year is
+    not a small year; it is not a year, and neither is a year missing half of Montréal.
+
+    A `--` cell COUNTS as present: suppression is a published statement about a cell, and
+    what an all-marker member means is the degenerate floor's question, not this one."""
+    closed = []
+    for year in PLAN_GOVERNED_YEARS:
+        rows = _province_rows(frame, year, province)
+        if set(rows[MONTH_COLUMN]) != set(EN_MONTHS):
+            continue
+        by_member: dict[str, set] = {}
+        for member, month in zip(rows[CMA_COLUMN], rows[MONTH_COLUMN]):
+            by_member.setdefault(member, set()).add(month)
+        if all(by_member.get(m, set()) == set(EN_MONTHS) for m in MODELED_CMAS):
+            closed.append(year)
+    return closed
+
+
+def _degenerate(realized: RealizedLandings) -> str | None:
+    """Run-log token naming why this realized value is silence rather than a measurement,
+    or None. Every branch is derived from the feed's suppression semantics."""
+    if realized.n_numeric == 0:
+        return f"no numeric cell in {realized.province} {realized.year} " \
+               f"({realized.n_suppressed} suppressed) — `--` is not a zero"
+    for member in MODELED_CMAS:
+        if realized.numeric_by_member.get(member, 0) == 0:
+            return (f"modeled member {member!r} reports no numeric cell in {realized.year} — "
+                    "present in the feed but all-marker; presence is not content")
+    floor = SUPPRESSED_CELL_MAX * realized.n_suppressed
+    if realized.value <= floor:
+        return (f"realized {realized.value} is inside what suppression alone could carry "
+                f"({realized.n_suppressed} cells x {SUPPRESSED_CELL_MAX} = {floor})")
+    return None
+
+
+def _months_behind(latest: tuple[int, int], now: tuple[int, int]) -> int:
+    return (now[0] - latest[0]) * 12 + (now[1] - latest[1])
+
+
+def evaluate_pr_landings(
+    landings: PRLandings,
+    *,
+    band: tuple[float, float],
+    now: tuple[int, int],
+    freshness_years: int = 1,
+) -> PRLandingsEvaluation:
+    """Evaluate realized PR landings against a CALLER-SUPPLIED band, fail-safe throughout.
+
+    GATE ORDER, and it is load-bearing — each stage can only be reached once the previous
+    one has established that a number worth judging exists:
+
+      1. feed absent                      -> UNKNOWN, nothing emitted
+      2. no CLOSED plan-governed year     -> UNKNOWN, nothing emitted
+      3. degenerate read                  -> UNKNOWN, nothing emitted
+      4. feed itself stale (>5 months)    -> UNKNOWN, measurement retained
+      5. band comparison (generic gate)   -> OK / CROSSED / UNKNOWN
+
+    Degenerate precedes staleness deliberately: a gutted sum must never ride a record, and
+    stage 4 is the one UNKNOWN branch that keeps its value.
+
+    THE REASON TOKEN AT STAGES 1-3 is `source_unavailable`, and the derivation matters
+    because the enum is closed and no member says "the era has not arrived". The choice is
+    forced by the nullability contract, not by taste. This indicator is DEFINED over a
+    closed year the plan in force governs; before 2026 closes, no such datum is published,
+    so there is no honest measurement — and the only reasons permitted to emit none are the
+    nullable four. `stale` is not among them, so choosing it would force the newest pre-plan
+    number (2025 provincial 60,010) into a record whose band comes from the 2026 plan: a
+    cross-era pairing one field away from a status token, and misleading precisely because
+    that year's OWN plan level was ~60k and it was on target. Refusing with nothing beats
+    refusing with a number that reads like a crossing.
+    """
+    province, indicator = QUEBEC_PROVINCE, PR_LANDINGS_INDICATOR
+    band_low, band_high = _band_endpoints(indicator, band[0], band[1])
+    spec = TripwireSpec(indicator, band_low, band_high, as_of=now[0],
+                        freshness_years=freshness_years, source_kind=SourceKind.WIRED)
+
+    if not landings.available or landings.frame is None:
+        return PRLandingsEvaluation(
+            _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE), None, landings.sha256,
+            f"IRCC PR feed unavailable: {landings.reason or 'no frame'}")
+
+    years = closed_plan_years(landings.frame, province)
+    if not years:
+        return PRLandingsEvaluation(
+            _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE), None, landings.sha256,
+            f"no CLOSED year in the plan era {min(PLAN_GOVERNED_YEARS)}-{max(PLAN_GOVERNED_YEARS)} "
+            f"({MONTHS_PER_CLOSED_YEAR} distinct months required); feed latest_period="
+            f"{landings.as_of}. Pre-plan years are NOT substitutes")
+
+    year = max(years)
+    realized = pr_landings_realized(landings.frame, year, province)
+    year_spec = TripwireSpec(indicator, band_low, band_high, as_of=year,
+                             freshness_years=freshness_years, source_kind=SourceKind.WIRED)
+
+    degenerate = _degenerate(realized)
+    if degenerate is not None:
+        return PRLandingsEvaluation(
+            _unknown_nullable(year_spec, Reason.SOURCE_UNAVAILABLE), realized, landings.sha256,
+            f"degenerate feed read, RAISED to UNKNOWN (never CROSSED): {degenerate}")
+
+    behind = _months_behind(landings.latest_period, now) if landings.latest_period else None
+    # A feed dated AHEAD of `now` is an impossible vintage, and the staleness test is signed:
+    # only `behind > limit` acted, so a negative `behind` fell straight through to the band
+    # comparison with nothing recorded. The generic gate's own `as_of > now` guard is silent
+    # here — it sees the SELECTED year, which is in the past (review finding F8). The
+    # measurement exists, so this is the value-RETAINING branch; `future_as_of` is not a
+    # nullable reason, and a null-valued record under it would fail the nullability contract.
+    if behind is not None and behind < 0:
+        return PRLandingsEvaluation(
+            _unknown_measured(year_spec, realized.value, Reason.FUTURE_AS_OF), realized,
+            landings.sha256,
+            f"feed latest_period {landings.as_of} is AHEAD of {now[0]:04d}-{now[1]:02d} by "
+            f"{-behind} month(s) — an impossible vintage, not a fresh one")
+    if behind is not None and behind > FEED_FRESHNESS_MONTHS:
+        return PRLandingsEvaluation(
+            _unknown_measured(year_spec, realized.value, Reason.STALE), realized, landings.sha256,
+            f"feed latest_period {landings.as_of} is {behind} months behind "
+            f"{now[0]:04d}-{now[1]:02d} (limit {FEED_FRESHNESS_MONTHS})")
+
+    result = evaluate_indicator(year_spec, realized.value, available=True, now=now[0])
+    return PRLandingsEvaluation(
+        result, realized, landings.sha256,
+        f"{province} {year} realized={realized.value} +/-{realized.envelope} over "
+        f"{realized.n_cells} cells ({realized.n_suppressed} suppressed, "
+        f"{len(realized.months)} months); band=({band_low}, {band_high})")

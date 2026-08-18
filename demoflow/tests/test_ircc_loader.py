@@ -162,3 +162,102 @@ def test_unknown_total_token_raises(tmp_path):
     _plant(tmp_path, "\r\n".join(lines) + "\r\n")
     with pytest.raises(LoaderError, match="TOTAL"):
         load_pr_landings(data_dir=tmp_path)
+
+
+# --- period axis: gated vocabulary + the as_of the consumers must not re-derive --------
+# Added at Task 28. EN_MONTH was parsed by NOBODY and gated by nothing, so a month-token
+# mutant was absorbed silently — and the tripwire's discriminating completeness check is
+# "twelve DISTINCT months on the selected year", which a renamed token defeats while still
+# counting twelve. The vocabulary is closed here, once, where the schema lives.
+
+def test_month_vocabulary_is_closed(tmp_path):
+    """`Febr` still counts as one distinct month. Only a closed vocabulary refuses it."""
+    lines = _fixture_lines()
+    lines[1] = lines[1].replace("\tFeb\t", "\tFebr\t", 1)
+    _plant(tmp_path, "\r\n".join(lines) + "\r\n")
+    with pytest.raises(LoaderError, match="EN_MONTH"):
+        load_pr_landings(data_dir=tmp_path)
+
+
+def test_non_integer_year_token_raises(tmp_path):
+    """EN_YEAR is the selection key for an annual tripwire; a token that is not a year
+    would be silently unselectable rather than loudly wrong."""
+    lines = _fixture_lines()
+    lines[1] = lines[1].replace("2015\tQ1", "20I5\tQ1", 1)
+    _plant(tmp_path, "\r\n".join(lines) + "\r\n")
+    with pytest.raises(LoaderError, match="EN_YEAR"):
+        load_pr_landings(data_dir=tmp_path)
+
+
+def test_latest_period_and_as_of_are_exposed_not_re_derived(tmp_path):
+    """Every consumer re-deriving the feed's own coverage is a defect per consumer. The
+    slice carries 2015 Jan-Feb, so the latest published period is 2015-02."""
+    result = load_pr_landings(data_dir=_plant(tmp_path).parent)
+    assert result.latest_period == (2015, 2)
+    assert result.as_of == "2015-02"
+
+
+def test_vintage_digest_is_recorded_on_load(tmp_path):
+    """IRCC RESTATES history, so a downstream red must be attributable to data-vs-code.
+    The digest is recorded (identity), NOT pinned (this feed refreshes monthly, and a pin
+    would red on every upstream publication)."""
+    import hashlib
+    path = _plant(tmp_path)
+    result = load_pr_landings(data_dir=tmp_path)
+    assert result.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
+    from demoflow.loaders.pins import WORKBOOK_SHA256
+    assert CSV_NAME not in WORKBOOK_SHA256          # recorded, never pinned
+
+
+# --- review-response gates (adversarial review of Task 28) -----------------------------
+# Three drift classes the shipped loader let through, each demonstrated on real bytes.
+# All three are SCHEMA — the same argument `_check_modeled_cmas` and `_check_periods`
+# already make: a PRESENT file asserting it is the feed must raise on every way it can lie.
+
+def test_duplicate_cell_key_is_refused(tmp_path):
+    """A republished / appended vintage that repeats a (province, member, year, month)
+    cell DOUBLE-COUNTS, and doubling is not merely an inflated CROSSED — it reaches a
+    FALSE GREEN: measured on the QC slice, a vintage whose true provincial total is
+    29,918 (CROSSED below a 55k-65k band) becomes 59,836 (OK, exit 0) when every row is
+    duplicated. Uniqueness is keyed on the PROVINCE too: a member token that legitimately
+    appeared under two provinces would false-red a (member, year, month) key."""
+    lines = _fixture_lines()
+    _plant(tmp_path, "\r\n".join(lines + [lines[1]]) + "\r\n")
+    with pytest.raises(LoaderError, match="duplicate"):
+        load_pr_landings(data_dir=tmp_path)
+
+
+def test_missing_province_token_raises_not_silent_unknown(tmp_path):
+    """EN_PROVINCE_TERRITORY is the tripwire's PRIMARY selection key and was gated by
+    nothing. A token drift ('Quebec' -> 'Québec') loads clean, selects nothing, and the
+    indicator reports UNKNOWN forever while the run log points the reader at IRCC's
+    publication calendar — verbatim the harm `_check_periods`' own docstring exists to
+    prevent. Gated where the other selection keys are gated."""
+    lines = _fixture_lines()
+    mutated = [lines[0]]
+    for line in lines[1:]:
+        fields = line.split("\t")
+        if fields[8] == "Quebec":
+            fields[8] = "Québec"
+        mutated.append("\t".join(fields))
+    _plant(tmp_path, "\r\n".join(mutated) + "\r\n")
+    with pytest.raises(LoaderError, match="EN_PROVINCE_TERRITORY"):
+        load_pr_landings(data_dir=tmp_path)
+
+
+@pytest.mark.parametrize("token", ["²", "١٢", "02026"])
+def test_year_token_must_parse_and_be_canonical(tmp_path, token):
+    """`str.isdigit()` is the wrong gate on all three counts, and each class fails
+    differently. `'²'.isdigit()` is True but `int('²')` RAISES — a bare ValueError leaking
+    out of `load_pr_landings`, routing around the one `except LoaderError` handler the
+    module docstring says every failure lands in. `'١٢'` and `'02026'` both clear the gate
+    AND parse, but neither string-matches the tripwire's `EN_YEAR == str(year)` selection:
+    present-but-unselectable, the exact state the gate was written to close. One rule
+    closes all three: `int(y)` parses AND round-trips to the same token."""
+    lines = _fixture_lines()
+    fields = lines[1].split("\t")
+    fields[0] = token
+    lines[1] = "\t".join(fields)
+    _plant(tmp_path, "\r\n".join(lines) + "\r\n")
+    with pytest.raises(LoaderError, match="EN_YEAR"):
+        load_pr_landings(data_dir=tmp_path)

@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# IRCC PR-by-CMA test fixture: a VERBATIM byte slice of the live feed, which publishes
+# CRLF. `* text=auto` above normalizes it to LF in the index, so the committed artifact
+# stopped being the bytes the loader was verified against (40,669 -> 40,108 bytes, all 561
+# CR bytes stripped) and a fresh checkout would exercise line endings the feed never sends.
+# The fixture's entire evidentiary value is that it IS the feed's bytes; pin them.
+demoflow/tests/fixtures/ircc_pr_qc_slice.csv -text
