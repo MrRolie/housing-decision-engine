@@ -43,5 +43,5 @@ ScenarioPrior row enum, the rankings row enum, and the join table's input-proven
   in amendment #14 (seat-measured, already written); task 2 is plan Task 27 verbatim plus carries
   that cite rulings K/J and measured traps by name. No cap value or gate semantics is set here.`
 
-- run id: (appended at dispatch)
+- run id: `wf_052812cb-199` (dispatched 2026-08-18; task id w3b301m2k)
 - outcome: (appended at run close)
