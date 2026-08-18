@@ -51,3 +51,68 @@ refactor (including the `MAINTAINER_TOTAL_MEMBER` rename) must be shown to break
 
 - run id: `wf_523b798d-66d` (dispatched 2026-08-15; task id w82gzaoqz)
 - outcome: (appended at run close)
+
+---
+
+## OUTCOME — 2/2 APPROVE, verify PASS → LANDED `3c15927` (P10) + `4ed39a3` (P11 + sentences)
+
+11 agents, 0 errors. P11 closeout APPROVE (2 fix rounds), sentence corrections APPROVE (1). Suites
+**191 + 734**, three green runs with outbound network hard-blocked, no flake. Tree clean, pushed.
+
+**The closeout verified against FIRST SOURCES, not against the producer.** All 272 extract cells
+match the stood-down instance's independent pull with ZERO value differences and identical withheld
+sets; every ρ figure was recomputed with its own CSV reader and its own remap, importing neither
+`census.py` nor `hors_aligned.py`, and reproduces exactly (served spread 1.202409 pp, **bound spread
+1.212115 pp** — the adverse structure holds at both corners). External anchors hold and do not
+co-move. Extract sha matches its pins row; the generator reproduces the artifact byte-identically;
+two independent pulls minutes apart are byte-identical at 84,049 bytes.
+
+**The scope fence was PROVED, not asserted:** re-running `derive_ownership_from_csv` after the
+`census.py` seam refactor reproduces the committed ownership artifact with zero geography × band
+values moved and identical serialized size; shipped HORS_RMR unchanged; the aligned artifact carries
+only HORS_RMR; `load_ownership_rates` not re-pointed; zero `_MAINTAINER_TOTAL_MEMBER` references
+remain.
+
+**The sub-floor correction gained something the mandate did not ask for and should have:** besides
+pinning that the extract DOES publish sub-25 counts, there is now a test that makes the clause
+**RETIRE ITSELF LOUDLY when the ownership lattice is extended** — so §7's ordering constraint
+(age-resolved headship first, then the floor) cannot be violated quietly by a future task.
+
+### Honest disclosures the closeout made rather than smoothed
+
+- **No WDS call was made this run.** The 272-cell reproduction reuses the stood-down instance's
+  preserved pull (mandate-sanctioned), and the 98-10-0003-01 membership is verified against the
+  extract's recorded `_pull.membership` block and P10's note, **not re-derived live**.
+- The unpublished-remainder bound is called an upper bound "by construction" at three sites; under
+  independent round-to-5 per cell that is LOOSE rather than exact — two committed fields carry a
+  NEGATIVE remainder (published band cells exceeding the published all-ages cell), which is why the
+  clamp exists. Disclosed adjacent, magnitude immaterial (single-digit households against a
+  12,675-household subtraction), and the remainder also absorbs the un-pulled under-25 maintainer
+  member, so it over-covers.
+- `hors_aligned` reaches through to `census._band_counts`, `._PROVINCE`, `._QC_CMAS` and
+  `._AGE_BAND_SPEC` despite the public-seam refactor introduced for it — the refactor's stated
+  rationale covers only part of the reach-through.
+- Two weak assertions recorded: `assert "5" in rounding["note"]` is satisfied by almost any prose,
+  and a two-cell floor under a 12,675-household quantity. `relative_delta_bound_pct` is emitted into
+  every band's provenance row and asserted nowhere.
+
+### ⚠ THREE DISPATCH-CONTEXT ERRORS — in the seat's brief, not in the work
+
+- **X-1, the serious one: "Committed HEAD is 34fd60a" names an object that has NEVER EXISTED in this
+  repo** (`git cat-file -t` → `Not a valid object name`; the actual HEAD was `23c64eb`). A
+  hand-typed identifier the tree contradicts — the seat's signature failure class, now its FOURTH
+  instance this session after two suite counts and the §6 person-weight/conversion pair.
+- X-2: "demoflow 696" cannot be reproduced, because it was measured on a dispatch-time tree state
+  that was never committed; the gate is 734, fully attributed from a measured 604 HEAD baseline.
+- X-3: the `MM_PORTFOLIO_DATA_DIR` hermetic-env instruction has no referent in this repo — inherited
+  from a template and never checked.
+
+**MECHANISM CHANGE, since care has now failed four times:** every identifier and figure in a dispatch
+context is DERIVED at authoring time — `git rev-parse --short HEAD` and a live suite run piped into
+the args — never typed. The same fix already applied to commit messages; it now applies to briefs.
+X-3 adds a second rule: an inherited instruction must have a referent verified in THIS repo before it
+rides in a mandate.
+
+- outcome: **2/2 APPROVE / landed `3c15927` + `4ed39a3` / suites 191+734.** Next: the seat writes
+  amendment #13 (the values are now REVIEWED), then a run regenerates P8 and updates the join table
+  where the citation coupling reds and then greens, then Task 27.
