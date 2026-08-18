@@ -1120,17 +1120,23 @@ def test_p10_the_note_states_what_the_membership_gate_cannot_do(note):
     assert "would not be seen" in body
 
 
-def test_p10_the_aligned_values_are_deliberately_absent_from_the_spec(offline):
-    """The ordering constraint, as a property rather than a promise: the figures this run
-    proposes are NOT in §6 yet, which is exactly why nothing may be wired on them. If a later
-    run rules them in, this test is the one that says so out loud.
+def test_p10_the_aligned_values_are_RULED_and_the_spec_carries_what_this_run_measures(offline):
+    """The ordering constraint, RETIRED BY THE EVENT IT WATCHED FOR — and replaced by the
+    stronger check that event makes possible.
+
+    Until 2026-08-15 §6 did not carry these figures, and this test asserted their ABSENCE so
+    that nothing could be wired on unruled numbers; it said so out loud the moment the seat
+    ruled (amendment #13). The successor form is a CITATION COUPLING rather than a scope note:
+    the spec must now carry exactly what this run measures, so a later edit to either side that
+    moves a ruled value reds here. Wiring — P8's regeneration and the join-table update —
+    remains a separate run's work, and is not what this test governs.
     """
     mod, tmp_path = offline
     _run_offline(mod, tmp_path)
     s6 = mod._spec_s6()
     aligned = mod.LAST_RUN["aligned"]["pair"]
-    assert f"{aligned[0]:.4f}" not in s6 and f"{aligned[1]:.4f}" not in s6, (
-        "spec §6 now carries the aligned pair — the ruling has landed, so P8's regeneration and "
-        "the join-table update are the next run's work and this probe's scope note is stale")
+    assert f"{aligned[0]:.4f}" in s6 and f"{aligned[1]:.4f}" in s6, (
+        "spec §6 must carry the aligned pair this run measures (amendment #13 ruled them in): "
+        "a mismatch means the spec and this probe disagree about a RULED value")
     for label, token in mod.LAST_RUN["coupled"]:
         assert isinstance(token, str) and token, label

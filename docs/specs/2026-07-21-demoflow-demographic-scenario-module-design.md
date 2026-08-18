@@ -298,7 +298,7 @@ ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at 
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
 `p_imm` is asserted ∈ [0,1] → immigrant owner-household demand.
 
-**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #12;
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #13;
 operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
@@ -525,6 +525,60 @@ by inheritance from P4's borrowed ROC-CHSP year-1 floor rather than by construct
 recent member, and in a different SHAPE (a uniform override compresses cross-geography differences;
 the recent reading moves both factors together). Immigrant HEADSHIP has no sweep axis at all, so a
 `rank_stable` verdict is evidence, not proof, on this axis.
+
+**AMENDMENT #13 (2026-08-15) — the recompute #12(A) ordered has LANDED, and #12(B) is REVERSED.**
+
+**(A) HORS_RMR's immigrant values, now MEASURED at exact territory:** headship **0.5234**, ratio
+**1.0248** (suppression envelope 0.5225-0.5236 and 1.0228-1.0264). These supersede the
+SUPERSEDED-PENDING-RECOMPUTE marks of #12(A). The immigrant demand leg was understated **+8.083%**,
+and the ratio CROSSES 1.0 with BOTH envelope ends above it — at aligned territory, settled immigrants
+in hors-RMR OUT-own non-immigrants rather than under-owning them.
+
+**The construction is RULED, not preferred, and the fallback #12(A) named is REFUSED.**
+98-10-0003-01 publishes the Ottawa-Gatineau CMA (member 594) with its **25 constituent CSDs as
+geography children**, closing exactly on the CMA total (1,488,307 = QC 353,293 + ON 1,135,014); **16
+are Québec-side**, selected two independent ways — SGC prefix AND census-tree ancestry in
+98-10-0622-01 — agreeing on all 25. Four census divisions contribute, three of them PARTIALLY, so no
+whole-CD union is this territory. The whole-CD bracket #12(A) ranked second **does not enclose the
+exact headship** (0.5234 sits above its own 0.5218-0.5228 range): it would have published a value no
+member of its own range produces. Membership gate: QC-part census population 353,293 against ISQ's
+355,971 = −0.752%, inside a 1.109% threshold derived from the six wholly-QC CMAs.
+
+**(B) #12(B) IS REVERSED. The ownership rate WAS corrected, and the reason it had to be is that
+#12(B)'s clearance was premise-conditional.** That clearance said a band-uniform relative scaling of
+ρ cancels exactly in ED — true as stated, and the premise is false. Measured, the contamination is
+**not band-uniform**: all-ages +0.918%, **25-54 +1.425%**, 55-64 +0.315%, 65-74 +0.304%, **75+
++0.223%** — spread **1.2024 pp**, all same-signed, and **at the suppression bound it WIDENS to
+1.2121 pp**, so the structure holds at both corners rather than as a point estimate. The arrangement
+is adversarial by structure, not by chance: the MOST contaminated band (25-54) is the one D_native is
+built from, the LEAST (75+) is the one S rides through `initialize_households`, so δ_D − δ_S sits at
+or near the full spread. Because ED's numerator is a DIFFERENCE of flows this is amplified rather
+than averaged — ΔED/ED = (δ_S − δ_OS) + (δ_D − δ_S)·D/(D−S), measured at +1.0% relative at
+D/(D−S)=1.4, +8.4% at 7.7 and +54% at 46 — **unbounded near flow balance, with the multiplier turning
+NEGATIVE for D < S so sufficient amplification carries ED across zero rather than rescaling it.**
+Rank 1 is most-negative ED, so this lands precisely where rankings are decided; the bounded-absolute
+argument that would have let it stand is true and irrelevant, because rankings are relative and
+decided near zero, which is exactly where that bound is vacuous.
+
+**How the corrected curve lands, and one thing that must NOT be done to it.** The aligned curve
+(`loaders/hors_aligned.py`, artifact `data/ownership_hors_aligned.json`, extract
+`data/hors_aligned_csd_98100232.json` from 98-10-0232-01) sits BESIDE the shipped curve with the join
+explicit, re-pointing **HORS_RMR ONLY** — proven, not asserted: re-deriving the shipped artifact after
+the refactor moves zero geography × band values. **`load_ownership_rates` is NOT re-pointed**, because
+the committed T13b external-anchor gates pin HORS_RMR's SHIPPED residual at `rel=1e-12`; re-pointing
+would red ruled gates. A future reader who "simplifies" the two curves into one must move those gates
+first, deliberately.
+
+**(C) Two figures in #12(A) were the SEAT's own errors, corrected by the probe that executed it:**
+the "10.35% person weight" is the MAINTAINER weight (10.336%) — the person weight is 10.770%; and the
+"≈345,000" conversion measures 347,875 at the recorded province ratio against the **347,710**
+private-household persons the resolved membership actually carries (local universe ratio 0.9842 vs
+province-wide 0.9773).
+
+**LINEAGE, recorded because this block is the clearest specimen of how this document gets things
+right:** the QFE NAMED the band-varying caveat and graded it second-order; P10 MEASURED it and found
+the adversarial arrangement; the ruling followed the measurement, not the grade. A clearance that
+rests on an unmeasured premise is a hypothesis wearing a verdict's clothes.
 
 **Costs, recorded rather than argued away:** (i) at the ruled settled reading the netting discount
 is ~4-11% — this section's "the netting IS the showcase's originality claim" holds STRUCTURALLY but
