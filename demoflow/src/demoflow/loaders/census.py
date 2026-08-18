@@ -77,6 +77,10 @@ from demoflow.loaders.validate import assert_fraction
 from demoflow.loaders.vintage import RateVintage, vintage_from_provenance
 
 CENSUS_EXTRACT = "census_tenure_age_98100231.csv"
+# The cube the extract was cut from. PUBLIC because the operand-aligned surface
+# (`loaders/hors_aligned.py`) names this table beside its own CD/CSD sibling in one provenance
+# block, and two spellings of one table number is a drift vector.
+STATCAN_TABLE = "98-10-0231-01"
 POP_QC_WORKBOOK = "pop-as-qc-base.xlsx"
 OWNERSHIP_ARTIFACT = "ownership_by_geo_age.json"
 HEADSHIP_ARTIFACT = "headship_by_age.json"
@@ -166,8 +170,10 @@ _HEADSHIP_BANDS = tuple((label, lo, hi) for label, lo, hi, _ in _HEADSHIP_BAND_S
 
 # The extract's own published all-ages maintainer count — an INDEPENDENT aggregate the banded
 # sum must close against (a dropped or duplicated constituent moves the sum by >= 10,920, the
-# smallest member, while every rate stays a plausible fraction).
-_MAINTAINER_TOTAL_MEMBER = "Total - Age of primary household maintainer"
+# smallest member, while every rate stays a plausible fraction). PUBLIC because the
+# operand-aligned extraction (`loaders/hors_aligned.py`) reads the same member off the same
+# cube: two spellings of one member label in one package is a drift vector.
+MAINTAINER_TOTAL_MEMBER = "Total - Age of primary household maintainer"
 
 # ISQ denominator selection. The base year is the PIT anchor (spec §7 r3-F3: base-year Census
 # rates held constant), and `Référence (A2026)` is the reference fan; sex code 3 is ISQ's
@@ -378,6 +384,36 @@ def _band_counts(cube, geo: str, members, ctx: str) -> tuple[int, int]:
     return owner, total
 
 
+def read_totals_cube(csv_path: Path | str) -> dict[tuple[str, str], tuple[int, int]]:
+    """PUBLIC seam onto the pinned P2 extract: verify the pin, then read the totals cube.
+
+    Exists because the operand-aligned extraction (`loaders/hors_aligned.py`) needs the SAME
+    counts this module derives the shipped curve from, and a second reader of the same CSV
+    would be a second place for the positional bindings and the GEO-set gate to drift. Ruling
+    B's "one producer" argument applies to the READ as well as to the rate: two readers of one
+    extract can disagree while both emit plausible numbers.
+    """
+    csv_path = Path(csv_path)
+    verify_pin(csv_path, csv_path.name)
+    return _read_totals_cube(csv_path)
+
+
+def net_of_qc_cmas(cube, members, ctx: str) -> tuple[int, int]:
+    """(owner, total) for the province NET of all six wholly-Québec CMAs, over `members`.
+
+    THE HORS_RMR RESIDUAL, derived in exactly one place. Owner and total are netted
+    SEPARATELY and the division happens at the call site — never a difference of rates, which
+    is not a rate. The operand-aligned extraction subtracts further territory from this same
+    pair, so the two constructions cannot diverge on what "the residual" means.
+    """
+    owner, total = _band_counts(cube, _PROVINCE, members, ctx)
+    for cma in _QC_CMAS:
+        cma_owner, cma_total = _band_counts(cube, cma, members, ctx)
+        owner -= cma_owner
+        total -= cma_total
+    return owner, total
+
+
 def _rate(owner: int, total: int, ctx: str) -> float:
     """Owner/Total with every degenerate named. Guards precede the division so a zero or
     inverted denominator surfaces as LoaderError, never ZeroDivisionError."""
@@ -443,12 +479,7 @@ def derive_ownership_from_csv(csv_path: Path | str) -> dict:
     hors: dict[str, float] = {}
     for label, _lo, _hi, members in _AGE_BAND_SPEC:
         ctx = f"ownership[{Geography.HORS_RMR.value},{label}]"
-        prov_owner, prov_total = _band_counts(cube, _PROVINCE, members, ctx)
-        for cma in _QC_CMAS:
-            cma_owner, cma_total = _band_counts(cube, cma, members, ctx)
-            prov_owner -= cma_owner
-            prov_total -= cma_total
-        hors[label] = _rate(prov_owner, prov_total, ctx)
+        hors[label] = _rate(*net_of_qc_cmas(cube, members, ctx), ctx=ctx)
     rates[Geography.HORS_RMR.value] = hors
 
     for geo, parent in _BORROWS_FROM.items():
@@ -467,7 +498,7 @@ def derive_ownership_from_csv(csv_path: Path | str) -> dict:
         # records a hash of an unidentified object.
         "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
         "raw_source_member": raw_member(CENSUS_EXTRACT),
-        "statcan_table": "98-10-0231-01",
+        "statcan_table": STATCAN_TABLE,
         # `as_of` (was `ref_date` until 2026-08-13): the Census reference year, now spelled the
         # way `constants.Anchor` spells it because every rate below is typed against it. One
         # date field, and it is load-bearing — a de-dated artifact serves nothing.
@@ -695,7 +726,48 @@ def _headship_value(maintainers: int, persons: float, ctx: str) -> float:
     return assert_fraction(ctx, maintainers / persons)
 
 
-def _zero_support_note(maintainers: int, persons: float) -> str:
+def _ownership_spec_omitted_members(cube: dict[tuple[str, str], tuple[int, int]]
+                                    ) -> tuple[tuple[str, int, int], ...]:
+    """Published maintainer-age members `_HEADSHIP_BAND_SPEC` reads and `_AGE_BAND_SPEC` drops,
+    each with the (owner, total) counts the extract publishes for the province.
+
+    DERIVED from the two specs rather than typed, in the order the headship spec declares them,
+    so the sentence below cannot outlive the choice it describes: extend `_AGE_BAND_SPEC`
+    downward and the clause retires itself instead of becoming a museum label.
+    """
+    owned = {member for *_, members in _AGE_BAND_SPEC for member in members}
+    out = []
+    for *_, members in _HEADSHIP_BAND_SPEC:
+        for member in members:
+            if member not in owned:
+                owner, total = cube[(_PROVINCE, member)]
+                out.append((member, owner, total))
+    return tuple(out)
+
+
+def _zero_support_note(maintainers: int, persons: float,
+                       omitted: tuple[tuple[str, int, int], ...]) -> str:
+    """The 0-19 band's kept-deliberately record, and — since amendment #12 — the honest
+    attribution of the sub-25 ownership zero that every consumer pairs it with.
+
+    `omitted` comes from `_ownership_spec_omitted_members`, so both the member names and the
+    counts cited below are COMPUTED from the committed extract. A cited value is a computed
+    value in this package: the earlier clause typed the data's silence as its premise and the
+    premise was false, which is exactly the failure a derived citation cannot repeat.
+    """
+    if not omitted:
+        # The day `_AGE_BAND_SPEC` reaches the youngest published member, the clause below has
+        # no subject and would render as a grammatically broken sentence with no figures in it.
+        # RAISE rather than emit that: an extension of the ownership lattice is a supervised
+        # change (spec §7's ordering constraint gates it), so a loud stop with an instruction
+        # is cheaper than a malformed provenance record shipped inside a green suite.
+        raise LoaderError(
+            "the ownership band spec no longer omits any published maintainer-age member, so "
+            "`zero_support_note`'s sub-25 clause has retired itself — rewrite the clause (and "
+            "spec §7's ordering constraint, which it cites) instead of generating an empty one")
+    published = "; ".join(f"{member!r} {owner:,} owners of {total:,} households"
+                          for member, owner, total in omitted)
+    dropped = ", ".join(repr(member) for member, _owner, _total in omitted)
     return (
         "THE 0-19 BAND, KEPT DELIBERATELY (T13b 2026-08-08): its numerator has support only at "
         "15-19 — there is no published maintainer member under 15 in 98-10-0231-01 — so the "
@@ -707,8 +779,20 @@ def _zero_support_note(maintainers: int, persons: float) -> str:
         "age-18 D_native term) must land an age-resolved curve rather than reuse this one. The "
         "band is kept rather than dropped because the pipeline builds a per-single-year curve "
         "over range(0, 101) (plan:4675), where a missing band RAISES, and because every "
-        "consumer today pairs it with ownership(a) — undefined, hence contributing nothing, "
-        "below the ownership lattice's floor of 25."
+        "consumer today pairs it with ownership(a), which contributes nothing below 25. "
+        "THAT SUB-25 ZERO IS A CHOICE IN `_AGE_BAND_SPEC`, NOT THE DATA'S SILENCE (corrected "
+        "2026-08-15, spec §7 amendment #12 — the clause here previously called the ownership "
+        "rate UNDEFINED below the lattice floor, and that premise is FALSE for the committed "
+        f"extract): for {_PROVINCE} it publishes {published}. "
+        f"`_HEADSHIP_BAND_SPEC` reads {dropped} off the SAME age dimension of the SAME extract "
+        "— the first of them is this very band's sole constituent — while `_AGE_BAND_SPEC` "
+        "starts at 25-54, so the two youngest PUBLISHED bands are dropped by the ownership "
+        "derivation and by nothing upstream of it. THE OMISSION STANDS FOR NOW, under spec "
+        "§7's binding ordering constraint: the sub-25 zero is currently the only thing "
+        "suppressing the age-20 band-entry artifact that this note's own age-resolved warning "
+        "describes, so an age-resolved headship curve must land BEFORE the ownership curve is "
+        "extended downward. The under-15 sentence above is a SEPARATE claim about a different "
+        "line and remains TRUE."
     )
 
 
@@ -743,10 +827,10 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
                     "be summed (schema drift?)") from exc
         maintainers[label] = total
 
-    published = cube.get((_PROVINCE, _MAINTAINER_TOTAL_MEMBER))
+    published = cube.get((_PROVINCE, MAINTAINER_TOTAL_MEMBER))
     if published is None:
         raise LoaderError(
-            f"{csv_path.name}: the published {_MAINTAINER_TOTAL_MEMBER!r} member is absent for "
+            f"{csv_path.name}: the published {MAINTAINER_TOTAL_MEMBER!r} member is absent for "
             f"{_PROVINCE!r} — the banded numerator has nothing independent to close against")
     published_total = published[1]
     banded = sum(maintainers.values())
@@ -758,7 +842,7 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
     n_members = sum(len(members) for *_, members in _HEADSHIP_BAND_SPEC)
     tolerance = 2.5 * (n_members + 1)
     closure = (f"banded maintainers {banded:,} vs the extract's published "
-               f"{_MAINTAINER_TOTAL_MEMBER!r} member {published_total:,}; delta "
+               f"{MAINTAINER_TOTAL_MEMBER!r} member {published_total:,}; delta "
                f"{banded - published_total:+,} inside the round-to-5 bound 2.5 x "
                f"({n_members} members + 1 total) = {tolerance:g}")
     if abs(banded - published_total) > tolerance:
@@ -787,7 +871,7 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
         },
         "raw_source_sha256": raw_anchor(CENSUS_EXTRACT),
         "raw_source_member": raw_member(CENSUS_EXTRACT),
-        "statcan_table": "98-10-0231-01",
+        "statcan_table": STATCAN_TABLE,
         "isq_scenario": _POP_SCENARIO,
         "isq_geography": _POP_LABEL,
         "base_year_status": f"{_POP_BASE_STATUS} (réel — an observation, not a projection)",
@@ -802,7 +886,8 @@ def derive_headship_from_sources(csv_path: Path | str, workbook_path: Path | str
         "band_persons": {label: band_persons[label] for label, *_ in _HEADSHIP_BAND_SPEC},
         "band_maintainers": {label: maintainers[label] for label, *_ in _HEADSHIP_BAND_SPEC},
         "numerator_closure": closure,
-        "zero_support_note": _zero_support_note(maintainers["0-19"], band_persons["0-19"]),
+        "zero_support_note": _zero_support_note(maintainers["0-19"], band_persons["0-19"],
+                                                _ownership_spec_omitted_members(cube)),
         # NOT `_ROUNDING_NOTE`: that sentence describes the OWNERSHIP rate's numerator and
         # denominator, both of which are round-to-5 household counts. Here only the numerator
         # is — the ISQ person denominators are not rounded that way, and a reader told

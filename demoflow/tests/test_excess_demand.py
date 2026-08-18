@@ -102,9 +102,14 @@ def test_a_NEGATIVE_ED_is_legitimate_and_must_never_be_clamped():
 
 
 def test_ED_is_scale_invariant():
-    """households / households — the spec says so, and it is what lets geographies of very
-    different size be ranked against each other at all. Scaling all three terms by a common
-    factor must not move the fraction; a stray absolute term added to either side would."""
+    """Invariance to geography SIZE — the property that lets geographies of very different size
+    be ranked against each other at all. Scaling all three terms by a common factor must not
+    move the quotient; a stray absolute term added to either side would.
+
+    NOT the same claim as "dimensionless", which is what this docstring used to say (corrected
+    2026-08-15, spec §7 amendment #12): D and S are annual FLOWS over a stock LEVEL, so ED
+    carries yr^-1 — a net turnover rate. The common factor below is a pure NUMBER, so this test
+    exercises size-invariance and says nothing about the unit either way."""
     base = excess_demand(D=250.0, S=111.0, owner_stock=5000.0)
     for k in (0.5, 3.7, 100.0):
         assert excess_demand(D=250.0 * k, S=111.0 * k,

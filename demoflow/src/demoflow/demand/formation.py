@@ -40,7 +40,8 @@ intermediate value stays a plausible float — the failure class this repo's loa
 refuse. Both doors raise: `_households` for the rate, `_require_prior_cohort` for the
 population, each scoped to terms that actually contribute, and each accepting a stated ZERO
 while refusing an ABSENCE. The one documented exception is the Census ownership lattice's
-floor (see `OWNERSHIP_LATTICE_FLOOR`), which is a convention landed upstream, not a local one.
+floor (see `OWNERSHIP_LATTICE_FLOOR`), which is a CHOICE landed upstream in
+`census._AGE_BAND_SPEC` — not the data's silence, and not a local decision.
 """
 import math
 
@@ -50,33 +51,59 @@ from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 AGE_MIN = 18        # household-formation floor (codex r7-F7 — a−1 must never leave the domain)
 AGE_BOUNDARY = 75
 
-# 98-10-0231-01 publishes no owner-maintainer rate below age 25, so `ownership(a)` is
-# UNDEFINED there and an absent rate below this age contributes nothing. That convention is
-# NOT decided here: it is census.py's `zero_support_note`, landed at T13b 2026-08-08 —
-# "undefined, hence contributing nothing, below the ownership lattice's floor of 25". This
-# module mirrors it; the floor is duplicated rather than imported (this module stays free of
-# the Census band table, as `living_arrangement` stays free of `census._QC_CMAS`) and pinned
-# equal to `min(census._AGE_BANDS)` by test.
+# `ownership(a)` is UNDEFINED below age 25 BECAUSE THE DERIVATION SPEC STARTS AT 25-54, not
+# because the table is silent there — corrected 2026-08-15 under spec §7 amendment #12, and the
+# distinction is the whole reason this block is long. 98-10-0231-01 PUBLISHES owner-maintainer
+# counts below 25 (`15 to 19 years` and `20 to 24 years`, at all seven of its GEO rows; Québec
+# 20-24 is 17,170 owners of 106,605 households), and census.py's own `_HEADSHIP_BAND_SPEC` reads
+# both members off the same age dimension of the same extract while `_AGE_BAND_SPEC` drops them.
+# The convention is still NOT decided here — it is census.py's `zero_support_note` (T13b
+# 2026-08-08, re-attributed at amendment #12), which now names the omission as this module's
+# upstream CHOICE. This module mirrors that; the floor is duplicated rather than imported (this
+# module stays free of the Census band table, as `living_arrangement` stays free of
+# `census._QC_CMAS`) and pinned equal to `min(census._AGE_BANDS)` by test.
 #
 # MEASURED CONSEQUENCE, stated in full rather than at its smallest instance: the pipeline
 # builds its curve over `range(25, 101)`, so ALL SEVEN sub-floor terms of the spec §6
 # summation — ages 18, 19, 20, 21, 22, 23, 24, not just the explicit a_min boundary term —
 # evaluate to ZERO in every production run. Both arms are pinned by test at each of the seven.
 #
-# HOW MUCH THAT DROPS, measured 2026-08-14 on the real artifacts so a later reader is not left
-# to guess. THE RECIPE, stated in full because the fan is a filter and not a default: MTL_RMR,
-# the `Scenario.REFERENCE` rows of `pop-as-rmr-base.xlsx` (ISQ's central fan of THREE — the
-# label is a scenario, never an edition), years 2025 -> 2026. On that reading: 59.5% of D_native
-# at first sight — but 97.6% of that mass is ONE term, the age-20 gain of 21,353 households,
-# which is an artifact of the pipeline sketch reusing the BANDED headship curve at single years
-# of age (h jumps 0.0061 -> 0.3954 across the 0-19 -> 20-34 boundary). census.py's own
-# `zero_support_note` forbids exactly that reuse: "a consumer multiplying a SINGLE age inside
-# the band ... must land an age-resolved curve". Net of band-entry ages the sub-floor drop is
-# 1.42%. The other two fans move none of this: re-run on LOW and HIGH the drop is 59.8% / 59.3%
-# and the net 0.91% / 2.33%, so what is priced here is the convention, not the fan. The same
-# probe found 100% of the computed D_native is itself band-entry mass — in all three fans — so
-# NO number from that wiring prices this convention: the question reopens when the pipeline
-# lands an age-resolved headship curve, and is reported to the seat rather than settled here.
+# HOW MUCH THAT DROPS — AN ORDER-OF-MAGNITUDE BOUND, NEVER A MEASUREMENT, and the qualifier is
+# load-bearing rather than modest. Measured 2026-08-14 on the real artifacts. THE RECIPE, stated
+# in full because the fan is a filter and not a default: MTL_RMR, the `Scenario.REFERENCE` rows
+# of `pop-as-rmr-base.xlsx` (ISQ's central fan of THREE — the label is a scenario, never an
+# edition), years 2025 -> 2026. On that reading: 59.5% of D_native at first sight — but 97.6% of
+# that mass is ONE term, the age-20 gain of 21,353 households, which is an artifact of the
+# pipeline sketch reusing the BANDED headship curve at single years of age (h jumps 0.0061 ->
+# 0.3954 across the 0-19 -> 20-34 boundary). census.py's own `zero_support_note` forbids exactly
+# that reuse: "a consumer multiplying a SINGLE age inside the band ... must land an age-resolved
+# curve". Net of band-entry ages the sub-floor drop is 1.42%; on LOW and HIGH it is 59.8% /
+# 59.3% and 0.91% / 2.33%, so what is priced is the convention and not the fan. 100% of the
+# computed D_native is itself band-entry mass in all three fans, so NO LEVEL from that wiring is
+# a measurement of this convention.
+#
+# ITS DIRECTION ON ED, IN ED's OWN UNIT — the part that survives the contamination above,
+# because both legs carry the same band-entry artifact and it largely cancels in their RATIO
+# (QFE 2026-08-15, ruled at spec §7 amendment #12). The convention hits BOTH sides:
+#   * NUMERATOR: the zeroed 18-24 formation terms are an ADDITIVE hit worth 0.195-0.337% of
+#     OwnerStock, and they SHRINK D.
+#   * DENOMINATOR: the zeroed sub-25 stock terms are a MULTIPLICATIVE 0.96-1.65%, and they
+#     shrink OwnerStock.
+# The numerator leg DOMINATES by roughly 30x-200x. The two are equal only at |ED| ~ 19-21%/yr,
+# against an ISQ-implied stock movement of 0.10-0.63%/yr — that separation IS the 30x-200x just
+# stated and not a second fact (the leg ratio at an operating |ED| is exactly the crossover
+# |ED| over it), which is what makes the crossover a statement and not a caveat. No larger gloss
+# belongs here: both source documents stop at the ratio. SO: FOR ED < 0 — the
+# decline regime this model exists to measure — BOTH LEGS PUSH PESSIMISTIC. Any sentence
+# calling this convention's effect "optimistic" is priced on the smaller leg alone and is
+# sign-wrong exactly where it matters. The denominator leg's near-uniformity across geographies
+# does NOT transfer to the numerator either: an additive non-uniform shift can REORDER the
+# rankings where a multiplicative near-uniform one cannot.
+#
+# THE FIX IS ORDERED, NOT OPTIONAL, AND ITS ORDER BINDS (spec §7 amendment #12): this zero is
+# currently the only thing suppressing the age-20 band-entry artifact, so extending the
+# ownership curve below 25 BEFORE an age-resolved headship curve lands would MULTIPLY that
+# artifact into demand instead of zeroing it. Age-resolved headship first, then the floor.
 #
 # The a_min term still earns its place independently of all of the above: it exists so a_min
 # entrants form against a zero prior stock BY EQUATION instead of against H(17) by array

@@ -11,7 +11,8 @@ denominator has exactly one defining equation, and this is it.
 THE SUM RUNS OVER ALL AGES, 75+ INCLUDED. The neighbouring equation says the opposite:
 `demand/formation.py` stops at 75 by design (D/S disjointness at the age boundary — every 75+
 household dynamic lives in S). Carrying that rule one module over would truncate the
-denominator and inflate every ED, so it is stated here rather than left to be inferred.
+denominator and scale every |ED| away from zero, so it is stated here rather than left to be
+inferred.
 
 MULTIPLICAND, STATED AT THE USE SITE (run-6 carry — the rate surfaces in this tree take
 different operands and every mix-up is invisible in the numbers): `pop_by_age` is the RAW ISQ
@@ -21,18 +22,23 @@ age (`census.derive_headship_from_sources`, and the artifact's own `multiplicand
 raw basis is the one that reproduces the published maintainer count. The Task-29 pipeline
 sketch passes `_pop_by_age(pop_g_s, t)` HERE and the scaled `resident_t` to
 `native_formation` — that difference is deliberate: netting surviving arrival cohorts out of
-this denominator would shrink the stock and inflate ED, while §6's operand binding
-(P_resident, never P_ISQ) governs the FORMATION equation alone.
+this denominator would shrink the stock and scale |ED| away from zero, while §6's operand
+binding (P_resident, never P_ISQ) governs the FORMATION equation alone.
 
-MISSING IS NOT ZERO, AND HERE THE DIRECTION IS THE WORST ONE IN THE TREE. The plan body read
-both rate curves with `.get(a, 0.0)`. `demand/formation.py` already resolved that for the SAME
-two curves on the demand side, where a hole quietly SHRINKS demand; this is the DENOMINATOR, so
-a hole quietly shrinks the stock and INFLATES excess demand — the very quantity the rankings
-rank on, moved in the optimistic direction, with every intermediate value still a plausible
-float. Both curves therefore raise, scoped to terms that actually contribute, each accepting a
-stated ZERO while refusing an ABSENCE. The one documented exception is the Census ownership
-lattice's floor, which is a convention landed upstream (see `OWNERSHIP_LATTICE_FLOOR`), not a
-local one.
+MISSING IS NOT ZERO, AND HERE IT MOVES THE RANKED AXIS IN BOTH REGIMES. The plan body read both
+rate curves with `.get(a, 0.0)`. `demand/formation.py` already resolved that for the SAME two
+curves on the demand side, where a hole quietly SHRINKS demand; this is the DENOMINATOR, so a
+hole quietly shrinks the stock and SCALES |ED| AWAY FROM ZERO, with every intermediate value
+still a plausible float. State the direction that way and not as "optimistic" (corrected
+2026-08-15): a shrunken denominator multiplies whatever sign ED already has, so it reads as more
+excess demand when ED > 0 and as a DEEPER DEFICIT when ED < 0 — and since rank 1 is most-negative
+ED, the decline regime this model exists to measure is moved toward MORE risk, not less.
+"Optimistic" describes only the ED > 0 half of the ranked set. Both curves therefore raise,
+scoped to terms that actually contribute, each accepting a stated ZERO while refusing an
+ABSENCE. The one documented exception is the Census ownership lattice's floor, which is a CHOICE
+landed upstream in `census._AGE_BAND_SPEC` (see `OWNERSHIP_LATTICE_FLOOR`) rather than the data's
+silence — and whose OWN direction is a different question, priced on both sides of ED at that
+constant and NOT by the sentence above.
 
 THE FLOOR IS IMPORTED, NOT REDECLARED. `formation.py` duplicates the number instead of
 importing it for a stated reason — keeping the demand package free of the Census BAND TABLE,
@@ -72,22 +78,30 @@ def _headship(headship_by_age: dict[int, float], age: int, persons: float) -> fl
             f"no headship rate for age {age}, where {persons:,.1f} persons are present — an "
             "absent rate is not a zero rate: the committed curve is banded across 0-100 and "
             "has no undefined region, so this is a holed curve, and it would silently shrink "
-            "the ED DENOMINATOR and INFLATE excess demand")
+            "the ED DENOMINATOR, scaling |ED| AWAY FROM ZERO — more excess demand where ED > 0, "
+            "a DEEPER DEFICIT where ED < 0, the half rank 1 selects")
     return assert_fraction(f"headship[{age}]", headship_by_age[age])
 
 
 def _ownership(ownership_by_age: dict[int, float], age: int, persons: float) -> float:
     """ownership(age) at an age carrying population — the one place a silence is legitimate.
 
-    98-10-0231-01 publishes no owner-maintainer rate below 25, so the rate is UNDEFINED there
-    and the term contributes nothing. That convention is not decided here: it is `census.py`'s
-    `zero_support_note` (T13b 2026-08-08), which names THIS equation as its consumer —
-    "spec:395 sums pop(a) x headship(a) x ownership(a) over ages ... undefined, hence
-    contributing nothing, below the ownership lattice's floor of 25". A supplied sub-floor rate
-    is still USED, so an extended curve is never swallowed by the convention — and still
-    ASSERTED: the check below runs on whatever rate it is handed, at any age. The convention
-    therefore excuses an ABSENCE and never a bad value, which is why a sub-floor age can be
-    defective on BOTH curves at once (see `owner_stock`'s note on what the call order decides).
+    The rate is UNDEFINED below 25 and the term contributes nothing. THE SILENCE IS THE
+    DERIVATION SPEC'S, NOT THE TABLE'S (corrected 2026-08-15, spec §7 amendment #12): the
+    committed extract PUBLISHES owner-maintainer counts below 25 — Québec `20 to 24 years` is
+    17,170 owners of 106,605 households, at all seven of its GEO rows — and `census.py` reads
+    those same members for HEADSHIP while `census._AGE_BAND_SPEC` starts the ownership lattice
+    at 25-54. So the convention is a CHOICE upstream of this module, recorded in `census.py`'s
+    `zero_support_note` (T13b 2026-08-08, re-attributed at amendment #12), which names THIS
+    equation as its consumer — "spec:395 sums pop(a) x headship(a) x ownership(a) over ages ...
+    every consumer today pairs it with ownership(a), which contributes nothing below 25". The
+    choice STANDS, on the ordering constraint stated at `OWNERSHIP_LATTICE_FLOOR`, which is also
+    where its cost on BOTH sides of ED is priced — the effect is NOT "optimistic": for ED < 0
+    both legs push pessimistic. A supplied sub-floor rate is still USED, so an extended curve is
+    never swallowed by the convention — and still ASSERTED: the check below runs on whatever
+    rate it is handed, at any age. The convention therefore excuses an ABSENCE and never a bad
+    value, which is why a sub-floor age can be defective on BOTH curves at once (see
+    `owner_stock`'s note on what the call order decides).
     """
     if age in ownership_by_age:
         return assert_fraction(f"ownership[{age}]", ownership_by_age[age])
@@ -97,7 +111,8 @@ def _ownership(ownership_by_age: dict[int, float], age: int, persons: float) -> 
         f"no ownership rate for age {age}, where {persons:,.1f} persons are present — the age "
         f"is at or above the Census lattice floor ({OWNERSHIP_LATTICE_FLOOR}), so 'undefined "
         "below the floor' does not explain it; the curve is holed and the ED DENOMINATOR "
-        "would silently shrink, INFLATING excess demand")
+        "would silently shrink, scaling |ED| AWAY FROM ZERO — more excess demand where ED > 0, "
+        "a DEEPER DEFICIT where ED < 0, the half rank 1 selects")
 
 
 def owner_stock(pop_by_age: dict[int, float], headship_by_age: dict[int, float],
@@ -119,8 +134,9 @@ def owner_stock(pop_by_age: dict[int, float], headship_by_age: dict[int, float],
     ≥ 0 is assigned upstream" stance, deliberately and for a positional reason. NaN does not
     vanish from this sum the way it can from a gain comparison — it propagates to a NaN
     OwnerStock, and `NaN < MIN_OWNER_STOCK` is False, so the r9-F5 denominator guard passes it
-    through and a NaN ED reaches the emitter. A negative cell shrinks the denominator and
-    inflates ED, the ranked quantity; `validate.assert_nonneg_finite` names stocks in its own
+    through and a NaN ED reaches the emitter. A negative cell shrinks the denominator and so
+    scales |ED| — the ranked quantity — away from zero, deepening the deficit in exactly the
+    ED < 0 regime rank 1 selects; `validate.assert_nonneg_finite` names stocks in its own
     docstring, and ISQ populations are already refused negative at load — this refuses one
     arriving by any other door.
     """

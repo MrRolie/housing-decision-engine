@@ -10,16 +10,19 @@ WHAT IS PLAN-VERBATIM AND WHAT IS RE-DERIVED, so a reviewer never has to guess:
   * The plan's `test_owner_stock_ignores_ages_without_rates` (age 40, population 1,000, EMPTY
     rate dicts, expected 0.0) is REPLACED, on the seat carry. It asserted the "missing is not
     zero" defect the Task-25 review already raised and `demand/formation.py` already resolved
-    for the SAME two curves — and here the direction is worse: OwnerStock is the DENOMINATOR,
-    so a silently-shrunk stock INFLATES excess demand, the very quantity the rankings rank on.
-    Demand shrinking quietly is bad; the denominator shrinking quietly moves every ranking row
-    in the optimistic direction. Its replacement carries BOTH arms — the hole RAISES, the
-    documented sub-floor CONVENTION still contributes zero — so a future reader can tell which
-    silence is which.
+    for the SAME two curves — and here it lands on the DENOMINATOR, so a silently-shrunk stock
+    SCALES |ED| AWAY FROM ZERO in whichever direction ED already points: more excess demand
+    when ED > 0, a deeper deficit when ED < 0. Since rank 1 is most-negative ED, the decline
+    regime is moved toward MORE risk, so "the optimistic direction" (the earlier wording here,
+    corrected 2026-08-15) covers only the ED > 0 half of the ranked set. Its replacement
+    carries BOTH arms — the hole RAISES, the documented sub-floor CONVENTION still contributes
+    zero — so a future reader can tell which silence is which.
 
   * Everything else is added, and each test names the silent failure it kills.
 """
 import math
+import re
+from pathlib import Path
 
 import pytest
 
@@ -71,14 +74,18 @@ def test_missing_ownership_AT_OR_ABOVE_the_floor_raises_rather_than_shrinking_th
 def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age):
     """The OTHER arm: below the Census lattice the absence is a CONVENTION, not a hole.
 
-    98-10-0231-01 publishes no owner-maintainer rate below 25, so `ownership(a)` is UNDEFINED
-    there and the term contributes nothing. That convention is not decided here — it is
-    `census.py`'s own `zero_support_note` (T13b 2026-08-08), which names THIS equation as the
-    consumer it is stated for: "spec:395 sums pop(a) x headship(a) x ownership(a) over ages ...
-    every consumer today pairs it with ownership(a) — undefined, hence contributing nothing,
-    below the ownership lattice's floor of 25". The Task-29 pipeline sketch builds ownership
-    over `range(25, 101)` against a population running 0..100, so EVERY run takes this path at
-    all twenty-five sub-floor ages — not at some boundary corner.
+    `ownership(a)` is UNDEFINED below 25 and the term contributes nothing — because
+    `census._AGE_BAND_SPEC` starts the ownership lattice at 25-54, NOT because the extract is
+    silent there (corrected 2026-08-15, spec §7 amendment #12: it publishes `15 to 19 years`
+    and `20 to 24 years` at all seven GEO rows, and `_HEADSHIP_BAND_SPEC` reads both — pinned
+    by `test_the_extract_DOES_publish_owner_maintainer_counts_below_25`). The convention is
+    still not decided here: it is `census.py`'s own `zero_support_note` (T13b 2026-08-08),
+    which names THIS equation as the consumer it is stated for — "spec:395 sums pop(a) x
+    headship(a) x ownership(a) over ages ... every consumer today pairs it with ownership(a),
+    which contributes nothing below 25" — and which now records the omission as the upstream
+    choice it is. The Task-29 pipeline sketch builds ownership over `range(25, 101)` against a
+    population running 0..100, so EVERY run takes this path at all twenty-five sub-floor ages —
+    not at some boundary corner.
 
     Parametrized over all twenty-five because the convention is identical at each and a test
     that pins only one leaves the rest free to change under it. The second arm pins that a rate
@@ -192,7 +199,8 @@ def test_a_NON_FINITE_or_NEGATIVE_population_cell_is_refused_HERE(pop, match):
 
     NEGATIVE: this module diverges from `formation`'s "P_resident ≥ 0 is asserted upstream"
     stance deliberately, because the position is different — this is the DENOMINATOR, where a
-    negative cell SHRINKS the stock and INFLATES ED, the ranked quantity (`validate.py`'s
+    negative cell SHRINKS the stock and so scales |ED| — the ranked quantity — AWAY FROM ZERO,
+    deepening the deficit in the ED < 0 regime rank 1 selects (`validate.py`'s
     `assert_nonneg_finite` names stocks in its own docstring). ISQ populations are already
     refused negative at load; this refuses one arriving by any other door.
     """
@@ -209,9 +217,12 @@ def test_a_NON_FINITE_or_NEGATIVE_population_cell_is_refused_HERE(pop, match):
 ])
 def test_out_of_unit_rates_in_a_hand_built_curve_raise(headship, ownership, match):
     """A curve assembled by hand (fixtures, a sweep, a future caller) is not loader-checked,
-    and this function takes plain dicts. A rate above 1 inflates the denominator and DEFLATES
-    ED; the assertions are the same `assert_fraction` the loaders apply, re-applied at the use
-    site — same discipline as `native_formation`."""
+    and this function takes plain dicts. A rate above 1 inflates the denominator and so scales
+    |ED| TOWARD zero — less excess demand where ED > 0, a SHALLOWER deficit where ED < 0. That
+    is the MIRROR of a hole, not a copy of it, and its risk consequence flips with it: since
+    rank 1 is most-negative ED, an over-unit rate UNDERSTATES the decline regime — this is the
+    direction that really is "optimistic". The assertions are the same `assert_fraction` the
+    loaders apply, re-applied at the use site — same discipline as `native_formation`."""
     with pytest.raises(LoaderError, match=match):
         owner_stock(pop_by_age={70: 1000.0}, headship_by_age={70: headship},
                     ownership_by_age={70: ownership})
@@ -225,7 +236,8 @@ def test_the_sum_runs_over_ALL_AGES_including_75plus():
     Worth its own test because the neighbouring equation says the opposite: `native_formation`
     stops at 75 by design (D/S disjointness at the age boundary — 75+ dynamics live in S), so
     an implementer carrying that rule one module over would truncate the denominator and
-    inflate every ED. The spec closes it explicitly: this is a stock LEVEL estimate, ISQ-
+    scale every |ED| away from zero. The spec closes it explicitly: this is a stock LEVEL
+    estimate, ISQ-
     embedded mortality is correct here, and I1 governs only the 75+ exit FLOW model.
     """
     assert formation.AGE_BOUNDARY == 75          # the rule that must NOT be inherited
@@ -233,3 +245,41 @@ def test_the_sum_runs_over_ALL_AGES_including_75plus():
                     ownership_by_age={90: 0.7})
     assert s == pytest.approx(560.0)
     assert math.isfinite(s) and s > 0.0
+
+
+# --- the ED-direction sentence, pinned at EVERY site in the module ----------------------
+
+def test_no_site_in_the_module_states_the_ED_direction_ONE_SIDEDLY():
+    """Regression, run-25 review: the sign correction landed at ONE site and the identical
+    one-sided claim survived at five siblings in the same file — two of them RUNTIME messages.
+
+    The defect is not stylistic. ED is signed and rank 1 is the MOST NEGATIVE ED (spec §7), so
+    a shrunken denominator scales |ED| AWAY FROM ZERO: it reads as more excess demand when
+    ED > 0 and as a DEEPER DEFICIT when ED < 0. "Inflates ED" / "inflates excess demand"
+    describes only the ED > 0 half of the ranked set and is sign-wrong in the decline regime
+    the module exists to measure — the same error the QFE named in run 22's "OwnerStock
+    understated → ED overstated → optimistic" (amendment #12).
+
+    THE SOURCE FILE, NOT `__doc__`, is what this reads: the load-bearing half of the defect was
+    two `LoaderError` message literals, which no docstring test can reach. Scoped to
+    `owner_stock.py` alone — `formation`'s "inflates D" sentences are a different and
+    well-defined claim (D has no sign ambiguity), and this test's own prose would trip it.
+
+    Same shape as `test_constants.py`'s docstring-misattribution regression, and for the same
+    reason: a module that misstates its own direction on the screen a reader lands on teaches
+    the wrong thing before the correction is reached.
+    """
+    source = Path(owner_stock.__code__.co_filename).read_text(encoding="utf-8")
+    forbidden = (
+        re.compile(r"inflat\w*\s+(?:every\s+|the\s+)?ED\b", re.IGNORECASE),
+        re.compile(r"inflat\w*\s+excess\s+demand", re.IGNORECASE),
+        re.compile(r"deflat\w*\s+(?:every\s+|the\s+)?ED\b", re.IGNORECASE),
+    )
+    hits = [(n, line.strip())
+            for n, line in enumerate(source.splitlines(), start=1)
+            for pattern in forbidden if pattern.search(line)]
+    assert not hits, (
+        "owner_stock.py states the ED direction one-sidedly at "
+        f"{len(hits)} site(s): {hits}. A shrunken denominator scales |ED| AWAY FROM ZERO "
+        "(more excess demand when ED > 0, a deeper deficit when ED < 0); an inflated one "
+        "scales it TOWARD zero. Name both halves, or name the magnitude — never one sign.")

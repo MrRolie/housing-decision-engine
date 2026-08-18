@@ -588,6 +588,166 @@ def test_headship_zero_support_band_records_why_it_is_kept():
     assert "aggregate-consistent" in note and "age-resolved" in note
 
 
+# --- amendment #12: the sub-25 floor's PREMISE, measured ------------------------------
+# TEST-OWNED literals, transcribed from the QFE record (SUBJECT 2(a) of
+# docs/audits/dispatch/2026-08-15-qfe-retriage-task-26.md) and never read from it at runtime —
+# an oracle that re-derived them from the producer would move with a mutation to it.
+_SUB_FLOOR_MEMBERS = ("15 to 19 years", "20 to 24 years")
+_QFE_SUB_FLOOR_CELLS = {                      # GEO -> member -> (owner, total)
+    "Quebec": {"15 to 19 years": (1150, 10920), "20 to 24 years": (17170, 106605)},
+    "Montréal (CMA), Que.": {"15 to 19 years": (615, 5075), "20 to 24 years": (6080, 52120)},
+    "Québec (CMA), Que.": {"15 to 19 years": (90, 1225), "20 to 24 years": (1585, 13270)},
+}
+# Every maintainer-age member 98-10-0231-01 publishes (probe P2 §5's 15-member list). The SET
+# is the discriminator for both halves of the finding at once: nothing under 15 exists (the
+# `zero_support_note`'s separate claim, which SURVIVES), and the two youngest published bands
+# are exactly the pair `_AGE_BAND_SPEC` drops.
+_PUBLISHED_AGE_MEMBERS = frozenset((
+    "Total - Age of primary household maintainer",
+    "15 to 19 years", "20 to 24 years", "25 to 29 years", "30 to 34 years",
+    "35 to 39 years", "40 to 44 years", "45 to 49 years", "50 to 54 years",
+    "55 to 59 years", "60 to 64 years", "65 to 69 years", "70 to 74 years",
+    "75 to 84 years", "85 years and over"))
+
+
+def _independent_published_age_members() -> set[str]:
+    """Every value the extract's age dimension takes on the `Total -` slice, read positionally
+    with test-owned column names — the enumeration `_independent_band_counts` cannot give,
+    because that reader can only report members it was already told to look for."""
+    members: set[str] = set()
+    with (DATA_DIR / CENSUS_EXTRACT).open(encoding="utf-8-sig", newline="") as fh:
+        rows = csv.reader(fh)
+        header = next(rows)
+        i_stat = header.index("Statistics (3C)")
+        i_age = header.index("Age of primary household maintainer (15)")
+        i_struct = header.index("Structural type of dwelling (10)")
+        i_condo = header.index("Condominium status (3)")
+        i_hh = header.index("Household type including census family structure (16)")
+        for row in rows:
+            if (row[i_stat] == "Number of private households"
+                    and row[i_struct] == "Total - Structural type of dwelling"
+                    and row[i_condo] == "Total - Condominium status"
+                    and row[i_hh] == "Total - Household type including census family structure"):
+                members.add(row[i_age])
+    return members
+
+
+def test_the_extract_DOES_publish_owner_maintainer_counts_below_25():
+    """THE FLOOR IS A CHOICE IN `_AGE_BAND_SPEC`, NOT THE DATA'S SILENCE (QFE 2026-08-15).
+
+    The convention shipped with a stated premise — "98-10-0231-01 publishes no owner-maintainer
+    rate below 25, so the rate is UNDEFINED there" — carried in `census._zero_support_note` and
+    mirrored into `formation.OWNERSHIP_LATTICE_FLOOR`, `owner_stock._ownership` and both of
+    their test files. It is FALSE for the committed extract, and nothing in this suite could
+    see that: every oracle here was pointed at the four bands the derivation reads, so the two
+    the derivation drops were outside every gate's field of view. This is the arc's fourth
+    absence-claim-that-was-a-property-of-the-search and the first inside our own code, so the
+    gate is written as the enumeration it needed to be, not as another band lookup.
+
+    WHAT DOES NOT MOVE: no rate, no band, no floor. The premise is corrected; the behaviour
+    stands under spec §7's binding ordering constraint (age-resolved headship first, then the
+    floor) because the sub-25 zero is currently the only thing suppressing the age-20
+    band-entry artifact in D_native.
+
+    THE UNDER-15 CLAIM SURVIVES and is asserted here too, from the same enumeration: the two
+    facts differ only in where the line is drawn, so a reader who learns the first is false
+    must be able to see in one place that the second is true.
+    """
+    counts = _independent_band_counts({m: (m,) for m in _SUB_FLOOR_MEMBERS})
+
+    # 1. BOTH members carry real owner AND household counts at EVERY geography the ownership
+    #    derivation reads — not at a corner, and not only in the province row.
+    assert set(counts) == {_PROVINCE, *_ALL_QC_CMAS}, f"extract GEO set drifted: {sorted(counts)}"
+    for geo, bands in counts.items():
+        assert set(bands) == set(_SUB_FLOOR_MEMBERS), f"{geo}: sub-25 member coverage drifted"
+        for member, (owner, total) in bands.items():
+            assert 0 < owner < total, (
+                f"{geo}[{member}]: {owner} owners of {total} households — a published "
+                f"owner-maintainer rate below 25 is what the floor's premise denies exists")
+
+    # 2. The QFE's own cited cells, exactly (an external anchor: measured by a different agent
+    #    from the same extract, and the numbers the spec's amendment #12 quotes).
+    for geo, cells in _QFE_SUB_FLOOR_CELLS.items():
+        for member, expected in cells.items():
+            assert counts[geo][member] == expected, (
+                f"{geo}[{member}]: {counts[geo][member]} does not reproduce the QFE's "
+                f"{expected} (docs/audits/dispatch/2026-08-15-qfe-retriage-task-26.md)")
+
+    # 3. The published member set, enumerated: nothing under 15 (the surviving claim), and the
+    #    two youngest published bands are exactly the sub-floor pair above.
+    published = _independent_published_age_members()
+    assert published == set(_PUBLISHED_AGE_MEMBERS), (
+        f"the extract's age dimension drifted: {sorted(published)}")
+
+    # 4. THE ASYMMETRY, which is the finding: one module, one age dimension of one extract, two
+    #    band specs — and the ONLY members the headship spec reads that the ownership spec does
+    #    not are the two youngest published bands. That is the assertion this file needed.
+    headship_members = {m for *_, members in census._HEADSHIP_BAND_SPEC for m in members}
+    ownership_members = {m for *_, members in census._AGE_BAND_SPEC for m in members}
+    assert headship_members - ownership_members == set(_SUB_FLOOR_MEMBERS), (
+        "the two specs no longer differ by exactly the sub-25 pair: "
+        f"headship-only = {sorted(headship_members - ownership_members)}")
+    assert not (ownership_members - headship_members), (
+        "the ownership spec reads a member the headship spec does not — the asymmetry this "
+        "gate describes has reversed and the note above is stale")
+
+
+def test_zero_support_note_calls_the_sub_25_zero_a_CHOICE_and_cites_what_is_published():
+    """The corrected sentence, pinned on BOTH surfaces (amendment #12).
+
+    The retired clause attributed the sub-25 zero to the table's silence. It is paraphrased
+    rather than quoted anywhere in this file on purpose (the `p_imm` precedent): a test that
+    matched the dead string would keep reading a museum label long after the note moved. What
+    is asserted instead is the LIVE claim — the note names `_AGE_BAND_SPEC` as the omitting
+    choice, cites a published sub-25 cell in role-bound form, and records why the omission
+    stands for now.
+
+    Committed artifact AND fresh derivation, for the reason the rest of this file gives: a
+    producer mutation regenerated THROUGH the artifact moves both together, so pinning only
+    the artifact would leave the producer uncovered.
+    """
+    owner, total = _independent_band_counts(
+        {"20-24": ("20 to 24 years",)})[_PROVINCE]["20-24"]
+    fresh = derive_headship_from_sources(DATA_DIR / CENSUS_EXTRACT, DATA_DIR / POP_QC_WORKBOOK)
+
+    for surface, provenance in (("committed", _committed_headship()["_provenance"]),
+                                ("fresh", fresh["_provenance"])):
+        note = provenance["zero_support_note"]
+        assert "_AGE_BAND_SPEC" in note and "_HEADSHIP_BAND_SPEC" in note, (
+            f"{surface}: the note does not name the two band specs whose asymmetry IS the "
+            f"choice it now describes: {note!r}")
+        assert f"{owner:,} owners of {total:,} households" in note, (
+            f"{surface}: the note does not cite a published sub-25 cell in role-bound form "
+            f"(expected {owner:,} owners of {total:,} households): {note!r}")
+        assert "age-resolved headship curve must land BEFORE" in note, (
+            f"{surface}: the note states the omission without spec §7's binding ordering "
+            f"constraint, which is the only thing that makes it a standing choice: {note!r}")
+
+
+def test_the_sub_25_clause_RETIRES_ITSELF_loudly_when_the_ownership_lattice_is_extended(
+        monkeypatch):
+    """The clause's own expiry, pinned — because a self-retiring sentence that retires SILENTLY
+    is just a malformed record shipped inside a green suite.
+
+    `_zero_support_note` cites the omitted members and their counts from the two band specs, so
+    the day `_AGE_BAND_SPEC` reaches the youngest published member the clause has no subject.
+    Both halves are asserted: the derivation of the omission goes EMPTY under an extended spec,
+    and the note REFUSES to render an empty one. Extending the lattice is a supervised change
+    (spec §7's ordering constraint gates it), so the stop costs a rewrite that was due anyway.
+    """
+    cube = census.read_totals_cube(DATA_DIR / CENSUS_EXTRACT)
+    assert census._ownership_spec_omitted_members(cube), (
+        "the ownership spec already omits nothing — this gate's premise is gone")
+
+    extended = census._AGE_BAND_SPEC + (
+        ("15-24", 15, 24, ("15 to 19 years", "20 to 24 years")),)
+    monkeypatch.setattr(census, "_AGE_BAND_SPEC", extended)
+    assert census._ownership_spec_omitted_members(cube) == ()
+
+    with pytest.raises(LoaderError, match="retired itself"):
+        census._zero_support_note(10_920, 1_794_061.0, ())
+
+
 def test_headship_provenance_states_WHICH_population_its_rate_multiplies():
     """Run-6 carry (2026-08-13), the sibling of `living_arrangement`'s `multiplicand_note`.
 

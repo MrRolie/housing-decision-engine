@@ -7,10 +7,31 @@ denominated, per (geography g, year t, scenario s):
     S = sum_cause exits(cause) * phi_market(cause), estate lagged L      (cohort/listings.py)
     OwnerStock = the §7 defining equation                               (balance/owner_stock.py)
 
-ED is scale-invariant (households/households). Denominator guard has a NUMERIC boundary
-(codex r9-F5): OwnerStock < 1,000 households -> raise (no modeled geography legitimately
-carries fewer; never leave "near-zero" to implementation taste, never emit an unbounded
-fraction). Tranche 1 stops at the raw fraction; the ED->drift mapping (beta) is Tranche 2.
+ED IS SCALE-INVARIANT BUT NOT DIMENSIONLESS — it carries units of yr^-1 (relabelled 2026-08-15,
+spec §7 amendment #12; the equation is unchanged). D and S are annual FLOWS (households/yr) and
+OwnerStock is a stock LEVEL (households), so the quotient composes as a NET TURNOVER RATE per
+year, not as a bare households/households ratio. Invariance to geography SIZE is the separate
+property the rankings actually need, and it still holds: scaling all three terms by a common
+factor leaves the quotient fixed. No numeric error followed from the old "dimensionless" gloss —
+§7's beta is stated as drift per year per unit ED and absorbs the yr^-1 either way — which is
+exactly why it had to be corrected in words: a wrong label beside a right number is the class
+this module's neighbours keep closing.
+
+Denominator guard has a NUMERIC boundary (codex r9-F5): OwnerStock < 1,000 households -> raise
+(never leave "near-zero" to implementation taste, never emit an unbounded fraction). Tranche 1
+stops at the raw fraction; the ED->drift mapping (beta) is Tranche 2.
+
+THE GUARD IS A STRUCTURAL FLOOR, NOT A PLAUSIBILITY CHECK, and its message must not be read as
+one (amendment #12). Measured across the full frame — 744 cells, 8 geographies x 3 scenarios x
+31 years — OwnerStock runs 99,692.3 to 1,189,439.0, so 1,000 sits exactly 100x below any real
+value; calibrated to this frame the number would be ~50,000. The VALUE STAYS: this function
+takes a bare float and cannot be geography-aware, so what 1,000 correctly bounds is arithmetic
+pathology, and its zero detection power in the 1k-99k gap costs nothing because the defects that
+would land there (a truncated age lattice, a wrong scenario slice, a partly-built curve) are
+already refused upstream by `owner_stock`'s absent-rate raises and its nonneg-finite assertion.
+A geography-aware plausibility band belongs at Task 29, where geography identity exists — the
+message's "no modeled geography legitimately carries fewer" is a true statement about the frame
+and NOT a claim that the threshold was fitted to it.
 
 A NEGATIVE ED IS A READING, NOT AN ERROR, and nothing here clamps it: S > D means more owner
 households are listing than forming, and §7's Tranche-2 mapping handles the sign explicitly

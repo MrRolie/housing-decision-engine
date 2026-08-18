@@ -38,6 +38,21 @@ WORKBOOK_SHA256 = {
     # so re-pinning is only ever a VINTAGE change, never pull noise.
     "living_arrangement_98100134.json":
         "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
+    # P11 operand-aligned CSD extract (StatCan 98-10-0232-01, pulled 2026-08-15 by
+    # scripts/pull_hors_aligned_csd.py). The Québec-side census subdivisions of the
+    # Ottawa-Gatineau CMA, plus the Québec province row the universe guard binds against —
+    # the territory SUBTRACTED from the shipped HORS_RMR residual so the ownership rate's
+    # territory matches the ISQ hors-RMR flow it multiplies (spec §6, the #12(B) reversal).
+    # Same PIT role as the P2 and P3 extracts above: `derive_aligned_ownership` verifies this
+    # pin before reading a cell, and the artifact records the digest so the load path can
+    # refuse a stale vintage (steering ruling L). NO raw-source anchor row: unlike the P2
+    # extract this is a WDS COORDINATE pull with no uncommittable upstream member behind it —
+    # the committed file IS the response, projected and sorted (pins.py's ISQ parenthetical
+    # argument). Two independent pulls minutes apart produced byte-identical output and
+    # reproduced probe P10's own 259 published cells and 13 withheld addresses exactly, so
+    # re-pinning is only ever a VINTAGE change, never pull noise.
+    "hors_aligned_csd_98100232.json":
+        "92821b9dad0d7aae7211300d11d3f721b8d7a0e2d19efcfa50ca78fb8cf24d3f",
     # P9 catalogue closure index (StatCan WDS full-catalogue member-level sweep, pulled
     # 2026-08-14 by probes/run_p9.py). NOT loaded by the module — it is EVIDENCE, the
     # compact derived form of a 5.29 GB pull that cannot be committed, and it is what turns

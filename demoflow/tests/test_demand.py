@@ -139,12 +139,16 @@ def test_an_ownership_rate_that_multiplies_a_ZERO_gain_is_not_required():
 def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age):
     """ALL SEVEN sub-floor ages under the REAL ownership lattice, as a measured fact.
 
-    98-10-0231-01 publishes no owner-maintainer rate below 25 (census.py `_AGE_BAND_SPEC`),
-    and the pipeline builds its curve over `range(25, 101)` — so in every production run
-    EVERY term of the spec §6 summation at ages 18..24 multiplies an UNDEFINED rate and
-    contributes zero, not merely the age-18 boundary term. That is census.py's own
-    `zero_support_note`, landed at T13b 2026-08-08 and quoted verbatim in `formation`:
-    "undefined, hence contributing nothing, below the ownership lattice's floor of 25".
+    `census._AGE_BAND_SPEC` starts the ownership lattice at 25-54 and the pipeline builds its
+    curve over `range(25, 101)` — so in every production run EVERY term of the spec §6
+    summation at ages 18..24 multiplies an UNDEFINED rate and contributes zero, not merely the
+    age-18 boundary term. UNDEFINED BY THAT SPEC, NOT BY THE TABLE (corrected 2026-08-15, spec
+    §7 amendment #12): 98-10-0231-01 does publish owner-maintainer counts below 25, and
+    `_HEADSHIP_BAND_SPEC` reads them — see
+    `test_census_ownership.test_the_extract_DOES_publish_owner_maintainer_counts_below_25`.
+    The convention is census.py's own `zero_support_note`, landed at T13b 2026-08-08 and
+    mirrored in `formation`: ownership(a) "contributes nothing below 25", by a choice the note
+    now attributes to `_AGE_BAND_SPEC`.
 
     Parametrized over all seven rather than pinned at a_min because the convention and the
     silence it buys are identical at each, and a test that pins only 18 leaves 19..24 free to
