@@ -42,9 +42,18 @@ an ANCHOR flag says where a CONSTANT came from; a §7 emitter member says what a
 means; these say how THIS GEOGRAPHY'S INPUT was obtained. No emitter may import this set and
 this set is neither of theirs — an emitter MAPS from these into its own §7 enum. The third
 member is MINTED rather than silently widened into an existing set because HORS_RMR fits
-neither: it is not `cited` (its territory is CONSTRUCTED — the province net of the six
-wholly-QC CMAs — not measured), and it is not `borrowed_prior` (nothing was borrowed). The
-mint is deliberate and loud; an unresolved modeled member still raises.
+neither: it is not `cited` (its territory is CONSTRUCTED — a netting, stated in full in that
+row's own `source` and nowhere else — not measured), and it is not
+`borrowed_prior` (nothing was borrowed). The mint is deliberate and loud; an unresolved
+modeled member still raises.
+
+WHICH netting lives in the ROW, never in this paragraph, and amendment #13 is why: it moved
+HORS_RMR's territory (province-net-of-six-CMAs → that, further net of the Ottawa-Gatineau
+CMA's Québec-side census subdivisions) and its digits (0.5169 → 0.5234, 0.9600 → 1.0248)
+while leaving the FLAG untouched — still arithmetic over cited counts at a constructed
+territory. So `computed_residual` cannot tell a reader which territory produced the number
+and was never meant to; the `source` string is the only discriminator, which is what makes
+a second copy of the construction up here a thing that would silently go stale.
 
 NO ROW MIXES ITS PAIR TODAY — all five measured geographies are cited-or-computed on both
 fields and the three RA proxies borrow both. The per-field carrier is kept anyway, because
@@ -128,8 +137,9 @@ FLOOR_NOT_COVERED: dict[Geography, str] = {
 
 def _validate_ratio(ratio: float) -> float:
     """The ownership RATIO is NOT a fraction (codex r7-F8): it can validly exceed 1 —
-    immigrants CAN out-own non-immigrants in a cell, and two of the ruled geographies
-    measure above 1 (RA06 1.0757, RA13 1.1112). Only the PRODUCT `p_imm` binds [0,1]."""
+    immigrants CAN out-own non-immigrants in a cell, and THREE of the ruled geographies
+    measure above 1 (RA06 1.0757, RA13 1.1112, and HORS_RMR 1.0248 since amendment #13 moved
+    it to the operand-aligned territory). Only the PRODUCT `p_imm` binds [0,1]."""
     return assert_nonneg_finite("immigrant_ownership_ratio", ratio)
 
 
@@ -189,18 +199,32 @@ _MEASURED = {
                "20,490 maintainers / 40,545 persons; owner-maintainer propensity 0.5351 vs "
                "non-immigrant 0.6006. DIRECT and cited — P8 DECISION-SOURCE-QC_RMR"),
     Geography.HORS_RMR: ImmigrantInputs(
-        geography=Geography.HORS_RMR, immigrant_headship=0.5169, ownership_ratio=0.9600,
+        geography=Geography.HORS_RMR, immigrant_headship=0.5234, ownership_ratio=1.0248,
         headship_provenance="computed_residual", ratio_provenance="computed_residual",
-        source="StatCan 98-10-0621-01 province member 24 NET of its six geoLevel-503 wholly-QC "
-               "CMA children (30 Drummondville, 35 Montréal, 36 Québec, 40 Saguenay, 48 "
-               "Sherbrooke, 51 Trois-Rivières): 43,825 maintainers / 84,785 persons. A "
-               "CONSTRUCTED territory — the tree's own documented residual method, computed "
-               "rather than borrowed, so neither `cited` nor `borrowed_prior` describes it. "
-               "The Québec side of Ottawa-Gatineau is parented to Ontario in this cube and is "
-               "therefore INSIDE the residual, per P2's recorded definition — LOAD-BEARING: "
-               "the ISQ RMR workbook's same-named 'Territoire hors des RMR' row is a DIFFERENT "
-               "territory (P8 §2 measured the gap at exactly the Gatineau row, 355,971 "
-               "persons), so the two must never be substituted. P8 DECISION-SOURCE-HORS_RMR"),
+        source="OPERAND-ALIGNED per spec §6 amendment #13. StatCan 98-10-0621-01 province "
+               "member 24 NET of its six geoLevel-503 wholly-QC CMA children (30 "
+               "Drummondville, 35 Montréal, 36 Québec, 40 Saguenay, 48 Sherbrooke, 51 "
+               "Trois-Rivières) AND NET of the 16 Québec-side census subdivisions of the "
+               "Ottawa-Gatineau CMA, whose counts are read at subdivision grain from the "
+               "census-division sibling 98-10-0622-01: 25,185 maintainers / 48,120 persons. "
+               "Still a CONSTRUCTED territory — arithmetic over cited counts, computed rather "
+               "than borrowed, so neither `cited` nor `borrowed_prior` describes it — but a "
+               "DIFFERENT one from the pair this row used to serve (0.5169 / 0.9600, the same "
+               "residual with the Québec side of Ottawa-Gatineau still IN because that CMA is "
+               "parented to Ontario in this cube and so is not one of the six netted above). "
+               "WHY THE TERRITORY MOVED, load-bearing and the REVERSE of what this row "
+               "previously warned: the rate's territory must match the territory of the "
+               "arrival FLOW it multiplies, and that flow is ISQ's 'Territoire hors des RMR' "
+               "row, which EXCLUDES the Québec side of Ottawa-Gatineau (P8 §2 measured the "
+               "old gap at exactly the ISQ Gatineau row, 355,971 persons). This residual now "
+               "excludes it too, so the two operands are one territory. The 16-subdivision "
+               "MEMBERSHIP is carried from probes/P10-hors-operand-alignment.md — "
+               "98-10-0003-01's Ottawa-Gatineau member 594 publishes 25 CSD children closing "
+               "exactly on the CMA, 16 Québec-side by SGC prefix AND census-tree ancestry, "
+               "gated against the ISQ row at -0.752% — and every member is re-resolved live "
+               "in the P8 run. 18 withheld settled fields at 7 of the 16 are bounded "
+               "field-wise, envelope 0.5225-0.5236 and 1.0228-1.0264. P8 "
+               "DECISION-SOURCE-HORS_RMR and DECISION-HORS-ALIGNMENT"),
     Geography.MTL_ISLAND_RA06: ImmigrantInputs(
         geography=Geography.MTL_ISLAND_RA06, immigrant_headship=0.5555, ownership_ratio=1.0757,
         headship_provenance="cited", ratio_provenance="cited",

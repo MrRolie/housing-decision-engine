@@ -51,6 +51,9 @@ from ._probe_asserts import (
 PROBES = Path(__file__).resolve().parent.parent / "probes"
 NOTE = PROBES / "P8-immigrant-inputs.md"
 P9_NOTE = PROBES / "P9-catalogue-closure.md"
+P10_NOTE = PROBES / "P10-hors-operand-alignment.md"
+SPEC_FILE = (Path(__file__).resolve().parents[2] / "docs" / "specs"
+             / "2026-07-21-demoflow-demographic-scenario-module-design.md")
 
 WDS_LIVENESS = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
 LIVENESS_PID = 98100621
@@ -70,6 +73,7 @@ EVIDENCE_TOKENS = (
     "DECISION-SOURCE-MTL_RMR",
     "DECISION-SOURCE-QC_RMR",
     "DECISION-SOURCE-HORS_RMR",
+    "DECISION-HORS-ALIGNMENT",
     "DECISION-SOURCE-MTL_ISLAND_RA06",
     "DECISION-SOURCE-LAVAL_RA13",
     "DECISION-TERRITORY-GATE",
@@ -176,7 +180,54 @@ _P = {
                        10: (288925, 105975, 69370), 11: (135315, 62065, 43345),
                        12: (119160, 57390, 41745), 13: (16155, 4670, 1605),
                        14: (5310, 1745, 285)},
+    # The Ottawa-Gatineau QUÉBEC-PART census subdivisions (amendment #13's aligned territory).
+    # Three population-characteristic members only — the ruled one, the ratio's base, and the
+    # universe row the suppression bound is cut from — because those are the three the aligned
+    # pair needs and the only three the probe requests here.
+    #
+    # `None` is a WITHHELD count, not a zero and not a fixture gap: StatCan suppresses small
+    # immigrant counts at these rural municipalities, `_fake_data` returns those coordinates
+    # exactly as the live endpoint does (`status: FAILED`, empty `vectorDataPoint`), and the
+    # producer carries each at a bound. 18 of the 48 settled counts are withheld, at 7 of the
+    # 16 subdivisions — the shape the envelope in §2b is measured over, so a fixture that
+    # published them would make the envelope unreproducible.
+    (98100622, 1926): {1: (3050, 1420, 915), 10: (3020, 1400, 905), 12: (20, 15, 10)},
+    (98100622, 1927): {1: (420, 170, 135), 10: (400, 155, 130), 12: (15, 10, 10)},
+    (98100622, 1928): {1: (925, 350, 290), 10: (900, 340, 285), 12: (25, None, None)},
+    (98100622, 1929): {1: (735, 290, 255), 10: (730, 290, 250), 12: (None, None, None)},
+    (98100622, 1932): {1: (465, 230, 210), 10: (445, 215, 200), 12: (15, None, None)},
+    (98100622, 1941): {1: (915, 495, 405), 10: (910, 490, 400), 12: (None, None, None)},
+    (98100622, 1942): {1: (650, 335, 305), 10: (650, 335, 305), 12: (None, None, None)},
+    (98100622, 1944): {1: (285715, 126475, 76085), 10: (236230, 103435, 64985),
+                       12: (34270, 17465, 10190)},
+    (98100622, 1946): {1: (6080, 2175, 2020), 10: (5970, 2120, 1965), 12: (105, 55, 55)},
+    (98100622, 1947): {1: (840, 380, 320), 10: (825, 375, 315), 12: (20, None, None)},
+    (98100622, 1948): {1: (13325, 5350, 4635), 10: (12845, 5140, 4445), 12: (410, 200, 180)},
+    (98100622, 1949): {1: (11435, 4110, 3805), 10: (10795, 3825, 3535), 12: (570, 270, 255)},
+    (98100622, 1950): {1: (7995, 3040, 2805), 10: (7250, 2695, 2475), 12: (670, 320, 305)},
+    (98100622, 1951): {1: (6120, 2375, 2085), 10: (5930, 2275, 1985), 12: (175, 100, 95)},
+    (98100622, 1952): {1: (8495, 3670, 3145), 10: (8115, 3460, 2970), 12: (370, 205, 170)},
+    (98100622, 1954): {1: (545, 275, 205), 10: (535, 270, 200), 12: (None, None, None)},
 }
+# The same 16, as the geography members `98-10-0622-01` publishes them: SGC code, name, id and
+# the census division each sits in. FOUR divisions contribute and three of them only partly,
+# which is the property that makes no whole-CD union this territory — and the reason the
+# probe's ancestry check walks member → census division → province rather than trusting a code.
+_QC_PART_PARENTS = [
+    (1918, "Papineau", "2480"), (1943, "Gatineau", "2481"),
+    (1945, "Les Collines-de-l'Outaouais", "2482"), (1953, "La Vallée-de-la-Gatineau", "2483"),
+]
+_QC_PART = [
+    (1926, "Thurso", "2480050", 1918), (1927, "Lochaber", "2480055", 1918),
+    (1928, "Lochaber-Partie-Ouest", "2480060", 1918), (1929, "Mayo", "2480065", 1918),
+    (1932, "Mulgrave-et-Derry", "2480085", 1918), (1941, "Val-des-Bois", "2480140", 1918),
+    (1942, "Bowman", "2480145", 1918), (1944, "Gatineau", "2481017", 1943),
+    (1946, "L'Ange-Gardien", "2482005", 1945),
+    (1947, "Notre-Dame-de-la-Salette", "2482010", 1945),
+    (1948, "Val-des-Monts", "2482015", 1945), (1949, "Cantley", "2482020", 1945),
+    (1950, "Chelsea", "2482025", 1945), (1951, "Pontiac", "2482030", 1945),
+    (1952, "La Pêche", "2482035", 1945), (1954, "Denholm", "2483005", 1953),
+]
 # 43-10-0060-01, PERCENT values: {(geo, immigrant member): {indicator: percent}}
 _SIB = {
     (13, 2): {5: 70.4, 8: 16.3}, (13, 3): {5: 56.3, 8: 13.4}, (13, 4): {5: 38.5, 8: 8.9},
@@ -302,7 +353,14 @@ def _fake_meta(pids) -> list:
              _m(1730, "Laval", geo_level=3, parent=884, code="2465"),
              # The TRAP: the CSD named identically to the CD, one level down.
              _m(1731, "Laval", geo_level=5, parent=1730, code="2465005"),
-             _m(1732, "Montréal", geo_level=3, parent=884, code="2466")], 5468, parent=884))]
+             _m(1732, "Montréal", geo_level=3, parent=884, code="2466"),
+             # The aligned territory: four census divisions and the 16 Québec-part
+             # subdivisions inside them. Present as a HIERARCHY, not a flat list, because the
+             # probe re-establishes each member's Québec side by walking it — subdivision to
+             # census division to the province member — beside the SGC prefix.
+             *[_m(i, n, geo_level=3, parent=884, code=c) for i, n, c in _QC_PART_PARENTS],
+             *[_m(i, n, geo_level=5, parent=p, code=c) for i, n, c, p in _QC_PART]],
+            5468, parent=884))]
         + [_dim(p, n, _pad(ms, total, parent=None)) for p, n, ms, total in _CENSUS_DIMS],
     }
     cubes[43100060] = {
@@ -381,13 +439,19 @@ def _fake_data(requests: list) -> list:
     Not in request order — that is what the live endpoint does (measured 2026-08-07, recorded
     in run_p7.py), and a probe that zipped the two would pair every value with the wrong
     meaning while every count still looked plausible.
+
+    A WITHHELD cell (`None` in the table above) comes back exactly as the live endpoint returns
+    a suppressed count: `status: FAILED` with an EMPTY `vectorDataPoint`. Returning a zero, or
+    omitting the object, would let the producer's suppression path be exercised by a shape the
+    source never sends.
     """
-    out = [{"status": "SUCCESS",
-            "object": {"productId": str(r["productId"]), "coordinate": r["coordinate"],
-                       "vectorDataPoint": [
-                           {"refPer": "2021-01-01",
-                            "value": _fake_value(r["productId"], r["coordinate"])}]}}
-           for r in requests]
+    out = []
+    for r in requests:
+        value = _fake_value(r["productId"], r["coordinate"])
+        obj = {"productId": str(r["productId"]), "coordinate": r["coordinate"],
+               "vectorDataPoint": ([] if value is None
+                                   else [{"refPer": "2021-01-01", "value": value}])}
+        out.append({"status": "FAILED" if value is None else "SUCCESS", "object": obj})
     out.sort(key=lambda o: (o["object"]["coordinate"], o["object"]["productId"]))
     return out
 
@@ -427,9 +491,9 @@ def _wire(probe, tmp_path: Path, **overrides):
     probe._meta = overrides.get("meta", _fake_meta)
     probe._data = overrides.get("data", _fake_data)
     probe._isq_rows = overrides.get("isq", lambda name: _FAKE_ISQ[name])
-    for name in ("spec", "p9", "constants"):
+    for name in ("spec", "p9", "p10", "constants"):
         if name in overrides:
-            setattr(probe, {"spec": "_spec_s6", "p9": "_p9_note",
+            setattr(probe, {"spec": "_spec_s6", "p9": "_p9_note", "p10": "_p10_note",
                             "constants": "_constants_source"}[name], overrides[name])
     probe.OUT = tmp_path / "P8-offline.md"
     return probe.OUT
@@ -477,6 +541,119 @@ def test_p8_the_note_names_both_inputs_not_headship_alone(note):
     assert NOTE.name == "P8-immigrant-inputs.md"
     head = note[: note.index("\n## ")]
     assert "headship" in head.lower() and "ratio" in head.lower(), head
+
+
+# ===========================================================================
+# 1b. AMENDMENT #13 — the note must state what §6 NOW rules for HORS_RMR
+#
+# The ruling-S table row and amendment #13 both describe HORS_RMR, and they state DIFFERENT
+# pairs on purpose: the table row is the census residual that includes the Québec side of
+# Ottawa-Gatineau, #13 is the operand-aligned territory that does not. #13 is the operative
+# one. Every figure below is PARSED OUT OF THE SPEC rather than typed here, so a further
+# amendment moves these gates with it instead of leaving a hand-typed digit one level up.
+# ===========================================================================
+_AMD13_HEAD = "**AMENDMENT #13 (2026-08-15)"
+_AMD13_TAIL = "**Costs, recorded rather than argued away:**"
+
+
+def _spec_s6_text() -> str:
+    text = SPEC_FILE.read_text(encoding="utf-8")
+    head, tail = "## 6. Demand side", "## 7. Outputs"
+    assert head in text and tail in text, "§6 no longer carries both section markers"
+    return text[text.index(head):text.index(tail)]
+
+
+def _amendment_13() -> str:
+    s6 = _spec_s6_text()
+    assert _AMD13_HEAD in s6 and _AMD13_TAIL in s6, (
+        "spec §6 no longer carries amendment #13 between its own markers — every gate in "
+        "this block would pass vacuously over a section it could not find")
+    return s6[s6.index(_AMD13_HEAD):s6.index(_AMD13_TAIL)]
+
+
+def _amendment_13_ruled() -> dict:
+    """#13(A)'s ruled pair and its suppression envelope, read off the ruling's own digits."""
+    block = _amendment_13()
+    pair = re.search(r"headship \*\*([0-9.]+)\*\*, ratio\s*\n?\*\*([0-9.]+)\*\*", block)
+    envelope = re.search(r"suppression envelope ([0-9.]+)-([0-9.]+) and ([0-9.]+)-([0-9.]+)",
+                         block)
+    leg = re.search(r"understated \*\*\+([0-9.]+)%\*\*", block)
+    assert pair and envelope and leg, (
+        "amendment #13 no longer yields a parseable ruled pair / envelope / leg move — a "
+        "coupling gate over a ruling it cannot read is the can't-fail shape this file refuses")
+    return {"headship": pair.group(1), "ratio": pair.group(2),
+            "headship_band": (envelope.group(1), envelope.group(2)),
+            "ratio_band": (envelope.group(3), envelope.group(4)),
+            "leg": leg.group(1)}
+
+
+def test_p8_hors_rmr_states_amendment_13s_RULED_pair(note):
+    """The note's DECISION digits for HORS_RMR must be the pair §6 now RULES.
+
+    Not the ruling-S table row: #13 superseded that value at exact territory. The DECISION
+    tokens are what `demand/immigrant_inputs.py` is coupled to, so a note still publishing the
+    contaminated pair would serve the superseded number to the model through a green gate.
+    """
+    ruled = _amendment_13_ruled()
+    for token_name, key in (("DECISION-HEADSHIP", "headship"), ("DECISION-RATIO", "ratio")):
+        value = _token(note, token_name)
+        assert value, f"the note carries no `{token_name}`"
+        hit = re.search(r"\bHORS_RMR\s+([0-9.]+)", value)
+        assert hit, f"`{token_name}` publishes no HORS_RMR value: {value!r}"
+        assert hit.group(1) == ruled[key], (
+            f"`{token_name}` states HORS_RMR {hit.group(1)}, and amendment #13 rules "
+            f"{ruled[key]}")
+
+
+def test_p8_hors_rmr_carries_the_suppression_envelope_amendment_13_rules(note):
+    """#13 rules the ENVELOPE as well as the pair, and both ends of the ratio band sit above
+    1.0 — that is the ruled property, not a remark. A note publishing the point estimate alone
+    would drop the uncertainty the ruling states beside it."""
+    ruled = _amendment_13_ruled()
+    for low, high in (ruled["headship_band"], ruled["ratio_band"]):
+        assert low in note and high in note, (
+            f"the note does not state the ruled suppression envelope end {low}-{high}")
+    assert float(ruled["ratio_band"][0]) > 1.0 and float(ruled["ratio_band"][1]) > 1.0
+
+
+def test_p8_the_superseded_residual_is_still_recomputed_and_NAMED_as_superseded(note):
+    """The contaminated construction stays in the note, labelled.
+
+    §6's ruling-S table row still states 0.5169 / 0.9600, and §2a's recent-member readings
+    (which §6 also states) are properties of that same residual. Dropping it would leave those
+    citations unbacked; publishing it unlabelled would leave two pairs with no ruling between
+    them. So it is recomputed, printed, and named as the superseded measurement it is.
+    """
+    rows = {}
+    for line in _spec_s6_text().splitlines():
+        if line.strip().startswith("|") and "HORS_RMR" in line:
+            rows = re.findall(r"\d+\.\d+", line)
+    assert len(rows) >= 2, "§6's ruling-S table no longer carries a HORS_RMR row"
+    for figure in rows[:2]:
+        assert figure in note, f"the note no longer recomputes the superseded {figure}"
+    assert "SUPERSEDED" in note, "the note does not name the superseded construction as such"
+
+
+def test_p8_the_untouched_geographies_did_not_move(note):
+    """MTL_RMR, QC_RMR, RA06 and RA13 were never contaminated. Their territories are untouched
+    by the alignment, so any movement is a FINDING rather than a rounding artifact — and this
+    gate reads §6's own rows so it cannot drift with the note."""
+    spec_rows = {}
+    for line in _spec_s6_text().splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        cells = [c.strip().strip("*` ") for c in line.strip().strip("|").split("|")]
+        if cells and cells[0] in ("MTL_RMR", "QC_RMR", "MTL_ISLAND_RA06", "LAVAL_RA13"):
+            spec_rows[cells[0]] = re.findall(r"\d+\.\d+", " ".join(cells[1:]))
+    assert len(spec_rows) == 4, spec_rows
+    headship = _token(note, "DECISION-HEADSHIP")
+    ratio = _token(note, "DECISION-RATIO")
+    for geography, (ruled_headship, ruled_ratio) in spec_rows.items():
+        for token_value, ruled in ((headship, ruled_headship), (ratio, ruled_ratio)):
+            hit = re.search(rf"\b{geography}\s+([0-9.]+)", token_value)
+            assert hit and hit.group(1) == ruled, (
+                f"{geography}: the note publishes {hit and hit.group(1)} where §6 rules "
+                f"{ruled} — a geography this correction does not touch has moved")
 
 
 # ===========================================================================
@@ -537,6 +714,85 @@ def test_p8_a_zero_denominator_refuses_rather_than_publishing_a_rate(probe):
         _ = empty.headship
     with pytest.raises(probe.ProbeRefusal):
         _ = empty.owner_propensity
+
+
+def test_p8_the_suppression_bound_is_the_published_complement_clamped_at_zero(probe):
+    """The bound on a withheld immigrant count is everything that is not non-immigrant.
+
+    Clamped at zero per field AND the clamp REPORTED: both legs are rounded to 5
+    independently, so a geography with no immigrants can publish a total one rounding step
+    BELOW its non-immigrant count — and a negative bound would put an interval's upper end
+    under its lower end.
+    """
+    total = probe.Cell(persons=1000, maintainers=400, owner_maintainers=250)
+    nonimm = probe.Cell(persons=900, maintainers=360, owner_maintainers=230)
+    bound, clamped = probe.complement_bound(total, nonimm)
+    assert (bound.persons, bound.maintainers, bound.owner_maintainers) == (100, 40, 20)
+    assert clamped == 0
+    rounded_under = probe.Cell(persons=1005, maintainers=405, owner_maintainers=255)
+    bound, clamped = probe.complement_bound(total, rounded_under)
+    assert (bound.persons, bound.maintainers, bound.owner_maintainers) == (0, 0, 0)
+    assert clamped == 3, "a clamped field must be counted, not silently absorbed"
+
+
+def test_p8_the_bounded_sum_is_FIELD_WISE_and_refuses_an_unbounded_hole(probe):
+    """Dropping a partially published geography does not widen the interval — it BIASES the
+    point estimate, because that territory's persons and maintainers would then be netted out
+    of different denominators. So the sum is taken field by field."""
+    rows = [((100, 50, 25), (None, None, None)),
+            ((40, None, 10), (None, 30, None))]
+    low, high, withheld = probe.bounded_sum(rows)
+    assert low == (140, 50, 35), "a published count was discarded with its withheld neighbour"
+    assert high == (140, 80, 35) and withheld == 1
+    with pytest.raises(probe.ProbeRefusal):
+        probe.bounded_sum([((10, None, 5), (None, None, None))])   # withheld, no bound
+    with pytest.raises(probe.ProbeRefusal):
+        probe.bounded_sum([])
+
+
+def test_p8_the_envelope_is_taken_at_the_boxs_OPPOSITE_corners(probe):
+    """Headship is largest when the FEWEST maintainers and the MOST persons are netted out.
+
+    Pairing low-with-low would report an interval narrower than the uncertainty actually is —
+    and amendment #13 rules that envelope, so under-reporting it would understate the ruling.
+    """
+    shipped = probe.Cell(persons=100_000, maintainers=50_000, owner_maintainers=30_000)
+    low = probe.Cell(persons=10_000, maintainers=5_000, owner_maintainers=3_000)
+    high = probe.Cell(persons=12_000, maintainers=6_000, owner_maintainers=3_600)
+    base = probe.Cell(persons=200_000, maintainers=100_000, owner_maintainers=60_000)
+    got = probe.bounded_pair(shipped, low, high, base)
+    assert got["headship"] == pytest.approx(45_000 / 90_000)
+    band_low, band_high = got["headship_band"]
+    assert band_low == pytest.approx(44_000 / 90_000)      # most maintainers, fewest persons
+    assert band_high == pytest.approx(45_000 / 88_000)     # fewest maintainers, most persons
+    assert band_low < got["headship"] < band_high
+    naive = (50_000 - 5_000) / (100_000 - 10_000), (50_000 - 6_000) / (100_000 - 12_000)
+    assert (band_low, band_high) != naive, "the envelope was paired, not cornered"
+
+
+def test_p8_a_withheld_cell_that_never_reached_the_bound_refuses(probe):
+    """The two counts of the same suppression, taken on opposite sides of the derivation.
+
+    A withheld cell that the boundary reported but the bounded sum never carried has been
+    DROPPED, and dropping does not widen the interval — it biases the point estimate. Unit-
+    tested directly rather than by fixture mutation on purpose: no source response can produce
+    the divergence, only a wiring change between the boundary and the arithmetic can, which is
+    exactly the regression this guard is here to catch.
+    """
+    probe._guard_withheld_accounted(reported=18, carried=18)
+    for reported, carried in ((18, 17), (17, 18), (1, 0)):
+        with pytest.raises(probe.ProbeRefusal) as exc:
+            probe._guard_withheld_accounted(reported=reported, carried=carried)
+        assert exc.value.boundary == "suppression"
+
+
+def test_p8_the_aligned_ratio_band_may_not_straddle_the_crossing_it_reports(probe):
+    """#13 rules the aligned ratio as crossing 1.0 with BOTH envelope ends above it."""
+    probe._guard_ratio_band(1.0228, 1.0264)
+    for straddling in ((0.99, 1.01), (1.0, 1.05), (0.95, 1.0)):
+        with pytest.raises(probe.ProbeRefusal) as exc:
+            probe._guard_ratio_band(*straddling)
+        assert exc.value.boundary == "suppression"
 
 
 def test_p8_share_residual_cancels_a_uniform_universe_offset(probe):
@@ -757,6 +1013,56 @@ def test_p8_citation_coupling_keys_rows_on_the_geography_token(offline):
         mod._guard_s6_rows(real.replace("| MTL_RMR |", "| MTL_CMA |"))
 
 
+def test_p8_the_aligned_territory_is_recomputed_and_bound_to_BOTH_records(offline):
+    """The aligned pair is coupled to §6's amendment #13; its COUNTS to P10's note.
+
+    Two records because they state different halves: the spec rules RATES, and the aligned
+    territory's counts are stated only by the probe that derived that membership. Coupling the
+    counts to §6 would demand digits no ruling carries; leaving them uncoupled would let the
+    one construction this run does not derive end to end drift silently.
+    """
+    mod, tmp_path = offline
+    _run_offline(mod, tmp_path)
+    ruled = _amendment_13_ruled()
+    aligned = mod.LAST_RUN["aligned"]
+    assert f"{aligned['pair'][0]:.4f}" == ruled["headship"]
+    assert f"{aligned['pair'][1]:.4f}" == ruled["ratio"]
+    assert tuple(f"{b:.4f}" for b in aligned["headship_band"]) == ruled["headship_band"]
+    assert tuple(f"{b:.4f}" for b in aligned["ratio_band"]) == ruled["ratio_band"]
+    assert f"{aligned['move']['leg']:.3f}" == ruled["leg"]
+    assert aligned["shipped"] == (pytest.approx(0.5169, abs=5e-5),
+                                  pytest.approx(0.9600, abs=5e-5))
+    assert len(aligned["members"]) == mod.PINNED_QC_PART_COUNT
+    assert aligned["withheld_fields"] == 18 and len(aligned["withheld_codes"]) == 7
+    p10 = P10_NOTE.read_text(encoding="utf-8")
+    coupled = mod.LAST_RUN["coupled_p10"]
+    assert len(coupled) >= 8, f"only {len(coupled)} aligned figures are coupled to P10"
+    for label, tok in coupled:
+        assert tok in p10, f"{label}: {tok!r} is not in P10's note"
+
+
+def test_p8_the_shipped_and_aligned_constructions_differ_only_by_that_territory(offline):
+    """The correction is a SUBTRACTION of one territory, and nothing else moved.
+
+    The aligned settled triple must be the shipped one minus exactly the published QC-part
+    counts. Asserted on the counts rather than the rates, because a rate can agree by accident
+    where three counts cannot.
+    """
+    mod, tmp_path = offline
+    _run_offline(mod, tmp_path)
+    aligned = mod.LAST_RUN["aligned"]
+    settled = aligned["cells"]["Before 2016"]
+    low = aligned["qc_low"]
+    assert (settled.persons + low.persons, settled.maintainers + low.maintainers,
+            settled.owner_maintainers + low.owner_maintainers) == (84785, 43825, 29355)
+    # And the untouched geographies really are untouched — the digits §6 rules, unmoved.
+    ruled = mod.LAST_RUN["ruled"]
+    for geography, pair in (("MTL_RMR", (0.5259, 0.9634)), ("QC_RMR", (0.5054, 0.8910)),
+                            ("MTL_ISLAND_RA06", (0.5555, 1.0757)),
+                            ("LAVAL_RA13", (0.4816, 1.1112))):
+        assert (round(ruled[geography][0], 4), round(ruled[geography][1], 4)) == pair
+
+
 def test_p8_coupled_tokens_are_all_really_in_the_spec(offline):
     """The coupling list must not contain a token §6 does not carry — a gate asserting the
     presence of something that was never there would red on a correct run."""
@@ -825,9 +1131,35 @@ def test_p8_responses_are_keyed_by_coordinate_not_request_order(probe):
          "object": {"productId": "98100621", "coordinate": r["coordinate"],
                     "vectorDataPoint": [{"refPer": "2021-01-01", "value": i}]}}
         for i, r in enumerate(requests)]))
-    series = probe._guard_response(requests, response)
+    series, withheld = probe._guard_response(requests, response)
     assert series[(98100621, requests[0]["coordinate"])] == 0
     assert series[(98100621, requests[1]["coordinate"])] == 1
+    assert withheld == [], "nothing was suppressible here, so nothing may be reported withheld"
+
+
+def test_p8_a_withheld_cell_is_carried_ONLY_where_it_was_declared_suppressible(probe):
+    """The suppression scope is declared BEFORE the response is read, by geography.
+
+    A cell that comes back empty inside that scope is a StatCan publication rule and is carried
+    to the bound; the same shape ANYWHERE else is an outage, and letting it through would let
+    an outage name itself a publication rule — fabricating a rule the source never stated.
+    """
+    inside = {"productId": 98100622, "coordinate": probe.coord(1929, 1, 1, 1, 1, 12, 1),
+              "latestN": 1}
+    outside = {"productId": 98100621, "coordinate": probe.coord(24, 1, 1, 1, 1, 12, 1),
+               "latestN": 1}
+
+    def empty(request):
+        return {"status": "FAILED",
+                "object": {"productId": str(request["productId"]),
+                           "coordinate": request["coordinate"], "vectorDataPoint": []}}
+
+    suppressible = {(98100622, inside["coordinate"])}
+    series, withheld = probe._guard_response([inside], [empty(inside)], suppressible)
+    assert series == {} and withheld == [(98100622, inside["coordinate"])]
+    with pytest.raises(probe.ProbeRefusal) as exc:
+        probe._guard_response([outside], [empty(outside)], suppressible)
+    assert "suppressible" in str(exc.value)
 
 
 def test_p8_a_failed_cell_with_an_empty_point_list_refuses(probe):
@@ -937,6 +1269,29 @@ def test_p8_pinned_ids_that_move_are_a_finding_not_a_typo(probe):
 # 9. Floor guards over the whole derivation — each mutant applied to the fixture the
 #    green path really reads, so no mutant is unreachable.
 # ===========================================================================
+_EXPECTED_BOUNDARY = {
+    # These two mutate the FIRST object of the sorted response, and the aligned territory added
+    # 144 coordinates to that sort — 16 of whose cells are legitimately suppressible. Declared
+    # here so a future member set that reordered the sort could not park the mutation on a
+    # suppressible cell, where it would be carried by the bound and the mutant would go green
+    # by never reaching the guard at all.
+    "empty-vector-data-point": "wds-data",
+    "wrong-reference-period": "wds-data",
+    "amendment-13-gone": "citation",
+    "amendment-13-digit-moved": "citation",
+    "p10-tokens-gone": "p10",
+    "p10-membership-short": "p10",
+    "p10-membership-renamed": "p10",
+    "p10-counts-disagree": "citation",
+    "qc-part-ancestry-breaks": "membership",
+    "p10-membership-off-province-code": "membership",
+    "qc-part-off-province-both-legs": "membership",
+    "qc-part-bound-leg-withheld": "wds-data",
+    "aligned-band-straddles-one": "suppression",
+}
+
+
+
 @pytest.mark.parametrize("mutation", [
     "cma-cd-province-disagree", "isq-parts-do-not-sum", "isq-workbooks-disagree-on-province",
     "census-cubes-disagree-on-province-persons", "empty-vector-data-point",
@@ -946,6 +1301,13 @@ def test_p8_pinned_ids_that_move_are_a_finding_not_a_typo(probe):
     "dimension-lists-diverge", "isq-scenario-fans-disagree", "isq-header-note-gone",
     "p9-tokens-gone", "constants-antipattern-gone", "isq-ra-code-axis-renumbered",
     "isq-row-relabelled",
+    # The aligned territory (amendment #13). Every new refusal gets its own mutant, applied to
+    # the same fixture the byte-equality gate proves passes clean.
+    "amendment-13-gone", "amendment-13-digit-moved", "p10-tokens-gone",
+    "p10-membership-short", "p10-membership-renamed", "p10-counts-disagree",
+    "qc-part-ancestry-breaks", "p10-membership-off-province-code",
+    "qc-part-off-province-both-legs", "qc-part-bound-leg-withheld",
+    "aligned-band-straddles-one",
 ])
 def test_p8_floor_guards_are_load_bearing(offline, mutation):
     """Each guard must actually fire. A guard that cannot fail is not a guard — and an
@@ -1072,10 +1434,112 @@ def test_p8_floor_guards_are_load_bearing(offline, mutation):
         extra["p9"] = lambda: "# P9\n\nno decision tokens survive here\n"
     elif mutation == "constants-antipattern-gone":
         extra["constants"] = lambda: '"""a docstring with no anti-pattern block."""\n'
+    elif mutation == "amendment-13-gone":
+        # §6 keeps ruling S's table row (which still matches the SUPERSEDED construction) and
+        # loses #13. Nothing else reds, which is the point: without a gate on the prose the
+        # note could publish either pair and the table-keyed gate would pass either way.
+        real = mod._spec_s6()
+        assert _AMD13_HEAD in real
+        extra["spec"] = lambda: real.replace(_AMD13_HEAD, "**AMENDMENT #13 (withdrawn)")
+    elif mutation == "amendment-13-digit-moved":
+        real = mod._spec_s6()
+        assert "headship **0.5234**" in real
+        extra["spec"] = lambda: real.replace("headship **0.5234**", "headship **0.5299**")
+    elif mutation == "p10-tokens-gone":
+        extra["p10"] = lambda: "# P10\n\nno decision tokens and no membership table\n"
+    elif mutation == "p10-membership-short":
+        # One subdivision drops out of P10's §4b table. The residual would then be netted
+        # against 15 of 16 territories — a third territory, neither shipped nor aligned.
+        real = P10_NOTE.read_text(encoding="utf-8")
+        short = "\n".join(line for line in real.splitlines()
+                          if not line.startswith("| 2483005 "))
+        assert short != real
+        extra["p10"] = lambda: short
+    elif mutation == "p10-membership-renamed":
+        real = P10_NOTE.read_text(encoding="utf-8")
+        assert "| 2481017 | Gatineau |" in real
+        extra["p10"] = lambda: real.replace("| 2481017 | Gatineau |",
+                                            "| 2481017 | Gatineau-Ouest |")
+    elif mutation == "p10-counts-disagree":
+        # P10's committed aligned counts move; this run's recomputation does not. Two
+        # measurements of one territory that disagree must refuse, never publish.
+        real = P10_NOTE.read_text(encoding="utf-8")
+        assert "48,120" in real
+        extra["p10"] = lambda: real.replace("48,120", "48,125")
+    elif mutation == "qc-part-ancestry-breaks":
+        # CD Gatineau stops being a child of the province member. The SGC prefix still says
+        # Québec; the census tree no longer does, and a tie broken by whichever ran first is
+        # exactly what the two-way check refuses.
+        def meta(pids):
+            out = _fake_meta(pids)
+            for item in out:
+                if int(item["object"]["productId"]) == 98100622:
+                    for m in item["object"]["dimension"][0]["member"]:
+                        if m["memberId"] == 1943:
+                            m["parentMemberId"] = 99
+            return out
+    elif mutation in ("p10-membership-off-province-code", "qc-part-off-province-both-legs"):
+        # One member of P10's §4b table carries an ONTARIO SGC code. The two mutants differ
+        # only in what the census tree then says about it, and each pins one half of the
+        # two-way check:
+        #   * `...-code`: the tree still puts the subdivision in Québec, so the legs DISAGREE.
+        #     Reachable only because the note parser reads every membership row P10 published
+        #     rather than the `24`-prefixed ones — a parser that filtered on the prefix would
+        #     drop this row and the COUNT gate would refuse at `p10`, leaving the prefix leg
+        #     constant-True and the note's two-way claim unenforceable.
+        #   * `...-both-legs`: the subdivision's census division is reparented off the
+        #     province too, so BOTH legs say Ontario and they AGREE. A guard that refused only
+        #     on disagreement would pass this and net out a member the run itself just judged
+        #     off-province, in silence — verified RED here: with that branch removed the run
+        #     raises nothing at all and the note regenerates as if the territory were sound.
+        real = P10_NOTE.read_text(encoding="utf-8")
+        assert "| 2483005 | Denholm |" in real
+        extra["p10"] = lambda: real.replace("| 2483005 | Denholm |", "| 3506008 | Denholm |")
+        orphan = mutation == "qc-part-off-province-both-legs"
+
+        def meta(pids):
+            out = _fake_meta(pids)
+            for item in out:
+                if int(item["object"]["productId"]) == 98100622:
+                    for m in item["object"]["dimension"][0]["member"]:
+                        if m["memberId"] == 1954:            # Denholm, the CSD itself
+                            m["classificationCode"] = "3506008"
+                        if orphan and m["memberId"] == 1953:  # its census division
+                            m["parentMemberId"] = 99
+            return out
+    elif mutation == "qc-part-bound-leg-withheld":
+        # The bound is `Total - Age` − `Non-immigrants`. Withhold the first leg and the bound
+        # is built out of a hole: an interval whose upper end is itself unmeasured.
+        broken = {k: dict(v) for k, v in _P.items()}
+        broken[(98100622, 1928)][1] = (None, None, None)
+        data = lambda reqs: _fake_data_with(reqs, broken)                    # noqa: E731
+    elif mutation == "aligned-band-straddles-one":
+        # A withheld-heavy subdivision grows until its bound puts 1.0 inside the aligned
+        # ratio's envelope. The crossing amendment #13 rules is then not earned at this run's
+        # own resolution, and a verdict inside its own uncertainty is not a verdict.
+        broken = {k: dict(v) for k, v in _P.items()}
+        broken[(98100622, 1929)][1] = (40_000, 20_000, 15_000)
+        data = lambda reqs: _fake_data_with(reqs, broken)                    # noqa: E731
 
     _wire(mod, tmp_path, meta=meta, data=data, isq=isq, **extra)
-    with pytest.raises(mod.ProbeRefusal):
+    with pytest.raises(mod.ProbeRefusal) as exc:
         mod._sections(["-"])
+    # A mutant that fires at the WRONG boundary is an unreachable mutant wearing a green tick:
+    # the guard under test never ran, and something upstream refused first. Declared for the
+    # aligned-territory guards, whose refusals sit behind several others in one derivation.
+    # Two mutants share a boundary and a guard but must take DIFFERENT branches of it: one
+    # is the legs disagreeing, the other is both legs agreeing the member is off-province.
+    # Without this, a guard that collapsed to one branch would still show two green ticks.
+    _BRANCH = {"p10-membership-off-province-code": "disagree",
+               "qc-part-off-province-both-legs": "OUTSIDE Québec"}
+    if mutation in _BRANCH:
+        assert _BRANCH[mutation] in str(exc.value), (
+            f"{mutation} refused, but not on the branch it exists to reach: {exc.value}")
+    expected = _EXPECTED_BOUNDARY.get(mutation)
+    if expected:
+        assert exc.value.boundary == expected, (
+            f"{mutation} refused at {exc.value.boundary!r}, not at the {expected!r} guard it "
+            f"exists to reach: {exc.value}")
 
 
 def _fake_data_with(requests: list, table: dict) -> list:

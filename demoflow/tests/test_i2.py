@@ -23,8 +23,10 @@ THE PLAN'S TEST BODIES ARE SUPERSEDED IN FIVE PLACES, each named at the ruling t
      with its OWN measured values (ruling T + the amendment-#11 territory gate, PASS at
      +0.611% against a 1.586% derived threshold). MTL_ISLAND_RA06 moves the same way.
   4. `resolve_immigrant_inputs(HORS_RMR).flag == "borrowed_prior"` → `computed_residual`:
-     the province NET of the six wholly-QC CMAs. Nothing is borrowed, and its territory is
-     constructed rather than measured, so neither existing member describes it.
+     the province NET of the six wholly-QC CMAs — and, since amendment #13, NET of the
+     Ottawa-Gatineau CMA's 16 Québec-side census subdivisions too. Nothing is borrowed, and
+     its territory is constructed rather than measured, so neither existing member describes
+     it. The flag is unmoved by #13; the TERRITORY under it is what moved.
   5. `p_resident(...) == pytest.approx(9_500.0)` → EXACT equality (the decomposition
      fixture's exact-oracle law; a subtraction of two exactly-representable floats has one
      right answer, and `approx` would hide a wiring change of a few ULP-sized terms).
@@ -140,8 +142,11 @@ def _mismatches(text: str) -> list[str]:
     return bad
 
 
-# A PLAUSIBLE defect, not a nonsense one: MTL_RMR's ratio overwritten with HORS_RMR's, the
-# copy slip a five-row hand-transcribed table actually produces.
+# A PLAUSIBLE defect, not a nonsense one: MTL_RMR's ratio overwritten with the 0.9600 that
+# still sits in the note as HORS_RMR's SUPERSEDED row (amendment #13 moved the served value
+# to 1.0248 and P8 §2 keeps the superseded one printed beside it) — the copy slip a
+# hand-transcribed table produces, and MORE plausible now that a stale digit for a real
+# geography is published in the same note.
 _DEFECT = ("0.9634", "0.9600")
 
 # Rewordings that touch PROSE only — no digit, no geography token. The second one sits
@@ -178,7 +183,7 @@ def test_the_table_serves_the_ruled_values_per_field():
     ruled = {
         Geography.MTL_RMR: (0.5259, 0.9634, "cited", "cited"),
         Geography.QC_RMR: (0.5054, 0.8910, "cited", "cited"),
-        Geography.HORS_RMR: (0.5169, 0.9600, "computed_residual", "computed_residual"),
+        Geography.HORS_RMR: (0.5234, 1.0248, "computed_residual", "computed_residual"),
         Geography.MTL_ISLAND_RA06: (0.5555, 1.0757, "cited", "cited"),
         Geography.LAVAL_RA13: (0.4816, 1.1112, "cited", "cited"),
         # RA proxies borrow the PARENT CMA (MTL_RMR) on both fields — §6 "RA members borrow
@@ -299,14 +304,32 @@ def test_each_measured_geographys_provenance_matches_the_notes_own_source_token(
 
 
 def test_the_hors_rmr_source_states_the_construction_that_makes_it_a_residual():
-    """HORS_RMR is the one CONSTRUCTED territory, and the construction is load-bearing: the
-    province net of the six wholly-QC CMAs, with Gatineau staying INSIDE (P2's definition —
-    P8 §2 measured the ISQ workbook's same-named row as a DIFFERENT territory, 355,971
-    persons apart). A residual whose definition is unstated is a number nobody can re-derive."""
+    """HORS_RMR is the one CONSTRUCTED territory, and WHICH construction is load-bearing —
+    amendment #13 moved it. The row must state the ALIGNED territory: the province net of the
+    six wholly-QC CMAs AND net of the Ottawa-Gatineau CMA's 16 Québec-side census
+    subdivisions, counts read from the census-division sibling, membership carried from P10.
+
+    Pinned on the SUPERSEDED reading too, in the negative: this row used to say Gatineau stays
+    INSIDE the residual and that ISQ's same-named row must never be substituted for it. Both
+    halves reversed — the whole point of #13 is that the rate's territory now MATCHES the
+    ISQ flow territory it multiplies. A source left at the old text would read as a citation
+    for digits it no longer describes, which is exactly the silent-decay this coupling exists
+    to prevent, so the old ruling's marker `P2` is asserted ABSENT rather than merely
+    unasserted."""
     row = resolve_immigrant_inputs(Geography.HORS_RMR)
     source = row.source
-    assert "Gatineau" in source and "P2" in source
+    # the aligned construction, stated in the row itself
     assert "six" in source.lower() and "98-10-0621-01" in source
+    assert "Ottawa-Gatineau" in source and "16" in source
+    assert "98-10-0622-01" in source, "the sibling cube the netted counts are read from"
+    assert "P10" in source, "the note the 16-member census-subdivision list is carried from"
+    assert "#13" in source, "the amendment that ruled this territory"
+    assert "aligned" in source.lower()
+    # the old ruling's CITATION MARKER is gone; the superseded construction stays stated
+    # above it, as the row's own record of what moved
+    assert "P2" not in source, (
+        "the source still cites P2's Gatineau-INSIDE definition, which amendment #13 "
+        "superseded — a citation for a territory this row no longer measures")
 
 
 # ==================================================== the provenance vocabulary (seat ruling)
@@ -379,9 +402,15 @@ def test_ratio_is_nonneg_finite_not_fraction():
         ii._validate_ratio(-0.1)                        # negative -> raise
     with pytest.raises(LoaderError):
         ii._validate_ratio(float("nan"))                # non-finite -> raise
-    # and the ruled table really exercises the carve-out: two geographies measure above 1.
+    # and the ruled table really exercises the carve-out: THREE geographies measure above 1.
+    # HORS_RMR joined at amendment #13 and its crossing is the ruling's own headline — at the
+    # operand-aligned territory the ratio moves 0.9600 → 1.0248, so settled immigrants in
+    # hors-RMR OUT-own non-immigrants rather than under-owning them, with BOTH suppression
+    # envelope ends (1.0228, 1.0264) above 1.0 (a verdict inside its own uncertainty is not a
+    # verdict). Asserted as an exact SET rather than a count: a carve-out that silently gained
+    # a member would be a ratio inversion nobody was told about.
     above_one = [g.value for g in Geography if resolve_immigrant_inputs(g).ownership_ratio > 1.0]
-    assert set(above_one) == {"MTL_ISLAND_RA06", "LAVAL_RA13"}, above_one
+    assert set(above_one) == {"MTL_ISLAND_RA06", "LAVAL_RA13", "HORS_RMR"}, above_one
 
 
 def test_a_headship_outside_the_unit_interval_raises():

@@ -19,6 +19,21 @@ province NET of the six wholly-QC CMAs, computed here from published counts rath
 borrowed, and the six are resolved STRUCTURALLY as the geoLevel-503 children of the Quebec
 member — never from a typed id list (the pinned ids are asserted, not trusted).
 
+HORS_RMR'S TERRITORY IS THE OPERAND-ALIGNED ONE (spec §6 amendment #13). That residual alone
+still carries the Québec side of Ottawa-Gatineau — parented to Ontario in this cube, so not
+one of the six — while the ISQ arrival flows it multiplies exclude it, and the rate's
+territory must match the flow's. So the residual is netted a second time, against the
+Ottawa-Gatineau CMA's Québec-side census subdivisions, FIELD-WISE, with every withheld count
+carried at a bound the same cube publishes (`Total - Age` − `Non-immigrants`) rather than
+dropped. The MEMBERSHIP — which subdivisions — is carried BY REFERENCE from P10, the
+committed probe that derived it, and every member of it is then RE-RESOLVED live here by SGC
+code and geoLevel with its Québec-side property re-established two ways in this cube. The
+VALUES are recomputed from live cells and checked digit for digit against BOTH documents that
+state them: the rates against §6 (ruling S's table row for the superseded construction,
+amendment #13 for the ruled one) and the aligned counts against P10's note. The superseded
+pair stays in the note under its own name, because §6 still states it and §2a's per-member
+readings are properties of that same territory.
+
 RULING T'S TERRITORY GATE, AND WHY THIS PROBE DOES NOT IMPLEMENT ITS ORIGINAL WORDING. As
 first written, the gate compared 98-10-0622-01's population against the ISQ RA total. That is
 a PRIVATE-HOUSEHOLD count against a TOTAL-POPULATION estimate, and measured it trips at both
@@ -76,8 +91,28 @@ launder itself into `pytest.skip`):
   * `_guard_code_join` — every innocent control's ISQ code equals the census member's
                          classification code. This is what makes the calibration set's
                          identity measured rather than asserted.
-  * `_guard_citation`  — every figure §6 states is RECOMPUTED here and matches, keyed on the
-                         DIGITS (a stable token) and never on a prose prefix.
+  * `_guard_citation`  — every figure the record states is RECOMPUTED here and matches, keyed
+                         on the DIGITS (a stable token) and never on a prose prefix. Two
+                         records: §6 for the rates, P10's note for the aligned counts.
+  * `_guard_amendment13` — §6 states HORS_RMR's pair TWICE, and the prose statement is the
+                         operative one. A table-keyed parser cannot see it, which is exactly
+                         how a superseded pair rode through a green suite; this reads #13 and
+                         refuses if the ruling is missing or unparseable.
+  * `_guard_p10`       — P10's note yields all 16 Québec-part subdivisions and a MEASURED
+                         verdict. A membership read short would net out a smaller territory
+                         and publish the result as the aligned one.
+  * `_guard_qc_split`  — SGC prefix AND census-tree ancestry both place every one of them
+                         in Québec. Agreement alone would pass a member the two readings
+                         agree is outside it, and a prefix-filtered parser would leave the
+                         first reading unable to fail at all.
+  * `_guard_required_complete` — the two members each suppression bound is cut from are
+                         themselves published; an interval with an unmeasured end is not one.
+  * `_guard_withheld_accounted` — every cell the boundary reported absent is a field the
+                         bound carried. Dropping one biases the point estimate rather than
+                         widening the interval.
+  * `_guard_ratio_band` — the aligned ratio's suppression envelope does not straddle 1.0.
+                         #13 rules the crossing with BOTH ends above it; a verdict inside its
+                         own uncertainty is not a verdict.
   * `_guard_floor`     — ruled headship EXCEEDS the settled living-alone share at the same
                          geography. Each person living alone maintains exactly one household.
   * `_guard_territory` — |residual| ≤ the derived threshold, two-sided.
@@ -115,6 +150,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 SPEC = (_REPO_ROOT / "docs" / "specs"
         / "2026-07-21-demoflow-demographic-scenario-module-design.md")
 P9_NOTE = Path(__file__).resolve().parent / "P9-catalogue-closure.md"
+P10_NOTE = Path(__file__).resolve().parent / "P10-hors-operand-alignment.md"
 CONSTANTS = _REPO_ROOT / "demoflow" / "src" / "demoflow" / "loaders" / "constants.py"
 
 # --- the cubes ----------------------------------------------------------------------------
@@ -156,7 +192,27 @@ PINNED_GEO_IDS = {(CMA_PID, QUEBEC): 24, (CD_PID, QUEBEC): 884,
 PINNED_CMA_IDS = (30, 35, 36, 40, 48, 51)
 CMA_GEO_LEVEL = 503
 CD_GEO_LEVEL = 3
+CSD_GEO_LEVEL = 5
 PROVINCE_GEO_LEVEL = 2
+
+# --- the OPERAND-ALIGNED HORS_RMR territory (spec §6 amendment #13) -------------------------
+# The residual above includes the Québec side of Ottawa-Gatineau; the ISQ arrival flows it
+# multiplies exclude it. #13 rules the corrected territory: the same province-net-of-six
+# residual, NET of the Ottawa-Gatineau CMA's Québec-side census subdivisions.
+#
+# The MEMBERSHIP — which subdivisions those are — is carried BY REFERENCE from P10, the
+# committed probe that derived it (98-10-0003-01's 25 CMA children closing exactly on the CMA,
+# 16 Québec-side by SGC prefix AND census-tree ancestry, validated against the ISQ row at
+# −0.752%). This run does not re-derive that set: it READS P10's own §4b table and then
+# re-resolves every member of it live, by SGC code and geoLevel, re-checking the Québec-side
+# property in the cube the counts come from. The same treatment P9's catalogue closure gets —
+# a committed measurement carried at the level its own note earned, never restated as a
+# hand-typed list, and never taken on trust where a live surface can re-confirm it.
+QC_SGC_PREFIX = "24"
+PINNED_QC_PART_COUNT = 16        # asserted against what P10's note yields; never used to fetch
+# The three members the aligned arithmetic needs at CSD grain: the ruled member, the ratio's
+# base, and the universe row the suppression bound is built out of.
+ALIGNED_POPCHARS = (PC_TOTAL_AGE, PC_NONIMM, PC_SETTLED)
 # The CSD that shares the census division's name one level down. Named so the avoidance is a
 # recorded property of this run rather than a coincidence of resolution order.
 CSD_LAVAL_TRAP_ID = 1731
@@ -210,6 +266,15 @@ HORS_NAME_MARKERS = ("outside", "non-cma", "rest of", "remainder", "hors")
 
 REF_YEAR = "2021"
 _DATA_CHUNK = 60
+
+# §6 states HORS_RMR's immigrant pair TWICE and the two statements DISAGREE, deliberately:
+# ruling S's table row carries the contaminated residual's 0.5169 / 0.9600, and amendment #13
+# carries the operand-aligned 0.5234 / 1.0248 that supersedes it. Both are recomputed here and
+# each is checked against the statement that rules IT — the table row against the shipped
+# construction, #13 against the aligned one. Binding both is what keeps the note honest about
+# a spec that (correctly) still carries the superseded row as the record of what was shipped.
+AMD13_HEAD = "**AMENDMENT #13 (2026-08-15)"
+AMD13_TAIL = "**Costs, recorded rather than argued away:**"
 
 # The margin above the maximum innocent residual. STATED, and small: the innocent set has six
 # members, so its maximum is itself a noisy estimate of the innocent spread's upper edge, and
@@ -278,6 +343,92 @@ def cell_sum(cells) -> Cell:
                      total.maintainers + cell.maintainers,
                      total.owner_maintainers + cell.owner_maintainers)
     return total
+
+
+def complement_bound(total: Cell, non_immigrant: Cell) -> tuple:
+    """An upper bound on ANY immigrant member's counts: everything that is not non-immigrant.
+
+    The bound the aligned construction's withheld cells are carried at. Clamped at zero per
+    field, and the clamp is REPORTED rather than silent: both inputs are rounded to 5
+    independently, so a geography whose immigrant population is genuinely zero can publish a
+    total one rounding step BELOW its non-immigrant count, and a negative "bound" would put
+    the upper end of an interval under its lower end.
+
+    The same definition P10 measured this territory with (`run_p10.complement_bound`), and
+    deliberately the same arithmetic rather than a paraphrase of it: the two probes publish
+    figures that are compared digit for digit, and a fourth-decimal divergence between two
+    spellings of one definition would surface as a citation refusal with no defect behind it.
+    """
+    fields = (total.persons - non_immigrant.persons,
+              total.maintainers - non_immigrant.maintainers,
+              total.owner_maintainers - non_immigrant.owner_maintainers)
+    return Cell(*(max(f, 0) for f in fields)), sum(1 for f in fields if f < 0)
+
+
+def bounded_sum(rows: list) -> tuple:
+    """Sum a set of geographies FIELD BY FIELD, carrying the withheld fields as an interval.
+
+    `rows` is [(values, bounds)] per geography, both the same width, where a `None` in `values`
+    marks a count StatCan withholds at that geography and the parallel entry in `bounds` is an
+    upper bound on it drawn from a quantity the same cube DOES publish.
+
+    FIELD-WISE is the whole point: a subdivision that publishes settled PERSONS while
+    withholding settled MAINTAINERS is a real shape in this territory, and dropping the whole
+    geography would discard a published count — which does not merely widen the interval, it
+    BIASES the point estimate, because the persons and the maintainers of one territory would
+    then be netted out of different denominators.
+
+    Returns (low, high, withheld_field_count): `low` counts only what is published, `high` adds
+    every bound. The truth lies in the box between them, per field.
+    """
+    if not rows:
+        raise ProbeRefusal("suppression", "a bounded sum over no geographies is not a sum")
+    width = len(rows[0][0])
+    low, high, withheld = [0] * width, [0] * width, 0
+    for values, bounds in rows:
+        for index, (value, bound) in enumerate(zip(values, bounds, strict=True)):
+            if value is None:
+                if bound is None:
+                    raise ProbeRefusal(
+                        "suppression",
+                        f"field {index} is withheld and carries NO bound — an interval with an "
+                        "unmeasured end is not an interval, and this run may not publish one.")
+                high[index] += bound
+                withheld += 1
+            else:
+                low[index] += value
+                high[index] += value
+    return tuple(low), tuple(high), withheld
+
+
+def bounded_pair(shipped: Cell, low: Cell, high: Cell, non_immigrant: Cell) -> dict:
+    """The aligned headship and ratio, with the ENVELOPE the withheld cells leave.
+
+    The headline subtracts only what is published (`low`) — the one construction assembled
+    entirely from counts the source states. The envelope is taken at the box's CORNERS, not by
+    pairing the two sums: headship is largest when the fewest maintainers and the most persons
+    are netted out, and those are opposite corners. Pairing low-with-low would report an
+    interval narrower than the uncertainty actually is.
+    """
+    headline = cell_minus(shipped, low)
+    h_high = (shipped.maintainers - low.maintainers) / (shipped.persons - high.persons)
+    h_low = (shipped.maintainers - high.maintainers) / (shipped.persons - low.persons)
+    p_high = ((shipped.owner_maintainers - low.owner_maintainers)
+              / (shipped.maintainers - high.maintainers))
+    p_low = ((shipped.owner_maintainers - high.owner_maintainers)
+             / (shipped.maintainers - low.maintainers))
+    base = non_immigrant.owner_propensity
+    return {"cells": headline, "headship": headline.headship,
+            "ratio": ownership_ratio(headline, non_immigrant),
+            "headship_band": (h_low, h_high),
+            "ratio_band": (p_low / base, p_high / base)}
+
+
+def relative_pct(new: float, old: float) -> float:
+    """`new` against `old`, in percent OF `old` — a relative delta, never a difference."""
+    if not old:
+        raise ProbeRefusal("arithmetic", "a relative delta against zero is not a percentage")
+    return (new / old - 1) * 100
 
 
 def ownership_ratio(immigrant: Cell, non_immigrant: Cell) -> float:
@@ -386,6 +537,15 @@ def _p9_note() -> str:
     return P9_NOTE.read_text(encoding="utf-8")
 
 
+def _p10_note() -> str:
+    """P10's committed note — the source of the aligned MEMBERSHIP this run carries."""
+    if not P10_NOTE.exists():
+        raise ProbeRefusal("p10", f"{P10_NOTE.name} is absent; this run may not net out a "
+                                  "territory whose membership it cannot read at the level P10 "
+                                  "earned it")
+    return P10_NOTE.read_text(encoding="utf-8")
+
+
 def _constants_source() -> str:
     """`loaders/constants.py` — where the POOLED-ratio anti-pattern is recorded."""
     return CONSTANTS.read_text(encoding="utf-8")
@@ -458,26 +618,138 @@ def _guard_pinned_id(pid: int, name: str, member: dict, pinned: int) -> dict:
     return member
 
 
-def _guard_response(requests: list, response) -> dict:
-    """Key every returned cell by (productId, coordinate) and prove none is missing.
+def _member_by_code(pid: int, by_code: dict, code: str, level: int, label: str) -> dict:
+    """Resolve a geography member by its SGC classification code AND geoLevel.
+
+    The code is what joins P10's membership to the cube these counts are read from, and the
+    geoLevel is what keeps a census subdivision from answering for the division that shares its
+    name and its code prefix. Ambiguity refuses, exactly as `_member` does.
+    """
+    hits = by_code.get((code, level)) or []
+    if len(hits) != 1:
+        raise ProbeRefusal(
+            "wds-meta",
+            f"{table_number(pid)}: {len(hits)} member(s) with SGC {code} at geoLevel {level} "
+            f"({label}). Exactly one must match — the code is the join between the membership "
+            "and the counts, and a name would not survive an accented rename.")
+    return hits[0]
+
+
+def _guard_qc_split(children: list) -> None:
+    """BOTH readings must place EVERY member P10 hands over on the Québec side.
+
+    Two independent readings of one claim, re-run HERE rather than inherited: the prefix is a
+    string property of the SGC code this cube gives the member, the ancestry is a property of
+    the geography tree in the same cube these counts are read from. P10 established the SET;
+    this run re-establishes that each of its members really sits on the Québec side of the
+    cube it is subtracted from. Neither reading is taken on the other's word, and AGREEMENT is
+    not the test: a member both readings place OUTSIDE Québec is refused — its counts would be
+    netted out of a residual they were never inside — and so is a member they disagree about,
+    which is a finding about the axis, never a tie broken by whichever ran first.
+    """
+    if not children:
+        raise ProbeRefusal("membership", "no members were classified — a split over an empty "
+                                         "list is vacuous")
+    broken = [(name, by_code, by_tree) for name, by_code, by_tree in children
+              if by_code != by_tree]
+    if broken:
+        raise ProbeRefusal(
+            "membership",
+            "the SGC prefix and the census-tree ancestry disagree on which side of the "
+            "provincial boundary a member sits: "
+            + "; ".join(f"{n} (prefix says {'QC' if c else 'not QC'}, tree says "
+                        f"{'QC' if t else 'not QC'})" for n, c, t in broken))
+    outside = [name for name, by_code, by_tree in children if not (by_code and by_tree)]
+    if outside:
+        raise ProbeRefusal(
+            "membership",
+            f"{len(outside)} member(s) of the membership sit OUTSIDE Québec by the SGC prefix "
+            f"and by the census tree alike ({outside[:4]}). Two readings agreeing does not put "
+            "a subdivision inside this territory, and its counts may not be netted out of a "
+            "residual they were never inside.")
+
+
+def _guard_required_complete(published: dict) -> None:
+    """The members the suppression BOUND is built from must themselves be published.
+
+    The bound is `Total - Age` minus `Non-immigrants`: an upper bound on any immigrant member
+    at that geography. If either leg were itself withheld the bound would be built out of a
+    hole, and an interval whose upper end is unmeasured bounds nothing.
+    """
+    holes = sorted(name for name, complete in published.items() if not complete)
+    if holes:
+        raise ProbeRefusal(
+            "wds-data",
+            f"{len(holes)} QC-part CSD(s) do not publish both members the suppression bound is "
+            f"built from ({holes[:4]}). An interval whose upper end is itself unmeasured is not "
+            "a bound, and this run may not publish one as if it were.")
+
+
+def _guard_withheld_accounted(*, reported: int, carried: int) -> None:
+    """Every cell the BOUNDARY reported absent must be a field the BOUND actually carried.
+
+    The two counts are taken on opposite sides of the derivation — one from the response, one
+    from inside the arithmetic — so a divergence means a withheld count went missing between
+    them. That does not widen the interval, it BIASES the point estimate, which is the failure
+    the whole field-wise construction exists to avoid.
+    """
+    if reported != carried:
+        raise ProbeRefusal(
+            "suppression",
+            f"{reported} cell(s) came back withheld but the bounded sum carried {carried} — a "
+            "withheld count was dropped between the boundary and the arithmetic.")
+
+
+def _guard_ratio_band(low: float, high: float) -> None:
+    """The suppression bound may not straddle the finding it is published under.
+
+    Amendment #13 rules the aligned ratio as CROSSING 1.0 with BOTH envelope ends above it —
+    settled immigrants OUT-own in the aligned hors-RMR territory where they under-own in the
+    contaminated one. If the bound contained 1.0 the crossing would not be earned at this
+    run's own resolution, and a verdict inside its own uncertainty is not a verdict.
+    """
+    lo, hi = sorted((low, high))
+    if lo <= 1.0 <= hi:
+        raise ProbeRefusal(
+            "suppression",
+            f"the suppression bound on the aligned ratio is [{lo:.4f}, {hi:.4f}] and STRADDLES "
+            "1.0, so the crossing amendment #13 rules is not earned at the resolution the "
+            "withheld cells leave.")
+
+
+def _guard_response(requests: list, response, suppressible: set | None = None) -> tuple:
+    """Key every returned cell by (productId, coordinate) and prove none is UNEXPECTEDLY absent.
 
     Keying by POSITION is the defect this refuses: WDS returns its objects sorted by coordinate
     STRING, not in request order, so a positional read pairs every value with the wrong cell
     while every count still looks plausible.
+
+    A `status: FAILED` cell carries an EMPTY `vectorDataPoint`. At the tiny census subdivisions
+    of the Ottawa-Gatineau Québec part that is a PUBLICATION RULE — StatCan withholds small
+    immigrant counts — so those coordinates are declared suppressible IN ADVANCE, by geography,
+    and are carried by the bound rather than dropped. Everywhere else an absent cell is refused:
+    an outage reaching the arithmetic as "the source publishes nothing here" would fabricate a
+    publication rule. Returns (series, withheld coordinates).
     """
+    suppressible = set(suppressible or ())
     if not isinstance(response, list):
         raise ProbeRefusal("wds-data", f"getData returned {type(response).__name__}, not a list")
     series: dict = {}
     for item in response:
         obj = item.get("object") or {}
         points = obj.get("vectorDataPoint") or []
+        key = (int(obj["productId"]), obj["coordinate"]) if obj.get("productId") else None
         if item.get("status") != "SUCCESS" or not points:
+            if key in suppressible:
+                continue
             raise ProbeRefusal(
                 "wds-data",
                 f"cell {obj.get('productId')}/{obj.get('coordinate')} came back "
-                f"status={item.get('status')!r} with {len(points)} data point(s). A FAILED cell "
-                "carries an EMPTY vectorDataPoint, so a blind [0] would raise an IndexError "
-                "that reads like a code bug.")
+                f"status={item.get('status')!r} with {len(points)} data point(s), and it is NOT "
+                "in the suppressible scope (the QC-part CSDs' cells). A FAILED cell carries an "
+                "EMPTY vectorDataPoint, so a blind [0] would raise an IndexError that reads "
+                "like a code bug — and outside a tiny geography an absence is an outage, never "
+                "a publication rule.")
         period = str(points[0].get("refPer", ""))[:4]
         if period != REF_YEAR:
             raise ProbeRefusal(
@@ -485,13 +757,14 @@ def _guard_response(requests: list, response) -> dict:
                 f"cell {obj.get('productId')}/{obj.get('coordinate')} answered for reference "
                 f"period {period!r}, not the {REF_YEAR} census — a census cube answering a "
                 "different period is drift, and mixing vintages inside one ratio is silent.")
-        series[(int(obj["productId"]), obj["coordinate"])] = points[0]["value"]
+        series[key] = points[0]["value"]
     wanted = {(int(r["productId"]), r["coordinate"]) for r in requests}
-    missing = sorted(wanted - set(series))
+    missing = sorted(wanted - set(series) - suppressible)
     if missing:
         raise ProbeRefusal("wds-data", f"{len(missing)} of {len(wanted)} requested cells did "
-                                       f"not come back (first: {missing[0]})")
-    return series
+                                       f"not come back and are not suppressible "
+                                       f"(first: {missing[0]})")
+    return series, sorted(wanted - set(series))
 
 
 _RULED_TRIPLE_FIELDS = ("persons", "maintainers", "owner-maintainers")
@@ -695,24 +968,39 @@ def _guard_s6_rows(s6: str) -> dict:
     return rows
 
 
-def _guard_citation(s6: str, coupled: list) -> None:
-    """Every recomputed figure must match the digits §6 states.
+def _guard_citation(source_name: str, text: str, coupled: list) -> None:
+    """Every recomputed figure must match the digits the document it is checked against states.
 
-    A measurement contradicting §6 is fork-class: the run refuses rather than publishing a
-    note whose numbers quietly disagree with the ruling it claims to implement.
+    A measurement contradicting the record is fork-class: the run refuses rather than
+    publishing a note whose numbers quietly disagree with what it claims to implement.
+
+    Parameterised by SOURCE because two documents rule different halves here: §6 states the
+    ruled rates (both HORS_RMR constructions, since #13 supersedes ruling S's row in prose),
+    while the aligned territory's COUNTS are stated only by P10, the committed probe that
+    derived that membership. Coupling the counts to §6 would demand digits no ruling carries;
+    leaving them uncoupled would let the one construction this run does not derive end to end
+    drift silently. So each figure is bound to the document that actually states it.
     """
-    absent = [(label, tok) for label, tok in coupled if tok not in s6]
+    absent = [(label, tok) for label, tok in coupled if tok not in text]
     if absent:
         raise ProbeRefusal(
             "citation",
-            "recomputed figures spec §6 does NOT state: "
+            f"recomputed figures {source_name} does NOT state: "
             + "; ".join(f"{label} -> {tok}" for label, tok in absent)
-            + ". Either this run measured something the ruling contradicts (fork-class — raise "
-              "it, do not paper over it) or §6 moved and the coupling must move with it.")
+            + ". Either this run measured something the record contradicts (fork-class — raise "
+              "it, do not paper over it) or the record moved and the coupling must move with "
+              "it.")
 
 
 def _guard_rows_match_spec(spec_rows: dict, computed: dict) -> None:
-    """Each modeled geography's recomputed PAIR must be the pair its own §6 row carries."""
+    """Each modeled geography's recomputed PAIR must be the pair its own §6 row carries.
+
+    HORS_RMR enters here as the SHIPPED residual, which is what its ruling-S row states. Its
+    ruled pair is the ALIGNED one and is bound to amendment #13 instead (`_guard_amendment13`)
+    — a table row cannot carry a value a later amendment moved into prose. If a future seat
+    rewrites that row to the aligned pair, this gate REDS and the coupling must be re-pointed
+    deliberately, which is the intended cost of a spec that keeps both statements.
+    """
     for geography, (headship, ratio) in sorted(computed.items()):
         published = spec_rows[geography]
         for label, token in (("headship", headship), ("ratio", ratio)):
@@ -722,6 +1010,98 @@ def _guard_rows_match_spec(spec_rows: dict, computed: dict) -> None:
                     f"{geography}: recomputed {label} {token} is not among the figures §6's own "
                     f"row publishes ({published}) — the row is keyed on the geography token, so "
                     "this is a disagreement about the value, not about the wording.")
+
+
+# Every membership row P10's §4b table publishes, keyed on the 7-digit SGC code its first
+# column carries — NOT on the `24` prefix. Selecting on the prefix HERE would make the
+# province a property of the parser: an off-province row would be dropped without a word,
+# and `_guard_qc_split`'s code leg could never fail. The prefix is enforced downstream,
+# where failing it is a refusal rather than a silent filter.
+_CSD_CODE_ROW = re.compile(r"^\|\s*(\d{7})\s*\|\s*([^|]+?)\s*\|")
+
+
+def _guard_p10(text: str) -> dict:
+    """The aligned MEMBERSHIP and its gate, read from P10's own note and DECISION tokens.
+
+    Two things are carried, and only two: WHICH census subdivisions make up the Ottawa-Gatineau
+    Québec part (P10's §4b table, one row per member, keyed on the SGC code the row starts
+    with), and the verdicts P10 earned about that set — the 25-child closure and the −0.752%
+    membership gate. The values this note publishes are NOT carried: they are recomputed here
+    from the live cells at exactly those geographies.
+
+    Parsed on the CODE COLUMN rather than a prose prefix, EVERY row of it rather than the
+    Québec-coded ones, and refused unless the set is complete: a membership gate over a table
+    this run could not read would net out a smaller territory than the ruling names and
+    publish the result as the aligned one, and a parser that kept only the rows it already
+    believed were Québec would answer the province question before `_guard_qc_split` asked it.
+    """
+    wanted = ("DECISION-VERDICT", "DECISION-CONSTRUCTION", "DECISION-MEMBERSHIP",
+              "DECISION-MEMBERSHIP-GATE", "DECISION-ALIGNED-HEADSHIP", "DECISION-ALIGNED-RATIO")
+    tokens = {}
+    for name in wanted:
+        found = re.search(rf"`{name}:\s*(.*?)`", text)
+        if not found:
+            raise ProbeRefusal("p10", f"P10's note carries no `{name}` token — this run may not "
+                                      "net out a territory whose derivation it cannot read")
+        tokens[name] = found.group(1).strip()
+    if tokens["DECISION-VERDICT"] != "MEASURED":
+        raise ProbeRefusal("p10", f"P10's verdict is {tokens['DECISION-VERDICT']!r}, not "
+                                  "MEASURED — an unmeasured membership is not a territory")
+    members = [(m.group(1), m.group(2)) for m in
+               (_CSD_CODE_ROW.match(line) for line in text.splitlines()) if m]
+    if len(members) != PINNED_QC_PART_COUNT or len({c for c, _n in members}) != len(members):
+        raise ProbeRefusal(
+            "p10",
+            f"P10's note yields {len(members)} membership row(s) "
+            f"({sorted(c for c, _n in members)[:4]}...), not the {PINNED_QC_PART_COUNT} the "
+            "ruled construction names. A residual netted against a partial membership is a "
+            "third territory, neither the shipped one nor the aligned one.")
+    tokens["members"] = dict(members)
+    return tokens
+
+
+def _guard_amendment13(s6: str) -> dict:
+    """Amendment #13's ruled pair and envelope, parsed out of §6's own text.
+
+    §6 states HORS_RMR's pair twice — ruling S's table row (the shipped residual) and #13 (the
+    aligned territory that supersedes it). `_guard_s6_rows` reads the first; this reads the
+    second, because a table-keyed parser cannot see a ruling stated in prose. That blindness is
+    exactly why the note could carry a superseded pair through a green suite.
+    """
+    if AMD13_HEAD not in s6 or AMD13_TAIL not in s6:
+        raise ProbeRefusal(
+            "citation",
+            f"spec §6 no longer carries amendment #13 between {AMD13_HEAD!r} and "
+            f"{AMD13_TAIL!r} — the aligned HORS_RMR pair would be coupled to nothing, which is "
+            "the can't-fail shape this family refuses.")
+    block = s6[s6.index(AMD13_HEAD):s6.index(AMD13_TAIL)]
+    pair = re.search(r"headship \*\*([0-9.]+)\*\*, ratio\s*\n?\*\*([0-9.]+)\*\*", block)
+    envelope = re.search(r"suppression envelope ([0-9.]+)-([0-9.]+) and ([0-9.]+)-([0-9.]+)",
+                         block)
+    if not pair or not envelope:
+        raise ProbeRefusal(
+            "citation",
+            "amendment #13 yields no parseable ruled pair and envelope — this run recomputes "
+            "both and may not publish them against a ruling it could not read.")
+    return {"block": block, "headship": pair.group(1), "ratio": pair.group(2),
+            "headship_band": (envelope.group(1), envelope.group(2)),
+            "ratio_band": (envelope.group(3), envelope.group(4))}
+
+
+def _guard_amendment13_match(ruled: dict, headship: str, ratio: str, bands: dict) -> None:
+    """The recomputed aligned pair and envelope must be the ones amendment #13 states."""
+    for label, computed, stated in (("headship", headship, ruled["headship"]),
+                                    ("ratio", ratio, ruled["ratio"]),
+                                    ("headship envelope", bands["headship"],
+                                     "-".join(ruled["headship_band"])),
+                                    ("ratio envelope", bands["ratio"],
+                                     "-".join(ruled["ratio_band"]))):
+        if computed != stated:
+            raise ProbeRefusal(
+                "citation",
+                f"HORS_RMR aligned {label}: this run recomputes {computed}, amendment #13 rules "
+                f"{stated}. Either the measurement contradicts the ruling (fork-class — raise "
+                "it, do not paper over it) or §6 moved and the coupling must move with it.")
 
 
 def _guard_p9(text: str) -> dict:
@@ -773,6 +1153,48 @@ def _census_cells(series: dict, keys: dict, geo_ids: list) -> dict:
             values = [series[keys[(geo, name, field)]] for field in range(3)]
             out[geo][name] = Cell(int(values[0]), int(values[1]), int(values[2]))
     return out
+
+
+def _csd_requests(pid: int, geo_ids: list, member_ids: dict) -> tuple:
+    """The QC-part subdivisions' cells: the three members the aligned arithmetic needs.
+
+    A narrower cross than `_census_requests` on purpose. The aligned residual is a pair, and
+    the pair needs the ruled member, the base it is divided by, and the universe row the
+    suppression bound is cut from — 3 members rather than 7, at 16 geographies whose withheld
+    cells each cost a guard.
+    """
+    requests, keys = [], {}
+    for geo in geo_ids:
+        for name in ALIGNED_POPCHARS:
+            for field, (tenure, maintainer) in enumerate(
+                    ((member_ids["tenure_total"], member_ids["maint_all"]),
+                     (member_ids["tenure_total"], member_ids["maint_primary"]),
+                     (member_ids["tenure_owner"], member_ids["maint_primary"]))):
+                coordinate = coord(geo, tenure, member_ids["gender"], maintainer,
+                                   member_ids["statistic"], member_ids["popchar"][name],
+                                   member_ids["suitability"])
+                requests.append({"productId": pid, "coordinate": coordinate, "latestN": 1})
+                keys[(geo, name, field)] = (pid, coordinate)
+    return requests, keys
+
+
+def _census_fields(series: dict, keys: dict, geo: int, name: str) -> tuple:
+    """The three counts as they came back — `None` in the position of a withheld one.
+
+    The FIELD-WISE reading. `_census_cell` collapses a partially published geography to
+    nothing, which is right where a whole `Cell` is needed and wrong where a SUM is: these
+    subdivisions publish persons while withholding maintainers, and that published count is
+    part of the territory being netted out.
+    """
+    return tuple(series.get(keys[(geo, name, field)]) for field in range(3))
+
+
+def _census_cell(series: dict, keys: dict, geo: int, name: str) -> Cell | None:
+    """A `Cell`, or None when ANY of its three counts is withheld at this geography."""
+    values = [series.get(keys[(geo, name, field)]) for field in range(3)]
+    if any(v is None for v in values):
+        return None
+    return Cell(int(values[0]), int(values[1]), int(values[2]))
 
 
 def _isq_totals(book: str, rows: list) -> dict:
@@ -849,8 +1271,13 @@ _SCOPE = (
     "SCOPE OF THIS HEADER (it claims only what it can enforce): every rate, ratio, count, "
     "residual and threshold below is COMPUTED by this run from the live StatCan WDS responses "
     "and the two pinned ISQ workbooks it names — none is transcribed from the ruling it is "
-    "checked against. The direction of that check is one-way: §6 states the ruled figures, "
-    "this run recomputes them, and a disagreement REFUSES the run rather than being published. "
+    "checked against. The direction of that check is one-way: §6 states the ruled figures — "
+    "ruling S's table row for HORS_RMR's superseded territory and amendment #13 for its ruled "
+    "one, both recomputed here — and P10's committed note states the aligned territory's "
+    "counts; this run recomputes each and a disagreement REFUSES the run rather than being "
+    "published. What is CARRIED rather than recomputed is named where it is used and listed "
+    "below: P10's membership derivation and P9's catalogue closure, each at the level its own "
+    "note earned. "
     "The threshold in §4 is derived from innocent controls measured here in the same "
     "construction, never inherited. Quoted strings are verbatim from a live response, a "
     "workbook cell or a named in-repo file, and every absence claim is scoped to the search "
@@ -948,6 +1375,40 @@ def _sections(where: list) -> list:
     csd_trap = [m for m in geo_members(CD_PID)
                 if m["memberNameEn"] == "Laval" and m["memberId"] != ra_members["LAVAL_RA13"]["memberId"]]
 
+    # ------------------------------------------------------- the aligned territory (#13)
+    # P10's membership, re-resolved live. The codes come from P10's committed note; every
+    # member behind them is looked up in THIS cube by code AND geoLevel, and its Québec-side
+    # property is re-established two ways — the SGC prefix and the census tree — in the cube
+    # the counts are actually subtracted from.
+    where[0] = "p10"
+    p10_text = _p10_note()
+    p10 = _guard_p10(p10_text)
+    where[0] = "wds-meta"
+    by_code: dict = {}
+    for member in geo_members(CD_PID):
+        by_code.setdefault((str(member.get("classificationCode")), member.get("geoLevel")),
+                           []).append(member)
+    cd_by_id = {m["memberId"]: m for m in geo_members(CD_PID)}
+    qc_part, qc_part_split = {}, []
+    for code, name in sorted(p10["members"].items()):
+        member = _member_by_code(CD_PID, by_code, code, CSD_GEO_LEVEL,
+                                 f"{name} — from P10's membership")
+        if member["memberNameEn"] != name:
+            raise ProbeRefusal(
+                "p10",
+                f"SGC {code} names {member['memberNameEn']!r} in {table_number(CD_PID)} and "
+                f"{name!r} in P10's note. The membership is carried BY REFERENCE, so the two "
+                "documents must be describing the same subdivision.")
+        parent = cd_by_id.get(member.get("parentMemberId"))
+        in_tree = bool(parent and parent.get("geoLevel") == CD_GEO_LEVEL
+                       and parent.get("parentMemberId") == province[CD_PID]["memberId"])
+        qc_part_split.append(
+            (f"{name} ({code})",
+             str(member.get("classificationCode")).startswith(QC_SGC_PREFIX), in_tree))
+        qc_part[code] = member
+    _guard_qc_split(qc_part_split)
+    qc_part_parents = {code: cd_by_id[m["parentMemberId"]] for code, m in qc_part.items()}
+
     sibling_ids = {
         "gender": _member(metas, SIBLING_PID, SIB_POS_GENDER, SIB_GENDER_TOTAL)["memberId"],
         "age": _member(metas, SIBLING_PID, SIB_POS_AGE, SIB_AGE_TOTAL)["memberId"],
@@ -1012,7 +1473,14 @@ def _sections(where: list) -> list:
         requests.append({"productId": TOTALPOP_PID, "coordinate": coordinate, "latestN": 1})
         pop_keys[tag] = (TOTALPOP_PID, coordinate)
 
-    series = _guard_response(requests, _data(requests))
+    csd_part, csd_keys = _csd_requests(CD_PID, [m["memberId"] for m in qc_part.values()],
+                                       census_ids[CD_PID])
+    requests += csd_part
+    # The suppressible scope, declared BEFORE the response is read and by GEOGRAPHY: these 16
+    # subdivisions and nothing else. Declaring it after would let an outage anywhere name
+    # itself a publication rule.
+    suppressible = set(csd_keys.values())
+    series, withheld = _guard_response(requests, _data(requests), suppressible)
 
     cma_cells = _census_cells(series, {k[1:]: v for k, v in keys.items() if k[0] == CMA_PID},
                               cma_geo_ids)
@@ -1085,6 +1553,56 @@ def _sections(where: list) -> list:
     pooled = {g: (cells[PC_ALL_IMM].headship,
                   ownership_ratio(cells[PC_ALL_IMM], cells[PC_NONIMM]))
               for g, cells in geographies.items()}
+
+    # ------------------------------------------------- HORS_RMR at ALIGNED territory (#13)
+    # The rate's territory must match the flow's. `hors` above is the shipped residual and
+    # still carries the Québec side of Ottawa-Gatineau; the ISQ flow row it multiplies does
+    # not. Netting P10's 16 Québec-part subdivisions out of it makes the two the same
+    # territory. FIELD-WISE, with every withheld count carried at a bound the same cube
+    # publishes — never dropped, because dropping a geography discards published counts and
+    # biases the point estimate rather than widening the interval.
+    where[0] = "suppression"
+    rows, csd_settled, complete = [], {}, {}
+    for code, member in sorted(qc_part.items()):
+        geo = member["memberId"]
+        total = _census_cell(series, csd_keys, geo, PC_TOTAL_AGE)
+        nonimm = _census_cell(series, csd_keys, geo, PC_NONIMM)
+        complete[f"{member['memberNameEn']} ({code})"] = bool(total and nonimm)
+        values = _census_fields(series, csd_keys, geo, PC_SETTLED)
+        # The bound: all immigrants and non-permanent residents together, which CONTAINS the
+        # ruled `Before 2016` member by construction and is published at every one of these
+        # geographies — `_guard_required_complete` makes that a checked precondition.
+        bound, clamped = (complement_bound(total, nonimm) if (total and nonimm) else (None, 0))
+        csd_settled[code] = (values, bound, clamped)
+        rows.append((values, (bound.persons, bound.maintainers, bound.owner_maintainers)
+                     if bound else (None, None, None)))
+    _guard_required_complete(complete)
+    clamped_fields = sum(c for _v, _b, c in csd_settled.values())
+    withheld_codes = sorted(code for code, (values, _b, _c) in csd_settled.items()
+                            if any(v is None for v in values))
+    low_counts, high_counts, withheld_fields = bounded_sum(rows)
+    _guard_withheld_accounted(reported=len(withheld), carried=withheld_fields)
+    qc_low, qc_high = Cell(*low_counts), Cell(*high_counts)
+    qc_totals = {name: cell_sum([_census_cell(series, csd_keys, m["memberId"], name)
+                                 for m in qc_part.values()])
+                 for name in (PC_TOTAL_AGE, PC_NONIMM)}
+    aligned_cells = {PC_SETTLED: cell_minus(hors[PC_SETTLED], qc_low),
+                     PC_NONIMM: cell_minus(hors[PC_NONIMM], qc_totals[PC_NONIMM]),
+                     PC_TOTAL_AGE: cell_minus(hors[PC_TOTAL_AGE], qc_totals[PC_TOTAL_AGE])}
+    envelope = bounded_pair(hors[PC_SETTLED], qc_low, qc_high, aligned_cells[PC_NONIMM])
+    _guard_ratio_band(*envelope["ratio_band"])
+    aligned = (envelope["headship"], envelope["ratio"])
+    shipped_pair = ruled["HORS_RMR"]
+    aligned_move = {
+        "headship": relative_pct(aligned[0], shipped_pair[0]),
+        "ratio": relative_pct(aligned[1], shipped_pair[1]),
+        "leg": relative_pct(aligned[0] * aligned[1], shipped_pair[0] * shipped_pair[1]),
+    }
+    # The RULED pair for HORS_RMR is the aligned one from here on: `ruled` is what the note's
+    # headline table, its DECISION tokens and task 25b's join table all read. The shipped
+    # residual stays measured and published under its own name — §6's ruling-S row still
+    # states it, and §2a's recent-member readings are properties of that same territory.
+    ruled = dict(ruled, HORS_RMR=aligned)
 
     # ---------------------------------------------------------------- the territory gate
     where[0] = "territory"
@@ -1177,11 +1695,31 @@ def _sections(where: list) -> list:
     where[0] = "citation"
     s6 = _spec_s6()
     spec_rows = _guard_s6_rows(s6)
-    _guard_rows_match_spec(spec_rows, {g: (_r4(ruled[g][0]), _r4(ruled[g][1]))
-                                       for g in modeled})
+    # §6 rules HORS_RMR twice, and each construction is bound to the statement that rules IT:
+    # the SHIPPED residual against ruling S's table row (which still states it, correctly, as
+    # the record of what shipped) and the ALIGNED pair against amendment #13. Binding only the
+    # table row is how a superseded pair rode through a green suite: the table cannot state a
+    # value #13 moved into prose, so a table-keyed gate is blind to exactly the move it exists
+    # to catch.
+    _guard_rows_match_spec(spec_rows, dict({g: (_r4(ruled[g][0]), _r4(ruled[g][1]))
+                                            for g in modeled},
+                                           HORS_RMR=(_r4(shipped_pair[0]),
+                                                     _r4(shipped_pair[1]))))
+    amd13 = _guard_amendment13(s6)
+    _guard_amendment13_match(
+        amd13, _r4(aligned[0]), _r4(aligned[1]),
+        {"headship": "-".join(_r4(b) for b in envelope["headship_band"]),
+         "ratio": "-".join(_r4(b) for b in envelope["ratio_band"])})
     coupled = [(f"{g} headship", _r4(ruled[g][0])) for g in modeled]
     coupled += [(f"{g} ratio", _r4(ruled[g][1])) for g in modeled]
     coupled += [
+        ("HORS_RMR shipped headship", _r4(shipped_pair[0])),
+        ("HORS_RMR shipped ratio", _r4(shipped_pair[1])),
+        ("HORS_RMR aligned headship envelope low", _r4(envelope["headship_band"][0])),
+        ("HORS_RMR aligned headship envelope high", _r4(envelope["headship_band"][1])),
+        ("HORS_RMR aligned ratio envelope low", _r4(envelope["ratio_band"][0])),
+        ("HORS_RMR aligned ratio envelope high", _r4(envelope["ratio_band"][1])),
+        ("HORS_RMR immigrant demand leg move", _r3(aligned_move["leg"])),
         ("province headship", _r4(ruled["QC_PROVINCE"][0])),
         ("province ratio", _r4(ruled["QC_PROVINCE"][1])),
         ("island non-immigrant owner propensity",
@@ -1214,7 +1752,25 @@ def _sections(where: list) -> list:
                 for g in ("MTL_RMR", "QC_RMR", "HORS_RMR")]
     coupled += [(f"{g} recent ratio", _r4(recent[g][1]))
                 for g in ("MTL_RMR", "QC_RMR", "HORS_RMR")]
-    _guard_citation(s6, coupled)
+    _guard_citation("spec §6", s6, coupled)
+    # The aligned territory's COUNTS are stated by P10 and by no ruling — the spec rules rates.
+    # Bound to the note that measured them, so the one construction this run carries a
+    # membership for cannot drift from the probe that derived it.
+    coupled_p10 = [
+        ("aligned settled persons", _n(aligned_cells[PC_SETTLED].persons)),
+        ("aligned settled maintainers", _n(aligned_cells[PC_SETTLED].maintainers)),
+        ("aligned settled owner-maintainers",
+         _n(aligned_cells[PC_SETTLED].owner_maintainers)),
+        ("aligned non-immigrant propensity",
+         _r4(aligned_cells[PC_NONIMM].owner_propensity)),
+        ("aligned settled propensity", _r4(aligned_cells[PC_SETTLED].owner_propensity)),
+        ("aligned headship", _r4(aligned[0])),
+        ("aligned ratio", _r4(aligned[1])),
+        ("aligned headship move", _r3(aligned_move["headship"])),
+        ("aligned ratio move", _r3(aligned_move["ratio"])),
+        ("immigrant demand leg move", _r3(aligned_move["leg"])),
+    ]
+    _guard_citation(f"probes/{P10_NOTE.name}", p10_text, coupled_p10)
 
     where[0] = "p9"
     p9 = _guard_p9(_p9_note())
@@ -1247,7 +1803,16 @@ def _sections(where: list) -> list:
                   "geo_levels": sib_levels, "not_covered": not_covered},
         "universe": {"drifted": universe_drift},
         "coupled": coupled,
+        "coupled_p10": coupled_p10,
         "ruled": ruled,
+        "aligned": {"pair": aligned, "shipped": shipped_pair, "move": aligned_move,
+                    "cells": aligned_cells, "headship_band": envelope["headship_band"],
+                    "ratio_band": envelope["ratio_band"],
+                    "members": {code: m["memberId"] for code, m in qc_part.items()},
+                    "withheld_fields": withheld_fields, "withheld_codes": withheld_codes,
+                    "withheld_cells": len(withheld), "clamped_fields": clamped_fields,
+                    "qc_low": qc_low, "qc_high": qc_high,
+                    "p10": {k: v for k, v in p10.items() if k != "members"}},
     }
 
     # ======================================================================= the note
@@ -1264,6 +1829,37 @@ def _sections(where: list) -> list:
                                f"header note of the pinned {ISQ_RA_BOOK}")
     f_isq_rmr_note = Fact.cited(isq[ISQ_RMR_BOOK]["note"],
                                 f"header note of the pinned {ISQ_RMR_BOOK}")
+    # §2b. The aligned pair and its envelope are DERIVED — recomputed here from live cells at
+    # P10's membership — while the membership's own derivation and gate are CITED from P10's
+    # note. The split is the point: this run measures the values and carries the territory.
+    f_aligned_headship = Fact.derived(
+        _r4(aligned[0]), "HORS_RMR aligned: maintainers / persons on the Before 2016 member, "
+                         "shipped residual net of the QC-part CSDs' published counts")
+    f_aligned_ratio = Fact.derived(
+        _r4(aligned[1]), "HORS_RMR aligned: settled owner-maintainer propensity / "
+                         "non-immigrant, both netted over the same aligned territory")
+    f_move_headship = Fact.derived(_pct(aligned_move["headship"]),
+                                   "aligned headship against the shipped one")
+    f_move_ratio = Fact.derived(_pct(aligned_move["ratio"]),
+                                "aligned ratio against the shipped one")
+    f_move_leg = Fact.derived(_pct(aligned_move["leg"]),
+                              "the PRODUCT headship × ratio, aligned against shipped — the "
+                              "immigrant demand leg at HORS_RMR")
+    f_band_headship_low = Fact.derived(_r4(envelope["headship_band"][0]),
+                                       "aligned headship at the suppression box's low corner")
+    f_band_headship_high = Fact.derived(_r4(envelope["headship_band"][1]),
+                                        "aligned headship at the suppression box's high corner")
+    f_band_ratio_low = Fact.derived(_r4(envelope["ratio_band"][0]),
+                                    "aligned ratio at the suppression box's low corner")
+    f_band_ratio_high = Fact.derived(_r4(envelope["ratio_band"][1]),
+                                     "aligned ratio at the suppression box's high corner")
+    f_p10_membership = Fact.cited(p10["DECISION-MEMBERSHIP"],
+                                  f"probes/{P10_NOTE.name} DECISION-MEMBERSHIP, read this run")
+    f_p10_gate = Fact.cited(p10["DECISION-MEMBERSHIP-GATE"],
+                            f"probes/{P10_NOTE.name} DECISION-MEMBERSHIP-GATE, read this run")
+    f_p10_construction = Fact.cited(
+        p10["DECISION-CONSTRUCTION"],
+        f"probes/{P10_NOTE.name} DECISION-CONSTRUCTION, read this run")
     f_p9_verdict = Fact.cited(p9["DECISION-VERDICT"],
                               f"probes/{P9_NOTE.name} DECISION-VERDICT, read this run")
     f_p9_level = Fact.cited(p9["DECISION-CLOSURE-LEVEL"],
@@ -1296,18 +1892,25 @@ def _sections(where: list) -> list:
         f"{table_number(CD_PID)} `{ra_members['LAVAL_RA13']['memberNameEn']}` "
         f"classificationCode, verbatim from live metadata")
 
-    def rate_rows(source: dict, geos) -> list:
+    def rate_rows(rows) -> list:
+        """One row per (label, cells) pair — the counts and the rates from the SAME cells.
+
+        Keyed on the cells rather than on a geography name, because HORS_RMR now has two
+        constructions in this table and a row that took its counts from one and its rates from
+        the other would be arithmetically impossible while looking entirely plausible.
+        """
         out = []
-        for g in geos:
-            cells = geographies[g]
+        for label, cells in rows:
             settled = cells[PC_SETTLED]
+            headship = settled.headship
+            ratio = ownership_ratio(settled, cells[PC_NONIMM])
             out.append(
-                f"| {g} | {_n(settled.persons)} | {_n(settled.maintainers)} | "
+                f"| {label} | {_n(settled.persons)} | {_n(settled.maintainers)} | "
                 f"{_n(settled.owner_maintainers)} | "
-                f"**{Fact.derived(_r4(source[g][0]), f'{g}: maintainers / persons on the {PC_SETTLED} member')}** | "
+                f"**{Fact.derived(_r4(headship), f'{label}: maintainers / persons on the {PC_SETTLED} member')}** | "
                 f"{_r4(cells[PC_NONIMM].owner_propensity)} | "
                 f"{_r4(settled.owner_propensity)} | "
-                f"**{Fact.derived(_r4(source[g][1]), f'{g}: settled owner-maintainer propensity / non-immigrant')}** |")
+                f"**{Fact.derived(_r4(ratio), f'{label}: settled owner-maintainer propensity / non-immigrant')}** |")
         return out
 
     def member_rows(geos) -> list:
@@ -1392,33 +1995,45 @@ def _sections(where: list) -> list:
         "propensity | settled propensity | RATIO |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    lines += rate_rows(ruled, ("MTL_RMR", "QC_RMR", "HORS_RMR", "QC_PROVINCE"))
+    lines += rate_rows([("MTL_RMR", geographies["MTL_RMR"]),
+                        ("QC_RMR", geographies["QC_RMR"]),
+                        ("HORS_RMR", aligned_cells),
+                        ("HORS_RMR (SUPERSEDED — Gatineau IN)", hors),
+                        ("QC_PROVINCE", prov_cma)])
     lines += [
         "",
-        f"`HORS_RMR` is the province NET of the six wholly-QC CMAs — the tree's own documented "
-        f"residual method, computed here rather than borrowed. The six are resolved "
-        f"STRUCTURALLY as the geoLevel-{CMA_GEO_LEVEL} children of the Quebec member "
+        f"`HORS_RMR` is the province NET of the six wholly-QC CMAs AND net of the "
+        f"Ottawa-Gatineau CMA's Québec-side census subdivisions — the operand-aligned territory "
+        f"amendment #13 rules, §2b. The six are resolved STRUCTURALLY as the "
+        f"geoLevel-{CMA_GEO_LEVEL} children of the Quebec member "
         f"(memberId {province[CMA_PID]['memberId']}): "
         + ", ".join(f"{m['memberNameEn']} (id {m['memberId']}, code {m['classificationCode']})"
                     for m in cma_members)
-        + ". The Québec side of Ottawa-Gatineau is parented to Ontario in this cube and is "
-        "therefore INSIDE the residual, per P2's recorded definition.",
+        + ". The Québec side of Ottawa-Gatineau is parented to Ontario in this cube, so it is "
+        "NOT one of those six and stays inside the residual until it is netted out by "
+        "subdivision — which is the whole of the correction below. The SUPERSEDED row is the "
+        "construction that stopped there: it is published because §6's ruling-S table still "
+        f"states its pair ({_r4(shipped_pair[0])} / {_r4(shipped_pair[1])}) as the record of "
+        "what shipped, and because §2a's per-member readings are properties of that same "
+        "territory. It is not a candidate; it is the measurement being corrected.",
         "",
         f"**The ISQ RMR workbook's own `{isq[ISQ_RMR_BOOK]['labels'][hors_code].strip()}` "
-        f"row is NOT this residual, and the gap is measured rather than argued.** ISQ publishes "
-        f"{_n(isq[ISQ_RMR_BOOK]['totals'][hors_code])} for {ISQ_YEAR}; province net of the "
-        f"same six CMAs is "
+        f"row is what the ALIGNMENT closes on, and the gap is measured rather than argued.** "
+        f"ISQ publishes {_n(isq[ISQ_RMR_BOOK]['totals'][hors_code])} for {ISQ_YEAR}; province "
+        f"net of the same six CMAs is "
         f"{_n(isq_total - sum(isq[ISQ_RMR_BOOK]['totals'][int(m['classificationCode'])] for m in cma_members))}"
         f" — a difference of "
         f"{Fact.derived(_n(isq_total - sum(isq[ISQ_RMR_BOOK]['totals'][int(m['classificationCode'])] for m in cma_members) - isq[ISQ_RMR_BOOK]['totals'][hors_code]), 'ISQ province net of the six wholly-QC CMAs, minus ISQ published outside-the-CMAs row')}"
         f", which is exactly the workbook's `{isq[ISQ_RMR_BOOK]['labels'][gatineau_code].strip()}` "
-        f"row ({_n(isq[ISQ_RMR_BOOK]['totals'][gatineau_code])}). ISQ nets Gatineau out; "
-        "P2's definition keeps it in. Two rows with the same name for two different "
-        "territories is precisely the substitution this note refuses to make.",
+        f"row ({_n(isq[ISQ_RMR_BOOK]['totals'][gatineau_code])}). ISQ nets Gatineau out on its "
+        "side; the SUPERSEDED census construction kept it in, and that mismatch IS the defect "
+        "#13 corrects. Two rows with the same name for two different territories is precisely "
+        "the substitution this note refuses to make — and the aligned row above is the one "
+        "that no longer makes it.",
         "",
         f"The province row differs from the residual precisely because the province CONTAINS "
         f"the CMAs: {_r4(ruled['QC_PROVINCE'][0])} / {_r4(ruled['QC_PROVINCE'][1])} at "
-        f"province level against {_r4(ruled['HORS_RMR'][0])} / {_r4(ruled['HORS_RMR'][1])} net "
+        f"province level against {_r4(shipped_pair[0])} / {_r4(shipped_pair[1])} net "
         "of them.",
         "",
         "### 2a. EVERY population-characteristic member at EVERY CMA-grain geography",
@@ -1447,6 +2062,109 @@ def _sections(where: list) -> list:
         f"({_r4(recent['MTL_RMR'][0])}) is what pulls the pool down. So the immigrant channel "
         "contributes MORE household formation per settled person than a general-rate model "
         "would have credited. Measured, not assumed either way.",
+        "",
+        f"**These rows are the SUPERSEDED territory's**, and they are the right ones to print "
+        f"here: they come from `{table_number(CMA_PID)}` alone, which publishes no Québec-part "
+        f"member to net out at this grain (§2b), so every per-member reading at CMA grain is a "
+        f"property of the residual that keeps Gatineau in. The aligned correction is measured "
+        f"at the three members the ruled pair needs — {', '.join(f'`{n}`' for n in ALIGNED_POPCHARS)} "
+        "— and is deliberately NOT extended to the rest: an aligned `Recent immigrants` row "
+        "would be a figure this run did not measure.",
+        "",
+        "### 2b. THE OPERAND ALIGNMENT — HORS_RMR's ruled territory (amendment #13)",
+        "",
+        f"The rate's territory must match the flow's territory. The residual above is measured "
+        f"over a census territory that INCLUDES the Québec side of Ottawa-Gatineau, while the "
+        f"arrival flows it multiplies come from ISQ's `{isq[ISQ_RMR_BOOK]['labels'][hors_code].strip()}` "
+        f"row, which EXCLUDES it. Amendment #13 rules the corrected construction: the same "
+        f"province-net-of-six residual, NET of that CMA's Québec-side census subdivisions.",
+        "",
+        f"**The MEMBERSHIP is carried BY REFERENCE from P10 and RE-RESOLVED here; the VALUES "
+        f"are recomputed.** P10 derived which subdivisions those are — "
+        f"{f_p10_membership} — and validated the resolved part against the ISQ row it aligns "
+        f"to: {f_p10_gate}. This run does not repeat that derivation. It reads P10's own §4b "
+        f"table, and then looks EVERY one of its {len(qc_part)} members up live in "
+        f"`{table_number(CD_PID)}` by SGC code AND geoLevel {CSD_GEO_LEVEL}, checking the name "
+        f"the two documents give it and re-establishing the Québec-side property two "
+        f"independent ways in the cube the counts are actually subtracted from — the `"
+        f"{QC_SGC_PREFIX}` province prefix on the SGC code that cube gives the member, and the "
+        f"census tree (the member's census division is a geoLevel-{CD_GEO_LEVEL} child of that "
+        f"cube's Quebec member, id {province[CD_PID]['memberId']}). BOTH readings place all "
+        f"{len(qc_part)} inside Québec: a member either one puts outside it refuses the run, "
+        f"and so does a disagreement between them. P10's rows are read by their SGC code and "
+        f"never SELECTED on that prefix — a parser that filtered on it would drop an "
+        f"off-province row without a word and leave the first reading unable to fail. Four "
+        f"census divisions contribute — "
+        + ", ".join(f"`{name}` (SGC {code})" for code, name in sorted(
+            {m["classificationCode"]: m["memberNameEn"]
+             for m in qc_part_parents.values()}.items()))
+        + " — which is why no whole-CD union is this territory.",
+        "",
+        f"**Suppression: BOUNDED by the published complement, never dropped.** StatCan withholds "
+        f"small counts at these subdivisions. Of the "
+        f"{len(qc_part) * len(ALIGNED_POPCHARS) * 3} cells this run requested across the "
+        f"{len(qc_part)} of them, "
+        f"{Fact.derived(len(withheld), 'cells returned with no data point at the QC-part CSDs')} "
+        f"came back with no data point, every one a `{PC_SETTLED}` field, at "
+        f"{Fact.derived(len(withheld_codes), 'QC-part subdivisions withholding a settled count')} "
+        f"of the {len(qc_part)} subdivisions — the other two members are published at every one "
+        f"of them, which is what makes the bound available at all, and the count the bounded "
+        f"sum carried is asserted equal to the count the boundary reported. Each is bounded "
+        f"above by a quantity the SAME cube "
+        f"publishes at the SAME geography — `{PC_TOTAL_AGE}` minus `{PC_NONIMM}`, i.e. all "
+        f"immigrants and non-permanent residents together, which contains `{PC_SETTLED}` by "
+        f"construction — and the bound's own two legs are required to be published "
+        f"(`_guard_required_complete`), because an interval whose upper end is itself unmeasured "
+        f"is not a bound. FIELD-WISE: a subdivision publishing settled persons while withholding "
+        f"settled maintainers keeps the published count, since dropping the geography would net "
+        f"its persons and its maintainers out of different denominators — a bias, not a wider "
+        f"interval. {Fact.derived(clamped_fields, 'bound fields clamped at zero for a rounding-step negative')}"
+        f" field(s) needed the clamp for a rounding-step negative.",
+        "",
+        "| construction | settled persons | maintainers | owner-maintainers | HEADSHIP | RATIO |",
+        "|---|---:|---:|---:|---:|---:|",
+        f"| as shipped (Gatineau IN) — SUPERSEDED | {_n(hors[PC_SETTLED].persons)} | "
+        f"{_n(hors[PC_SETTLED].maintainers)} | {_n(hors[PC_SETTLED].owner_maintainers)} | "
+        f"{_r4(shipped_pair[0])} | {_r4(shipped_pair[1])} |",
+        f"| **ALIGNED (published counts only) — RULED** | "
+        f"**{Fact.derived(_n(aligned_cells[PC_SETTLED].persons), 'aligned settled persons: shipped residual net of the published QC-part counts')}** | "
+        f"**{Fact.derived(_n(aligned_cells[PC_SETTLED].maintainers), 'aligned settled maintainers')}** | "
+        f"**{Fact.derived(_n(aligned_cells[PC_SETTLED].owner_maintainers), 'aligned settled owner-maintainers')}** | "
+        f"**{f_aligned_headship}** | **{f_aligned_ratio}** |",
+        f"| aligned, every withheld field at its bound | {_n(hors[PC_SETTLED].persons - qc_high.persons)} | "
+        f"{_n(hors[PC_SETTLED].maintainers - qc_high.maintainers)} | "
+        f"{_n(hors[PC_SETTLED].owner_maintainers - qc_high.owner_maintainers)} | "
+        f"{_r4(cell_minus(hors[PC_SETTLED], qc_high).headship)} | "
+        f"{_r4(ownership_ratio(cell_minus(hors[PC_SETTLED], qc_high), aligned_cells[PC_NONIMM]))} |",
+        "",
+        f"**Aligned: headship {f_aligned_headship} ({f_move_headship}), ratio "
+        f"{f_aligned_ratio} ({f_move_ratio}) — and the ratio CROSSES 1.0.** Shipped, settled "
+        f"immigrants under-own in hors-RMR; aligned, they OUT-own. The non-immigrant base moves "
+        f"too and is netted across the same territory: {_r4(hors[PC_NONIMM].owner_propensity)} "
+        f"shipped against {_r4(aligned_cells[PC_NONIMM].owner_propensity)} aligned. The "
+        f"suppression envelope is "
+        f"[{f_band_ratio_low}, {f_band_ratio_high}] on the ratio and "
+        f"[{f_band_headship_low}, {f_band_headship_high}] on the headship — taken at the box's "
+        f"OPPOSITE corners (headship is largest when the fewest maintainers and the most "
+        f"persons are netted out), so it is the envelope rather than the two sums paired. "
+        f"Neither end straddles 1.0, which is a refusal condition here rather than a remark: "
+        f"amendment #13 rules the crossing with BOTH ends above 1.0, and a verdict inside its "
+        f"own uncertainty is not a verdict.",
+        "",
+        f"The two factors MULTIPLY inside D_imm and their errors are same-signed, so the "
+        f"immigrant demand leg moves by their product: **{f_move_leg}**. Rank 1 is the most "
+        f"negative ED, so the shipped construction ranked HORS_RMR more risky than truth — "
+        f"which is why #13 rules the aligned pair rather than recording the gap as a caveat.",
+        "",
+        f"**What this run does NOT re-derive, stated as the reference it is.** The 25-child "
+        f"closure on the Ottawa-Gatineau CMA, the two-way selection of the Québec side at the "
+        f"membership cube, and the population gate against the ISQ row are P10's measurements, "
+        f"read from its committed note this run: {f_p10_construction}. What this run adds is "
+        f"independent of them only where it can be: every member is re-resolved live, its "
+        f"Québec-side property re-checked in this cube, and every count above is read from the "
+        f"live responses rather than transcribed from P10 — the figures are then checked "
+        f"against P10's own digits, so a divergence refuses instead of publishing two "
+        f"measurements of one territory that disagree.",
         "",
         "## 3. The census-division sibling (98-10-0622-01) and the one-universe check",
         "",
@@ -1828,7 +2546,8 @@ def _sections(where: list) -> list:
         f"25b consumes, and the per-field provenance §6 requires is visible in the DECISION "
         f"block: MTL_RMR and QC_RMR direct and `cited`; RA06 and RA13 measured at census-"
         f"division grain and `cited`, on the strength of the gate in §4; HORS_RMR computed as "
-        "the province-net residual.",
+        "the operand-aligned residual of §2b — the province net of the six wholly-QC CMAs and "
+        "of the Ottawa-Gatineau Québec part, with the membership carried from P10.",
         "",
         "## DECISION",
         "",
@@ -1846,7 +2565,21 @@ def _sections(where: list) -> list:
         f"{named_cma['Québec (CMA), Que.']['memberId']} — DIRECT, cited, both fields`",
         f"- `DECISION-SOURCE-HORS_RMR: {table_number(CMA_PID)} province member "
         f"{province[CMA_PID]['memberId']} NET of the six geoLevel-{CMA_GEO_LEVEL} children "
-        f"{list(PINNED_CMA_IDS)} — COMPUTED residual, both fields`",
+        f"{list(PINNED_CMA_IDS)} NET of the {len(qc_part)} Ottawa-Gatineau Québec-part census "
+        f"subdivisions read from {table_number(CD_PID)} (membership carried from "
+        f"probes/{P10_NOTE.name}, every member re-resolved live by SGC code and geoLevel "
+        f"{CSD_GEO_LEVEL}) — OPERAND-ALIGNED computed residual per amendment #13, both fields`",
+        f"- `DECISION-HORS-ALIGNMENT: RULED {_r4(aligned[0])} / {_r4(aligned[1])} "
+        f"(suppression envelope {_r4(envelope['headship_band'][0])}-"
+        f"{_r4(envelope['headship_band'][1])} and {_r4(envelope['ratio_band'][0])}-"
+        f"{_r4(envelope['ratio_band'][1])}, neither ratio end straddling 1.0); SUPERSEDED "
+        f"{_r4(shipped_pair[0])} / {_r4(shipped_pair[1])} — the same residual with the Québec "
+        f"side of Ottawa-Gatineau still IN, which §6's ruling-S row states and amendment #13 "
+        f"supersedes. Immigrant demand leg {_pct(aligned_move['leg'])}; headship "
+        f"{_pct(aligned_move['headship'])}, ratio {_pct(aligned_move['ratio'])}. "
+        f"{withheld_fields} withheld settled fields at {len(withheld_codes)} of "
+        f"{len(qc_part)} subdivisions, bounded FIELD-WISE by `{PC_TOTAL_AGE}` − "
+        f"`{PC_NONIMM}` at the same geography`",
         f"- `DECISION-SOURCE-MTL_ISLAND_RA06: {table_number(CD_PID)} CD Montréal member "
         f"{ra_members['MTL_ISLAND_RA06']['memberId']} (SGC "
         f"{ra_members['MTL_ISLAND_RA06']['classificationCode']}) — MEASURED, cited, both "
