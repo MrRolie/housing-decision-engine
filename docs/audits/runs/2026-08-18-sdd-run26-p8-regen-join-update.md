@@ -52,3 +52,65 @@ extraction and amendment #13 will all have changed nothing the model computes.
 
 - run id: `wf_a594e264-ace` (dispatched 2026-08-18; task id wh16s0n8c)
 - outcome: (appended at run close)
+
+---
+
+## OUTCOME — 2/2 APPROVE (1 fix round each) → LANDED `8cde877`; suites 191+757
+
+The regeneration was verified FOUR independent ways: a LIVE regen from a scratchpad copy against real
+www150 reproducing the working-tree note byte for byte; an independent recompute from P10's COMMITTED
+capture importing no part of `run_p8.py`, reproducing every figure in #13 including the +8.083% leg;
+RED-first replicated by running the new gates against `git show HEAD`'s note; and the four untouched
+geographies verified present verbatim, with only HORS_RMR's digits moving. **No gate was relaxed** —
+confirmed by reading every deleted line of both files.
+
+## THE RUN'S PREMISE — MINE — WAS MEASURED FALSE, and that is the run's most valuable output
+
+I wrote "the coupling is RED right now for HORS_RMR". It was not. `immigrant_inputs.py:192` and HEAD's
+note both carried 0.5169 / 0.9600, so `test_i2` was green. **The gates key on §6 TABLE ROWS while
+amendment #13 stated its supersession in PROSE** — so the spec moved somewhere the coupling could not
+see, and the chain built to stop a moved value landing quietly did not notice a moved value.
+
+**The seat then measured the gate itself, by mutation, rather than trusting the diagnosis:** garbage
+in the row (0.9999 / 7.7777) DOES red one gate, so the coupling is not decorative — but swapping the
+row between the two LEGITIMATE pairs (ruled 0.5234/1.0248 ↔ superseded 0.5169/0.9600) reds NOTHING in
+either direction, because the note carries both and the gate is satisfied by PRESENCE rather than
+identity with the RULED pair. **The machinery catches a typo and cannot catch a supersession, which
+is the one thing an amendment does.**
+
+→ **Amendment #14 (`f6231c8`)**: the table now carries the ruled pair; a STANDING RULE binds every
+future amendment to update the table in the same commit (the other four rows sit behind the same
+gates, so a prose-only amendment moving any of them is invisible the same way); and the gate weakness
+is recorded as an OPEN DEFECT with a named owner rather than smoothed.
+
+## NEXT RUN — two tasks, in this order
+
+1. **Strengthen the §6-table coupling**: bind the table row to the note's DECISION-token (ruled)
+   pair, and prove by mutation that a ruled↔superseded swap REDS IN BOTH DIRECTIONS. Until this
+   lands, the table's correctness rests on the seat updating it, not on anything that fails.
+2. **Task 27** — the rankings table (scenario-named fans, closed flags enum, row allowlist), carrying
+   ruling K's `closed_cohort_exceedance` wiring and the `.value` enum carry.
+
+**And the standing Task-29 carry is unchanged and still binding:** nothing in `balance/`, `demand/`
+or `cohort/` reads `hors_aligned`, so the #12(B) reversal remains INERT until Task 29's pipeline
+routes HORS_RMR through the artifact's verified `join` map.
+
+### Carries from this run
+
+- Implementer-report figures disagreed with the artifact on the provenance count (49→70 reported vs
+  the note's own internally-consistent 69 = 56 DERIVED + 13 CITED). **Artifact governs**; recorded
+  because this arc grades reports as well as artifacts.
+- `test_p8_hors_rmr_carries_the_suppression_envelope_amendment_13_rules` asserts substring presence
+  of the four envelope ends, and one of them (0.5236) was ALREADY in the pre-regen note as
+  QC_PROVINCE's headship — so that end is satisfiable by coincidence. The producer-side
+  `_guard_amendment13_match` binds all four exactly, so the property holds; the artifact-side gate
+  alone does not enforce it.
+- Mutant-census gaps named per guard: `_guard_amendment13_match`'s ratio/envelope branches,
+  `_guard_p10`'s note-absent and verdict≠MEASURED branches, `_member_by_code`'s 0-hit and >1-hit
+  ambiguity refusals, and `_guard_required_complete`'s `Non-immigrants` leg are all UNCHECKED by
+  mutation (each covered positively).
+- §2a's per-member table prints the superseded pair under a bare geography label with the
+  "superseded" sentence three paragraphs below, unlike §2's headline table which labels its row
+  inline. Both DECISION tokens are unambiguous, so no machine consumer is exposed.
+
+- outcome: **2/2 APPROVE / landed `8cde877` + `f6231c8` / suites 191+757.**
