@@ -261,8 +261,23 @@ CENTRAL_PROVENANCE = {
 }
 
 
+# The DECLARED width of the identity token below, exported because the artifact emitter has to
+# validate the same form this function produces. `output/artifacts.py` guessed 64 (sha256's full
+# width) and therefore REFUSED the only hash any run computes — two committed contracts in
+# contradiction, green because no test crossed the seam (review finding F2, run 30). One
+# declaration, read by producer and gate alike; `test_constants.py` keeps a third, test-owned
+# literal so a widening is a PR-visible act in three places rather than a silent re-mint.
+ASSUMPTIONS_HASH_CHARS = 16
+
+
 def assumptions_hash() -> str:
     """Identity of the central/sweep SELECTION (spec §7 identity envelope). Not a proof the
-    selection is right — a proof that two runs used the same one."""
+    selection is right — a proof that two runs used the same one.
+
+    TRUNCATED to `ASSUMPTIONS_HASH_CHARS`: this is a collision-resistance question over the
+    handful of assumption selections one project ever emits, not a security boundary — 64 bits
+    is ample there, and the artifact stays readable. Widening it RE-MINTS every artifact
+    identity (§9: "a change in any re-mints the artifact BY DESIGN"), so it is a change to make
+    before a golden pins bytes, never after."""
     payload = json.dumps({"central": CENTRAL_ASSUMPTIONS, "sweep": SWEEP_GRID}, sort_keys=True)
-    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+    return hashlib.sha256(payload.encode()).hexdigest()[:ASSUMPTIONS_HASH_CHARS]
