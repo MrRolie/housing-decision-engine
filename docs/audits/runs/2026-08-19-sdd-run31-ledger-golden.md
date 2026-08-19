@@ -63,5 +63,5 @@ read from each artifact's `_provenance`, there is NO wall-clock read in `pipelin
 `artifacts.py`, and the live emitted values genuinely differ per source (2026-07-21 / 2026-08-08 /
 2026-08-15). Stable, belongs in the golden, and the mandate says so as a verified fact.
 
-- run id: (appended at dispatch)
+- run id: `wf_0dee300e-e08` (task `wjmtlvrmg`)
 - outcome: (appended at run close)
