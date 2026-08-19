@@ -68,5 +68,5 @@ CODE-STATE, because committing this very record moves HEAD before any gate reads
 5. The seat writes the three audit documents at the plan's paths; **the gates return verdicts only
    and write nothing.**
 
-- run id: (appended at dispatch)
+- run id: `wf_19bc200b-298` (task `wre987dr2`)
 - outcome: (appended at run close)
