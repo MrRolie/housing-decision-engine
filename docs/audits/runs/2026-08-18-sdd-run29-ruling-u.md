@@ -46,5 +46,5 @@ only, never for the tests. This is what makes the ruling testable without planti
   confirmation and the two precision corrections the seat adopted. No NEW ruling is set here — this
   mandate transcribes U and its measured derivation.
 
-- run id: (appended at dispatch)
+- run id: `wf_40941a59-2f6` (task `wajw5jyxd`)
 - outcome: (appended at run close)
