@@ -64,5 +64,5 @@ operator authorized. Three address forms were tried against the `ListAgents` row
 a conclusion about the peer: the fork is surfaced to the operator directly instead, and this run
 proceeds with everything that is not the fork.
 
-- run id: (appended at dispatch)
+- run id: `wf_0b8b9e78-cf5` (task `wkupo9nfr`)
 - outcome: (appended at run close)
