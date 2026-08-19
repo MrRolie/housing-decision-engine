@@ -45,5 +45,5 @@ Also carried: the under-15 zero must be written as a POSITIVE BOUND (`X ≤ 35` 
 1,364,340 persons, below 2.6e-5), never as "the table is silent" and never as "proved exactly zero" —
 and the implementer must verify that arithmetic itself.
 
-- run id: (appended at dispatch)
+- run id: `wf_d6e1c5d6-ca2` (task `wahcdivpd`)
 - outcome: (appended at run close)
