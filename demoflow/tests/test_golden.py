@@ -56,9 +56,10 @@ _REMINT = ("If this is a deliberate refresh, re-mint with `cd demoflow && uv run
 
 @pytest.fixture(scope="module")
 def fresh(tmp_path_factory):
-    """ONE re-derivation for the whole module. `generate_golden` runs the ED grid four times
-    (central + the three-leg rank-stability sweep) over five workbooks; a per-test run would
-    multiply ~a minute of real I/O by every assertion below, and this file has four."""
+    """ONE re-derivation for the whole module. `generate_golden` runs the ED grid ELEVEN times
+    (the central run plus the rank-stability sweep's ten five-axis legs) over five workbooks; a
+    per-test run would multiply minutes of real I/O by every assertion below, and this file has
+    four."""
     out = tmp_path_factory.mktemp("golden")
     result = generate_golden(out_dir=out)
     # BINDS the golden's name list to what the run actually emitted. A third document added to

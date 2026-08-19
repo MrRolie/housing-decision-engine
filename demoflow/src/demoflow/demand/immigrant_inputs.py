@@ -279,6 +279,30 @@ _TABLE: dict[Geography, ImmigrantInputs] = (
 )
 
 
+def resolved_selection() -> dict[str, dict[str, object]]:
+    """The RESOLVED table as plain data — what `constants.assumptions_hash` identifies.
+
+    QUANT GATE F4 (run 32): these pairs are the ruled values amendments #13/#14 exist to
+    govern, and they sat outside BOTH identity tokens — not in `data_vintage.source_hashes`
+    (they are source literals, not files under `data/`) and not in `assumptions_hash` (which
+    covered `CENTRAL_ASSUMPTIONS` + `SWEEP_GRID` only). So a RULED value could move and re-mint
+    nothing, while a ratio change of that class reorders up to 7 of 8 geographies (measured).
+
+    IT RANGES OVER THE WHOLE TABLE, borrowed rows included: a proxy's pair is DERIVED from its
+    parent, so re-hashing it costs nothing and a future row that stops being derived is covered
+    without an edit here. The `source` CITATIONS are deliberately absent — see the residual
+    `assumptions_hash` states: identity must not move on a reworded note, and the prose is
+    coupled to the digits by `tests/test_i2.py` instead. The per-field provenance TOKENS ARE
+    included: they are consumed (a `borrowed_prior` on either field flags the emitted rankings
+    row), so a relabel with unchanged digits still moves the artifact.
+    """
+    return {geography.value: {"immigrant_headship": row.immigrant_headship,
+                              "ownership_ratio": row.ownership_ratio,
+                              "headship_provenance": row.headship_provenance,
+                              "ratio_provenance": row.ratio_provenance}
+            for geography, row in sorted(_TABLE.items(), key=lambda kv: kv[0].value)}
+
+
 def resolve_immigrant_inputs(geography: Geography) -> ImmigrantInputs:
     """The full-geography join (codex r5-F4): every MODELED member resolves, or raise.
 

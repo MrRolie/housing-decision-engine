@@ -32,9 +32,14 @@ from demoflow.output.artifacts import (
     TRIPWIRE_SCHEMA,
     _DYN,
     _ITEM,
+    _KEY_REGISTRY,
+    _ROOT_FIELDS,
+    _ROW_CONTRACTS,
+    _SEQ_PATHS,
     _VALUE_VALIDATORS,
     _dump_json,
     _assert_finite,
+    _assert_rows_valid,
     assert_exclusion_row_valid,
     assert_no_open_strings,
     rankings_document,
@@ -551,6 +556,45 @@ def test_the_writer_refuses_a_document_that_never_passed_the_walk(tmp_path):
     assert not out.exists()
 
 
+@pytest.mark.parametrize("field_name,bad", [
+    ("rank_stable", 1), ("rank", 0), ("rank", -3), ("mean_ed_reference", True),
+])
+def test_the_writer_owns_the_rankings_row_type_contract(tmp_path, field_name, bad):
+    """Stress gate F6. The row TYPE contract had exactly ONE enforcement point on the emit
+    path — `rankings_document`'s per-row call — and deleting that CALL SITE passed the whole
+    suite, after which `rank_stable: 1`, `rank: 0`, `rank: -3` and `mean_ed_reference: true`
+    all shipped. Classic body-tested / wiring-unpinned: no-op'ing the FUNCTION was killed by
+    `tests/test_rankings.py`, deleting its call was not. Nor was it redundant with the walk:
+    all four are scalars at scalar positions, so `assert_no_open_strings` passes them.
+
+    THE CONTRACT NOW HAS ONE OWNER AND IT SITS ON THE WRITE PATH — there is no builder call
+    left to delete, and a document assembled outside the two builders meets it too. These
+    four payloads are exactly the ones the gate measured reaching disk."""
+    doc = _ranks_doc()
+    doc["rankings"][0][field_name] = bad
+    out = tmp_path / "rankings.json"
+    with pytest.raises(ValueError, match="rankings row"):
+        write_json_strict(out, doc, _KEYS)
+    assert not out.exists()                       # refuse means NOTHING lands on disk
+
+
+@pytest.mark.parametrize("index,field_name,bad,match", [
+    (1, "current_value", 1.5, "must be NULL"),        # UNKNOWN(nullable) carrying a value
+    (0, "reason", "stale", "exactly when"),           # CROSSED carrying a reason
+    (0, "as_of", None, "non-null"),                   # a verdict with no measurement date
+])
+def test_the_writer_owns_the_tripwire_record_contract(tmp_path, index, field_name, bad, match):
+    """The same move on the sibling document. Every one of these is a CROSS-FIELD rule the
+    string walk cannot see — it dispatches on declared position, and each of these positions
+    holds a legal value in isolation."""
+    doc = _trips_doc()
+    doc["indicators"][index][field_name] = bad
+    out = tmp_path / "tripwire_baseline.json"
+    with pytest.raises(ValueError, match=match):
+        write_json_strict(out, doc, _KEYS)
+    assert not out.exists()
+
+
 def test_the_writer_emits_sorted_stable_bytes(tmp_path):
     out = tmp_path / "rankings.json"
     write_json_strict(out, _ranks_doc(), _KEYS)
@@ -585,3 +629,49 @@ def test_the_vintage_field_set_is_declared_and_minimal():
     census_year / constants_as_of belong to the Tranche-2 ScenarioPrior emitter; adding one
     here is a one-line registry edit PLUS a declared validator, which is the point."""
     assert DATA_VINTAGE_FIELDS == frozenset({"source_hashes"})
+
+
+# ------------------------------------------------- the per-record contract table itself
+
+def _row_positions(schema: str) -> tuple:
+    """The root positions of `schema` that carry an ARRAY OF RECORDS — derived from the
+    module's own declarations rather than restated: a ROOT field that `_SEQ_PATHS` declares
+    an array and whose ITEM node `_KEY_REGISTRY` declares a map. `rankings[].flags` is out
+    because it is not a root field, and a root array of STRINGS would be out because its item
+    is a `_VALUE_VALIDATORS` position the walk already binds."""
+    return tuple(sorted(field for field in _ROOT_FIELDS[schema]
+                        if (field,) in _SEQ_PATHS and (field, _ITEM) in _KEY_REGISTRY))
+
+
+def test_every_document_types_record_positions_are_bound_by_the_contract_table():
+    """The review finding on the F6 repair: `_ROW_CONTRACTS`' header claimed that declaring
+    the contracts as ONE DISPATCHED TABLE means "a third document type cannot arrive with its
+    rows unbound" — but nothing pinned the table's shape, so dropping the `exclusions` entry
+    passed the whole suite (measured) and a third schema could be registered in `_ROOT_FIELDS`
+    with no entry at all. This is that claim as a MEASUREMENT, in both directions: no document
+    type without a contract, no contract without a document type, and per schema exactly the
+    record positions it declares — no more (a stray entry never dispatches) and no fewer (an
+    unbound position is a row that reaches disk unchecked).
+
+    It is what makes the `exclusions` entry load-bearing rather than decorative. That row is
+    subsumed by the walk TODAY — every sub-case `assert_exclusion_row_valid` refuses is
+    refused earlier by `assert_no_open_strings` (measured), so no writer-path test can
+    discriminate on it — but subsumption is a property of today's key/value tables, not of the
+    contract: the first cross-field rule that validator grows (the shape
+    `assert_tripwire_record_valid` already has) is enforced on the write path only if the
+    entry is there."""
+    assert set(_ROW_CONTRACTS) == set(_ROOT_FIELDS)
+    for schema in _ROOT_FIELDS:
+        bound = tuple(sorted(field for field, _ in _ROW_CONTRACTS[schema]))
+        assert bound == _row_positions(schema), schema
+        assert len(_ROW_CONTRACTS[schema]) == len(bound)          # no duplicated entry
+
+
+def test_a_document_type_with_no_declared_contract_refuses_instead_of_passing():
+    """The dispatch is FAIL-CLOSED, which is what the header comment above the table asserts.
+    It read `_ROW_CONTRACTS.get(doc["schema"], ())`, so an unlisted schema validated NO rows
+    and returned silently — the one thing the table's stated reason for existing rules out.
+    `ValueError`, not a bare `KeyError`: `cli.REFUSALS` turns exactly that class into a named
+    nonzero exit, and a KeyError would escape it as a traceback."""
+    with pytest.raises(ValueError, match="no per-record contract"):
+        _assert_rows_valid({"schema": "demoflow.some.future.v1"})

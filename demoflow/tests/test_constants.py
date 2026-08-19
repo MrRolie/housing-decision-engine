@@ -17,6 +17,8 @@ them close gaps the plan's bodies left open, each named at its defect:
     robustness sweep grid must span BOTH axes, not the fifth-year cross-province spread
     alone" — the plan's SWEEP_GRID carried no immigrant-ratio axis at all.
 """
+import importlib
+
 import pytest
 
 from demoflow.errors import LoaderError
@@ -25,6 +27,8 @@ from demoflow.loaders.constants import (
     CENTRAL_ASSUMPTIONS,
     CENTRAL_PROVENANCE,
     CONSTANTS,
+    MODEL_CHOICE_PROVENANCE,
+    MODEL_CHOICES,
     SWEEP_GRID,
     Anchor,
     assumptions_hash,
@@ -299,3 +303,189 @@ def test_module_docstring_does_not_misattribute_the_flag_vocabulary_to_spec_7():
             f"module docstring attributes the anchor-flag vocabulary to spec §7 ({false_claim!r}); "
             f"ANCHOR_FLAGS is {sorted(ANCHOR_FLAGS)} — neither §7 emitter enum (spec:352-353 "
             f"ScenarioPrior rows, spec:434 rankings rows)")
+
+
+# ---------------------------------- identity coverage: the two UNCITED money-path literals
+#
+# STRESS-GATE FINDING F2 (run 32): `pipeline.ROLL_AGE = 80` and `p_nonimm = read_ownership(geo,
+# 40)` were bare literals on the money path — no anchor anywhere, and outside BOTH identity
+# tokens, so editing either moved every emitted `mean_ed_*` number (measured: -55% and -66% at
+# HORS_RMR) under a byte-identical envelope. Lifting them here closes both halves at once: the
+# citation lands beside the value, and `assumptions_hash` covers it.
+#
+# THEY ARE DELIBERATELY NOT `CENTRAL_ASSUMPTIONS` MEMBERS. That dict's contract is
+# central-value-plus-band — `test_every_banded_assumption_is_in_the_sweep_grid` holds its
+# keyset EQUAL to `SWEEP_GRID`'s — and neither of these carries a spec §5 band. Inventing one
+# would be a fabricated anchor; adding a sweep axis would silently widen the robustness sweep's
+# declared grid, which is a modelling decision and not an identity fix.
+
+def test_every_model_choice_has_documented_provenance():
+    """The charter carry over the third dict too: keysets match, and a bare value cannot land.
+    Both entries are honestly marked UNCITED today — an honest absence beats an invented
+    anchor, and it is the marker a future citation replaces."""
+    assert set(MODEL_CHOICE_PROVENANCE) == set(MODEL_CHOICES)
+    assert set(MODEL_CHOICES) == {"p_nonimm_age", "roll_age"}
+    for k, cite in MODEL_CHOICE_PROVENANCE.items():
+        assert len(cite.strip()) > 20, f"{k}: provenance too thin: {cite!r}"
+
+
+def test_the_model_choices_carry_the_same_values_the_pipeline_literals_did():
+    """The lift changes IDENTITY COVERAGE, never a number: 40 and 80 are the shipped values,
+    and the pipeline now READS them instead of re-declaring them."""
+    import demoflow.pipeline as pipeline
+
+    assert MODEL_CHOICES == {"p_nonimm_age": 40, "roll_age": 80}
+    for key, value in MODEL_CHOICES.items():
+        assert isinstance(value, int) and not isinstance(value, bool), f"{key} is not an age"
+    assert pipeline.ROLL_AGE == MODEL_CHOICES["roll_age"]
+    assert pipeline.P_NONIMM_AGE == MODEL_CHOICES["p_nonimm_age"]
+
+
+def test_the_pipeline_holds_no_second_declaration_of_either_choice():
+    """THE REVERT PIN over the two exact spellings this task removed. Read on the SOURCE —
+    the binding above proves the names agree, not that the old literal is gone.
+
+    IT IS NOT THE CHECK THAT MAKES THE SINGLE-SOURCE RULE BIND, and saying so here is the
+    point: two frozen strings are spelling-bound by construction, so a second declaration
+    spelled any other way walks straight past them (measured). The discriminating check is
+    the read-through guard below. This one stays because a REVERT to either original line is
+    the likeliest way the lift regresses, and a source read names that precisely."""
+    from pathlib import Path
+
+    import demoflow.pipeline as pipeline
+
+    source = Path(pipeline.__file__).read_text(encoding="utf-8")
+    for gone in ("read_ownership(geo, 40)", "ROLL_AGE = 80"):
+        assert gone not in source, f"pipeline.py still declares {gone!r} as its own literal"
+
+
+def test_the_model_choices_are_bound_read_through_not_redeclared(monkeypatch):
+    """THE DISCRIMINATING CHECK — what makes constants.py's "the rule above binds each of them
+    identically" materially true for this dict and not just claimed.
+
+    EVERY OTHER INSTRUMENT HERE IS VALUE-BLIND. `pipeline.ROLL_AGE == MODEL_CHOICES["roll_age"]`
+    reads the same dict twice, so a consumer that redeclares its own literal EQUAL to today's
+    value passes it; the grep above holds two frozen strings. Measured on a scratchpad copy: a
+    plain appended second declaration, and one spelled to evade the grep, each left the whole
+    suite's failure set byte-identical — the exact hash-bypass this section exists to close,
+    since `assumptions_hash` would then cover a dict the run no longer reads.
+
+    Same shape and same reason as `tests/test_listings.py`'s guard over `CENTRAL_ASSUMPTIONS`:
+    mutate the dict, RE-EXECUTE the consumer, assert the values MOVED. A module holding its own
+    literal re-executes to the shipped number and REDs here.
+
+    THE CALL SITES RIDE THESE MODULE GLOBALS (`age=ROLL_AGE`, `read_ownership(geo,
+    P_NONIMM_AGE)`), resolved at call time, so pinning the binding covers every use of the NAME.
+    A future edit swapping a name for a bare literal AT a call site is outside any test of this
+    shape — a new-diff defect, the same residual `test_listings.py` carries.
+    """
+    import demoflow.pipeline as pipeline
+
+    sentinels = {"roll_age": 78, "p_nonimm_age": 33}
+    for key, value in sentinels.items():
+        monkeypatch.setitem(MODEL_CHOICES, key, value)
+    try:
+        moved = importlib.reload(pipeline)
+
+        assert moved.ROLL_AGE == 78
+        assert moved.P_NONIMM_AGE == 33
+    finally:
+        monkeypatch.undo()                # restore the dict BEFORE re-executing the module
+        importlib.reload(pipeline)
+
+    assert pipeline.ROLL_AGE == MODEL_CHOICES["roll_age"]
+    assert pipeline.P_NONIMM_AGE == MODEL_CHOICES["p_nonimm_age"]
+
+
+def test_the_model_choices_are_unbanded_and_stay_out_of_the_run_contract_dicts():
+    """They are DISCRETE MODEL CHOICES, not banded assumptions. Keeping them out of
+    CENTRAL_ASSUMPTIONS/SWEEP_GRID is what keeps the run contract's strongest gate honest —
+    "every central assumption is banded, so an unswept one silently claims rank_stable it
+    never tested". A choice with no band has nothing to sweep and must not pretend otherwise."""
+    assert not set(MODEL_CHOICES) & set(CENTRAL_ASSUMPTIONS)
+    assert not set(MODEL_CHOICES) & set(SWEEP_GRID)
+
+
+def test_the_assumptions_hash_covers_the_model_choices(monkeypatch):
+    """The identity half. Both literals moved every emitted number under an unchanged hash
+    before this task; now either one moving RE-MINTS the artifact identity."""
+    base = assumptions_hash()
+    monkeypatch.setitem(MODEL_CHOICES, "roll_age", 85)
+    assert assumptions_hash() != base
+    monkeypatch.undo()
+    monkeypatch.setitem(MODEL_CHOICES, "p_nonimm_age", 60)
+    assert assumptions_hash() != base
+
+
+# ------------------------------- identity coverage: the RULED immigrant join-table selection
+#
+# QUANT-GATE FINDING F4 (run 32): the headship and ownership-ratio pairs that amendments
+# #13/#14 exist to govern sat outside BOTH identity tokens — being source literals they are
+# not in `data_vintage.source_hashes`, and `assumptions_hash` hashed CENTRAL_ASSUMPTIONS +
+# SWEEP_GRID only. So a RULED value could move and re-mint nothing, which is the
+# citation-coupling chain failing at the artifact boundary. Measured consequence: a ratio
+# change of that class reorders up to 7 of 8 geographies.
+
+def test_the_assumptions_hash_covers_a_moved_ruled_immigrant_value(monkeypatch):
+    import dataclasses
+
+    from demoflow.demand import immigrant_inputs
+    from demoflow.geography import Geography
+
+    base = assumptions_hash()
+    row = immigrant_inputs._TABLE[Geography.MTL_RMR]
+    monkeypatch.setitem(immigrant_inputs._TABLE, Geography.MTL_RMR,
+                        dataclasses.replace(row, ownership_ratio=0.5))
+    assert assumptions_hash() != base, "a ruled ratio moved and re-minted nothing"
+    monkeypatch.undo()
+    monkeypatch.setitem(immigrant_inputs._TABLE, Geography.MTL_RMR,
+                        dataclasses.replace(row, immigrant_headship=0.60))
+    assert assumptions_hash() != base, "a ruled headship moved and re-minted nothing"
+
+
+def test_the_assumptions_hash_covers_a_join_table_provenance_relabel(monkeypatch):
+    """The provenance TOKENS ride the hash beside the digits, deliberately: they are CONSUMED —
+    `pipeline._borrowed_inputs` reads them and a `borrowed_prior` on either field puts a flag
+    on the emitted row — so a relabel moves artifact bytes. A closed three-member vocabulary
+    costs no reword noise, unlike the `source` citation (next test)."""
+    import dataclasses
+
+    from demoflow.demand import immigrant_inputs
+    from demoflow.geography import Geography
+
+    base = assumptions_hash()
+    row = immigrant_inputs._TABLE[Geography.MTL_RMR]
+    monkeypatch.setitem(immigrant_inputs._TABLE, Geography.MTL_RMR,
+                        dataclasses.replace(row, ratio_provenance="borrowed_prior"))
+    assert assumptions_hash() != base
+
+
+def test_the_assumptions_hash_ignores_a_reworded_join_table_citation(monkeypatch):
+    """The stated RESIDUAL, asserted rather than described: the hash covers the SELECTION, not
+    the prose. Coupling identity to citation text would re-mint every artifact on a reworded
+    note — and the prose is already bound where it belongs, on the digits, by
+    `tests/test_i2.py`'s coupling to P8's DECISION tokens."""
+    import dataclasses
+
+    from demoflow.demand import immigrant_inputs
+    from demoflow.geography import Geography
+
+    base = assumptions_hash()
+    row = immigrant_inputs._TABLE[Geography.MTL_RMR]
+    monkeypatch.setitem(immigrant_inputs._TABLE, Geography.MTL_RMR,
+                        dataclasses.replace(row, source=row.source + " (reworded, same digits)"))
+    assert assumptions_hash() == base
+
+
+def test_the_assumptions_hash_selection_names_every_modeled_geography():
+    """The join table resolves EVERY modeled member or raises (§6), so the covered selection
+    must span the same set — a partial payload would leave the un-named geographies exactly
+    where finding F4 found them."""
+    from demoflow.demand.immigrant_inputs import resolved_selection
+    from demoflow.geography import Geography
+
+    selection = resolved_selection()
+    assert set(selection) == {g.value for g in Geography}
+    for pair in selection.values():
+        assert set(pair) == {"immigrant_headship", "ownership_ratio",
+                             "headship_provenance", "ratio_provenance"}

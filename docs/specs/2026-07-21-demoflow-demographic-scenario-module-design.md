@@ -831,6 +831,25 @@ conditionally; that guarantee lives in the single derivation path (the version-s
 module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
 plus review. Named, not hand-waved.
 
+**Amendment #17 / seat-ruled 2026-08-19 — a NON-FINITE band endpoint is a RUN-LEVEL TERMINAL, not an
+UNKNOWN record.** The value-integrity rule above sends an inverted band to UNKNOWN, and the
+implementation extended that to non-finite endpoints — but `_unknown_measured` passes the offending
+endpoint through UNCOERCED into `band_low`/`band_high`, and the contract validator REJECTS exactly
+that record because §7 emits with `allow_nan=False`. Four of the five malformed-band sub-cases
+(±Inf and NaN on each endpoint) therefore died at the contract boundary with a bare `ValueError`
+instead of producing a record. **The third producer/contract seam of this build**, one branch over
+from amendment #16's and found by the pre-PR data-integrity gate. The band is the CALLER's, injected,
+so a non-finite band is a caller/config defect — deterministic, independent of the feed — which is
+the shape of a terminal, not of a per-indicator UNKNOWN; and the module already ruled the sibling
+case this way, raising a named terminal for a NON-COERCIBLE endpoint on the grounds that it cannot
+ride the record's float-typed fields. A non-finite endpoint cannot ride them either. **The FINITE
+inversion case (`lo > hi`) is UNCHANGED and keeps its UNKNOWN(`malformed_band`)** — it serializes, so
+"inverted band → UNKNOWN" above stays exactly true. No `Reason` member is added and the record
+allowlist is untouched; the refusal moves to where `check_registry`'s run-level terminal already
+lives. Pinned by the generalized seam test: every record each producer can emit must validate against
+its contract validator, parametrized over the full sub-case set.
+
+
 
 **Amendment #16 / seat-ruled 2026-08-19 — `duplicate_indicator` JOINS the nullable reasons.** The
 nullability rule above enumerates four reasons; `duplicate_indicator` was left out while

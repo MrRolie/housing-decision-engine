@@ -51,13 +51,21 @@ written in the test. If the walk ever skips a position the document contains, th
 disagree and the suite reds — which is what makes the coverage claim in this docstring a
 measurement rather than a promise.
 
-THE ROW VALIDATORS STILL RUN. `assert_rankings_row_valid` / `assert_tripwire_record_valid`
-bind NUMERIC types and cross-field rules the walk genuinely cannot see — `rank_stable: 1` (an
-int where the sweep verdict must be a bool), `rank: 0`, a CROSSED record carrying `stale`, an
-UNKNOWN record with a non-null `current_value`. All four are scalars at scalar positions, so
-the walk passes them and the row contract is what refuses. The walk is the quantifier over
-positions and their kinds; the row validators are the per-record contract. Neither subsumes
-the other and both are called.
+THE ROW VALIDATORS STILL RUN, AND THEY RUN ON THE WRITE PATH. `assert_rankings_row_valid` /
+`assert_tripwire_record_valid` bind NUMERIC types and cross-field rules the walk genuinely
+cannot see — `rank_stable: 1` (an int where the sweep verdict must be a bool), `rank: 0`, a
+CROSSED record carrying `stale`, an UNKNOWN record with a non-null `current_value`. All four
+are scalars at scalar positions, so the walk passes them and the row contract is what
+refuses. The walk is the quantifier over positions and their kinds; the row validators are
+the per-record contract. Neither subsumes the other.
+
+THE CONTRACT HAS EXACTLY ONE OWNER, `_ROW_CONTRACTS` READ BY `write_json_strict`, and the
+reason is a measured one (stress gate F6): while the BUILDERS owned it, the emit path had a
+single enforcement point per document and that CALL SITE was deletion-survivable — remove it
+and the whole suite still passed, after which `rank_stable: 1`, `rank: -3` and
+`mean_ed_reference: true` all reached disk. Body-tested, wiring-unpinned. On the write path
+there is no call left to delete, and a document assembled outside the two builders meets the
+same contract as one they built.
 
 COMPLETENESS IS BOUND AT THIS BOUNDARY TOO, for both artifacts, because a partial file is a
 false green rather than a small one: a tripwire baseline must carry EXACTLY the code-owned
@@ -79,6 +87,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from demoflow.cohort.basis import BASIS_SOURCE_KEY
 from demoflow.geography import Geography
 from demoflow.loaders import census, hors_aligned, living_arrangement
 from demoflow.loaders.constants import ASSUMPTIONS_HASH_CHARS
@@ -152,13 +161,21 @@ EXCLUSION_ROW_FIELDS = frozenset({"geography", "unresolved_input"})
 #
 # The names come from each loader's OWN constant, never restated here: the same "one
 # declaration, no drift" rule this module applies to every other bound vocabulary.
+#
+# THE MORTALITY BASIS IS IN IT TOO, and it is the only member that is not a FILE (data-gate
+# finding F1). Every q value the supply side rides on comes off it, it lives behind a uv path
+# dependency with no digest, and the run hashes the q SURFACE it consumes rather than the CSVs
+# behind it — spec §2 admits the engine's public entry point only. Same argument as the four
+# derived artifacts, one boundary further out: without the key, two runs over different upstream
+# mortality tables emit different rankings bytes under a byte-identical envelope. The name comes
+# from `cohort/basis.py`, which owns the basis pair it is derived from.
 _EVIDENCE_ONLY = frozenset({"catalogue_member_index_p9.json"})
 DERIVED_ARTIFACT_KEYS = frozenset({
     census.OWNERSHIP_ARTIFACT, census.HEADSHIP_ARTIFACT,
     living_arrangement.ARTIFACT, hors_aligned.ARTIFACT,
 })
 SOURCE_KEY_REGISTRY = ((frozenset(WORKBOOK_SHA256) - _EVIDENCE_ONLY)
-                       | frozenset({IRCC_CSV_NAME}) | DERIVED_ARTIFACT_KEYS)
+                       | frozenset({IRCC_CSV_NAME, BASIS_SOURCE_KEY}) | DERIVED_ARTIFACT_KEYS)
 
 _GEOGRAPHY_VALUES = frozenset(g.value for g in Geography)
 _STATUS_VALUES = frozenset(s.value for s in Status)
@@ -293,14 +310,21 @@ _VALUE_VALIDATORS = {
 
 
 def _fixed_keys(path: tuple[str, ...], schema: str) -> tuple[frozenset, frozenset]:
+    """The (required, optional) field set at a FIXED-key node.
+
+    EVERY PATH THAT REACHES IT IS DECLARED, so it does not check. `_walk` calls it only from
+    the _MAP branch at a non-dynamic path, and `_declared_kind` returns _MAP for nothing but
+    `()`, `_KEY_REGISTRY` and `_DYNAMIC_KEY_PATHS` — measured, the residual set
+    `({()} | set(_KEY_REGISTRY) | set(_DYNAMIC_KEY_PATHS)) - {()} - _DYNAMIC_KEY_PATHS -
+    _KEY_REGISTRY` is EMPTY. The undeclared-node refusal that used to sit here was therefore
+    unreachable, and a permissive mutant of it survived the full suite (stress gate F7). A
+    map planted at an undeclared position is refused by `_refuse_kind` — "declared string
+    position $.rankings[].flags[] carries a map" — which is the message a reader actually
+    sees. A live-sounding claim over code that cannot run is worse than no claim: a reader
+    counts it."""
     if path == ():
         return _ROOT_FIELDS[schema], frozenset()
-    try:
-        return _KEY_REGISTRY[path]
-    except KeyError:
-        raise ValueError(
-            f"artifact node {_fmt(path)} declares no field set — spec §7's closed-schema rule "
-            "cannot rule on a node whose vocabulary is undeclared, so it refuses") from None
+    return _KEY_REGISTRY[path]
 
 
 _MAP, _SEQ, _STR, _SCALAR = "a map", "an array", "a string", "a number/bool/null"
@@ -485,17 +509,14 @@ def _typed(records, kind: type, what: str, origin: str) -> list:
 
 def rankings_document(rankings, vintage, assumptions_hash, allowed_source_keys,
                       exclusions=()) -> dict:
-    rows = []
-    for gr in _typed(rankings, GeoRanking, "rankings", "rank_geographies"):
-        row = ranking_row(gr)
-        assert_rankings_row_valid(row)      # closed allowlist + flags enum + typed rank_stable
-        rows.append(row)
-
-    exclusion_rows = []
-    for exc in _typed(exclusions, RankingExclusion, "exclusions", "exclude_from_rankings"):
-        row = exc.as_row()
-        assert_exclusion_row_valid(row)
-        exclusion_rows.append(row)
+    # The per-row TYPE contracts are NOT re-run here: `_ROW_CONTRACTS` owns them on the write
+    # path (see the module docstring). What stays is what the writer cannot ask — that the
+    # records are the PRODUCERS' typed returns rather than bare dicts, and that the document
+    # accounts for at least one geography.
+    rows = [ranking_row(gr) for gr in _typed(rankings, GeoRanking, "rankings",
+                                             "rank_geographies")]
+    exclusion_rows = [exc.as_row() for exc in _typed(exclusions, RankingExclusion,
+                                                     "exclusions", "exclude_from_rankings")]
 
     if not rows and not exclusion_rows:
         # The rankings sibling of the completeness rule below. Every modeled geography is
@@ -515,11 +536,10 @@ def rankings_document(rankings, vintage, assumptions_hash, allowed_source_keys,
 
 
 def tripwire_document(results, vintage, assumptions_hash, allowed_source_keys) -> dict:
-    records = []
-    for result in _typed(results, TripwireResult, "indicators", "evaluate_indicator"):
-        record = tripwire_record(result)
-        assert_tripwire_record_valid(record)   # allowlist + reason enum + registry-bound source
-        records.append(record)
+    # Record contract on the write path (`_ROW_CONTRACTS`); COMPLETENESS below is this
+    # builder's own, because it is a property of the SET and no per-record validator can see it.
+    records = [tripwire_record(result)
+               for result in _typed(results, TripwireResult, "indicators", "evaluate_indicator")]
     # COMPLETENESS, as one comparison over the whole class (spec §7c: "empty registry, missing
     # required indicator, or duplicate key ⇒ UNKNOWN/nonzero"; codex r10-F6). The landed body
     # refused only the EMPTY baseline, on a derivation that applies verbatim to its siblings —
@@ -557,25 +577,79 @@ def _dump_json(path, obj) -> None:
         fh.write("\n")
 
 
+# THE PER-RECORD CONTRACT, BY SCHEMA: which sequence position carries the records, and which
+# validator owns them — one declaration, dispatched, like every other vocabulary in this module.
+#
+# THE DISPATCH IS FAIL-CLOSED AND THE TABLE IS PINNED, because this header used to CLAIM that
+# being a dispatched table means "a third document type cannot arrive with its rows unbound"
+# over a `.get(schema, ())` lookup and an unpinned table: an unlisted schema validated NO rows
+# and returned silently, and the `exclusions` entry could be deleted with the whole suite still
+# green (measured, review finding on the F6 repair). A live-sounding claim over bytes that
+# cannot deliver it is stress gate F7's defect, reproduced inside F6's repair — so the
+# mechanism was BUILT rather than the sentence narrowed. The lookup below REFUSES an unlisted
+# schema instead of defaulting to "no contract", and `tests/test_artifacts.py` pins the table in
+# both directions: no document type without a
+# contract, no contract without a document type, and per schema EXACTLY the root positions
+# that `_SEQ_PATHS` and `_KEY_REGISTRY` declare to be arrays of records.
+#
+# `exclusions` rides the table for the CONTRACT, not for today's coverage: every sub-case
+# `assert_exclusion_row_valid` refuses is refused EARLIER by the walk (measured — both of its
+# positions are `_VALUE_VALIDATORS`-bound and its key set `_KEY_REGISTRY`-bound), so no
+# writer-path test can discriminate on that entry. But subsumption is a property of today's
+# key/value tables, not of the record contract: the first cross-field rule that validator
+# grows — the shape `assert_tripwire_record_valid` already has — reaches the write path only
+# through this row.
+_ROW_CONTRACTS = {
+    RANKINGS_SCHEMA: (("rankings", assert_rankings_row_valid),
+                      ("exclusions", assert_exclusion_row_valid)),
+    TRIPWIRE_SCHEMA: (("indicators", assert_tripwire_record_valid),),
+}
+
+
+def _assert_rows_valid(doc: dict) -> None:
+    """Run the schema's per-record contract. Called AFTER the walk, which is what has already
+    established that the schema is declared and that the sequence positions exist and hold
+    arrays — so this reads them without re-checking either.
+
+    The lookup REFUSES an undeclared schema instead of defaulting to "no contract". The walk's
+    schema set (`_ROOT_FIELDS`) and this table are two independent declarations, and the day
+    they disagree is exactly the day a document type's rows ship unbound — which is the one
+    outcome the table exists to rule out. `ValueError`, not the bare `KeyError` an index gives:
+    `cli.REFUSALS` turns that class into a named nonzero exit, and a KeyError would escape it
+    as a traceback."""
+    schema = doc["schema"]
+    if schema not in _ROW_CONTRACTS:
+        raise ValueError(
+            f"no per-record contract is declared for schema {schema!r} — a document type whose "
+            f"rows no validator owns must not be written; contracts exist for "
+            f"{sorted(_ROW_CONTRACTS)}")
+    for field_name, validator in _ROW_CONTRACTS[schema]:
+        for row in doc[field_name]:
+            validator(row)
+
+
 def write_json_strict(path: Path, doc: dict, allowed_source_keys) -> None:
-    """Validate, then serialize. The file is opened only after both gates pass, so a refusal
-    leaves NOTHING on disk.
+    """Validate, then serialize. The file is opened only after every gate passes, so a
+    refusal leaves NOTHING on disk.
 
     `loaders/vintage.py` already states the first gate as a fact of the system — "spec §7's
     `write_json_strict` re-checks 64-hex on the way out" — and a writer that merely serialized
     would make that committed claim false while letting any document assembled outside the two
     builders ship.
 
-    EXACTLY WHAT IS RE-CHECKED HERE, because a gate description broader than the gate is the
-    defect this module was written to remove: finiteness over the whole tree (codex r4-F3) and
-    every position's declared kind and binding (spec §7). ROW-LEVEL NUMERIC types and
-    cross-field contracts are NOT re-run — `rank: 0`, `rank_stable: 1`, an UNKNOWN record with
-    a non-null `current_value`, all pass this function (measured, not assumed). Nor is
-    completeness: this function will write a one-indicator baseline that `tripwire_document`
-    would refuse. Those belong to `assert_rankings_row_valid` / `assert_tripwire_record_valid`,
-    which the two builders call on every row; re-running them here would duplicate a contract
-    that already has one owner. The builders are therefore the only sanctioned producers, and
-    that is a contract on callers — not a property this function can enforce."""
+    EXACTLY WHAT IS CHECKED HERE, because a gate description broader than the gate is the
+    defect this module was written to remove: finiteness over the whole tree (codex r4-F3),
+    every position's declared kind and binding (spec §7), and — since stress gate F6 — the
+    per-ROW contracts, which this function OWNS rather than re-runs. `rank: 0`,
+    `rank_stable: 1`, `mean_ed_reference: true` and an UNKNOWN record with a non-null
+    `current_value` used to pass this function (measured, not assumed) while their only
+    enforcement sat at a deletion-survivable builder call site; they now die here.
+
+    WHAT IS STILL NOT CHECKED HERE, and deliberately: COMPLETENESS. This function will write
+    a one-indicator baseline that `tripwire_document` would refuse, and a rankings document
+    that accounts for no geography. Both are properties of the SET, which the builders own
+    because they are the ones that know what a complete set is."""
     _assert_finite(doc)
     assert_no_open_strings(doc, allowed_source_keys)
+    _assert_rows_valid(doc)
     _dump_json(path, doc)

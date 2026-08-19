@@ -27,7 +27,7 @@ from demoflow.cohort.listings import (
     phi_market, market_listings, PHI_VOLUNTARY, ESTATE_EVENTUAL_FRACTION, ESTATE_LAG_YEARS,
 )
 from demoflow.errors import CalibrationError
-from demoflow.loaders.constants import CENTRAL_ASSUMPTIONS
+from demoflow.loaders.constants import CENTRAL_ASSUMPTIONS, SWEEP_GRID
 
 
 # ---------------------------------------------------------------- plan bodies (verbatim)
@@ -152,3 +152,35 @@ def test_eventual_fraction_domain_guard():
     for bad in (-0.01, 1.01, float("nan")):
         with pytest.raises(CalibrationError, match="eventual_fraction"):
             market_listings({}, {2040: 10.0}, eventual_fraction=bad)
+
+
+# ------------------------------------- added: phi_voluntary is REACHABLE (run-33 quant/stress F1)
+
+def test_phi_voluntary_is_a_signature_parameter_the_sweep_can_reach():
+    """WHY THREE OF FOUR DECLARED SWEEP AXES WERE NEVER SWEPT, named at its cause.
+
+    `lag` and `eventual_fraction` were already parameters; `phi_voluntary` was hard-bound to the
+    MODULE-LEVEL constant inside the function body, so the only way to reach its band endpoints
+    was to mutate `CENTRAL_ASSUMPTIONS` and RELOAD this module — which a production sweep must
+    never do (the test above does exactly that, deliberately, and a reload inside `pipeline.py`
+    would rebind every consumer's import mid-run). Run-33's quant and stress gates both
+    diagnosed this asymmetry as the likely reason `_rank_stability` iterated one axis.
+
+    The DEFAULT is asserted in the same breath as the override: the read-through binding is the
+    thing that keeps `assumptions_hash` honest, and a parameter that shadowed it with its own
+    literal would be the second declaration site `constants.py` forbids.
+    """
+    lo, hi = SWEEP_GRID["phi_voluntary"]
+    assert market_listings({2040: 100.0}, {}, phi_voluntary=lo)[2040] == pytest.approx(100.0 * lo)
+    assert market_listings({2040: 100.0}, {}, phi_voluntary=hi)[2040] == pytest.approx(100.0 * hi)
+    assert lo != PHI_VOLUNTARY and hi != PHI_VOLUNTARY          # both endpoints are OFF central
+    assert market_listings({2040: 100.0}, {})[2040] == pytest.approx(100.0 * PHI_VOLUNTARY)
+
+
+def test_phi_voluntary_domain_guard():
+    """Parity with its two siblings, and for the same stated reason: a fraction outside [0,1] is
+    not a sweep leg, it is a defect. A new parameter without the guard its neighbours carry is
+    the one door on this function that would still admit a silently-wrong value."""
+    for bad in (-0.01, 1.01, float("nan")):
+        with pytest.raises(CalibrationError, match="phi_voluntary"):
+            market_listings({2040: 10.0}, {}, phi_voluntary=bad)

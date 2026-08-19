@@ -20,7 +20,9 @@ each stated at its own gate below and each carrying a test that REDs if the wiri
 
 WHAT IS COARSE BY DESIGN (Tranche 1). The 75+ owner stock is a SINGLE lumped bucket rolled at
 a fixed age, not an age-indexed lattice; the surviving-arrival cohorts carry no mortality of
-their own; the sweep varies q_live alone. YSL / the ED->drift beta mapping are Tranche 2.
+their own. YSL / the ED->drift beta mapping are Tranche 2. The sweep is NOT on that list any
+more: until run 33 it varied q_live alone, which made `rank_stable` a verdict over one of five
+declared axes and the four it skipped included the only one that moves the order (`_sweep_legs`).
 
 WHAT IS NOT COARSE, because coarse is not the same as silent. Every silent-zero door on the
 model path refuses instead: a year the population frame does not carry, a holed age lattice, an
@@ -37,7 +39,8 @@ stock lattice (2026-2051) with no gap and no year silently arriving at zero.
 """
 import hashlib
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -45,7 +48,7 @@ import pandas as pd
 
 from demoflow.balance.excess_demand import excess_demand
 from demoflow.balance.owner_stock import owner_stock
-from demoflow.cohort.basis import q_at
+from demoflow.cohort.basis import BASIS_SOURCE_KEY, basis_digest, q_at
 from demoflow.cohort.gates import check_reconciliation
 from demoflow.cohort.init import initialize_households
 from demoflow.cohort.listings import market_listings
@@ -61,7 +64,8 @@ from demoflow.loaders.census import (
 )
 from demoflow.loaders.compo import FLOW_SPAN, load_immigrant_flows
 from demoflow.loaders.constants import (
-    ASSUMPTIONS_HASH_CHARS, CENTRAL_ASSUMPTIONS, CONSTANTS, SWEEP_GRID, assumptions_hash,
+    ASSUMPTIONS_HASH_CHARS, CENTRAL_ASSUMPTIONS, CONSTANTS, MODEL_CHOICES, SWEEP_GRID,
+    assumptions_hash,
 )
 from demoflow.loaders.hors_aligned import (
     ARTIFACT as ALIGNED_OWNERSHIP_ARTIFACT, aligned_ownership_rate, load_aligned_ownership_join,
@@ -84,10 +88,33 @@ from demoflow.output.tripwires import (
 POP_WORKBOOKS = ("pop-as-rmr-base.xlsx", "pop-as-ra-base.xlsx")
 COMPO_WORKBOOKS = ("compo-rmr-base.xlsx", "compo-ra-base.xlsx")
 
-# The single lumped 75+ bucket's hazard age (Tranche-1 coarseness, the plan body's). Stated as
-# a named constant because it is a MODEL choice and not an index: the bucket holds everyone
-# 75+ and is decremented at one age, so raising or lowering it moves S for every geography.
-ROLL_AGE = 80
+# Where a document is serialized before it is renamed into place (see the emission block at
+# the foot of `run_pipeline`). Named rather than inlined so a reader who finds one of these
+# after a crash can grep for what left it there.
+STAGING_SUFFIX = ".partial"
+
+# THE TWO UNCITED MONEY-PATH LITERALS, now READ-THROUGH from the constants surface rather than
+# declared here (run-32 stress gate F2). Each swings the shipped headline `mean_ed_*` numbers by
+# 55-66% and neither was inside either identity token, so editing one moved every emitted number
+# under a byte-identical envelope. `constants.MODEL_CHOICES` carries the values, its provenance
+# twin carries the honest UNCITED derivation, and `assumptions_hash` now covers both — the same
+# read-through binding `cohort/listings.py` uses for its three central assumptions. The names
+# stay HERE because they are this module's own vocabulary; the VALUES are declared once.
+#
+# DO NOT INLINE EITHER NUMBER BACK. A redeclared literal equal to today's value passes every
+# equality read, so `tests/test_constants.py` mutates `MODEL_CHOICES`, re-executes this module
+# and asserts both names MOVED — a check only a read-through binding survives.
+#
+# ROLL_AGE — the single lumped 75+ bucket's hazard age (Tranche-1 coarseness, the plan body's).
+# A MODEL choice and not an index: the bucket holds everyone 75+ and is decremented at one age,
+# so raising or lowering it moves S for every geography.
+# P_NONIMM_AGE — the age at which the non-immigrant ownership propensity is read for the
+# immigrant leg. Spec §6 defines `p_imm(a) = p_nonimm(a) x ratio` age-indexed while the ISQ
+# arrival flow carries no age axis, so one age must be chosen; ownership is BANDED, so 40
+# selects the 25-54 band (quant gate F5 measures the band choice at the size of the whole
+# signal, and the pick inside the band as inert).
+ROLL_AGE = MODEL_CHOICES["roll_age"]
+P_NONIMM_AGE = MODEL_CHOICES["p_nonimm_age"]
 
 # The full single-year age lattice the ISQ population frames publish. A cell missing from it is
 # a HOLED frame, never an empty cohort — see `_pop_by_age`.
@@ -95,10 +122,11 @@ POP_AGES = tuple(range(0, 101))
 
 
 # ===========================================================================================
-# THE IDENTITY ENVELOPE — every input the run READS, hashed OFF DISK, with its extraction date.
+# THE IDENTITY ENVELOPE — every input the run READS, with its digest and its extraction date.
 # ===========================================================================================
 #
-# THE PLAN COVERED THREE OF THIRTEEN. Its `ALLOWED_SOURCE_KEYS` named `ownership_by_geo_age.json`,
+# THE PLAN COVERED THREE OF THIRTEEN (and the fourteenth, the mortality basis, is not a file at
+# all — see BASIS_RECORDED_AT). Its `ALLOWED_SOURCE_KEYS` named `ownership_by_geo_age.json`,
 # `headship_by_age.json` and `living_arrangement.json` and filtered them through `.exists()`, so
 # every population and immigrant-flow workbook — the inputs that drive the entire model — was
 # outside the envelope, and an absent input VANISHED from the vintage instead of refusing. The
@@ -146,6 +174,29 @@ _ISQ_PULL = "2026-07-21"          # git add-date of all five ISQ workbooks; the 
 
 _COMMITTED = "committed"          # publish the digest of the committed file itself
 _RAW_ANCHOR = "raw_anchor"        # publish the RAW upstream member's pinned digest (spec §7)
+
+# THE MORTALITY BASIS IS A THIRD SOURCE CLASS — not a file under `data_dir`, and the one input
+# the envelope missed entirely until run 33 (data gate F1). It is the SOLE source of every q
+# value the supply side rides on, it lives behind a uv path dependency with no digest, and
+# `_source_hashes` ranges over `data_dir` — so two runs over DIFFERENT upstream mortality tables
+# emitted DIFFERENT `rankings.json` bytes under a BYTE-IDENTICAL envelope, and the golden's
+# attribution table then routed the reader to "the CODE moved", which is a WRONG verdict, not a
+# vague one. `cohort/basis.py` computes the digest over the q SURFACE through the §2-sanctioned
+# public entry point; `mortality._DATA_DIR` is a private reach-in the spec forbids.
+#
+# RECORDED, NOT PINNED — the IRCC feed's class, for the IRCC feed's reason: actuarial-system may
+# legitimately re-publish, and a pin would turn every refresh into a refusal instead of a
+# re-mint. Unlike the feed it is declared UNCONDITIONALLY: every run reads q.
+#
+# `extracted_at` IS A DECLARED RECORDING DATE, and it is the one entry in this envelope whose
+# date is neither an upstream pull nor an artifact's own `_provenance`. The dependency publishes
+# no date through any public surface, so the honest field is the day this basis surface was
+# measured into the envelope — declared and stated. `tests/test_basis_guard.py` holds a
+# test-owned copy of the digest this date describes, so a MOVED basis reds with "re-declare the
+# date in the same commit" instead of shipping a fresh digest under a stale date; the golden
+# alone would say only "re-mint". Inventing the CPM table's publication
+# date would be the precise-but-unsupported citation `loaders/constants.py` refuses by name.
+BASIS_RECORDED_AT = "2026-08-19"
 
 
 @dataclass(frozen=True)
@@ -205,9 +256,10 @@ def _run_identity(data_dir: Path | None, ircc) -> str:
     """The run's FULL identity: the assumption selection AND the data vintage, in one token.
 
     CARRY B4, and the reason this is a token rather than a widened `assumptions_hash()`.
-    `assumptions_hash` covers `CENTRAL_ASSUMPTIONS` + `SWEEP_GRID` and NOTHING about the data,
-    so two runs over different source bytes produce an identical hash — the envelope could not
-    make the data-vs-code call §9 rests on. Folding the data digest INTO that hash would fix
+    `assumptions_hash` covers the assumption SELECTION — the banded central/sweep values, the
+    unbanded model choices and the ruled immigrant join table — and NOTHING about the data, so
+    two runs over different source bytes produce an identical hash; the envelope could not make
+    the data-vs-code call §9 rests on. Folding the data digest INTO that hash would fix
     the first half by destroying the second: one token that moves for either cause answers
     neither question. So the emitted envelope keeps TWO fields — `assumptions_hash` (the
     selection) and `data_vintage.source_hashes` (the bytes), the second of which this task
@@ -303,11 +355,16 @@ def _artifact_extracted_at(name: str, raw: bytes) -> str:
 
 
 def _source_hashes(data_dir: Path | None, ircc) -> dict:
-    """spec §7 `data_vintage.source_hashes`, over EVERY input the run read, hashed OFF DISK.
+    """spec §7 `data_vintage.source_hashes`, over EVERY input the run read.
 
-    Three refusal doors, all of them carry B5/B5b's and all of them naming the file: an input
-    that is absent, one that is declared but carries no source record, and one whose pinned
-    bytes have drifted. A declared input that cannot be hashed is never dropped.
+    Three refusal doors on the FILE inputs, all of them carry B5/B5b's and all of them naming
+    the file: an input that is absent, one that is declared but carries no source record, and
+    one whose pinned bytes have drifted. A declared input that cannot be hashed is never dropped.
+
+    THE FILES ARE HASHED OFF DISK; the two non-file inputs are not files and say so. The
+    mortality basis is digested over the q surface it answers with (see BASIS_RECORDED_AT) and
+    the IRCC feed's digest is recorded at read time. Both are declared here rather than left
+    out — an input outside the envelope is the one class §9's attribution cannot make a call on.
     """
     dd = data_dir or DATA_DIR
     out: dict[str, dict[str, str]] = {}
@@ -328,6 +385,13 @@ def _source_hashes(data_dir: Path | None, ircc) -> dict:
         recorded = _artifact_extracted_at(name, raw)
         datetime.fromisoformat(recorded)                 # a calendar, not a shape
         out[name] = {"sha256": hashlib.sha256(raw).hexdigest(), "extracted_at": recorded}
+
+    # The mortality basis joins from OUTSIDE `data_dir` entirely (see BASIS_RECORDED_AT): the
+    # digest is taken over the q surface the model consumes, through the public basis surface.
+    # Unconditional — every run reads q, including the tripwire listing, which inherits the
+    # envelope's refusal doors by the same design that gave it the other twelve entries.
+    datetime.fromisoformat(BASIS_RECORDED_AT)            # a calendar, not a shape
+    out[BASIS_SOURCE_KEY] = {"sha256": basis_digest(), "extracted_at": BASIS_RECORDED_AT}
 
     # The IRCC feed joins from the other side: its digest is RECORDED at read time (monthly
     # refresh, no pin) and it is declared ONLY when the run actually read it. Declaring it
@@ -789,21 +853,136 @@ def _reconciliation_retention(frames: Frames, read_ownership, q_live: float) -> 
 
 
 # ===========================================================================================
+# THE ROBUSTNESS SWEEP'S ASSUMPTION LEG (spec §7b run contract; run-32 quant F1 / stress F1)
+# ===========================================================================================
+#
+# `rank_stable: true` SHIPPED ON ALL EIGHT ROWS AS A VERDICT OVER ONE OF FIVE DECLARED AXES.
+# `_rank_stability` iterated `SWEEP_GRID["q_live_per_year"]`; the grid declares FOUR, and
+# `constants.py` states a FIFTH as an existing fact of THIS module — "Task 29 perturbs the join
+# table with a uniform override spanning CONSTANTS['immigrant_ownership_ratio_sweep_span']" —
+# for which no code existed anywhere in the tree. Two committed contracts in direct
+# contradiction, green because no test crossed them. And the omission was not benign: the four
+# grid axes leave the published order INTACT at both endpoints, while the ratio axis reorders
+# EVERY row at 0.155 (rank 1 changes hands) and four rows at 1.033. The one axis that was swept
+# is the one that could not have failed.
+#
+# WHY A LEG OBJECT AND NOT FOUR MORE PARAMETERS. `_ed_series` is called once per (geography,
+# scenario) per leg, and a positional list of five band values threaded through three call
+# layers is the shape where an endpoint silently lands on the wrong axis — the same
+# operand-mix-up class this module's header already names twice. One frozen record, and each leg
+# is CONSTRUCTED as the central leg with exactly one field replaced, so "a leg perturbs one axis"
+# is a property of how the legs are built rather than a rule someone has to follow
+# (`tests/test_pipeline.py` pins it against the central leg, field by field).
+#
+# THE RATIO AXIS IS DELIBERATELY NOT A `SWEEP_GRID` MEMBER. That dict's keyset is held EQUAL to
+# `CENTRAL_ASSUMPTIONS`' by test, on the stated ground that every central assumption is banded;
+# rulings S/T measure the ratio PER GEOGRAPHY, so Task 25b deleted the central scalar and there
+# is no central value for a grid entry to pair with. The override's central setting is therefore
+# `None` — meaning "read the ruled join-table row" — and the span lives where P4 put it, in
+# `CONSTANTS`. A scalar here would silently replace five ruled measurements with one number.
+#
+# STATED RESIDUAL, because it is the one thing this wiring does NOT close. `SWEEP_GRID` rides
+# `assumptions_hash`; `CONSTANTS` does not, and the ratio span now feeds an EMITTED field. So
+# narrowing that span (the one edit that would legitimately flip a `rank_stable` back to `true`)
+# moves the artifact under a byte-identical `assumptions_hash`, and `artifacts/README.md`'s
+# reading table would route the reader to its "the code moved" bucket — a mis-attribution of the
+# same class run 33 closed for the mortality basis and the ruled join table. The fix is one
+# payload key in `constants.assumptions_hash`; it is NOT taken here because that token's coverage
+# is a §7b identity question with its own owner, and widening it silently from inside the sweep
+# is how a second contract starts disagreeing with the first.
+RATIO_SWEEP_AXIS = "immigrant_ownership_ratio"
+RATIO_SWEEP_SPAN_ANCHOR = "immigrant_ownership_ratio_sweep_span"
+
+
+@dataclass(frozen=True)
+class Assumptions:
+    """Every banded assumption the ED grid reads, at ONE setting — the headline's or a leg's.
+
+    The four named fields are `CENTRAL_ASSUMPTIONS`' own keys, so `Assumptions(**CENTRAL_
+    ASSUMPTIONS)` is the central leg and a key added there without a field here raises AT
+    IMPORT rather than being dropped from the sweep. `immigrant_ownership_ratio` is the fifth
+    axis and has no central value by construction (see the section note): `None` means every
+    geography reads its RULED join-table ratio, and a float is the uniform override the sweep
+    applies across all geographies at once.
+    """
+
+    q_live_per_year: float
+    phi_voluntary: float
+    estate_eventual_fraction: float
+    estate_lag_years: int
+    immigrant_ownership_ratio: float | None = None
+
+
+SWEEP_LEG_FIELDS = tuple(f.name for f in fields(Assumptions))
+CENTRAL_LEG = Assumptions(**CENTRAL_ASSUMPTIONS)
+
+
+def _sweep_legs() -> list[tuple[str, Assumptions]]:
+    """The sweep's product: every declared axis at BOTH declared endpoints, ONE axis off-central
+    per leg. Spec §7b asks "does the ordering change ANYWHERE IN THE SWEEP GRID?", so the legs
+    are a UNION over axes and never a joint perturbation — a leg that moved two axes could not
+    attribute a reorder to either, and the verdict would then cover a combination the spec never
+    declared.
+
+    A DECLARED AXIS WITH NO LEG FIELD REFUSES THE RUN, and that is exactly HALF of the forward
+    guard the gates asked for by name ("a future axis added to the constant cannot go unswept").
+    It closes DECLARED -> FIELD: an axis present in `SWEEP_GRID` and absent from the leg can no
+    longer fall out SILENTLY and leave `rank_stable` a verdict over a grid it had not covered.
+
+    IT DOES NOT CLOSE FIELD -> CONSUMED, and that is the door the failure actually walked
+    through: `phi_voluntary` was a declared axis the whole time, and it went unswept because
+    `market_listings` read the module constant instead of the argument — carried in name,
+    inert in effect. Nothing in this function can see that. `tests/test_pipeline.py::
+    test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS` owns the second door and
+    the split is measured, not assumed: with that one test removed, a mutant that ignores all
+    four `SWEEP_GRID` fields inside `_ed_series` leaves 8 of these 10 legs at max|delta ED| =
+    0.0 and passes the remaining 1139 tests — the central run is untouched so no golden byte
+    moves, and the ratio axis alone keeps `rank_stable` false on every row.
+    """
+    declared = {axis: SWEEP_GRID[axis] for axis in sorted(SWEEP_GRID)}
+    declared[RATIO_SWEEP_AXIS] = CONSTANTS[RATIO_SWEEP_SPAN_ANCHOR].value
+
+    legs: list[tuple[str, Assumptions]] = []
+    for axis, endpoints in declared.items():
+        if axis not in SWEEP_LEG_FIELDS:
+            raise CalibrationError(
+                f"the robustness axis {axis!r} is DECLARED and the ED grid has no way to vary it "
+                f"(leg fields: {list(SWEEP_LEG_FIELDS)}) — a declared axis the sweep drops makes "
+                f"`rank_stable` a verdict over a grid it never covered, which is the run-32 "
+                f"CRITICAL this refusal exists to prevent. Add the field and thread it through "
+                f"`_ed_series`, or remove the declaration")
+        legs += [(axis, replace(CENTRAL_LEG, **{axis: endpoint})) for endpoint in endpoints]
+    return legs
+
+
+# ===========================================================================================
 # EXCESS DEMAND
 # ===========================================================================================
 
 def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
-               q_live: float) -> list[float]:
+               assumptions: Assumptions) -> list[float]:
     """ED at every PROJECTED year (the ranking domain), for one (geography, scenario).
 
-    `q_live` is a PARAMETER so the rank_stability sweep can re-run this at the band endpoints;
-    the headline run passes the central value. Nothing else in this function reads a band.
+    EVERY BANDED ASSUMPTION ARRIVES IN `assumptions` AND NOTHING IS READ FROM A MODULE DEFAULT,
+    which is the contract the narrow sweep broke. The headline run passes `CENTRAL_LEG`; each
+    robustness leg passes one axis moved to a declared endpoint. Until run 33 only `q_live` was
+    a parameter here and the other three grid axes rode `market_listings`' defaults, so a leg
+    could not reach them at all — `cohort/listings.py` states the same fact at its own signature.
+
+    THE IMMIGRANT RATIO IS THE ONE FIELD WITH A `None` CENTRAL SETTING, and the branch below is
+    the whole reason: `None` reads the RULED per-geography ratio from the §6 join table (rulings
+    S/T measure it per geography, so there is no central scalar), while a float is the sweep's
+    UNIFORM override — spec §6 amendment #12(C)'s containment argument is stated over exactly
+    that uniform construction, and it was resting on code that did not exist.
     """
     ctx = f"{geo.value}/{scen.value}"
+    q_live = assumptions.q_live_per_year
     inputs = resolve_immigrant_inputs(geo)
+    ratio = (inputs.ownership_ratio if assumptions.immigrant_ownership_ratio is None
+             else assumptions.immigrant_ownership_ratio)
     headship = {a: headship_rate(frames.headship, a) for a in range(0, 101)}
     ownership = {a: read_ownership(geo, a) for a in range(25, 101)}
-    p_nonimm = read_ownership(geo, 40)
+    p_nonimm = read_ownership(geo, P_NONIMM_AGE)
 
     pop_g_s = frames.pop[(frames.pop["geography"] == geo) & (frames.pop["scenario"] == scen)]
     compo_g_s = frames.compo[(frames.compo["geography"] == geo)
@@ -823,7 +1002,10 @@ def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
         stock = (_add(nxt, _band_entry_stock(pop_g_s, entry_year, geo, frames.la, read_ownership))
                  if entry_year <= last_pop_year else nxt)
     listings = market_listings(voluntary_by_year=listings_in["voluntary"],
-                              estate_by_year=listings_in["estate"])
+                              estate_by_year=listings_in["estate"],
+                              lag=assumptions.estate_lag_years,
+                              eventual_fraction=assumptions.estate_eventual_fraction,
+                              phi_voluntary=assumptions.phi_voluntary)
 
     # --- demand + the balance, per projected year.
     def resident(year: int):
@@ -844,34 +1026,54 @@ def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
         scale = p_res / p_isq
         return {a: p * scale for a, p in by_age.items()}, by_age, p_isq, surviving
 
+    # ONE `resident()` EVALUATION PER YEAR, CARRIED FORWARD. Every projected year is both a `t`
+    # and the next year's `t-1`, and evaluating both legs inside the iteration re-derived each
+    # year TWICE — the pandas row selections in `_pop_by_age` / `_surviving_arrivals`, which the
+    # profile says is where this function spends two thirds of its time. That was a private
+    # inefficiency while the run evaluated three ED grids; the five-axis sweep evaluates ELEVEN
+    # and it rode every one. `_projected_years` ASSERTS the lattice is CONTIGUOUS, and that
+    # assertion is what makes the carry sound rather than merely faster: the previous iteration's
+    # `t` IS this iteration's `t-1`, never a year the frame might skip. The values are unchanged
+    # bit-for-bit (`resident` is a pure function of the year) — measured against the committed
+    # golden, whose only moved field is `rank_stable`.
     series = []
+    resident_tm1 = resident(years[0] - 1)[0]
     for t in years:
         resident_t, raw_t, p_isq_t, surviving_t = resident(t)
-        resident_tm1, _, _, _ = resident(t - 1)
         assert_i2_identity(sum(resident_t.values()), p_isq_t, surviving_t)   # operand binding
         arrivals_t = _arrival_flow(compo_g_s, _arrival_year(t), ctx=f"{ctx}/{t}")
         D = total_owner_demand(
             native_formation(resident_t, resident_tm1, headship, ownership),
-            immigrant_formation(arrivals_t, inputs.immigrant_headship, p_nonimm,
-                                inputs.ownership_ratio))
+            immigrant_formation(arrivals_t, inputs.immigrant_headship, p_nonimm, ratio))
         # OwnerStock takes RAW ISQ population — P_ISQ, collectives included — never P_resident:
         # §6's operand binding governs the FORMATION equation alone, and netting arrivals out of
         # this denominator would scale |ED| away from zero (balance/owner_stock.py states it at
         # the use site).
         os = owner_stock(raw_t, headship, ownership)
         series.append(excess_demand(D, _listings_at(listings, t, ctx=f"{ctx}/{t}"), os))
+        resident_tm1 = resident_t
     return series
 
 
-def _ed_dict(geos, frames: Frames, read_ownership, q_live: float) -> dict:
-    return {g: {sc: _ed_series(g, sc, frames, read_ownership, q_live)
+def _ed_dict(geos, frames: Frames, read_ownership, assumptions: Assumptions) -> dict:
+    return {g: {sc: _ed_series(g, sc, frames, read_ownership, assumptions)
                 for sc in (Scenario.REFERENCE, Scenario.LOW, Scenario.HIGH)} for g in geos}
 
 
 def _rank_stability(geos, frames: Frames, read_ownership,
                     central_ed: dict) -> dict[Geography, bool]:
     """The RUN-CONTRACT robustness sweep (codex r8-F1): a geography's rank is STABLE iff it is
-    unchanged at BOTH q_live band endpoints against the central value.
+    unchanged across EVERY leg `_sweep_legs` declares — five axes at both endpoints each, ten
+    legs — measured against the central value. Spec §7b's question is "does the ordering change
+    ANYWHERE IN THE SWEEP GRID?", so the verdict is a UNION and a single reordering leg is
+    enough to make a geography unstable.
+
+    IT RETURNS `False` FOR EVERY GEOGRAPHY ON THE COMMITTED VINTAGE, and that is the measured
+    answer rather than a regression: the four `SWEEP_GRID` axes leave the published order intact
+    at both endpoints, while the join-table ratio override reorders every row at 0.155 and four
+    rows at 1.033. The narrow sweep that shipped `true` was evaluating the one axis that could
+    not have failed (run-32 quant F1 / stress F1, reached independently; `_sweep_legs` carries
+    the contradiction the two committed contracts had been holding).
 
     THE CENTRAL LEG IS HANDED IN, NOT RECOMPUTED, and that is a contract rather than a saving.
     The run contract says the headline IS the central-value evaluation, so a sweep that
@@ -881,15 +1083,16 @@ def _rank_stability(geos, frames: Frames, read_ownership,
     Passing the headline in makes "the sweep's central leg is the headline" structural.
 
     NO SWEEP LEG RUNS `check_reconciliation` — ruling O, and the reason is measured, not
-    stylistic: at q_live 0.06, the sweep grid's OWN low endpoint, the spec-pinned cohort retains
+    stylistic (it binds all ten legs now, and the q_live pair is still the one that would trip):
+    at q_live 0.06, the sweep grid's OWN low endpoint, the spec-pinned cohort retains
     0.4565 on the CORRECT model (the gate RAISES) while a doubled decrement retains 0.3724 (the
     gate PASSES), inverted at 21/21 start years. Run at sweep scope this gate would reject the
     right model and accept the wrong one. The sweep's product is RANK STABILITY; calibration is
     the central run's job.
     """
-    lo, hi = SWEEP_GRID["q_live_per_year"]
-    legs = [central_ed] + [_ed_dict(geos, frames, read_ownership, q) for q in (lo, hi)]
-    orders = [{r.geography: r.rank for r in rank_geographies(leg)} for leg in legs]
+    grids = [central_ed] + [_ed_dict(geos, frames, read_ownership, leg)
+                            for _axis, leg in _sweep_legs()]
+    orders = [{r.geography: r.rank for r in rank_geographies(grid)} for grid in grids]
     return {g: all(o[g] == orders[0][g] for o in orders) for g in geos}
 
 
@@ -916,8 +1119,9 @@ def evaluate_tripwires(data_dir: Path | None = None, now_year: int = 2026,
     """Evaluate spec §7c's six indicators and NOTHING ELSE — the path behind `demoflow tripwires`.
 
     IT TAKES NO `out_dir`, AND THAT IS THE POINT (run-30 carry C3). Asking for six statuses used
-    to run `run_pipeline`, which loads five workbooks, evaluates the ED grid four times (central
-    + the three-leg `_rank_stability` sweep) and WRITES BOTH DOCUMENTS — so a status listing
+    to run `run_pipeline`, which loads five workbooks, evaluates the ED grid ELEVEN times (the
+    central run + `_rank_stability`'s ten-leg five-axis sweep) and WRITES BOTH DOCUMENTS — so a
+    status listing
     re-emitted `rankings.json` into whatever directory the operator happened to be standing in.
     A function with nowhere to write cannot reacquire that behaviour by a later edit that forgets
     why; the separation is structural rather than a rule someone has to remember.
@@ -979,10 +1183,10 @@ def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,
     geos = [g for g in present if g not in unresolved]
 
     # RULING O — the CENTRAL-ASSUMPTION run, and only it, discharges the reconciliation gate.
-    q_live = CENTRAL_ASSUMPTIONS["q_live_per_year"]
-    check_reconciliation(_reconciliation_retention(frames, read_ownership, q_live))
+    check_reconciliation(
+        _reconciliation_retention(frames, read_ownership, CENTRAL_LEG.q_live_per_year))
 
-    ed = _ed_dict(geos, frames, read_ownership, q_live)
+    ed = _ed_dict(geos, frames, read_ownership, CENTRAL_LEG)
     ed, exclusions = exclude_from_rankings(ed, unresolved)
 
     # `borrowed_prior` says the geography's INPUTS were borrowed from a coarser prior, and
@@ -1004,12 +1208,24 @@ def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,
     trips, trip_log = _tripwire_results(landings, now=(now_year, now_month))
     source_keys = frozenset(vintage["source_hashes"])
 
-    # EMISSION IS ALL-OR-NOTHING (review finding F2). Both documents are BUILT AND VALIDATED
-    # before either is written. The landed body wrote `rankings.json` and only then built
-    # `tripwire_document`, so a refusal in the second document shipped the first file alone —
-    # contradicting the sentence `artifacts.py` raises inside that very refusal ("NO file is
-    # emitted and the run exits nonzero"). A half-emitted pair is worse than no pair: the
-    # rankings file carries the same envelope either way, so nothing downstream can tell.
+    # EMISSION IS ALL-OR-NOTHING (review finding F2), AND THE WRITES ARE PART OF THAT CLAIM
+    # (run-33 stress gate F8). Both documents are BUILT AND VALIDATED before either is
+    # written: the landed body wrote `rankings.json` and only then built `tripwire_document`,
+    # so a refusal in the second document shipped the first file alone — contradicting the
+    # sentence `artifacts.py` raises inside that very refusal ("NO file is emitted and the run
+    # exits nonzero"). A half-emitted pair is worse than no pair: the rankings file carries the
+    # same envelope either way, so nothing downstream can tell, and `refuse_cross_vintage`
+    # operates WITHIN a run over a set this function itself builds.
+    #
+    # THE VALIDATION HALF WAS TRUE AND THE WRITE HALF WAS NOT. The writes were a bare
+    # sequential loop, so an I/O failure on the SECOND document left the first on disk —
+    # measured, `['rankings.json']` survived. Each document is therefore SERIALIZED to a
+    # staging name beside its final one and RENAMED only after every write has succeeded, and
+    # the staging files are removed on any exit. THE RESIDUAL, stated rather than papered
+    # over: the renames themselves are a loop, so a failure BETWEEN two `os.replace` calls
+    # still leaves a mismatched pair. That window is a same-directory metadata operation on a
+    # file that already exists, where the old window spanned a full open-and-serialize; POSIX
+    # gives no atomic multi-file rename, so narrowing is the honest ceiling, not closing.
     documents = {
         "rankings.json": rankings_document(rankings, vintage, ah, source_keys,
                                            exclusions=exclusions),
@@ -1017,8 +1233,15 @@ def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,
     }
     out_dir = Path(out_dir) if out_dir else Path.cwd() / "artifacts"
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name, document in documents.items():
-        write_json_strict(out_dir / name, document, source_keys)
+    staged = {name: out_dir / (name + STAGING_SUFFIX) for name in documents}
+    try:
+        for name, document in documents.items():
+            write_json_strict(staged[name], document, source_keys)
+        for name, tmp in staged.items():
+            os.replace(tmp, out_dir / name)
+    finally:
+        for tmp in staged.values():
+            tmp.unlink(missing_ok=True)
     return {"rankings": rankings, "tripwires": trips, "tripwire_log": trip_log,
             "exclusions": exclusions, "exit_code": run_exit_code(trips), "out_dir": out_dir,
             "artifacts": list(documents), "assumptions_hash": ah, "data_vintage": vintage}

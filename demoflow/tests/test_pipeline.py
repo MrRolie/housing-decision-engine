@@ -13,22 +13,35 @@ is consumed by nothing until here), the RUN-CONTRACT central/sweep split, and sp
 run-level exit code. Each gets a test that FAILS if the wiring is dropped, not merely one that
 passes when it is present.
 """
+import dataclasses
 import json
 import math
 import shutil
+from pathlib import Path
 
 import pytest
 
+from demoflow.cohort.basis import (
+    BASIS_DIGEST_AGES,
+    BASIS_DIGEST_GENDERS,
+    BASIS_DIGEST_YEARS,
+    BASIS_SOURCE_KEY,
+)
 from demoflow.errors import CalibrationError, LoaderError
 from demoflow.geography import RA_PROXY_MEMBERS, Geography, Scenario
 from demoflow.loaders.census import CENSUS_EXTRACT, OWNERSHIP_ARTIFACT
 from demoflow.loaders.compo import FLOW_SPAN
-from demoflow.loaders.constants import CENTRAL_ASSUMPTIONS, SWEEP_GRID
+from demoflow.loaders.constants import (
+    CENTRAL_ASSUMPTIONS,
+    CONSTANTS,
+    SWEEP_GRID,
+    assumptions_hash,
+)
 from demoflow.loaders.ircc import CSV_NAME as IRCC_CSV_NAME
 from demoflow.loaders.living_arrangement import ARTIFACT as LIVING_ARRANGEMENT_ARTIFACT
 from demoflow.loaders.pins import DATA_DIR, WORKBOOK_SHA256, raw_anchor
 from demoflow.output.artifacts import DERIVED_ARTIFACT_KEYS, SOURCE_KEY_REGISTRY
-from demoflow.output.rankings import CLOSED_COHORT_EXCEEDANCE_MEMBERS
+from demoflow.output.rankings import CLOSED_COHORT_EXCEEDANCE_MEMBERS, rank_geographies
 from demoflow.output.tripwires import (
     PR_LANDINGS_INDICATOR,
     REQUIRED_INDICATORS,
@@ -36,6 +49,7 @@ from demoflow.output.tripwires import (
     Status,
 )
 
+import demoflow.output.artifacts as artifacts
 import demoflow.pipeline as pipeline
 from demoflow.pipeline import (
     EXIT_CAUSE_TO_LISTING_CAUSE,
@@ -59,10 +73,33 @@ def _data_copy(dest):
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
     """ONE full pipeline run for the whole module — it loads five workbooks and evaluates the
-    ED grid four times (central + two sweep legs + the sweep's own central leg), so a
-    per-test run would multiply a ~minute of real I/O by every assertion below."""
+    ED grid ELEVEN times (the central run, reused as the sweep's central leg, plus
+    `_rank_stability`'s ten five-axis legs), so a per-test run would multiply minutes of real
+    I/O by every assertion below.
+
+    IT ALSO RECORDS THE RUN'S q CONSUMPTION, because that is the one measurement the basis
+    digest's coverage claim needs and no unit test can make: `BASIS_DIGEST_*` must be a
+    SUPERSET of what the model actually reads, and the population-lattice years come from
+    DATA, not from any constant a unit test could bind to. The wrapper is a pass-through and
+    it patches `pipeline.q_at` — the module global BOTH call sites resolve — so `basis_digest`
+    itself, which calls `basis.q_at` internally, is deliberately not recorded: the digest's own
+    lookups are not model consumption. try/finally, because a raising `run_pipeline` must not
+    leak the patch into the rest of the module.
+    """
     out = tmp_path_factory.mktemp("artifacts")
-    result = run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026)
+    consumed: set[tuple[int, str, int]] = set()
+    real_q_at = pipeline.q_at
+
+    def recording_q_at(age, gender, year):
+        consumed.add((age, gender, year))
+        return real_q_at(age, gender, year)
+
+    pipeline.q_at = recording_q_at
+    try:
+        result = run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026)
+    finally:
+        pipeline.q_at = real_q_at
+    result["_q_consumption"] = consumed
     result["_docs"] = {
         "rankings": json.loads((out / "rankings.json").read_text(encoding="utf-8")),
         "tripwires": json.loads((out / "tripwire_baseline.json").read_text(encoding="utf-8")),
@@ -173,7 +210,12 @@ def test_the_envelope_covers_every_input_the_run_reads(run):
     inputs and every population and immigrant-flow workbook was uncovered — for those the
     envelope could not make the data-vs-code call it exists to make."""
     emitted = set(run["_docs"]["rankings"]["data_vintage"]["source_hashes"])
-    assert emitted == set(RUN_SOURCES) | set(RUN_ARTIFACTS)
+    assert emitted == set(RUN_SOURCES) | set(RUN_ARTIFACTS) | {BASIS_SOURCE_KEY}
+    # ...and the CPM mortality basis, which is not a file under `data_dir` at all (data-gate
+    # finding F1): every q value the supply side rides on comes off it, and until run 33 two
+    # runs over DIFFERENT upstream tables emitted different bytes under an IDENTICAL envelope.
+    assert BASIS_SOURCE_KEY not in set(RUN_SOURCES) | set(RUN_ARTIFACTS)
+    assert not (_DATA / BASIS_SOURCE_KEY).exists()
     # the five modelling inputs the plan's envelope missed entirely
     assert {"pop-as-rmr-base.xlsx", "pop-as-ra-base.xlsx", "compo-rmr-base.xlsx",
             "compo-ra-base.xlsx", "hors_aligned_csd_98100232.json"} <= emitted
@@ -210,6 +252,92 @@ def test_a_derived_artifacts_own_bytes_ride_the_envelope(tmp_path):
     from demoflow.loaders.census import load_ownership_rates, ownership_rate
     assert ownership_rate(load_ownership_rates(data_dir=edited), Geography.MTL_RMR, 40) != \
         ownership_rate(load_ownership_rates(data_dir=_DATA), Geography.MTL_RMR, 40)
+
+
+def test_a_moved_mortality_basis_moves_the_envelope_and_the_identity(monkeypatch):
+    """DATA-GATE FINDING F1: the CPM basis is the sole source of every q value the supply side
+    rides on, and it was OUTSIDE the envelope entirely — so the answer to "can two runs over
+    different upstream bytes emit the same artifact identity?" was YES.
+
+    The swap is the data gate's own prescription (`_BASE_TABLES` re-pointed at the package's
+    `cpm2014_public_*` pair, the shape of actuarial-system re-publishing the combined tables).
+    Both halves are asserted, because only the PAIR is the fix: the envelope MOVES (so the red
+    is attributable to DATA) and `assumptions_hash` does NOT (so it is not mis-attributed to
+    the assumption selection). The digest is taken through the §2-sanctioned public surface —
+    `mortality._DATA_DIR` is a private reach-in the spec forbids the model path.
+    """
+    from mcp_server.engine import mortality
+
+    before = pipeline._source_hashes(_DATA, ircc=None)
+    identity_before, assumptions_before = pipeline._run_identity(_DATA, ircc=None), assumptions_hash()
+
+    monkeypatch.setattr(mortality, "_base_cache", {})          # else the loaded arrays answer
+    monkeypatch.setitem(mortality._BASE_TABLES, "CPM2014_combined",
+                        ("cpm2014_public_male.csv", "cpm2014_public_female.csv", 2014))
+    after = pipeline._source_hashes(_DATA, ircc=None)
+
+    assert before[BASIS_SOURCE_KEY]["sha256"] != after[BASIS_SOURCE_KEY]["sha256"]
+    assert {k: v for k, v in before.items() if k != BASIS_SOURCE_KEY} == \
+        {k: v for k, v in after.items() if k != BASIS_SOURCE_KEY}, \
+        "the basis swap moved a FILE digest — the probe is not isolating what it claims"
+    assert pipeline._run_identity(_DATA, ircc=None) != identity_before
+    assert assumptions_hash() == assumptions_before, (
+        "a moved mortality TABLE is a data move, not an assumption-selection move — "
+        "attributing it to `assumptions_hash` would send the reader to the wrong ledger")
+
+
+def test_the_basis_entry_publishes_a_declared_recording_date(run):
+    """`extracted_at` for the basis is DECLARED, not stamped: the dependency is a uv path dep
+    that publishes no pull date through any public surface, so the entry records the date its
+    q surface was measured into this envelope and says so at its declaration. Bound to that ONE
+    declaration site rather than re-typed here, so a second copy cannot drift into existence;
+    `tests/test_basis_guard.py` holds the other half — the digest the date describes."""
+    entry = run["_docs"]["rankings"]["data_vintage"]["source_hashes"][BASIS_SOURCE_KEY]
+    assert entry["extracted_at"] == pipeline.BASIS_RECORDED_AT
+    assert len(entry["sha256"]) == 64
+
+
+def test_the_basis_digest_grid_covers_the_q_surface_the_run_actually_reads(run):
+    """THE COVERAGE CLAIM, MEASURED RATHER THAN RE-TYPED. `cohort/basis.py` declares
+    `BASIS_DIGEST_*` a superset of what the model consumes, and UNDER-covering is the failure
+    that matters: a re-published table moving a q value outside the grid ships a moved basis
+    under a BYTE-IDENTICAL envelope, which is the finding the digest exists to close.
+
+    `tests/test_basis_guard.py` binds the AGE axis to the model's own constants (`ROLL_AGE`,
+    `BAND_ENTRY_AGE`, the reconciliation cohort's decade) and can do it without I/O. THE YEAR
+    AXIS HAS NO SUCH CONSTANT: the supply roll spans `range(base_year, last projected year+1)`
+    off the ISQ population frame, so a unit-level assertion there can only re-type the grid's
+    own literal — it fires when the GRID narrows and stays green when CONSUMPTION widens past
+    it, which is the direction that actually ships the defect. Recording the real run closes
+    both directions on all three axes, and catches what a data-side binding still could not:
+    a NEW q call site in `pipeline.py` at an age or year outside the grid.
+
+    MEASURED on this vintage: 80 distinct lookups, ages 75-84, years 2021-2051. The age axis
+    carries 16 ages of slack; the YEAR axis carries NONE — consumption is exactly the grid, so
+    the first ISQ vintage that extends the lattice under-covers immediately.
+
+    SCOPE: the recorder patches `pipeline.q_at`, today's only consumer under `src/`. A future
+    module importing `cohort.basis.q_at` directly would read a surface this test cannot see.
+    """
+    grid = {(age, gender, year) for age in BASIS_DIGEST_AGES
+            for gender in BASIS_DIGEST_GENDERS for year in BASIS_DIGEST_YEARS}
+    consumed = run["_q_consumption"]
+
+    # NON-VACUITY FIRST: a recorder that captured nothing — or lost an axis — passes the subset
+    # assertion trivially. Bound to the constants the guard test already binds, not new literals.
+    _geo, _scen, recon_start, recon_age = RECONCILIATION_COHORT
+    ages = {age for age, _, _ in consumed}
+    years = {year for _, _, year in consumed}
+    assert {gender for _, gender, _ in consumed} == {"M", "F"}
+    assert pipeline.ROLL_AGE in ages
+    assert set(range(recon_age, recon_age + 10)) <= ages
+    assert set(range(recon_start, recon_start + 10)) <= years
+
+    assert consumed <= grid, (
+        f"the run reads q OUTSIDE the digested grid at {sorted(consumed - grid)[:8]} — the "
+        f"basis digest is blind there, so a re-published table that moves those cells ships "
+        f"under a byte-identical envelope. Widen `cohort/basis.BASIS_DIGEST_*` to cover them, "
+        f"then re-mint the golden and `_BASIS_DIGEST_AT_DECLARATION` in the same commit")
 
 
 def test_a_derived_artifacts_extraction_date_is_read_off_its_own_provenance(run):
@@ -465,10 +593,9 @@ def test_the_published_ed_is_computed_from_the_aligned_curve_and_never_the_shipp
 
     frames = pipeline._load_all(_DATA)
     read = pipeline._ownership_reader(_DATA)
-    q = CENTRAL_ASSUMPTIONS["q_live_per_year"]
-
     def series(geo, read_ownership):
-        return pipeline._ed_series(geo, Scenario.REFERENCE, frames, read_ownership, q)
+        return pipeline._ed_series(geo, Scenario.REFERENCE, frames, read_ownership,
+                                   pipeline.CENTRAL_LEG)
 
     # --- value: the published series IS the aligned curve's, and the choice moves the number.
     # The shipped-forced reader is built on a REPLICA join, never the committed one, whose
@@ -568,17 +695,21 @@ def test_the_central_run_invokes_the_reconciliation_gate(monkeypatch, tmp_path):
 def test_sweep_legs_never_re_run_the_reconciliation_gate(monkeypatch):
     """Ruling O's other half, and the measured reason: at q_live 0.06 — the sweep grid's OWN
     low endpoint — the spec-pinned cohort RAISES on the correct model while a doubled decrement
-    PASSES, inverted at 21/21 start years. Binding every leg makes the spec self-contradictory."""
+    PASSES, inverted at 21/21 start years. Binding every leg makes the spec self-contradictory.
+
+    IT NOW COVERS TEN LEGS RATHER THAN TWO (run-33 five-axis sweep) and the assertion is
+    unchanged, which is the point: widening the sweep must not widen the gate's scope with it."""
     calls = []
     monkeypatch.setattr(pipeline, "check_reconciliation", lambda retention: calls.append(retention))
     lo, hi = SWEEP_GRID["q_live_per_year"]
     frames = pipeline._load_all(_DATA)
     read = pipeline._ownership_reader(_DATA)
     geos = [Geography.MTL_RMR, Geography.QC_RMR]
-    central = pipeline._ed_dict(geos, frames, read, CENTRAL_ASSUMPTIONS["q_live_per_year"])
+    central = pipeline._ed_dict(geos, frames, read, pipeline.CENTRAL_LEG)
     stable = pipeline._rank_stability(geos, frames, read, central)
     assert calls == [], "a sweep leg ran the central-run-only reconciliation gate"
     assert set(stable) == set(geos)
+    assert len(pipeline._sweep_legs()) == 10
     assert (lo, hi) == (0.06, 0.11)
 
 
@@ -710,7 +841,7 @@ def test_native_formation_reads_the_netted_operands_at_both_t_and_t_minus_1(monk
                         lambda t_map, tm1_map, hs, own: (
                             seen.append((sum(t_map.values()), sum(tm1_map.values()))),
                             real_native_formation(t_map, tm1_map, hs, own))[1])
-    pipeline._ed_series(geo, scen, frames, read, CENTRAL_ASSUMPTIONS["q_live_per_year"])
+    pipeline._ed_series(geo, scen, frames, read, pipeline.CENTRAL_LEG)
 
     assert len(seen) == len(years)                       # once per projected year
     # approx, not ==: the operand is rebuilt per age as p * (P_resident / P_ISQ), so its sum
@@ -753,7 +884,7 @@ def test_owner_stock_takes_the_raw_isq_population_never_the_netted_resident_one(
     monkeypatch.setattr(pipeline, "owner_stock",
                         lambda pop, hs, own: (seen.append(sum(pop.values())),
                                               real_owner_stock(pop, hs, own))[1])
-    pipeline._ed_series(geo, scen, frames, read, CENTRAL_ASSUMPTIONS["q_live_per_year"])
+    pipeline._ed_series(geo, scen, frames, read, pipeline.CENTRAL_LEG)
     assert seen == raw_totals   # P_ISQ, collectives included, once per projected year
 
     # and the netted operand is a MATERIALLY different number — 2035 carries P_ISQ 4,484,077
@@ -820,7 +951,7 @@ def test_the_ed_roll_forward_takes_its_entrants_from_band_entry_only(monkeypatch
     monkeypatch.setattr(pipeline, "_standing_stock",
                         lambda *a, **k: (standing.append(a[1]), real_standing(*a, **k))[1])
     pipeline._ed_series(Geography.QC_RMR, Scenario.REFERENCE, frames, read,
-                        CENTRAL_ASSUMPTIONS["q_live_per_year"])
+                        pipeline.CENTRAL_LEG)
     assert len(standing) == 1, f"the roll-forward re-anchored to the ISQ 75+ stock {standing}"
     # one band-entry cohort per rolled year, from the year after the base through the last
     # population year — the cohort's ONLY entry point.
@@ -852,6 +983,153 @@ def test_rank_stable_covers_every_ranked_geography(run):
     assert len(rows) == len([g for g in Geography])
     assert all(isinstance(r["rank_stable"], bool) for r in rows)
     assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
+
+
+def test_the_robustness_sweep_evaluates_EVERY_declared_axis_at_BOTH_endpoints():
+    """CRITICAL — run-33 quant F1 and stress F1, reached independently, and the seat reproduced
+    it: `rank_stable: true` shipped on all eight golden rows as a verdict over ONE of FIVE
+    declared axes. `_rank_stability` iterated `SWEEP_GRID["q_live_per_year"]` alone; the grid
+    declares FOUR, and `constants.py` states a FIFTH as an existing fact of this very module —
+    "Task 29 perturbs the join table with a uniform override spanning
+    CONSTANTS['immigrant_ownership_ratio_sweep_span']" — for which no code existed anywhere in
+    the tree. Spec §7b asks whether the ordering changes ANYWHERE IN THE SWEEP GRID; a verdict
+    computed over one axis cannot answer that question, and the one it does answer is the axis
+    that turned out not to move the order.
+
+    THIS IS THE AXIS-COVERAGE ASSERTION `test_rank_stable_covers_every_ranked_geography` DOES
+    NOT MAKE. That test pins GEOGRAPHY coverage and bool TYPE, and both held while four of five
+    axes were silently absent — which is why the narrowing shipped green.
+
+    ONE AXIS OFF-CENTRAL PER LEG is asserted too, and it is a contract rather than a style: a leg
+    that moved two axes at once could not attribute a reorder to either, and the union verdict
+    would then be true of a combination the spec never declared.
+    """
+    legs = pipeline._sweep_legs()
+    declared = set(SWEEP_GRID) | {pipeline.RATIO_SWEEP_AXIS}
+    assert {axis for axis, _ in legs} == declared, "a declared robustness axis is never evaluated"
+    assert len(legs) == 2 * len(declared)
+
+    for axis in declared:
+        endpoints = (SWEEP_GRID[axis] if axis in SWEEP_GRID
+                     else CONSTANTS["immigrant_ownership_ratio_sweep_span"].value)
+        assert (sorted(getattr(leg, axis) for a, leg in legs if a == axis)
+                == sorted(endpoints)), f"{axis} is not evaluated at both declared endpoints"
+
+    for axis, leg in legs:
+        moved = [f for f in pipeline.SWEEP_LEG_FIELDS
+                 if getattr(leg, f) != getattr(pipeline.CENTRAL_LEG, f)]
+        assert moved == [axis], f"leg for {axis} moved {moved} — a leg perturbs ONE axis"
+
+
+def test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS():
+    """THE SECOND DOOR, and it is the one the original CRITICAL walked through: a leg field
+    reachable in NAME and inert in EFFECT. `_sweep_legs` refuses a declared axis that has no leg
+    FIELD, which closes declared -> field. Nothing closed field -> CONSUMED, and that is the half
+    that actually failed — `phi_voluntary` was a declared `SWEEP_GRID` axis the whole time and
+    still could not move an ED number, because `market_listings` read the module constant instead
+    of an argument.
+
+    MEASURED SURVIVABLE, which is why this is a test and not a comment. A mutant that ignores the
+    four grid fields inside `_ed_series` (reading `CENTRAL_LEG`'s values in their place) leaves 8
+    of the 10 legs INERT at max|delta ED| = 0.0 and passes the ENTIRE suite — the axis-coverage
+    test above, the `rank_stable is False` pin, and both golden byte-matches included. Nothing
+    sees it because the CENTRAL run is untouched, so no golden byte moves; and because the ratio
+    axis ALONE saturates the union verdict (it reorders all eight rows at 0.155), so `false` on
+    every row stays satisfiable by ONE live axis. A one-axis sweep is exactly the defect run 33
+    exists to close, and it would have shipped green a second time.
+
+    ONE GEOGRAPHY AT `REFERENCE` IS ENOUGH, and the cost is stated rather than hidden: eleven ED
+    series on frames loaded ONCE — measured at 4s end to end, most of it that single load, against
+    a suite already near five minutes. All eight geographies move on all ten legs (measured), so
+    the choice of geography is not load-bearing. Iterating LEGS rather than AXES is deliberate
+    too — it also catches a declared endpoint that has drifted onto the central value, which is
+    an inert leg by a different route.
+    """
+    frames = pipeline._load_all(_DATA)
+    read = pipeline._ownership_reader(_DATA)
+    geo = Geography.MTL_RMR
+    central = pipeline._ed_series(geo, Scenario.REFERENCE, frames, read, pipeline.CENTRAL_LEG)
+
+    for axis, leg in pipeline._sweep_legs():
+        series = pipeline._ed_series(geo, Scenario.REFERENCE, frames, read, leg)
+        assert series != central, (
+            f"the {axis!r} leg at endpoint {getattr(leg, axis)!r} reproduces the CENTRAL ED "
+            f"series at {geo.value} — the axis is swept in NAME and its field never reaches the "
+            f"model, so `rank_stable` reports a verdict over a grid it did not vary")
+
+
+def test_the_central_leg_reads_the_RULED_per_geography_ratio_and_never_a_scalar():
+    """The other side of the ratio axis, and it is the reason the override is a sweep-only
+    field with `None` as its central value. Task 25b DELETED the plan's `immigrant_ratio_center`
+    scalar because rulings S/T measure the ratio PER GEOGRAPHY — so the headline run must read
+    the join table row by row, and a central scalar here would silently replace five ruled
+    measurements with one number. The override exists for the SWEEP alone."""
+    assert pipeline.CENTRAL_LEG.immigrant_ownership_ratio is None
+    assert "immigrant_ratio_center" not in SWEEP_GRID and "immigrant_ratio_center" not in CENTRAL_ASSUMPTIONS
+    assert pipeline.CENTRAL_LEG == pipeline.Assumptions(**CENTRAL_ASSUMPTIONS)
+
+
+def test_a_declared_sweep_axis_the_ED_grid_cannot_VARY_is_REFUSED(monkeypatch):
+    """The forward guard stress F1 asks for by name — "a future axis added to the constant cannot
+    go unswept". The failure this closes is the one that already happened: an axis declared in
+    `SWEEP_GRID` and absent from the sweep's product fell out SILENTLY, and `rank_stable` then
+    reported a verdict over a grid it had not covered. A declared axis the leg cannot carry now
+    REFUSES the run rather than shrinking the sweep."""
+    monkeypatch.setitem(SWEEP_GRID, "tenure_transition_rate", (0.1, 0.2))
+    with pytest.raises(CalibrationError, match="tenure_transition_rate"):
+        pipeline._sweep_legs()
+
+
+def test_rank_stable_is_FALSE_on_every_row_of_the_committed_vintage(run):
+    """THE MEASURED STATE, pinned so it cannot quietly revert to the false attestation.
+
+    `false` on all eight rows is the CORRECT output of the five-axis sweep, not a regression:
+    the join-table ratio axis reorders the published ranking at both of its declared endpoints,
+    and the union over every axis therefore finds no geography whose rank is unchanged
+    everywhere. The four grid axes alone leave the order intact — which is exactly why sweeping
+    one of them and calling it `rank_stable` produced a green verdict for a year.
+
+    It also kills the one silent failure the axis-coverage test above cannot see: a
+    `_sweep_legs()` that returned NOTHING would satisfy every set assertion vacuously and make
+    the union verdict trivially TRUE.
+    """
+    rows = run["_docs"]["rankings"]["rankings"]
+    assert len(rows) == len([g for g in Geography])
+    assert [r["rank_stable"] for r in rows] == [False] * len(rows), (
+        "the five-axis sweep reorders the ranking at the join-table ratio endpoints, so no row "
+        "is rank-stable on the committed vintage — a True here means an axis stopped being swept")
+
+
+def test_the_join_table_ratio_endpoint_is_the_axis_THAT_REORDERS(run):
+    """WHICH axis carries the verdict, measured rather than asserted — so a future regression
+    that drops the ratio leg reds HERE with its cause named, instead of flipping eight booleans
+    back to `true` with no reader able to say why.
+
+    MEASURED at the low endpoint 0.155, and the permutation reproduces run-32's quant and stress
+    gates independently (both ran an out-of-tree harness, this runs the shipped code): HORS_RMR
+    1->4, LAURENTIDES 2->6, LANAUDIERE 3->7, LAVAL_RA13 4->1, MONTEREGIE 5->3, MTL_RMR 6->2,
+    QC_RMR 7->8, MTL_ISLAND_RA06 8->5. Every ranked geography moves, and rank 1 — the geography
+    the whole artifact exists to name — changes hands. The 1.033 endpoint moves four rows; the
+    union is what `rank_stable` reports.
+
+    Only the LOW endpoint is evaluated here, and that is a cost decision stated rather than
+    hidden: it is one ED grid, it is the endpoint that moves every row, and the union over all
+    ten legs is already covered by the run fixture's own `rank_stable` above.
+    """
+    frames = pipeline._load_all(_DATA)
+    read = pipeline._ownership_reader(_DATA)
+    geos = [g for g in Geography if g in set(frames.pop["geography"])]
+    lo, _hi = CONSTANTS["immigrant_ownership_ratio_sweep_span"].value
+    leg = dataclasses.replace(pipeline.CENTRAL_LEG, immigrant_ownership_ratio=lo)
+
+    swept = rank_geographies(pipeline._ed_dict(geos, frames, read, leg))
+    swept_order = [r.geography.value for r in sorted(swept, key=lambda r: r.rank)]
+    central_order = [r["geography"] for r in run["_docs"]["rankings"]["rankings"]]
+
+    assert set(swept_order) == set(central_order)
+    moved = [g for g in central_order if central_order.index(g) != swept_order.index(g)]
+    assert moved == central_order, f"only {len(moved)} of {len(central_order)} rows moved"
+    assert swept_order[0] != central_order[0], "rank 1 did not change hands"
 
 
 def test_hors_rmr_is_ranked_and_the_exclusion_path_still_exists(run):
@@ -886,6 +1164,33 @@ def test_neither_artifact_is_emitted_when_the_second_document_refuses(monkeypatc
     assert not out.exists() or list(out.iterdir()) == []
 
 
+def test_an_io_failure_on_the_second_write_leaves_neither_artifact(monkeypatch, tmp_path):
+    """Stress gate F8. "EMISSION IS ALL-OR-NOTHING" over-claimed: VALIDATION was
+    all-or-nothing, the WRITES were a bare sequential loop, so an I/O failure on the SECOND
+    document left the first on disk — a mismatched-identity pair nothing in the tree
+    cross-checks (`refuse_cross_vintage` operates WITHIN a run, over a set the pipeline
+    itself builds, and the rankings file carries the same envelope either way). Measured by
+    the gate on the committed documents: `['rankings.json']` survived the failure.
+
+    Both documents are now STAGED beside their final names and renamed only after every
+    write has succeeded, so the failure leaves neither artifact and no staging file."""
+    real = artifacts._dump_json
+    written = []
+
+    def flaky(path, obj):
+        written.append(Path(path).name)
+        if len(written) == 2:
+            raise OSError("disk full")
+        real(path, obj)
+
+    monkeypatch.setattr(artifacts, "_dump_json", flaky)
+    out = tmp_path / "artifacts"
+    with pytest.raises(OSError, match="disk full"):
+        run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026)
+    assert len(written) == 2, f"the failure was not on the second document: {written}"
+    assert list(out.iterdir()) == [], f"a half-emitted pair survived: {list(out.iterdir())}"
+
+
 def test_the_ircc_feed_is_read_once_inside_the_identity_bracket(monkeypatch, tmp_path):
     """Review finding F3. The feed is deliberately UNPINNED (`PRLandings.sha256` is RECORDED,
     monthly refresh), so its bytes are the one input in the envelope that can legitimately move
@@ -918,8 +1223,9 @@ def test_every_emitted_number_is_finite(run):
 # ------------------------------------- 29c carries C2/C3: the tripwire path that builds nothing
 #
 # `demoflow tripwires` is a STATUS LISTING. The plan's CLI answered it by calling `run_pipeline`,
-# which loads five workbooks, evaluates the ED grid four times (~10s of real I/O) and writes
-# BOTH artifacts — so asking for six statuses re-emitted `rankings.json` as a side effect.
+# which loads five workbooks, evaluates the ED grid eleven times (the central run plus the
+# five-axis sweep's ten legs — ~30s of real I/O) and writes BOTH artifacts — so asking for six
+# statuses re-emitted `rankings.json` as a side effect.
 # `evaluate_tripwires` is the path that does neither, and the three tests below bind "neither"
 # structurally rather than by reading the body.
 

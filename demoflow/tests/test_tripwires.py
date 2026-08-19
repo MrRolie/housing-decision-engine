@@ -49,9 +49,10 @@ from demoflow.loaders.ircc import (
     PRLandings, load_pr_landings,
 )
 from demoflow.output.tripwires import (
-    FEED_FRESHNESS_MONTHS, MONTHS_PER_CLOSED_YEAR, PLAN_GOVERNED_YEARS,
-    PR_LANDINGS_INDICATOR, QUEBEC_PROVINCE, REQUIRED_INDICATORS, SOURCE_REGISTRY,
-    TRIPWIRE_RECORD_REQUIRED, Reason, SourceKind, Status, TripwireSpec,
+    CELL_ROUNDING_HALFWIDTH, FEED_FRESHNESS_MONTHS, MONTHS_PER_CLOSED_YEAR,
+    NULLABLE_REASONS, PLAN_GOVERNED_YEARS, PR_LANDINGS_INDICATOR, QUEBEC_PROVINCE,
+    REQUIRED_INDICATORS, SOURCE_REGISTRY, SUPPRESSED_CELL_MAX, TRIPWIRE_RECORD_REQUIRED,
+    Reason, SourceKind, Status, TripwireSpec,
     assert_tripwire_record_valid, check_registry, closed_plan_years, evaluate_indicator,
     evaluate_pr_landings, exit_code, pr_landings_realized, run_exit_code, tripwire_record,
 )
@@ -280,11 +281,39 @@ def test_realized_is_computed_from_the_feed_not_the_band_midpoint(tmp_path):
     assert realized.value != midpoint, "realized must not be the band midpoint the plan typed"
 
 
-def test_suppression_envelope_is_derived_from_the_cell_count(tmp_path):
-    """±2.5 per published cell (base-5 rounding; a suppressed cell absorbs the whole 0-5
-    band). 355 × 2.5 = 887.5 — the ±888/yr floor, recorded not corrected."""
-    realized = pr_landings_realized(_plant(tmp_path, _lines()).frame, 2025)
-    assert realized.envelope == pytest.approx(887.5)
+@pytest.mark.parametrize("year,cells,numeric,suppressed,value,bound", [
+    (2025, QC_2025_CELLS, 304, QC_2025_SUPPRESSED, QC_2025_PROVINCE, (59250.0, 61025.0)),
+    (2026, 174, 142, 32, QC_2026_PARTIAL_PROVINCE, (21365.0, 22235.0)),
+])
+def test_the_published_interval_is_asymmetric_because_suppression_only_adds(
+        tmp_path, year, cells, numeric, suppressed, value, bound):
+    """ROUNDING is two-sided on PUBLISHED cells (base-5, ±2.5 each). SUPPRESSION IS
+    ONE-SIDED: a `--` contributes 0 to the sum and its true contribution is [0, +5].
+
+    The shipped property published a SYMMETRIC ±2.5·n_cells and called it "±(rounding +
+    suppression)" — 355 × 2.5 = 887.5 on this slice, an interval centred 2.5×51 = 127.5
+    BELOW the arithmetic whose upper end it understated by the same 127.5 (quant gate F3 /
+    stress gate F9). The strongest argument is internal: `_degenerate` models the suppressed
+    cell correctly one-sided one constant away, as `SUPPRESSED_CELL_MAX * n_suppressed`.
+
+    Both legs are asserted against the module's OWN constants as well as against the
+    measured bytes, so a re-tuned constant reds rather than silently re-centring."""
+    realized = pr_landings_realized(_plant(tmp_path, _lines()).frame, year)
+    assert (realized.n_cells, realized.n_numeric, realized.n_suppressed) == (
+        cells, numeric, suppressed)
+    assert realized.n_numeric + realized.n_suppressed == realized.n_cells
+    assert realized.value == value
+    lo, hi = realized.interval
+    assert (lo, hi) == pytest.approx(bound)
+    assert lo == pytest.approx(value - CELL_ROUNDING_HALFWIDTH * numeric)
+    assert hi == pytest.approx(value + CELL_ROUNDING_HALFWIDTH * numeric
+                               + SUPPRESSED_CELL_MAX * suppressed)
+    # The interval is NOT centred on the realized value, and it is wider ABOVE than below —
+    # the whole content of the correction, stated as a property rather than as two numbers.
+    assert hi - value > value - lo
+    assert (hi - value) - (value - lo) == pytest.approx(SUPPRESSED_CELL_MAX * suppressed)
+    # ...and the symmetric figure it replaced sat INSIDE the true upper bound.
+    assert value + CELL_ROUNDING_HALFWIDTH * cells < hi
 
 
 # --- carry 2: the numerator is PROVINCIAL; the CMA pair is a different quantity --------
@@ -306,7 +335,8 @@ def test_provincial_numerator_is_not_the_cma_pair_and_the_share_decays(tmp_path)
 def test_other_provinces_are_excluded_from_the_numerator(tmp_path):
     """The slice carries Ontario (Toronto) and `Not stated` rows. A province filter that
     leaked would inflate the numerator; `Not stated` is excluded because those admissions
-    are not attributable to Québec (measured ≤20/yr — inside the ±888 envelope)."""
+    are not attributable to Québec (measured ≤20/yr — inside the 1,775-landing width the
+    published interval carries on this slice)."""
     frame = _plant(tmp_path, _lines()).frame
     everything = float(sum(0 if v == "--" else int(v)
                            for v in frame[frame["EN_YEAR"] == "2025"]["TOTAL"]))
@@ -850,19 +880,37 @@ def test_an_intact_partial_year_reports_the_member_gap_without_claiming_its_caus
 
 @pytest.mark.parametrize("band", [(math.nan, 50000.0), (40000.0, math.nan),
                                   (math.nan, math.nan), (40000.0, math.inf),
-                                  (-math.inf, 50000.0)])
-def test_non_finite_band_endpoint_is_unknown_never_within_band(band):
+                                  (-math.inf, 50000.0), (math.inf, -math.inf)])
+def test_a_non_finite_band_is_a_run_level_terminal(band):
     """A non-finite endpoint makes BOTH boundary comparisons False, so every value
     classifies as within-band: status=OK, exit 0 — verbatim the mechanism spec §7c names
     in words for the VALUE side ('naive comparisons classify NaN as inside every band').
-    ±Inf belongs in the same branch and not only by symmetry: band endpoints RIDE the
-    emitted record, and spec §7 emits tripwire JSON with `allow_nan=False`, which rejects
-    Infinity as well as NaN — an endpoint that cannot be serialized is not a threshold.
-    Same closed reason token as inversion; the enum is spec-closed, so no new member."""
-    r = evaluate_indicator(_spec(band_low=band[0], band_high=band[1]), 45000,
+
+    IT REFUSES AS A RUN-LEVEL TERMINAL, NOT AS AN UNKNOWN RECORD, and the shipped tree got
+    that wrong in a way no test crossed (run-33 data gate F2). The UNKNOWN(`malformed_band`)
+    record it built carried the offending ±Inf/NaN in `band_low`/`band_high`, and
+    `assert_tripwire_record_valid` — the contract in this same module — REJECTED exactly
+    that record: four of the five malformed-band sub-cases died with a bare serialization
+    ValueError and NO baseline at all, where §7c wants that indicator UNKNOWN and the other
+    five still evaluated.
+
+    THE BAND IS THE CALLER'S, injected, so a non-finite band is a caller/config defect —
+    deterministic, independent of the feed — which is the shape of a run-level terminal and
+    not of a per-indicator UNKNOWN. The module already ruled the sibling case this way:
+    `_band_endpoints` raises a named terminal for a NON-COERCIBLE endpoint because it
+    "cannot ride the record's float-typed band fields", and under §7's `allow_nan=False` a
+    non-finite endpoint cannot ride them either.
+
+    THE FINITE INVERSION KEEPS ITS UNKNOWN(`malformed_band`) — it is serializable, it rides
+    the record honestly, and `test_inverted_band_is_unknown` is where that stays pinned."""
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_indicator(_spec(band_low=band[0], band_high=band[1]), 45000,
                            available=True, now=2026)
-    assert r.status is Status.UNKNOWN and r.reason is Reason.MALFORMED_BAND
-    assert exit_code([r]) != 0
+    # The terminal fires at the ENTRY of both producers, before availability is consulted —
+    # the same door and the same ordering the non-coercible sibling already used.
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_pr_landings(PRLandings(available=False, reason="n/a"), band=band,
+                             now=(2027, 3))
 
 
 def test_non_coercible_band_raises_inside_the_taxonomy():
@@ -891,13 +939,18 @@ def test_a_numeric_field_can_never_carry_a_string():
         assert_tripwire_record_valid({**rec, "band_high": True})   # bool is not a threshold
 
 
-def test_a_non_finite_band_can_never_ride_a_record():
-    """The refusal is not enough on its own: the malformed endpoint still travels in the
-    record's band_low/band_high, and `json.dumps(..., allow_nan=False)` would only discover
-    it at emit time. The contract validator is where it must die."""
-    r = evaluate_indicator(_spec(band_high=math.nan), 45000, available=True, now=2026)
-    with pytest.raises(ValueError, match="finite"):
-        assert_tripwire_record_valid(tripwire_record(r))
+def test_a_non_finite_number_can_never_ride_a_record():
+    """The producer terminal above is one half; this is the CONTRACT half, and BOTH are
+    needed. `json.dumps(..., allow_nan=False)` would discover a non-finite number only at
+    emit time, and a record assembled anywhere other than `evaluate_indicator` never meets
+    that terminal — so the validator binds the field itself, however the record was built.
+    Every numeric position, and every non-finite value, not just the one pair the producer
+    used to be able to reach."""
+    rec = tripwire_record(evaluate_indicator(_spec(), 45000, available=True, now=2026))
+    for field_name in ("current_value", "band_low", "band_high"):
+        for bad in (math.nan, math.inf, -math.inf):
+            with pytest.raises(ValueError, match="finite"):
+                assert_tripwire_record_valid({**rec, field_name: bad})
 
 
 # --- F3: only ONE of the record's four string-typed positions was bound -----------------
@@ -1133,3 +1186,175 @@ def test_the_member_set_note_rides_every_branch_that_has_a_frame(tmp_path):
     # has no member set to speak about and no note to carry.
     returns = inspect.getsource(evaluate_pr_landings).count("return PRLandingsEvaluation(")
     assert returns == len(arms) + 1
+
+
+# =======================================================================================
+# THE PRODUCER/CONTRACT SEAM, GENERALIZED (run-33: data F2, stress F3, stress F4)
+# =======================================================================================
+#
+# THREE SEAMS IN THIS ONE MODULE IN THREE CONSECUTIVE ROUNDS, all the same shape: a producer
+# builds a record its OWN contract validator refuses, nothing in the run reaches that branch
+# today, and no test walks producer -> contract on the input that would. Amendment #16 closed
+# `duplicate_indicator` one record at a time; `test_a_duplicate_record_from_the_producer_
+# validates` is that crossing for that one branch.
+#
+# THIS IS THAT TEST GENERALIZED, and it is worth more than any of the three individual fixes:
+# every record every producer in this module can emit, crossed into
+# `assert_tripwire_record_valid` — with the reason and status coverage ASSERTED, so the
+# property cannot quietly shrink to whichever branches happen to be reachable today. A new
+# branch that emits a record the contract refuses reds here; a branch that stops being
+# reachable reds the coverage assertion rather than silently narrowing the crossing.
+
+
+def _generic_gate_records():
+    """Every record `evaluate_indicator` can emit, labelled by the branch that built it."""
+    string_band = dict(band_low="40000", band_high="50000")
+    return [
+        ("ok", evaluate_indicator(_spec(), 45000, available=True, now=2026)),
+        ("crossed(low endpoint)", evaluate_indicator(_spec(), 40000, available=True, now=2026)),
+        ("crossed(high endpoint)", evaluate_indicator(_spec(), 60000, available=True, now=2026)),
+        ("stale", evaluate_indicator(_spec(as_of=2023), 45000, available=True, now=2026)),
+        ("source_unavailable", evaluate_indicator(_spec(), None, available=False, now=2026)),
+        ("operator_input_missing",
+         evaluate_indicator(_spec(source_kind=SourceKind.OPERATOR_SUPPLIED), None,
+                            available=True, now=2026)),
+        ("non_finite(nan)", evaluate_indicator(_spec(), math.nan, available=True, now=2026)),
+        ("non_finite(inf)", evaluate_indicator(_spec(), math.inf, available=True, now=2026)),
+        ("non_finite(str)", evaluate_indicator(_spec(), "n/a", available=True, now=2026)),
+        ("future_as_of", evaluate_indicator(_spec(as_of=2030), 45000, available=True, now=2026)),
+        ("malformed_band(finite inversion)",
+         evaluate_indicator(_spec(band_low=50000.0, band_high=40000.0), 45000,
+                            available=True, now=2026)),
+        # stress F4's input class: a COERCIBLE band endpoint. The verdict path coerced and
+        # the record path re-read the RAW field, so these two rows are where the listing
+        # path and the emit path used to disagree about the same input.
+        ("coercible-string band, within",
+         evaluate_indicator(_spec(**string_band), 45000, available=True, now=2026)),
+        ("coercible-string band, crossed",
+         evaluate_indicator(_spec(**string_band), 60000, available=True, now=2026)),
+        ("coercible-string band, UNKNOWN branch",
+         evaluate_indicator(_spec(**string_band), None, available=False, now=2026)),
+        ("int band", evaluate_indicator(_spec(band_low=40000, band_high=50000), 45000,
+                                        available=True, now=2026)),
+    ]
+
+
+def _registry_records():
+    """Both completeness branches of `check_registry` — amendment #16's own seam, kept in
+    the generalized property rather than left to the one-branch test that closed it."""
+    dup = check_registry(sorted(REQUIRED_INDICATORS) + [PR_LANDINGS_INDICATOR])
+    short = check_registry([PR_LANDINGS_INDICATOR])
+    return ([("check_registry duplicate", r) for r in dup]
+            + [("check_registry missing", r) for r in short])
+
+
+def _fed_indicator_records(tmp_path):
+    """Every RETURNING branch of `evaluate_pr_landings` — the third producer, and the only
+    one whose records come off real feed bytes rather than a hand-built spec.
+
+    The BRANCH CENSUS has one owner and it is not here:
+    `test_the_member_set_note_rides_every_branch_that_has_a_frame` reads the returning-branch
+    count off the function itself, so a new branch reds there and sends a reader back to both
+    arm lists. Transcribing that count a second time would be two facts where there is one."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    wide = (55000.0, 65000.0)
+
+    def plant(name, lines):
+        d = tmp_path / name
+        d.mkdir()
+        return _plant(d, lines)
+
+    arms = [
+        ("pr feed absent", PRLandings(available=False, reason="not found"), BAND, dict(now=(2027, 3))),
+        ("pr no closed year", plant("a", _lines()), BAND, dict(now=(2026, 8))),
+        ("pr degenerate read", plant("b", _suppress(era, "2026", cma="Montréal")), BAND,
+         dict(now=(2027, 1))),
+        ("pr impossible vintage", plant("c", era), BAND, dict(now=(2026, 1))),
+        ("pr feed stale", plant("d", era), BAND, dict(now=(2028, 6))),
+        ("pr verdict CROSSED", plant("e", era), BAND, dict(now=(2027, 3))),
+        ("pr verdict OK", plant("f", era), wide, dict(now=(2027, 3))),
+    ]
+    return [(label, evaluate_pr_landings(landings, band=band, **kw).result)
+            for label, landings, band, kw in arms]
+
+
+@pytest.fixture(scope="module")
+def producible(tmp_path_factory):
+    """(label, TripwireResult) for EVERY record this module's three producers can emit.
+
+    Module-scoped: `_fed_indicator_records` plants seven real feed slices through the real
+    loader, and the properties below all range over the same set."""
+    return (_generic_gate_records() + _registry_records()
+            + _fed_indicator_records(tmp_path_factory.mktemp("seam")))
+
+
+def test_every_record_a_producer_can_emit_validates(producible):
+    """THE CROSSING. Three producers, every reachable branch, one contract validator.
+
+    This is the test shape that would have caught all three of this arc's seams — the
+    `duplicate_indicator` nullability disagreement (amendment #16), the non-finite band the
+    contract refused while the producer emitted it (data F2), and the coercible-string band
+    that verdicted GREEN on the listing path while crashing on the emit path (stress F4).
+    Each was latent on the committed tree for the SAME reason: a property of today's
+    callers, not of the contract."""
+    assert producible
+    rejected = []
+    for label, r in producible:
+        try:
+            assert_tripwire_record_valid(tripwire_record(r))
+        except ValueError as exc:
+            rejected.append(f"  [{label}] {exc}")
+    # EVERY failing sub-case, not the first: a seam usually opens across a whole branch
+    # class (four of five malformed-band sub-cases, in data F2's), and a report that stops
+    # at one of them understates what has to be fixed.
+    assert not rejected, ("the contract REJECTS records its own producers built:\n"
+                          + "\n".join(rejected))
+
+
+def test_the_producers_reach_every_state_the_closed_enums_declare(producible):
+    """What makes the crossing a PROPERTY rather than a spot check. Without this, deleting a
+    branch from the census above would narrow the crossing silently — the failure mode the
+    three seams all shared, one level up."""
+    assert {r.reason for _, r in producible if r.reason is not None} == set(Reason)
+    assert {r.status for _, r in producible} == set(Status)
+
+
+def test_nullable_reasons_is_exactly_the_set_the_producers_null(producible):
+    """stress F3: `NULLABLE_REASONS` is a spec-closed enumeration with NO exact-membership
+    pin — `Reason.STALE` and `Reason.MALFORMED_BAND` could each be ADDED and the whole suite
+    still passed. A widened set reintroduces amendment #16's seam in the OPPOSITE direction:
+    `_unknown_measured` RETAINS current_value and as_of, so the validator's nullability
+    branch would reject the record its own module just built — CI-green, and live the first
+    time a real indicator value lands.
+
+    PINNED AS A PROPERTY OVER THE PRODUCERS, not as a fourth frozenset copy (which would
+    pass under any widening applied to both halves): the set of reasons under which a
+    producer emits NULLs must EQUAL `NULLABLE_REASONS`, and no value-retaining reason may be
+    in it. Drop-one is already pinned by the crossing above; this pins the widening."""
+    unknowns = [r for _, r in producible if r.status is Status.UNKNOWN]
+    nulled = {r.reason for r in unknowns if r.current_value is None}
+    valued = {r.reason for r in unknowns if r.current_value is not None}
+    assert nulled == set(NULLABLE_REASONS)
+    assert not (valued & set(NULLABLE_REASONS))
+    # current_value and as_of null TOGETHER or not at all — the contract reads them as one
+    # branch, so a producer that split them would satisfy the two set assertions above.
+    for label, r in producible:
+        assert (r.current_value is None) == (r.as_of is None), label
+
+
+def test_a_coercible_band_endpoint_never_rides_the_record_raw(producible):
+    """stress F4, THE CHEAP-GREEN HALF OF THE SEAM. `_band_endpoints` COERCED the caller's
+    band and returned floats, but every `TripwireResult` constructor re-read the RAW
+    `spec.band_low`/`spec.band_high` — so `("40000", "50000")` verdicted OK on the
+    `demoflow tripwires` path (six OK, exit 0) while the emit path CRASHED on the record
+    that same producer built. Two verification paths disagreeing about one input, and the
+    GREEN one is the cheap one. The spec is rebuilt from the coerced endpoints, which is
+    what `evaluate_pr_landings` already did with its `year_spec`."""
+    for label, r in producible:
+        for endpoint in (r.band_low, r.band_high):
+            assert isinstance(endpoint, float) and not isinstance(endpoint, bool), label
+    string_band = evaluate_indicator(_spec(band_low="40000", band_high="50000"), 45000,
+                                     available=True, now=2026)
+    assert string_band.status is Status.OK and exit_code([string_band]) == 0   # listing path
+    assert string_band.band_low == 40000.0 and string_band.band_high == 50000.0
+    assert_tripwire_record_valid(tripwire_record(string_band))                 # emit path

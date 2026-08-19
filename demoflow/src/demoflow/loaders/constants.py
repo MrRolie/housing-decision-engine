@@ -212,11 +212,12 @@ CONSTANTS = {
 # central values + sweep grid are enumerated HERE and covered by assumptions_hash — the hash
 # identifies the selection; the spec's central-value rule DETERMINES it.
 #
-# SINGLE SOURCE, forward-binding on the consumers: assumptions_hash covers only what THIS dict
-# holds, so a consumer that REDECLARES one of these values as its own literal moves the run's
-# numbers while the hash stays byte-identical — breaking spec:532's artifact identity. Every
-# consumer reads its central value FROM here (spec:475 names constants.py as the enumeration's
-# home); a second declaration site is a defect, not a convenience.
+# SINGLE SOURCE, forward-binding on the consumers: a consumer that REDECLARES one of these
+# values as its own literal moves the run's numbers while the hash stays byte-identical —
+# breaking spec:532's artifact identity. Every consumer reads its central value FROM here
+# (spec:475 names constants.py as the enumeration's home); a second declaration site is a
+# defect, not a convenience. `assumptions_hash` covers THREE selections now, not this dict
+# alone — see its docstring; the rule above binds each of them identically.
 CENTRAL_ASSUMPTIONS = {
     "q_live_per_year": 0.085,          # flat age-shape (annualized 1-(1-0.36)^(1/5))
     "phi_voluntary": 0.9,
@@ -242,9 +243,12 @@ SWEEP_GRID = {                          # endpoints for the robustness sweep, ne
 # a consumer reads a member as `CENTRAL_ASSUMPTIONS["phi_voluntary"]`, a float — so the citation
 # lives alongside, keyset-locked by test. WHAT READS IT TODAY (stated because a wrong why about
 # reach is what makes a member look safe to delete): `cohort/listings.py` binds THREE keys
-# read-through at import — phi_voluntary, estate_eventual_fraction, estate_lag_years;
-# `q_live_per_year` is read by the cohort tests and gate discharge, and by the Task-29 pipeline
-# when it lands.
+# read-through at import — phi_voluntary, estate_eventual_fraction, estate_lag_years, which
+# are its DEFAULTS for a caller that states nothing; `q_live_per_year` is read by the cohort
+# tests and gate discharge. ALL FOUR are read by the pipeline, which builds
+# `pipeline.CENTRAL_LEG` = `Assumptions(**CENTRAL_ASSUMPTIONS)` and passes every one of them
+# EXPLICITLY down the ED path — a key added here without a leg field raises at import rather
+# than dropping out of the robustness sweep (run-32 quant F1 / stress F1).
 CENTRAL_PROVENANCE = {
     "q_live_per_year":
         "CONSTANTS['q_live_annual'] — CMHC 36%/5yr annualized, spec §5 band [0.06, 0.11]/yr; "
@@ -261,6 +265,63 @@ CENTRAL_PROVENANCE = {
 }
 
 
+# ===========================================================================================
+# MODEL CHOICES — the discrete, UNBANDED picks the model makes (run-32 stress gate F2)
+# ===========================================================================================
+#
+# TWO LITERALS SAT ON THE MONEY PATH WITH NO ANCHOR AND NO IDENTITY COVERAGE. `pipeline.py`
+# carried `ROLL_AGE = 80` and `p_nonimm = read_ownership(geo, 40)` as bare numbers; each swings
+# the SHIPPED headline `mean_ed_*` figures by 55-66% (measured, run 32), and neither was inside
+# `assumptions_hash` or `data_vintage.source_hashes` — so editing either moved every emitted
+# number under a byte-identical envelope. Lifting them here closes both halves in one move: the
+# citation lands beside the value (spec:621 "Binds Task 25b: no uncited literals") and the hash
+# covers the selection.
+#
+# WHY THIS IS A THIRD DICT AND NOT `CENTRAL_ASSUMPTIONS`. That dict's contract is a central
+# value WITH a spec §5 band — its keyset is held EQUAL to `SWEEP_GRID`'s by test, on the stated
+# ground that "every central assumption is banded, so an unswept one silently claims
+# rank_stable it never tested". Neither of these carries a band. Inventing one would be the
+# fabricated anchor this file exists to refuse, and adding a sweep axis would widen the
+# robustness sweep's DECLARED grid — a modelling decision, not an identity fix. A discrete
+# choice with no band has nothing to sweep, and saying so plainly is cheaper than either lie.
+#
+# BOTH ARE HONESTLY UNCITED, and the marker is the point: this arc has removed several
+# fabricated citations, so an absent anchor is RECORDED as absent, with the measured
+# sensitivity and the thing that would close it, rather than dressed in a plausible source.
+MODEL_CHOICES = {
+    "p_nonimm_age": 40,
+    "roll_age": 80,
+}
+
+MODEL_CHOICE_PROVENANCE = {
+    "p_nonimm_age":
+        "UNCITED. Spec §6 defines p_imm(a) = p_nonimm(a) x ratio age-indexed, but the ISQ compo "
+        "arrival flow carries NO age axis, so ONE age must be chosen and §6 never says which. "
+        "40 selects the 25-54 ownership BAND, on the reasoning that PR arrivals concentrate at "
+        "those ages — a reasoning no committed source in this tree carries, which is why this "
+        "entry is marked uncited rather than anchored to it. WITHIN that band the pick is inert "
+        "(ages 25/40/54 all return the same rate, measured), so the exposure is BAND selection, "
+        "not point selection. MEASURED: moving to the 55-64 band "
+        "moves HORS_RMR's mean reference ED -66% and MTL_RMR's +61% (run-32 stress F2; quant F5 "
+        "measures the same axis at +25.4% on the immigrant leg alone). No committed source in "
+        "this tree carries a PR arrival age distribution; weighting p_nonimm by one is what "
+        "closes this entry",
+    "roll_age":
+        "UNCITED. Tranche-1 coarseness, stated as such in `pipeline.py`'s own header: the 75+ "
+        "owner stock is a SINGLE lumped bucket rather than an age-indexed lattice, so it is "
+        "decremented at ONE age and this is that age. A MODEL choice, not an index — the whole "
+        "bucket's hazard rides it. MEASURED: ROLL_AGE 75 gives HORS_RMR mean reference ED "
+        "-0.00025067 and 85 gives -0.00012999, a 55% swing across the pair (run-32 stress F2). "
+        "Neither the spec, the plan nor the dossier names an age, so nothing is cited here; "
+        "Tranche 2's age-indexed lattice REMOVES the choice rather than anchoring it",
+}
+
+# The keyset lock lives in `tests/test_constants.py`, not in an import-time guard — the same
+# place and the same reason as `CENTRAL_PROVENANCE`'s: these are bare values, not `Anchor`s,
+# so there is no constructor to raise from and a second mechanism would guard nothing the
+# neighbouring dict does not already have.
+
+
 # The DECLARED width of the identity token below, exported because the artifact emitter has to
 # validate the same form this function produces. `output/artifacts.py` guessed 64 (sha256's full
 # width) and therefore REFUSED the only hash any run computes — two committed contracts in
@@ -271,13 +332,47 @@ ASSUMPTIONS_HASH_CHARS = 16
 
 
 def assumptions_hash() -> str:
-    """Identity of the central/sweep SELECTION (spec §7 identity envelope). Not a proof the
+    """Identity of the ASSUMPTION SELECTION (spec §7 identity envelope). Not a proof the
     selection is right — a proof that two runs used the same one.
+
+    IT COVERS THREE SELECTIONS, and the second and third were added at run 33 because a ruled
+    value could move and re-mint NOTHING (quant gate F4, stress gate F2):
+
+      * `central` + `sweep` — the run contract's banded assumptions (codex r8-F1).
+      * `model_choices` — the discrete unbanded picks; each swings the shipped headline numbers
+        by 55-66% and both were bare literals in `pipeline.py`.
+      * `immigrant_inputs` — the ruled per-geography headship/ratio pairs that amendments
+        #13/#14 exist to govern. Task 25b moved them out of `CENTRAL_ASSUMPTIONS` into
+        `demand/immigrant_inputs.py` and they left hash coverage with them; being source
+        literals rather than files under `data/`, they are outside `source_hashes` too. The
+        exact scenario #14 was written about — a ruled value swapping between two legitimate
+        pairs — moved every geography's ED under a byte-identical envelope, and a ratio change
+        of that class reorders up to 7 of 8 geographies (measured).
+
+    IT DOES NOT COVER THE DATA, and that separation is the whole design (see
+    `pipeline._run_identity`): `source_hashes` answers "which bytes", this answers "which
+    selection", and one token that moved for either cause would answer neither.
+
+    STATED RESIDUAL: the join table's `source` CITATIONS are excluded on purpose — coupling
+    artifact identity to prose would re-mint every artifact on a reworded note, and the prose
+    is already bound where it belongs, to the DIGITS, by `tests/test_i2.py`'s coupling to P8's
+    DECISION tokens. The per-field provenance TOKENS are in, because they are consumed: a
+    `borrowed_prior` on either field puts a flag on the emitted rankings row.
 
     TRUNCATED to `ASSUMPTIONS_HASH_CHARS`: this is a collision-resistance question over the
     handful of assumption selections one project ever emits, not a security boundary — 64 bits
     is ample there, and the artifact stays readable. Widening it RE-MINTS every artifact
     identity (§9: "a change in any re-mints the artifact BY DESIGN"), so it is a change to make
     before a golden pins bytes, never after."""
-    payload = json.dumps({"central": CENTRAL_ASSUMPTIONS, "sweep": SWEEP_GRID}, sort_keys=True)
+    # THE IMPORT IS LOCAL, deliberately: the arrow points the other way everywhere else in this
+    # tree — `demand/` and `cohort/` read THIS module (the import-direction gate admits
+    # `constants` and `validate` as their only loader leaves) and `cohort/listings.py` binds
+    # three central assumptions at import. A module-level import would make the leaf every model
+    # module reads depend on a model package at import time, one edit from a cycle. The hash
+    # needs the RESOLVED table rather than the module, so call time costs nothing.
+    from demoflow.demand.immigrant_inputs import resolved_selection
+
+    payload = json.dumps({"central": CENTRAL_ASSUMPTIONS, "sweep": SWEEP_GRID,
+                          "model_choices": MODEL_CHOICES,
+                          "immigrant_inputs": resolved_selection()}, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()[:ASSUMPTIONS_HASH_CHARS]

@@ -16,7 +16,7 @@ re-verdict every past run; bands arrive from the constants/spec surface the run 
 `now` is injected for the same reason — a wall-clock read inside a verification gate makes
 its verdict unreproducible, and freshness is exactly what an auditor re-checks."""
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 from demoflow.errors import LoaderError
@@ -104,19 +104,44 @@ class TripwireResult:
 
 
 def _band_endpoints(indicator: str, band_low, band_high) -> tuple[float, float]:
-    """Coerce the caller's band, or refuse in the module's own taxonomy. A non-coercible
-    endpoint used to reach `spec.band_low > spec.band_high` and die with `TypeError: '>'
-    not supported between str and float` — a class no caller's handler catches, so the
-    verification gate CRASHED rather than refused. It cannot become an UNKNOWN either: the
-    endpoints ride the record's float-typed band fields, so a str endpoint has nowhere to
-    go. Named terminal, deterministic, independent of the data (review finding F2)."""
+    """Coerce the caller's band, or refuse in the module's own taxonomy. TWO named
+    terminals, both deterministic and independent of the data, because both defects are the
+    CALLER's and neither endpoint can ride the record.
+
+    NON-COERCIBLE. A str endpoint used to reach `spec.band_low > spec.band_high` and die
+    with `TypeError: '>' not supported between str and float` — a class no caller's handler
+    catches, so the verification gate CRASHED rather than refused. It cannot become an
+    UNKNOWN either: the endpoints ride the record's float-typed band fields, so a str
+    endpoint has nowhere to go (review finding F2).
+
+    NON-FINITE — the SAME defect one coercion later, and the shipped tree sent it down the
+    opposite path (run-33 data gate F2). `evaluate_indicator` returned UNKNOWN
+    (`malformed_band`) carrying ±Inf/NaN in `band_low`/`band_high`, and
+    `assert_tripwire_record_valid` below REFUSED exactly that record — four of the five
+    malformed-band sub-cases died at the contract boundary with a bare serialization
+    ValueError and NO baseline at all, where §7c wants that indicator UNKNOWN and the other
+    five still evaluated and emitted. §7 serializes this JSON with `allow_nan=False`, so a
+    non-finite endpoint cannot ride those fields any more than a str can, and the band is
+    INJECTED by the caller — a caller/config defect, which is the shape of a run-level
+    terminal rather than of a per-indicator UNKNOWN.
+
+    THE FINITE INVERSION (`lo > hi`) IS DELIBERATELY NOT HERE. It is serializable, it rides
+    the record honestly, and §7c's "inverted band ⇒ UNKNOWN" governs it — see
+    `evaluate_indicator`."""
     try:
-        return float(band_low), float(band_high)
+        lo, hi = float(band_low), float(band_high)
     except (TypeError, ValueError) as exc:
         raise ValueError(
             f"tripwire band for {indicator!r} must be two real numbers, got "
             f"({band_low!r}, {band_high!r}) — a band endpoint that is not a float cannot "
             "ride the record's band_low/band_high fields") from exc
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        raise ValueError(
+            f"tripwire band for {indicator!r} must be two FINITE real numbers, got "
+            f"({band_low!r}, {band_high!r}) — a non-finite endpoint makes BOTH boundary "
+            "comparisons False (every value reads as within-band) and cannot ride the "
+            "record's band_low/band_high fields, which §7 serializes with allow_nan=False")
+    return lo, hi
 
 
 def _src(indicator: str) -> str:
@@ -136,7 +161,15 @@ def _unknown_measured(spec: TripwireSpec, v: float, reason: Reason) -> TripwireR
 
 
 def evaluate_indicator(spec: TripwireSpec, current_value, available: bool, now: int) -> TripwireResult:
+    # THE COERCED BAND IS THE ONE THAT RIDES THE RECORD (run-33 stress gate F4). The
+    # endpoints were coerced here and every constructor below then re-read the RAW
+    # `spec.band_low`/`spec.band_high`, so a coercible-STRING band verdicted OK on the
+    # `demoflow tripwires` listing path (six OK, exit 0) while the emit path CRASHED on the
+    # record this same function had just built — two verification paths disagreeing about
+    # one input, and the GREEN one is the cheap one. Rebuilding the spec from the coerced
+    # endpoints is what `evaluate_pr_landings` already does with its `year_spec`.
     lo, hi = _band_endpoints(spec.indicator, spec.band_low, spec.band_high)
+    spec = replace(spec, band_low=lo, band_high=hi)
     if not available:
         return _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE)
     if current_value is None:
@@ -149,14 +182,14 @@ def evaluate_indicator(spec: TripwireSpec, current_value, available: bool, now: 
         return _unknown_nullable(spec, Reason.NON_FINITE)   # raw value -> run log, NEVER the JSON
     if spec.as_of > now:
         return _unknown_measured(spec, v, Reason.FUTURE_AS_OF)
-    # VALUE INTEGRITY APPLIES TO THE BAND, NOT ONLY TO THE VALUE (review finding F2). A
-    # non-finite endpoint makes BOTH boundary comparisons False, so every value classifies
-    # as within-band — the exact false-green mechanism spec §7c names in words on the value
-    # side. ±Inf joins NaN here on the spec's own terms, not by symmetry: the endpoints ride
-    # the emitted record and §7 emits tripwire JSON with `allow_nan=False`, which rejects
-    # Infinity too — an endpoint that cannot be serialized is not a threshold. Same closed
-    # reason token as inversion: the enum is spec-closed, so a new member would be fork-class.
-    if not (math.isfinite(lo) and math.isfinite(hi)) or lo > hi:
+    # VALUE INTEGRITY APPLIES TO THE BAND, NOT ONLY TO THE VALUE (review finding F2). An
+    # INVERTED band admits no value at all and would otherwise read as an ordinary
+    # comparison, so §7c rules it UNKNOWN — and the record carries its two FINITE endpoints
+    # honestly. Its NON-FINITE sibling is NOT judged here: `_band_endpoints` raises a
+    # run-level terminal on it, because an endpoint the artifact cannot serialize is not a
+    # threshold and has nowhere to ride (run-33 data gate F2). The reason token is unchanged
+    # and the enum stays spec-closed: a new member would be fork-class.
+    if lo > hi:
         return _unknown_measured(spec, v, Reason.MALFORMED_BAND)
     if now - spec.as_of > spec.freshness_years:
         return _unknown_measured(spec, v, Reason.STALE)
@@ -372,8 +405,10 @@ MONTHS_PER_CLOSED_YEAR = len(EN_MONTHS)
 # the suppressed cells alone could carry is indistinguishable from silence.
 SUPPRESSED_CELL_MAX = 5.0
 # TOTAL is rounded to the nearest 5 (0 of 16,539 numeric cells are non-multiples), so every
-# published cell carries ±2.5 — 355 Québec cells in 2025 is the ±888/yr envelope, recorded
-# and never silently corrected.
+# PUBLISHED cell carries ±2.5 — recorded and never silently corrected. It applies to the
+# numeric cells alone: a `--` publishes no number to round, and what IT contributes is the
+# one-sided [0, SUPPRESSED_CELL_MAX] the constant above already states. See
+# `RealizedLandings.interval`, which is where the two legs are combined.
 CELL_ROUNDING_HALFWIDTH = 2.5
 
 PR_LANDINGS_INDICATOR = "pr_landings_annual"
@@ -400,9 +435,27 @@ class RealizedLandings:
     numeric_by_member: dict = field(default_factory=dict)
 
     @property
-    def envelope(self) -> float:
-        """±(rounding + suppression) on the annual total: ±2.5 per published cell."""
-        return CELL_ROUNDING_HALFWIDTH * self.n_cells
+    def interval(self) -> tuple[float, float]:
+        """The honest bound on the annual total — ASYMMETRIC, because its two legs are
+        different arithmetic (quant gate F3 / stress gate F9).
+
+        ROUNDING is two-sided and applies to PUBLISHED cells ONLY: TOTAL is rounded to the
+        nearest 5, so each of `n_numeric` cells carries ±CELL_ROUNDING_HALFWIDTH.
+
+        SUPPRESSION IS ONE-SIDED. A `--` contributes 0 to `value`, and its true contribution
+        lies in [0, SUPPRESSED_CELL_MAX] — it can only ADD. The shipped property published a
+        symmetric ±2.5·n_cells and its docstring called that "±(rounding + suppression)",
+        which centred the interval 2.5·n_suppressed BELOW the arithmetic and understated the
+        upper end by the same amount: measured on the committed 2025 Québec slice (355
+        cells, 304 numeric, 51 suppressed, value 60,010) it published ±887.5 =>
+        [59,122.5, 60,897.5] where the arithmetic is [59,250.0, 61,025.0].
+
+        THE STRONGEST ARGUMENT IS INTERNAL: `_degenerate` one screen down already models the
+        suppressed cell correctly one-sided, as `SUPPRESSED_CELL_MAX * n_suppressed`, so the
+        symmetric envelope contradicted its own neighbour one constant away."""
+        rounding = CELL_ROUNDING_HALFWIDTH * self.n_numeric
+        return (self.value - rounding,
+                self.value + rounding + SUPPRESSED_CELL_MAX * self.n_suppressed)
 
 
 @dataclass(frozen=True)
@@ -687,8 +740,11 @@ def evaluate_pr_landings(
             f"{now[0]:04d}-{now[1]:02d} (limit {FEED_FRESHNESS_MONTHS})" + note)
 
     result = evaluate_indicator(year_spec, realized.value, available=True, now=now[0])
+    lo_bound, hi_bound = realized.interval
     return PRLandingsEvaluation(
         result, realized, landings.sha256,
-        f"{province} {year} realized={realized.value} +/-{realized.envelope} over "
-        f"{realized.n_cells} cells ({realized.n_suppressed} suppressed, "
-        f"{len(realized.months)} months); band=({band_low}, {band_high})" + note)
+        f"{province} {year} realized={realized.value} in [{lo_bound}, {hi_bound}] over "
+        f"{realized.n_cells} cells (rounding +/-{CELL_ROUNDING_HALFWIDTH} on "
+        f"{realized.n_numeric} numeric; suppression one-sided [0, +{SUPPRESSED_CELL_MAX}] on "
+        f"{realized.n_suppressed}, {len(realized.months)} months); "
+        f"band=({band_low}, {band_high})" + note)

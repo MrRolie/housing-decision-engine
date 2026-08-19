@@ -23,9 +23,12 @@ inlining the numbers; that reintroduces the exact defect the reload test exists 
 
 The values and their citations are NOT repeated here — they live in `constants.CENTRAL_ASSUMPTIONS`
 and `CENTRAL_PROVENANCE`, with band endpoints in `SWEEP_GRID`. Endpoints enter ONLY the robustness
-sweep (rank_stable), never the headline run; they are NOT this function's domain, since a
-hand-worked fixture legitimately passes explicit off-central params for a pinned example (the
-plan's boundary fixture does). The guards below are structural for that reason, never band-tight.
+sweep (rank_stable), never the headline run — and they enter it THROUGH THIS SIGNATURE, which is
+what run 33 changed: all three are now parameters, because `phi_voluntary` being the one that was
+not is why three declared sweep axes went unevaluated for an entire arc. Band membership is NOT
+this function's domain either way, since a hand-worked fixture legitimately passes explicit
+off-central params for a pinned example (the plan's boundary fixture does). The guards below are
+structural for that reason, never band-tight.
 
 LAG IS NOT IN `phi_market` (caller trap, recorded): `phi_market("estate")` returns the eventual
 listing fraction alone. Spec §7's supply term reads `S = Σ_cause exits(cause)·φ_market(cause),
@@ -52,25 +55,42 @@ def phi_market(cause: str) -> float:
 
 def market_listings(voluntary_by_year: dict[int, float], estate_by_year: dict[int, float],
                     lag: int = ESTATE_LAG_YEARS,
-                    eventual_fraction: float = ESTATE_EVENTUAL_FRACTION) -> dict[int, float]:
+                    eventual_fraction: float = ESTATE_EVENTUAL_FRACTION,
+                    phi_voluntary: float = PHI_VOLUNTARY) -> dict[int, float]:
     """listings[t] = voluntary[t]*phi_voluntary + estate[t-lag]*eventual_fraction.
 
-    The two guards are STRUCTURAL and ADDED beyond the plan body (repo precedent:
-    `decrements._check_unit`), because both rejected shapes are silently wrong rather than loudly
+    ALL THREE RUN-CONTRACT VALUES ARE PARAMETERS, defaulting to the read-through central
+    binding, and `phi_voluntary` became one at run 33 for a measured reason. It was hard-bound
+    to the module-level constant INSIDE this body while its two siblings were already
+    parameters, so the only way to reach its band endpoints was to mutate `CENTRAL_ASSUMPTIONS`
+    and RELOAD this module — which `tests/test_listings.py` does deliberately and a production
+    sweep must never do. That asymmetry is why `pipeline._rank_stability` swept ONE of the four
+    declared `SWEEP_GRID` axes and shipped `rank_stable: true` as a verdict it had not computed
+    (run-32 quant F1 / stress F1, both gates independently). A band endpoint the sweep cannot
+    reach through the signature is an axis that silently stops being swept.
+
+    THE DEFAULTS ARE THE BINDING, NEVER A SECOND LITERAL. Each is the module attribute, bound at
+    `def` time, so the reload test's mutated dict moves the default path too — the check that a
+    redeclared literal here could not survive.
+
+    The three guards are STRUCTURAL and ADDED beyond the plan body (repo precedent:
+    `decrements._check_unit`), because every rejected shape is silently wrong rather than loudly
     wrong: a negative lag lands listings BEFORE the deaths that caused them, and a non-integral
     lag lands them on a fractional year key that no annual consumer ever looks up — deleting the
-    entire estate leg from the supply term without a trace. NaN falls to the fraction guard by the
-    same comparison rule `decrements` relies on (every ordering against NaN is False).
+    entire estate leg from the supply term without a trace. NaN falls to the fraction guards by
+    the same comparison rule `decrements` relies on (every ordering against NaN is False).
     """
     if not isinstance(lag, int) or lag < 0:
         raise CalibrationError(
             f"estate lag must be a non-negative whole number of years, got {lag!r}")
     if not 0.0 <= eventual_fraction <= 1.0:
         raise CalibrationError(f"eventual_fraction outside [0,1]: {eventual_fraction!r}")
+    if not 0.0 <= phi_voluntary <= 1.0:
+        raise CalibrationError(f"phi_voluntary outside [0,1]: {phi_voluntary!r}")
 
     out: dict[int, float] = {}
     for t, v in voluntary_by_year.items():
-        out[t] = out.get(t, 0.0) + v * PHI_VOLUNTARY
+        out[t] = out.get(t, 0.0) + v * phi_voluntary
     for t, e in estate_by_year.items():
         land = t + lag
         out[land] = out.get(land, 0.0) + e * eventual_fraction

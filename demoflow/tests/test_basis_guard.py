@@ -19,8 +19,11 @@ vacuity in the normal-path test, which would otherwise pass on inherited QC stat
 `ensure_qc_basis` stopped calling `set_active_mortality` altogether.
 """
 
+import ast
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +31,7 @@ from demoflow.cohort import basis as B
 from demoflow.errors import BasisError
 
 # SEAT-COORDINATED SWAP: becomes `actuarial.compat` when actuarial-system's consumer-first branch merges.
+from mcp_server.engine import mortality
 from mcp_server.engine.mortality import active_mortality, set_active_mortality
 
 US_BASIS = ("RP2014_combined", "MP2021")  # the engine's documented default pair
@@ -105,3 +109,120 @@ def test_q_at_returns_quebec_oracle_values():
     assert B.q_at(75, "F", 2035) == pytest.approx(0.0115, abs=5e-5)
     assert B.q_at(100, "M", 2035) == pytest.approx(0.3534, abs=5e-5)
     assert active_mortality() == ("CPM2014_combined", "CPM-B")  # and it left the basis QC
+
+
+# ------------------------------------------- the basis DIGEST (data-gate finding F1, run 32)
+#
+# THE BASIS WAS OUTSIDE ARTIFACT IDENTITY. `basis.py` pins the two basis IDENTIFIERS and
+# nothing about the TABLE CONTENT; the CSVs live outside this repo behind a uv path dep with
+# no digest (`uv.lock`: `source = { directory = "../../actuarial-system" }`), and
+# `pipeline._source_hashes` ranges over files under `data_dir` only. So two runs over
+# DIFFERENT upstream mortality tables emitted DIFFERENT `rankings.json` bytes under a
+# BYTE-IDENTICAL envelope, and `test_golden.py`'s attribution table then routed the operator
+# to hunt a code defect that does not exist. These tests pin the digest that closes it.
+
+def test_the_basis_digest_is_a_64_hex_sha256_and_deterministic():
+    """Two reads of one basis agree — the digest identifies the surface, never the moment."""
+    first = B.basis_digest()
+    assert re.fullmatch(r"[0-9a-f]{64}", first), first
+    assert B.basis_digest() == first
+
+
+def test_the_basis_digest_leaves_the_basis_on_the_quebec_pair():
+    """It goes through the SAME guarded surface every q lookup does, so it cannot read one
+    basis while the model reads another — entering on the US pair (the fixture) it returns
+    the QUÉBEC digest and leaves the engine on the Québec basis."""
+    assert active_mortality() == US_BASIS          # enter on the WRONG basis on purpose
+    B.basis_digest()
+    assert active_mortality() == ("CPM2014_combined", "CPM-B")
+
+
+def test_the_basis_digest_moves_when_the_upstream_table_content_moves(monkeypatch):
+    """THE DISCRIMINATION THE ENVELOPE COULD NOT MAKE: re-point `CPM2014_combined` at the
+    package's own `cpm2014_public_*` pair — the shape of actuarial-system re-publishing the
+    combined tables — and the digest MOVES while both basis IDENTIFIERS stay put.
+
+    The private reach-in is the data gate's own prescription ("prescribe a pytest that swaps
+    `_BASE_TABLES` and asserts the emitted identity MOVES") and it is confined to this test:
+    spec §2 forbids it in the model path, which is why `basis_digest` computes through the
+    public `q_at` surface and not off `mortality._DATA_DIR`. `_base_cache` is swapped for a
+    fresh dict in the same breath — without it the already-loaded arrays answer and the test
+    passes vacuously; monkeypatch restores both.
+    """
+    before = B.basis_digest()
+    monkeypatch.setattr(mortality, "_base_cache", {})
+    monkeypatch.setitem(mortality._BASE_TABLES, "CPM2014_combined",
+                        ("cpm2014_public_male.csv", "cpm2014_public_female.csv", 2014))
+    after = B.basis_digest()
+    assert active_mortality() == ("CPM2014_combined", "CPM-B")   # identifiers UNCHANGED
+    assert after != before, (
+        "the digest is blind to table CONTENT — the envelope cannot distinguish two runs over "
+        "different upstream mortality tables, which is the finding it exists to close")
+
+
+def test_the_basis_digest_grid_brackets_the_surface_the_model_consumes():
+    """A digest over a NARROWER grid than the run reads would miss the change it exists to
+    catch, so the AGE axis is bound to the model's own constants rather than to a literal.
+
+    The run's q consumption is TWO call sites: the lumped 75+ bucket rolled at
+    `pipeline.ROLL_AGE` over every population-lattice year, and the ruling-O reconciliation
+    cohort rolled a decade from `BAND_ENTRY_AGE`. Both bind here without I/O.
+
+    THE POPULATION-LATTICE YEARS DO NOT, and that is why they are not asserted in this file.
+    They come from the ISQ frame, not from any constant, so the only thing a unit test can
+    write here is the grid's own literal compared against itself — an assertion that fires
+    when the GRID narrows and stays green when CONSUMPTION widens past it, which is the
+    direction that ships the defect ("under-covering ships a moved table under an unchanged
+    envelope"). The year axis is measured instead against the recorded consumption of a real
+    run, in `tests/test_pipeline.py`
+    (`test_the_basis_digest_grid_covers_the_q_surface_the_run_actually_reads`), which closes
+    both directions on all three axes.
+    """
+    from demoflow.cohort.rollforward import BAND_ENTRY_AGE
+    from demoflow.pipeline import RECONCILIATION_COHORT, ROLL_AGE
+
+    _geo, _scen, recon_start, recon_age = RECONCILIATION_COHORT
+    ages, years = set(B.BASIS_DIGEST_AGES), set(B.BASIS_DIGEST_YEARS)
+    assert set(B.BASIS_DIGEST_GENDERS) == {"M", "F"}          # couples decrement per sex
+    assert ROLL_AGE in ages
+    assert set(range(BAND_ENTRY_AGE, 101)) <= ages            # the whole modeled band
+    assert set(range(recon_age, recon_age + 10)) <= ages      # the decade roll's ages
+    assert set(range(recon_start, recon_start + 10)) <= years  # ruling O's decade, a constant
+
+
+def test_the_basis_digest_reaches_no_private_engine_surface():
+    """Spec §2 forbids the private reach-in, and the cheap version of this digest is exactly
+    one: hash the CSVs off `mortality._DATA_DIR`. Read on the module's own AST rather than on
+    its text — `q_at`'s docstring legitimately NAMES `_load_base` when it explains the engine's
+    silent-zero below age 18, and a text grep cannot tell a citation from a reach-in."""
+    tree = ast.parse(Path(B.__file__).read_text(encoding="utf-8"))
+    imported = [(node.module, alias.name) for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) for alias in node.names]
+    reached = [node.attr for node in ast.walk(tree)
+               if isinstance(node, ast.Attribute) and node.attr.startswith("_")]
+    engine_private = [(mod, name) for mod, name in imported
+                      if (mod or "").startswith("mcp_server") and name.startswith("_")]
+    assert not engine_private, (
+        f"cohort/basis.py imports the engine's private {engine_private} — spec §2 admits the "
+        f"public surface only, which is why the digest is taken over the q SURFACE")
+    assert not reached, f"cohort/basis.py reaches private attributes {reached}"
+
+
+# THIRD, TEST-OWNED copy of the basis digest — the same device `tests/test_golden.py` uses for
+# the required-indicator names, and here it does one job the golden cannot. A re-published
+# upstream table reds the golden, whose remedy line says "re-mint"; re-minting alone would ship
+# a FRESH digest under the STALE `pipeline.BASIS_RECORDED_AT`, which is precisely the
+# date-describes-a-different-object defect the data gate raised one field over. This literal
+# makes the date's staleness a red with an instruction rather than a silent pairing.
+_BASIS_DIGEST_AT_DECLARATION = "d15e1f52318413016d1cc3229a5a2c85306fe922010be52e132dc8fbba830cea"
+
+
+def test_the_declared_recording_date_still_describes_this_basis():
+    """Measured 2026-08-19 on actuarial-system's committed CPM2014 + CPM-B tables."""
+    from demoflow.pipeline import BASIS_RECORDED_AT
+
+    assert B.basis_digest() == _BASIS_DIGEST_AT_DECLARATION, (
+        f"the CPM basis surface MOVED — actuarial-system re-published, or the engine's "
+        f"interpolation changed. That is a legitimate re-mint, NOT a refusal: update this pin "
+        f"AND `pipeline.BASIS_RECORDED_AT` (declared {BASIS_RECORDED_AT}) in the SAME commit as "
+        f"the golden re-mint, so the envelope's date and its digest keep describing one object")
