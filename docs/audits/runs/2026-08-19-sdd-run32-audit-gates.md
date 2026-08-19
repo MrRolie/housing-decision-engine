@@ -69,4 +69,81 @@ CODE-STATE, because committing this very record moves HEAD before any gate reads
    and write nothing.**
 
 - run id: `wf_19bc200b-298` (task `wre987dr2`)
-- outcome: (appended at run close)
+- outcome: **PROCEED-WITH-MODIFICATIONS ×3**, none dry; 20 findings (2 CRITICAL, 3 HIGH, 9 MED,
+  6 LOW); 3 agents, 0 errors, 975,646 subagent tokens, 47 min. Verdicts written to
+  `docs/audits/{quant,stress,data}/2026-07-21-demoflow-tranche1.md`.
+
+## THE GATES EARNED THEIR SLOT. Tranche 1 does not ship as it stands.
+
+**TWO GATES INDEPENDENTLY FOUND THE SAME CRITICAL, and the seat has now REPRODUCED it.**
+
+`rank_stable: true` ships on **all eight rows of the committed golden** as a verdict over **ONE of
+FIVE declared robustness axes.** Confirmed structurally by the seat before measuring anything:
+`_rank_stability` (`pipeline.py:890`) iterates only `SWEEP_GRID["q_live_per_year"]`, while
+`SWEEP_GRID` declares FOUR axes and `constants.py:229-232` states as FACT that a fifth exists —
+"Task 29 perturbs the join table with a uniform override spanning
+`CONSTANTS["immigrant_ownership_ratio_sweep_span"]` = [0.155, 1.033]". **No such code exists
+anywhere in the tree** — `sweep_span` appears only in `constants.py` and `test_constants.py`, never
+in `pipeline.py`.
+
+**This is the THIRD PRODUCER/CONTRACT SEAM**, the class the dispatch explicitly told the gates to
+hunt after the 64-vs-16 assumptions-hash width and the `check_registry`/validator mismatch. It is
+also the worst of the three, because the other two would have failed loudly the moment they were
+exercised; this one ships a false all-clear in a committed artifact and announces nothing.
+
+**SEAT REPRODUCTION**, out-of-tree harness patching `resolve_immigrant_inputs` at the public entry
+point, nothing in the worktree touched. Harness validity established first: the unpatched central run
+reproduces the committed `rankings.json` EXACTLY, so the legs below count.
+
+- **uniform ratio 0.155 → 8 of 8 geographies change rank, and every mean ED FLIPS SIGN.** HORS_RMR
+  1→4 (−0.000290 → −0.002180), LAVAL_RA13 4→1, MTL_RMR 6→2, MTL_ISLAND_RA06 8→5, QC_RMR 7→8,
+  MONTEREGIE 5→3, LAURENTIDES 2→6, LANAUDIERE 3→7.
+- **uniform ratio 1.033 → 4 of 8 change rank.**
+- **Union over both DECLARED endpoints: every one of the eight rows moves.** The honest value of
+  `rank_stable` is therefore **`false` on every row.**
+
+Spec basis is double: §7b's run contract (codex r8-F1) mandates that band endpoints enter through the
+sweep grid, and **§6 amendment #12(C) LEANS on this override existing** for its containment argument
+("a `rank_stable` verdict is evidence, not proof, on this axis"). It is not evidence at all — the
+axis was never evaluated.
+
+## The second decision-critical finding puts the ranking ORDER in question
+
+`D_native` is **68–100% band-step artifact.** `pipeline.py:804` materialises the BANDED headship
+curve at single years of age — the reuse `census.py:778-779` explicitly forbids in its own words
+("It is NOT an age-resolved rate ... must land an age-resolved curve rather than reuse this one")
+and which spec §7 amendment #12 quotes as binding. Measured share of `D_native` that is band-step
+mass: MTL_RMR 100.00%, MTL_ISLAND_RA06 100.00%, LAVAL_RA13 99.40%, HORS_RMR 78.32% — and the spread
+across the ranked set is ~30pp, so it is **not common-mode**. Scale: MTL_RMR's 2026 step mass is
+0.689%/yr against a committed mean reference ED of 0.277%/yr — **the artifact is ~2.5× the entire
+ranked signal.** A perturbation probe (monotone piecewise-linear through the same band values)
+reorders every row and flips rank 1's sign.
+
+**And run 15's reopening condition SILENTLY FAILED.** That record wrote "it reopens when Task 29
+lands an age-resolved headship curve"; Task 29 landed WITHOUT one, and nothing reopened. A condition
+whose trigger nobody checks is not a condition — this is the same class as the mis-aimed audit gates,
+one layer down.
+
+## What the gates CONFIRMED, so a later round does not re-spend on it
+
+- **RULING U's presence-bar inference SURVIVED its strongest available falsification**, probed
+  independently by TWO gates, one of them against three real Wayback vintages of the IRCC feed. The
+  residual measures NARROWER than the seat's own record claimed. The inference stands as an
+  inference — evidence, not proof — and the record's honesty about it was the right call.
+- **All six cohort oracle fixtures pass independent recomputation** from the spec §5 branch algebra
+  alone using exact `fractions.Fraction`. A wrong oracle would have pinned a wrong implementation;
+  they are right.
+
+## Disposition
+
+**F1 (the sweep) is NOT a fork — it is code failing its own committed, operator-ratified contract**,
+and it goes to a fix run: wire every declared axis plus the join-table ratio override, set
+`rank_stable` from the union, re-mint the golden (all eight booleans flip to `false`, which is the
+honest state), and record in `artifacts/README.md` that the flag is a five-axis verdict. The only
+fork would be RETRACTING the contract instead, which would require `constants.py:228-232` and spec §6
+amendment #12(C)'s containment sentence to be struck in the same commit.
+
+**F2 (the headship curve) IS a scope fork and is going to the operator / mm-infra steering**, because
+landing an age-resolved, population-weight-conserving headship curve is new modelling work, and the
+alternative — shipping rankings whose order is ~2.5× artifact with a row-level caveat — is a claim
+about what the deliverable is for. The seat does not rule that alone.
