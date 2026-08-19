@@ -25,6 +25,11 @@ not have to guess, so it is stated here, in `--help`, and in the contract tests:
     of the EVALUATION, not of the emission, and it is the code a cron or a shell `&&` should
     branch on.
 
+THE LISTING CARRIES THE IDENTITY ENVELOPE (`assumptions_hash` + `data_vintage`), because a
+status with no provenance cannot be checked against the committed `tripwire_baseline.json` it is
+supposed to correspond to — the two could disagree with no field on either side revealing it. The
+printed fields are the document's own, verbatim, so the comparison is byte-level.
+
 Because those differ, `run` PRINTS the tripwire verdict beside its exit line: an operator who
 reads `run`'s exit 0 as "the tripwires are green" has been misled by a gate that was never
 claiming it. It prints the RUN LOG under that verdict for the same reason (ruling U, see
@@ -126,13 +131,40 @@ def _print_log(log) -> None:
         print(f"  log: {line}")
 
 
-def _print_tripwires(results, log) -> None:
-    """One line per indicator, then the run log. The LISTING is this subcommand's alone (`run`
-    prints a verdict and points here); the log is not.
+def _print_identity(assumptions_hash: str, vintage: dict) -> None:
+    """The listing's IDENTITY ENVELOPE — the same two fields `tripwire_baseline.json` carries,
+    printed ABOVE the rows exactly as spec §7 stacks them in the document.
+
+    THE LISTING WAS UNATTRIBUTABLE. It named six statuses and nothing about what they were
+    computed from, so it could disagree with a committed baseline — different source bytes, a
+    re-pinned workbook, a different assumption selection — with NO field on either side able to
+    reveal it. "Run it again and compare" is not the recovery: that is a second read of a
+    deliberately unpinned, monthly-refreshing feed, which is the thing `_tripwire_results` is
+    built around not doing.
+
+    FULL DIGESTS, NOT PREFIXES, and the whole `source_hashes` map rather than the one feed this
+    gate reads. The comparison this line exists to enable is against the JSON, so what is
+    printed has to be what the JSON holds — a truncated or filtered rendering re-opens the gap
+    one field narrower. `assumptions_hash` is the SELECTION and `data_vintage` is the BYTES:
+    two tokens for two questions, which is what makes a disagreement attributable to
+    data-vs-code (`pipeline._run_identity` states the same split at its source).
+    """
+    print(f"assumptions_hash: {assumptions_hash}")
+    sources = vintage["source_hashes"]
+    print(f"data_vintage.source_hashes ({len(sources)} source(s)):")
+    for name in sorted(sources):
+        entry = sources[name]
+        print(f"  {name} sha256={entry['sha256']} extracted_at={entry['extracted_at']}")
+
+
+def _print_tripwires(results, log, assumptions_hash: str, vintage: dict) -> None:
+    """The identity, one line per indicator, then the run log. The LISTING is this subcommand's
+    alone (`run` prints a verdict and points here); the log is not.
 
     Every token on these lines comes from a closed vocabulary: `status` and `reason` from their
     enums, `source` from the code-owned registry the emitted record is bound to.
     """
+    _print_identity(assumptions_hash, vintage)
     for t in results:
         reason = f" — {t.reason.value}" if t.reason is not None else ""
         print(f"{t.status.value:8} {t.indicator} ({t.source}){reason}")
@@ -171,7 +203,11 @@ def main(argv: list[str] | None = None) -> int:
         _print_log(result["tripwire_log"])
         return 0
 
-    _print_tripwires(result["tripwires"], result["tripwire_log"])
+    # Indexed, not `.get`, for the same reason `run`'s log is: these keys are part of
+    # `evaluate_tripwires`'s return contract, and a listing that silently lost its identity
+    # would be the exact defect this printing closes.
+    _print_tripwires(result["tripwires"], result["tripwire_log"],
+                     result["assumptions_hash"], result["data_vintage"])
     return result["exit_code"]
 
 

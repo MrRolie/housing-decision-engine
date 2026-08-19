@@ -81,10 +81,6 @@ from demoflow.output.tripwires import (
     evaluate_indicator, evaluate_pr_landings, run_exit_code,
 )
 
-# ScenarioPrior horizons (Tranche-2 reference). NOT the ranking domain — that is
-# `_projected_years`, which is the full contiguous projected lattice (codex r8-F3).
-HORIZON_YEARS = [2030, 2035, 2040, 2045, 2050]
-
 POP_WORKBOOKS = ("pop-as-rmr-base.xlsx", "pop-as-ra-base.xlsx")
 COMPO_WORKBOOKS = ("compo-rmr-base.xlsx", "compo-ra-base.xlsx")
 
@@ -746,6 +742,31 @@ def _add(a: Stock, b: Stock) -> Stock:
     return Stock(a.couple + b.couple, a.solo_m + b.solo_m, a.solo_f + b.solo_f)
 
 
+def _listings_at(listings: dict[int, float], year: int, ctx: str) -> float:
+    """The supply term S at `year` — REFUSING a year the roll-forward never keyed.
+
+    `listings.get(year, 0.0)` stood here, in a module whose own docstring says "every silent-zero
+    door on the model path refuses instead". It is UNREACHABLE as written and the door is closed
+    anyway, because unreachability here is a property of two loops staying in step rather than of
+    anything structural: the supply loop keys `voluntary` at every year from the population
+    frame's first through `years[-1]`, which covers the whole ranking domain, and nothing binds
+    those two ranges together except that one line writes them and another reads them.
+
+    THE DEFAULT IS THE DEFLATING ONE, which is why this is the door and not merely a lookup. ED
+    is demand MINUS supply over stock: a missing listing year books supply as ZERO, which pushes
+    excess demand UP and a geography's rank TOWARD the top. The failure surfaces as a better
+    ranking, not as a hole — the shape spec §7b's domain gate and `_pop_by_age`'s holed-lattice
+    gate both exist to refuse one level down.
+    """
+    if year not in listings:
+        raise CalibrationError(
+            f"{ctx}: no market-listing entry for {year} — the supply term would default to 0.0, "
+            f"which INFLATES excess demand and moves the geography UP the ranking rather than "
+            f"showing a hole (keyed years {min(listings, default=None)}-"
+            f"{max(listings, default=None)})")
+    return listings[year]
+
+
 # ===========================================================================================
 # RULING O — the reconciliation gate, CENTRAL RUN ONLY
 # ===========================================================================================
@@ -838,7 +859,7 @@ def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
         # this denominator would scale |ED| away from zero (balance/owner_stock.py states it at
         # the use site).
         os = owner_stock(raw_t, headship, ownership)
-        series.append(excess_demand(D, listings.get(t, 0.0), os))
+        series.append(excess_demand(D, _listings_at(listings, t, ctx=f"{ctx}/{t}"), os))
     return series
 
 
@@ -911,10 +932,25 @@ def evaluate_tripwires(data_dir: Path | None = None, now_year: int = 2026,
     `now_month` defaults to the LAST month of `now_year` for `run_pipeline`'s stated reason: an
     under-specified call makes a feed look as OLD as that year permits, so it refuses rather than
     certifies. The CLI supplies the real month.
+
+    IT RETURNS THE IDENTITY ENVELOPE TOO, and that is what makes the listing an ATTRIBUTABLE
+    reading rather than a floating opinion. A listing carrying neither `assumptions_hash` nor
+    `data_vintage` cannot be checked against a committed `tripwire_baseline.json` at all: the two
+    can disagree — different bytes, different assumption selection, a re-pinned workbook — with no
+    field on either side able to reveal it, and "re-run it and compare" is precisely the second
+    read of an unpinned monthly feed that `_tripwire_results` exists to prevent. The SAME two
+    fields the document carries are returned here, computed off the SAME single feed read.
+
+    IT INHERITS THE ENVELOPE'S REFUSAL DOORS, and that is the intended trade: `_data_vintage`
+    hashes every declared input OFF DISK, so an absent, unhashable or pin-drifted input now
+    stops the LISTING too, with the file named, instead of printing six statuses under a
+    provenance it could not state. Both outcomes exit nonzero; only one of them says why.
     """
     landings = load_pr_landings(data_dir=data_dir)
     trips, trip_log = _tripwire_results(landings, now=(now_year, now_month))
-    return {"tripwires": trips, "tripwire_log": trip_log, "exit_code": run_exit_code(trips)}
+    return {"tripwires": trips, "tripwire_log": trip_log, "exit_code": run_exit_code(trips),
+            "assumptions_hash": assumptions_hash(),
+            "data_vintage": _data_vintage(data_dir, landings)}
 
 
 def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,

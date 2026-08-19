@@ -36,6 +36,7 @@ exist yet (the feed carries 6 months). Every plan-era test therefore runs on a
 year-RELABELED slice of real 2025 bytes — derived from measured data, never invented.
 """
 import hashlib
+import inspect
 import math
 from pathlib import Path
 
@@ -54,6 +55,9 @@ from demoflow.output.tripwires import (
     assert_tripwire_record_valid, check_registry, closed_plan_years, evaluate_indicator,
     evaluate_pr_landings, exit_code, pr_landings_realized, run_exit_code, tripwire_record,
 )
+# The month-vocabulary CLAUSE by name. Private, and imported deliberately: the rule is an
+# equivalent mutant at `closed_plan_years`' boundary, so it is only killable here.
+from demoflow.output.tripwires import _months_are_the_closed_vocabulary
 
 # ---------------------------------------------------------------------------------------
 # LAYER 1 — the plan's 13 core-gate contracts, verbatim.
@@ -117,6 +121,30 @@ def test_registry_completeness_empty_missing_duplicate():
     assert any(r.reason is Reason.DUPLICATE_INDICATOR for r in dup) and exit_code(dup) != 0
     complete = check_registry(sorted(REQUIRED_INDICATORS))
     assert complete == []                                      # no completeness violations
+
+
+def test_a_duplicate_record_from_the_producer_validates():
+    """THE SEAM between the producer and the contract, which nothing crossed.
+
+    `check_registry` emits its duplicate record with `current_value=None` and `as_of=None` — a
+    duplicated key names no honest measurement, the identical logic that nulls the other four
+    UNKNOWN branches. `NULLABLE_REASONS` did not list `duplicate_indicator`, so
+    `assert_tripwire_record_valid` took its NON-null branch and REJECTED a record its own
+    module had just built. Latent rather than live: nothing in the run emits a duplicate today,
+    and that is exactly why it shipped — the two halves disagreed and no test made them meet.
+
+    The crossing is the test: every record `check_registry` produces must validate, for BOTH
+    completeness reasons, and both must be null on both nullable fields. Asserted over the
+    reasons the producer can actually emit rather than over a copy of the frozenset, so a
+    record that starts carrying a value reds here instead of passing a set-equality check."""
+    dup = check_registry(sorted(REQUIRED_INDICATORS) + [PR_LANDINGS_INDICATOR])
+    assert [r.reason for r in dup] == [Reason.DUPLICATE_INDICATOR]
+    short = check_registry([PR_LANDINGS_INDICATOR])
+    assert {r.reason for r in short} == {Reason.MISSING_INDICATOR}
+    for produced in (dup, short):
+        for r in produced:
+            assert r.current_value is None and r.as_of is None
+            assert_tripwire_record_valid(tripwire_record(r))   # the contract accepts its producer
 
 
 def test_exit_code_zero_only_when_all_ok():
@@ -342,18 +370,78 @@ def test_a_month_gap_inside_a_relabeled_year_is_not_a_closed_year(tmp_path):
     assert closed_plan_years(_plant(tmp_path, gapped).frame) == []
 
 
-def test_closed_year_check_is_vocabulary_bound_not_a_count(tmp_path):
-    """Twelve DISTINCT tokens is not twelve MONTHS. The loader refuses an unknown token, so
-    this frame cannot arrive through it — which is the point: `closed_plan_years` is
-    importable, and a caller that hands it a frame from anywhere else must still be refused.
-    A `len(months) == 12` gate passes this input; the vocabulary equality does not."""
+def test_closed_year_check_is_vocabulary_bound_not_a_count():
+    """Twelve DISTINCT tokens is not twelve MONTHS — asserted against the CLAUSE, because
+    through `closed_plan_years` this rule cannot be observed at all.
+
+    WHAT THIS TEST USED TO DO, and why it was passing for the wrong reason. It handed
+    `closed_plan_years` a directly-built frame of twelve Montréal rows carrying `Sept` instead
+    of `Sep` and asserted the year did not close. It did not close — but the MEMBER-SET clause
+    and the per-MODELED-member clause both refuse that frame on their own (thirty required
+    members absent, `Québec` absent), so the assertion held with the month-vocabulary clause
+    mutated to a bare count AND with it deleted outright. Run 29's reviewer measured both mutants
+    surviving the FULL suite; reproduced here at module scope against pristine HEAD sources — 60
+    passed under each mutant, this test among them.
+
+    THE MUTANT IS EQUIVALENT AT THE FUNCTION'S BOUNDARY, so isolating the clause is the only
+    fix. `closed_plan_years` also demands `by_member[m] == set(EN_MONTHS)` for both
+    `MODELED_CMAS`, which forces the province-wide union to CONTAIN all twelve tokens; on any
+    frame satisfying that, `len(set(months)) == 12` holds exactly when
+    `set(months) == set(EN_MONTHS)` does. No input to `closed_plan_years` can separate them.
+    Handed the rows directly, the rule separates them on the first input below.
+
+    THE REACHABLE THREAT IS A DIRECTLY CONSTRUCTED FRAME AND ONLY THAT. `ircc._check_periods`
+    refuses `Sept` at LOAD, so no frame carrying it arrives through the loader — but
+    `closed_plan_years` is importable, and a caller handing it a frame assembled anywhere else
+    must still be refused rather than counted. The clause's WIRING is defended one test down.
+    """
     import pandas as pd
-    rows = [{"EN_YEAR": "2026", "EN_MONTH": m, "EN_PROVINCE_TERRITORY": QUEBEC_PROVINCE,
-             "EN_CENSUS_METROPOLITAN_AREA": "Montréal", "TOTAL": "5"}
-            for m in ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                      "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")]   # `Sept`, not `Sep`
-    frame = pd.DataFrame(rows)
-    assert frame["EN_MONTH"].nunique() == MONTHS_PER_CLOSED_YEAR
+    smuggled = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")        # `Sept`, not `Sep`
+    rows = pd.DataFrame([{"EN_MONTH": m} for m in smuggled])
+    assert rows["EN_MONTH"].nunique() == MONTHS_PER_CLOSED_YEAR    # a bare count says CLOSED
+    assert set(smuggled) != set(EN_MONTHS)
+    assert not _months_are_the_closed_vocabulary(rows)             # the vocabulary says NO
+    # ...and it is clearable, or it is not a gate: the real twelve pass.
+    assert _months_are_the_closed_vocabulary(pd.DataFrame([{"EN_MONTH": m} for m in EN_MONTHS]))
+    # a SHORT year is refused by the same rule, which is the shape the loader does deliver.
+    assert not _months_are_the_closed_vocabulary(
+        pd.DataFrame([{"EN_MONTH": m} for m in EN_MONTHS[:6]]))
+
+
+def test_an_extra_month_token_refuses_a_year_the_other_two_clauses_accept(tmp_path):
+    """THE CLAUSE'S WIRING, which the isolated test above cannot reach: is the rule actually
+    consulted by `closed_plan_years`?
+
+    Built to satisfy EVERY OTHER CLAUSE, so only the month-vocabulary rule can refuse it: real
+    2025 bytes under a plan-era stamp (all 31 required members, both modeled members 12/12),
+    plus ONE appended cell on a NON-modeled member carrying `Sept`. Delete the clause and this
+    year closes; keep it and the year is refused. Directly constructed for the same reason as
+    above — `_check_periods` refuses the token at load, so this frame is spliced onto a loaded
+    one rather than planted through the loader.
+
+    THIS TEST DOES NOT DISTINGUISH the bare-count rewrite (thirteen tokens fails a count too);
+    the test above does. Two mutants, two rules, two tests: the rule, and its wiring."""
+    import pandas as pd
+    era = _relabel_year(_lines(), "2025", "2026")
+    landings = _plant(tmp_path, era)
+    assert closed_plan_years(landings.frame) == [2026]         # the un-spliced frame CLOSES
+
+    extra_token, smuggler = "Sept", "Saguenay"
+    assert extra_token not in set(EN_MONTHS)
+    assert smuggler not in MODELED_CMAS and smuggler in QUEBEC_REQUIRED_CMAS
+    row = {column: "" for column in EXPECTED_COLUMNS}
+    row.update({"EN_YEAR": "2026", "EN_MONTH": extra_token,
+                "EN_PROVINCE_TERRITORY": QUEBEC_PROVINCE,
+                "EN_CENSUS_METROPOLITAN_AREA": smuggler, "TOTAL": "5"})
+    frame = pd.concat([landings.frame, pd.DataFrame([row])], ignore_index=True)
+
+    # every OTHER clause is satisfied on this frame — stated as assertions, not as a claim.
+    assert QUEBEC_REQUIRED_CMAS <= _qc_members(frame, "2026")
+    for modeled in MODELED_CMAS:
+        member = frame[(frame["EN_YEAR"] == "2026")
+                       & (frame["EN_CENSUS_METROPOLITAN_AREA"] == modeled)]
+        assert set(member["EN_MONTH"]) == set(EN_MONTHS)
     assert closed_plan_years(frame) == []
 
 
@@ -925,3 +1013,123 @@ def test_a_feed_dated_ahead_of_now_is_refused_not_evaluated(tmp_path):
     assert_tripwire_record_valid(tripwire_record(ev.result))
     assert exit_code([ev.result]) != 0
     assert "ahead" in ev.log.lower()
+
+
+def _restamp_year(lines: list[str], src: str, dst: str, drop_member: str | None = None) -> list[str]:
+    """DATA rows of `src` re-stamped as `dst` (header excluded), optionally minus one member.
+    Returned as rows to APPEND, so a caller can hold two plan-era years in one feed."""
+    out = []
+    for ln in lines[1:]:
+        f = ln.split("\t")
+        if f[_COL["EN_YEAR"]] != src:
+            continue
+        if drop_member is not None and f[_COL["EN_CENSUS_METROPOLITAN_AREA"]] == drop_member:
+            continue
+        f[_COL["EN_YEAR"]] = dst
+        f[_COL["FR_ANNEÉ"]] = dst
+        out.append("\t".join(f))
+    return out
+
+
+def test_a_later_year_losing_members_is_named_while_the_verdict_rides_the_honest_year(tmp_path):
+    """THE THIRD UNCHECKED SIBLING of the discriminator's cause set, and it was silent.
+
+    `_member_set_note` was wired into the empty-closed-years branch ALONE. So a feed with 2026
+    CLOSED and 2027 truncated — twelve months published, one required member gone — reached a
+    verdict on 2026 (`year = max(years)` selects the honest year, which is right) and said
+    NOTHING about 2027 anywhere. The verdict is not at risk; the REPORT is. A reader learns the
+    feed is losing members only once the loss reaches the evaluated year, which is a year late.
+
+    Both arms below carry the same frame and differ only in `freshness_years`, because the
+    bound that was doing the hiding is exactly the freshness gate: at the run's declared
+    `freshness_years=1` the 2026 verdict is STALE by 2028, and a bound that holds only while
+    another gate refuses is not a bound this module may rely on. Widen it and the run reaches a
+    real OK/exit-0 verdict — with the 2027 truncation still named in the log."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    dropped = "Saguenay"
+    assert dropped in QUEBEC_REQUIRED_CMAS
+    landings = _plant(tmp_path, era + _restamp_year(era, "2026", "2027", drop_member=dropped))
+    assert landings.latest_period == (2027, 12)
+    assert closed_plan_years(landings.frame) == [2026]          # 2027 fails the member set
+    assert dropped not in _qc_members(landings.frame, "2027")
+
+    wide = (55000.0, 65000.0)
+    stale = evaluate_pr_landings(landings, band=wide, now=(2028, 3))
+    assert stale.result.status is Status.UNKNOWN and stale.result.reason is Reason.STALE
+    assert "member-set truncation" in stale.log.lower()
+
+    verdict = evaluate_pr_landings(landings, band=wide, now=(2028, 3), freshness_years=2)
+    assert verdict.result.status is Status.OK and verdict.result.reason is None
+    assert verdict.result.as_of == 2026 and verdict.result.current_value == QC_2025_PROVINCE
+    assert exit_code([verdict.result]) == 0                     # an honest year, honestly green
+    assert "member-set truncation" in verdict.log.lower()       # ...and the gap still NAMED
+    assert "2027: 1 of 31 required" in verdict.log
+    assert "12 of 12 months" in verdict.log and "cannot explain" in verdict.log
+    # the evaluated year itself is intact, so the note speaks about 2027 and not about 2026.
+    assert "2026:" not in verdict.log.split("MEMBER-SET TRUNCATION SUSPECTED")[1]
+
+
+def test_the_member_set_note_rides_every_branch_that_has_a_frame(tmp_path):
+    """The invariant `evaluate_pr_landings`' docstring ASSERTS, pinned at every site it names.
+
+    The note was computed once and appended to five returning branches, but only two of the
+    five were reachable by any test: dropping `+ note` from the degenerate branch, the
+    impossible-vintage branch, or the feed-staleness branch left the whole suite green. That
+    is the diff's own defect class — behaviour with no crossing test — sitting inside the fix
+    that introduced it, and a stated invariant no test defends decays branch by branch.
+
+    Reason tokens CANNOT discriminate these branches and asserting on them would rebuild the
+    passes-for-the-wrong-reason defect here: `source_unavailable` is emitted by the
+    empty-years branch AND the degenerate one, and `stale` by the feed-staleness branch AND
+    the generic gate on the verdict path. So each arm asserts the LOG HEAD that only its own
+    branch writes. That also makes the arms honest about which gate they crossed: the two
+    arms of `test_a_later_year_losing_members_is_named_while_the_verdict_rides_the_honest_year`
+    LOOK like a stale/fresh pair, and both in fact return through the verdict path — 2027-12 is 3 months behind 2028-03, inside the 5-month feed limit, so the
+    STALE there is the generic gate's, not this module's.
+
+    ONE truncated 2027 rides every arm; what selects the branch is the state of 2026 and the
+    `now` the run is asked about. The note must name 2027 in all five."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    tail = _restamp_year(era, "2026", "2027", drop_member="Saguenay")   # 12/12 months, 30/31 members
+    wide = (55000.0, 65000.0)
+
+    def plant(name: str, lines: list[str]) -> PRLandings:
+        d = tmp_path / name
+        d.mkdir()
+        return _plant(d, lines)
+
+    # (arm, landings, kwargs, the log head ONLY that branch writes)
+    arms = [
+        ("no closed year", plant("a", [_lines()[0]] + tail),
+         dict(now=(2028, 1)), "no CLOSED year in the plan era"),
+        ("degenerate read", plant("b", _suppress(era, "2026", cma="Montréal") + tail),
+         dict(now=(2028, 1)), "degenerate feed read"),
+        ("impossible vintage", plant("c", era + tail),
+         dict(now=(2027, 6)), "is AHEAD of"),
+        ("feed stale", plant("d", era + tail),
+         dict(now=(2029, 6)), "months behind"),
+        ("verdict", plant("e", era + tail),
+         dict(now=(2028, 3), freshness_years=2), "realized="),
+    ]
+    heads = set()
+    for arm, landings, kwargs, head in arms:
+        ev = evaluate_pr_landings(landings, band=wide, **kwargs)
+        assert head in ev.log, f"{arm}: expected branch not taken — {ev.log[:120]}"
+        assert "member-set truncation" in ev.log.lower(), f"{arm}: the note is NOT on this branch"
+        assert "2027: 1 of 31 required" in ev.log, f"{arm}: the note names the wrong year"
+        heads.add(ev.log.split("MEMBER-SET")[0])
+
+    # ...and the arms are genuinely five DIFFERENT branches, not one branch reached five ways.
+    assert len(heads) == len(arms)
+
+    # LAST, never first: the loop above is what proves the note is ON each branch, and it is
+    # the only thing that can — a count is blind to WHICH branch a note rides, and a count
+    # checked ahead of the loop would swallow every drop-`+ note` mutant into one arity
+    # failure that names no branch. Here it closes the remaining hole: the number of RETURNING
+    # BRANCHES is read off the function rather than transcribed, so ANY sixth returning branch
+    # reds this test — carrying the note or not, and the note-less one is the defect shape —
+    # demanding an arm above or a recorded exemption. The `+ 1` IS the one exemption, and it
+    # is exempt by construction: `not landings.available` returns BEFORE a frame exists, so it
+    # has no member set to speak about and no note to carry.
+    returns = inspect.getsource(evaluate_pr_landings).count("return PRLandingsEvaluation(")
+    assert returns == len(arms) + 1

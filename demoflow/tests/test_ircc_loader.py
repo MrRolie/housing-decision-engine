@@ -20,7 +20,10 @@ from pathlib import Path
 import pytest
 
 from demoflow.errors import LoaderError
-from demoflow.loaders.ircc import CSV_NAME, EXPECTED_COLUMNS, PRLandings, load_pr_landings
+from demoflow.loaders.ircc import (
+    CSV_NAME, EXPECTED_COLUMNS, MODELED_CMAS, QUEBEC_REQUIRED_CMAS, PRLandings,
+    load_pr_landings,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ircc_pr_by_cma_sample.csv"
 
@@ -261,3 +264,36 @@ def test_year_token_must_parse_and_be_canonical(tmp_path, token):
     _plant(tmp_path, "\r\n".join(lines) + "\r\n")
     with pytest.raises(LoaderError, match="EN_YEAR"):
         load_pr_landings(data_dir=tmp_path)
+
+
+# --- the selection-key vocabularies this module OWNS ---------------------------------
+
+def test_the_required_quebec_member_set_is_selectable_in_this_feeds_own_grammar():
+    """`QUEBEC_REQUIRED_CMAS` lives in `ircc.py` and had NO pin in `ircc.py`'s own test module —
+    its only binding was over in `test_tripwires.py`, beside the gate that CONSUMES it. This is
+    the OWNER's half, and it is deliberately not a second copy of that binding.
+
+    WHAT test_tripwires PINS: membership, size and spelling, by exact equality against the
+    committed 2026 Quebec bytes of `fixtures/ircc_pr_qc_slice.csv`
+    (`test_the_required_member_set_is_bound_to_the_committed_fixture_bytes`). That is the
+    CONTENT question and it belongs there, at the gate that clears or refuses a year.
+
+    WHAT THIS PINS, which content-equality does not reach: that every token is SELECTABLE in the
+    grammar of THIS feed. The file is TAB-delimited, so a member token carrying a tab or an
+    embedded newline can never string-match a parsed cell — the member-set clause would then be
+    permanently un-clearable and the indicator would report UNKNOWN forever with no cause named,
+    which is verbatim the harm `_check_periods` and `_check_provinces` exist to prevent one
+    column over. That is not hypothetical: the constant's own derivation comment records that the
+    emitting script's first pass wrapped a line INSIDE `Ottawa - Gatineau (Quebec part)`.
+
+    And that `MODELED_CMAS` is a SUBSET of it, which is a consistency claim between two
+    vocabularies this module declares eight lines apart. A modeled member outside the required
+    set would make `closed_plan_years`' per-modeled-member clause and its member-set clause
+    disagree about who must report."""
+    assert isinstance(QUEBEC_REQUIRED_CMAS, frozenset)
+    assert len(QUEBEC_REQUIRED_CMAS) == 31
+    for member in QUEBEC_REQUIRED_CMAS:
+        assert isinstance(member, str) and member, f"empty or non-str member: {member!r}"
+        assert member == member.strip(), f"member carries edge whitespace: {member!r}"
+        assert not (set(member) & set("\t\r\n")), f"member is unselectable in a TSV: {member!r}"
+    assert set(MODELED_CMAS) <= QUEBEC_REQUIRED_CMAS

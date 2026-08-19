@@ -43,6 +43,15 @@ from demoflow.output.tripwires import (
 _PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
 
+# The fake vintage is SHAPED like the real one — `{name: {sha256, extracted_at}}` — because the
+# identity printer reads that shape and an empty dict would let a printer that renders nothing
+# pass every assertion below. Two entries, one of them the unpinned IRCC feed, so the sort order
+# and the per-entry rendering are both exercised.
+_FAKE_VINTAGE = {"source_hashes": {
+    "pop-as-rmr-base.xlsx": {"sha256": "a" * 64, "extracted_at": "2026-08-08"},
+    "ircc_pr_by_cma.csv": {"sha256": "b" * 64, "extracted_at": "2026-06-01"}}}
+
+
 def _fake_result(exit_code: int = 1, out_dir: Path | None = None) -> dict:
     """What `run_pipeline` hands back, minus the ten seconds of real I/O."""
     trips = [TripwireResult(i, None, SOURCE_REGISTRY[i], None, 0.0, 0.0, Status.UNKNOWN,
@@ -50,7 +59,7 @@ def _fake_result(exit_code: int = 1, out_dir: Path | None = None) -> dict:
     return {"rankings": [], "tripwires": trips, "tripwire_log": ["fake: nothing wired"],
             "exclusions": [], "exit_code": exit_code, "out_dir": out_dir,
             "artifacts": ["rankings.json", "tripwire_baseline.json"],
-            "assumptions_hash": "0" * 12, "data_vintage": {}}
+            "assumptions_hash": "0123456789abcdef", "data_vintage": _FAKE_VINTAGE}
 
 
 # ------------------------------------------------------------------ the boundary that was broken
@@ -183,6 +192,46 @@ def test_every_printed_token_comes_from_a_closed_vocabulary(monkeypatch, capsys)
         assert SOURCE_REGISTRY[indicator] in printed
     assert Reason.SOURCE_UNAVAILABLE.value in printed
     assert Status.UNKNOWN.value in printed
+
+
+# ------------------------------------------------ the listing is ATTRIBUTABLE, not a floating read
+
+def test_the_listing_prints_the_identity_envelope_above_the_rows(monkeypatch, capsys):
+    """A listing that names six statuses and nothing about what produced them cannot be checked
+    against the committed `tripwire_baseline.json` it is supposed to correspond to: the two can
+    disagree — other bytes, a re-pinned workbook, another assumption selection — with NO field on
+    either side revealing it. Re-running is not the recovery; that is a second read of a
+    deliberately unpinned monthly feed.
+
+    FULL DIGESTS AND THE WHOLE MAP, asserted as such. The comparison this exists to enable is
+    against the JSON, so a truncated or filtered rendering would reopen the gap one field
+    narrower. ABOVE the rows, as spec §7 stacks the document — asserted by POSITION, not by
+    presence, because an identity printed under six status lines is a footnote."""
+    monkeypatch.setattr(cli, "evaluate_tripwires", lambda **kw: _fake_result(exit_code=1))
+    cli.main(["tripwires"])
+    printed = capsys.readouterr().out
+    assert "assumptions_hash: 0123456789abcdef" in printed
+    for name, entry in _FAKE_VINTAGE["source_hashes"].items():
+        assert f"{name} sha256={entry['sha256']} extracted_at={entry['extracted_at']}" in printed
+        assert entry["sha256"] in printed and len(entry["sha256"]) == 64   # full, not a prefix
+    first_status = min(printed.index(i) for i in REQUIRED_INDICATORS)
+    assert printed.index("assumptions_hash:") < first_status
+    assert printed.index("data_vintage.source_hashes") < first_status
+
+
+def test_the_listing_identity_is_the_one_the_evaluation_computed(monkeypatch):
+    """...and it is the EVALUATION's identity, not a token the CLI derived on its own. A second
+    derivation here would be a second answer to spec §9's question for a reader to reconcile —
+    the same rule the exit code follows ("returned verbatim from the evaluation")."""
+    now = datetime.now()
+    expected = pipeline.evaluate_tripwires(now_year=now.year, now_month=now.month)
+    seen = {}
+    monkeypatch.setattr(cli, "_print_identity",
+                        lambda ah, vintage: seen.update(ah=ah, vintage=vintage))
+    cli.main(["tripwires"])
+    assert seen["ah"] == expected["assumptions_hash"]
+    assert seen["vintage"] == expected["data_vintage"]
+    assert seen["vintage"]["source_hashes"], "an empty vintage merely LOOKS provenanced"
 
 
 def test_the_run_log_reaches_the_operator(monkeypatch, capsys):

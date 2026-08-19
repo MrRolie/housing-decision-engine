@@ -22,9 +22,13 @@ rewording alone. A regenerated P8 whose value moves therefore REDs this table in
 leaving it a decorative copy of a measurement nobody re-checked.
 
 PROVENANCE IS PER FIELD, and one flag could not have said it honestly (seat ruling, run 21):
-under ruling T a geography may hold a cited ratio beside a borrowed headship, so
-`ImmigrantInputs` carries `headship_provenance` and `ratio_provenance` separately. The plan's
-single `flag` field — `None` for the CMAs, `"borrowed_prior"` elsewhere — is superseded: it
+under rulings Q AND T a geography may hold a cited ratio beside a borrowed headship, so
+`ImmigrantInputs` carries `headship_provenance` and `ratio_provenance` separately. BOTH rulings
+are named because both put a geography's two fields on independent footings, and citing only one
+reads as though the other were silent on it: Q is the ruling about what the vocabulary must be
+ABLE to state (a mixed pair — `pipeline.py` cites it at the `borrowed_prior` derivation for the
+same reason), while T is why RA06/RA13 carry MEASURED provenance of their own rather than the
+parent CMA's. The plan's single `flag` field — `None` for the CMAs, `"borrowed_prior"` elsewhere — is superseded: it
 cannot express a mixed pair, and `None` cannot say "measured for THIS geography", which under
 ruling S is an affirmative claim about a cube coordinate, not the absence of a caveat.
 

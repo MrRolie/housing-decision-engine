@@ -65,8 +65,16 @@ REQUIRED_INDICATORS = frozenset(SOURCE_REGISTRY)
 
 # UNKNOWN-branch nullability (codex r7-F2/r8-F2): current_value + as_of are NULL exactly for these
 # reasons (no honest measurement; a non_finite raw value goes to the run log, never the JSON).
+#
+# `DUPLICATE_INDICATOR` BELONGS HERE FOR THE SAME REASON THE OTHER FOUR DO, and its absence was a
+# CONTRACT-vs-PRODUCER seam: `check_registry` emits its duplicate record with `current_value=None`
+# and `as_of=None` — because a duplicated key names no honest measurement either — and that record
+# then FAILED `assert_tripwire_record_valid`'s non-null branch. Latent rather than live (nothing in
+# the run emits a duplicate today), which is exactly what let it ship: the two halves disagreed and
+# no test crossed them. `test_a_duplicate_record_from_the_producer_validates` is that crossing.
 NULLABLE_REASONS = frozenset({
-    Reason.SOURCE_UNAVAILABLE, Reason.OPERATOR_INPUT_MISSING, Reason.MISSING_INDICATOR, Reason.NON_FINITE})
+    Reason.SOURCE_UNAVAILABLE, Reason.OPERATOR_INPUT_MISSING, Reason.MISSING_INDICATOR,
+    Reason.NON_FINITE, Reason.DUPLICATE_INDICATOR})
 
 TRIPWIRE_RECORD_REQUIRED = frozenset(
     {"indicator", "current_value", "source", "as_of", "band_low", "band_high", "status"})
@@ -446,6 +454,29 @@ def _missing_required(rows) -> list[str]:
     return sorted(QUEBEC_REQUIRED_CMAS - set(rows[CMA_COLUMN]))
 
 
+def _months_are_the_closed_vocabulary(rows) -> bool:
+    """Does this province-year's month column carry EXACTLY the twelve closed tokens?
+
+    EQUALITY AGAINST THE VOCABULARY, never a count of distinct values — twelve DISTINCT tokens
+    is not twelve MONTHS. The threat is a directly-constructed frame and nothing else:
+    `ircc._check_periods` refuses an unrecognized month token at LOAD, so no frame carrying one
+    can arrive through the loader. `closed_plan_years` is importable, and a caller that hands it
+    a frame assembled anywhere else — a fixture, a notebook, a future in-memory splice — must
+    still be refused rather than counted.
+
+    IT IS ITS OWN FUNCTION BECAUSE THE RULE IS NOT OBSERVABLE THROUGH `closed_plan_years`.
+    The per-modeled-member clause below demands `by_member[m] == set(EN_MONTHS)` for both
+    `MODELED_CMAS`, which already forces the province-wide union to CONTAIN all twelve tokens;
+    on any frame that satisfies it, `len(set(months)) == 12` and `set(months) == set(EN_MONTHS)`
+    agree on every input. A bare-count rewrite is therefore an EQUIVALENT MUTANT at the
+    function's boundary and no black-box test of `closed_plan_years` can kill it — measured,
+    and it is why the test that claimed to defend this rule was passing on the member clauses
+    instead. Handed the rows directly, the rule is killable; wired in above, its WIRING is
+    killable (an extra token on a non-modeled member reds a year every other clause accepts).
+    """
+    return set(rows[MONTH_COLUMN]) == set(EN_MONTHS)
+
+
 def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
     """Years the plan in force GOVERNS that the feed has CLOSED. THREE rules, all required:
     all twelve month tokens present province-wide; all twelve present for each MODELED
@@ -464,7 +495,7 @@ def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
     closed = []
     for year in PLAN_GOVERNED_YEARS:
         rows = _province_rows(frame, year, province)
-        if set(rows[MONTH_COLUMN]) != set(EN_MONTHS):
+        if not _months_are_the_closed_vocabulary(rows):
             continue
         if _missing_required(rows):
             continue
@@ -478,6 +509,11 @@ def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
 
 def _member_set_note(frame, province: str) -> str:
     """Run-log text NAMING member-set truncation, or ''.
+
+    CALLED ON EVERY PATH THAT HAS A FRAME, not only where no year closed. It ranges over the
+    WHOLE plan era, so it speaks about years the evaluated one does not cover — a 2027 losing
+    members while 2026 is closed and verdicted is exactly the state the empty-years-only wiring
+    could not report.
 
     The reason enum is spec-closed and CORRECTLY stays closed, so a gutted feed surfaces as
     `source_unavailable` exactly like a pre-era refusal does. Without this line a reader
@@ -578,6 +614,15 @@ def evaluate_pr_landings(
     Degenerate precedes staleness deliberately: a gutted sum must never ride a record, and
     stage 4 is the one UNKNOWN branch that keeps its value.
 
+    THE MEMBER-SET NOTE RIDES EVERY BRANCH THAT HAS A FRAME, not only the empty-closed-years
+    one. Wired into that branch alone, a truncated 2027 standing beside a closed 2026 was never
+    named anywhere: `closed_plan_years` drops 2027, `year = max(years)` selects 2026, and the
+    run reports an honest verdict on an honest year while the feed quietly loses members in the
+    next one. That is not a verdict risk — it is a REPORTING gap, and the note is the only place
+    a reader can learn the feed is degrading before the degradation reaches the evaluated year.
+    Computed ONCE, from the same frame, and appended to each returning branch: two call sites
+    with the same intent drift, and a discriminator that disagrees with itself is a new defect.
+
     THE REASON TOKEN AT STAGES 1-3 is `source_unavailable`, and the derivation matters
     because the enum is closed and no member says "the era has not arrived". The choice is
     forced by the nullability contract, not by taste. This indicator is DEFINED over a
@@ -599,6 +644,9 @@ def evaluate_pr_landings(
             _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE), None, landings.sha256,
             f"IRCC PR feed unavailable: {landings.reason or 'no frame'}")
 
+    # ONE computation, appended to every branch below (see the gate note in the docstring).
+    note = _member_set_note(landings.frame, province)
+
     years = closed_plan_years(landings.frame, province)
     if not years:
         return PRLandingsEvaluation(
@@ -606,8 +654,7 @@ def evaluate_pr_landings(
             f"no CLOSED year in the plan era {min(PLAN_GOVERNED_YEARS)}-{max(PLAN_GOVERNED_YEARS)} "
             f"({MONTHS_PER_CLOSED_YEAR} distinct months province-wide AND per modeled member, "
             f"plus all {len(QUEBEC_REQUIRED_CMAS)} required members present); feed "
-            f"latest_period={landings.as_of}. Pre-plan years are NOT substitutes."
-            + _member_set_note(landings.frame, province))
+            f"latest_period={landings.as_of}. Pre-plan years are NOT substitutes." + note)
 
     year = max(years)
     realized = pr_landings_realized(landings.frame, year, province)
@@ -618,7 +665,7 @@ def evaluate_pr_landings(
     if degenerate is not None:
         return PRLandingsEvaluation(
             _unknown_nullable(year_spec, Reason.SOURCE_UNAVAILABLE), realized, landings.sha256,
-            f"degenerate feed read, RAISED to UNKNOWN (never CROSSED): {degenerate}")
+            f"degenerate feed read, RAISED to UNKNOWN (never CROSSED): {degenerate}" + note)
 
     behind = _months_behind(landings.latest_period, now) if landings.latest_period else None
     # A feed dated AHEAD of `now` is an impossible vintage, and the staleness test is signed:
@@ -632,16 +679,16 @@ def evaluate_pr_landings(
             _unknown_measured(year_spec, realized.value, Reason.FUTURE_AS_OF), realized,
             landings.sha256,
             f"feed latest_period {landings.as_of} is AHEAD of {now[0]:04d}-{now[1]:02d} by "
-            f"{-behind} month(s) — an impossible vintage, not a fresh one")
+            f"{-behind} month(s) — an impossible vintage, not a fresh one" + note)
     if behind is not None and behind > FEED_FRESHNESS_MONTHS:
         return PRLandingsEvaluation(
             _unknown_measured(year_spec, realized.value, Reason.STALE), realized, landings.sha256,
             f"feed latest_period {landings.as_of} is {behind} months behind "
-            f"{now[0]:04d}-{now[1]:02d} (limit {FEED_FRESHNESS_MONTHS})")
+            f"{now[0]:04d}-{now[1]:02d} (limit {FEED_FRESHNESS_MONTHS})" + note)
 
     result = evaluate_indicator(year_spec, realized.value, available=True, now=now[0])
     return PRLandingsEvaluation(
         result, realized, landings.sha256,
         f"{province} {year} realized={realized.value} +/-{realized.envelope} over "
         f"{realized.n_cells} cells ({realized.n_suppressed} suppressed, "
-        f"{len(realized.months)} months); band=({band_low}, {band_high})")
+        f"{len(realized.months)} months); band=({band_low}, {band_high})" + note)

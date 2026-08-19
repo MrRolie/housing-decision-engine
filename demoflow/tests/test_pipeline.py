@@ -39,7 +39,6 @@ from demoflow.output.tripwires import (
 import demoflow.pipeline as pipeline
 from demoflow.pipeline import (
     EXIT_CAUSE_TO_LISTING_CAUSE,
-    HORIZON_YEARS,
     RECONCILIATION_COHORT,
     RUN_ARTIFACTS,
     RUN_SOURCES,
@@ -93,8 +92,36 @@ def test_run_pipeline_emits_two_json_artifacts_with_identity_envelope(run):
                 "band_low", "band_high", "status"} <= set(t)
 
 
-def test_horizons_are_the_declared_set():
-    assert HORIZON_YEARS == [2030, 2035, 2040, 2045, 2050]
+def test_the_supply_lookup_refuses_a_year_the_roll_forward_did_not_key():
+    """The last silent-zero door on the model path, closed (this module's docstring claims ALL
+    of them refuse; `listings.get(t, 0.0)` was the one that did not).
+
+    UNREACHABLE THROUGH `_ed_series` BY CONSTRUCTION — the supply loop keys every year from the
+    population frame's first through the ranking domain's last — so the rule is tested where it
+    can be reached at all, which is the door itself. The sibling test below pins the WIRING; a
+    rule tested only through a call site that cannot violate it is a check that cannot fail.
+
+    THE DEFAULT WAS DEFLATING, which is what makes it worth a refusal rather than a comment: a
+    missing year books supply as zero, excess demand rises, and the geography moves UP the
+    ranking. Nothing downstream can tell that from a real shortage."""
+    listings = {2030: 1234.5, 2031: 0.0}
+    assert pipeline._listings_at(listings, 2030, ctx="MTL_RMR/reference") == 1234.5
+    # a REAL zero is a measurement and must pass — the door refuses ABSENCE, never a zero value.
+    assert pipeline._listings_at(listings, 2031, ctx="MTL_RMR/reference") == 0.0
+    with pytest.raises(CalibrationError, match="2032"):
+        pipeline._listings_at(listings, 2032, ctx="MTL_RMR/reference")
+
+
+def test_the_ed_series_reads_supply_through_the_refusing_door():
+    """The WIRING half. A source contract, and it is the honest instrument here: the defaulting
+    lookup cannot be exercised through `_ed_series` on any real frame, so a behavioural test of
+    the call site would be a test that cannot fail. STATED RESIDUAL, as the import-direction
+    gate states its own: this reads one function's source text, so a defaulting read spelled
+    some third way inside a helper it calls is not covered."""
+    import inspect
+    source = inspect.getsource(pipeline._ed_series)
+    assert "_listings_at(" in source
+    assert "listings.get(" not in source, "the silent-zero supply default is back"
 
 
 def test_two_vintage_mixing_refused():
@@ -940,3 +967,12 @@ def test_the_cheap_tripwire_path_returns_the_SAME_verdict_as_the_full_run(run):
     assert cheap["tripwires"] == run["tripwires"]
     assert cheap["tripwire_log"] == run["tripwire_log"]
     assert cheap["exit_code"] == run["exit_code"]
+    # ...and the listing is ATTRIBUTABLE: the same two identity fields the EMITTED document
+    # carries, so a listing and a committed `tripwire_baseline.json` can be told apart when they
+    # disagree instead of both being unlabelled readings of an unpinned monthly feed. Compared
+    # against the WRITTEN document rather than against `run`'s own return value, because the
+    # file is what an operator holds in their hand.
+    emitted = run["_docs"]["tripwires"]
+    assert cheap["assumptions_hash"] == emitted["assumptions_hash"]
+    assert cheap["data_vintage"] == emitted["data_vintage"]
+    assert cheap["data_vintage"]["source_hashes"], "an empty vintage merely LOOKS provenanced"

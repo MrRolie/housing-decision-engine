@@ -831,6 +831,22 @@ conditionally; that guarantee lives in the single derivation path (the version-s
 module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
 plus review. Named, not hand-waved.
 
+
+**Amendment #16 / seat-ruled 2026-08-19 — `duplicate_indicator` JOINS the nullable reasons.** The
+nullability rule above enumerates four reasons; `duplicate_indicator` was left out while
+`missing_indicator` was included, and the two are produced by the SAME function on the SAME branch.
+`check_registry` emits a duplicate record with `current_value` and `as_of` both null — it has no
+honest measurement, exactly the r7-F2 logic that put the other four in — so that record FAILED the
+contract validator's non-null branch. **The producer and the contract disagreed, and no test crossed
+them**, which is the same seam class as the 64-vs-16 assumptions-hash width run 30 found one module
+over. Unreachable in practice only because nothing in Tranche 1 currently emits a duplicate, which is
+a property of today's callers and not of the contract. The nullable set is therefore
+{`source_unavailable`, `operator_input_missing`, `missing_indicator`, `non_finite`,
+**`duplicate_indicator`**}, and the seam is pinned by a test asserting that every record
+`check_registry` can produce validates. No `Reason` member is added — the enum already carried this
+token; only the nullability set moves.
+
+
 **Amendment #15 / RULING U (seat-ruled 2026-08-18) — the WIRED indicator's completeness contract is
 MEMBER-SET, not month-presence.** This section pinned the tripwire RECORD contract and left
 completeness to the implementation, which chose "twelve distinct months on the selected year". That
