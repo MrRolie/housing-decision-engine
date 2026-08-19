@@ -107,6 +107,55 @@ MODELED_CMAS = ("Montréal", "Québec")
 # nothing (review finding F6).
 QUEBEC_PROVINCE = "Quebec"
 
+# The REQUIRED Quebec member set for a CLOSED province-year — the completeness contract's
+# third clause (Ruling U, seat 2026-08-18), and the only one that is DATA-shaped rather than
+# literal-shaped. It lives HERE beside `MODELED_CMAS` and `QUEBEC_PROVINCE` for the reason
+# review finding F6 settled for the province token: these are SELECTION-KEY vocabularies into
+# this feed, so the schema module owns them.
+#
+# DERIVED, NEVER TRANSCRIBED — emitted into this file by a script that recomputed it from the
+# live feed (2026-08-18 vintage, 21,383 data rows, 3,544 of them Quebec): the CROSS-YEAR
+# INTERSECTION of the feed's Quebec members over all twelve published years, 2015-2026. The
+# UNION is 32; exactly ONE member, `Hawkesbury (Quebec part)`, is intermittent — published in
+# 6 of the 12 years (2016, 2017, 2019, 2020, 2021, 2025) — so it is OPTIONAL and the
+# intersection is 31. A hand-typed list of 31 accented French place-names is precisely where
+# a silent selection bug lives (the emitting script's first pass wrapped a line INSIDE
+# "Ottawa - Gatineau (Quebec part)"), so the constant is checked back against committed
+# fixture BYTES by `test_the_required_member_set_is_bound_to_the_committed_fixture_bytes`.
+#
+# EARNED, NOT TUNED: the intersection is the LARGEST set that clears every real year. The
+# 32-member union fails six of them (2015, 2018, 2022, 2023, 2024, 2026), so a constant
+# "tightened" to 32 would silently stop the gate from ever clearing.
+#
+# A SET, AND NOT A THRESHOLD — a cell-count or annual-total FLOOR was considered and REJECTED.
+# 2020 is the historical minimum at a provincial 25,005 — the COVID collapse is 38% against
+# 2019's 40,315, and it sits 58% under 2025's 60,010 four years later; the two comparisons are
+# different statements and the floor has to survive both. Every required member still
+# published that year. Any floor loose enough to
+# admit 2020 is loose enough to admit a large truncation. The member set admits 2020 and
+# refuses the truncation because it asks WHO reported, not HOW MUCH.
+#
+# THE ASYMMETRY IS LOAD-BEARING, AND IT IS `<=`, NOT `==`. `REQUIRED <= members_present` means
+# a delineation ADDITION (a new CMA carved out of an existing one) still closes the year and
+# still sums provincially, while a REMOVAL or a RENAME reds to UNKNOWN. That direction is the
+# point: a structural change to the feed's geography is exactly when a human must look. Do NOT
+# "simplify" the subset test into an equality check.
+#
+# NOT GATED AT LOAD, deliberately: required-member coverage is a per-province-YEAR property
+# (the optional member alone proves the per-year set moves, and the current year is always
+# partial), so the honest response to a year that lost members is the tripwire REFUSING that
+# year — UNKNOWN, exit nonzero — not a raise that would also make the eleven complete
+# historical years unreadable. The rule is applied in `output.tripwires.closed_plan_years`,
+# which is where a year is judged.
+QUEBEC_REQUIRED_CMAS = frozenset({
+    "Alma", "Amos", "Baie-Comeau", "Cowansville", "Dolbeau-Mistassini", "Drummondville",
+    "Granby", "Joliette", "Lachute", "Matane", "Montréal", "Other - Quebec",
+    "Ottawa - Gatineau (Quebec part)", "Québec", "Rimouski", "Rivière-du-Loup",
+    "Rouyn-Noranda", "Saguenay", "Saint-Georges", "Saint-Hyacinthe", "Sainte-Agathe-des-Monts",
+    "Sainte-Marie", "Salaberry-de-Valleyfield", "Sept-Îles", "Shawinigan", "Sherbrooke",
+    "Sorel-Tracy", "Thetford Mines", "Trois-Rivières", "Val-d'Or", "Victoriaville",
+})
+
 # The feed's cell identity: one TOTAL per province x member x year x month. PROVINCE is in
 # the key deliberately — a (member, year, month) key would false-red if a member token ever
 # appeared under two provinces, which cannot be ruled out from a single-province slice.

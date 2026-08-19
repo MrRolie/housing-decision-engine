@@ -43,7 +43,10 @@ import pytest
 
 from demoflow.errors import LoaderError
 from demoflow.loaders.constants import CONSTANTS
-from demoflow.loaders.ircc import CSV_NAME, EXPECTED_COLUMNS, PRLandings, load_pr_landings
+from demoflow.loaders.ircc import (
+    CSV_NAME, EN_MONTHS, EXPECTED_COLUMNS, MODELED_CMAS, QUEBEC_REQUIRED_CMAS,
+    PRLandings, load_pr_landings,
+)
 from demoflow.output.tripwires import (
     FEED_FRESHNESS_MONTHS, MONTHS_PER_CLOSED_YEAR, PLAN_GOVERNED_YEARS,
     PR_LANDINGS_INDICATOR, QUEBEC_PROVINCE, REQUIRED_INDICATORS, SOURCE_REGISTRY,
@@ -543,6 +546,216 @@ def test_an_intact_modeled_pair_still_closes_the_year(tmp_path):
     permanently UNKNOWN. Real 2025 bytes under a plan-era stamp still close."""
     landings = _plant(tmp_path, _relabel_year(_lines(), "2025", "2026"))
     assert closed_plan_years(landings.frame) == [2026]
+
+
+# --- Ruling U: completeness is MEMBER-SET, not month-presence (F1's remaining half) -----
+# Ruling U (seat, 2026-08-18) closes the DATA-path version of the scope confusion the SCOPE
+# block above prevents on the literal path. `MODELED_CMAS` coverage is the part derivable
+# from a two-name constant; it leaves the province's name wearable by any subset that
+# happens to include those two. The third clause fixes WHO must report.
+
+def _only_members(lines: list[str], members) -> list[str]:
+    """Truncate the feed to `members` — a vintage in which the province lost everyone else."""
+    keep = set(members)
+    return [lines[0]] + [ln for ln in lines[1:]
+                         if ln.split("\t")[_COL["EN_CENSUS_METROPOLITAN_AREA"]] in keep]
+
+
+def _without_member(lines: list[str], member: str) -> list[str]:
+    return [lines[0]] + [ln for ln in lines[1:]
+                         if ln.split("\t")[_COL["EN_CENSUS_METROPOLITAN_AREA"]] != member]
+
+
+def _qc_members(frame, year: str) -> set:
+    sel = frame[(frame["EN_YEAR"] == year) & (frame["EN_PROVINCE_TERRITORY"] == QUEBEC_PROVINCE)]
+    return set(sel["EN_CENSUS_METROPOLITAN_AREA"])
+
+
+def test_a_feed_truncated_to_the_modeled_pair_is_refused(tmp_path):
+    """THE CRITICAL. Both shipped rules see nothing wrong on a two-member feed: the
+    province-wide month union is full (the pair alone supplies twelve tokens) and both
+    modeled members are 12/12. Measured on the frozen slice under a plan-era stamp, the
+    shipped gate closes 2026 and publishes 45,895 over 24 cells — the Montréal+Québec CMA
+    PAIR wearing the province's name — status OK, exit 0, record accepted, against a true
+    provincial 60,010. Member-set completeness is what refuses it."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    truncated = _plant(tmp_path, _only_members(era, MODELED_CMAS))
+    assert _qc_members(truncated.frame, "2026") == set(MODELED_CMAS)
+    assert set(truncated.frame[truncated.frame["EN_YEAR"] == "2026"]["EN_MONTH"]) == set(EN_MONTHS)
+    realized = pr_landings_realized(truncated.frame, 2026)
+    assert realized.value == QC_2025_PAIR and realized.n_cells == 24
+    assert BAND[0] < realized.value < BAND[1]          # it would publish OK, exit 0
+    assert closed_plan_years(truncated.frame) == []
+    ev = evaluate_pr_landings(truncated, band=BAND, now=(2027, 3))
+    assert ev.result.status is Status.UNKNOWN and ev.result.status is not Status.OK
+    assert ev.result.reason is Reason.SOURCE_UNAVAILABLE
+    assert ev.result.current_value is None and ev.result.as_of is None
+    assert exit_code([ev.result]) != 0
+    assert_tripwire_record_valid(tripwire_record(ev.result))
+    # The reason enum is spec-closed, so this surfaces as `source_unavailable` exactly like a
+    # pre-era refusal does. The RUN LOG is the only place the two can be told apart.
+    assert "member-set truncation" in ev.log.lower()
+    # ...and the discriminator must ALSO fire on the shape a truncation would arrive in
+    # TODAY, while 2026 is still 6 months deep. Gating the note on month-completeness would
+    # log plain pre-era here — the very confusion it exists to close. The intact feed in that
+    # same state stays silent (`test_first_evaluable_year_is_2026_and_today_it_is_not_closed`).
+    partial = _plant(tmp_path, _only_members(_lines(), MODELED_CMAS))
+    log = evaluate_pr_landings(partial, band=BAND, now=(2026, 8)).log
+    assert "member-set truncation" in log.lower() and "6 of 12 months" in log
+
+
+def test_dropping_one_non_modeled_member_is_a_value_integrity_breach(tmp_path):
+    """The exploit the review had not listed, and it is quieter than the truncation: drop
+    ONE non-modeled member and the shipped gate still closes every year. Measured at the
+    (55000, 65000) probe band the drop NEVER changes a verdict on any year — deltas run
+    -60 to -675 — so no band comparison could ever catch it. It is a VALUE-INTEGRITY breach:
+    59,335 published under the name of a provincial 60,010."""
+    dropped = "Saguenay"
+    assert dropped not in MODELED_CMAS
+    era = _relabel_year(_lines(), "2025", "2026")
+    landings = _plant(tmp_path, _without_member(era, dropped))
+    realized = pr_landings_realized(landings.frame, 2026)
+    assert realized.value == 59335.0 < QC_2025_PROVINCE
+    wide = (55000.0, 65000.0)
+    for value in (realized.value, QC_2025_PROVINCE):       # same verdict either way
+        assert evaluate_indicator(_spec(band_low=wide[0], band_high=wide[1]), value,
+                                  available=True, now=2026).status is Status.OK
+    assert closed_plan_years(landings.frame) == []
+    ev = evaluate_pr_landings(landings, band=wide, now=(2027, 3))
+    assert ev.result.status is Status.UNKNOWN and ev.result.current_value is None
+    assert exit_code([ev.result]) != 0
+
+
+def test_the_member_set_rule_is_clearable_on_the_intact_year(tmp_path):
+    """The countervailing half, and the 2020-anchor property in miniature: a rule that can
+    never clear is not a gate. Real 2025 bytes under a plan-era stamp carry every required
+    member, so the year still CLOSES and still reaches a verdict."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    landings = _plant(tmp_path, era)
+    assert QUEBEC_REQUIRED_CMAS <= _qc_members(landings.frame, "2026")
+    assert closed_plan_years(landings.frame) == [2026]
+    ev = evaluate_pr_landings(landings, band=(55000.0, 65000.0), now=(2027, 3))
+    assert ev.result.status is Status.OK and ev.result.reason is None
+    assert exit_code([ev.result]) == 0
+
+
+def test_the_optional_intermittent_member_is_not_required(tmp_path):
+    """Pins the INTERSECTION choice. The required set is the cross-year intersection of the
+    feed's Quebec members, which leaves exactly one intermittent member OPTIONAL — published
+    in 6 of the 12 years. Without this test a future reader "tightens" the constant to the
+    32-member union and the gate silently stops clearing six real years. The optional member
+    is DERIVED from the fixture here, never named: fixture-2025 members minus the constant."""
+    era = _relabel_year(_lines(), "2025", "2026")
+    optional = sorted(_qc_members(_plant(tmp_path, era).frame, "2026") - QUEBEC_REQUIRED_CMAS)
+    assert len(optional) == 1
+    landings = _plant(tmp_path, _without_member(era, optional[0]))
+    assert optional[0] not in _qc_members(landings.frame, "2026")
+    assert closed_plan_years(landings.frame) == [2026]
+
+
+def test_the_required_member_set_is_bound_to_the_committed_fixture_bytes(tmp_path):
+    """A transcription error in the constant is the one failure the derivation cannot
+    self-detect — it would simply have derived a different set. So the constant is checked
+    against REAL BYTES, which is a stronger guard than the spec's test-owned literal copy
+    (§7c's co-deletion residual) for a 31-token accented French vocabulary that no reviewer
+    proofreads reliably.
+
+    EXACT equality against the fixture's 2026 Quebec members fully determines the constant —
+    membership, size and spelling in one comparison, so a SWAP (one required name out, the
+    optional name in) reds here too, which neither a subset test nor a size test catches.
+    That the frozen slice's partial 2026 happens to carry precisely the 31 is a byte-fact of
+    a FROZEN fixture, not a claim that 2026 defines the set; 2025 is the subset case, adding
+    the one optional member."""
+    frame = _plant(tmp_path, _lines()).frame
+    assert QUEBEC_REQUIRED_CMAS == _qc_members(frame, "2026")
+    assert len(QUEBEC_REQUIRED_CMAS) == 31
+    assert QUEBEC_REQUIRED_CMAS <= _qc_members(frame, "2025")
+    assert len(_qc_members(frame, "2025") - QUEBEC_REQUIRED_CMAS) == 1
+
+
+# --- The DISCRIMINATOR must discriminate: it earns its claim, or it hedges --------------
+# Ruling U made the run log the only place a gutted feed can be told from a pre-era refusal,
+# because the reason enum is spec-closed at `source_unavailable` for both. A line that stays
+# SILENT on the worst truncation, or that asserts truncation on a state the publication
+# CALENDAR explains, is not a discriminator — it is a second defect wearing the fix's name.
+
+
+def _without_province_year(lines: list[str], province: str, year: str) -> list[str]:
+    """Delete every row of one province-year — the MAXIMAL truncation, 100% of the members."""
+    return [lines[0]] + [ln for ln in lines[1:]
+                         if not (ln.split("\t")[_COL["EN_YEAR"]] == year
+                                 and ln.split("\t")[_COL["EN_PROVINCE_TERRITORY"]] == province)]
+
+
+def test_a_wholly_absent_member_set_is_named_not_read_as_pre_era_silence(tmp_path):
+    """The truncation taken to its LIMIT: every Quebec row of the plan year gone. This is the
+    worst instance of the state Ruling U required the log to NAME, and it is the one state a
+    member-by-member note can miss — with no rows there is no member to call absent.
+
+    It is DISTINGUISHABLE, and the frame carries the proof: the feed has published 2026 for
+    other provinces. Pre-era means NOBODY has published the year; this is the year published
+    with Quebec cut out of it. Reading the second as the first tells the operator to wait for
+    data that has already arrived."""
+    lines = _lines()
+    gutted = _without_province_year(lines, QUEBEC_PROVINCE, "2026")
+    others = [ln for ln in gutted[1:] if ln.split("\t")[_COL["EN_YEAR"]] == "2026"]
+    assert others                                          # the feed HAS published 2026
+    landings = _plant(tmp_path, gutted)
+    assert _qc_members(landings.frame, "2026") == set()
+    ev = evaluate_pr_landings(landings, band=BAND, now=(2026, 8))
+    assert ev.result.status is Status.UNKNOWN and ev.result.reason is Reason.SOURCE_UNAVAILABLE
+    assert exit_code([ev.result]) != 0
+    assert_tripwire_record_valid(tripwire_record(ev.result))
+    assert "member-set truncation" in ev.log.lower()
+    assert f"{len(others)} rows for other provinces" in ev.log   # the evidence, in the line
+    assert "cannot explain" in ev.log            # categorical, and here it is EARNED
+    # ...and the same reason token on the INTACT feed in the same month must stay silent,
+    # or the discriminator discriminates nothing.
+    intact = evaluate_pr_landings(_plant(tmp_path, lines), band=BAND, now=(2026, 8))
+    assert intact.result.reason is Reason.SOURCE_UNAVAILABLE     # same token, other cause
+    assert "member-set truncation" not in intact.log.lower()
+
+
+def test_an_intact_partial_year_reports_the_member_gap_without_claiming_its_cause(tmp_path):
+    """The discriminator's other half, and the reason it may not assert CATEGORICALLY at a
+    partial year: IRCC fills its member set over a year's first months. Derived from the
+    committed 2025 bytes in this fixture — 24 of the 31 required members after Jan, 29 after
+    Feb, 30 after Mar/Apr, 31 only from May. So a real vintage published through Jan shows
+    members absent for a reason that is pure publication ORDER, and a line that calls that
+    truncation is making a false claim about the feed.
+
+    The gap is still REPORTED (silence would hide a truncation that arrived mid-year, which
+    is the shape one would arrive in today); only the CAUSE is withheld. At twelve of twelve
+    the calendar is exhausted and the categorical claim is earned — the contrast is asserted
+    here so the two halves cannot drift apart."""
+    lines = _lines()
+    # The evidence for withholding the cause, RE-DERIVED from the committed bytes rather than
+    # transcribed: a real, intact, untouched 2025 shows 7 required members still absent after
+    # its first month. If a re-vintaged fixture ever made publication order instantaneous,
+    # this reds and the hedge below has to be re-argued instead of silently outliving it.
+    jan_2025 = {ln.split("\t")[_COL["EN_CENSUS_METROPOLITAN_AREA"]] for ln in lines[1:]
+                if ln.split("\t")[_COL["EN_YEAR"]] == "2025"
+                and ln.split("\t")[_COL["EN_MONTH"]] == "Jan"
+                and ln.split("\t")[_COL["EN_PROVINCE_TERRITORY"]] == QUEBEC_PROVINCE}
+    assert len(QUEBEC_REQUIRED_CMAS & jan_2025) == 24
+    jan_only = [lines[0]] + [ln for ln in lines[1:]
+                             if not (ln.split("\t")[_COL["EN_YEAR"]] == "2026"
+                                     and ln.split("\t")[_COL["EN_MONTH"]] != "Jan")]
+    partial = _plant(tmp_path, jan_only)
+    assert len(QUEBEC_REQUIRED_CMAS - _qc_members(partial.frame, "2026")) == 1   # real bytes
+    ev = evaluate_pr_landings(partial, band=BAND, now=(2026, 3))
+    assert ev.result.status is Status.UNKNOWN and exit_code([ev.result]) != 0
+    assert "1 of 31 required" in ev.log and "1 of 12 months" in ev.log   # the gap, reported
+    assert "cannot explain" not in ev.log                               # the cause, withheld
+    assert "publication-calendar gap" not in ev.log       # the shipped phrasing said exactly
+    assert "cause is NOT claimed" in ev.log               # this, of exactly this state
+    # The SAME member gap at a COMPLETE calendar: publication order is exhausted as an
+    # explanation, so the categorical claim is earned there and only there.
+    era = _relabel_year(lines, "2025", "2026")
+    full = _plant(tmp_path, _without_member(era, "Saguenay"))
+    log = evaluate_pr_landings(full, band=BAND, now=(2027, 3)).log
+    assert "1 of 31 required" in log and "12 of 12 months" in log
+    assert "cannot explain" in log and "cause is NOT claimed" not in log
 
 
 # --- F2: value integrity was enforced on the value but not on its twin, the BAND --------

@@ -8,7 +8,7 @@ contract, indicator-agnostic. Below it: `pr_landings_annual`, the one WIRED indi
 whose realized value is COMPUTED FROM THE FEED. That half exists because a hand-typed
 realized value is not a weaker version of the gate, it is a defeat of it: a literal
 compared against a band is a constant compared against a constant, green forever, on any
-data, in any era. Five measured facts shape it, each stated at its gate below.
+data, in any era. Six measured facts shape it, each stated at its gate below.
 
 THE BAND IS THE CALLER'S. No band literal lives in this module. A threshold typed here
 would be a parameter this module invented, and the same edit that widened it would silently
@@ -22,7 +22,7 @@ from enum import Enum
 from demoflow.errors import LoaderError
 from demoflow.loaders.ircc import (
     CMA_COLUMN, EN_MONTHS, MODELED_CMAS, MONTH_COLUMN, MONTH_INDEX, PROVINCE_COLUMN,
-    QUEBEC_PROVINCE, SUPPRESSED, TOTAL_COLUMN, YEAR_COLUMN, PRLandings,
+    QUEBEC_PROVINCE, QUEBEC_REQUIRED_CMAS, SUPPRESSED, TOTAL_COLUMN, YEAR_COLUMN, PRLandings,
 )
 
 
@@ -324,9 +324,36 @@ FEED_FRESHNESS_MONTHS = 5
 # against a true 60,010 that is CROSSED. So coverage is checked PER MODELED MEMBER as well,
 # against the code-owned `MODELED_CMAS`. That rule is clearable (both modeled members are
 # 12/12 in the real data) where a whole-province "every member 12/12" rule never would be.
-# RESIDUAL, NAMED NOT PAPERED OVER: a feed truncated to the two modeled members alone still
-# passes — it publishes the CMA-pair total as the provincial one — and closing that needs a
-# pinned member set or a cell-count floor, i.e. a new measured constant. Not decided here.
+#
+# THIRD CLAUSE — MEMBER-SET COMPLETENESS (Ruling U, seat 2026-08-18). The two rules above
+# verify MONTH presence and never MEMBER coverage, so the same scope confusion the SCOPE
+# block above exists to prevent re-entered through a DATA path instead of a literal: truncate
+# the feed to the two `MODELED_CMAS` and both rules pass, the year closes, and 45,895 over 24
+# cells — the Montréal+Québec CMA PAIR — is published wearing the province's name against a
+# true provincial 60,010. A year is therefore CLOSED only when, in addition, every member of
+# the code-owned `QUEBEC_REQUIRED_CMAS` is PRESENT in that province-year. The derivation, the
+# `<=`-not-`==` direction and the rejected threshold live beside the constant in `ircc.py`.
+#
+# PRESENCE, NOT 12/12, for the non-modeled members — and this is the NAMED RESIDUAL. The bar
+# is >= 1 cell in the year, because 11 of 32 members carry interior month gaps in the real
+# 2025 data (Hawkesbury missing 9 of 12, Lachute 4, Sainte-Marie 3, Dolbeau-Mistassini 3,
+# Sainte-Agathe 3, Cowansville 2, five others 1). A whole-province "every member 12/12" rule
+# would never clear, and a gate that can never clear is not a gate — `FEED_FRESHNESS_MONTHS`
+# makes the same argument one constant down. A `--` COUNTS as presence, as it does for the
+# month rules: suppression is a published statement about a cell.
+#
+# THE ASSUMPTION THAT BAR RESTS ON, STATED AS AN ASSUMPTION: that an unpublished month means
+# ZERO landings rather than missing data — the feed publishing `--` for 1-5 and omitting true
+# zeros. That is the SEAT'S READING of IRCC publication behaviour, NOT a documented IRCC
+# statement, and it is recorded here so a reader can re-test it rather than inherit it. If it
+# is false, an interior gap hides landings and the annual sum is low by an unknown amount.
+#
+# WHAT THE TWO SHIPPED RULES ALSO MISSED, and this clause catches: dropping a SINGLE
+# non-modeled member leaves them closing every year — measured, Saguenay dropped publishes
+# 59,335 against a true 60,010. A VALUE-INTEGRITY breach, not a verdict change: measured at
+# the (55000, 65000) probe band the drop moves NO year's verdict, deltas running -60 to -675,
+# so no band comparison could ever have caught it. The member-set clause is what refuses it,
+# and it refuses a RENAME on the same footing.
 MONTHS_PER_CLOSED_YEAR = len(EN_MONTHS)
 
 # DEGENERATE FLOOR. A suppressed cell is `--`, which absorbs the whole 0-5 band; the feed has
@@ -342,9 +369,12 @@ SUPPRESSED_CELL_MAX = 5.0
 CELL_ROUNDING_HALFWIDTH = 2.5
 
 PR_LANDINGS_INDICATOR = "pr_landings_annual"
-# QUEBEC_PROVINCE is the LOADER's (imported above, beside MODELED_CMAS): it is a selection
-# key into the feed's vocabulary, so the schema gate that refuses a drifted token has to own
-# it. Re-exported here because this module is where its consumers read it.
+# QUEBEC_PROVINCE and QUEBEC_REQUIRED_CMAS are the LOADER's (imported above, beside
+# MODELED_CMAS): they are selection-key vocabularies into the feed, so the schema module that
+# refuses a drifted token has to own them. Only QUEBEC_PROVINCE is RE-EXPORTED — this module
+# is where its consumers read it. QUEBEC_REQUIRED_CMAS is imported for this module's OWN gate
+# and nothing reads it off here; its consumers go to the loader, which is the direction
+# finding F6 settled and the direction the constant's derivation comment lives in.
 
 
 @dataclass(frozen=True)
@@ -407,10 +437,27 @@ def pr_landings_realized(frame, year: int, province: str = QUEBEC_PROVINCE) -> R
                             numeric_by_member=numeric_by_member)
 
 
+def _missing_required(rows) -> list[str]:
+    """Required members with NO cell at all in this province-year, sorted.
+
+    ONE helper, called by BOTH the gate and the run-log discriminator. If the two computed
+    membership independently they would drift, and a discriminator that disagrees with the
+    gate it explains is a new defect class, not a smaller one."""
+    return sorted(QUEBEC_REQUIRED_CMAS - set(rows[CMA_COLUMN]))
+
+
 def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
-    """Years the plan in force GOVERNS that the feed has CLOSED — all twelve month tokens
-    present province-wide AND all twelve present for each MODELED member. A partial year is
-    not a small year; it is not a year, and neither is a year missing half of Montréal.
+    """Years the plan in force GOVERNS that the feed has CLOSED. THREE rules, all required:
+    all twelve month tokens present province-wide; all twelve present for each MODELED
+    member; and every member of `QUEBEC_REQUIRED_CMAS` present with at least one cell
+    (`REQUIRED <= present` — a SUBSET test, so a delineation addition still closes while a
+    removal or rename reds). A partial year is not a small year; it is not a year, and
+    neither is a year missing half of Montréal, nor a province that has lost 29 of its 31
+    members and is quietly reporting a two-CMA total under the province's name.
+
+    `MODELED_CMAS` and `QUEBEC_REQUIRED_CMAS` are both Quebec-shaped, so `province` is a
+    selection key here, not a genericity claim — the same scope the module has carried since
+    `QUEBEC_PROVINCE` became its default.
 
     A `--` cell COUNTS as present: suppression is a published statement about a cell, and
     what an all-marker member means is the degenerate floor's question, not this one."""
@@ -419,12 +466,74 @@ def closed_plan_years(frame, province: str = QUEBEC_PROVINCE) -> list[int]:
         rows = _province_rows(frame, year, province)
         if set(rows[MONTH_COLUMN]) != set(EN_MONTHS):
             continue
+        if _missing_required(rows):
+            continue
         by_member: dict[str, set] = {}
         for member, month in zip(rows[CMA_COLUMN], rows[MONTH_COLUMN]):
             by_member.setdefault(member, set()).add(month)
         if all(by_member.get(m, set()) == set(EN_MONTHS) for m in MODELED_CMAS):
             closed.append(year)
     return closed
+
+
+def _member_set_note(frame, province: str) -> str:
+    """Run-log text NAMING member-set truncation, or ''.
+
+    The reason enum is spec-closed and CORRECTLY stays closed, so a gutted feed surfaces as
+    `source_unavailable` exactly like a pre-era refusal does. Without this line a reader
+    cannot tell "IRCC has not published 2026 yet" from "the feed lost 29 of its 31 members",
+    and those call for opposite actions. `PRLandingsEvaluation.log` is where every cause
+    narrower than the reason token is spoken.
+
+    THREE STATES per plan-governed year, and what separates them is which CLAIM the line has
+    EARNED. The header names the suspicion; the certainty is attached PER YEAR, because a
+    mixed feed (one year gutted at a full calendar, the next partial) owes different claims
+    to each.
+
+    1. The FRAME carries no rows for the year at all — nobody has published it. Silent: that
+       is the pre-era case, and calling all 31 members 'absent' there is the same scope
+       confusion pointed the other way.
+    2. The frame carries the year for OTHER PROVINCES while this province has ZERO rows — the
+       maximal truncation, and the one a member-by-member note would miss, since with no rows
+       there is no member to call absent. The year's presence elsewhere is the proof it is not
+       publication order, so the categorical claim is EARNED and the other-province row count
+       is quoted as its evidence.
+    3. The province has rows and required members are missing. The gap is always REPORTED —
+       silence would hide a truncation arriving mid-year, the shape one would arrive in today
+       while 2026 is 6 months deep. The CAUSE is claimed only at TWELVE of twelve months,
+       where the publication calendar is exhausted as an explanation. Below twelve it is
+       withheld, because IRCC genuinely fills its member set over a year's first months:
+       measured on this repo's committed 2025 Quebec bytes, 24 of the 31 required members had
+       reported after Jan, 29 after Feb, 30 after Mar and Apr, and 31 only from May. A line
+       that called that state truncation would be asserting something false about the feed."""
+    notes = []
+    for year in PLAN_GOVERNED_YEARS:
+        rows = _province_rows(frame, year, province)
+        if rows.empty:
+            n_elsewhere = len(frame[frame[YEAR_COLUMN] == str(year)])
+            if not n_elsewhere:
+                continue                                   # state 1: pre-era, and silent
+            notes.append(                                  # state 2
+                f"{year}: {province} has NO rows at all while the feed publishes "
+                f"{n_elsewhere} rows for other provinces that year — the WHOLE member set is "
+                f"absent, and the year's presence elsewhere is why publication order "
+                f"cannot explain it")
+            continue
+        missing = _missing_required(rows)
+        if missing:                                        # state 3
+            n_months = len(set(rows[MONTH_COLUMN]))
+            verdict = (" — the calendar is COMPLETE, so publication order cannot explain it"
+                       if n_months == MONTHS_PER_CLOSED_YEAR else
+                       " — a PARTIAL year, where publication ORDER also produces member "
+                       "absences, so the gap is reported and its cause is NOT claimed")
+            notes.append(
+                f"{year}: {len(missing)} of {len(QUEBEC_REQUIRED_CMAS)} required {province} "
+                f"members absent (e.g. {missing[:3]}) at {n_months} of "
+                f"{MONTHS_PER_CLOSED_YEAR} months published" + verdict)
+    if not notes:
+        return ""
+    return (" MEMBER-SET TRUNCATION SUSPECTED — " + "; ".join(notes)
+            + ". A province-wide month count is a UNION over members and cannot see this.")
 
 
 def _degenerate(realized: RealizedLandings) -> str | None:
@@ -495,8 +604,10 @@ def evaluate_pr_landings(
         return PRLandingsEvaluation(
             _unknown_nullable(spec, Reason.SOURCE_UNAVAILABLE), None, landings.sha256,
             f"no CLOSED year in the plan era {min(PLAN_GOVERNED_YEARS)}-{max(PLAN_GOVERNED_YEARS)} "
-            f"({MONTHS_PER_CLOSED_YEAR} distinct months required); feed latest_period="
-            f"{landings.as_of}. Pre-plan years are NOT substitutes")
+            f"({MONTHS_PER_CLOSED_YEAR} distinct months province-wide AND per modeled member, "
+            f"plus all {len(QUEBEC_REQUIRED_CMAS)} required members present); feed "
+            f"latest_period={landings.as_of}. Pre-plan years are NOT substitutes."
+            + _member_set_note(landings.frame, province))
 
     year = max(years)
     realized = pr_landings_realized(landings.frame, year, province)

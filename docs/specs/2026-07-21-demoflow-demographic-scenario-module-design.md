@@ -831,6 +831,34 @@ conditionally; that guarantee lives in the single derivation path (the version-s
 module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
 plus review. Named, not hand-waved.
 
+**Amendment #15 / RULING U (seat-ruled 2026-08-18) — the WIRED indicator's completeness contract is
+MEMBER-SET, not month-presence.** This section pinned the tripwire RECORD contract and left
+completeness to the implementation, which chose "twelve distinct months on the selected year". That
+check is a UNION over members and two members satisfy it: measured on the 2026-08-18 vintage, a feed
+truncated to the two modeled CMAs publishes the Montréal+Québec PAIR total (45,895) as the PROVINCIAL
+realized, status OK, exit 0, against a true provincial 60,010 — the scope confusion this section's
+own SCOPE rule forbids, re-entering through a data path rather than a literal. **A plan-governed year
+is CLOSED only when (i) all twelve month tokens are present province-wide, (ii) each MODELED member
+carries all twelve, and (iii) every member of a CODE-OWNED REQUIRED SET is present with at least one
+cell.** The required set is the cross-year INTERSECTION of the feed's Quebec members — 31 across all
+twelve published years (2015–2026), with `Hawkesbury (Quebec part)` OPTIONAL because it appears in
+only 6 of 12 — checked as `REQUIRED ⊆ present`. It is the LARGEST set that clears every real year,
+which is what makes it earned rather than tuned, and it closes all eleven real closed years including
+2020 (provincial 25,005, the historical minimum, all 31 published). **A threshold was considered and
+REJECTED on that anchor:** 2020's collapse is 38% against 2019 (40,315 -> 25,005) and 58% under
+2025's 60,010, and any cell-count or annual-total floor loose enough to admit a swing that size also
+admits a large truncation. The member set admits 2020 and refuses the truncation because it asks WHO
+reported, not HOW MUCH. The subset direction is deliberate — a delineation ADDITION still
+closes and still sums provincially; a removal or rename reds to UNKNOWN, because a structural change
+in the feed is when a human must look. **Named residual, with its assumption stated:** non-modeled
+members carry a PRESENCE bar rather than twelve-of-twelve, because 11 of 32 members show interior
+month gaps in the real 2025 data; that bar rests on the reading that an unpublished month means zero
+landings (the feed publishes `--` for 1–5 and omits true zeros), which is an INFERENCE about IRCC
+publication behaviour and NOT a documented IRCC statement. The reason enum is unchanged — the
+truncation state surfaces as `source_unavailable` like every other empty-closed-years cause, so the
+RUN LOG must name member-set truncation or a reader cannot tell a pre-era refusal from a gutted feed.
+
+
 **Scenario-named fan fields (codex r6-F6 — scenario identity vs min/max are DIFFERENT semantics
 and can cross):** `mean_ed_low` / `mean_ed_high` are SCENARIO-NAMED — the Faible (D2026) and Fort
 (E2026) scenario means respectively, whatever their numeric order; the ranking tiebreak uses the
