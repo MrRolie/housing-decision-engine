@@ -231,12 +231,32 @@ CENTRAL_ASSUMPTIONS = {
     # perturbs the join table with a uniform override spanning
     # `CONSTANTS["immigrant_ownership_ratio_sweep_span"]` = [0.155, 1.033], which is why P4's
     # three anchors and that span stay above.
+    #
+    # THE ONE CATEGORICAL MEMBER (operator ruling V, 2026-08-19). `headship_shape` names which
+    # of the age-resolved headship curve's two tangent rules the headline run reads. It is NOT
+    # a banded scalar and it does NOT belong in `MODEL_CHOICES` either: that dict exists for
+    # discrete picks with NOTHING to sweep, and this one has a measured, admissible
+    # alternative — both arms reproduce all 14 published maintainer-age members EXACTLY, so
+    # neither is a degraded version of the other and choosing between them is a shape
+    # assumption the sweep can actually price. The design panel measured the arm spread at
+    # 0.00026 … 0.00052 of ED per geography and NON-common-mode, i.e. larger than the spread
+    # across entirely different construction families — an axis this size left undeclared is a
+    # `rank_stable` verdict over a grid it never varied. The VALUE is a bare string here rather
+    # than an import from `loaders.census` because this module is the leaf every model module
+    # reads; `tests/test_pipeline.py` binds the two declarations plus the artifact's own
+    # `central_shape` so none can drift alone.
+    "headship_shape": "expo_cum_fc",
 }
 SWEEP_GRID = {                          # endpoints for the robustness sweep, never the headline
     "q_live_per_year": (0.06, 0.11),
     "phi_voluntary": (0.7, 1.0),
     "estate_eventual_fraction": (0.6, 0.85),
     "estate_lag_years": (1, 3),
+    # An ADMISSIBLE SET, not an interval — the two carried constructions, both member-exact.
+    # One of them IS the central value, so its leg is a provable no-op; `pipeline._sweep_legs`
+    # still declares it and `tests/test_pipeline.py` names it as the ONLY exempt leg, so a
+    # numeric endpoint drifting onto its central value cannot hide behind the exemption.
+    "headship_shape": ("expo_cum_fc", "expo_cum_fb"),
 }
 
 # The charter carry applies to these bare floats too. CENTRAL_ASSUMPTIONS cannot hold Anchors —
@@ -262,6 +282,19 @@ CENTRAL_PROVENANCE = {
     "estate_lag_years":
         "spec §5 estate-lag convolution L in [1, 3] years; central 2 = the exact band midpoint, the "
         "spec's central-value rule with no point estimate",
+    "headship_shape":
+        "operator ruling V (2026-08-19), design panel `docs/research/2026-08-19-headship-curve-"
+        "design-panel.md` §5: the age-resolved headship curve is a monotone cubic Hermite on the "
+        "cumulative maintainer count against the CUMULATIVE-PERSONS abscissa, and the tangent "
+        "rule is the one degree of freedom left free by per-member closure. Central "
+        "`expo_cum_fc` = three-point width-weighted tangents under the Fritsch-Carlson circle "
+        "filter, chosen because its closure is ALGEBRAIC (member endpoints ARE interpolation "
+        "knots, so the sum telescopes independently of the tangent rule) rather than a converged "
+        "solve. Sweep endpoint `expo_cum_fb` = Fritsch-Butland weighted-harmonic-mean interior "
+        "slopes, member-exact on the same knots. This is a SHAPE ASSUMPTION, not a measurement: "
+        "closure pins one linear functional per published member and leaves 4, 9 or 15 degrees "
+        "of freedom, and the artifact's own `shape_note` carries the generator-computed "
+        "refutation of the age-abscissa alternative",
 }
 
 
@@ -278,12 +311,16 @@ CENTRAL_PROVENANCE = {
 # covers the selection.
 #
 # WHY THIS IS A THIRD DICT AND NOT `CENTRAL_ASSUMPTIONS`. That dict's contract is a central
-# value WITH a spec §5 band — its keyset is held EQUAL to `SWEEP_GRID`'s by test, on the stated
-# ground that "every central assumption is banded, so an unswept one silently claims
-# rank_stable it never tested". Neither of these carries a band. Inventing one would be the
-# fabricated anchor this file exists to refuse, and adding a sweep axis would widen the
-# robustness sweep's DECLARED grid — a modelling decision, not an identity fix. A discrete
-# choice with no band has nothing to sweep, and saying so plainly is cheaper than either lie.
+# value WITH a DECLARED ALTERNATIVE — its keyset is held EQUAL to `SWEEP_GRID`'s by test, on
+# the stated ground that "an unswept central assumption silently claims rank_stable it never
+# tested". Neither of these has one: no band, and no second admissible value either. Inventing
+# a band would be the fabricated anchor this file exists to refuse, and adding a sweep axis
+# would widen the robustness sweep's DECLARED grid — a modelling decision, not an identity fix.
+# THE LINE IS "IS THERE SOMETHING TO SWEEP", NOT "IS IT A FLOAT" (sharpened at ruling V, when
+# `headship_shape` joined `CENTRAL_ASSUMPTIONS` as a categorical member): a discrete pick with
+# a measured, admissible alternative is a sweep axis; a discrete pick with none — `roll_age`
+# is not "one of two lattices", it is the coarseness Tranche 2 removes — has nothing to sweep,
+# and saying so plainly is cheaper than either lie.
 #
 # BOTH ARE HONESTLY UNCITED, and the marker is the point: this arc has removed several
 # fabricated citations, so an absent anchor is RECORDED as absent, with the measured

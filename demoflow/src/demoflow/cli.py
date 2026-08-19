@@ -8,8 +8,8 @@ it `argv` mocks exactly the leg that was broken.
 
 THE TWO SUBCOMMANDS ARE NOT TWO VIEWS OF ONE COMPUTATION, and the plan's body treated them as
 if they were — `main` called `run_pipeline` for BOTH, so asking for six tripwire statuses loaded
-five workbooks, evaluated the excess-demand grid eleven times (the central run plus the five-axis
-rank-stability sweep's ten legs), and WROTE `rankings.json` into whatever directory the operator
+five workbooks, evaluated the excess-demand grid twelve times (the central run plus the
+six-axis rank-stability sweep's twelve legs, one of which reuses the central grid), and WROTE `rankings.json` into whatever directory the operator
 was standing in. `run` emits; `tripwires` evaluates. They are
 routed to different functions and only one of them can write anything.
 

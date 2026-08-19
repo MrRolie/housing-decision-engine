@@ -55,7 +55,7 @@ AGE_BOUNDARY = 75
 # because the table is silent there — corrected 2026-08-15 under spec §7 amendment #12, and the
 # distinction is the whole reason this block is long. 98-10-0231-01 PUBLISHES owner-maintainer
 # counts below 25 (`15 to 19 years` and `20 to 24 years`, at all seven of its GEO rows; Québec
-# 20-24 is 17,170 owners of 106,605 households), and census.py's own `_HEADSHIP_BAND_SPEC` reads
+# 20-24 is 17,170 owners of 106,605 households), and census.py's own `_HEADSHIP_MEMBER_SPEC` reads
 # both members off the same age dimension of the same extract while `_AGE_BAND_SPEC` drops them.
 # The convention is still NOT decided here — it is census.py's `zero_support_note` (T13b
 # 2026-08-08, re-attributed at amendment #12), which now names the omission as this module's
@@ -69,18 +69,50 @@ AGE_BOUNDARY = 75
 # evaluate to ZERO in every production run. Both arms are pinned by test at each of the seven.
 #
 # HOW MUCH THAT DROPS — AN ORDER-OF-MAGNITUDE BOUND, NEVER A MEASUREMENT, and the qualifier is
-# load-bearing rather than modest. Measured 2026-08-14 on the real artifacts. THE RECIPE, stated
+# load-bearing rather than modest. Measured 2026-08-14 on the real artifacts — WHICH CARRIED THE
+# SIX-BAND HEADSHIP CURVE, retired by operator ruling V on 2026-08-19, so EVERY FIGURE IN THIS
+# BLOCK IS PRE-RULING-V and none of them is a reading of the curve now shipped. They stand here
+# unrestated on purpose: re-measuring them against the age-resolved curve is the ordered
+# follow-on that must land BEFORE the ownership lattice moves below 25, and census.py's
+# `zero_support_note` carries the binding copy of that requirement. THE RECIPE, stated
 # in full because the fan is a filter and not a default: MTL_RMR, the `Scenario.REFERENCE` rows
 # of `pop-as-rmr-base.xlsx` (ISQ's central fan of THREE — the label is a scenario, never an
 # edition), years 2025 -> 2026. On that reading: 59.5% of D_native at first sight — but 97.6% of
-# that mass is ONE term, the age-20 gain of 21,353 households, which is an artifact of the
-# pipeline sketch reusing the BANDED headship curve at single years of age (h jumps 0.0061 ->
-# 0.3954 across the 0-19 -> 20-34 boundary). census.py's own `zero_support_note` forbids exactly
-# that reuse: "a consumer multiplying a SINGLE age inside the band ... must land an age-resolved
-# curve". Net of band-entry ages the sub-floor drop is 1.42%; on LOW and HIGH it is 59.8% /
-# 59.3% and 0.91% / 2.33%, so what is priced is the convention and not the fan. 100% of the
-# computed D_native is itself band-entry mass in all three fans, so NO LEVEL from that wiring is
-# a measurement of this convention.
+# that mass was ONE term, the age-20 gain of 21,353 households, an artifact of the pipeline
+# sketch AS WIRED ON THAT DATE, reusing the six-band curve at single years of age (h jumped
+# 0.0061 -> 0.3954 across the 0-19 -> 20-34 boundary — a step that no longer exists; the
+# resolved curve spreads that rise across 20..34, so the floor now discards a SLOPE, not a
+# STEP). census.py's own `zero_support_note` forbade exactly that reuse — "a consumer
+# multiplying a SINGLE age inside the band ... must land an age-resolved curve" — and ruling V
+# is that curve landing, which is why the clause now reads as discharged rather than as a
+# warning. Net of band-entry ages the sub-floor drop was 1.42%; on LOW and HIGH it was 59.8% /
+# 59.3% and 0.91% / 2.33%, so what was priced is the convention and not the fan. 100% of the
+# D_native computed on that wiring was itself band-entry mass in all three fans, so NO LEVEL
+# from it is a measurement of this convention.
+#
+# WHAT RULING V DID MEASURE, AND IT IS NOT THE RE-MEASUREMENT ORDERED ABOVE. The acceptance
+# metric for the age-resolved curve was the CONCENTRATION of D_native — the largest single-age
+# share, targeted at 14-18% (design panel, "The success criterion, measured";
+# docs/research/2026-08-19-headship-curve-design-panel.md). Measured 2026-08-19 on the shipped
+# artifacts, same recipe as above (MTL_RMR, `Scenario.REFERENCE`) with the §6 P_resident
+# operand, the 26 projected years pooled: the RETIRED six-band curve peaked at age 35 with
+# 79.9% (per-year 77.5-83.9%); the shipped `expo_cum_fc` peaks at age 26 with 26.1%
+# (24.3-40.4%) and `expo_cum_fb` at 26 with 31.5% (29.4-46.0%). The band step is GONE — the
+# per-age profile is smooth (h: 24 -> 0.30553, 25 -> 0.35090, 26 -> 0.40615, 27 -> 0.44563)
+# — and what remains above the target is THIS convention's edge, not a curve defect: ages
+# 18-24 contribute EXACTLY 0.0 because `_ownership` returns 0.0 below the floor, so the mass
+# piles at 25-27 (65.8% of the horizon total). The same run with the floor probed at 18 peaks
+# at age 21 with 12.6% on `expo_cum_fc` — just BELOW the 14-18% band — and 16.5% on
+# `expo_cum_fb`, inside it, against 26.1% / 31.5% at floor 25. That is what ATTRIBUTES the
+# residual here, and fc undershooting the band rather than landing in it makes the attribution
+# STRONGER, not weaker: the floor accounts for more than the whole gap.
+# One proposal PREDICTED that attribution (the EWC-PCHIP submission's `age20_interaction`
+# item 3, at its own probe's 16.1% — a DIFFERENT chassis and a probe-grade level, so it is a
+# corroborating prediction and not a figure to carry); the counterfactual above is the
+# measurement that was missing from it.
+# THAT IS NOT A LICENCE TO MOVE THE FLOOR: the ordered re-measurement above is the sub-floor
+# DROP against the age-resolved curve, it is still pending, and it is what the floor move
+# waits on.
 #
 # ITS DIRECTION ON ED, IN ED's OWN UNIT — the part that survives the contamination above,
 # because both legs carry the same band-entry artifact and it largely cancels in their RATIO

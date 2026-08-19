@@ -26,16 +26,28 @@ def main() -> int:
     payload = derive_headship_from_sources(DATA_DIR / CENSUS_EXTRACT,
                                           DATA_DIR / POP_QC_WORKBOOK)
     out = DATA_DIR / HEADSHIP_ARTIFACT
-    # Deterministic bytes: band order comes from `_HEADSHIP_BAND_SPEC` (never a set
-    # iteration, whose order is per-process randomized), so re-running this must reproduce
-    # the file byte-for-byte.
+    # Deterministic bytes: member order comes from `_HEADSHIP_MEMBER_SPEC` and age order from
+    # `range(0, 101)` (never a set iteration, whose order is per-process randomized), so
+    # re-running this must reproduce the file byte-for-byte.
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {out}")
     prov = payload["_provenance"]
-    for band, rate in payload["headship"].items():
-        print(f"  {band:6s} {rate:.6f}   "
-              f"{prov['band_maintainers'][band]:>9,d} maintainers / "
+    print(f"  central shape: {payload['central_shape']}   "
+          f"carried: {', '.join(payload['headship'])}")
+    for member, (lo, hi) in prov["member_spec"].items():
+        if not prov["member_maintainers"][member]:
+            continue
+        residuals = "  ".join(
+            f"{shape} {prov['per_member_closure']['residuals'][shape][member]:.3g}"
+            for shape in payload["headship"])
+        print(f"  {member:20s} {lo:>3d}-{hi:<3d} {prov['member_rates'][member]:.6f}   "
+              f"{prov['member_maintainers'][member]:>9,d} maintainers / "
+              f"{prov['member_persons'][member]:>12,.0f} persons   closure {residuals}")
+    for band, rate in prov["band_maintainers"].items():
+        print(f"  legacy {band:6s} {rate:>9,d} maintainers / "
               f"{prov['band_persons'][band]:>12,.0f} persons")
+    for shape, sup in prov["range_certificate"].items():
+        print(f"  range certificate sup dY/dX [{shape}]: {sup:.10f} <= 1")
     print(f"  closure: {prov['numerator_closure']}")
     return 0
 

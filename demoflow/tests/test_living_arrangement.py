@@ -380,8 +380,12 @@ def test_band_labels_partition_75_plus_and_do_not_collide_with_the_ownership_ban
         assert str(lo) in member, f"{label}: cube member {member!r} is not this band"
         prev_hi = hi
     mine = {label for label, _, _, _ in spec}
+    # `census._HEADSHIP_BANDS` is GONE (operator ruling V): headship is age-resolved and its
+    # six LEGACY band labels survive only as provenance, so the collision surface is the
+    # ownership lattice plus that legacy label set — the same labels, read from the spec that
+    # still publishes them.
     theirs = {label for label, _, _ in census._AGE_BANDS} | {
-        label for label, _, _ in census._HEADSHIP_BANDS}
+        label for label, _, _ in census._HEADSHIP_LEGACY_BAND_SPEC}
     assert mine & theirs == set(), (
         f"a band label is shared with census.py's lattices while denoting a DIFFERENT domain "
         f"(theirs: 75+ = 75..200): {mine & theirs}")

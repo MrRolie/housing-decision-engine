@@ -144,7 +144,7 @@ def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age
     summation at ages 18..24 multiplies an UNDEFINED rate and contributes zero, not merely the
     age-18 boundary term. UNDEFINED BY THAT SPEC, NOT BY THE TABLE (corrected 2026-08-15, spec
     §7 amendment #12): 98-10-0231-01 does publish owner-maintainer counts below 25, and
-    `_HEADSHIP_BAND_SPEC` reads them — see
+    `_HEADSHIP_MEMBER_SPEC` reads them — see
     `test_census_ownership.test_the_extract_DOES_publish_owner_maintainer_counts_below_25`.
     The convention is census.py's own `zero_support_note`, landed at T13b 2026-08-08 and
     mirrored in `formation`: ownership(a) "contributes nothing below 25", by a choice the note
@@ -425,9 +425,17 @@ def test_a_demand_consumer_can_state_the_vintage_of_the_rate_surfaces_it_holds()
      load_ownership_rates, load_ownership_vintage, "strict join"),
     (OWNERSHIP_ARTIFACT, lambda p: p.pop("rates"),
      load_ownership_rates, load_ownership_vintage, "strict join"),
-    (HEADSHIP_ARTIFACT, lambda p: p["headship"].pop("65-74"),
+    # Since ruling V the headship curve is age-resolved and carried at TWO shapes, so the
+    # strict join has two ways to be holed: a dropped AGE inside a carried shape, and a
+    # dropped SHAPE the robustness sweep declares. Both must refuse the vintage as well as
+    # the rates — the second is the one a headline-only completeness check would miss, because
+    # the headline reads the central arm and the sweep leg reads the other.
+    (HEADSHIP_ARTIFACT, lambda p: p["headship"]["expo_cum_fc"].pop("70"),
      load_headship_rates, load_headship_vintage, "strict join"),
-], ids=["stale-digest", "dropped-geography", "dropped-rates-key", "dropped-headship-band"])
+    (HEADSHIP_ARTIFACT, lambda p: p["headship"].pop("expo_cum_fb"),
+     load_headship_rates, load_headship_vintage, "strict join"),
+], ids=["stale-digest", "dropped-geography", "dropped-rates-key", "dropped-headship-age",
+        "dropped-headship-shape"])
 def test_the_vintage_accessor_refuses_exactly_what_the_rate_loader_refuses(
         tmp_path, artifact, mutate, rate_loader, vintage_loader, match):
     """A vintage that can be stated where the rates would be REFUSED is worse than none.

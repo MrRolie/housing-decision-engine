@@ -59,7 +59,8 @@ from demoflow.demand.immigrant_inputs import resolve_immigrant_inputs
 from demoflow.errors import CalibrationError, LoaderError
 from demoflow.geography import Geography, Scenario
 from demoflow.loaders.census import (
-    CENSUS_EXTRACT, HEADSHIP_ARTIFACT, OWNERSHIP_ARTIFACT, headship_rate, load_headship_rates,
+    CENSUS_EXTRACT, HEADSHIP_ARTIFACT, OWNERSHIP_ARTIFACT, headship_curve, headship_rate,
+    load_headship_curves,
     load_ownership_rates, ownership_rate,
 )
 from demoflow.loaders.compo import FLOW_SPAN, load_immigrant_flows
@@ -256,8 +257,9 @@ def _run_identity(data_dir: Path | None, ircc) -> str:
     """The run's FULL identity: the assumption selection AND the data vintage, in one token.
 
     CARRY B4, and the reason this is a token rather than a widened `assumptions_hash()`.
-    `assumptions_hash` covers the assumption SELECTION — the banded central/sweep values, the
-    unbanded model choices and the ruled immigrant join table — and NOTHING about the data, so
+    `assumptions_hash` covers the assumption SELECTION — the central/sweep values, banded and
+    categorical alike, the unswept model choices and the ruled immigrant join table — and
+    NOTHING about the data, so
     two runs over different source bytes produce an identical hash; the envelope could not make
     the data-vs-code call §9 rests on. Folding the data digest INTO that hash would fix
     the first half by destroying the second: one token that moves for either cause answers
@@ -615,7 +617,10 @@ def _ownership_reader(data_dir: Path | None) -> _OwnershipReader:
 class Frames:
     pop: pd.DataFrame
     compo: pd.DataFrame
-    headship: dict
+    # EVERY carried headship shape, not one curve: `headship_shape` is a declared robustness
+    # axis, so a leg must be able to reach the other arm without re-reading and re-verifying
+    # the same artifact bytes once per leg.
+    headship: dict[str, dict[int, float]]
     la: dict
 
 
@@ -625,7 +630,7 @@ def _load_all(data_dir: Path | None) -> Frames:
     compo = pd.concat([load_immigrant_flows(w, data_dir=data_dir) for w in COMPO_WORKBOOKS],
                       ignore_index=True)
     return Frames(pop=pop, compo=compo,
-                  headship=load_headship_rates(data_dir=data_dir),
+                  headship=load_headship_curves(data_dir=data_dir),
                   la=load_living_arrangement(data_dir=data_dir))
 
 
@@ -856,7 +861,8 @@ def _reconciliation_retention(frames: Frames, read_ownership, q_live: float) -> 
 # THE ROBUSTNESS SWEEP'S ASSUMPTION LEG (spec §7b run contract; run-32 quant F1 / stress F1)
 # ===========================================================================================
 #
-# `rank_stable: true` SHIPPED ON ALL EIGHT ROWS AS A VERDICT OVER ONE OF FIVE DECLARED AXES.
+# `rank_stable: true` SHIPPED ON ALL EIGHT ROWS AS A VERDICT OVER ONE OF SIX DECLARED AXES
+# (five when the narrowing was found; `headship_shape` joined at ruling V).
 # `_rank_stability` iterated `SWEEP_GRID["q_live_per_year"]`; the grid declares FOUR, and
 # `constants.py` states a FIFTH as an existing fact of THIS module — "Task 29 perturbs the join
 # table with a uniform override spanning CONSTANTS['immigrant_ownership_ratio_sweep_span']" —
@@ -875,8 +881,11 @@ def _reconciliation_retention(frames: Frames, read_ownership, q_live: float) -> 
 # (`tests/test_pipeline.py` pins it against the central leg, field by field).
 #
 # THE RATIO AXIS IS DELIBERATELY NOT A `SWEEP_GRID` MEMBER. That dict's keyset is held EQUAL to
-# `CENTRAL_ASSUMPTIONS`' by test, on the stated ground that every central assumption is banded;
-# rulings S/T measure the ratio PER GEOGRAPHY, so Task 25b deleted the central scalar and there
+# `CENTRAL_ASSUMPTIONS`' by test, on the stated ground that an unswept central assumption
+# silently claims `rank_stable` it never tested — the membership rule is stated ONCE, at
+# `loaders/constants.py`'s MODEL_CHOICES header, and since ruling V it is "is there something to
+# sweep", never "is it a float" (`headship_shape` is central, categorical and swept).
+# Rulings S/T measure the ratio PER GEOGRAPHY, so Task 25b deleted the central scalar and there
 # is no central value for a grid entry to pair with. The override's central setting is therefore
 # `None` — meaning "read the ruled join-table row" — and the span lives where P4 put it, in
 # `CONSTANTS`. A scalar here would silently replace five ruled measurements with one number.
@@ -896,11 +905,13 @@ RATIO_SWEEP_SPAN_ANCHOR = "immigrant_ownership_ratio_sweep_span"
 
 @dataclass(frozen=True)
 class Assumptions:
-    """Every banded assumption the ED grid reads, at ONE setting — the headline's or a leg's.
+    """Every SWEPT assumption the ED grid reads, at ONE setting — the headline's or a leg's;
+    banded and categorical alike since ruling V added `headship_shape` (the membership rule is
+    `loaders/constants.py`'s MODEL_CHOICES header, and the body below marks the categorical one).
 
-    The four named fields are `CENTRAL_ASSUMPTIONS`' own keys, so `Assumptions(**CENTRAL_
+    The five named fields are `CENTRAL_ASSUMPTIONS`' own keys, so `Assumptions(**CENTRAL_
     ASSUMPTIONS)` is the central leg and a key added there without a field here raises AT
-    IMPORT rather than being dropped from the sweep. `immigrant_ownership_ratio` is the fifth
+    IMPORT rather than being dropped from the sweep. `immigrant_ownership_ratio` is the sixth
     axis and has no central value by construction (see the section note): `None` means every
     geography reads its RULED join-table ratio, and a float is the uniform override the sweep
     applies across all geographies at once.
@@ -910,6 +921,10 @@ class Assumptions:
     phi_voluntary: float
     estate_eventual_fraction: float
     estate_lag_years: int
+    # The one CATEGORICAL axis (ruling V). It carries no default, deliberately: a default here
+    # would be a second declaration of the central value, and the central value lives in
+    # `CENTRAL_ASSUMPTIONS` alone.
+    headship_shape: str
     immigrant_ownership_ratio: float | None = None
 
 
@@ -917,7 +932,7 @@ SWEEP_LEG_FIELDS = tuple(f.name for f in fields(Assumptions))
 CENTRAL_LEG = Assumptions(**CENTRAL_ASSUMPTIONS)
 
 
-def _sweep_legs() -> list[tuple[str, Assumptions]]:
+def _sweep_legs(axes: tuple[str, ...] | None = None) -> list[tuple[str, Assumptions]]:
     """The sweep's product: every declared axis at BOTH declared endpoints, ONE axis off-central
     per leg. Spec §7b asks "does the ordering change ANYWHERE IN THE SWEEP GRID?", so the legs
     are a UNION over axes and never a joint perturbation — a leg that moved two axes could not
@@ -934,13 +949,27 @@ def _sweep_legs() -> list[tuple[str, Assumptions]]:
     `market_listings` read the module constant instead of the argument — carried in name,
     inert in effect. Nothing in this function can see that. `tests/test_pipeline.py::
     test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS` owns the second door and
-    the split is measured, not assumed: with that one test removed, a mutant that ignores all
-    four `SWEEP_GRID` fields inside `_ed_series` leaves 8 of these 10 legs at max|delta ED| =
-    0.0 and passes the remaining 1139 tests — the central run is untouched so no golden byte
-    moves, and the ratio axis alone keeps `rank_stable` false on every row.
+    the split is measured, not assumed — MEASURED AT 98c2f10, against that commit's five-axis
+    ten-leg grid: with that one test removed, a mutant that ignored all four numeric
+    `SWEEP_GRID` fields inside `_ed_series` left 8 of those 10 legs at max|delta ED| = 0.0 and
+    passed the remaining 1139 tests — the central run is untouched so no golden byte moves, and
+    the ratio axis alone keeps `rank_stable` false on every row. Ruling V's `headship_shape`
+    axis widens the grid to twelve legs and does not weaken that split: it adds one LIVE leg
+    (`expo_cum_fb`) and one inert BY CONSTRUCTION (the `expo_cum_fc` leg, which IS `CENTRAL_LEG`
+    and reuses the central grid), so the same mutant would now leave 9 of 12 inert. That is
+    arithmetic on the two new legs, not a re-run — the mutation battery has NOT been re-measured
+    on the twelve-leg grid.
     """
     declared = {axis: SWEEP_GRID[axis] for axis in sorted(SWEEP_GRID)}
     declared[RATIO_SWEEP_AXIS] = CONSTANTS[RATIO_SWEEP_SPAN_ANCHOR].value
+    if axes is not None:
+        unknown = sorted(set(axes) - set(declared))
+        if unknown:
+            raise CalibrationError(
+                f"the robustness axes {unknown} are not declared (declared: "
+                f"{sorted(declared)}) — a caller cannot sweep an axis the run contract does "
+                f"not carry")
+        declared = {axis: endpoints for axis, endpoints in declared.items() if axis in axes}
 
     legs: list[tuple[str, Assumptions]] = []
     for axis, endpoints in declared.items():
@@ -980,7 +1009,13 @@ def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
     inputs = resolve_immigrant_inputs(geo)
     ratio = (inputs.ownership_ratio if assumptions.immigrant_ownership_ratio is None
              else assumptions.immigrant_ownership_ratio)
-    headship = {a: headship_rate(frames.headship, a) for a in range(0, 101)}
+    # THE SHAPE COMES OFF THE LEG, never off the artifact's own `central_shape` (ruling V):
+    # the headline passes `CENTRAL_ASSUMPTIONS["headship_shape"]` and each sweep leg passes its
+    # endpoint, so the run's shape selection sits in ONE place and `assumptions_hash()` covers
+    # it. A fallback to the artifact default would be a second selection site outside the
+    # identity token — the defect this audit round already named for the immigrant inputs.
+    curve = headship_curve(frames.headship, assumptions.headship_shape)
+    headship = {a: headship_rate(curve, a) for a in range(0, 101)}
     ownership = {a: read_ownership(geo, a) for a in range(25, 101)}
     p_nonimm = read_ownership(geo, P_NONIMM_AGE)
 
@@ -1030,7 +1065,7 @@ def _ed_series(geo: Geography, scen: Scenario, frames: Frames, read_ownership,
     # and the next year's `t-1`, and evaluating both legs inside the iteration re-derived each
     # year TWICE — the pandas row selections in `_pop_by_age` / `_surviving_arrivals`, which the
     # profile says is where this function spends two thirds of its time. That was a private
-    # inefficiency while the run evaluated three ED grids; the five-axis sweep evaluates ELEVEN
+    # inefficiency while the run evaluated three ED grids; the six-axis sweep evaluates TWELVE
     # and it rode every one. `_projected_years` ASSERTS the lattice is CONTIGUOUS, and that
     # assertion is what makes the carry sound rather than merely faster: the previous iteration's
     # `t` IS this iteration's `t-1`, never a year the frame might skip. The values are unchanged
@@ -1060,11 +1095,11 @@ def _ed_dict(geos, frames: Frames, read_ownership, assumptions: Assumptions) -> 
                 for sc in (Scenario.REFERENCE, Scenario.LOW, Scenario.HIGH)} for g in geos}
 
 
-def _rank_stability(geos, frames: Frames, read_ownership,
-                    central_ed: dict) -> dict[Geography, bool]:
+def _rank_stability(geos, frames: Frames, read_ownership, central_ed: dict,
+                    sweep_axes: tuple[str, ...] | None = None) -> dict[Geography, bool]:
     """The RUN-CONTRACT robustness sweep (codex r8-F1): a geography's rank is STABLE iff it is
-    unchanged across EVERY leg `_sweep_legs` declares — five axes at both endpoints each, ten
-    legs — measured against the central value. Spec §7b's question is "does the ordering change
+    unchanged across EVERY leg `_sweep_legs` declares — six axes at both endpoints each,
+    twelve legs — measured against the central value. Spec §7b's question is "does the ordering change
     ANYWHERE IN THE SWEEP GRID?", so the verdict is a UNION and a single reordering leg is
     enough to make a geography unstable.
 
@@ -1083,15 +1118,33 @@ def _rank_stability(geos, frames: Frames, read_ownership,
     Passing the headline in makes "the sweep's central leg is the headline" structural.
 
     NO SWEEP LEG RUNS `check_reconciliation` — ruling O, and the reason is measured, not
-    stylistic (it binds all ten legs now, and the q_live pair is still the one that would trip):
+    stylistic (it binds all twelve legs now, and the q_live pair is still the one that trips):
     at q_live 0.06, the sweep grid's OWN low endpoint, the spec-pinned cohort retains
     0.4565 on the CORRECT model (the gate RAISES) while a doubled decrement retains 0.3724 (the
     gate PASSES), inverted at 21/21 start years. Run at sweep scope this gate would reject the
     right model and accept the wrong one. The sweep's product is RANK STABILITY; calibration is
     the central run's job.
     """
-    grids = [central_ed] + [_ed_dict(geos, frames, read_ownership, leg)
-                            for _axis, leg in _sweep_legs()]
+    legs = _sweep_legs(sweep_axes)
+    if sweep_axes is not None and set(sweep_axes) != set(SWEEP_GRID) | {RATIO_SWEEP_AXIS}:
+        # FAIL-SAFE, and it is the whole safety of the knob: a run that did not evaluate the
+        # DECLARED grid cannot show a rank is stable ACROSS it, so it reports `False` and the
+        # legs are not evaluated at all (which is where the saving comes from). The reduction
+        # can therefore only ever weaken the claim — the run-32 CRITICAL was a `true` shipped
+        # over a grid that was never swept, and this is the one place a cost shortcut could
+        # reopen that door.
+        return {g: False for g in geos}
+    grids = [central_ed]
+    for _axis, leg in legs:
+        # A leg whose assumptions are `==` the central leg's cannot produce a different grid.
+        # `headship_shape` is categorical and its central value is one of its two admissible
+        # members, so exactly ONE declared leg is a provable no-op; reusing the headline grid
+        # for it saves 24 ED series per run. Reusing it SILENTLY would be indistinguishable
+        # from dropping the leg, so `tests/test_pipeline.py` names the exempt leg and reds on
+        # a second one — a numeric endpoint drifted onto its central value is an inert leg by
+        # a different route and must still be caught.
+        grids.append(central_ed if leg == CENTRAL_LEG
+                     else _ed_dict(geos, frames, read_ownership, leg))
     orders = [{r.geography: r.rank for r in rank_geographies(grid)} for grid in grids]
     return {g: all(o[g] == orders[0][g] for o in orders) for g in geos}
 
@@ -1119,8 +1172,9 @@ def evaluate_tripwires(data_dir: Path | None = None, now_year: int = 2026,
     """Evaluate spec §7c's six indicators and NOTHING ELSE — the path behind `demoflow tripwires`.
 
     IT TAKES NO `out_dir`, AND THAT IS THE POINT (run-30 carry C3). Asking for six statuses used
-    to run `run_pipeline`, which loads five workbooks, evaluates the ED grid ELEVEN times (the
-    central run + `_rank_stability`'s ten-leg five-axis sweep) and WRITES BOTH DOCUMENTS — so a
+    to run `run_pipeline`, which loads five workbooks, evaluates the ED grid TWELVE times (the
+    central run + `_rank_stability`'s twelve-leg six-axis sweep, one leg of which reuses the
+    central grid) and WRITES BOTH DOCUMENTS — so a
     status listing
     re-emitted `rankings.json` into whatever directory the operator happened to be standing in.
     A function with nowhere to write cannot reacquire that behaviour by a later edit that forgets
@@ -1158,13 +1212,23 @@ def evaluate_tripwires(data_dir: Path | None = None, now_year: int = 2026,
 
 
 def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,
-                 now_year: int = 2026, now_month: int = 12) -> dict:
+                 now_year: int = 2026, now_month: int = 12,
+                 sweep_axes: tuple[str, ...] | None = None) -> dict:
     """Emit `rankings.json` + `tripwire_baseline.json`, and return the run's own record.
 
     `now_month` defaults to the LAST month of `now_year`, which is the fail-safe end of the
     freshness axis: a caller who does not state the month makes a feed look as OLD as that year
     permits, so an under-specified call refuses (UNKNOWN/stale) rather than certifies. The CLI
     supplies the real month.
+
+    `sweep_axes=None` — THE COMMITTED DEFAULT — evaluates every declared robustness axis at
+    both endpoints. A caller may name FEWER axes, and a run that did so reports
+    `rank_stable: false` on every row by construction (see `_rank_stability`): it did not
+    evaluate the declared grid, so it cannot certify stability across it. The knob exists
+    because most end-to-end tests of this function assert nothing about the robustness verdict
+    and were each paying a full twelve-leg sweep for it — a gate slow enough that people stop
+    running it has stopped working. `golden.generate_golden` never passes it: a golden minted
+    from a reduced sweep is the defect the widened sweep exists to close.
     """
     frames = _load_all(data_dir)
     read_ownership = _ownership_reader(data_dir)
@@ -1200,7 +1264,7 @@ def run_pipeline(data_dir: Path | None = None, out_dir: Path | None = None,
         return "borrowed_prior" in (row.headship_provenance, row.ratio_provenance)
 
     borrowed = {g for g in geos if _borrowed_inputs(g)}
-    stable = _rank_stability(geos, frames, read_ownership, ed)
+    stable = _rank_stability(geos, frames, read_ownership, ed, sweep_axes)
     # spec §7b's composition rule, sampled AROUND the whole computation (see the gate).
     _refuse_mixed_identity({identity, _run_identity(data_dir, landings)})
     rankings = rank_geographies(ed, borrowed=borrowed, rank_stable=stable)

@@ -77,7 +77,7 @@ def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age
     `ownership(a)` is UNDEFINED below 25 and the term contributes nothing — because
     `census._AGE_BAND_SPEC` starts the ownership lattice at 25-54, NOT because the extract is
     silent there (corrected 2026-08-15, spec §7 amendment #12: it publishes `15 to 19 years`
-    and `20 to 24 years` at all seven GEO rows, and `_HEADSHIP_BAND_SPEC` reads both — pinned
+    and `20 to 24 years` at all seven GEO rows, and `_HEADSHIP_MEMBER_SPEC` reads both — pinned
     by `test_the_extract_DOES_publish_owner_maintainer_counts_below_25`). The convention is
     still not decided here: it is `census.py`'s own `zero_support_note` (T13b 2026-08-08),
     which names THIS equation as the consumer it is stated for — "spec:395 sums pop(a) x
@@ -139,10 +139,13 @@ def test_the_ownership_floor_is_the_demand_packages_constant_and_the_census_latt
 def test_missing_headship_at_a_POPULATED_age_raises(age, ownership_by_age):
     """Headship absence is a HOLE at EVERY age, with no convention to excuse it.
 
-    The committed headship curve is banded across 0-100 (`census._HEADSHIP_BAND_SPEC`: 0-19,
-    20-34, 35-54, 55-64, 65-74, 75+) and the Task-29 sketch materialises it over
-    `range(0, 101)` — so unlike ownership, headship has no undefined region to point at, and a
-    missing rate can only mean a holed or partially-built curve.
+    Since operator ruling V the committed headship curve is AGE-RESOLVED at every single year
+    0-100 (`census._HEADSHIP_MEMBER_SPEC`'s fourteen published members graduated onto the ISQ
+    single-year denominator) and the Task-29 sketch materialises it over `range(0, 101)` — so
+    unlike ownership, headship has no undefined region to point at, and a missing rate can only
+    mean a holed or partially-built curve. The argument is UNCHANGED by ruling V and that is
+    the point: the old six-band curve had no undefined region either, so this guard's reach
+    never rested on the band structure that went away.
 
     The sub-floor case is strict because the CALL IS UNCONDITIONAL, not because of where it
     sits in the loop: `owner_stock` asks for headship at every populated age, and `_ownership`

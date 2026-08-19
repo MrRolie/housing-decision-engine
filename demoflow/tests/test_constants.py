@@ -71,9 +71,18 @@ def test_central_assumptions_and_hash():
     assert CENTRAL_ASSUMPTIONS["q_live_per_year"] == 0.085
     assert CENTRAL_ASSUMPTIONS["estate_eventual_fraction"] == 0.725
     assert CENTRAL_ASSUMPTIONS["estate_lag_years"] == 2
-    # every central value lies within (or at) its sweep endpoints
-    for k, (lo, hi) in SWEEP_GRID.items():
-        assert lo <= CENTRAL_ASSUMPTIONS[k] <= hi
+    # Every central value is REACHABLE FROM ITS DECLARED GRID, and the two grid shapes are
+    # checked as the different things they are (sharpened at ruling V). A BANDED axis declares
+    # an ordered interval and its central value lies within it; a CATEGORICAL axis declares the
+    # admissible set and its central value must be a MEMBER of it — an ordering assertion there
+    # would be reading lexicographic accident as a band.
+    for k, endpoints in SWEEP_GRID.items():
+        central = CENTRAL_ASSUMPTIONS[k]
+        if isinstance(central, str):
+            assert central in endpoints, f"{k}: central {central!r} is not an admissible member"
+        else:
+            lo, hi = endpoints
+            assert lo <= central <= hi
     assert isinstance(assumptions_hash(), str) and len(assumptions_hash()) == 16
     assert assumptions_hash() == assumptions_hash()   # deterministic
 
@@ -210,14 +219,20 @@ def test_q_live_annual_is_the_annualized_cmhc_anchor_in_matching_units():
     assert "q_live_five_year" not in CONSTANTS                             # duplicate removed
 
 
-def test_every_banded_assumption_is_in_the_sweep_grid():
-    """spec §7 run contract (r8-F1): a Tranche-1 run evaluates EVERY banded assumption at
-    its central value, band endpoints entering ONLY the robustness sweep. The plan's grid
-    omitted phi_voluntary (spec §5 band [0.7, 1.0]) and the immigrant ratio."""
+def test_every_central_assumption_has_a_declared_grid_entry():
+    """spec §7 run contract (r8-F1): a Tranche-1 run evaluates EVERY central assumption at its
+    central value, the declared alternatives entering ONLY the robustness sweep. The plan's grid
+    omitted phi_voluntary (spec §5 band [0.7, 1.0]) and the immigrant ratio.
+
+    NAMED FOR WHAT IT ENFORCES, sharpened at ruling V when the CATEGORICAL `headship_shape`
+    joined both dicts: this gate is the KEYSET half of the membership rule, which is stated once
+    — `loaders/constants.py`'s MODEL_CHOICES header — and is "is there something to sweep", not
+    "is it a float". The SHAPE half (a banded axis declares an ordered interval, a categorical
+    one an admissible set) is `test_central_assumptions_and_hash` above."""
     assert SWEEP_GRID["phi_voluntary"] == (0.7, 1.0)
     assert set(SWEEP_GRID) == set(CENTRAL_ASSUMPTIONS), (
-        "every central assumption is banded (spec §5) — an unswept one silently claims "
-        "rank_stable it never tested")
+        "an unswept central assumption silently claims rank_stable it never tested — banded "
+        "or categorical (the rule: loaders/constants.py, MODEL_CHOICES header)")
 
 
 def test_every_central_assumption_has_documented_provenance():
@@ -313,11 +328,13 @@ def test_module_docstring_does_not_misattribute_the_flag_vocabulary_to_spec_7():
 # HORS_RMR) under a byte-identical envelope. Lifting them here closes both halves at once: the
 # citation lands beside the value, and `assumptions_hash` covers it.
 #
-# THEY ARE DELIBERATELY NOT `CENTRAL_ASSUMPTIONS` MEMBERS. That dict's contract is
-# central-value-plus-band — `test_every_banded_assumption_is_in_the_sweep_grid` holds its
-# keyset EQUAL to `SWEEP_GRID`'s — and neither of these carries a spec §5 band. Inventing one
-# would be a fabricated anchor; adding a sweep axis would silently widen the robustness sweep's
-# declared grid, which is a modelling decision and not an identity fix.
+# THEY ARE DELIBERATELY NOT `CENTRAL_ASSUMPTIONS` MEMBERS. That dict's contract is a central
+# value WITH A DECLARED ALTERNATIVE — `test_every_central_assumption_has_a_declared_grid_entry`
+# holds its keyset EQUAL to `SWEEP_GRID`'s — and neither of these has one: no spec §5 band, and
+# no second admissible value either. Inventing a band would be a fabricated anchor; adding a
+# sweep axis would silently widen the robustness sweep's declared grid, which is a modelling
+# decision and not an identity fix. (The rule this reads off lives in the module under test,
+# `loaders/constants.py`'s MODEL_CHOICES header; it is not restated here.)
 
 def test_every_model_choice_has_documented_provenance():
     """The charter carry over the third dict too: keysets match, and a bare value cannot land.
@@ -398,10 +415,12 @@ def test_the_model_choices_are_bound_read_through_not_redeclared(monkeypatch):
 
 
 def test_the_model_choices_are_unbanded_and_stay_out_of_the_run_contract_dicts():
-    """They are DISCRETE MODEL CHOICES, not banded assumptions. Keeping them out of
+    """They are DISCRETE MODEL CHOICES WITH NOTHING TO SWEEP. Keeping them out of
     CENTRAL_ASSUMPTIONS/SWEEP_GRID is what keeps the run contract's strongest gate honest —
-    "every central assumption is banded, so an unswept one silently claims rank_stable it
-    never tested". A choice with no band has nothing to sweep and must not pretend otherwise."""
+    "an unswept central assumption silently claims rank_stable it never tested". Being unbanded
+    is NOT what disqualifies them (ruling V's `headship_shape` is unbanded, central and swept):
+    these two carry no band AND no second admissible value, so there is nothing a sweep leg
+    could move them to, and they must not pretend otherwise."""
     assert not set(MODEL_CHOICES) & set(CENTRAL_ASSUMPTIONS)
     assert not set(MODEL_CHOICES) & set(SWEEP_GRID)
 

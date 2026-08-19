@@ -337,8 +337,7 @@ def test_model_band_lattices_are_spec_labelled_and_partition_their_domain():
     partition their domain with no gap and no overlap.
     """
     for name, spec_labels, bands, floor in (
-            ("ownership", _SPEC_AGE_BANDS, census._AGE_BANDS, 25),
-            ("headship", _SPEC_HEADSHIP_BANDS, census._HEADSHIP_BANDS, 0)):
+            ("ownership", _SPEC_AGE_BANDS, census._AGE_BANDS, 25),):
         assert tuple(label for label, _, _ in bands) == spec_labels, f"{name}: labels drifted"
         prev_hi = floor - 1
         for label, lo, hi in bands:
@@ -353,12 +352,25 @@ def test_model_band_lattices_are_spec_labelled_and_partition_their_domain():
 
     # The derivation's band spec is the SAME lattice (one source of truth) and its members
     # are exactly the spec bands' constituents — a member moved between bands reds here too.
-    # BOTH surfaces now: headship became a derivation at T13b, so its band spec carries
-    # constituents too and a member moved between headship bands must red here as well.
     assert {label: members for label, _, _, members in census._AGE_BAND_SPEC} == _BAND_MEMBERS
-    assert ({label: members for label, _, _, members in census._HEADSHIP_BAND_SPEC}
-            == _SPEC_HEADSHIP_BAND_MEMBERS)
-    assert {label: (lo, hi) for label, lo, hi in census._HEADSHIP_BANDS} == _HEADSHIP_BAND_RANGE
+
+    # HEADSHIP NO LONGER HAS A BAND LATTICE (operator ruling V): it reads the 14 PUBLISHED
+    # members and graduates them onto the single-year denominator, so the property to pin is
+    # not "labels agree with ranges and partition a domain" but "the member spec IS the
+    # published dimension, contiguous from the youngest published member to the denominator's
+    # terminal age, and the six legacy bands DERIVE from it". The legacy lattice keeps the
+    # partition check, against the SAME spec-anchored labels as before.
+    assert tuple(label for label, _lo, _hi in census._HEADSHIP_LEGACY_BAND_SPEC) == _SPEC_HEADSHIP_BANDS
+    prev_hi = -1
+    for label, lo, hi in census._HEADSHIP_LEGACY_BAND_SPEC:
+        assert lo == prev_hi + 1, f"legacy headship[{label}]: gap or overlap below {lo}"
+        prev_hi = hi
+    assert prev_hi == 100
+    prev_hi = 14
+    for label, lo, hi in census._HEADSHIP_MEMBER_SPEC:
+        assert lo == prev_hi + 1, f"headship member {label!r}: gap or overlap below {lo}"
+        prev_hi = hi
+    assert prev_hi == 100, "the open member no longer closes at the denominator's terminal age"
 
 
 # --- T13b PART 1: headship RE-DERIVED at its use site -------------------------------
@@ -498,21 +510,30 @@ def test_headship_curve_matches_a_full_band_independent_recompute():
 
     The use site defines the semantics — spec:395 `OwnerStock(g,t,s) = Σ_over_all_ages
     pop(a,g,t,s) × headship(a) × ownership(a)` multiplies ISQ scenario POPULATION — so
-    headship(a) is maintainers-in-band ÷ PERSONS-in-band, and the denominator is the pinned
-    ISQ workbook, not the Census cube. Both surfaces are asserted (committed artifact AND a
+    headship(a) is maintainers per PERSON at a single year of age, whose band AGGREGATE is
+    maintainers-in-band ÷ persons-in-band, and the denominator is the pinned ISQ workbook,
+    not the Census cube. Both surfaces are asserted (committed artifact AND a
     fresh derivation) for the same reason the ownership gate does it: a producer mutation
     regenerated THROUGH the artifact moves both together, so pinning only the artifact would
     leave the producer uncovered.
     """
     expected = _expected_headship_curve()
-    fresh = derive_headship_from_sources(
-        DATA_DIR / CENSUS_EXTRACT, DATA_DIR / POP_QC_WORKBOOK)["headship"]
-    committed = _committed_headship()["headship"]
+    persons = _independent_persons_by_age()
+    fresh = derive_headship_from_sources(DATA_DIR / CENSUS_EXTRACT, DATA_DIR / POP_QC_WORKBOOK)
+    committed = _committed_headship()
 
-    for surface, table in (("committed", committed), ("fresh", fresh)):
-        assert set(table) == set(expected), f"{surface}: headship band set drifted"
-        for band, value in expected.items():
-            assert table[band] == pytest.approx(value, rel=1e-12), f"{surface}[{band}]"
+    # Since ruling V the curve is age-resolved, so the band-level oracle is asserted through
+    # the AGGREGATION the curve must reproduce — Σ_{a∈band} P(a)·h(a) / Σ_{a∈band} P(a) — on
+    # EVERY carried shape. That is a strictly stronger statement than the old direct read: it
+    # holds only if per-member closure holds, and it is what makes the six legacy provenance
+    # figures below still derivable.
+    for surface, payload in (("committed", committed), ("fresh", fresh)):
+        for shape, curve in _curves(payload).items():
+            for band, lo, hi in _SPEC_LEGACY_BANDS:
+                num = sum(persons[a] * curve[a] for a in range(lo, hi + 1))
+                den = sum(persons[a] for a in range(lo, hi + 1))
+                assert num / den == pytest.approx(expected[band], rel=1e-12), (
+                    f"{surface}[{shape}][{band}]")
 
     # External anchor: the DIV's independently measured values, at the precision the cited
     # record actually publishes (3 dp — see the note on _DIV_REFERENCE_HEADSHIP; a 4th digit
@@ -571,21 +592,27 @@ def test_headship_numerator_closes_against_the_published_maintainer_total():
 
 
 def test_headship_zero_support_band_records_why_it_is_kept():
-    """The 0-19 band's numerator has support only at 15-19 — recorded, not silently averaged.
+    """The youngest PUBLISHED member starts at 15 — recorded, not silently averaged.
 
-    The use-site rule keeps the band (spec:395 sums pop × headship × ownership over all ages,
-    and the plan's pipeline builds `{a: headship_rate(headship, a) for a in range(0, 101)}`,
-    plan:4675 — a dropped band would raise there), and the band rate is aggregate-consistent:
-    multiplied by pop(0-19) it reproduces exactly the published 15-19 maintainer count. What
-    it is NOT is an age-resolved rate, so the clause naming both facts is asserted here.
+    The use-site rule keeps every age (spec:395 sums pop × headship × ownership over all ages,
+    and the pipeline builds `{a: headship_rate(curve, a) for a in range(0, 101)}` — a dropped
+    AGE would raise there). Since ruling V the curve IS age-resolved, so what the note records
+    is no longer a band average carrying its whole numerator at 15-19: it is a CLOSURE BOUND
+    on an unpublished under-15 member, and the clause stating it is asserted here.
     """
     maintainers = _independent_qc_maintainers()
-    persons = _independent_qc_persons_by_band()
+    persons = _independent_persons_by_age()
     note = _committed_headship()["_provenance"]["zero_support_note"]
-    assert (f"{maintainers['0-19']:,} maintainers aged 15-19 over {persons['0-19']:,.0f} "
-            f"persons aged 0-19" in note), f"zero_support_note lost its role-bound figures: {note!r}"
-    assert "no published maintainer member under 15" in note
-    assert "aggregate-consistent" in note and "age-resolved" in note
+    under_15 = sum(persons[a] for a in range(0, 15))
+    assert f"{maintainers['0-19']:,} households" in note, (
+        f"zero_support_note lost the youngest published member's count: {note!r}")
+    assert f"{under_15:,.0f} persons aged 0-14" in note, (
+        f"zero_support_note lost its role-bound denominator: {note!r}")
+    # The claim is a BOUND, in both directions: never an absence claim, never a proof of zero.
+    assert "DECLARES ITS OWN CARDINALITY" in note and "only admissible value" in note
+    assert "no published maintainer member under 15" not in note, (
+        "the note reverted to the absence claim ruling V replaced with a closure bound")
+    assert "not a proof of exact zero" in note
 
 
 # --- amendment #12: the sub-25 floor's PREMISE, measured ------------------------------
@@ -682,7 +709,7 @@ def test_the_extract_DOES_publish_owner_maintainer_counts_below_25():
     # 4. THE ASYMMETRY, which is the finding: one module, one age dimension of one extract, two
     #    band specs — and the ONLY members the headship spec reads that the ownership spec does
     #    not are the two youngest published bands. That is the assertion this file needed.
-    headship_members = {m for *_, members in census._HEADSHIP_BAND_SPEC for m in members}
+    headship_members = {m for m, _lo, _hi in census._HEADSHIP_MEMBER_SPEC}
     ownership_members = {m for *_, members in census._AGE_BAND_SPEC for m in members}
     assert headship_members - ownership_members == set(_SUB_FLOOR_MEMBERS), (
         "the two specs no longer differ by exactly the sub-25 pair: "
@@ -713,15 +740,18 @@ def test_zero_support_note_calls_the_sub_25_zero_a_CHOICE_and_cites_what_is_publ
     for surface, provenance in (("committed", _committed_headship()["_provenance"]),
                                 ("fresh", fresh["_provenance"])):
         note = provenance["zero_support_note"]
-        assert "_AGE_BAND_SPEC" in note and "_HEADSHIP_BAND_SPEC" in note, (
+        assert "_AGE_BAND_SPEC" in note and "_HEADSHIP_MEMBER_SPEC" in note, (
             f"{surface}: the note does not name the two band specs whose asymmetry IS the "
             f"choice it now describes: {note!r}")
         assert f"{owner:,} owners of {total:,} households" in note, (
             f"{surface}: the note does not cite a published sub-25 cell in role-bound form "
             f"(expected {owner:,} owners of {total:,} households): {note!r}")
-        assert "age-resolved headship curve must land BEFORE" in note, (
+        assert "age-resolved headship FIRST, then the floor" in note, (
             f"{surface}: the note states the omission without spec §7's binding ordering "
             f"constraint, which is the only thing that makes it a standing choice: {note!r}")
+        assert "MUST BE RE-MEASURED" in note, (
+            f"{surface}: amendment #12's quantified-floor-effect legs were measured on the "
+            f"BANDED curve; the note must say they do not survive this one: {note!r}")
 
 
 def test_the_sub_25_clause_RETIRES_ITSELF_loudly_when_the_ownership_lattice_is_extended(
@@ -745,7 +775,8 @@ def test_the_sub_25_clause_RETIRES_ITSELF_loudly_when_the_ownership_lattice_is_e
     assert census._ownership_spec_omitted_members(cube) == ()
 
     with pytest.raises(LoaderError, match="retired itself"):
-        census._zero_support_note(10_920, 1_794_061.0, ())
+        census._zero_support_note(1_364_340.0, ("15 to 19 years", 10_920), (),
+                                  members=14, tolerance=37.5, delta=5)
 
 
 def test_headship_provenance_states_WHICH_population_its_rate_multiplies():
@@ -762,6 +793,14 @@ def test_headship_provenance_states_WHICH_population_its_rate_multiplies():
     head. The contrast clause is asserted, not just the word "collective": a note that says
     only "collectives are included" leaves the reader to guess whether the OTHER surface
     behaves the same way, which is the confusion itself.
+
+    THE FOURTH ARM IS RULING V's (design panel §5.2). Age-resolving this curve made the two
+    surfaces LOOK more alike — the tail is now single-year across 75-100, finer than
+    `living_arrangement.json`'s 75+ cohort — so the note must state that the increased
+    temptation to unify them is REFUSED, and refused on the DENOMINATOR rather than on
+    granularity. Without that clause the note's contrast reads as an artefact of the old
+    six-band coarseness, which the very next reader would be right to think this change had
+    dissolved. Asserted on the committed bytes because the note rides the artifact digest.
     """
     note = _committed_headship()["_provenance"]["multiplicand_note"]
     lowered = note.casefold()
@@ -770,6 +809,11 @@ def test_headship_provenance_states_WHICH_population_its_rate_multiplies():
         f"multiplicand_note does not forbid the collective correction outright: {note!r}")
     assert "private-household persons" in lowered and "living_arrangement" in lowered, (
         f"multiplicand_note does not contrast the OTHER surface's multiplicand: {note!r}")
+    assert "tempting" in lowered and "75-100" in lowered, (
+        "multiplicand_note does not state that the age-resolved 75-100 tail makes unification "
+        f"with living_arrangement.json MORE tempting: {note!r}")
+    assert "still refused" in lowered, (
+        f"multiplicand_note states the temptation without refusing it: {note!r}")
 
 
 def test_ownership_provenance_must_be_dated_and_cited(tmp_path):
@@ -893,7 +937,7 @@ def test_headship_artifact_records_and_checks_the_upstream_raw_anchor():
 
 def test_missing_headship_key_raises_rather_than_serving_an_empty_curve(tmp_path):
     """A renamed/absent top-level key must fail as a FILE error, not resurface downstream
-    as 'no headship rate for band 35-54' — a message that reads as a band bug."""
+    as 'no headship rate for age 35' — a message that reads as a holed curve."""
     (tmp_path / "headship_by_age.json").write_text(json.dumps({"headship_rates": {"75+": 0.62}}))
     with pytest.raises(LoaderError, match="headship"):
         load_headship_rates(data_dir=tmp_path)
@@ -1467,3 +1511,329 @@ def test_hors_rmr_netting_identity_is_anchored_by_the_published_province_cell():
     assert _committed_all_ages_totals()[_PROVINCE] == (
         _PUBLISHED_CELLS[(_PROVINCE, _ALL_AGES, "Owner")],
         _PUBLISHED_CELLS[(_PROVINCE, _ALL_AGES, "Total - Tenure")])
+
+
+# ===========================================================================================
+# OPERATOR RULING V (2026-08-19): the AGE-RESOLVED headship curve
+# ===========================================================================================
+#
+# TEST-OWNED oracle inputs, transcribed from the PUBLISHED dimension and never imported from
+# `census.py` — the same discipline `_SPEC_HEADSHIP_BAND_MEMBERS` carried for the six bands it
+# replaces. The point of the ruling is that the extract publishes FOURTEEN maintainer-age
+# members and the loader was consuming six; an oracle that read the member list off the code
+# under test could not tell those two apart.
+#
+# THE MEMBERS ARE NOT ALL FIVE-YEAR. Twelve are (15-19 … 70-74); `75 to 84 years` is TEN-year
+# and `85 years and over` is open-ended, closing at 100 only because the ISQ denominator does
+# (`_POP_TERMINAL_AGE`). Every classical graduation multiplier (Sprague, Beers,
+# Karup-King-Newton) is defined for UNIFORM five-year panels and is refused here for that
+# reason — the granularity degrades exactly where the supply side lives.
+_SPEC_HEADSHIP_MEMBERS = (
+    ("15 to 19 years", 15, 19), ("20 to 24 years", 20, 24), ("25 to 29 years", 25, 29),
+    ("30 to 34 years", 30, 34), ("35 to 39 years", 35, 39), ("40 to 44 years", 40, 44),
+    ("45 to 49 years", 45, 49), ("50 to 54 years", 50, 54), ("55 to 59 years", 55, 59),
+    ("60 to 64 years", 60, 64), ("65 to 69 years", 65, 69), ("70 to 74 years", 70, 74),
+    ("75 to 84 years", 75, 84), ("85 years and over", 85, 100),
+)
+# The six LEGACY bands, kept for provenance and for the C3 identity gate only — never a lookup
+# path. Each is an EXACT union of published members, which is why per-member closure SUBSUMES
+# the band identity rather than merely being compatible with it.
+_SPEC_LEGACY_BANDS = (("0-19", 0, 19), ("20-34", 20, 34), ("35-54", 35, 54),
+                      ("55-64", 55, 64), ("65-74", 65, 74), ("75+", 75, 100))
+# The published Owner column at GEO=Quebec for the whole age dimension and for the two members
+# the ownership lattice drops. Their difference is the base-year OwnerStock every member-closed
+# curve produces, shape-invariantly — see the identity test below.
+_QC_OWNERS_ALL_AGES = 2245600
+_QC_OWNERS_15_19 = 1150
+_QC_OWNERS_20_24 = 17170
+
+
+def _independent_member_counts() -> dict[str, tuple[int, int]]:
+    """{published member: (owner, total)} at GEO=Quebec, through this file's OWN reader —
+    one pseudo-band per member, so the oracle shares the reader and nothing else."""
+    per_member = {label: (label,) for label, _lo, _hi in _SPEC_HEADSHIP_MEMBERS}
+    return _independent_band_counts(per_member)[_PROVINCE]
+
+
+def _independent_member_maintainers() -> dict[str, int]:
+    return {label: total for label, (_owner, total) in _independent_member_counts().items()}
+
+
+def _independent_persons_by_age() -> dict[int, float]:
+    return dict(census._qc_persons_by_age(DATA_DIR / POP_QC_WORKBOOK))
+
+
+def _fresh_headship() -> dict:
+    return derive_headship_from_sources(DATA_DIR / CENSUS_EXTRACT, DATA_DIR / POP_QC_WORKBOOK)
+
+
+def _curves(payload) -> dict[str, dict[int, float]]:
+    return {shape: {int(a): v for a, v in curve.items()}
+            for shape, curve in payload["headship"].items()}
+
+
+def test_the_member_spec_is_the_published_dimension_and_the_legacy_bands_derive_from_it():
+    """The 14 published members, in published order, with the two non-five-year members
+    carried as they are published. The legacy band members are DERIVED by containment from
+    this one spec, so a member cannot exist for the curve and be absent from the provenance."""
+    assert census._HEADSHIP_MEMBER_SPEC == _SPEC_HEADSHIP_MEMBERS
+    assert census._HEADSHIP_LEGACY_BAND_SPEC == _SPEC_LEGACY_BANDS
+    assert census._legacy_band_members() == _SPEC_HEADSHIP_BAND_MEMBERS
+    # the granularity claim itself, asserted rather than commented
+    widths = [hi - lo + 1 for _l, lo, hi in _SPEC_HEADSHIP_MEMBERS]
+    assert widths.count(5) == 12 and widths[-2] == 10 and widths[-1] == 16
+
+
+def test_per_member_closure_holds_on_every_published_member_for_both_arms():
+    """G1, the contract. Σ_{a∈m} P(a)·h(a) = M_m for all 14 published members AND the declared
+    (0, 14, 0) member, on BOTH arms. The construction makes this ALGEBRAIC — the member
+    endpoints ARE interpolation knots, so the single-year counts telescope to the knot
+    difference independently of the tangent rule — which is why it is asserted at an absolute
+    household tolerance and not at a relative epsilon someone has to tune."""
+    persons = _independent_persons_by_age()
+    members = _independent_member_maintainers()
+    for shape, curve in _curves(_fresh_headship()).items():
+        for label, lo, hi in _SPEC_HEADSHIP_MEMBERS:
+            got = sum(persons[a] * curve[a] for a in range(lo, hi + 1))
+            assert abs(got - members[label]) <= 1e-6, f"{shape}[{label}]: closure {got}"
+        assert sum(persons[a] * curve[a] for a in range(0, 15)) == 0.0
+
+
+def test_the_legacy_six_band_maintainers_and_rates_reproduce_from_the_fine_curve():
+    """G3 / falsifier F3. Every legacy band is an exact union of published members, so a
+    member-closed curve reproduces `band_maintainers`, `band_persons` and the six band RATES
+    with nothing deleted to dodge a mismatch. The rates are asserted BIT-IDENTICAL because
+    that is what is measured; the generator's own gate is the honest 1e-6 absolute."""
+    persons = _independent_persons_by_age()
+    members = _independent_member_maintainers()
+    payload = _fresh_headship()
+    for shape, curve in _curves(payload).items():
+        for band, lo, hi in _SPEC_LEGACY_BANDS:
+            expected_n = sum(members[m] for m in _SPEC_HEADSHIP_BAND_MEMBERS[band])
+            band_persons = sum(persons[a] for a in range(lo, hi + 1))
+            got = sum(persons[a] * curve[a] for a in range(lo, hi + 1))
+            assert abs(got - expected_n) <= 1e-6, f"{shape}[{band}]"
+            assert got / band_persons == expected_n / band_persons, f"{shape}[{band}] rate"
+    prov = payload["_provenance"]
+    assert prov["band_maintainers"] == {
+        band: sum(members[m] for m in _SPEC_HEADSHIP_BAND_MEMBERS[band])
+        for band, _lo, _hi in _SPEC_LEGACY_BANDS}
+
+
+def test_headship_is_EXACTLY_zero_below_fifteen_on_both_arms():
+    """G6 / falsifier F2, and the claim is a POSITIVE BOUND, never an absence claim: the
+    dimension declares its own cardinality (15) = one total + 14 members with none under 15,
+    and the closure residual bounds any unpublished member at |5 + X| ≤ 2.5 × 16 = 40, so
+    X ≤ 35 households against 1,364,340 persons — below rounding scale. Identity, not
+    `== 0.0` on a rounded value."""
+    for shape, curve in _curves(_fresh_headship()).items():
+        for age in range(0, 15):
+            assert curve[age] == 0.0 and repr(curve[age]) == "0.0", f"{shape}[{age}]"
+
+
+def test_support_is_exactly_the_101_integer_ages_on_every_carried_shape():
+    """G5. A holed `expo_cum_fb` curve would break the sweep leg silently — the class
+    `owner_stock._headship`'s message exists to prevent — so the strict join runs over BOTH
+    carried shapes, not only the central one."""
+    payload = _fresh_headship()
+    assert set(payload["headship"]) == set(census.HEADSHIP_SHAPES)
+    assert payload["central_shape"] == census.HEADSHIP_CENTRAL_SHAPE
+    for shape, curve in _curves(payload).items():
+        assert sorted(curve) == list(range(0, 101)), shape
+
+
+def test_the_range_certificate_is_a_computed_supremum_below_one():
+    """G4. `0 ≤ h` is true by construction (a monotone cumulative cannot difference negative);
+    `h ≤ 1` is NOT a theorem of the method — the monotonicity filter bounds the tangent only by
+    3× the largest member rate — so it is CERTIFIED: the closed-form maximum of the derivative
+    quadratic on every Hermite segment, asserted ≤ 1, raising rather than shipping."""
+    payload = _fresh_headship()
+    cert = payload["_provenance"]["range_certificate"]
+    assert set(cert) == set(census.HEADSHIP_SHAPES)
+    for shape, curve in _curves(payload).items():
+        assert 0.0 < cert[shape] <= 1.0
+        assert max(curve.values()) <= cert[shape] + 1e-12, shape
+        assert all(0.0 <= v <= 1.0 for v in curve.values()), shape
+
+
+def test_the_tail_is_NOT_monotone_and_the_terminal_end_rule_is_PINNED():
+    """Falsifier F5 plus the one defect closure cannot catch.
+
+    Global monotonicity is REFUTED by the committed bytes: the published members peak at 70-74
+    (0.6476) and fall through 75-84 (0.6300) to 85+ (0.4948). The first two assertions pin that.
+
+    THE THIRD PINS THE END RULE, and it is the only assertion here that can see it. Closure
+    telescopes independently of the tangent rule, so an under-specified terminal slope passes
+    every gate in this file. A PLAIN LAST-SECANT terminal slope produces `h(90) → h(100)`
+    RISING — demographically backwards, and the pathology the design panel's own winner listed
+    as its risk. The pinned one-sided three-point rule refuses it."""
+    for shape, curve in _curves(_fresh_headship()).items():
+        assert curve[85] < curve[72], shape
+        assert curve[100] < curve[75], shape
+        assert curve[100] < curve[90], f"{shape}: the terminal rule reverted to a plain secant"
+
+
+def test_the_osculatory_overshoot_at_74_75_EXISTS_and_is_PINNED_rather_than_clamped():
+    """THE ONE MEASURED CURVE DEFECT, pinned so it cannot be silently removed.
+
+    Closure telescopes independently of the tangent rule — that is the winning chassis's whole
+    point — so a future rule that flattened the ten-year member, or an unanchored hull clamp
+    bolted on after construction, would leave every OTHER gate in this file green. This is the
+    only assertion that sees it. It is deliberately a pin on a DEFECT: the overshoot is what
+    the alternative costs, and the design measured that a hull clamp buys its removal with
+    `h(15) = -0.0061`, a NEGATIVE rate.
+
+    STRUCTURE, NOT BIT-EXACT FLOATS, and per carried arm rather than the central one alone:
+    the excess is asserted strictly positive and the peak inside the ten-year member, because
+    those are the properties a clamp or a flattening rule destroys; the magnitudes are
+    recomputed by the generator on every vintage and pinning them would gate the run on a
+    figure a legitimate re-extract moves.
+    """
+    persons = _independent_persons_by_age()
+    members = _independent_member_maintainers()
+    hull = max(members[label] / sum(persons[a] for a in range(lo, hi + 1))
+               for label, lo, hi in _SPEC_HEADSHIP_MEMBERS)
+    payload = _fresh_headship()
+    prov = payload["_provenance"]
+    overshoot = prov["osculatory_overshoot"]
+    assert set(overshoot) == set(census.HEADSHIP_SHAPES)
+    for shape, curve in _curves(payload).items():
+        inside = max(curve[a] for a in range(75, 85))
+        assert inside > hull, (
+            f"{shape}: the 74/75 osculatory overshoot is GONE — the ten-year member peaks at "
+            f"{inside} against the member-rate hull {hull}. Either a hull clamp was added "
+            "(measured to produce a negative rate at 15) or the tangent rule flattened the "
+            "wide member; both are refused, and the defect is recorded rather than papered "
+            "over (see `shape_note`)")
+        record = overshoot[shape]
+        assert 75 <= record["peak_age"] <= 84, f"{shape}: peak left the ten-year member"
+        assert record["peak_rate"] == curve[record["peak_age"]], shape
+        assert record["excess_over_hull_pct"] > 0.0, shape
+        assert record["hull_max"] == max(prov["member_rates"].values()), shape
+        assert record["hull_max"] == pytest.approx(hull, rel=1e-12), shape
+    note = prov["shape_note"]
+    assert "osculatory overshoot" in note and "74/75" in note
+
+
+def test_base_year_owner_stock_is_the_published_owner_count_for_maintainers_25_plus():
+    """THE CHEAPEST SIMULTANEOUS VALIDATION OF CLOSURE, and it is an identity rather than a
+    tolerance. The ownership lattice's bands are themselves exact unions of published members,
+    so Σ_a P(a)·h(a)·own(a) collapses to Σ_bands owner_b — the published Owner column, netted
+    of the two members the lattice drops. It is therefore SHAPE-INVARIANT among member-closed
+    curves and is the number the committed six-band curve misses by 2.207%."""
+    persons = _independent_persons_by_age()
+    counts = _independent_band_counts()[_PROVINCE]
+    own = {(lo, min(hi, 100)): counts[band][0] / counts[band][1]
+           for band, lo, hi, _members in census._AGE_BAND_SPEC}
+    members = _independent_member_counts()
+    assert members["15 to 19 years"][0] == _QC_OWNERS_15_19
+    assert members["20 to 24 years"][0] == _QC_OWNERS_20_24
+    target = _QC_OWNERS_ALL_AGES - _QC_OWNERS_15_19 - _QC_OWNERS_20_24
+    assert target == 2227280
+    for shape, curve in _curves(_fresh_headship()).items():
+        stock = 0.0
+        for age, p in persons.items():
+            rate = next((r for (lo, hi), r in own.items() if lo <= age <= hi), 0.0)
+            stock += p * curve[age] * rate
+        assert stock == pytest.approx(target, abs=1e-6), shape
+
+
+def test_both_arms_pass_the_IDENTICAL_gate_set_and_neither_is_a_step_curve():
+    """The sweep endpoint is not a second-class citizen: `expo_cum_fb` clears every gate the
+    central arm clears, and NEITHER is piecewise-constant at member scale — the 14-member step
+    curve satisfies per-member closure exactly and is the WORST design measured, so closure
+    alone does not discriminate. The discriminator is that the rate MOVES inside every member."""
+    curves = _curves(_fresh_headship())
+    assert set(curves) == set(census.HEADSHIP_SHAPES)
+    for shape, curve in curves.items():
+        for _label, lo, hi in _SPEC_HEADSHIP_MEMBERS:
+            inside = {curve[a] for a in range(lo, hi + 1)}
+            assert len(inside) == hi - lo + 1, f"{shape}[{lo}-{hi}] is flat — a step curve"
+    assert curves["expo_cum_fc"] != curves["expo_cum_fb"]
+
+
+def test_the_shape_note_declares_the_assumption_and_carries_its_OWN_measured_refutation():
+    """Falsifier F6's honesty clause, written INTO the artifact so it rides the artifact digest.
+
+    Per-member closure pins ONE linear functional per member and leaves 4, 9 or 15 degrees of
+    freedom: the level is published, the shape is ASSUMED. The anchor for the abscissa choice
+    must be COMPUTED BY THE GENERATOR on this vintage — the design panel's judge could not
+    reproduce one of the figures the proposal quoted for it, so a transcribed anchor here would
+    be a citation this repo cannot re-derive."""
+    prov = _fresh_headship()["_provenance"]
+    note = prov["shape_note"]
+    assert "assumed" in note.lower() and "degrees of freedom" in note
+    assert "2.059" not in note, "the shape_note transcribed an unreproducible figure"
+    ref = prov["abscissa_refutation"]
+    assert set(ref) == set(census.HEADSHIP_SHAPES)
+    assert ref["expo_cum_fb"]["max_rate"] > 1.0, (
+        "the age-abscissa variant did not reproduce its out-of-range failure — the refutation "
+        "that anchors the exposure abscissa is no longer measured")
+    for shape in census.HEADSHIP_SHAPES:
+        assert ref[shape]["rate_step_at_56"] < 0.0
+        assert ref[shape]["persons_ratio_56_over_55"] > 1.0
+
+
+def test_the_zero_support_note_keeps_THREE_claims_distinct():
+    """Falsifier F11. The clause that ORDERED this work is DISCHARGED, not deleted — and the
+    other two claims it carried are different claims about different lines and both survive."""
+    note = _fresh_headship()["_provenance"]["zero_support_note"]
+    # (i) under-15: a positive bound, never an absence claim and never a proof of zero
+    assert "only admissible value" in note
+    assert "the table is silent" not in note and "proved exactly zero" not in note
+    assert "1,364,340" in note and "2.6e-05" in note.replace("2.6E-05", "2.6e-05")
+    # (ii) the age-resolved warning, explicitly retired
+    assert "DISCHARGED" in note and "age-resolved" in note
+    # (iii) the sub-25 ownership clause, still standing, with its computed figures
+    assert "17,170 owners of 106,605 households" in note
+    assert "amendment #12" in note and "re-measure" in note.lower()
+
+
+def test_the_generator_is_still_the_only_writer_and_the_artifact_is_byte_reproducible():
+    """Falsifier F13, and it is what makes every figure above a DERIVATION rather than a
+    transcription: member order and age order come from the spec, never from set iteration."""
+    first = json.dumps(_fresh_headship(), indent=2, ensure_ascii=False)
+    second = json.dumps(_fresh_headship(), indent=2, ensure_ascii=False)
+    assert first == second
+
+
+def test_headship_rate_reads_a_single_age_and_a_hole_RAISES(tmp_path):
+    """Falsifier F15. `headship_rate` is now a direct per-age read — the band lookup is gone —
+    and an absent age must still RAISE (never a bare KeyError, never a silent zero): a holed
+    curve shrinks the ED DENOMINATOR and scales |ED| AWAY FROM ZERO."""
+    curve = load_headship_rates()
+    assert set(curve) == set(range(0, 101))
+    assert headship_rate(curve, 30) == curve[30]
+    with pytest.raises(LoaderError, match="age 30"):
+        headship_rate({a: v for a, v in curve.items() if a != 30}, 30)
+
+    payload = _committed_headship()
+    del payload["headship"]["expo_cum_fb"]["57"]
+    (tmp_path / HEADSHIP_ARTIFACT).write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(LoaderError, match="57"):
+        load_headship_rates(data_dir=tmp_path)
+
+
+def test_a_non_integer_or_out_of_range_age_key_is_refused_at_load(tmp_path):
+    """The JSON-string / in-memory-int asymmetry, closed at the boundary: `"07"` and `"3.0"`
+    would both cast into an age that already exists and collide silently."""
+    for bad in ("07", "3.0", "101"):
+        payload = _committed_headship()
+        payload["headship"][census.HEADSHIP_CENTRAL_SHAPE][bad] = 0.5
+        out = tmp_path / bad.replace(".", "_")
+        out.mkdir()
+        (out / HEADSHIP_ARTIFACT).write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(LoaderError):
+            load_headship_rates(data_dir=out)
+
+
+def test_load_headship_rates_selects_the_shape_and_refuses_an_unknown_one():
+    """The sweep's read path. The default is the artifact's own `central_shape`; the pipeline
+    NEVER relies on that default — it passes the shape explicitly, so the selection lives in
+    one place that `assumptions_hash` covers."""
+    central = load_headship_rates()
+    assert central == load_headship_rates(shape=census.HEADSHIP_CENTRAL_SHAPE)
+    other = load_headship_rates(shape="expo_cum_fb")
+    assert other != central
+    with pytest.raises(LoaderError, match="shape"):
+        load_headship_rates(shape="expo_cum_nope")

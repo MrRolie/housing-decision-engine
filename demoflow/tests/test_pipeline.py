@@ -63,6 +63,20 @@ from demoflow.pipeline import (
 # The run's data source, named ONCE and passed explicitly everywhere (carry B11).
 _DATA = DATA_DIR
 
+# THE SWEEP REDUCTION, named once and used only where it is SOUND (ruling V, run 34). Every
+# test below that runs `run_pipeline` end to end to assert something about EMISSION, the
+# identity bracket, the exit code or a gate's call count paid a full twelve-leg robustness
+# sweep for a verdict it never reads — measured at ~19s each against a suite already near five
+# minutes, and the shape axis this run added would have made it worse. `sweep_axes=()` skips
+# the legs, and `_rank_stability` then reports `rank_stable: False` on every row BY
+# CONSTRUCTION: a run that did not evaluate the declared grid cannot certify stability across
+# it. So the reduction can only ever weaken the claim, never manufacture one.
+#
+# IT IS NEVER USED BY A TEST THAT ASSERTS ON `rank_stable` — the `run` fixture and the golden
+# both keep the full sweep — and `test_a_REDUCED_sweep_can_never_certify_rank_stability` pins
+# both halves.
+_NO_SWEEP: tuple[str, ...] = ()
+
 
 def _data_copy(dest):
     """A private COPY of the committed data dir. Every byte-drift probe below mutates its own
@@ -73,9 +87,13 @@ def _data_copy(dest):
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
     """ONE full pipeline run for the whole module — it loads five workbooks and evaluates the
-    ED grid ELEVEN times (the central run, reused as the sweep's central leg, plus
-    `_rank_stability`'s ten five-axis legs), so a per-test run would multiply minutes of real
-    I/O by every assertion below.
+    ED grid TWELVE times (the central run, reused as the sweep's central leg AND as the one
+    no-op `headship_shape` leg, plus `_rank_stability`'s eleven remaining six-axis legs), so a
+    per-test run would multiply minutes of real I/O by every assertion below.
+
+    IT KEEPS THE FULL SWEEP, deliberately: the assertions below include `rank_stable` on every
+    row, which a reduced sweep reports `False` for by construction. The tests that reduce it
+    (`sweep_axes=()`) are the ones asserting nothing about the robustness verdict.
 
     IT ALSO RECORDS THE RUN'S q CONSUMPTION, because that is the one measurement the basis
     digest's coverage claim needs and no unit test can make: `BASIS_DIGEST_*` must be a
@@ -199,7 +217,7 @@ def test_an_identity_that_moves_mid_run_is_refused(monkeypatch, tmp_path):
     seen = iter(["identity-before", "identity-after"])
     monkeypatch.setattr(pipeline, "_run_identity", lambda *a, **k: next(seen))
     with pytest.raises(CalibrationError, match="single-vintage"):
-        run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026)
+        run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026, sweep_axes=_NO_SWEEP)
     assert not (tmp_path / "rankings.json").exists()
 
 
@@ -549,7 +567,8 @@ def test_the_run_calls_run_exit_code_not_the_verdict_only_gate(monkeypatch, tmp_
     real = pipeline.run_exit_code
     monkeypatch.setattr(pipeline, "run_exit_code",
                         lambda results: (called.append(len(results)), real(results))[1])
-    pipeline.run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026)
+    pipeline.run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026,
+                          sweep_axes=_NO_SWEEP)
     assert called == [len(REQUIRED_INDICATORS)]
 
 
@@ -685,7 +704,7 @@ def test_the_central_run_invokes_the_reconciliation_gate(monkeypatch, tmp_path):
     real = pipeline.check_reconciliation
     monkeypatch.setattr(pipeline, "check_reconciliation",
                         lambda retention: (calls.append(retention), real(retention))[1])
-    run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026)
+    run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026, sweep_axes=_NO_SWEEP)
     assert len(calls) == 1, f"expected exactly one central-run call, got {len(calls)}"
     from demoflow.cohort.gates import RECONCILIATION_BAND
     lo, hi = RECONCILIATION_BAND
@@ -697,7 +716,8 @@ def test_sweep_legs_never_re_run_the_reconciliation_gate(monkeypatch):
     low endpoint — the spec-pinned cohort RAISES on the correct model while a doubled decrement
     PASSES, inverted at 21/21 start years. Binding every leg makes the spec self-contradictory.
 
-    IT NOW COVERS TEN LEGS RATHER THAN TWO (run-33 five-axis sweep) and the assertion is
+    IT NOW COVERS TWELVE LEGS RATHER THAN TWO (run-33's five axes plus ruling V's shape axis)
+    and the assertion is
     unchanged, which is the point: widening the sweep must not widen the gate's scope with it."""
     calls = []
     monkeypatch.setattr(pipeline, "check_reconciliation", lambda retention: calls.append(retention))
@@ -709,7 +729,7 @@ def test_sweep_legs_never_re_run_the_reconciliation_gate(monkeypatch):
     stable = pipeline._rank_stability(geos, frames, read, central)
     assert calls == [], "a sweep leg ran the central-run-only reconciliation gate"
     assert set(stable) == set(geos)
-    assert len(pipeline._sweep_legs()) == 10
+    assert len(pipeline._sweep_legs()) == 12
     assert (lo, hi) == (0.06, 0.11)
 
 
@@ -987,7 +1007,7 @@ def test_rank_stable_covers_every_ranked_geography(run):
 
 def test_the_robustness_sweep_evaluates_EVERY_declared_axis_at_BOTH_endpoints():
     """CRITICAL — run-33 quant F1 and stress F1, reached independently, and the seat reproduced
-    it: `rank_stable: true` shipped on all eight golden rows as a verdict over ONE of FIVE
+    it: `rank_stable: true` shipped on all eight golden rows as a verdict over ONE of the
     declared axes. `_rank_stability` iterated `SWEEP_GRID["q_live_per_year"]` alone; the grid
     declares FOUR, and `constants.py` states a FIFTH as an existing fact of this very module —
     "Task 29 perturbs the join table with a uniform override spanning
@@ -1015,10 +1035,22 @@ def test_the_robustness_sweep_evaluates_EVERY_declared_axis_at_BOTH_endpoints():
         assert (sorted(getattr(leg, axis) for a, leg in legs if a == axis)
                 == sorted(endpoints)), f"{axis} is not evaluated at both declared endpoints"
 
+    # AT MOST ONE AXIS OFF-CENTRAL PER LEG, and the ONE leg that moves none is named. Since
+    # ruling V `headship_shape` is a CATEGORICAL axis whose admissible set contains the central
+    # value, so its `expo_cum_fc` endpoint IS the central leg — provably, not accidentally.
+    # Every other axis is a spec §5 band with both endpoints off-central, and one that drifted
+    # onto its central value would be an inert leg the exemption must not cover.
+    no_op = []
     for axis, leg in legs:
         moved = [f for f in pipeline.SWEEP_LEG_FIELDS
                  if getattr(leg, f) != getattr(pipeline.CENTRAL_LEG, f)]
+        if not moved:
+            no_op.append((axis, getattr(leg, axis)))
+            continue
         assert moved == [axis], f"leg for {axis} moved {moved} — a leg perturbs ONE axis"
+    assert no_op == [("headship_shape", CENTRAL_ASSUMPTIONS["headship_shape"])], (
+        f"legs that move no assumption at all: {no_op} — only the categorical shape axis may "
+        "declare its central value as an endpoint")
 
 
 def test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS():
@@ -1031,16 +1063,17 @@ def test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS():
 
     MEASURED SURVIVABLE, which is why this is a test and not a comment. A mutant that ignores the
     four grid fields inside `_ed_series` (reading `CENTRAL_LEG`'s values in their place) leaves 8
-    of the 10 legs INERT at max|delta ED| = 0.0 and passes the ENTIRE suite — the axis-coverage
+    of the 12 legs INERT at max|delta ED| = 0.0 and passes the ENTIRE suite — the axis-coverage
     test above, the `rank_stable is False` pin, and both golden byte-matches included. Nothing
     sees it because the CENTRAL run is untouched, so no golden byte moves; and because the ratio
     axis ALONE saturates the union verdict (it reorders all eight rows at 0.155), so `false` on
     every row stays satisfiable by ONE live axis. A one-axis sweep is exactly the defect run 33
     exists to close, and it would have shipped green a second time.
 
-    ONE GEOGRAPHY AT `REFERENCE` IS ENOUGH, and the cost is stated rather than hidden: eleven ED
+    ONE GEOGRAPHY AT `REFERENCE` IS ENOUGH, and the cost is stated rather than hidden: thirteen ED
     series on frames loaded ONCE — measured at 4s end to end, most of it that single load, against
-    a suite already near five minutes. All eight geographies move on all ten legs (measured), so
+    a suite already near five minutes. All eight geographies move on every leg that moves an
+    assumption at all (measured), so
     the choice of geography is not load-bearing. Iterating LEGS rather than AXES is deliberate
     too — it also catches a declared endpoint that has drifted onto the central value, which is
     an inert leg by a different route.
@@ -1052,6 +1085,14 @@ def test_every_declared_sweep_axis_actually_REACHES_the_ED_NUMBERS():
 
     for axis, leg in pipeline._sweep_legs():
         series = pipeline._ed_series(geo, Scenario.REFERENCE, frames, read, leg)
+        if leg == pipeline.CENTRAL_LEG:
+            # The ONE declared no-op leg (see the axis-coverage test, which names it and reds
+            # on a second). Its ED series MUST equal the central one — that identity is what
+            # makes the sweep's reuse of the central grid sound rather than a dropped leg.
+            assert series == central, (
+                f"the {axis!r} leg is `==` the central leg but produces a DIFFERENT ED series "
+                "— the leg object no longer determines the numbers")
+            continue
         assert series != central, (
             f"the {axis!r} leg at endpoint {getattr(leg, axis)!r} reproduces the CENTRAL ED "
             f"series at {geo.value} — the axis is swept in NAME and its field never reaches the "
@@ -1083,7 +1124,7 @@ def test_a_declared_sweep_axis_the_ED_grid_cannot_VARY_is_REFUSED(monkeypatch):
 def test_rank_stable_is_FALSE_on_every_row_of_the_committed_vintage(run):
     """THE MEASURED STATE, pinned so it cannot quietly revert to the false attestation.
 
-    `false` on all eight rows is the CORRECT output of the five-axis sweep, not a regression:
+    `false` on all eight rows is the CORRECT output of the six-axis sweep, not a regression:
     the join-table ratio axis reorders the published ranking at both of its declared endpoints,
     and the union over every axis therefore finds no geography whose rank is unchanged
     everywhere. The four grid axes alone leave the order intact — which is exactly why sweeping
@@ -1096,7 +1137,7 @@ def test_rank_stable_is_FALSE_on_every_row_of_the_committed_vintage(run):
     rows = run["_docs"]["rankings"]["rankings"]
     assert len(rows) == len([g for g in Geography])
     assert [r["rank_stable"] for r in rows] == [False] * len(rows), (
-        "the five-axis sweep reorders the ranking at the join-table ratio endpoints, so no row "
+        "the six-axis sweep reorders the ranking at the join-table ratio endpoints, so no row "
         "is rank-stable on the committed vintage — a True here means an axis stopped being swept")
 
 
@@ -1114,7 +1155,7 @@ def test_the_join_table_ratio_endpoint_is_the_axis_THAT_REORDERS(run):
 
     Only the LOW endpoint is evaluated here, and that is a cost decision stated rather than
     hidden: it is one ED grid, it is the endpoint that moves every row, and the union over all
-    ten legs is already covered by the run fixture's own `rank_stable` above.
+    twelve legs is already covered by the run fixture's own `rank_stable` above.
     """
     frames = pipeline._load_all(_DATA)
     read = pipeline._ownership_reader(_DATA)
@@ -1160,7 +1201,7 @@ def test_neither_artifact_is_emitted_when_the_second_document_refuses(monkeypatc
                         lambda *a, **k: (_ for _ in ()).throw(ValueError("refused")))
     out = tmp_path / "artifacts"
     with pytest.raises(ValueError, match="refused"):
-        run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026)
+        run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026, sweep_axes=_NO_SWEEP)
     assert not out.exists() or list(out.iterdir()) == []
 
 
@@ -1186,7 +1227,7 @@ def test_an_io_failure_on_the_second_write_leaves_neither_artifact(monkeypatch, 
     monkeypatch.setattr(artifacts, "_dump_json", flaky)
     out = tmp_path / "artifacts"
     with pytest.raises(OSError, match="disk full"):
-        run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026)
+        run_pipeline(data_dir=_DATA, out_dir=out, now_year=2026, sweep_axes=_NO_SWEEP)
     assert len(written) == 2, f"the failure was not on the second document: {written}"
     assert list(out.iterdir()) == [], f"a half-emitted pair survived: {list(out.iterdir())}"
 
@@ -1202,7 +1243,7 @@ def test_the_ircc_feed_is_read_once_inside_the_identity_bracket(monkeypatch, tmp
     real = pipeline.load_pr_landings
     monkeypatch.setattr(pipeline, "load_pr_landings",
                         lambda **kw: (calls.append(kw), real(**kw))[1])
-    run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026)
+    run_pipeline(data_dir=_DATA, out_dir=tmp_path, now_year=2026, sweep_axes=_NO_SWEEP)
     assert len(calls) == 1, f"the IRCC feed was read {len(calls)} times in one run"
 
 
@@ -1223,8 +1264,8 @@ def test_every_emitted_number_is_finite(run):
 # ------------------------------------- 29c carries C2/C3: the tripwire path that builds nothing
 #
 # `demoflow tripwires` is a STATUS LISTING. The plan's CLI answered it by calling `run_pipeline`,
-# which loads five workbooks, evaluates the ED grid eleven times (the central run plus the
-# five-axis sweep's ten legs — ~30s of real I/O) and writes BOTH artifacts — so asking for six
+# which loads five workbooks, evaluates the ED grid twelve times (the central run, reused as one
+# of the six-axis sweep's twelve legs — ~20s of real I/O) and writes BOTH artifacts — so asking for six
 # statuses re-emitted `rankings.json` as a side effect.
 # `evaluate_tripwires` is the path that does neither, and the three tests below bind "neither"
 # structurally rather than by reading the body.
@@ -1282,3 +1323,111 @@ def test_the_cheap_tripwire_path_returns_the_SAME_verdict_as_the_full_run(run):
     assert cheap["assumptions_hash"] == emitted["assumptions_hash"]
     assert cheap["data_vintage"] == emitted["data_vintage"]
     assert cheap["data_vintage"]["source_hashes"], "an empty vintage merely LOOKS provenanced"
+
+
+# ===========================================================================================
+# OPERATOR RULING V: the headship SHAPE axis, and the bill it comes with
+# ===========================================================================================
+
+def test_the_headship_shape_axis_is_declared_ONCE_and_bound_to_the_CURVE_it_selects():
+    """THREE declaration sites, bound by this test so none can drift alone.
+
+    `census.HEADSHIP_SHAPES` owns the CONSTRUCTION (which tangent rules exist);
+    `SWEEP_GRID["headship_shape"]` owns the ROBUSTNESS SELECTION (which the sweep varies);
+    the artifact's `central_shape` owns what a bare `load_headship_rates()` would serve. A
+    shape carried in the artifact and absent from the grid rides the headline unswept; a shape
+    declared in the grid and absent from the artifact makes a sweep leg raise at load. Neither
+    is visible from inside either file.
+    """
+    from demoflow.loaders.census import HEADSHIP_CENTRAL_SHAPE, HEADSHIP_SHAPES, load_headship_curves
+    assert set(SWEEP_GRID["headship_shape"]) == set(HEADSHIP_SHAPES)
+    assert CENTRAL_ASSUMPTIONS["headship_shape"] == HEADSHIP_CENTRAL_SHAPE
+    assert set(load_headship_curves(data_dir=_DATA)) == set(HEADSHIP_SHAPES)
+    payload = json.loads((_DATA / "headship_by_age.json").read_text(encoding="utf-8"))
+    assert payload["central_shape"] == CENTRAL_ASSUMPTIONS["headship_shape"]
+
+
+def test_the_ED_grid_reads_the_LEG_shape_and_never_the_artifact_default():
+    """The selection must live where `assumptions_hash()` can see it. A run that fell back on
+    the artifact's own `central_shape` would have a second selection site outside the identity
+    token — the exact defect this audit round already named for the immigrant inputs — and a
+    sweep leg that fell back on it would be swept in NAME and inert in EFFECT."""
+    frames = pipeline._load_all(_DATA)
+    read = pipeline._ownership_reader(_DATA)
+    geo, scen = Geography.MTL_RMR, Scenario.REFERENCE
+    central = pipeline._ed_series(geo, scen, frames, read, pipeline.CENTRAL_LEG)
+    other = pipeline._ed_series(geo, scen, frames, read, dataclasses.replace(
+        pipeline.CENTRAL_LEG, headship_shape="expo_cum_fb"))
+    assert other != central, (
+        "the `expo_cum_fb` leg reproduces the central ED series — the shape argument does not "
+        "reach the model, so `rank_stable` would report a verdict over a grid it never varied")
+    with pytest.raises(LoaderError, match="shape"):
+        pipeline._ed_series(geo, scen, frames, read, dataclasses.replace(
+            pipeline.CENTRAL_LEG, headship_shape="expo_cum_nope"))
+
+
+def test_exactly_ONE_declared_leg_equals_the_central_leg_and_it_is_the_shape_axis():
+    """THE ONE DECLARED NO-OP LEG, named so it cannot hide a real one.
+
+    `headship_shape` is a CATEGORICAL axis with exactly two admissible constructions, and the
+    central value is one of them — so its `expo_cum_fc` leg IS the central leg, provably rather
+    than accidentally. Every OTHER axis is a spec §5 BAND whose endpoints are both off-central,
+    and an endpoint that drifted onto its central value would be an inert leg by a different
+    route. This test keeps that distinction: one exempt leg, named, and any second one reds.
+    """
+    identical = [axis for axis, leg in pipeline._sweep_legs() if leg == pipeline.CENTRAL_LEG]
+    assert identical == ["headship_shape"], (
+        f"declared legs equal to the central leg: {identical} — a numeric endpoint that has "
+        "drifted onto its central value is an inert sweep leg")
+
+
+def test_the_no_op_shape_leg_REUSES_the_central_grid_rather_than_recomputing_it():
+    """The bill for adding a twelfth leg, paid where it is provably free: a leg whose
+    assumptions are `==` the central leg's cannot produce a different ED grid, so the sweep
+    reuses the headline's instead of evaluating 24 more ED series to rediscover it. Asserted
+    rather than commented, because a silent reuse is indistinguishable from a dropped leg."""
+    frames = pipeline._load_all(_DATA)
+    read = pipeline._ownership_reader(_DATA)
+    geos = [Geography.MTL_RMR]
+    central = pipeline._ed_dict(geos, frames, read, pipeline.CENTRAL_LEG)
+    calls = []
+    real = pipeline._ed_dict
+    monkey = lambda g, f, r, a: (calls.append(a), real(g, f, r, a))[1]
+    pipeline._ed_dict = monkey
+    try:
+        pipeline._rank_stability(geos, frames, read, central)
+    finally:
+        pipeline._ed_dict = real
+    assert pipeline.CENTRAL_LEG not in calls, "the no-op shape leg re-evaluated the central grid"
+    assert len(calls) == len(pipeline._sweep_legs()) - 1
+
+
+def test_a_REDUCED_sweep_can_never_certify_rank_stability():
+    """THE COST KNOB, AND ITS FAIL-SAFE. Most tests that run the pipeline end to end do not
+    care about the robustness verdict, and paying twelve ED grids for each of them is what
+    makes a gate slow enough that people stop running it. `sweep_axes` lets a caller evaluate
+    fewer legs — and a run that did not evaluate the DECLARED grid cannot claim a rank is
+    stable across it, so every row comes back `False` by construction. The reduction can
+    therefore only ever weaken the claim, never manufacture one: the run-32 CRITICAL was a
+    `true` shipped over a grid that was never swept, and this closes that door in the one
+    place a shortcut could reopen it.
+
+    THE COMMITTED DEFAULT IS THE FULL SET, and `golden.generate_golden` never passes the
+    argument — a golden minted from a reduced sweep is the exact defect run 33 existed to
+    close."""
+    import inspect
+    assert inspect.signature(run_pipeline).parameters["sweep_axes"].default is None
+    assert "sweep_axes" not in inspect.getsource(__import__(
+        "demoflow.golden", fromlist=["generate_golden"]).generate_golden)
+
+    frames = pipeline._load_all(_DATA)
+    read = pipeline._ownership_reader(_DATA)
+    geos = [Geography.MTL_RMR, Geography.QC_RMR]
+    central = pipeline._ed_dict(geos, frames, read, pipeline.CENTRAL_LEG)
+    assert pipeline._rank_stability(geos, frames, read, central, sweep_axes=()) == {
+        g: False for g in geos}
+    assert pipeline._rank_stability(geos, frames, read, central,
+                                    sweep_axes=("q_live_per_year",)) == {g: False for g in geos}
+    with pytest.raises(CalibrationError, match="not declared"):
+        pipeline._rank_stability(geos, frames, read, central, sweep_axes=("no_such_axis",))
+    assert len(pipeline._sweep_legs(("q_live_per_year",))) == 2

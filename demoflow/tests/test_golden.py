@@ -56,10 +56,15 @@ _REMINT = ("If this is a deliberate refresh, re-mint with `cd demoflow && uv run
 
 @pytest.fixture(scope="module")
 def fresh(tmp_path_factory):
-    """ONE re-derivation for the whole module. `generate_golden` runs the ED grid ELEVEN times
-    (the central run plus the rank-stability sweep's ten five-axis legs) over five workbooks; a
-    per-test run would multiply minutes of real I/O by every assertion below, and this file has
-    four."""
+    """ONE re-derivation for the whole module. `generate_golden` runs the ED grid TWELVE times
+    (the central run plus the rank-stability sweep's twelve six-axis legs, one of which reuses
+    the central grid) over five workbooks; a per-test run would multiply minutes of real I/O by
+    every assertion below, and this file has four.
+
+    THE GOLDEN IS ALWAYS MINTED FROM THE FULL SWEEP. `generate_golden` never passes
+    `run_pipeline`'s `sweep_axes` reduction — a golden minted from a reduced sweep would carry
+    a `rank_stable` verdict over a grid it never evaluated, which is the defect the widened
+    sweep exists to close."""
     out = tmp_path_factory.mktemp("golden")
     result = generate_golden(out_dir=out)
     # BINDS the golden's name list to what the run actually emitted. A third document added to

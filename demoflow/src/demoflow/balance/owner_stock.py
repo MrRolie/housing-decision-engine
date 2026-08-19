@@ -61,8 +61,9 @@ from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 def _headship(headship_by_age: dict[int, float], age: int, persons: float) -> float:
     """headship(age) at an age carrying population. ABSENT is a hole at EVERY age.
 
-    Unlike ownership, headship has no undefined region to point at: the committed curve is
-    banded across 0-100 (`census._HEADSHIP_BAND_SPEC`) and the pipeline materialises it over
+    Unlike ownership, headship has no undefined region to point at: since operator ruling V the
+    committed curve is AGE-RESOLVED at every single year 0-100 (`census._HEADSHIP_MEMBER_SPEC`
+    graduated onto the ISQ single-year denominator) and the pipeline materialises it over
     `range(0, 101)`, so a missing rate can only mean a holed or partially-built curve.
 
     THE REACH AT SUB-FLOOR AGES COMES FROM THE CALL BEING UNCONDITIONAL, not from where it
@@ -76,8 +77,8 @@ def _headship(headship_by_age: dict[int, float], age: int, persons: float) -> fl
     if age not in headship_by_age:
         raise LoaderError(
             f"no headship rate for age {age}, where {persons:,.1f} persons are present — an "
-            "absent rate is not a zero rate: the committed curve is banded across 0-100 and "
-            "has no undefined region, so this is a holed curve, and it would silently shrink "
+            "absent rate is not a zero rate: the committed curve is age-resolved over 0..100 "
+            "and has no undefined region, so this is a holed curve, and it would silently shrink "
             "the ED DENOMINATOR, scaling |ED| AWAY FROM ZERO — more excess demand where ED > 0, "
             "a DEEPER DEFICIT where ED < 0, the half rank 1 selects")
     return assert_fraction(f"headship[{age}]", headship_by_age[age])
