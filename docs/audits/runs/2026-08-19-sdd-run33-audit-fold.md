@@ -65,4 +65,78 @@ a conclusion about the peer: the fork is surfaced to the operator directly inste
 proceeds with everything that is not the fork.
 
 - run id: `wf_0b8b9e78-cf5` (task `wkupo9nfr`)
-- outcome: (appended at run close)
+- outcome: **APPROVE ×3, 0 unresolved** (fix rounds 2 / 1 / 1); 15 agents, 0 errors, 1,087,854
+  subagent tokens. **The run was KILLED mid-flight by a session boundary and RESUMED** from 8 cached
+  agents with its ~1,306 uncommitted insertions intact — see the resume note below.
+
+## Outcome — folded 2026-08-19
+
+**THE CRITICAL IS CLOSED AND THE HONEST VALUE SHIPPED.** All eight golden rows now carry
+`rank_stable: false` — a five-axis verdict replacing a one-axis attestation. The sweep iterates every
+declared `SWEEP_GRID` axis plus the join-table ratio override, and `constants.py`'s claim that "Task 29
+perturbs the join table" is now TRUE rather than aspirational.
+
+**Identity coverage closed on three fronts.** The CPM mortality basis is a thirteenth source entry,
+digested through the §2-sanctioned public surface with **no private engine reach-in** (grep for
+`_BASE_TABLES` / `_DATA_DIR` / `_base_cache` / `_SCALES` in `src/` returns comments only). The ruled
+immigrant inputs and two previously-uncited money-path literals are inside `assumptions_hash`, which
+moves `8b0779d17fcc2109` → `f39a8a240c60d777`.
+
+**Spec amendment #17 landed in the same commit as its code** — a non-finite band endpoint is a
+run-level terminal. Third amendment in a row to follow the #15 pattern.
+
+## What the reviewers did that is worth keeping
+
+- **The 33a reviewer ran a CLASS CENSUS on its own discrimination test and found the other half.** The
+  test swapped only `_BASE_TABLES`; the sibling half is the improvement scale `_SCALES['CPM-B']`. It
+  measured that leg too — digest moves, `assumptions_hash` does not, same pair. **A census that finds
+  the half its own test missed is the motion this arc is trying to institutionalize.**
+- **The golden RED was verified to be ENVELOPE-ONLY before it was accepted.** Against a live run at
+  the golden's defaults: non-envelope bytes byte-identical for both documents, exactly one
+  `source_hashes` key added, zero pre-existing entries moved, **no modeled number changed.** That is
+  the difference between "the golden went red, expected" and knowing why.
+- **A prior finding's fix landed STRICTLY STRONGER than what was proposed.** A re-typed year-range
+  assertion was replaced by a test measuring a real run's RECORDED q consumption; the previous round's
+  exact blind-spot mutant now REDs, and both directions on all three axes fire.
+
+## Carries
+
+- **`test_golden.py`'s `_match_golden` reports only the FIRST cause** (`data_vintage` tested first,
+  if/elif short-circuit), so its message said "the DATA moved" while BOTH identity tokens had moved.
+  Pre-existing; this fold is the first case where both move at once.
+- **The internal layering gate is ONE-DIRECTIONAL.** `test_import_direction.py` scans the model trees
+  for loader imports; nothing scans the reverse, and `constants.assumptions_hash` now imports
+  `demand.immigrant_inputs` call-locally precisely to dodge the cycle its own comment names. No test
+  would notice that import moving to module level.
+- **A second declaration of the ownership floor survives** at `pipeline._ed_series`
+  (`range(25, 101)` against `formation.OWNERSHIP_LATTICE_FLOOR = 25`) — the exact redeclaration class
+  the new guard forbids for the two new choices. That guard is also literal-exact, so a whitespace
+  variant slips past it.
+- **RED-first has two disclosed holes out of seventeen new tests**, both stated in the implementer's
+  report rather than papered: one passes on a clean tree by construction, one has a red condition that
+  is a future upstream republish.
+- **Spec §7b's enumeration sentence now understates the tree** — `assumptions_hash` covers
+  CENTRAL_ASSUMPTIONS + SWEEP_GRID + MODEL_CHOICES + the immigrant-inputs join-table selection.
+
+## Gate and cost
+
+Seat's own run: **hde 191 / demoflow 1140 / both suites passed**, landed as `98c2f10` (code +
+amendment #17) and `f5106aa` (the re-minted golden).
+
+**COST CARRY, and it is the one the mandate itself warned about.** The demoflow suite went
+**168s → 270s (+61%)**, because `_rank_stability` now runs ten legs where it ran two. The mandate told
+task 3 to use a session-scoped fixture or make the leg count configurable with the full set as the
+committed default; neither landed, and the golden tests still call `run_pipeline` directly. "A gate
+slow enough that people stop running it" was the seat's own phrasing for the golden in run 31 — it now
+applies to the sweep. **Not a defect in the fix; a bill the fix incurred, and it compounds with every
+future task that calls the pipeline in a test.**
+
+## Resume note — the run was killed and recovered
+
+A session boundary killed this run mid-mutation with ~1,306 uncommitted insertions in the worktree and
+8 of 15 agents journalled. Assessed before resuming: HEAD unmoved, the modified set coherent with
+tasks 33a/33b rather than torn. Resumed from the cached prefix; the cached agents replayed and the run
+completed. **The arc's standing rule — agents commit NOTHING, the seat commits after its own diff
+review — is what made this survivable**: a killed mutator left its work in the worktree for the
+resumed run to continue, and no half-finished state ever reached a commit. The rule's cost is exactly
+that recovery window; its benefit is that the window is recoverable.
