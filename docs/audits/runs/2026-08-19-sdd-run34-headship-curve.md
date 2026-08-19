@@ -63,4 +63,63 @@ extending the ownership floor downward in the same commit takes out the headship
 failure. A divergence in CLOSURE is.
 
 - run id: `wf_f86aee90-ce0` (task `w620fb07v`)
-- outcome: (appended at run close)
+- outcome: **FINDINGS on task 34a** (1 LOW, seat-fixed at fold), 3 fix rounds; **task 34b never ran** —
+  the pipeline halts on a FINDINGS verdict, so the golden re-mint is a successor. 9 agents,
+  1,282,139 subagent tokens.
+
+## Outcome — the curve LANDED as `c83595e`
+
+Gate, seat's own run: **hde 191 passed / demoflow 1160 passed with exactly TWO expected failures**
+(`test_golden.py`'s two diff tests). Golden re-mint deliberately deferred: task 35a moves artifact
+provenance prose, so minting first would mint twice.
+
+**CLOSURE VERIFIED BY THE SEAT, not transcribed: worst |residual| = 0.000e+00 on all 15 members
+(14 published + the declared `(0,14,0)`) on BOTH arms**, at a 1e-6 construction tolerance. The
+reviewer independently got `2227280.0` exact on fc for the base-year OwnerStock identity the seat
+specified as the cheap check (`2,245,600 − 1,150 − 17,170`) and −9.3e-10 on fb. **All six legacy band
+rates recompute BIT-IDENTICALLY on both arms** — the change is a pure within-band refinement, so the
++5 aggregate closure is preserved rather than re-argued. Two generator runs produced byte-identical
+artifacts.
+
+**The ranked order moved as ruled:** HORS_RMR 1→4 with a sign flip, LANAUDIERE 3→1, LAVAL 4→2,
+LAURENTIDES 2→3, MTL_RMR 6→5, MONTEREGIE 5→6. **The 7/8 swap the design panel predicted did NOT
+occur**, reported rather than smoothed over — consistent with the panel's own statement that its
+magnitudes were probe-grade.
+
+## THE ACCEPTANCE METRIC WAS THE SEAT'S, AND THE METRIC IS THE PART THAT WAS WRONG
+
+The mandate required the largest single-age share of `D_native` to land in **14-18%**. Measured live:
+MTL_RMR **79.81% → 26.72%** (fc), HHI **0.6585 → 0.1763**; HORS_RMR 49.13% → 12.20%. The collapse is
+real and large. But the reviewer **could not reproduce the seat's own quoted BASELINE** ("committed is
+65-77%") under any convention it tried, which makes the 14-18% target convention-dependent rather
+than cleanly missed. **The seat took the design panel's explicitly probe-grade figures and wrote them
+into a mandate as an acceptance gate** — that is the error, and it is the same class as citing a
+figure without deriving it. The residual peak sits at **age 26, the ownership lattice's entry step**,
+which spec §7 amendment #12 orders as the NEXT step and which this commit was forbidden to touch.
+
+## Two false claims caught, neither of which reached the code
+
+- **The LOW finding:** a new comment called the floor-probed-at-18 counterfactual "inside the target
+  band" when 12.6% sits BELOW the 14-18% band the same block declares eleven lines above. Seat-fixed
+  at fold — and the correction makes the attribution STRONGER, since fc undershooting means the floor
+  accounts for more than the whole gap.
+- **The implementer's report claimed the arm spread was inside the panel's predicted band**; live
+  figures fall outside at both ends. The reviewer verified the substantive claim survives (the spread
+  is real, non-common-mode, and the fb arm alone reorders ranks 2/3/4) and — the part that matters —
+  **the live figures appear nowhere in `demoflow/**`**, so no false number landed in the tree.
+
+## The cost carry run 33 left unpaid was PAID here
+
+The suite went **270s → 205s** while GAINING an axis, because `_sweep_legs` is now configurable with
+the full set as the committed default — the option run 33's mandate offered and did not get. **The
+golden still mints from the full sweep and it is protected structurally, not by convention: a reduced
+sweep CANNOT certify rank stability at all.** The reviewer mutated that fail-safe away and it returns
+`true` off an unevaluated grid.
+
+## Mutation battery — 4 pins, all real
+
+The terminal end rule (a plain last secant reintroduces the `h(90)→h(100)` rise the pinned rule
+refuses); the ED grid reading the LEG shape rather than the artifact default; the reduced-sweep
+fail-safe; and the strict shape join. Also reproduced from the design's §5.8 expectations, unreported
+by the implementer: the 2026-2029 negative D_native window (−25.1%/−19.7%/−15.5%/−13.2%) and the
+negative first differences of h landing at exactly the four ages the design named.
