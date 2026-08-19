@@ -64,4 +64,64 @@ read from each artifact's `_provenance`, there is NO wall-clock read in `pipelin
 2026-08-15). Stable, belongs in the golden, and the mandate says so as a verified fact.
 
 - run id: `wf_0dee300e-e08` (task `wjmtlvrmg`)
-- outcome: (appended at run close)
+- outcome: **APPROVE ×2, 0 unresolved** (fix rounds 2 / 0); 9 agents, 0 errors, 1,262,256 subagent
+  tokens, 3h25m
+
+## Outcome — folded 2026-08-19 as `cab9c95` (ledger) and `867ad91` (golden)
+
+Gate, seat's own run: **hde 191 / demoflow 1097 / both suites passed.** Tree clean, pushed. Spec
+amendment #16 landed in the SAME commit as L2's code, the #15 pattern.
+
+**A SEAT PREMISE WAS MEASURED FALSE, and it is recorded because it is the premise that set this
+run's task order.** The mandate sequenced the ledger before the golden because "several of these
+change what the artifacts contain". **None of them do.** The reviewer emitted both documents from
+pristine-HEAD sources (`git archive HEAD` into a canaried shadow) and from the working tree and got
+byte-identical files — `rankings.json` sha256 `8a8fccf0…`, `tripwire_baseline.json` sha256
+`f3abec66…`. Mechanically: L2 is unreachable on the committed tree, L3 unreachable by construction,
+L5 touches only the CLI print, and the run log is not a document field, so L8 cannot reach the golden
+either. **The ordering was harmless and the reasoning behind it was wrong** — the golden would have
+been the same bytes either way.
+
+**Every ledger item discharged with mutation evidence, not assertion.** L1: the province-wide clause
+is now `_months_are_the_closed_vocabulary`, and the bare-count mutant AND the delete-the-wiring
+mutant both red — each on a test whose name describes the rule it defends, which was the whole
+defect. L2: the seam is **live, not merely latent** — `pipeline.py:501` appends `check_registry`
+output into the results that `tripwire_record` emits, so a duplicate record really would have failed
+its own contract validator. L3: door closed, and the class census found NO open sibling (it checked
+`formation.py:125/158`, `listings.py:73/76`, `init.py:190`, `tripwires.py:582` and correctly
+classified `pipeline.py:715` as a clamp rather than a lookup). L4: `HORIZON_YEARS` and its vacuous
+test removed, zero references repo-wide. L5/L7/L8 pinned; L8's note now rides all five
+frame-carrying branches, each mutation-killed individually.
+
+**Class census on `NULLABLE_REASONS` is worth keeping:** all five members are individually pinned by
+drop-one mutation, but **no exact-membership pin of the frozenset exists anywhere** — the set is not
+co-deletable member-by-member, yet nothing asserts the set itself. Recorded rather than fixed; the
+audit gates should decide whether that matters.
+
+**LIVE-SURFACE CHANGE nothing in the ledger asked for, fail-safe direction.** `evaluate_tripwires`
+now builds the data vintage, so `demoflow tripwires` REFUSES with a named `LoaderError` (exit 1) if
+any of the 12 declared inputs is absent or pin-drifted, where it previously listed regardless. It
+still lists normally when they are intact — **seat-verified live**: identity `8b0779d17fcc2109` and
+all 12 digests print above the rows, matching the emitted `tripwire_baseline.json` exactly. One
+review aside stated this as "now refuses the whole listing" without the conditional; the live
+measurement is the accurate one.
+
+**The golden implements the ruled contract exactly.** One pinned `now` (2026-12) shared by generator
+and test; the generation path committed as SOURCE (`scripts/gen_golden.py` + `golden.py`) because
+that file is the artifact's only provenance for the clock; nothing normalized out of the diff; the
+data source declared rather than ambient; and `artifacts/README.md` tells a future reader which kind
+of red they are looking at and names the amendment to take when the first real input lands.
+
+## Carries
+
+- **The canonical gate runs NO linter**, and `pyproject.toml` configures none. Surfaced by a
+  120-char line at `demand/immigrant_inputs.py:31` against the file's ~100 ceiling, which nothing
+  catches. Cosmetic today; it is the absence of the check that is worth recording.
+- **Amendments are placed BESIDE the text they amend, not in numeric order** — #16 sits at spec:835
+  next to the nullability enumeration it widens, #15 at spec:850 next to the completeness text.
+  Deliberate and more useful for a reader, but a reader scanning for amendment order should know.
+- **PLAN DEFECT IN THE AUDIT GATES THEMSELVES, caught before it cost a cycle:** Task 31 writes
+  `subagent_type: mm-spine:quant-financial-engineer` and warns in-line that "a bare name fails to
+  resolve"; Task 33 uses the prefix; **Task 32 writes `subagent_type: stress-tester` BARE** and would
+  therefore fail to resolve. The gate that hunts for guards that cannot fire could not itself have
+  fired.
