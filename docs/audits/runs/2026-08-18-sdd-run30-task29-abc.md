@@ -68,5 +68,5 @@ The plan is HISTORICAL and the SPEC governs (now through amendment #15). Every p
 divergence must be classified plan-superseded / code-defect / genuine-drift rather than reported
 flat. `loaders/hors_aligned.py` is read-and-import only: task 2 must CONSUME it.
 
-- run id: (appended at dispatch)
+- run id: `wf_a425b526-7ba` (task `wcc6b9n0k`)
 - outcome: (appended at run close)
