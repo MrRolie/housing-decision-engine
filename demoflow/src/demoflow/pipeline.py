@@ -22,7 +22,9 @@ WHAT IS COARSE BY DESIGN (Tranche 1). The 75+ owner stock is a SINGLE lumped buc
 a fixed age, not an age-indexed lattice; the surviving-arrival cohorts carry no mortality of
 their own. YSL / the ED->drift beta mapping are Tranche 2. The sweep is NOT on that list any
 more: until run 33 it varied q_live alone, which made `rank_stable` a verdict over one of five
-declared axes and the four it skipped included the only one that moves the order (`_sweep_legs`).
+declared axes, and the four it skipped included the only axis that then moved the BAND-curve
+order — a uniqueness ruling V retired: three grid axes reorder the resolved curve (`_sweep_legs`
+carries the re-measurement).
 
 WHAT IS NOT COARSE, because coarse is not the same as silent. Every silent-zero door on the
 model path refuses instead: a year the population frame does not carry, a holed age lattice, an
@@ -867,10 +869,23 @@ def _reconciliation_retention(frames: Frames, read_ownership, q_live: float) -> 
 # `constants.py` states a FIFTH as an existing fact of THIS module — "Task 29 perturbs the join
 # table with a uniform override spanning CONSTANTS['immigrant_ownership_ratio_sweep_span']" —
 # for which no code existed anywhere in the tree. Two committed contracts in direct
-# contradiction, green because no test crossed them. And the omission was not benign: the four
-# grid axes leave the published order INTACT at both endpoints, while the ratio axis reorders
-# EVERY row at 0.155 (rank 1 changes hands) and four rows at 1.033. The one axis that was swept
-# is the one that could not have failed.
+# contradiction, green because no test crossed them. And the omission was not benign: ON THE BAND
+# CURVE the four grid axes left the published order INTACT at both endpoints, while the ratio axis
+# reordered EVERY row at 0.155 (rank 1 changes hands) and four rows at 1.033. The one axis that
+# was swept was the one that could not have failed.
+#
+# THOSE PER-LEG FIGURES ARE PRE-RULING-V AND THREE OF THEM NO LONGER HOLD. Re-measured on the
+# resolved curve at the run-35 re-mint, by re-running `_rank_stability`'s own leg loop (central
+# order reproduces the committed `rankings.json` exactly): `estate_eventual_fraction` and
+# `estate_lag_years` still move NOTHING at either endpoint, but `q_live_per_year` reorders 2 rows
+# at 0.11, `phi_voluntary` 3 rows at 1.0, the new `headship_shape` axis 3 rows at `expo_cum_fb`,
+# and the ratio axis 8 rows at 0.155 (rank 1 -> MTL_RMR) and SIX — not four — at 1.033 (rank 1 ->
+# LAVAL_RA13). THE VERDICT IS UNCHANGED AND SO IS ITS MECHANISM: 0.155 is still the only leg that
+# moves ALL eight rows, so it alone saturates the union and `rank_stable` stays `false` everywhere.
+# What changed is the MARGIN — the resolved curve packs ranks 1-4 inside 2.6e-4 — so a reader must
+# not carry "only the ratio axis can reorder" forward from the sentence above. `artifacts/README.md`
+# holds the same table, and NO test pins these per-leg counts (the pins are the union verdict,
+# all-8-move at 0.155, and rank-1-changes-hands there).
 #
 # WHY A LEG OBJECT AND NOT FOUR MORE PARAMETERS. `_ed_series` is called once per (geography,
 # scenario) per leg, and a positional list of five band values threaded through three call
@@ -1104,11 +1119,17 @@ def _rank_stability(geos, frames: Frames, read_ownership, central_ed: dict,
     enough to make a geography unstable.
 
     IT RETURNS `False` FOR EVERY GEOGRAPHY ON THE COMMITTED VINTAGE, and that is the measured
-    answer rather than a regression: the four `SWEEP_GRID` axes leave the published order intact
-    at both endpoints, while the join-table ratio override reorders every row at 0.155 and four
-    rows at 1.033. The narrow sweep that shipped `true` was evaluating the one axis that could
-    not have failed (run-32 quant F1 / stress F1, reached independently; `_sweep_legs` carries
-    the contradiction the two committed contracts had been holding).
+    answer rather than a regression. Re-measured at the run-35 re-mint on the resolved headship
+    curve: the ratio override reorders EVERY row at 0.155 and six rows at 1.033, `q_live_per_year`
+    two rows at 0.11, `phi_voluntary` three at 1.0, `headship_shape` three at `expo_cum_fb`, and
+    only the two estate axes leave the order intact at both endpoints. The 0.155 leg is still the
+    only one that moves all eight, so the union verdict rests on the same single leg it always did
+    — but the pre-ruling-V reading of this docstring ("the four `SWEEP_GRID` axes leave the
+    published order intact... four rows at 1.033") is retired, not merely restated: three axes
+    that could not reorder the band curve reorder this one. The narrow sweep that shipped `true`
+    was evaluating the one axis that could not have failed (run-32 quant F1 / stress F1, reached
+    independently; `_sweep_legs` carries the contradiction the two committed contracts had been
+    holding).
 
     THE CENTRAL LEG IS HANDED IN, NOT RECOMPUTED, and that is a contract rather than a saving.
     The run contract says the headline IS the central-value evaluation, so a sweep that

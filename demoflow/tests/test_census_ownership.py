@@ -112,6 +112,7 @@ import csv
 import hashlib
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -1787,6 +1788,236 @@ def test_the_zero_support_note_keeps_THREE_claims_distinct():
     # (iii) the sub-25 ownership clause, still standing, with its computed figures
     assert "17,170 owners of 106,605 households" in note
     assert "amendment #12" in note and "re-measure" in note.lower()
+
+
+def test_the_DISCHARGED_clause_names_the_retired_SENTENCE_and_the_COMMIT_that_retired_it():
+    """Falsifier F11's second half, on BOTH surfaces: a discharge that does not say what
+    discharged it is indistinguishable from a deletion to the next reader.
+
+    Three things are pinned, because the clause makes three separable claims: the retired
+    sentence is QUOTED (so a reader can tell which sentence went), the commit that retires it
+    is NAMED, and what now SATISFIES it is stated in the terms that satisfy it — per-single-year
+    rates under per-member closure, so a consumer multiplying ONE age is no longer reusing a
+    band rate. The commit id could not be written by the commit that made it; this gate is the
+    reason the follow-up run wrote it instead of leaving "the commit that lands this curve",
+    which is not a reference a reader can resolve.
+    """
+    for surface, provenance in (("committed", _committed_headship()["_provenance"]),
+                                ("fresh", _fresh_headship()["_provenance"])):
+        note = provenance["zero_support_note"]
+        assert "DISCHARGED" in note, f"{surface}: the discharge marker is gone: {note!r}"
+        assert "must land an age-resolved curve rather than reuse this one" in note, (
+            f"{surface}: the discharge no longer quotes the sentence it retires, so the reader "
+            f"cannot tell WHICH claim was retired: {note!r}")
+        assert "c83595e" in note, (
+            f"{surface}: the discharge does not name the commit that retired the clause: "
+            f"{note!r}")
+        assert "no longer reusing a band rate" in note, (
+            f"{surface}: the discharge states the retirement without stating what SATISFIES "
+            f"the retired requirement: {note!r}")
+
+
+def _assert_lattice_floor_unmoved(spec_floor: int, mirrored_floor: int) -> None:
+    """The tripwire's ONE assertion, factored out so it can be EXERCISED rather than described.
+
+    A tripwire nobody has ever seen fire is an untested tripwire, and this one exists precisely
+    because the failure it guards against is a FUTURE edit. Keeping the assertion in a callable
+    lets the gate below fire it on a moved floor without anyone editing this file.
+    """
+    assert spec_floor == mirrored_floor == 25, (
+        "the ownership lattice floor MOVED. Spec §7 amendment #12 orders this SECOND, and its "
+        "first half (the age-resolved headship curve) landed at c83595e. Before the floor moves, "
+        "amendment #12's quantified floor-effect legs — every one of them measured on the "
+        "RETIRED six-band curve — must be RE-MEASURED against the age-resolved curve: they are "
+        "the warrant for an irreversible ordering decision and a stale measurement cannot serve "
+        "as one. Do NOT update this pin without the re-measured figures landing in the same "
+        "diff: `demand/formation.py`'s OWNERSHIP_LATTICE_FLOOR block still carries the "
+        "pre-ruling-V figures, and `census._zero_support_note` carries the obligation to "
+        "re-measure them. This assertion is the only guard that reds on ANY move of the floor, "
+        "and the only one whose message names the re-measurement: the derive-time RAISE — the "
+        "one that fires when `_ownership_spec_omitted_members` comes back empty — needs a FULL "
+        "extension, and it orders a clause rewrite rather than this measurement.")
+
+
+def test_the_ownership_LATTICE_FLOOR_IS_A_TRIPWIRE_that_reds_when_the_floor_moves():
+    """THE re-measurement trigger — the instrument that replaces "a human notices the milestone".
+
+    Run 15 recorded the sub-25 question as reopening "when Task 29 lands an age-resolved headship
+    curve". Task 29 landed WITHOUT one, nothing reopened, and the defect survived three review
+    rounds until a pre-PR gate caught it. The lesson binds here because the SECOND half of spec
+    §7 amendment #12's ordering constraint carries the same shape of obligation: the floor may
+    move only after the floor-effect legs are re-measured against the curve that landed at
+    c83595e, and no runtime check can express "was this measured".
+
+    So the floor is PINNED, and the pin's failure message carries the obligation. It is a
+    tripwire, not a proof: whoever moves the floor must edit this test, and the edit IS the
+    point — it puts the obligation in a PR-visible diff instead of in a reader's memory. What it
+    cannot do is verify the re-measurement happened, and `census._zero_support_note` says exactly
+    that rather than implying the suite checks it.
+
+    It is deliberately NOT the same assertion as the `OWNERSHIP_LATTICE_FLOOR ==
+    min(census._AGE_BANDS)` pins in `test_owner_stock.py` / `test_demand.py`: those two catch the
+    two literals PARTING, and stay green on a downward extension that moves both together —
+    which is the very edit that must not pass quietly.
+    """
+    # Imported HERE rather than at module scope: this is the loaders' test module, and the
+    # mirrored literal belongs to the demand package — the coupling belongs to the assertion,
+    # not to this file's import surface.
+    from demoflow.demand.formation import OWNERSHIP_LATTICE_FLOOR
+
+    _assert_lattice_floor_unmoved(min(lo for _label, lo, _hi in census._AGE_BANDS),
+                                  OWNERSHIP_LATTICE_FLOOR)
+
+
+def test_the_sub_25_reopening_trigger_FIRES_MECHANICALLY_and_names_what_it_cannot_check():
+    """RUN-15's LESSON, encoded as a gate. Run 15's record wrote "it reopens when Task 29 lands
+    an age-resolved headship curve". Task 29 landed WITHOUT one, nothing reopened, and the
+    defect survived three review rounds until the pre-PR gate caught it: A CONDITION WHOSE
+    TRIGGER NOBODY CHECKS IS NOT A CONDITION.
+
+    So prose alone is not enough here. This gate pins that the note names BOTH mechanical
+    triggers by identifier, EXERCISES each one to prove it fires, and pins that the note states
+    the one thing neither trigger can observe. The last assertion is the load-bearing one: a
+    trigger that fires on the EXTENSION cannot verify the RE-MEASUREMENT that must precede it,
+    and a note implying otherwise reads as a guarantee it cannot make.
+    """
+    # Imported HERE rather than at module scope: this is the loaders' test module, and the pin
+    # under test is the demand package's mirror of the loaders' spec — the coupling belongs to
+    # the assertion, not to this file's import surface.
+    from demoflow.demand.formation import OWNERSHIP_LATTICE_FLOOR
+
+    note = _fresh_headship()["_provenance"]["zero_support_note"]
+
+    # 1. TRIGGER (a) IS CITED BY THE NAME OF A TEST THAT EXISTS — asserted through the function
+    #    OBJECT, so renaming or deleting the tripwire reds this gate instead of leaving the note
+    #    pointing at a test nobody has.
+    tripwire = test_the_ownership_LATTICE_FLOOR_IS_A_TRIPWIRE_that_reds_when_the_floor_moves
+    assert tripwire.__name__ in note, (
+        f"the note does not cite the tripwire that actually reds on a floor move: {note!r}")
+    assert "OWNERSHIP_LATTICE_FLOOR" in note and "_ownership_spec_omitted_members" in note, (
+        f"the note describes a reopening trigger without naming either guard: {note!r}")
+    for cited in ("tests/test_owner_stock.py", "tests/test_demand.py"):
+        assert cited in note, f"the note does not cite the twin pin's home {cited}: {note!r}"
+    here = Path(__file__).parent
+    for cited in ("test_owner_stock.py", "test_demand.py"):
+        assert "min(lo for _label, lo, _hi in census._AGE_BANDS)" in (
+            here / cited).read_text(encoding="utf-8"), (
+            f"{cited} no longer carries the twin pin the note cites — a guard the note "
+            "advertises has left the file it points at")
+
+    # 2. TRIGGER (a), EXERCISED — the tripwire reds on ANY move of the floor, made consistently
+    #    or not, which is what an "OWNERSHIP_LATTICE_FLOOR == min(_AGE_BANDS)" pin alone does NOT
+    #    do: a downward extension that moves BOTH sides keeps that identity true. Both readings
+    #    are asserted here so the note's split between the tripwire and the twin pins is the
+    #    measured one.
+    assert OWNERSHIP_LATTICE_FLOOR == min(lo for _label, lo, _hi in census._AGE_BANDS)
+    extended = census._AGE_BAND_SPEC + (("20-24", 20, 24, ("20 to 24 years",)),)
+    moved_floor = min(lo for _label, lo, _hi, _members in extended)
+    assert moved_floor != OWNERSHIP_LATTICE_FLOOR, (
+        "a band below the floor no longer moves min(_AGE_BANDS) — the twin pins are dead")
+    with pytest.raises(AssertionError, match="ownership lattice floor MOVED"):
+        _assert_lattice_floor_unmoved(moved_floor, moved_floor)
+
+    # 3. TRIGGER (b), EXERCISED — the narrower one: it fires only on a move that REACHES the
+    #    youngest published member, at derive time, before an empty clause can ship. The full
+    #    end-to-end path is
+    #    `test_the_sub_25_clause_RETIRES_ITSELF_loudly_when_the_ownership_lattice_is_extended`.
+    with pytest.raises(LoaderError, match="retired itself"):
+        census._zero_support_note(1_364_340.0, ("15 to 19 years", 10_920), (),
+                                  members=14, tolerance=37.5, delta=5)
+
+    # 4. THE HONEST HALF, and the whole reason this gate exists rather than a green checkmark:
+    #    every guard above fires on the EXTENSION, none observes whether amendment #12's legs
+    #    were re-measured first — the tripwire can be satisfied by editing the tripwire. The
+    #    note must say so in its own words rather than reading as a guarantee.
+    assert "NEITHER GUARD CHECKS" in note, (
+        f"the note advertises mechanical triggers without stating their limit: {note!r}")
+    assert "UNENFORCED by construction" in note, (
+        f"the note does not admit that the re-measurement obligation is unenforced: {note!r}")
+
+
+def _tripwire_message() -> str:
+    """The tripwire's failure message, obtained by FIRING it rather than transcribed.
+
+    Whitespace-normalized because the message is assembled from wrapped string literals, so a
+    phrase-level assertion on the raw text would depend on where the source happens to break."""
+    with pytest.raises(AssertionError) as tripped:
+        _assert_lattice_floor_unmoved(20, 20)
+    return " ".join(str(tripped.value).split())
+
+
+def _formation_comment_text() -> str:
+    """`demand/formation.py`'s prose, with the COMMENT MARKERS REMOVED before normalization.
+
+    The `#` strip is load-bearing, not cosmetic: that block wraps mid-phrase, so plain
+    whitespace normalization leaves the marker INSIDE phrases ("only mechanical # trigger") and
+    every phrase-level assertion against this surface then passes or fails for the wrong reason.
+    The same wrap is why a one-line `grep` for such a phrase reports the surface as clean."""
+    from demoflow.demand import formation
+
+    return " ".join(Path(formation.__file__).read_text(encoding="utf-8").replace("#", " ").split())
+
+
+def test_the_tripwire_MESSAGE_routes_each_surface_to_WHAT_IT_ACTUALLY_CARRIES():
+    """The tripwire message sends a future floor-mover to TWO surfaces for the re-measurement,
+    and this gate reads both surfaces to pin that each carries what the message says it carries.
+
+    That message is where the obligation is written down, so misrouting it costs what a lying
+    note costs: a reader sent to `_zero_support_note` for pre-ruling-V figures finds none — the
+    figures are `demand/formation.py`'s, and what the note carries is the OBLIGATION to
+    re-measure them. The assertions are split by surface for that reason, and the NEGATIVE half
+    is the load-bearing one: if a later edit moves a floor-effect figure into the note, this reds
+    instead of letting the message become quietly right about the wrong surface.
+    """
+    message = _tripwire_message()
+    note = _fresh_headship()["_provenance"]["zero_support_note"]
+    formation_prose = _formation_comment_text()
+
+    # Amendment #12's quantified floor-effect legs — the figures the re-measurement is FOR, every
+    # one of them measured on the retired six-band curve and none of them re-stated since.
+    for leg in ("0.195-0.337%", "0.96-1.65%", "30x-200x", "19-21%/yr", "1.42%"):
+        assert leg in formation_prose, (
+            f"the message routes the pre-ruling-V figures to `demand/formation.py`'s "
+            f"OWNERSHIP_LATTICE_FLOOR block, but the leg {leg!r} is not there — either the "
+            "figures moved or they were restated, and the routing is stale either way")
+        assert leg not in note, (
+            f"`census._zero_support_note` now carries the floor-effect figure {leg!r}. The "
+            "tripwire message routes FIGURES to formation.py and only the OBLIGATION to this "
+            "note; a figure landing here has to be reflected in that message or it misroutes")
+    assert "MUST BE RE-MEASURED" in note, (
+        f"the note no longer carries the obligation the tripwire message routes the reader here "
+        f"for: {note!r}")
+    assert "still carries the pre-ruling-V figures" in message, (
+        f"the message no longer names formation.py as the FIGURE carrier: {message!r}")
+    assert "carries the obligation" in message, (
+        f"the message no longer distinguishes the obligation carrier from the figure carrier, "
+        f"which is the distinction that makes it a usable instruction: {message!r}")
+
+
+def test_the_SOLE_TRIGGER_claim_is_SCOPED_on_every_surface_that_makes_it():
+    """THREE surfaces state how many guards fire when the floor moves, and a count they disagree
+    on is a count the next reader cannot use. `census._zero_support_note` counts TWO GUARDS (the
+    floor tripwire, and the derive-time RAISE which the gate above actually FIRES), so a bare
+    "the only mechanical trigger" on either other surface is a claim this suite refutes.
+
+    It is SCOPED rather than deleted, because the narrow reading is true and is the operative
+    one: the tripwire is the only guard that reds on ANY move of the floor — the RAISE needs a
+    FULL extension — and the only one whose message names the re-measurement, since the RAISE
+    orders a clause rewrite instead. Both surfaces must carry the qualifier that makes it true.
+    """
+    note = _fresh_headship()["_provenance"]["zero_support_note"]
+    assert "TWO GUARDS" in note, (
+        f"the note no longer states the guard count, so the other two surfaces have nothing to "
+        f"agree with: {note!r}")
+    for surface, text in (("the tripwire's failure message", _tripwire_message()),
+                          ("demand/formation.py", _formation_comment_text())):
+        assert "only mechanical trigger" not in text, (
+            f"{surface} calls the tripwire the obligation's ONLY mechanical trigger, while the "
+            "note counts TWO GUARDS and the gate above fires the second one on a full extension. "
+            "Scope the claim to what holds instead of dropping it")
+        assert "only guard that reds on ANY move" in text, (
+            f"{surface} no longer scopes its sole-trigger claim to what this suite measures: the "
+            "tripwire reds on ANY move of the floor, the derive-time RAISE only at FULL extension")
 
 
 def test_the_generator_is_still_the_only_writer_and_the_artifact_is_byte_reproducible():

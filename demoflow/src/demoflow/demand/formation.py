@@ -92,20 +92,31 @@ AGE_BOUNDARY = 75
 #
 # WHAT RULING V DID MEASURE, AND IT IS NOT THE RE-MEASUREMENT ORDERED ABOVE. The acceptance
 # metric for the age-resolved curve was the CONCENTRATION of D_native — the largest single-age
-# share, targeted at 14-18% (design panel, "The success criterion, measured";
-# docs/research/2026-08-19-headship-curve-design-panel.md). Measured 2026-08-19 on the shipped
-# artifacts, same recipe as above (MTL_RMR, `Scenario.REFERENCE`) with the §6 P_resident
-# operand, the 26 projected years pooled: the RETIRED six-band curve peaked at age 35 with
-# 79.9% (per-year 77.5-83.9%); the shipped `expo_cum_fc` peaks at age 26 with 26.1%
-# (24.3-40.4%) and `expo_cum_fb` at 26 with 31.5% (29.4-46.0%). The band step is GONE — the
-# per-age profile is smooth (h: 24 -> 0.30553, 25 -> 0.35090, 26 -> 0.40615, 27 -> 0.44563)
-# — and what remains above the target is THIS convention's edge, not a curve defect: ages
-# 18-24 contribute EXACTLY 0.0 because `_ownership` returns 0.0 below the floor, so the mass
-# piles at 25-27 (65.8% of the horizon total). The same run with the floor probed at 18 peaks
-# at age 21 with 12.6% on `expo_cum_fc` — just BELOW the 14-18% band — and 16.5% on
-# `expo_cum_fb`, inside it, against 26.1% / 31.5% at floor 25. That is what ATTRIBUTES the
-# residual here, and fc undershooting the band rather than landing in it makes the attribution
-# STRONGER, not weaker: the floor accounts for more than the whole gap.
+# share. THE COLLAPSE IS THE MEASURED PART; THE 14-18% BAND IT WAS READ AGAINST IS NOT A GATE
+# THIS CURVE MET OR MISSED. That band is the design panel's ("The success criterion, measured";
+# docs/research/2026-08-19-headship-curve-design-panel.md), and the panel states in the same
+# document that ALL its magnitudes are PROBE-GRADE: raw ISQ populations in place of P_resident
+# (~7% of scale), the committed `mean_ed_reference` in place of per-year ED, no immigrant leg.
+# Its baseline for the committed curve — 65-77% at age 35 — does not reproduce: the live recipe
+# below puts that same curve at 79.9%, and the run-34 review could not reproduce 65-77% under
+# any convention it tried (docs/audits/runs/2026-08-19-sdd-run34-headship-curve.md). So the
+# band is CONVENTION-DEPENDENT and not commensurable with a live P_resident measurement; it is
+# recorded here as the design's expectation and never as a threshold, which is the correction
+# the run-34 review made to the mandate that set it.
+# THE COLLAPSE, measured 2026-08-19 on the shipped artifacts, same recipe as above (MTL_RMR,
+# `Scenario.REFERENCE`) with the §6 P_resident operand, the 26 projected years pooled: the
+# RETIRED six-band curve peaked at age 35 with 79.9% (per-year 77.5-83.9%); the shipped
+# `expo_cum_fc` peaks at age 26 with 26.1% (24.3-40.4%) and `expo_cum_fb` at 26 with 31.5%
+# (29.4-46.0%). The band step is GONE — the per-age profile is smooth (h: 24 -> 0.30553,
+# 25 -> 0.35090, 26 -> 0.40615, 27 -> 0.44563).
+# THE RESIDUAL PEAK AT 26 IS THE OWNERSHIP LATTICE'S ENTRY STEP, NOT A CURVE DEFECT — and it is
+# the NEXT ORDERED STEP (spec §7 amendment #12), not something to fix in the curve: ages 18-24
+# contribute EXACTLY 0.0 because `_ownership` returns 0.0 below the floor, so the mass piles on
+# the first ages the lattice admits, 25-27 (65.8% of the horizon total). The same run with the
+# floor probed at 18 moves the peak to age 21, at 12.6% on `expo_cum_fc` and 16.5% on
+# `expo_cum_fb`, against 26.1% / 31.5% at floor 25. That 13.5pp drop on fc is what ATTRIBUTES
+# the residual to the lattice edge, and it is larger than the entire excess over the panel's
+# expected band — which is why the attribution survives the band being convention-dependent.
 # One proposal PREDICTED that attribution (the EWC-PCHIP submission's `age20_interaction`
 # item 3, at its own probe's 16.1% — a DIFFERENT chassis and a probe-grade level, so it is a
 # corroborating prediction and not a figure to carry); the counterfactual above is the
@@ -132,10 +143,25 @@ AGE_BOUNDARY = 75
 # does NOT transfer to the numerator either: an additive non-uniform shift can REORDER the
 # rankings where a multiplicative near-uniform one cannot.
 #
-# THE FIX IS ORDERED, NOT OPTIONAL, AND ITS ORDER BINDS (spec §7 amendment #12): this zero is
-# currently the only thing suppressing the age-20 band-entry artifact, so extending the
-# ownership curve below 25 BEFORE an age-resolved headship curve lands would MULTIPLY that
-# artifact into demand instead of zeroing it. Age-resolved headship first, then the floor.
+# THE FIX IS ORDERED, NOT OPTIONAL, ITS ORDER BINDS (spec §7 amendment #12) — AND THE ORDER IS
+# NOW HALF DISCHARGED. The first half LANDED at c83595e (operator ruling V): this zero used to be
+# the only thing suppressing the age-20 band-entry artifact, so extending the ownership curve
+# below 25 while the curve was banded would have MULTIPLIED that artifact into demand instead of
+# zeroing it — and that artifact is gone, replaced by the smooth 20..34 rise measured above. WHAT
+# STILL BLOCKS THE SECOND HALF IS THE RE-MEASUREMENT, NOT THE CURVE: amendment #12's quantified
+# floor-effect legs are pre-ruling-V (the floor counterfactual at 12.6% / 16.5% above is NOT that
+# re-measurement — it is post-ruling-V and prices CONCENTRATION, not the sub-floor drop). So the
+# order is now: age-resolved headship (DONE), then the re-measurement, then the floor. The floor
+# literal below is pinned by
+# test_the_ownership_LATTICE_FLOOR_IS_A_TRIPWIRE_that_reds_when_the_floor_moves
+# (demoflow/tests/test_census_ownership.py), which reds on ANY move of it and names the
+# re-measurement in its failure message — that tripwire is the only guard that reds on ANY move
+# of the floor, and the only one whose message names the re-measurement. It is NOT the only guard
+# that fires at all: `census._zero_support_note` RAISES when `_ownership_spec_omitted_members`
+# comes back empty, but that one needs a FULL extension down to the youngest published member and
+# it orders a clause rewrite rather than this measurement — which is why that note counts TWO
+# guards on the move, and states the same limit this block does rather than implying the suite can
+# check that the measurement itself was DONE.
 #
 # The a_min term still earns its place independently of all of the above: it exists so a_min
 # entrants form against a zero prior stock BY EQUATION instead of against H(17) by array

@@ -21,10 +21,15 @@ Step 1b). Measured against the pinned sources they did not reproduce: 35-54 was 
 (3,393,953 vs the published 3,749,035) — adverse in BOTH directions, overstating 75+ release
 while understating the absorbers. The USE SITE settles the semantics: spec:395
 `OwnerStock(g,t,s) = Σ_over_all_ages pop(a,g,t,s) × headship(a) × ownership(a)` multiplies ISQ
-scenario POPULATION, so headship(a) is
-    QC private-household PRIMARY MAINTAINERS in band a  (committed P2 Census extract)
-    ÷ ISQ 2021 Le Québec Référence (A2026) PERSONS in band a  (committed pop-as-qc-base.xlsx)
-and nothing else. Both sources are sha256-pinned and read at derivation.
+scenario POPULATION, so headship is
+    QC private-household PRIMARY MAINTAINERS  (committed P2 Census extract)
+    ÷ ISQ 2021 Le Québec Référence (A2026) PERSONS  (committed pop-as-qc-base.xlsx)
+and nothing else. T13b read BOTH sides at the six model bands and served the band rate flat at
+every age inside it; since operator ruling V (2026-08-19) each side is read at its FINEST
+published resolution — the 14 maintainer-age MEMBERS against the 101 single-year person
+denominators — and the value at a single age is a GRADUATION that closes exactly on every
+member, never a band rate reused at each age (`derive_headship_from_sources`). Both sources are
+sha256-pinned and read at derivation.
 
 STALENESS REFUSES AT LOAD (steering ruling L, 2026-08-08): a no-drift gate is a TEST — it
 defends the repo, not a runtime load. So `load_ownership_rates` and `load_headship_rates`
@@ -1124,7 +1129,10 @@ def _zero_support_note(under_15_persons: float, youngest_member: tuple[str, int]
     (ii) the age-resolved warning this note used to carry, explicitly DISCHARGED;
     (iii) the sub-25 ownership clause, STILL STANDING, its figures still computed from the
           extract via `_ownership_spec_omitted_members` — whose empty-set RAISE therefore
-          stays armed as the coupling guard on the ordering constraint.
+          stays armed as the coupling guard on the ordering constraint. The clause names TWO
+          guards that FIRE (that RAISE, and the `OWNERSHIP_LATTICE_FLOOR` pin, which catches
+          the PARTIAL extensions the RAISE cannot see) and names the one obligation neither
+          can check — run 15's lesson: a trigger nobody checks is not a condition.
 
     Silently deleting (ii) — the clause that ORDERED this work — is the failure this package's
     commenting discipline exists to prevent, so it is retired in writing and says what retired
@@ -1166,9 +1174,11 @@ def _zero_support_note(under_15_persons: float, youngest_member: tuple[str, int]
         "reuse this one\", and the six-band curve it described asserted phantom households "
         "under 15 while understating 15-19 several-fold — pure intra-band misallocation, which "
         "is why the aggregate closure stayed green throughout. The curve is now resolved at "
-        "every single year of age 0..100 against per-MEMBER closure, so that sentence is "
-        "retired by the commit that lands this curve; it is recorded here rather than deleted "
-        "because it is the clause that ordered the work. "
+        "every single year of age 0..100 against per-MEMBER closure, so the consumer that "
+        "sentence addressed multiplies a PER-SINGLE-YEAR rate and is no longer reusing a band "
+        "rate. That sentence is retired by commit `c83595e` (operator ruling V, 2026-08-19); "
+        "it is recorded here rather than deleted because it is the clause that ordered the "
+        "work. "
         "THE SUB-25 OWNERSHIP CLAUSE STILL STANDS, AND IT IS A CHOICE IN `_AGE_BAND_SPEC`, NOT "
         f"THE DATA'S SILENCE (spec §7 amendment #12): for {_PROVINCE} the extract publishes "
         f"{published}. `_HEADSHIP_MEMBER_SPEC` reads {dropped} off the SAME age dimension of "
@@ -1176,7 +1186,28 @@ def _zero_support_note(under_15_persons: float, youngest_member: tuple[str, int]
         "youngest PUBLISHED members are dropped by the ownership derivation and by nothing "
         "upstream of it. THE OMISSION STANDS FOR NOW, under spec §7 amendment #12's binding "
         "ordering constraint — age-resolved headship FIRST, then the floor — and this curve is "
-        "the first of those two steps. WHAT THE FLOOR NOW DISCARDS HAS CHANGED CHARACTER: the "
+        "the first of those two steps. "
+        "THE REOPENING TRIGGER IS MECHANICAL, AND ITS LIMIT IS STATED IN THE SAME BREATH: a "
+        "condition whose trigger nobody checks is not a condition (run 15 recorded \"it "
+        "reopens when Task 29 lands an age-resolved headship curve\"; Task 29 landed WITHOUT "
+        "one, nothing reopened, and the defect survived three review rounds until a pre-PR "
+        "gate caught it). TWO GUARDS FIRE ON THE MOVE ITSELF, with nobody required to notice a "
+        "milestone. (a) THE FLOOR TRIPWIRE: "
+        "`test_the_ownership_LATTICE_FLOOR_IS_A_TRIPWIRE_that_reds_when_the_floor_moves` "
+        "(demoflow/tests/test_census_ownership.py) pins `min(census._AGE_BANDS) == "
+        "OWNERSHIP_LATTICE_FLOOR == 25` and REDS on any move of the lattice floor — "
+        "consistently made or not — with the re-measurement below named in its failure "
+        "message; the twin pins in demoflow/tests/test_owner_stock.py and "
+        "demoflow/tests/test_demand.py separately stop `demand/formation.py`'s mirrored "
+        "literal from parting from this spec quietly. (b) THE DERIVE-TIME RAISE: an extension "
+        "that REACHES the youngest published member empties "
+        "`_ownership_spec_omitted_members` and this function RAISES before a subject-less "
+        "clause can ship. WHAT NEITHER GUARD CHECKS is that the re-measurement was actually "
+        "DONE: (a) forces the obligation into the DIFF and is satisfied by editing the "
+        "tripwire, (b) fires only at FULL extension, and both fire on the EXTENSION rather "
+        "than on the measurement. The re-measurement is therefore UNENFORCED by construction "
+        "and recorded here as such rather than dressed as a guarantee. "
+        "WHAT THE FLOOR NOW DISCARDS HAS CHANGED CHARACTER: the "
         "old curve put the entire 0-19 -> 20-34 rise at the single age 20, where "
         "ownership(20) = 0 zeroed it; the resolved curve spreads that rise across ages 20..34, "
         "most of it ABOVE the floor, so the floor discards a SLOPE rather than a STEP. "

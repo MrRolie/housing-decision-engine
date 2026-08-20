@@ -595,9 +595,12 @@ def test_the_published_ed_is_computed_from_the_aligned_curve_and_never_the_shipp
     consumption twin — and it is needed for the same measured reason: a mutant reading
     `ownership_rate(load_ownership_rates(), geo, a)` directly inside `_ed_series`, bypassing the
     reader on the DEMAND side, left the routing test GREEN (the reader object still answers
-    correctly) and the whole suite green, while moving rank-1 HORS_RMR's mean ED from
-    -0.00029045 to -0.00042867 — carry B3's exact named defect restored, and the join back to
-    decoration.
+    correctly) and the whole suite green, while moving HORS_RMR's mean ED from -0.00029045 to
+    -0.00042867 — carry B3's exact named defect restored, and the join back to decoration. THAT
+    MUTATION MEASUREMENT IS PRE-RULING-V: its baseline is the retired band-curve golden, on which
+    HORS_RMR was rank 1. On the resolved curve HORS_RMR is rank 4 at +0.0011023443 and rank 1 is
+    LANAUDIERE_RA14_PROXY, so the delta stands as the dated reason this test exists and not as a
+    reading of the committed vintage.
 
     THE PROVENANCE LEG IS WHAT KILLS THAT MUTANT, and the value legs alone measurably do NOT:
     the bypass was PARTIAL — `_standing_stock` and `_band_entry_stock` still read through the
@@ -832,9 +835,15 @@ def test_native_formation_reads_the_netted_operands_at_both_t_and_t_minus_1(monk
     reads". In `_ed_series` the assertion and the call are joined by a shared local name and
     nothing else; this is what binds them.
 
-    Measured, handing `native_formation` the RAW ISQ maps instead: MTL_RMR's mean ED
-    +0.002767760 -> +0.003883128 (+40%) and rank-1 HORS_RMR's SIGN flips, -0.000290446 ->
-    +0.001087254 — a reordered published ranking with the rest of the suite green.
+    Measured PRE-RULING-V, handing `native_formation` the RAW ISQ maps instead: MTL_RMR's mean
+    ED +0.002767760 -> +0.003883128 (+40%) and HORS_RMR's SIGN flips, -0.000290446 ->
+    +0.001087254 — a reordered published ranking with the rest of the suite green. Both baselines
+    are the retired band-curve golden, on which HORS_RMR was rank 1 and MTL_RMR rank 6; on the
+    resolved curve they are rank 4 at +0.0011023443 and rank 5 at +0.0019111440, and rank 1 is
+    LANAUDIERE_RA14_PROXY. READ THE MUTANT FIGURE +0.001087254 AS A BAND-CURVE NUMBER, NEVER AN
+    ARTIFACT ONE: it falls 1.5e-5 from the committed resolved-curve HORS_RMR reference
+    +0.0011023443 by coincidence, and the two have nothing to do with each other. The deltas
+    stand as the dated reason this test exists.
 
     BOTH operands are pinned, once per projected year: a swap on t-1 alone is the same defect
     at half the magnitude.
@@ -882,9 +891,11 @@ def test_owner_stock_takes_the_raw_isq_population_never_the_netted_resident_one(
     operand binding governs the FORMATION equation ALONE; `balance/owner_stock.py` states at its
     own use site that netting the surviving arrival cohorts out of THIS denominator would shrink
     the stock and scale |ED| away from zero. `_ed_series` passes the raw map and says so in a
-    comment — and measured, swapping it for `resident_t` moved MTL_RMR's mean ED from
-    +0.00276776 to +0.00297395 (+7.4%, away from zero exactly as the comment predicts) with the
-    whole suite still green.
+    comment — and measured PRE-RULING-V, swapping it for `resident_t` moved MTL_RMR's mean ED
+    from +0.00276776 to +0.00297395 (+7.4%, away from zero exactly as the comment predicts) with
+    the whole suite still green. That baseline is the retired band-curve golden, on which MTL_RMR
+    was rank 6; it is rank 5 at +0.0019111440 on the resolved curve, so the delta stands as the
+    dated reason this test exists and not as a reading of the committed vintage.
 
     The operand is pinned per PROJECTED YEAR, not once: a swap at any single year is the same
     silent defect. The two operands differ by the surviving arrivals alone, which the closing
@@ -1127,8 +1138,24 @@ def test_rank_stable_is_FALSE_on_every_row_of_the_committed_vintage(run):
     `false` on all eight rows is the CORRECT output of the six-axis sweep, not a regression:
     the join-table ratio axis reorders the published ranking at both of its declared endpoints,
     and the union over every axis therefore finds no geography whose rank is unchanged
-    everywhere. The four grid axes alone leave the order intact — which is exactly why sweeping
-    one of them and calling it `rank_stable` produced a green verdict for a year.
+    everywhere.
+
+    THE GRID AXES DO NOT LEAVE THE ORDER INTACT ANY MORE, and a reader must not take the run-33
+    reading forward. On the BAND curve the four `SWEEP_GRID` axes left the published order intact
+    at both endpoints — which is exactly why sweeping one of them and calling it `rank_stable`
+    produced a green verdict for a year. That clause is the correct HISTORY of the defect, not a
+    description of this vintage: `SWEEP_GRID` declares FIVE axes now (`headship_shape` joined at
+    ruling V), and re-measured at the run-35 re-mint by re-running `_rank_stability`'s own leg
+    loop — its central order reproduces the committed `rankings.json` exactly —
+    `q_live_per_year` reorders 2 rows at 0.11, `phi_voluntary` 3 at 1.0, `headship_shape` 3 at
+    `expo_cum_fb`, and only the two estate axes are inert at both endpoints. The union over the
+    five grid axes with the ratio leg EXCLUDED is 3 of 8 rows, so a grid-only sweep would report
+    `false` on three rows today and DROPPING THE RATIO LEG WOULD NOT RETURN THIS FIELD TO `true`.
+    What the ratio axis still owns is SATURATION: 0.155 is the only leg that moves ALL eight, so
+    it alone carries the union to every row — which is why the assertion below did not move when
+    the curve landed. Those per-leg counts are a DATED reading pinned by no test (`pipeline.py`'s
+    sweep-leg block and `artifacts/README.md` carry the same table and say the same); the pins
+    are the union verdict here, all-eight-move at 0.155, and rank 1 changing hands there.
 
     It also kills the one silent failure the axis-coverage test above cannot see: a
     `_sweep_legs()` that returned NOTHING would satisfy every set assertion vacuously and make
@@ -1146,12 +1173,20 @@ def test_the_join_table_ratio_endpoint_is_the_axis_THAT_REORDERS(run):
     that drops the ratio leg reds HERE with its cause named, instead of flipping eight booleans
     back to `true` with no reader able to say why.
 
-    MEASURED at the low endpoint 0.155, and the permutation reproduces run-32's quant and stress
-    gates independently (both ran an out-of-tree harness, this runs the shipped code): HORS_RMR
-    1->4, LAURENTIDES 2->6, LANAUDIERE 3->7, LAVAL_RA13 4->1, MONTEREGIE 5->3, MTL_RMR 6->2,
-    QC_RMR 7->8, MTL_ISLAND_RA06 8->5. Every ranked geography moves, and rank 1 — the geography
-    the whole artifact exists to name — changes hands. The 1.033 endpoint moves four rows; the
-    union is what `rank_stable` reports.
+    MEASURED at the low endpoint 0.155. The permutation below is PRE-RULING-V and is kept as the
+    record of the run-32 reproduction, not as a description of the current model — it was taken
+    against the BAND-curve central order, which `c83595e` replaced: HORS_RMR 1->4, LAURENTIDES
+    2->6, LANAUDIERE 3->7, LAVAL_RA13 4->1, MONTEREGIE 5->3, MTL_RMR 6->2, QC_RMR 7->8,
+    MTL_ISLAND_RA06 8->5 (it reproduced run-32's quant and stress gates independently — both ran
+    an out-of-tree harness, this runs the shipped code).
+
+    ON THE RESOLVED CURVE, re-measured at the run-35 re-mint: LANAUDIERE 1->6, LAVAL_RA13 2->3,
+    LAURENTIDES 3->7, HORS_RMR 4->8, MTL_RMR 5->1, MONTEREGIE 6->4, QC_RMR 7->5, MTL_ISLAND_RA06
+    8->2. THE ASSERTIONS BELOW ARE STRUCTURAL AND HOLD ON BOTH — every ranked geography moves, and
+    rank 1 (the geography the whole artifact exists to name) changes hands — which is why they did
+    not red when the curve landed and why neither permutation is pinned here. The 1.033 endpoint
+    moves SIX rows on the resolved curve (four on the band curve) and displaces rank 1 as well; the
+    union over all twelve legs is what `rank_stable` reports.
 
     Only the LOW endpoint is evaluated here, and that is a cost decision stated rather than
     hidden: it is one ED grid, it is the endpoint that moves every row, and the union over all
