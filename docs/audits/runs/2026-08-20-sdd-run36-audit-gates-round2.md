@@ -65,5 +65,5 @@ outside the worktree. The round-2 preamble carries the lesson as a binding instr
 demoflow/** only" is a GIT-TRACKED-PATH rule, and copying is not enough if you copy by writing
 THROUGH a hardlink.** Break the link first, or use `cp --remove-destination`.
 
-- run id: (appended at dispatch)
+- run id: `wf_f5b7bc78-d91` (task `wkykltz4n`)
 - outcome: (appended at run close)
