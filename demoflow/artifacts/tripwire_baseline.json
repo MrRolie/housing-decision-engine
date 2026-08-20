@@ -1,5 +1,5 @@
 {
-  "assumptions_hash": "f39a8a240c60d777",
+  "assumptions_hash": "9a876ab547fcafdd",
   "data_vintage": {
     "source_hashes": {
       "census_tenure_age_98100231.csv": {
@@ -16,7 +16,7 @@
       },
       "headship_by_age.json": {
         "extracted_at": "2026-07-21",
-        "sha256": "d33059c3d32697aa88000e40673ebe0301cc8d01c66a2e0fbc024a45495bc9d9"
+        "sha256": "042e0215e4008b736910c4e09737f13ac456b9613d2d1ad7b4d71335e9f1991b"
       },
       "hors_aligned_csd_98100232.json": {
         "extracted_at": "2026-08-15",

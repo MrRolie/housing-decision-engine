@@ -1,5 +1,5 @@
 {
-  "assumptions_hash": "f39a8a240c60d777",
+  "assumptions_hash": "9a876ab547fcafdd",
   "data_vintage": {
     "source_hashes": {
       "census_tenure_age_98100231.csv": {
@@ -16,7 +16,7 @@
       },
       "headship_by_age.json": {
         "extracted_at": "2026-07-21",
-        "sha256": "d33059c3d32697aa88000e40673ebe0301cc8d01c66a2e0fbc024a45495bc9d9"
+        "sha256": "042e0215e4008b736910c4e09737f13ac456b9613d2d1ad7b4d71335e9f1991b"
       },
       "hors_aligned_csd_98100232.json": {
         "extracted_at": "2026-08-15",
@@ -59,23 +59,25 @@
   "exclusions": [],
   "rankings": [
     {
-      "flags": [],
-      "geography": "HORS_RMR",
-      "mean_ed_high": 0.002224421742321622,
-      "mean_ed_low": -0.002988453507023817,
-      "mean_ed_reference": -0.0002904460082153389,
+      "flags": [
+        "borrowed_prior",
+        "ra_proxy"
+      ],
+      "geography": "LANAUDIERE_RA14_PROXY",
+      "mean_ed_high": 0.004145679212659106,
+      "mean_ed_low": -0.002376105607646313,
+      "mean_ed_reference": 0.0008509841398780386,
       "rank": 1,
       "rank_stable": false
     },
     {
       "flags": [
-        "borrowed_prior",
-        "ra_proxy"
+        "closed_cohort_exceedance"
       ],
-      "geography": "LAURENTIDES_RA15_PROXY",
-      "mean_ed_high": 0.0033091866616787808,
-      "mean_ed_low": -0.002817763188777324,
-      "mean_ed_reference": 8.497901564922134e-05,
+      "geography": "LAVAL_RA13",
+      "mean_ed_high": 0.003194685712081783,
+      "mean_ed_low": -0.0012152689270672394,
+      "mean_ed_reference": 0.0009579790896892557,
       "rank": 2,
       "rank_stable": false
     },
@@ -84,22 +86,29 @@
         "borrowed_prior",
         "ra_proxy"
       ],
-      "geography": "LANAUDIERE_RA14_PROXY",
-      "mean_ed_high": 0.003022320549814813,
-      "mean_ed_low": -0.0025958031459153252,
-      "mean_ed_reference": 0.0001961009163354002,
+      "geography": "LAURENTIDES_RA15_PROXY",
+      "mean_ed_high": 0.004532957404664348,
+      "mean_ed_low": -0.0024793118095701307,
+      "mean_ed_reference": 0.0010314996491296471,
       "rank": 3,
       "rank_stable": false
     },
     {
-      "flags": [
-        "closed_cohort_exceedance"
-      ],
-      "geography": "LAVAL_RA13",
-      "mean_ed_high": 0.002755996361821003,
-      "mean_ed_low": -0.0013871688920608454,
-      "mean_ed_reference": 0.0006130925985121075,
+      "flags": [],
+      "geography": "HORS_RMR",
+      "mean_ed_high": 0.003689491034422552,
+      "mean_ed_low": -0.0017816810813850433,
+      "mean_ed_reference": 0.0011023443227394117,
       "rank": 4,
+      "rank_stable": false
+    },
+    {
+      "flags": [],
+      "geography": "MTL_RMR",
+      "mean_ed_high": 0.005308927987303067,
+      "mean_ed_low": -0.0017605210083899148,
+      "mean_ed_reference": 0.001911143977324407,
+      "rank": 5,
       "rank_stable": false
     },
     {
@@ -108,36 +117,27 @@
         "ra_proxy"
       ],
       "geography": "MONTEREGIE_RA16_PROXY",
-      "mean_ed_high": 0.005481952587642645,
-      "mean_ed_low": -0.001593988847564595,
-      "mean_ed_reference": 0.0019020092571718295,
-      "rank": 5,
-      "rank_stable": false
-    },
-    {
-      "flags": [],
-      "geography": "MTL_RMR",
-      "mean_ed_high": 0.005571415727251615,
-      "mean_ed_low": -0.000314951739549975,
-      "mean_ed_reference": 0.002767759759272768,
+      "mean_ed_high": 0.006062785945337634,
+      "mean_ed_low": -0.0018887783720558107,
+      "mean_ed_reference": 0.0022502582711656422,
       "rank": 6,
       "rank_stable": false
     },
     {
       "flags": [],
       "geography": "QC_RMR",
-      "mean_ed_high": 0.009640627326519076,
-      "mean_ed_low": 0.001145271676612022,
-      "mean_ed_reference": 0.005461157458725967,
+      "mean_ed_high": 0.010048453012953089,
+      "mean_ed_low": 0.0006921075438364049,
+      "mean_ed_reference": 0.005585874121632705,
       "rank": 7,
       "rank_stable": false
     },
     {
       "flags": [],
       "geography": "MTL_ISLAND_RA06",
-      "mean_ed_high": 0.01127018094180874,
-      "mean_ed_low": 0.0026613263232273246,
-      "mean_ed_reference": 0.007213138815218609,
+      "mean_ed_high": 0.010238325713878494,
+      "mean_ed_low": 0.001256452579324422,
+      "mean_ed_reference": 0.006002561235622434,
       "rank": 8,
       "rank_stable": false
     }
