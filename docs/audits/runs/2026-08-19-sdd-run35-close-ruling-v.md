@@ -46,4 +46,57 @@ Also carried: the under-15 zero must be written as a POSITIVE BOUND (`X ≤ 35` 
 and the implementer must verify that arithmetic itself.
 
 - run id: `wf_d6e1c5d6-ca2` (task `wahcdivpd`)
-- outcome: (appended at run close)
+- outcome: **APPROVE ×2, 0 unresolved** (fix rounds 2 / 3); 15 agents, 1,856,007 subagent tokens.
+  Landed `16fc229` (note discharges) and `8c8e0f0` (the single mint).
+
+## Outcome — RULING V IS CLOSED. Gate: hde **191** / demoflow **1167** / both suites passed.
+
+**THE RUN-15 FAILURE CLASS IS NOW CAUGHT, AND THE CATCH WAS PROVEN AGAINST THAT EXACT CLASS.** The
+reviewer's M6 mutant is the whole point of this run: a **CONSISTENT** downward extension of the
+ownership lattice — moving `census._AGE_BAND_SPEC` and `formation.OWNERSHIP_LATTICE_FLOOR` together,
+which is precisely the quiet self-consistent edit a soft condition cannot see — **REDS the tripwire
+with amendment #12's re-measurement obligation verbatim in the message, while both twin pins stay
+GREEN.** `_AGE_BANDS` derives from `_AGE_BAND_SPEC`, so no spec move can hide from it. Run 15's
+"it reopens when Task 29 lands an age-resolved headship curve" is now a test rather than a hope.
+
+**Final ranked order, fully re-ordered, every mean ED positive** (HORS_RMR −0.000290 → +0.001102, the
+predicted sign flip): LANAUDIERE 1, LAVAL 2, LAURENTIDES 3, HORS_RMR 4, MTL_RMR 5, MONTEREGIE 6,
+QC_RMR 7, MTL_ISLAND 8. `rank_stable` false on every row — run 33's five-axis verdict is unchanged by
+this curve. `assumptions_hash` f39a8a24 → 9a876ab5; 13 sources; `exclusions` empty.
+
+## A SELF-DISCLOSED ENVELOPE BRUSH, and the disclosure is the point
+
+Building its probe copy, the 35a reviewer's `printf >` truncated
+`demoflow/.venv/.../_editable_impl_demoflow.pth` **in place** — a file HARDLINKED to
+`~/.cache/uv/archive-v0/.../_editable_impl_demoflow.pth`, i.e. **outside the worktree and shared with
+every other environment built from that uv archive entry.** It restored immediately (broke the link on
+the copy side first, then rewrote the original 82 bytes) and verified three ways: `cat` on both links,
+`find -inum` showing only the worktree venv and the archive entry, and both venvs resolving
+`demoflow.__file__` to their own src. No git-tracked file was touched.
+
+**Recorded because it generalizes and the footprint rule did not cover it:** "footprint: demoflow/**
+only" is stated in every mandate as a GIT-tracked-path rule, and a hardlinked venv file inside
+`demoflow/**` reaches OUTSIDE the repo entirely. **Probing on a copy is not sufficient when the copy
+is made by writing through a hardlink.** Candidate mm-spine harvest.
+
+## Carries
+
+- **26.1% (tree) vs 26.72% (run-34 record) for MTL_RMR fc is UNRECONCILED**, and the seat's own record
+  and its report to the operator both carry 26.72%. Both figures pre-date this run and it carried
+  neither: the implementer correctly declined to transcribe the record's number into the tree. The
+  record's value sits inside the tree's own stated per-year range (24.3-40.4%), so a pooling-convention
+  difference is the likely reconciliation. **79.9 vs 79.81 rounds fine; 26.1 vs 26.72 does not.**
+- **Naming a test inside the artifact note couples a test RENAME to the golden.** Renaming
+  `test_the_ownership_LATTICE_FLOOR_IS_A_TRIPWIRE...` now changes `headship_by_age.json`'s bytes, hence
+  `data_vintage`, hence both goldens — and it would fail as "the DATA moved" when no data moved. A
+  consequence of this package's deliberate notes-ride-the-digest design, not a defect.
+- **Nothing mechanically pins `formation.py`'s corrected acceptance-metric prose.** All three
+  statements are present and correct, but nothing reds if they regress — and run 34 caught a false
+  claim in this exact block. The new tests establish that reading source text off disk is in-idiom
+  here, so pinning "IS NOT A GATE THIS CURVE MET OR MISSED" is cheap.
+- **The tripwire's failure message is only partially pinned** — the `pytest.raises(match=...)` catches
+  "ownership lattice floor MOVED" but not the amendment-#12 obligation text the note advertises it as
+  carrying, so that sentence could be stripped with both gates green. One-token widening closes it.
+- `_zero_support_note`'s bound renders with `{rate_bound:.1e}` and then asserts the rate is "below" it;
+  round-half-even means a future vintage could round DOWN and make "below" false. Pre-existing,
+  unchanged, and true today (2.5653e-5 < 2.6e-5).
