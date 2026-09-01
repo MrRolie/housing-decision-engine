@@ -2,7 +2,7 @@
 
 ## Status
 
-**Overall:** S1–S4b complete; the 2026-09-01 readiness polish landed on `feat/readiness-polish` (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary). Next: PR + merge of that branch; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
+**Overall:** S1–S4b complete; the 2026-09-01 readiness polish landed on `feat/readiness-polish` (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary). **Remote caveat (2026-09-01):** `origin` was rebuilt the same day as a fresh single-commit history (`fb840ee`); this branch shares no history with it. Reconcile by a fresh clone plus replaying these commits' content — never merge, rebase, or force-push the existing branch — and pass the operator's content scan before opening a PR. Then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
 **Created:** 2026-06-07
 **Last Updated:** 2026-09-01
 **Slug:** `housing-decision-engine`
@@ -23,7 +23,7 @@ A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 
 ### Hand-off Payload
 
-- **Next session:** PR + merge of `feat/readiness-polish`; then the deferred ruling on mypy (fix + gate, or drop the config) and whether demoflow's emitter should embed source citations (plan E.5, cross-contract).
+- **Next session:** replay `feat/readiness-polish` onto a fresh clone of the rebuilt `origin` (content replay, not a push of this branch), run the operator's content scan, then PR + merge; then the deferred ruling on mypy (fix + gate, or drop the config) and whether demoflow's emitter should embed source citations (plan E.5, cross-contract).
 - **Input artifacts it consumes:** the readiness plan, `docs/specs/2026-09-01-provenance-remediation-design.md` (citation table), `tests/test_anchors.py` (generative pins).
 - **Mid-session resume state:** N/A.
 
@@ -40,7 +40,7 @@ A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 
 ### Next Recommended Action
 
-Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; regenerate `docs/story/` and confirm `git status` clean on a second render).
+Operator-triggered: fresh clone of the rebuilt `origin`, replay the `feat/readiness-polish` commits' content onto it, content scan, then the PR (run `bash scripts/test-all.sh` there first; regenerate `docs/story/` and confirm `git status` clean on a second render). Do not push, merge, or rebase this clone's existing branches.
 
 ---
 

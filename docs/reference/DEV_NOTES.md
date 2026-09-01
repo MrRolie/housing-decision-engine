@@ -19,7 +19,7 @@ churn (stage by explicit path).
 ## Typing
 
 `pyproject.toml` carries a strict mypy config, but the tree does not pass it
-(~59 errors as of 2026-09-01) and nothing gates it. Typing is aspirational
+(60 errors measured 2026-09-01 with `uv run --extra dev python -m mypy src`) and nothing gates it. Typing is aspirational
 until the operator rules one way or the other (fix all + add a stanza to
 `scripts/test-all.sh`, or drop the config). Do not present `mypy src` as a
 check that passes.
