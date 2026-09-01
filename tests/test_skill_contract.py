@@ -100,4 +100,7 @@ def test_project_settings_preapprove_the_user_flow():
     root = SKILL.parents[3]
     allow = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))["permissions"]["allow"]
     assert "Bash(uv run hde *)" in allow
-    assert {"Edit(scenarios/**)", "Write(scenarios/**)"} <= set(allow)
+    assert "Edit(scenarios/**)" in allow  # Edit rules govern Write too
+    # A Write(...) path rule is accepted but never consulted and warns at
+    # startup (Claude Code permissions docs, "Read and Edit") — friction, not cover.
+    assert not any(r.startswith("Write(") for r in allow)
