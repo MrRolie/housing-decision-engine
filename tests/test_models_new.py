@@ -1,5 +1,6 @@
 """Tests for S3 data model additions."""
 import pytest
+from hde.anchors import ANCHORS
 from hde.models import (
     PayDropEvent, RentParams, IncomeParams, ComparisonSpec,
     OptionResult, AffordabilityReport, ComparisonDeterministicResult,
@@ -28,17 +29,17 @@ def test_pay_drop_event_defaults():
 
 def test_rent_params_defaults():
     r = RentParams(monthly_rent=2000.0)
-    assert r.rent_escalation_rate == 0.03
+    assert r.rent_escalation_rate == ANCHORS["rent.rent_escalation_rate"].value
     assert r.invested_down_payment == 0.0
-    assert r.investment_return_rate == 0.07
+    assert r.investment_return_rate == ANCHORS["rent.investment_return_rate"].value
     assert r.events == []
     assert r.other_recurring_costs == []
 
 
 def test_income_params_defaults():
     i = IncomeParams(annual_income=100_000.0)
-    assert i.income_growth_rate == 0.03
-    assert i.affordability_threshold == 0.35
+    assert i.income_growth_rate == ANCHORS["income.income_growth_rate"].value
+    assert i.affordability_threshold == ANCHORS["income.affordability_threshold"].value
     assert i.pay_drop_events == []
 
 

@@ -47,9 +47,9 @@ class TestFormatAssumptions:
         lines = format_assumptions(load_config_dict(MINIMAL_CONFIG))
         defaults = [ln for ln in lines if ln.startswith("defaults applied:")]
         assert len(defaults) == 1
-        assert "rent.rent_escalation_rate=3.0%" in defaults[0]
-        assert "rent.investment_return_rate=7.0%" in defaults[0]
-        assert "house.selling_cost_rate=5.0%" in defaults[0]
+        assert "rent.rent_escalation_rate=1.0% [FP Canada 2026 PAG]" in defaults[0]
+        assert "rent.investment_return_rate=3.0% [FP Canada 2026 PAG]" in defaults[0]
+        assert "house.selling_cost_rate=5.0% [WOWA 2026]" in defaults[0]
         assert "economic.mode='real'" in defaults[0]
 
     def test_no_defaults_line_when_all_provided(self):

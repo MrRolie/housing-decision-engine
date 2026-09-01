@@ -11,6 +11,8 @@ from typing import Dict, FrozenSet, List, Optional, Literal, Tuple
 import numpy as np
 import numpy.typing as npt
 
+from .anchors import ANCHORS
+
 
 @dataclass
 class RecurringOtherCost:
@@ -54,8 +56,10 @@ class PriceShockParams:
     the loaded ScenarioPrior; 1.0 = neutral when no prior is loaded).
     """
     annual_hazard: float = 0.0      # P(price drawdown begins this year)
-    severity_mean: float = 0.20     # mean fractional drawdown
-    severity_vol: float = 0.10
+    # TREB 1989–96: −27.6% nominal peak-trough (≈ −39.4% real); channel default-off
+    severity_mean: float = ANCHORS["price_shock.severity_mean"].value
+    # calibrated dispersion, not independently sourced — see anchors.py rationale
+    severity_vol: float = ANCHORS["price_shock.severity_vol"].value
 
 
 class InputError(Exception):
@@ -128,7 +132,8 @@ class CondoParams:
     mortgage_rate: Optional[float] = None
     mortgage_term_years: Optional[int] = None
     all_cash: bool = False
-    selling_cost_rate: float = 0.05
+    # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
+    selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -157,7 +162,8 @@ class HouseParams:
     mortgage_rate: Optional[float] = None
     mortgage_term_years: Optional[int] = None
     all_cash: bool = False
-    selling_cost_rate: float = 0.05
+    # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
+    selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -230,9 +236,11 @@ class PayDropEvent:
 class RentParams:
     """Parameters for the rent option."""
     monthly_rent: float
-    rent_escalation_rate: float = 0.03
+    # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% inflation = 1.0% real
+    rent_escalation_rate: float = ANCHORS["rent.rent_escalation_rate"].value
     invested_down_payment: float = 0.0
-    investment_return_rate: float = 0.07
+    # FP Canada 2026 PAG 60/40 ≈ 5.1% nominal − 2.1% = 3.0% real
+    investment_return_rate: float = ANCHORS["rent.investment_return_rate"].value
     events: List[EventConfig] = field(default_factory=list)
     other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
 
@@ -241,8 +249,10 @@ class RentParams:
 class IncomeParams:
     """Employment cash flow parameters for affordability modeling."""
     annual_income: float
-    income_growth_rate: float = 0.03
-    affordability_threshold: float = 0.35
+    # FP Canada 2026 PAG salary growth 3.1% − 2.1% inflation = 1.0% real
+    income_growth_rate: float = ANCHORS["income.income_growth_rate"].value
+    # Legacy GDS guideline 32% — below CMHC's 39% cap; hde's numerator is broader than PITH
+    affordability_threshold: float = ANCHORS["income.affordability_threshold"].value
     pay_drop_events: List[PayDropEvent] = field(default_factory=list)
 
 

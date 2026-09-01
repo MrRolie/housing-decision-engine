@@ -1,0 +1,321 @@
+"""Parameter-provenance anchors: the single source of truth for every numeric
+default the engine silently applies (provenance remediation, Task A).
+
+Provenance audit finding: the engine's bias-critical defaults were uncited
+"vibes" — literals scattered across models.py and config.py with no derivation.
+This module is the remedy, modeled on demoflow's Anchor discipline
+(demoflow/src/demoflow/loaders/constants.py): a frozen dataclass carrying
+value + as_of + source + band, with a registry keyed by dotted parameter name.
+`Anchor.__post_init__` refuses an empty source/as_of/rationale and a band that
+does not bracket its own value — an uncited or self-inconsistent constant is a
+defect at import time, not a review comment.
+
+CITATION POLICY: every source below was fetched and its figure confirmed on the
+`retrieved_on` date; the citation table (source, URL, figure quoted, derivation)
+lives in docs/specs/2026-09-01-provenance-remediation-design.md. A default with no citation is marked as such ("neutral,
+uncited" / "calibrated") in `short_cite`/`rationale` — never dressed in a
+plausible-sounding source. Where a number is a calibration choice rather than a
+measurement (e.g. price_shock.severity_vol), the rationale says so explicitly.
+"""
+
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
+
+
+class AnchorError(Exception):
+    """Raised at import time when an anchor violates citation discipline."""
+    pass
+
+
+# Echo aliases: dotted keys as they appear in spec.defaults_applied -> registry
+# name. condo.selling_cost_rate and house.selling_cost_rate share ONE anchor
+# (condo.house.selling_cost_rate) so the citation cannot drift between options.
+_ECHO_ALIASES: Dict[str, str] = {
+    "condo.selling_cost_rate": "condo.house.selling_cost_rate",
+    "house.selling_cost_rate": "condo.house.selling_cost_rate",
+}
+
+
+@dataclass(frozen=True)
+class Anchor:
+    """One cited engine default: value + provenance + plausible band."""
+
+    name: str
+    value: float
+    as_of: str
+    source: str
+    url: str
+    rationale: str
+    band: Tuple[float, float]
+    short_cite: str
+    # ISO date the cited URL was fetched and the quoted figure confirmed
+    # (provenance remediation 0.0, 2026-09-01). Required whenever `url` is a
+    # live http(s) source; calibration/neutral entries carry no URL and no date.
+    retrieved_on: str = ""
+    replaces: Optional[Tuple[float, str]] = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or "." not in self.name or not self.name.strip():
+            raise AnchorError(f"anchor name must be a dotted key, got {self.name!r}")
+        for field_name in ("as_of", "source", "url", "rationale", "short_cite"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise AnchorError(
+                    f"anchor {self.name!r}: empty {field_name} — an uncited or "
+                    f"unmotivated constant is a defect"
+                )
+        if not isinstance(self.band, tuple) or len(self.band) != 2:
+            raise AnchorError(f"anchor {self.name!r}: band must be a 2-tuple, got {self.band!r}")
+        lo, hi = self.band
+        if not lo <= hi:
+            raise AnchorError(f"anchor {self.name!r}: band endpoints out of order: {self.band}")
+        if not lo <= self.value <= hi:
+            raise AnchorError(
+                f"anchor {self.name!r}: central value {self.value} outside its "
+                f"own band {self.band}"
+            )
+        if self.url.startswith("http") and not self.retrieved_on.strip():
+            raise AnchorError(
+                f"anchor {self.name!r}: a live URL needs retrieved_on — an "
+                f"unverified citation is a prediction dressed as an observation"
+            )
+        if self.replaces is not None:
+            if not isinstance(self.replaces, tuple) or len(self.replaces) != 2:
+                raise AnchorError(
+                    f"anchor {self.name!r}: replaces must be (old_value, why), got {self.replaces!r}"
+                )
+            if not isinstance(self.replaces[1], str) or not self.replaces[1].strip():
+                raise AnchorError(
+                    f"anchor {self.name!r}: replaces entry must state why the default changed"
+                )
+
+
+ANCHORS: Dict[str, Anchor] = {
+    # --- Re-anchored defaults (values changed; old defaults were uncited) ---
+    "rent.investment_return_rate": Anchor(
+        name="rent.investment_return_rate",
+        value=0.03,
+        as_of="2026",
+        source="FP Canada Standards Council / Institute of Financial Planning, "
+               "2026 Projection Assumption Guidelines (April 2026), §5 "
+               "Financial assumptions: U.S. equities 6.4%, fixed income 3.2%, "
+               "inflation 2.1% (nominal geometric means, before fees)",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "60/40 balanced portfolio ≈ 0.6×6.4% (US equities) + 0.4×3.2% "
+            "(fixed income) ≈ 5.1% nominal; deflated by 2.1% PAG inflation "
+            "≈ 3.0% real. The old 0.07 real default exceeded even the PAG "
+            "100%-equity real ceiling (emerging markets 7.5% nominal ⇒ ≈ 5.3% "
+            "real), i.e. it assumed an all-stock portfolio beating every PAG "
+            "asset class in real terms."
+        ),
+        band=(0.02, 0.05),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+        replaces=(0.07, "uncited default above any PAG-derived real return; "
+                        "re-anchored to the 60/40 real figure"),
+    ),
+    "rent.rent_escalation_rate": Anchor(
+        name="rent.rent_escalation_rate",
+        value=0.01,
+        as_of="2026",
+        source="FP Canada 2026 PAG §5 'Shelter Projection Considerations' "
+               "3.1% (inflation + 1%), new in the 2026 edition; NBER Digest "
+               "Oct 2025 on Ball & Koh, NBER WP 34113 (21% pass-through to "
+               "continuing tenants, nber.org/digest/202510/understanding-lag-"
+               "between-cpi-shelter-inflation-and-market-rents); Québec TAL "
+               "2026 base rate 3.1% = 3-year CPI average (tal.gouv.qc.ca, "
+               "'Pourcentages applicables à la fixation de loyer 2026')",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "PAG shelter projection 3.1% nominal − 2.1% inflation = 1.0% real. "
+            "Québec continuing-tenant leases renew at the TAL base rate, which "
+            "since 2026 is the 3-year CPI average (3.1% for Apr 2026–Apr 2027 "
+            "renewals) ⇒ ≈ 0.0% real; landlords pass through only ~21% of "
+            "market-rent movements at renewal (Ball & Koh 2025), so 0.0% real "
+            "is the floor of the plausible band."
+        ),
+        band=(0.0, 0.02),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+        replaces=(0.03, "old default read like a nominal escalation applied in "
+                        "real mode; re-anchored to the PAG real shelter-cost figure"),
+    ),
+    "income.income_growth_rate": Anchor(
+        name="income.income_growth_rate",
+        value=0.01,
+        as_of="2026",
+        source="FP Canada 2026 PAG §5 'YMPE, MPE growth rate or salary' 3.1% "
+               "(inflation + 1% for productivity, merit and advancement)",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "PAG Salary Growth 3.1% nominal − 2.1% inflation = 1.0% real. "
+            "Individual lifecycle salary growth (promotions, career changes) is "
+            "a user input, not an engine default; this anchor is the "
+            "population-level planning figure."
+        ),
+        band=(0.0, 0.02),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+        replaces=(0.03, "old default conflated nominal salary growth with real "
+                        "terms; re-anchored to the PAG real salary-growth figure"),
+    ),
+    "income.affordability_threshold": Anchor(
+        name="income.affordability_threshold",
+        value=0.32,
+        as_of="2026",
+        source="CMHC 'Calculating GDS/TDS': 'CMHC restricts debt service ratios "
+               "to 39% (GDS) and 44% (TDS)'; industry guideline 32% GDS / 40% "
+               "TDS per Ratehub 'Debt Service Ratios' (ratehub.ca/debt-service-"
+               "ratios) — the 32% is NOT on the CMHC page",
+        url="https://cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/calculating-gds-tds",
+        rationale=(
+            "Legacy GDS guideline 32%, deliberately below CMHC's current 39% "
+            "GDS cap: hde's numerator is broader than GDS PITH (full condo "
+            "fees, maintenance, stochastic events), so the same-income ratio "
+            "runs higher than a lender's GDS — 32% on the broader numerator is "
+            "the conservative reading. Band spans the legacy 32% guideline to "
+            "CMHC's 44% TDS ceiling."
+        ),
+        band=(0.32, 0.44),
+        short_cite="CMHC GDS/TDS",
+        retrieved_on="2026-09-01",
+        replaces=(0.35, "uncited midpoint between the legacy and CMHC caps; "
+                        "re-anchored to the legacy 32% GDS guideline"),
+    ),
+    "condo.house.selling_cost_rate": Anchor(
+        name="condo.house.selling_cost_rate",
+        value=0.05,
+        as_of="2026",
+        source="WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh "
+               "2026 Ontario example (5% total commission)",
+        url="https://wowa.ca/calculators/cost-selling-house",
+        rationale=(
+            "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated "
+            "(3–4% on the first $100k, 1–2% above), seller legal fees "
+            "$1,000–$1,600; WOWA's own Ontario worked example totals 5.9% "
+            "including 13% HST on the commission. 5% is the commission-plus-"
+            "notary figure before sales tax; the band (3–8%) brackets a "
+            "discount brokerage at the low end and a taxed full-commission "
+            "sale at the high end. One anchor serves both condo and house so "
+            "the citation cannot drift between options."
+        ),
+        band=(0.03, 0.08),
+        short_cite="WOWA 2026",
+        retrieved_on="2026-09-01",
+    ),
+    "price_shock.severity_mean": Anchor(
+        name="price_shock.severity_mean",
+        value=0.25,
+        as_of="2026",
+        source="TREB average price series 1989–96 (via Better Dwelling)",
+        url="https://betterdwelling.com/city/toronto/it-took-22-years-for-prices-to-recover-from-the-last-toronto-real-estate-crash",
+        rationale=(
+            "Toronto 1989–96 correction: peak $273,698 (1989) → trough $198,150 "
+            "(1996) = −27.6% nominal (≈ −39.4% real in 2017 dollars). Mean set "
+            "just under the observed nominal peak-trough severity of Canada's "
+            "largest metro correction; the channel is default-off "
+            "(annual_hazard=0)."
+        ),
+        band=(0.15, 0.40),
+        short_cite="TREB 1989–96",
+        retrieved_on="2026-09-01",
+        replaces=(0.20, "uncited; re-anchored near the observed 1989–96 nominal "
+                        "peak-trough severity (−27.6%)"),
+    ),
+    "price_shock.severity_vol": Anchor(
+        name="price_shock.severity_vol",
+        value=0.10,
+        as_of="2026",
+        source="CALIBRATED TO ANCHOR, NOT INDEPENDENTLY SOURCED (dispersion "
+               "choice around price_shock.severity_mean)",
+        url="none — calibration choice, see rationale",
+        rationale=(
+            "Dispersion around the TREB-anchored severity mean: ±1σ keeps "
+            "severity ≈ 0.21–0.30, inside the observed nominal (−27.6%) → real "
+            "(−39.4%) span of the 1989–96 event. This vol is calibrated to the "
+            "severity anchor, not independently sourced; its band is likewise "
+            "an illustrative plausible range for the calibration."
+        ),
+        band=(0.05, 0.15),
+        short_cite="TREB 1989–96 (calibrated)",
+    ),
+    # --- Rationale-only anchors (value unchanged; registered so the echo and
+    #     the config parsers cite a single source instead of a bare literal) ---
+    "condo.fee_escalation_rate": Anchor(
+        name="condo.fee_escalation_rate",
+        value=0.0,
+        as_of="2026",
+        source="FP Canada 2026 PAG §5 'Shelter Projection Considerations' "
+               "3.1% nominal (≈ 1.0% real) as the upper reference",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "Condo fees track inflation absent aging-building pressure ⇒ 0.0% "
+            "real. FP Canada 2026 shelter-cost growth 1.0% real is the upper "
+            "reference — a fee growing faster than that in real terms is an "
+            "aging-building judgment the user should set explicitly."
+        ),
+        band=(0.0, 0.01),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+    ),
+    "house.value_growth_rate": Anchor(
+        name="house.value_growth_rate",
+        value=0.0,
+        as_of="2026",
+        source="hde neutrality ruling — deliberately uncited",
+        url="none (deliberately uncited)",
+        rationale=(
+            "Neutral by construction: no defensible universal long-run real "
+            "appreciation default exists for Canadian home prices. Users "
+            "should set their own view or wire a market_scenario prior "
+            "(ISQ-grounded demographic drift). Band is an illustrative "
+            "neutrality range, not a citation."
+        ),
+        band=(-0.01, 0.02),
+        short_cite="neutral, uncited",
+    ),
+    "condo.value_growth_rate": Anchor(
+        name="condo.value_growth_rate",
+        value=0.0,
+        as_of="2026",
+        source="hde neutrality ruling — deliberately uncited",
+        url="none (deliberately uncited)",
+        rationale=(
+            "Neutral by construction: no defensible universal long-run real "
+            "appreciation default exists for Canadian home prices. Users "
+            "should set their own view or wire a market_scenario prior "
+            "(ISQ-grounded demographic drift). Band is an illustrative "
+            "neutrality range, not a citation."
+        ),
+        band=(-0.01, 0.02),
+        short_cite="neutral, uncited",
+    ),
+    "economic.inflation_rate": Anchor(
+        name="economic.inflation_rate",
+        value=0.0,
+        as_of="2026",
+        source="FP Canada 2026 PAG §5 inflation 2.1%; PAG p.6: CPI averaged "
+               "2.5% over the 10 years to Dec 2025 (3.9% over 5 years)",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "0.0 is the real-mode inert value (inflation is already stripped "
+            "from real-terms rates). In nominal mode the FP Canada 2026 "
+            "long-term planning assumption is 2.1% — set inflation_rate: 0.021 "
+            "when mode=nominal. The PAG publishes no separate short-term "
+            "inflation figure (its 2.4% is the short-term INVESTMENT return); "
+            "the band top 2.5% is the 10-year realised CPI average the PAG "
+            "quotes, a defensible nominal-mode ceiling."
+        ),
+        band=(0.0, 0.025),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+    ),
+}
+
+
+def short_cite(name: str) -> str:
+    """Short citation tag for a (possibly defaulted) dotted key, e.g.
+    "FP Canada 2026 PAG" — empty string when no anchor exists for the key."""
+    anchor = ANCHORS.get(_ECHO_ALIASES.get(name, name))
+    return anchor.short_cite if anchor is not None else ""

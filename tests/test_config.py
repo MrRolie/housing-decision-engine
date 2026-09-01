@@ -735,7 +735,7 @@ class TestCoherenceWarnings:
             "economic": {"mode": "real"},
             "house": {"initial_value": 400_000, "all_cash": True,
                       "value_growth_rate": 0.01},
-            "rent": {"monthly_rent": 2_000},
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01},
         }
         cfg.update(overrides)
         return load_config_dict(cfg)

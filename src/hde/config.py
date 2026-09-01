@@ -11,6 +11,7 @@ import difflib
 
 import yaml
 
+from .anchors import ANCHORS
 from .models import (
     CondoParams,
     HouseParams,
@@ -190,6 +191,7 @@ _ASSUMPTION_KEYS: Dict[str, tuple] = {
     "condo": ("fee_escalation_rate", "value_growth_rate", "selling_cost_rate"),
     "house": ("value_growth_rate", "selling_cost_rate"),
     "rent": ("rent_escalation_rate", "invested_down_payment", "investment_return_rate"),
+    "income": ("income_growth_rate", "affordability_threshold"),
 }
 
 
@@ -221,6 +223,20 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         warns.append(
             f"economic.inflation_rate={econ.inflation_rate:.1%} is set but "
             f"ignored in real mode (mode='real')"
+        )
+
+    if spec.rent is not None and "rent.rent_escalation_rate" in spec.defaults_applied:
+        warns.append(
+            f"rent.rent_escalation_rate defaulted to "
+            f"{spec.rent.rent_escalation_rate:.1%} real (FP Canada 2026 "
+            f"shelter-cost growth; QC continuing leases ≈ CPI ⇒ 0.0% real) "
+            f"— set explicitly for your market view"
+        )
+
+    if econ.mode == "nominal" and econ.inflation_rate == 0:
+        warns.append(
+            "nominal mode with inflation_rate=0 — FP Canada 2026 long-term "
+            "inflation assumption is 2.1%"
         )
 
     for name, opt in (("condo", spec.condo), ("house", spec.house)):
@@ -427,8 +443,8 @@ def _parse_price_shock(data: Dict[str, Any], label: str) -> PriceShockParams:
         raise ConfigValidationError(f"{label}.price_shock must be a mapping")
     return PriceShockParams(
         annual_hazard=float(data.get("annual_hazard", 0.0)),
-        severity_mean=float(data.get("severity_mean", 0.20)),
-        severity_vol=float(data.get("severity_vol", 0.10)),
+        severity_mean=float(data.get("severity_mean", ANCHORS["price_shock.severity_mean"].value)),
+        severity_vol=float(data.get("severity_vol", ANCHORS["price_shock.severity_vol"].value)),
     )
 
 
@@ -475,7 +491,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
-        selling_cost_rate=float(condo_data.get("selling_cost_rate", 0.05)),
+        # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
+        selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -519,7 +536,8 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         mortgage_rate=(None if "mortgage_rate" not in house_data else float(house_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
-        selling_cost_rate=float(house_data.get("selling_cost_rate", 0.05)),
+        # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
+        selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None
@@ -535,9 +553,11 @@ def _parse_rent(data: Dict[str, Any], years: int) -> RentParams:
     other = [_parse_recurring_cost(c) for c in data.get("other_recurring_costs", [])]
     return RentParams(
         monthly_rent=float(data["monthly_rent"]),
-        rent_escalation_rate=float(data.get("rent_escalation_rate", 0.03)),
+        # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% = 1.0% real
+        rent_escalation_rate=float(data.get("rent_escalation_rate", ANCHORS["rent.rent_escalation_rate"].value)),
         invested_down_payment=float(data.get("invested_down_payment", 0.0)),
-        investment_return_rate=float(data.get("investment_return_rate", 0.07)),
+        # FP Canada 2026 PAG 60/40 ≈ 3.0% real
+        investment_return_rate=float(data.get("investment_return_rate", ANCHORS["rent.investment_return_rate"].value)),
         events=events,
         other_recurring_costs=other,
     )
@@ -550,8 +570,10 @@ def _parse_income(data: Dict[str, Any]) -> IncomeParams:
     events = [_parse_pay_drop_event(e) for e in data.get("pay_drop_events", [])]
     return IncomeParams(
         annual_income=float(data["annual_income"]),
-        income_growth_rate=float(data.get("income_growth_rate", 0.03)),
-        affordability_threshold=float(data.get("affordability_threshold", 0.35)),
+        # FP Canada 2026 PAG salary growth 3.1% − 2.1% = 1.0% real
+        income_growth_rate=float(data.get("income_growth_rate", ANCHORS["income.income_growth_rate"].value)),
+        # Legacy GDS 32% guideline (below CMHC's 39% cap; broader-than-PITH numerator)
+        affordability_threshold=float(data.get("affordability_threshold", ANCHORS["income.affordability_threshold"].value)),
         pay_drop_events=events,
     )
 

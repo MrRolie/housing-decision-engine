@@ -18,51 +18,63 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
-        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0"),
+        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
+                                       "neutral, no universal long-run real default; set "
+                                       "your view or a market_scenario prior"),
         "monthly_fee": (False, "condo fee, $/month; default 0"),
         "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
         "down_payment": (False, "with mortgage_rate+term: capital structure"),
         "mortgage_rate": (False, "annual rate, decimal"),
         "mortgage_term_years": (False, "amortization term"),
         "all_cash": (False, "no financing; XOR with mortgage fields"),
-        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — dominates short horizons"),
+        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
+                                       "commissions 4–5% + notary (WOWA 2026); "
+                                       "dominates short horizons"),
         "events": (False, "list of {name, base_cost, expected_year, ...}"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
     },
     "house": {
         "initial_value": (True, "purchase price in DOLLARS"),
-        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0"),
+        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
+                                       "neutral, no universal long-run real default; set "
+                                       "your view or a market_scenario prior"),
         "annual_maintenance_rate": (False, "fraction of value per year; default 0.0"),
         "maintenance_curve": (False, "list of {year, rate} overrides"),
         "down_payment": (False, "with mortgage_rate+term: capital structure"),
         "mortgage_rate": (False, "annual rate, decimal"),
         "mortgage_term_years": (False, "amortization term"),
         "all_cash": (False, "no financing; XOR with mortgage fields"),
-        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05"),
+        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
+                                       "commissions 4–5% + notary (WOWA 2026)"),
         "events": (False, "list of {name, base_cost, expected_year, ...}"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
     },
     "rent": {
         "monthly_rent": (True, "$/month"),
-        "rent_escalation_rate": (False, "annual; DEFAULT 0.03"),
+        "rent_escalation_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 "
+                                          "PAG shelter-cost growth)"),
         "invested_down_payment": (False, "capital the renter invests instead; "
                                         "DEFAULT 0 — set it or the comparison is "
                                         "not like-for-like"),
-        "investment_return_rate": (False, "annual; DEFAULT 0.07"),
+        "investment_return_rate": (False, "annual; DEFAULT 0.03 real (FP Canada 2026 "
+                                            "PAG 60/40)"),
         "events": (False, "list of {name, base_cost, expected_year, ...}"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
     },
     "economic": {
         "mode": (False, '"real" (DEFAULT — growth/discount must be real) or "nominal"'),
-        "inflation_rate": (False, "ignored in real mode; default 0.0"),
+        "inflation_rate": (False, "ignored in real mode; DEFAULT 0.0 — nominal-mode "
+                                    "suggestion 0.021 (FP Canada 2026 PAG)"),
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
     },
     "income": {
         "annual_income": (False, "enables affordability reporting"),
-        "income_growth_rate": (False, "annual; default 0.03"),
-        "affordability_threshold": (False, "cost/income ratio; default 0.35"),
+        "income_growth_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 PAG "
+                                        "salary growth)"),
+        "affordability_threshold": (False, "cost/income ratio; DEFAULT 0.32 (legacy GDS "
+                                             "32%, below CMHC's 39% cap)"),
         "pay_drop_events": (False, "list of {year, magnitude, ...}"),
     },
     "simulation": {

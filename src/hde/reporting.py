@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.figure
 from matplotlib.figure import Figure
 
+from .anchors import short_cite
 from .models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
@@ -43,7 +44,9 @@ def format_assumptions(spec: ComparisonSpec) -> List[str]:
     Lines: terms mode + discount rate, per-option growth/escalation (with
     selling-cost rate for owned options, invested capital + return for rent),
     and a 'defaults applied' list for any echoed assumption the user YAML did
-    not provide (spec.defaults_applied, populated by the config loader).
+    not provide (spec.defaults_applied, populated by the config loader). Each
+    defaulted key carries its anchor's short citation tag (anchors.py) so the
+    consumer can ask "where did this number come from?" and get an answer.
     """
     lines = [
         f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}"
@@ -66,9 +69,11 @@ def format_assumptions(spec: ComparisonSpec) -> List[str]:
             f"{spec.rent.investment_return_rate:+.1%}/yr"
         )
     if spec.defaults_applied:
-        joined = ", ".join(
-            f"{key}={_echo_value(spec, key)}" for key in spec.defaults_applied
-        )
+        def _echo_entry(key: str) -> str:
+            cite = short_cite(key)
+            tag = f" [{cite}]" if cite else ""
+            return f"{key}={_echo_value(spec, key)}{tag}"
+        joined = ", ".join(_echo_entry(key) for key in spec.defaults_applied)
         lines.append(f"defaults applied: {joined}")
     return lines
 
