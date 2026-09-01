@@ -1,0 +1,35 @@
+# Income shock scenario: 20% pay cut in year 3
+# Which housing option is still affordable after the shock?
+
+years: 15
+discount_rate: 0.05
+
+condo:
+  monthly_fee: 700
+  fee_escalation_rate: 0.03
+  initial_value: 500000
+  all_cash: true
+
+rent:
+  monthly_rent: 2500
+  rent_escalation_rate: 0.04
+  # Equalized with the condo's all-cash purchase capital (500k): a renter who
+  # skips buying invests that same capital, so the opportunity cost is like-for-like.
+  invested_down_payment: 500000
+  investment_return_rate: 0.07
+
+income:
+  annual_income: 120000
+  income_growth_rate: 0.03
+  affordability_threshold: 0.35
+  pay_drop_events:
+    - year: 3
+      magnitude: 0.80
+
+simulation:
+  num_sims: 5000
+  random_seed: 42
+  condo_fee_vol: 0.08
+
+economic:
+  mode: real

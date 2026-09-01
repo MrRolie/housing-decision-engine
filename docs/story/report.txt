@@ -1,0 +1,31 @@
+Condo  total PV:  $     457,945
+  fee_pv: $     188,713
+  events_pv: $      10,153
+  other_pv: $           0
+  reserve_pv: $           0
+  downpayment_pv: $     480,000
+  mortgage_pv: $           0
+  terminal_equity_pv: $    -220,921
+House  total PV:  $     421,414
+  maintenance_pv: $     113,415
+  events_pv: $      11,137
+  other_pv: $           0
+  downpayment_pv: $     550,000
+  mortgage_pv: $           0
+  terminal_equity_pv: $    -253,138
+Rent   total PV:  $     389,342
+  rent_pv: $     534,342
+  events_pv: $           0
+  other_pv: $           0
+  invested_dp_benefit_pv: $    -145,000
+
+Cheapest: Rent saves $68,603 vs Condo
+  ≈ $401/month equivalent
+
+Monte Carlo:
+  Condo: mean $481,187  p5 $392,167  p50 $492,550  p95 $561,373
+  House: mean $442,358  p5 $360,441  p50 $452,149  p95 $513,527
+  Rent: mean $389,342  p5 $389,342  p50 $389,342  p95 $389,342
+  P(condo cheapest): 3.3%
+  P(house cheapest): 15.7%
+  P(rent cheapest): 81.0%

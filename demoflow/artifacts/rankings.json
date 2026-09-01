@@ -1,0 +1,165 @@
+{
+  "assumptions_hash": "e03504aaffd0a35a",
+  "data_vintage": {
+    "source_hashes": {
+      "census_tenure_age_98100231.csv": {
+        "committed_sha256": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+        "extracted_at": "2026-07-21",
+        "sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b"
+      },
+      "compo-ra-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "1b81a82b0f0588a3217eb93b74d37044addf08934731dfd612e846e6de7b728f"
+      },
+      "compo-rmr-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "096246df47a95f729d46bacdb655cf297f4779163d62ee25e95254b5cc23844b"
+      },
+      "headship_by_age.json": {
+        "extracted_at": "2026-07-21",
+        "sha256": "e9f00d61ff1ce90278a5cb98041a23d12f41caf2f454babef5d4772931006c92"
+      },
+      "hors_aligned_csd_98100232.json": {
+        "extracted_at": "2026-08-15",
+        "sha256": "92821b9dad0d7aae7211300d11d3f721b8d7a0e2d19efcfa50ca78fb8cf24d3f"
+      },
+      "living_arrangement.json": {
+        "extracted_at": "2026-08-08",
+        "sha256": "685c6e41deb14a8603bf43dae286aea85e7f0cc1ba66a06f1fe8844f0d4eabe7"
+      },
+      "living_arrangement_98100134.json": {
+        "extracted_at": "2026-08-08",
+        "sha256": "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39"
+      },
+      "mortality_basis:CPM2014_combined+CPM-B": {
+        "extracted_at": "2026-08-19",
+        "sha256": "d15e1f52318413016d1cc3229a5a2c85306fe922010be52e132dc8fbba830cea"
+      },
+      "ownership_by_geo_age.json": {
+        "extracted_at": "2026-07-21",
+        "sha256": "2c371f84a7ac1cd1dac4ce0f069993d59fdf32a552c39b147c149c9dc62706e4"
+      },
+      "ownership_hors_aligned.json": {
+        "extracted_at": "2026-08-15",
+        "sha256": "88775eca8ecf6283858155b42787301c614478fee37a29682790758b7831c0e5"
+      },
+      "pop-as-qc-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "1d286d252a75195db6ab66ac767e352d9f74e4e2359c68eba4a43301c9c61fd4"
+      },
+      "pop-as-ra-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "ae9de62fd8631668e127e5cd37ec10028959a38a18831e1c5e4d102a1c8779fe"
+      },
+      "pop-as-rmr-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "288d8c9f03d05ece6ae1271e2cf55226a534d4fe27005ca76fb2ef305f0882d7"
+      }
+    }
+  },
+  "exclusions": [],
+  "rankings": [
+    {
+      "flags": [
+        "borrowed_prior",
+        "ra_proxy"
+      ],
+      "geography": "LANAUDIERE_RA14_PROXY",
+      "mean_ed_high": 0.0023291205374152777,
+      "mean_ed_low": -0.003955989878047007,
+      "mean_ed_reference": -0.000861816054566814,
+      "rank": 1,
+      "rank_stable": false
+    },
+    {
+      "flags": [
+        "borrowed_prior",
+        "ra_proxy"
+      ],
+      "geography": "LAURENTIDES_RA15_PROXY",
+      "mean_ed_high": 0.0028024255329287687,
+      "mean_ed_low": -0.003978412893017653,
+      "mean_ed_reference": -0.000599967268849611,
+      "rank": 2,
+      "rank_stable": false
+    },
+    {
+      "flags": [
+        "closed_cohort_exceedance"
+      ],
+      "geography": "LAVAL_RA13",
+      "mean_ed_high": 0.0016854370483882204,
+      "mean_ed_low": -0.002626128516366279,
+      "mean_ed_reference": -0.0004921670100473161,
+      "rank": 3,
+      "rank_stable": false
+    },
+    {
+      "flags": [],
+      "geography": "HORS_RMR",
+      "mean_ed_high": 0.0028158877823177613,
+      "mean_ed_low": -0.0026216655846809313,
+      "mean_ed_reference": 0.00024822935467663234,
+      "rank": 4,
+      "rank_stable": false
+    },
+    {
+      "flags": [],
+      "geography": "MTL_RMR",
+      "mean_ed_high": 0.004039480181615847,
+      "mean_ed_low": -0.0029960504180002925,
+      "mean_ed_reference": 0.0006693437674490574,
+      "rank": 5,
+      "rank_stable": false
+    },
+    {
+      "flags": [
+        "borrowed_prior",
+        "ra_proxy"
+      ],
+      "geography": "MONTEREGIE_RA16_PROXY",
+      "mean_ed_high": 0.004518014006882055,
+      "mean_ed_low": -0.0032136391088007483,
+      "mean_ed_reference": 0.0008143468805139723,
+      "rank": 6,
+      "rank_stable": false
+    },
+    {
+      "flags": [],
+      "geography": "QC_RMR",
+      "mean_ed_high": 0.008067088356442346,
+      "mean_ed_low": -0.0011231683052316621,
+      "mean_ed_reference": 0.0036821317213199885,
+      "rank": 7,
+      "rank_stable": false
+    },
+    {
+      "flags": [],
+      "geography": "MTL_ISLAND_RA06",
+      "mean_ed_high": 0.00948518462616907,
+      "mean_ed_low": 6.630128456943239e-05,
+      "mean_ed_reference": 0.005032692684347393,
+      "rank": 8,
+      "rank_stable": false
+    }
+  ],
+  "rows_moved": {
+    "collective_share_75plus=0.02": 0,
+    "collective_share_75plus=0.08": 0,
+    "estate_eventual_fraction=0.6": 0,
+    "estate_eventual_fraction=0.85": 0,
+    "estate_lag_years=1": 0,
+    "estate_lag_years=3": 0,
+    "headship_shape=expo_cum_fb": 0,
+    "headship_shape=expo_cum_fc": 0,
+    "immigrant_ownership_ratio=0.155": 7,
+    "immigrant_ownership_ratio=1.033": 5,
+    "phi_voluntary=0.7": 4,
+    "phi_voluntary=1.0": 0,
+    "q_live_per_year=0.06": 2,
+    "q_live_per_year=0.11": 0
+  },
+  "run_pairing": "f7dfc4d152781567",
+  "schema": "demoflow.rankings.v1",
+  "schema_version": "1"
+}

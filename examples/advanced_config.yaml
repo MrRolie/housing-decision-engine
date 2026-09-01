@@ -1,0 +1,119 @@
+# Advanced Configuration Example
+# A more comprehensive scenario with multiple events, reserves, correlations, and hazard/lognormal events
+
+years: 30
+discount_rate: 0.035
+
+economic:
+  mode: nominal
+  inflation_rate: 0.025
+  inflation_vol: 0.010
+
+condo:
+  monthly_fee: 550
+  fee_escalation_rate: 0.015  # real growth above inflation
+  initial_value: 420000
+  value_growth_rate: 0.02
+  all_cash: true
+  reserve_contribution_rate: 0.30
+  reserve_initial_balance: 15000
+  reserve_growth_rate: 0.02
+  events:
+    - name: "special_assessment_exterior"   # Hazard-style special assessment with fat-tailed costs
+      base_cost: 8000
+      expected_year: 12
+      timing_model: hazard
+      hazard_base: 0.05
+      hazard_growth: 0.03
+      hazard_start_year: 8
+      min_year: 8
+      max_year: 18
+      cost_vol: 0.35
+      cost_distribution: lognormal
+    - name: "special_assessment_amenities"   # Jitter-style
+      base_cost: 5000
+      expected_year: 18
+      timing_std_years: 2
+      cost_vol: 0.25
+  other_recurring_costs:
+    - name: "unit_insurance"
+      annual_amount: 600
+      escalation_rate: 0.02
+    - name: "parking_fee"
+      annual_amount: 1200
+      escalation_rate: 0.01
+
+house:
+  initial_value: 500000
+  value_growth_rate: 0.03
+  annual_maintenance_rate: 0.009
+  all_cash: true
+  maintenance_curve:
+    - year: 1
+      rate: 0.007
+    - year: 15
+      rate: 0.012
+    - year: 30
+      rate: 0.018
+  events:
+    - name: "roof_replacement"      # Hazard/lognormal with rising probability after year 18
+      base_cost: 14000
+      expected_year: 22
+      timing_model: hazard
+      hazard_base: 0.03
+      hazard_growth: 0.04
+      hazard_start_year: 18
+      min_year: 15
+      max_year: 28
+      cost_vol: 0.30
+      cost_distribution: lognormal
+    - name: "hvac_replacement"
+      base_cost: 5000
+      expected_year: 15
+      timing_std_years: 2
+      min_year: 10
+      max_year: 20
+      cost_vol: 0.20
+    - name: "water_heater"
+      base_cost: 1200
+      expected_year: 12
+      timing_std_years: 1.5
+      cost_vol: 0.15
+      cost_distribution: normal
+    - name: "appliance_refresh"
+      base_cost: 2500
+      expected_year: 10
+      timing_std_years: 1
+      cost_vol: 0.20
+    - name: "exterior_paint"
+      base_cost: 1500
+      expected_year: 20
+      timing_std_years: 3
+      cost_vol: 0.15
+    - name: "driveway_repair"
+      base_cost: 3000
+      expected_year: 30
+      timing_std_years: 3
+      cost_vol: 0.30
+  other_recurring_costs:
+    - name: "home_insurance"
+      annual_amount: 1200
+      escalation_rate: 0.03
+    - name: "landscaping"
+      annual_amount: 1000
+      escalation_rate: 0.01
+    - name: "snow_removal"
+      annual_amount: 350
+      escalation_rate: 0.01
+
+simulation:
+  num_sims: 15000
+  random_seed: 12345
+  house_maintenance_vol: 0.25
+  condo_fee_vol: 0.08
+  other_cost_vol: 0.12
+  corr_inflation_house: 0.40
+  corr_inflation_condo: 0.50
+  corr_inflation_other: 0.35
+  corr_inflation_event_cost: 0.25
+  shock_model: lognormal

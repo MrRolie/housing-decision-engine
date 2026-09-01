@@ -1,0 +1,273 @@
+{
+  "_provenance": {
+    "source": "living_arrangement_98100134.json",
+    "sha256": "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
+    "statcan_table": "98-10-0134-01",
+    "product_id": 98100134,
+    "ref_date": "2021",
+    "released": "2022-07-13T08:30",
+    "extracted_at": "2026-08-08",
+    "derived_by": "demoflow.loaders.living_arrangement.derive_living_arrangement",
+    "generator": "demoflow/scripts/gen_living_arrangement.py",
+    "acquired_by": "demoflow/scripts/pull_living_arrangement.py",
+    "citation": "Statistics Canada. Table 98-10-0134-01, \"Census family status and household living arrangements, household type of person, age group and gender: Canada, provinces and territories, census metropolitan areas and census agglomerations\", 2021 Census, released 2022-07-13T08:30. https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=9810013401",
+    "universe": "Persons in PRIVATE households. MEASURED, not assumed (probe P3 §5): this cube's Québec all-ages/all-genders total is 8,308,475 against the published 2021 Census Québec population of 8,501,833 — the 2.27% gap is the collective / non-private-household population. Collectives are therefore already excluded from these denominators, which is what spec §5's partition requires.",
+    "measure": "living_alone = `Persons living alone` / `Total - Census family status and household living arrangements`; couple_share = `Married spouses and common-law partners` / (total − living alone), CONDITIONAL on not living alone per spec §5's coupled_s = pop_s × (1 − living_alone_s) × couple_share_s. Both per SEX, at the `Total - Household type of person` member, Census year 2021.",
+    "couple_share_rule": "CITED-OR-RAISE (spec §11.3): couple_share has NO invented default. Every value here is derived from the cited table above; a cell that carries no couple_share raises LoaderError at lookup rather than falling back to anything. Values stay EXACTLY as cited — steering ruling A retired the 0.25 same-age balance gate rather than calibrate a cited rate away from its source.",
+    "living_alone_rule": "Also cited-or-raise here. Spec §11.3's per-sex vitrine fallback (0.28, widened band [0.24, 0.34], `borrowed_prior`) is MEASURED UNNEEDED: probe P3 landed DECISION-FOUND-AT-CMA: YES and every modeled geography is served from the cited cube. The vitrine anchor stays defined in constants.py for a future geography extension; no code path invents a living_alone rate.",
+    "multiplicand_note": "WHAT THESE RATES MAY MULTIPLY — recorded here because getting it wrong is invisible: the denominators are PRIVATE-HOUSEHOLD persons, so the population they multiply must ALSO be private-household persons. ISQ's projected population includes collective/institutional residents, and at 75+ that population is exactly where collectives concentrate. The initialization must therefore remove the collective share (CONSTANTS['collective_share_75plus'], still borrowed_prior — probe P3 §5 states a 75+-SPECIFIC share is NOT derivable from this cube, which needs total population BY AGE) BEFORE applying these rates. Applying them to the raw ISQ stock double-counts collective residents into Solo/Couple/Other; removing the share twice undercounts. RECORDED, NOT RESOLVED: the join is downstream of this loader.",
+    "hors_rmr_method": "Québec-province counts NET of all six WHOLLY-QUÉBEC CMA counts; population, living-alone and coupled netted separately THEN divided (never a difference of rates). Same netting and same denotation as census.py's ownership residual.",
+    "netted_cmas": [
+      "Drummondville (CMA), Que.",
+      "Montréal (CMA), Que.",
+      "Québec (CMA), Que.",
+      "Saguenay (CMA), Que.",
+      "Sherbrooke (CMA), Que.",
+      "Trois-Rivières (CMA), Que."
+    ],
+    "ca_caveat": "HORS_RMR here denotes: Québec outside the six WHOLLY-QUÉBEC CMAs — INCLUDING all Census Agglomerations AND the Québec side of Ottawa-Gatineau. Ottawa-Gatineau is parented to Ontario in StatCan's geography and this cube publishes no separable Québec-part row, so its Québec side is INSEPARABLE here and falls inside the residual. The residual is COMPUTED (province counts net of the six CMA counts), never a published row — the same denotation census.py's ownership residual carries, and deliberately so: the two rates multiply the same population.",
+    "isq_territory_note": "TERRITORY MISMATCH INHERITED, NOT RESOLVED HERE: this residual's territory is NOT the territory of the ISQ HORS_RMR population it will multiply. ISQ's pop-as-rmr-base.xlsx publishes \"RMR d'Ottawa-Gatineau\" as Québec-part-only, so its literal 'Territoire hors des RMR' row EXCLUDES the Québec side of Ottawa-Gatineau while this Census residual INCLUDES it. The magnitudes are measured and recorded ONCE, in census.py's `_provenance.isq_territory_note` (355,971 persons = 12.99% of the Census residual territory / 14.93% of the ISQ hors-RMR population, 2021 Référence). Recorded here by reference rather than re-derived: two independently maintained copies of one measurement drift, and the rate × population join that must reconcile them is downstream of BOTH loaders.",
+    "rounding_note": "StatCan random-rounds counts to the nearest 5, so the living-arrangement hierarchy does not reconcile exactly to its totals (probe P3 §5 measured a worst deviation of 10 persons across 126 identities). Rates are computed directly from the published band counts; no reconciliation is asserted and no correction is applied. The one identity that IS gated here — Total-Gender vs Men+ + Women+ — is gated with a rounding tolerance, never exactly.",
+    "borrowed_prior": "RA-level members are absent from this CMA-level cube; each reuses its parent CMA's computed rates and carries `_flag: borrowed_prior` inline (spec §8). All five borrow MTL_RMR — understates island, overstates couronne (v0), the same imprecision census.py's ownership borrow carries.",
+    "couple_balance_diagnostic": {
+      "_what": "Source-level coupled-person counts from the cited cube, per geography × band × sex, with |Δ|/max. RECORDED, NOT GATED (steering ruling A): per-band imbalance under the same-age approximation is expected, and the retired 0.25 same-age gate was refuted by probe P3 §4b (breached on 13/21 correct rows). Distinct from the run-artifact diagnostic over MODELLED counts. Geographies flagged borrowed_prior inherit their parent's profile and are not repeated here.",
+      "MTL_RMR": {
+        "75-84": {
+          "coupled_M": 70150,
+          "coupled_F": 50195,
+          "imbalance": 0.284462
+        },
+        "85+": {
+          "coupled_M": 16295,
+          "coupled_F": 7390,
+          "imbalance": 0.546487
+        },
+        "75+": {
+          "coupled_M": 86445,
+          "coupled_F": 57585,
+          "imbalance": 0.333854,
+          "direction": "M>=F"
+        }
+      },
+      "QC_RMR": {
+        "75-84": {
+          "coupled_M": 16870,
+          "coupled_F": 12535,
+          "imbalance": 0.256965
+        },
+        "85+": {
+          "coupled_M": 2920,
+          "coupled_F": 1470,
+          "imbalance": 0.496575
+        },
+        "75+": {
+          "coupled_M": 19790,
+          "coupled_F": 14005,
+          "imbalance": 0.292319,
+          "direction": "M>=F"
+        }
+      },
+      "HORS_RMR": {
+        "75-84": {
+          "coupled_M": 59555,
+          "coupled_F": 42585,
+          "imbalance": 0.284947
+        },
+        "85+": {
+          "coupled_M": 10255,
+          "coupled_F": 4810,
+          "imbalance": 0.530961
+        },
+        "75+": {
+          "coupled_M": 69810,
+          "coupled_F": 47395,
+          "imbalance": 0.321086,
+          "direction": "M>=F"
+        }
+      }
+    }
+  },
+  "rates": {
+    "MTL_RMR": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      }
+    },
+    "MTL_ISLAND_RA06": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      },
+      "_flag": "borrowed_prior"
+    },
+    "LAVAL_RA13": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      },
+      "_flag": "borrowed_prior"
+    },
+    "QC_RMR": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.22890272707751771,
+          "couple_share": 0.9395711500974658
+        },
+        "F": {
+          "living_alone": 0.46622469091560653,
+          "couple_share": 0.8415575696542464
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.3216494845360825,
+          "couple_share": 0.8875379939209727
+        },
+        "F": {
+          "living_alone": 0.6286279683377308,
+          "couple_share": 0.522202486678508
+        }
+      }
+    },
+    "HORS_RMR": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.24433175963163722,
+          "couple_share": 0.9187042036251446
+        },
+        "F": {
+          "living_alone": 0.4076931678407693,
+          "couple_share": 0.8039456296016613
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.3109101187111362,
+          "couple_share": 0.8412633305988515
+        },
+        "F": {
+          "living_alone": 0.5586469175340272,
+          "couple_share": 0.436281179138322
+        }
+      }
+    },
+    "LANAUDIERE_RA14_PROXY": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      },
+      "_flag": "borrowed_prior"
+    },
+    "LAURENTIDES_RA15_PROXY": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      },
+      "_flag": "borrowed_prior"
+    },
+    "MONTEREGIE_RA16_PROXY": {
+      "75-84": {
+        "M": {
+          "living_alone": 0.2149822244794312,
+          "couple_share": 0.9076793685708741
+        },
+        "F": {
+          "living_alone": 0.43435547517264056,
+          "couple_share": 0.7295254705326648
+        }
+      },
+      "85+": {
+        "M": {
+          "living_alone": 0.2796641791044776,
+          "couple_share": 0.8440818440818441
+        },
+        "F": {
+          "living_alone": 0.5549111997100399,
+          "couple_share": 0.4011943539630836
+        }
+      },
+      "_flag": "borrowed_prior"
+    }
+  }
+}

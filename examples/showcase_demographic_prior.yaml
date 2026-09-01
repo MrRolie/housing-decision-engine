@@ -1,0 +1,54 @@
+# Showcase: the full stack — hde consuming demoflow's ScenarioPrior
+#
+# This is the end-to-end story: UN population projections → ISQ scenarios →
+# demoflow's audited demand model → this file's rent-vs-buy decision.
+# The prior at tests/fixtures/scenario_prior_golden.json is demoflow's REAL
+# emitted artifact (see that repo's Tranche-2 build).
+
+years: 25
+discount_rate: 0.05
+
+market_scenario:
+  path: tests/fixtures/scenario_prior_golden.json
+  geography: MTL_RMR
+
+condo:
+  monthly_fee: 800
+  fee_escalation_rate: 0.03
+  initial_value: 480000
+  value_growth_rate: 0.02
+  all_cash: true
+  price_shock:
+    annual_hazard: 0.03
+    severity_mean: 0.20
+    severity_vol: 0.10
+  events:
+    - name: "special_assessment"
+      base_cost: 15000
+      expected_year: 8
+      cost_vol: 0.2
+
+house:
+  initial_value: 550000
+  value_growth_rate: 0.02
+  annual_maintenance_rate: 0.012
+  all_cash: true
+  price_shock:
+    annual_hazard: 0.03
+    severity_mean: 0.20
+    severity_vol: 0.10
+  events:
+    - name: "roof_replacement"
+      base_cost: 20000
+      expected_year: 12
+      cost_vol: 0.15
+
+rent:
+  monthly_rent: 2400
+  rent_escalation_rate: 0.025
+  invested_down_payment: 145000
+  investment_return_rate: 0.05
+
+simulation:
+  num_sims: 5000
+  random_seed: 42

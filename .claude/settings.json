@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run hde *)",
+      "Bash(uv run hde)",
+      "Bash(uv run --extra dev python -m pytest *)",
+      "Bash(uv sync *)",
+      "Bash(uv run python -m pytest *)"
+    ]
+  }
+}

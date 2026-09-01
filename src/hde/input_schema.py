@@ -1,0 +1,98 @@
+"""The input contract, emitted as data (TOOL-SURFACES: agents query the living
+schema; docs rot, this cannot). REQUIRED flags and NOTES are hand-curated beside
+the machine key-sets; a test pins completeness against `_SECTION_KEYS` so a key
+added to the parser without a schema entry fails the suite.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from .config import _SECTION_KEYS
+
+# key -> (required?, note) per section; top-level scalars included as a section.
+_NOTES: Dict[str, Dict[str, Any]] = {
+    "top": {
+        "years": (True, "analysis horizon in years (>=1)"),
+        "discount_rate": (True, "annual discount rate, DECIMAL (0.05 = 5%); "
+                                "real terms if economic.mode=real (default)"),
+    },
+    "condo": {
+        "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
+        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0"),
+        "monthly_fee": (False, "condo fee, $/month; default 0"),
+        "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
+        "down_payment": (False, "with mortgage_rate+term: capital structure"),
+        "mortgage_rate": (False, "annual rate, decimal"),
+        "mortgage_term_years": (False, "amortization term"),
+        "all_cash": (False, "no financing; XOR with mortgage fields"),
+        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — dominates short horizons"),
+        "events": (False, "list of {name, base_cost, expected_year, ...}"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+        "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
+    },
+    "house": {
+        "initial_value": (True, "purchase price in DOLLARS"),
+        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0"),
+        "annual_maintenance_rate": (False, "fraction of value per year; default 0.0"),
+        "maintenance_curve": (False, "list of {year, rate} overrides"),
+        "down_payment": (False, "with mortgage_rate+term: capital structure"),
+        "mortgage_rate": (False, "annual rate, decimal"),
+        "mortgage_term_years": (False, "amortization term"),
+        "all_cash": (False, "no financing; XOR with mortgage fields"),
+        "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05"),
+        "events": (False, "list of {name, base_cost, expected_year, ...}"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+        "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
+    },
+    "rent": {
+        "monthly_rent": (True, "$/month"),
+        "rent_escalation_rate": (False, "annual; DEFAULT 0.03"),
+        "invested_down_payment": (False, "capital the renter invests instead; "
+                                        "DEFAULT 0 — set it or the comparison is "
+                                        "not like-for-like"),
+        "investment_return_rate": (False, "annual; DEFAULT 0.07"),
+        "events": (False, "list of {name, base_cost, expected_year, ...}"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+    },
+    "economic": {
+        "mode": (False, '"real" (DEFAULT — growth/discount must be real) or "nominal"'),
+        "inflation_rate": (False, "ignored in real mode; default 0.0"),
+        "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
+    },
+    "income": {
+        "annual_income": (False, "enables affordability reporting"),
+        "income_growth_rate": (False, "annual; default 0.03"),
+        "affordability_threshold": (False, "cost/income ratio; default 0.35"),
+        "pay_drop_events": (False, "list of {year, magnitude, ...}"),
+    },
+    "simulation": {
+        "num_sims": (False, "Monte Carlo paths; default 10,000"),
+        "random_seed": (False, "default 42 — same seed, same answer"),
+        "house_maintenance_vol": (False, "uncertainty knobs: all default 0 = "
+                                         "single-path run, NOT a forecast"),
+        "shock_model": (False, '"lognormal" (default) or "normal"'),
+    },
+    "market_scenario": {
+        "path": (True, "ScenarioPrior JSON (see examples/showcase_demographic_prior.yaml)"),
+        "geography": (True, "exact string, e.g. MTL_RMR; refusal lists what exists"),
+    },
+}
+
+
+def input_schema() -> dict:
+    """The full input contract as a dict (one section per YAML block)."""
+    sections: Dict[str, Any] = {}
+    for section, keys in _SECTION_KEYS.items():
+        notes = _NOTES.get(section, {})
+        sections[section] = {
+            key: {
+                "required": bool(notes.get(key, (False, ""))[0]),
+                "note": notes.get(key, (False, ""))[1] or "see docs/examples",
+            }
+            for key in sorted(keys)
+        }
+    sections["top_level"] = {
+        key: {"required": req, "note": note}
+        for key, (req, note) in sorted(_NOTES["top"].items())
+    }
+    return sections

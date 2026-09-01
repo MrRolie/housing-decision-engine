@@ -1,0 +1,113 @@
+{
+ "p3": {
+  "empty": [
+   "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
+   "",
+   "Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.",
+   ""
+  ],
+  "all_derived": [
+   "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
+   "",
+   "Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.",
+   "§5 additionally tags its measured figures with provenance. This run registered 2 such figures: 2 DERIVED (computed from live responses in this same run, each naming its source) and 0 CITED (external to this run, printed with the citation inline). Untagged numerals in the surrounding prose are product ids, dimension labels and counts of what was checked.",
+   ""
+  ],
+  "mixed": [
+   "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
+   "",
+   "Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.",
+   "§5 additionally tags its measured figures with provenance. This run registered 4 such figures: 2 DERIVED (computed from live responses in this same run, each naming its source) and 2 CITED (external to this run, printed with the citation inline). Untagged numerals in the surrounding prose are product ids, dimension labels and counts of what was checked.",
+   "",
+   "Externally cited figures:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ],
+  "all_cited": [
+   "Written by `probes/run_p3.py`; nothing in this file is hand-edited.",
+   "",
+   "Every table in §2-§4 is generated row by row from the live WDS responses of the run that wrote this file.",
+   "§5 additionally tags its measured figures with provenance. This run registered 2 such figures: 0 DERIVED (computed from live responses in this same run, each naming its source) and 2 CITED (external to this run, printed with the citation inline). Untagged numerals in the surrounding prose are product ids, dimension labels and counts of what was checked.",
+   "",
+   "Externally cited figures:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ]
+ },
+ "p4": {
+  "empty": [
+   "Written by `probes/run_p4.py`; nothing in this file is hand-edited.",
+   "",
+   "The catalogue sweep and dimension-level audit in §1-§3 are generated from the live WDS responses of the run that wrote this file. The fallback band in §4 is computed from CITED published rates: the input homeownership rates are external (each printed with its source and a verbatim quote); every RATIO and band endpoint is computed in code from those rates — no ratio is hand-typed.",
+   ""
+  ],
+  "all_derived": [
+   "Written by `probes/run_p4.py`; nothing in this file is hand-edited.",
+   "",
+   "The catalogue sweep and dimension-level audit in §1-§3 are generated from the live WDS responses of the run that wrote this file. The fallback band in §4 is computed from CITED published rates: the input homeownership rates are external (each printed with its source and a verbatim quote); every RATIO and band endpoint is computed in code from those rates — no ratio is hand-typed.",
+   "§4 tags its headline figures with provenance. This run registered 2: 2 DERIVED (computed from the cited rates in this same run) and 0 CITED (external published rates, printed with the citation inline). Untagged numerals elsewhere are: §1-§3 audit metadata (product ids, dimension labels, counts of what was checked); the cited source rates and figures shown in the §4 tables and verbatim quotes (traceable to the named articles); reference labels (census/horizon years, age ranges); and the per-row ratios and inline ranges computed beside those cited rates.",
+   ""
+  ],
+  "mixed": [
+   "Written by `probes/run_p4.py`; nothing in this file is hand-edited.",
+   "",
+   "The catalogue sweep and dimension-level audit in §1-§3 are generated from the live WDS responses of the run that wrote this file. The fallback band in §4 is computed from CITED published rates: the input homeownership rates are external (each printed with its source and a verbatim quote); every RATIO and band endpoint is computed in code from those rates — no ratio is hand-typed.",
+   "§4 tags its headline figures with provenance. This run registered 4: 2 DERIVED (computed from the cited rates in this same run) and 2 CITED (external published rates, printed with the citation inline). Untagged numerals elsewhere are: §1-§3 audit metadata (product ids, dimension labels, counts of what was checked); the cited source rates and figures shown in the §4 tables and verbatim quotes (traceable to the named articles); reference labels (census/horizon years, age ranges); and the per-row ratios and inline ranges computed beside those cited rates.",
+   "",
+   "Externally cited figures:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ],
+  "all_cited": [
+   "Written by `probes/run_p4.py`; nothing in this file is hand-edited.",
+   "",
+   "The catalogue sweep and dimension-level audit in §1-§3 are generated from the live WDS responses of the run that wrote this file. The fallback band in §4 is computed from CITED published rates: the input homeownership rates are external (each printed with its source and a verbatim quote); every RATIO and band endpoint is computed in code from those rates — no ratio is hand-typed.",
+   "§4 tags its headline figures with provenance. This run registered 2: 0 DERIVED (computed from the cited rates in this same run) and 2 CITED (external published rates, printed with the citation inline). Untagged numerals elsewhere are: §1-§3 audit metadata (product ids, dimension labels, counts of what was checked); the cited source rates and figures shown in the §4 tables and verbatim quotes (traceable to the named articles); reference labels (census/horizon years, age ranges); and the per-row ratios and inline ranges computed beside those cited rates.",
+   "",
+   "Externally cited figures:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ]
+ },
+ "p5": {
+  "empty": [
+   "Written by `probes/run_p5.py`; nothing in this file is hand-edited.",
+   "",
+   "SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package id, the CSV resource url, the observed column list, and every row / CMA / year / suppression / rounding count in §1-§3 are emitted by this run from the live CKAN search response and the live CSV pull — the column list is split from the fetched header, never a literal. The suppression/rounding CONVENTION is quoted verbatim from the live package notes (cited below). The expected package id is a cross-check constant; the run asserts the live-resolved id equals it and prints both.",
+   ""
+  ],
+  "all_derived": [
+   "Written by `probes/run_p5.py`; nothing in this file is hand-edited.",
+   "",
+   "SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package id, the CSV resource url, the observed column list, and every row / CMA / year / suppression / rounding count in §1-§3 are emitted by this run from the live CKAN search response and the live CSV pull — the column list is split from the fetched header, never a literal. The suppression/rounding CONVENTION is quoted verbatim from the live package notes (cited below). The expected package id is a cross-check constant; the run asserts the live-resolved id equals it and prints both.",
+   "This run registered 2 provenance-tagged figures: 2 DERIVED (computed from the live response this run) and 0 CITED (verbatim from the live package metadata). Untagged numerals elsewhere are audit metadata (result counts, resource counts, column positions) and reference labels (years, the base-5 rounding step), each traceable to the live response.",
+   ""
+  ],
+  "mixed": [
+   "Written by `probes/run_p5.py`; nothing in this file is hand-edited.",
+   "",
+   "SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package id, the CSV resource url, the observed column list, and every row / CMA / year / suppression / rounding count in §1-§3 are emitted by this run from the live CKAN search response and the live CSV pull — the column list is split from the fetched header, never a literal. The suppression/rounding CONVENTION is quoted verbatim from the live package notes (cited below). The expected package id is a cross-check constant; the run asserts the live-resolved id equals it and prints both.",
+   "This run registered 4 provenance-tagged figures: 2 DERIVED (computed from the live response this run) and 2 CITED (verbatim from the live package metadata). Untagged numerals elsewhere are audit metadata (result counts, resource counts, column positions) and reference labels (years, the base-5 rounding step), each traceable to the live response.",
+   "",
+   "Quoted verbatim from the live package metadata:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ],
+  "all_cited": [
+   "Written by `probes/run_p5.py`; nothing in this file is hand-edited.",
+   "",
+   "SCOPE OF THIS HEADER (it claims only what it can enforce): the resolved package id, the CSV resource url, the observed column list, and every row / CMA / year / suppression / rounding count in §1-§3 are emitted by this run from the live CKAN search response and the live CSV pull — the column list is split from the fetched header, never a literal. The suppression/rounding CONVENTION is quoted verbatim from the live package notes (cited below). The expected package id is a cross-check constant; the run asserts the live-resolved id equals it and prints both.",
+   "This run registered 2 provenance-tagged figures: 0 DERIVED (computed from the live response this run) and 2 CITED (verbatim from the live package metadata). Untagged numerals elsewhere are audit metadata (result counts, resource counts, column positions) and reference labels (years, the base-5 rounding step), each traceable to the live response.",
+   "",
+   "Quoted verbatim from the live package metadata:",
+   "- 9.9% — Source X, 2021",
+   "- 42 — Source Y",
+   ""
+  ]
+ }
+}

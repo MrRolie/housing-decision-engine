@@ -1,0 +1,100 @@
+# mcp_server/main.py
+from fastmcp import FastMCP
+from mcp_server.tools import (
+    define_scenario,
+    run_comparison,
+    sweep_param,
+    save_figure,
+    list_scenarios,
+    delete_scenario,
+)
+
+mcp = FastMCP(
+    name="housing-decision-engine",
+    instructions=(
+        "Housing cost comparison engine. Define named scenarios with define_scenario_tool, "
+        "then run comparisons, sweep parameters, and save figures. "
+        "Scenarios are session-scoped — they reset when the server restarts. "
+        "mode values for run_comparison_tool: 'deterministic', 'monte_carlo', or 'both'. "
+        "Use list_scenarios_tool to orient yourself in a long session."
+    ),
+)
+
+
+@mcp.tool
+def define_scenario_tool(name: str, config: dict) -> dict:
+    """Define a named housing scenario from a config dict.
+
+    Required config keys: 'years' (int), 'discount_rate' (float), and at least one
+    option section:
+      - 'condo': 'monthly_fee', 'initial_value' (> 0), and a capital structure —
+        either 'all_cash: true' OR a mortgage block ('down_payment' +
+        'mortgage_rate' + 'mortgage_term_years'), declared as exactly one.
+      - 'house': 'initial_value' and the same capital-structure requirement.
+      - 'rent': 'monthly_rent'.
+
+    Optional: 'income' (with 'annual_income') for affordability, plus 'economic'
+    and 'simulation' sections — see examples/basic_config.yaml.
+    Returns {name, status, years, discount_rate, and per-option summaries for any
+    section present} or {error}.
+    """
+    return define_scenario(name, config)
+
+
+@mcp.tool
+def run_comparison_tool(name: str, mode: str = "both") -> dict:
+    """Run a housing cost comparison for a named scenario.
+
+    mode: 'deterministic' (fast), 'monte_carlo' (full uncertainty), or 'both' (default).
+    Returns text report + structured summary. Caches MC results for save_figure_tool.
+    """
+    return run_comparison(name, mode)
+
+
+@mcp.tool
+def sweep_param_tool(name: str, param_path: str, values: list[float]) -> dict:
+    """Sweep a scalar parameter across values using the deterministic engine.
+
+    param_path is dot-notation for a single flat scalar field, drawn from the
+    _SWEEP_PATHS whitelist: the top-level 'years' and 'discount_rate', plus scalar
+    fields on the condo / house / rent / simulation / economic sections (including
+    the owned-option financing fields down_payment, mortgage_rate,
+    mortgage_term_years, selling_cost_rate, initial_value, value_growth_rate).
+    Calling with an unsupported path returns an error listing the full supported set.
+    A mortgage field is rejected on an all_cash option (the sweep would be a no-op).
+
+    Returns {name, param_path, rows: [{value, and condo_total_pv / house_total_pv /
+    rent_total_pv for each option present in the scenario}]}.
+    """
+    return sweep_param(name, param_path, values)
+
+
+@mcp.tool
+def save_figure_tool(name: str, figure_type: str) -> dict:
+    """Save a matplotlib figure to ~/.cache/hde/figures/ and return its absolute path.
+
+    figure_type: 'diff_distribution' or 'pv_distributions'.
+    Requires run_comparison_tool with mode='monte_carlo' or 'both' first.
+    Use Claude Code's SendUserFile with the returned path to show the figure to the user.
+    """
+    return save_figure(name, figure_type)
+
+
+@mcp.tool
+def list_scenarios_tool() -> dict:
+    """List all scenarios defined in this session with their result-cached status."""
+    return list_scenarios()
+
+
+@mcp.tool
+def delete_scenario_tool(name: str) -> dict:
+    """Remove a scenario from the session registry."""
+    return delete_scenario(name)
+
+
+def run() -> None:
+    mcp.run()
+
+
+if __name__ == "__main__":
+    run()

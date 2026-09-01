@@ -1,0 +1,351 @@
+{
+  "_provenance": {
+    "as_of": "2021",
+    "source": "StatCan 98-10-0231-01 (committed extract census_tenure_age_98100231.csv) province NET of the six wholly-Québec CMAs, NET of the 16 Québec-side census subdivisions of the Ottawa-Gatineau CMA read from StatCan 98-10-0232-01 (committed extract hors_aligned_csd_98100232.json) — DERIVED, never transcribed (steering ruling B)",
+    "sources": {
+      "census_tenure_age_98100231.csv": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+      "hors_aligned_csd_98100232.json": "92821b9dad0d7aae7211300d11d3f721b8d7a0e2d19efcfa50ca78fb8cf24d3f"
+    },
+    "raw_source_sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b",
+    "raw_source_member": "98100231.csv",
+    "statcan_tables": [
+      "98-10-0231-01",
+      "98-10-0232-01",
+      "98-10-0003-01"
+    ],
+    "extracted_at": "2026-08-15",
+    "derived_by": "demoflow.loaders.hors_aligned.derive_aligned_ownership",
+    "generator": "demoflow/scripts/gen_hors_aligned.py",
+    "measure": "owner-maintainer households / total private households, at the `Total -` member of every non-age dimension, over the OPERAND-ALIGNED territory",
+    "territory": "HORS_RMR, OPERAND-ALIGNED: the Québec province NET of the six wholly-Québec CMAs (98-10-0231-01, the shipped residual) NET of the 16 Québec-side census subdivisions of the Ottawa-Gatineau CMA (98-10-0232-01, resolved from 98-10-0003-01's own geography children of that CMA). The shipped residual INCLUDES the Québec side of Ottawa-Gatineau because 98-10-0231-01 parents that CMA to Ontario and publishes no Québec-part row; the ISQ flow row this rate multiplies EXCLUDES it. Four census divisions contribute to the CMA and no union of whole ones equals it — CD Gatineau entire, all seven Les Collines-de-l'Outaouais municipalities, seven of Papineau's and one of La Vallée-de-la-Gatineau's — so the membership is resolved at CSD grain rather than bracketed by whole CDs.",
+    "multiplicand_note": "WHAT THIS RATE MAY MULTIPLY: owner-maintainer HOUSEHOLDS / total private HOUSEHOLDS — a household-denominated rate, so its multiplicand is a household count, never a person count (spec §6, codex r2-F2). Identical in kind to the shipped ownership curve this one sits beside; only the TERRITORY differs.",
+    "universe": {
+      "note": "98-10-0232-01 is 98-10-0231-01's census-division/subdivision sibling: the same `Age of primary household maintainer` x `Tenure` cross at one finer grain. Their Québec province rows are asserted BIT-IDENTICAL on the all-ages pair — the identity that makes subtracting cells of one from a residual of the other arithmetic rather than transport. The SEVEN BAND rows are NOT asserted identical (four until operator ruling W refined the lattice on 2026-08-20): the two cubes publish different age granularities of the same partition — ten-year members inside 25-54 on the CD side against five-year members on the CMA side — so their banded sums carry independent round-to-5 error. Only the EDGES are shared, which is why the lattices are joined on edges and never on constituents.",
+      "province_all_ages": {
+        "households": 3749035,
+        "owner_households": 2245600,
+        "bit_identical_across_the_pair": true
+      }
+    },
+    "membership": {
+      "source_product_id": 98100003,
+      "source_table": "98-10-0003-01",
+      "anchor": "probes/P10-hors-operand-alignment.md DECISION-MEMBERSHIP",
+      "cma_member_id": 594,
+      "cma_member_name": "Ottawa - Gatineau",
+      "cma_classification_code": "505",
+      "cma_geo_level": 503,
+      "cma_population": 1488307,
+      "children_count": 25,
+      "children_population_sum": 1488307,
+      "quebec_side_codes": [
+        "2480050",
+        "2480055",
+        "2480060",
+        "2480065",
+        "2480085",
+        "2480140",
+        "2480145",
+        "2481017",
+        "2482005",
+        "2482010",
+        "2482015",
+        "2482020",
+        "2482025",
+        "2482030",
+        "2482035",
+        "2483005"
+      ],
+      "quebec_side_population": 353293,
+      "ontario_side_count": 9,
+      "ontario_side_population": 1135014,
+      "classification_methods": [
+        "SGC classification-code prefix '24'",
+        "census-tree ancestry in 98-10-0232-01 (geoLevel-5 member whose census division descends from that cube's Quebec member)"
+      ],
+      "classification_disagreements": [],
+      "netted_cmas_checked": [
+        "Drummondville (CMA), Que.",
+        "Montréal (CMA), Que.",
+        "Québec (CMA), Que.",
+        "Saguenay (CMA), Que.",
+        "Sherbrooke (CMA), Que.",
+        "Trois-Rivières (CMA), Que."
+      ],
+      "netted_cma_constituent_counts": {
+        "Drummondville (CMA), Que.": 12,
+        "Montréal (CMA), Que.": 93,
+        "Québec (CMA), Que.": 30,
+        "Saguenay (CMA), Que.": 10,
+        "Sherbrooke (CMA), Que.": 11,
+        "Trois-Rivières (CMA), Que.": 7
+      },
+      "shared_csd_codes": []
+    },
+    "bands": {
+      "25-34": {
+        "cd_members": [
+          "25 to 34 years"
+        ],
+        "shipped_households": 147205,
+        "shipped_owner_households": 85585,
+        "shipped_rate": 0.5814000883122177,
+        "subtracted_households": 23445,
+        "subtracted_owner_households": 11070,
+        "aligned_households": 123760,
+        "aligned_owner_households": 74515,
+        "aligned_rate": 0.6020927601809954,
+        "aligned_bound_households": 123760,
+        "aligned_bound_owner_households": 74515,
+        "aligned_bound_rate": 0.6020927601809954,
+        "aligned_envelope_low_rate": 0.6020927601809954,
+        "aligned_envelope_high_rate": 0.6020927601809954,
+        "relative_delta_pct": 3.5591105479271268,
+        "withheld_cells": 0,
+        "relative_delta_bound_pct": 3.5591105479271268,
+        "relative_delta_envelope_low_pct": 3.5591105479271268,
+        "relative_delta_envelope_high_pct": 3.5591105479271268
+      },
+      "35-44": {
+        "cd_members": [
+          "35 to 44 years"
+        ],
+        "shipped_households": 187830,
+        "shipped_owner_households": 131690,
+        "shipped_rate": 0.7011127083000586,
+        "subtracted_households": 29105,
+        "subtracted_owner_households": 19135,
+        "aligned_households": 158725,
+        "aligned_owner_households": 112555,
+        "aligned_rate": 0.7091195463852575,
+        "aligned_bound_households": 158725,
+        "aligned_bound_owner_households": 112555,
+        "aligned_bound_rate": 0.7091195463852575,
+        "aligned_envelope_low_rate": 0.7091195463852575,
+        "aligned_envelope_high_rate": 0.7091195463852575,
+        "relative_delta_pct": 1.1420186783680792,
+        "withheld_cells": 0,
+        "relative_delta_bound_pct": 1.1420186783680792,
+        "relative_delta_envelope_low_pct": 1.1420186783680792,
+        "relative_delta_envelope_high_pct": 1.1420186783680792
+      },
+      "45-54": {
+        "cd_members": [
+          "45 to 54 years"
+        ],
+        "shipped_households": 187500,
+        "shipped_owner_households": 138285,
+        "shipped_rate": 0.73752,
+        "subtracted_households": 27805,
+        "subtracted_owner_households": 20185,
+        "aligned_households": 159695,
+        "aligned_owner_households": 118100,
+        "aligned_rate": 0.7395347380944927,
+        "aligned_bound_households": 159695,
+        "aligned_bound_owner_households": 118100,
+        "aligned_bound_rate": 0.7395347380944927,
+        "aligned_envelope_low_rate": 0.7395347380944927,
+        "aligned_envelope_high_rate": 0.7395347380944927,
+        "relative_delta_pct": 0.27317741817072183,
+        "withheld_cells": 0,
+        "relative_delta_bound_pct": 0.27317741817072183,
+        "relative_delta_envelope_low_pct": 0.27317741817072183,
+        "relative_delta_envelope_high_pct": 0.27317741817072183
+      },
+      "55-64": {
+        "cd_members": [
+          "55 to 64 years"
+        ],
+        "shipped_households": 275450,
+        "shipped_owner_households": 205915,
+        "shipped_rate": 0.7475585405699764,
+        "subtracted_households": 31175,
+        "subtracted_owner_households": 22730,
+        "aligned_households": 244275,
+        "aligned_owner_households": 183185,
+        "aligned_rate": 0.7499130078804626,
+        "aligned_bound_households": 244275,
+        "aligned_bound_owner_households": 183185,
+        "aligned_bound_rate": 0.7499130078804626,
+        "aligned_envelope_low_rate": 0.7499130078804626,
+        "aligned_envelope_high_rate": 0.7499130078804626,
+        "relative_delta_pct": 0.31495423872637435,
+        "withheld_cells": 0,
+        "relative_delta_bound_pct": 0.31495423872637435,
+        "relative_delta_envelope_low_pct": 0.31495423872637435,
+        "relative_delta_envelope_high_pct": 0.31495423872637435
+      },
+      "65-74": {
+        "cd_members": [
+          "65 to 74 years"
+        ],
+        "shipped_households": 240310,
+        "shipped_owner_households": 175595,
+        "shipped_rate": 0.7307020099038741,
+        "subtracted_households": 21985,
+        "subtracted_owner_households": 15580,
+        "aligned_households": 218325,
+        "aligned_owner_households": 160015,
+        "aligned_rate": 0.732921103858926,
+        "aligned_bound_households": 218325,
+        "aligned_bound_owner_households": 160015,
+        "aligned_bound_rate": 0.732921103858926,
+        "aligned_envelope_low_rate": 0.732921103858926,
+        "aligned_envelope_high_rate": 0.732921103858926,
+        "relative_delta_pct": 0.3036934242652143,
+        "withheld_cells": 0,
+        "relative_delta_bound_pct": 0.3036934242652143,
+        "relative_delta_envelope_low_pct": 0.3036934242652143,
+        "relative_delta_envelope_high_pct": 0.3036934242652143
+      },
+      "75-84": {
+        "cd_members": [
+          "75 to 84 years"
+        ],
+        "shipped_households": 120345,
+        "shipped_owner_households": 80360,
+        "shipped_rate": 0.6677468943454236,
+        "subtracted_households": 10195,
+        "subtracted_owner_households": 6630,
+        "aligned_households": 110150,
+        "aligned_owner_households": 73730,
+        "aligned_rate": 0.6693599636858829,
+        "aligned_bound_households": 110150,
+        "aligned_bound_owner_households": 73720,
+        "aligned_bound_rate": 0.6692691783931003,
+        "aligned_envelope_low_rate": 0.6692691783931003,
+        "aligned_envelope_high_rate": 0.6693599636858829,
+        "relative_delta_pct": 0.24156897682625741,
+        "withheld_cells": 1,
+        "relative_delta_bound_pct": 0.22797321268996618,
+        "relative_delta_envelope_low_pct": 0.22797321268996618,
+        "relative_delta_envelope_high_pct": 0.24156897682625741
+      },
+      "85+": {
+        "cd_members": [
+          "85 years and over"
+        ],
+        "shipped_households": 33085,
+        "shipped_owner_households": 19555,
+        "shipped_rate": 0.5910533474384162,
+        "subtracted_households": 2480,
+        "subtracted_owner_households": 1420,
+        "aligned_households": 30605,
+        "aligned_owner_households": 18135,
+        "aligned_rate": 0.5925502368893971,
+        "aligned_bound_households": 30565,
+        "aligned_bound_owner_households": 18100,
+        "aligned_bound_rate": 0.5921805987240307,
+        "aligned_envelope_low_rate": 0.5914066329031205,
+        "aligned_envelope_high_rate": 0.5933256993292982,
+        "relative_delta_pct": 0.2532579262884365,
+        "withheld_cells": 12,
+        "relative_delta_bound_pct": 0.1907190426211028,
+        "relative_delta_envelope_low_pct": 0.05977217898102946,
+        "relative_delta_envelope_high_pct": 0.38445800209579295
+      }
+    },
+    "all_ages": {
+      "shipped_households": 1223585,
+      "shipped_owner_households": 845355,
+      "shipped_rate": 0.6908837555216842,
+      "aligned_households": 1072425,
+      "aligned_owner_households": 747725,
+      "aligned_rate": 0.6972282443993753,
+      "relative_delta_pct": 0.9183149592076177,
+      "note": "EVIDENCE, never served: not a model band. Published here because it is the row both cubes agree on bit-for-bit and the one the ruled immigrant cube (98-10-0621-01) independently corroborates at the same magnitude."
+    },
+    "suppression": {
+      "withheld_cells": 13,
+      "bound": "FIELD-WISE upper bound: each withheld field is bounded by its own subdivision's all-ages count MINUS everything that subdivision publishes across the SEVEN bands (the unpublished remainder, which contains the missing cell by construction), clamped at zero for the round-to-5 step. The remainder ranges over everything the subdivision publishes, so it did NOT move when operator ruling W (2026-08-20) refined the lattice from four bands to seven — but it is now charged to EACH suppressed band separately, which makes every band's bound individually valid and the collection looser than the single union bound the four-band lattice took. Looser is the correct direction for a bound. The SERVED rate subtracts only what is published; `aligned_bound_rate` subtracts every withheld field at its bound. Those two are the SUBTRACTION extremes (the DIAGONAL corners of the feasible rectangle) and they do NOT bracket the rate — see `envelope`.",
+      "envelope": {
+        "note": "THE BRACKET ON THE RATE, which is not the bracket on the subtraction. Each withheld field lies independently in [0, its remainder], so the feasible region is a RECTANGLE; rate = (S_o - s_o)/(S_t - s_t) falls in the subtracted owners and rises in the subtracted households, so the rate's extremes sit at the OFF-DIAGONAL corners — `aligned_envelope_high_rate` (least owner, most household subtracted) and `aligned_envelope_low_rate` (the reverse). Publishing only the diagonal pair would state an interval the true value can sit OUTSIDE. The HIGH corner is exactly ATTAINABLE: no cell here withholds its household field while publishing its owner field, so every withheld owner at 0 against every withheld household at its remainder satisfies owner <= total at every cell. The LOW corner is a CONSERVATIVE OUTER bound, not attained — reaching it would need positive withheld owners inside cells whose withheld households are zero. An outer bound is what an envelope needs.",
+        "band_spread_pp": {
+          "at_served_corner": 3.3175415711008696,
+          "at_subtract_most_corner": 3.368391505306024,
+          "narrowest_feasible": 3.3175415711008696,
+          "widest_feasible": 3.4993383689460975
+        },
+        "all_bands_same_signed_across_the_box": true,
+        "reversal_note": "#12(B)'s premise is band-UNIFORMITY, so what refutes it is the SPREAD across bands, and the spread must survive the suppression or the suppression is carrying the reversal. It does: the band spread stays strictly positive and same-signed at EVERY corner of the feasible box, so no feasible configuration of the withheld cells removes it."
+      },
+      "empty_complement_fields": 4
+    },
+    "rounding": {
+      "note": "StatCan rounds every count to the nearest 5, INDEPENDENTLY per cube and per cell. An aligned band count is therefore a sum of rounded cells: one province cell plus six CMA cells per 98-10-0231-01 constituent, plus one cell per 98-10-0232-01 constituent at each of the 16 subdivisions. `envelope_per_field` is 2.5 x that count — DERIVED from the lattice rather than tuned to an observed delta — and is a worst case in which every cell rounds the same way. No correction is applied and no reconciliation is asserted.",
+      "rounded_cells_per_field": {
+        "25-34": 30,
+        "35-44": 30,
+        "45-54": 30,
+        "55-64": 30,
+        "65-74": 30,
+        "75-84": 23,
+        "85+": 23
+      },
+      "envelope_per_field": {
+        "25-34": 75.0,
+        "35-44": 75.0,
+        "45-54": 75.0,
+        "55-64": 75.0,
+        "65-74": 75.0,
+        "75-84": 57.5,
+        "85+": 57.5
+      }
+    },
+    "supersedes": "spec §6 amendment #12(B), which cleared this rate from correction on the ground that a band-uniform relative scaling of the ownership propensity cancels exactly in ED. That premise is measured FALSE. CURRENT READING, on the SEVEN-band lattice this artifact is built over (operator ruling W, 2026-08-20; spec §8 amendment #18): the bands' relative contamination spans 3.318 percentage points (+0.242% at 75-84 to +3.559% at 25-34), all same-signed, and is adversarially arranged — the most contaminated band (25-34) is the most heavily WEIGHTED of the FIVE bands D_native reads, and the only two S reads are the two LEAST contaminated AT SERVED VALUES (75-84 at +0.242% and 85+ at +0.253%). D_NATIVE READS FIVE BANDS, NOT ONE (corrected 2026-08-21: the earlier wording, 'the one D_native is built from', stated a weight CONCENTRATION as an EXCLUSIVITY). It sums ages 18-74, so it reads 25-34, 35-44, 45-54, 55-64 and 65-74, and never either tail band. The weight concentrates in 25-34 because `demand/formation._ownership` returns 0.0 below OWNERSHIP_LATTICE_FLOOR 25, so ages 18-24 contribute EXACTLY zero and the formation gains pile on the first ages the lattice admits (mechanism in `demand/formation.py`). S does NOT read a band at pipeline.ROLL_AGE: operator ruling X1 (2026-08-21) values the lumped 75+ bucket at the POPULATION-WEIGHTED mean of the per-age rates over the ages it holds, so the read spans BOTH tail bands and no single age selects it (ROLL_AGE still carries the hazard and the living-arrangement read). The arrangement is therefore WEIGHT-INDEPENDENT AT SERVED VALUES rather than weaker: a weighted mean of two rates is a MEDIANT of them, so δ_S lies between those two band deltas at every feasible weight, and the whole SERVED interval sits below the next-lowest band, 45-54 at +0.273%. THAT SCOPE IS THE LIMIT AND NOT A HEDGE, AND THE WEIGHTING IS NOT FREE TO CHOOSE (operator ruling X6, 2026-08-21). The mediant bound is a property of the SERVED values: at the suppression HIGH corner 85+ alone rises to +0.384%, ABOVE 45-54, so the ordering is not weight-free there. And δ_S's weights are fixed by the quantity — S's rate is Σ_a pop(a)·ρ(a) / Σ_a pop(a) and the contamination moves only its NUMERATOR, so each band delta enters δ_S weighted by the OWNER HOUSEHOLDS that band contributes, pop(a)·ρ(a), never by households and never by plain population. At the model's own weighting 85+ is 24.147% of the 75+ block (households 21.743%, population 26.450%) and the high-corner blend is +0.276%, which EXCEEDS 45-54 by 0.0029 pp; the HOUSEHOLD-weighted corner blend clears 45-54 by 0.0005 pp and therefore reports a pass the model does not have. The HOUSEHOLD-WEIGHTED MEAN of the two SERVED band contaminations, at this artifact's own aligned household counts 110,150 / 30,605, is +0.244% — one point inside that interval, not the bound the argument rests on; the owner-population weighting puts the served blend at +0.244% too, so the SERVED reading is insensitive to the weighting and only the CORNER is not. So the band-difference term of ΔED/ED = (δ_S − δ_OS) + (δ_D − δ_S)·D/(D−S) is LARGE, same-signed and adversarially arranged rather than near zero — and it is 60% OF THAT SPREAD, NOT AT OR NEAR ALL OF IT (operator ruling X7, 2026-08-21, striking a superlative this note carried and never earned: it was read off the arrangement, never measured against D_native's own weights). MEASURED on the reference scenario's projected years, δ_D = ΔD/D = +2.243% against δ_S +0.244%, a difference of 1.999 pp against the 3.318 pp served spread. THE #12(B) REVERSAL IS UNAFFECTED: it needs the difference to be large, same-signed and adversarially arranged, never maximal — δ_D +2.243% against δ_S +0.244% served and +0.276% at the 85+ high corner, so the difference stays ~2.0 pp and same-signed at BOTH corners. It is amplified by D/(D−S), which is unbounded near flow balance and NEGATIVE for D < S. The absolute-units bound on |ΔED| is true and does not rescue it: rankings are relative and are decided near zero, which is where that bound is vacuous. THE WARRANT THE SEAT RULED ON is probe P10's measurement of 2026-08-15, taken against the FOUR-band lattice the model then carried (25-54 / 55-64 / 65-74 / 75+): a spread of 1.202 percentage points, +0.223% to +1.425%, most contaminated 25-54, least 75+ — same finding, same two roles, coarser lattice. It is recorded as that dated warrant and NOT as a current reading, and it is not deleted: the retired 25-54 band was averaging a steep gradient, so the refinement made the refutation STRONGER rather than moving it (3.318 against 1.202), and a reversal whose warrant has been overwritten cannot be audited. THE SUPPRESSION DOES NOT CARRY THIS: the spread stays strictly positive, same-signed and adversarially arranged at every corner of the feasible withheld-cell box, not only at the served point — see `suppression.envelope.band_spread_pp`, which records the box's narrowest and widest. Do not restore #12(B) without measuring the premise again.",
+    "scope_fence": "This re-points HORS_RMR ONLY. Every other geography reads the shipped curve (ownership_by_geo_age.json) unchanged — see `join`. The sub-floor ordering constraint of spec §7 does NOT bind this surface: re-extracting the 25+ bands at aligned territory is orthogonal to extending the curve below 25, and this curve does not extend below 25."
+  },
+  "join": {
+    "MTL_RMR": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "MTL_ISLAND_RA06": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "LAVAL_RA13": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "QC_RMR": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "HORS_RMR": {
+      "reads": "operand_aligned",
+      "artifact": "ownership_hors_aligned.json",
+      "why": "the ONLY computed residual, and the only geography whose census territory included the Québec side of Ottawa-Gatineau while its ISQ flow operand excluded it (spec §6 amendment #12(A)'s principle: the rate's territory must match the flow's territory)"
+    },
+    "LANAUDIERE_RA14_PROXY": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "LAURENTIDES_RA15_PROXY": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    },
+    "MONTEREGIE_RA16_PROXY": {
+      "reads": "shipped",
+      "artifact": "ownership_by_geo_age.json",
+      "why": "never contaminated: this geography reads its own CMA row (or borrows one), and no part of the Ottawa-Gatineau CMA lies inside any of them — checked live against 98-10-0003-01's constituent-CSD membership of the six netted CMAs"
+    }
+  },
+  "rates": {
+    "HORS_RMR": {
+      "25-34": 0.6020927601809954,
+      "35-44": 0.7091195463852575,
+      "45-54": 0.7395347380944927,
+      "55-64": 0.7499130078804626,
+      "65-74": 0.732921103858926,
+      "75-84": 0.6693599636858829,
+      "85+": 0.5925502368893971
+    }
+  }
+}

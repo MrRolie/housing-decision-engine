@@ -1,0 +1,15 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# IRCC PR test fixtures -- BOTH of them: each is a VERBATIM byte slice of the live feed,
+# which publishes CRLF. `* text=auto` above normalizes them to LF in the index, so a
+# committed fixture stops being the bytes the loader was verified against and a fresh
+# checkout exercises line endings the feed never sends. Their entire evidentiary value is
+# that they ARE the feed's bytes; pin them. Measured: qc_slice 40,669 -> 40,108 bytes (561
+# CR stripped); by_cma_sample 665 -> 658 (7 CR stripped).
+# NAME THE FILE, NOT THE FEED: this block used to be titled "IRCC PR-by-CMA test fixture"
+# while pinning only qc_slice, so by_cma_sample read as already covered and went unpinned --
+# `test_ircc_loader.py` splits it on CRLF, so 10 tests failed in every fresh clone and
+# archive for as long as that held. A pin is per PATH; one entry never covers a sibling.
+demoflow/tests/fixtures/ircc_pr_qc_slice.csv -text
+demoflow/tests/fixtures/ircc_pr_by_cma_sample.csv -text

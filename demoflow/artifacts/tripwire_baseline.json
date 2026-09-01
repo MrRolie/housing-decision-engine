@@ -1,0 +1,137 @@
+{
+  "assumptions_hash": "e03504aaffd0a35a",
+  "data_vintage": {
+    "source_hashes": {
+      "census_tenure_age_98100231.csv": {
+        "committed_sha256": "74673e57d1ae05824726b815e7263c18bb1b7d0419a3fbc52b8f6d6c704ee8da",
+        "extracted_at": "2026-07-21",
+        "sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b"
+      },
+      "compo-ra-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "1b81a82b0f0588a3217eb93b74d37044addf08934731dfd612e846e6de7b728f"
+      },
+      "compo-rmr-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "096246df47a95f729d46bacdb655cf297f4779163d62ee25e95254b5cc23844b"
+      },
+      "headship_by_age.json": {
+        "extracted_at": "2026-07-21",
+        "sha256": "e9f00d61ff1ce90278a5cb98041a23d12f41caf2f454babef5d4772931006c92"
+      },
+      "hors_aligned_csd_98100232.json": {
+        "extracted_at": "2026-08-15",
+        "sha256": "92821b9dad0d7aae7211300d11d3f721b8d7a0e2d19efcfa50ca78fb8cf24d3f"
+      },
+      "living_arrangement.json": {
+        "extracted_at": "2026-08-08",
+        "sha256": "685c6e41deb14a8603bf43dae286aea85e7f0cc1ba66a06f1fe8844f0d4eabe7"
+      },
+      "living_arrangement_98100134.json": {
+        "extracted_at": "2026-08-08",
+        "sha256": "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39"
+      },
+      "mortality_basis:CPM2014_combined+CPM-B": {
+        "extracted_at": "2026-08-19",
+        "sha256": "d15e1f52318413016d1cc3229a5a2c85306fe922010be52e132dc8fbba830cea"
+      },
+      "ownership_by_geo_age.json": {
+        "extracted_at": "2026-07-21",
+        "sha256": "2c371f84a7ac1cd1dac4ce0f069993d59fdf32a552c39b147c149c9dc62706e4"
+      },
+      "ownership_hors_aligned.json": {
+        "extracted_at": "2026-08-15",
+        "sha256": "88775eca8ecf6283858155b42787301c614478fee37a29682790758b7831c0e5"
+      },
+      "pop-as-qc-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "1d286d252a75195db6ab66ac767e352d9f74e4e2359c68eba4a43301c9c61fd4"
+      },
+      "pop-as-ra-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "ae9de62fd8631668e127e5cd37ec10028959a38a18831e1c5e4d102a1c8779fe"
+      },
+      "pop-as-rmr-base.xlsx": {
+        "extracted_at": "2026-07-21",
+        "sha256": "288d8c9f03d05ece6ae1271e2cf55226a534d4fe27005ca76fb2ef305f0882d7"
+      }
+    }
+  },
+  "indicators": [
+    {
+      "as_of": null,
+      "band_high": 50000.0,
+      "band_low": 40000.0,
+      "current_value": null,
+      "freshness_years": 1,
+      "indicator": "pr_landings_annual",
+      "reason": "source_unavailable",
+      "source": "IRCC PR admissions by CMA (open.canada.ca monthly CSV)",
+      "source_kind": "wired",
+      "status": "UNKNOWN"
+    },
+    {
+      "as_of": null,
+      "band_high": 0.0,
+      "band_low": 0.0,
+      "current_value": null,
+      "freshness_years": 1,
+      "indicator": "temp_resident_stock",
+      "reason": "source_unavailable",
+      "source": "StatCan NPR estimates 17-10-0121 family (or IRCC TR tables)",
+      "source_kind": "wired",
+      "status": "UNKNOWN"
+    },
+    {
+      "as_of": null,
+      "band_high": 2027.5,
+      "band_low": 2025.5,
+      "current_value": null,
+      "freshness_years": 1,
+      "indicator": "isq_edition_watch",
+      "reason": "source_unavailable",
+      "source": "ISQ Perspectives demographiques edition watch (slug/pin)",
+      "source_kind": "wired",
+      "status": "UNKNOWN"
+    },
+    {
+      "as_of": null,
+      "band_high": 0.0,
+      "band_low": 0.0,
+      "current_value": null,
+      "freshness_years": 1,
+      "indicator": "registre_foncier_volume",
+      "reason": "operator_input_missing",
+      "source": "Registre foncier monthly transfer counts (operator-supplied)",
+      "source_kind": "operator_supplied",
+      "status": "UNKNOWN"
+    },
+    {
+      "as_of": null,
+      "band_high": 0.42,
+      "band_low": 0.3,
+      "current_value": null,
+      "freshness_years": 5,
+      "indicator": "cmhc_senior_sale_5yr",
+      "reason": "operator_input_missing",
+      "source": "CMHC senior-sale rate refresh (operator-supplied)",
+      "source_kind": "operator_supplied",
+      "status": "UNKNOWN"
+    },
+    {
+      "as_of": null,
+      "band_high": 0.0,
+      "band_low": 0.0,
+      "current_value": null,
+      "freshness_years": 1,
+      "indicator": "natural_increase_sign",
+      "reason": "operator_input_missing",
+      "source": "ISQ compo natural-increase sign, annual release (operator-supplied)",
+      "source_kind": "operator_supplied",
+      "status": "UNKNOWN"
+    }
+  ],
+  "run_pairing": "f7dfc4d152781567",
+  "schema": "demoflow.tripwire_baseline.v1",
+  "schema_version": "1"
+}
