@@ -72,3 +72,23 @@ def test_skill_points_at_the_docs_that_exist():
                 "examples/showcase_demographic_prior.yaml"):
         assert rel in TEXT, rel
         assert (root / rel).exists(), rel
+
+
+def test_skill_has_no_machine_specific_paths():
+    """A cloned repo runs anywhere: the skill may not name this machine's paths."""
+    for needle in ("~/", "/home/", "ai_system"):
+        assert needle not in TEXT, needle
+
+
+def test_skill_gates_on_missing_information():
+    assert "## Missing information" in TEXT
+    for phrase in ("ONE message", "scenarios/", "Invent no values", "Run only once"):
+        assert phrase in TEXT, phrase
+
+
+def test_claude_md_routes_housing_questions_to_the_skill():
+    root = SKILL.parents[3]
+    text = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    assert ".claude/skills/hde/SKILL.md" in text
+    assert "Missing information" in text and "scenarios/" in text
+    assert "scenarios/" in (root / ".gitignore").read_text(encoding="utf-8")

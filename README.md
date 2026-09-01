@@ -13,13 +13,23 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 - **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
 - **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
 
-## Quickstart
+## Test drive
+
+1. Install [uv](https://docs.astral.sh/uv/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+2. `git clone https://github.com/MrRolie/housing-decision-engine.git && cd housing-decision-engine`
+3. `claude` — then ask in plain words, e.g. *"I pay $2,100 rent and condos like mine go for $450k. Should I buy?"*
+
+Claude follows the repo's `hde` skill: it asks for whatever your question is missing
+(how long you'll stay, how you'd pay, …), writes your scenario to `scenarios/` (git-ignored),
+runs the engine, reads every assumption back with its source, and gives the verdict with its
+decisiveness. Nothing to install beyond `uv`: the first run fetches the engine's dependencies.
+
+Without Claude:
 
 ```bash
-git clone https://github.com/MrRolie/housing-decision-engine.git
-cd housing-decision-engine
-uv sync --extra dev
-uv run hde examples/basic_config.yaml
+uv run hde examples/basic_config.yaml   # a worked scenario
+uv run hde --print-schema               # every input and what is required
+uv run hde --print-anchors              # where every default comes from
 ```
 
 ## The showcase

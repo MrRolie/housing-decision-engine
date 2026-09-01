@@ -8,8 +8,9 @@ description: Runs rent-vs-buy housing decision analyses with the housing-decisio
 ## Activation
 
 Any housing-decision question: rent vs buy, condo vs house, "is it worth it",
-demographic-informed price outlooks. The engine is the `hde` CLI at
-`~/ai_system/projects/housing-decision-engine` (standalone; needs only `uv`).
+demographic-informed price outlooks. The engine is the `hde` CLI in this repo
+(the directory holding this skill's `.claude/`; standalone — the first
+`uv run hde` installs its own dependencies, only `uv` is needed).
 
 ## Elicit first (before authoring anything)
 
@@ -40,9 +41,38 @@ rate produces a confident-looking wrong verdict, the exact failure this
 engine exists to prevent. Every number you do not ask for becomes a default
 the engine echoes back with its source.
 
+## Missing information (ask before you run)
+
+A question rarely carries everything the config needs. Before writing any
+YAML, work out what is missing and ask for ALL of it in ONE message, in the
+user's words, grouped so it reads as a short form — not a drip of one
+question per turn, and never a run on guessed numbers.
+
+1. **Which options the question implies** → which sections: "keep renting or
+   buy a condo" = `rent` + `condo`; "house or condo" = `condo` + `house`;
+   "is buying worth it" with no dwelling named = ask which.
+2. **The user's own numbers — always theirs, never yours:** monthly rent;
+   purchase price; condo fees; how they would pay (all cash, or down payment +
+   mortgage rate + amortization); how long they plan to stay; income if they
+   care about affordability. If they cannot give one, offer to bracket it (two
+   configs) rather than pick for them.
+3. **Modelling parameters — may be proposed, always labelled:** discount rate,
+   growth and escalation rates, maintenance rate, the uncertainty vols. Say
+   "I'll use X because <source or 'illustrative'>" and let the engine echo it
+   back under `defaults applied`; a user's "I don't know" here means take the
+   default and name it, not stop.
+4. **Units and terms:** decimals not percents in the YAML; quoted mortgage
+   and growth rates are usually nominal — settle real vs nominal (gate 3).
+
+Run only once every item in (2) is known. The engine refuses a missing
+required key with the exact message — show it, never paper over it.
+
 ## Cases → dispatch
 
-Run everything from the repo root: `cd ~/ai_system/projects/housing-decision-engine`
+Run everything from the repo root (the directory with `pyproject.toml`).
+Write the user's config to `scenarios/<slug>.yaml` and render into
+`scenarios/<slug>/` — `scenarios/` is git-ignored, so their numbers are never
+committed.
 
 | Case | Command |
 |---|---|
@@ -97,8 +127,9 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
 
 ## Routine (deterministic — do not hand-reproduce)
 
-Elicit → config authoring → engine run → **assumptions read-back** → warnings
-review → verdict with its decisiveness → story rendering. The CLI validates,
+Elicit → **Missing information** gate → config authoring → engine run →
+**assumptions read-back** → warnings review → verdict with its decisiveness →
+story rendering. The CLI validates,
 refuses unknown keys with did-you-mean, and renders the acts the config
 supports. Anything expressible as one of the commands above is the engine's
 job, not a reasoning task.
@@ -122,12 +153,12 @@ job, not a reasoning task.
 - Trade execution, money movement, market timing: out of scope; this engine
   computes present-value comparisons only.
 
-## Why no MCP
+## Why only the CLI
 
-Per the stack's TOOL-SURFACES doctrine: hde holds no session state, needs no
-protocol gating, and its consumers have shells — MCP would be pure context tax.
-The server code remains for non-shell consumers (claude.ai web) but the CLI is
-the registered surface.
+hde holds no session state, needs no protocol gating, and every consumer has a
+shell — an MCP layer would be pure context tax. The MCP server that existed
+until 2026-09-01 was removed as superseded; this skill plus the CLI is the
+whole surface.
 
 Deeper guidance: `examples/README.md` in the repo walks every config template;
 `docs/reference/ARCHITECTURE.md` carries the figure glossary (what every
