@@ -2,9 +2,9 @@
 
 ## Status
 
-**Overall:** S4a complete (PR #4, pending merge); S4b not started — its brainstorm will consume the demoflow ScenarioPrior contract (`docs/specs/2026-07-21-demoflow-demographic-scenario-module-design.md`, Tranche 2) and must author the one-page S4b demographic-input-slot sketch that gates demoflow's emitter
+**Overall:** S1–S4b complete; the 2026-09-01 readiness polish landed on `feat/readiness-polish` (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary). Next: PR + merge of that branch; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
 **Created:** 2026-06-07
-**Last Updated:** 2026-06-09
+**Last Updated:** 2026-09-01
 **Slug:** `housing-decision-engine`
 
 ### Session Status
@@ -15,24 +15,17 @@
 | 2 | brainstorm-to-execute | `completed` | `mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
 | 4a | brainstorm-to-execute | `completed` | `docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
-| 4b | brainstorm-to-execute | `not_started` | (will be produced by S4b) | Market scenario layer: price-drop events, discount-rate sensitivity, correlated market+income shocks, crisis/forced-sell, sensitivity_sweep/stress_test tools, + 4 S3-deferred items. Depends on S4a. |
+| 4b | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md` — commits `8ceb010`, `0e2116e` (2026-08-26) | Market scenario layer: demographic drift priors (demoflow ScenarioPrior) + tilted price-shock channel; correlated market+income shocks and the pre-canned stress configs were NOT built — the prior replaced the hand-authored scenario menu. |
+| readiness | plan-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/plans/2026-09-01-readiness-polish.md` (branch `feat/readiness-polish`) | Provenance + verdict + intake + glossary + hygiene; suite 440+ tests. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
 A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 
 ### Hand-off Payload
 
-- **Next session:** Session 4
-- **Session type:** brainstorm-to-execute
-- **Next step:** design the market scenario layer
-- **Input artifacts it consumes:**
-  - `src/hde/` — engine (ComparisonSpec, 3-way det + MC, AffordabilityReport)
-  - `mcp_server/` — MCP server (6 tools, inline affordability)
-  - `docs/specs/archive/2026-06/2026-06-08-rent-income-model-design.md` — S3 spec
-- **Session objective:** Design + implement market scenario layer: real estate price-drop events (year + magnitude + recovery), interest rate shocks, correlated market + income shocks in MC. Add `sensitivity_sweep` and `stress_test` MCP tools. Pre-canned scenario configs (market crash, rate spike, pay cut).
-- **Key open questions for S4 brainstorm:** (1) How are market shocks correlated with income shocks in MC? (2) What distribution for price-drop recovery? (3) Which pre-canned scenarios are most useful?
-- **S3 deferred items (carry into S4 design):** nominal-mode affordability cash-flow consistency; affordability MC using per-sim housing costs (not deterministic); rent event z_inf correlation; crisis event model (forced-sell on sustained income shock).
-- **Mid-session resume state:** N/A (S4 not started)
+- **Next session:** PR + merge of `feat/readiness-polish`; then the deferred ruling on mypy (fix + gate, or drop the config) and whether demoflow's emitter should embed source citations (plan E.5, cross-contract).
+- **Input artifacts it consumes:** the readiness plan, `docs/specs/2026-09-01-provenance-remediation-design.md` (citation table), `tests/test_anchors.py` (generative pins).
+- **Mid-session resume state:** N/A.
 
 ### Decisions / Deviations
 
@@ -42,23 +35,12 @@ A `completed` row MUST carry a real, stat-able **absolute** artifact path.
 - **2026-06-07 (S1 complete):** `src/cvh_cost/` → `src/hde/`, setuptools → hatchling, entry point `cvh-cost` → `hde`, Python floor bumped 3.9→3.10. 76 tests pass; `uv.lock` committed.
 - **2026-06-08 (S2 complete):** FastMCP server with 6 tools (define_scenario, run_comparison, sweep_param, save_figure, list_scenarios, delete_scenario). Session registry with total-replace store_results semantics. 11 PR review findings addressed (path traversal, stale MC, mode validation, backend import order). 115 tests pass. PR #2 merged.
 - **2026-06-08 (S4 design — split + leverage re-scope):** Code inspection found the engine is carrying-cost-only — `house_value` compounds but is never harvested as equity, no mortgage/interest rate, and the rent side is one-sidedly credited the invested-DP benefit. Price-drop scenarios were therefore wrong-signed/inert. Operator decisions: (D1) net-wealth comparator; (D2) **full mortgage/amortization DCF** ("full-value − financing carry", the long-term-correct model) — **re-opens the "mortgage/leverage modeling" out-of-scope boundary** (in-conversation instruction overrides roadmap, Authority Hierarchy #1); (D3) "interest rate shock" reinterpreted as discount-rate sensitivity (S4b); (D4) **split S4 → S4a foundation + S4b scenario layer**; (D5) net-wealth canonical (no legacy mode; affected tests rewritten against an independent oracle); (D6) required explicit capital structure (mortgage XOR all_cash) on owned options. Elegance-gate (architectural + strategic) both PROCEED-WITH-MODIFICATIONS, no second split; mods folded (pv_annuity reuse + closed-form balance, shared `_financing_pv`, compositional oracle-anchored test assertions, oracle-first ordering, 74-fixture `all_cash` stub pass, dual-layer fail-loud, AGENTS.md "do not add mortgage" line struck). Spec: `docs/specs/2026-06-08-net-wealth-foundation-design.md`.
+- **2026-08-26 (S4b, surface doctrine):** S4b built as demographic input slots consuming demoflow's ScenarioPrior instead of a hand-authored shock menu; CLI-first doctrine — MCP demoted to non-shell consumers.
+- **2026-09-01 (readiness):** decisiveness rule ruled (MC floor 0.65, tie band 5%); `house.annual_maintenance_rate` a registered neutral with a warning; mortgage convention disclosed, not changed; prior citations hde-side (`SOURCE_KEY_CITATIONS`), emitter contract untouched; mypy deferred.
 
 ### Next Recommended Action
 
-Start Session 1 (decisive). Pre-flight checklist:
-
-```
-1. git mv src/cvh_cost src/<new_package_slug>       # rename Python package
-2. Update all internal imports
-3. Swap pyproject.toml: setuptools → hatchling, add uv.lock
-4. Add AGENTS.md (repo operational rules)
-5. Add CLAUDE.md (Claude-specific guidance)
-6. mv context/ docs/reference/                      # align with projects convention
-7. mkdir docs/roadmaps docs/specs                   # canonical doc dirs
-8. Archive notebooks/ (move to docs/archive/notebooks/)
-9. uv sync && uv run pytest                         # all tests green
-10. git commit "chore: rename + uv migration + repo skeleton align"
-```
+Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; regenerate `docs/story/` and confirm `git status` clean on a second render).
 
 ---
 

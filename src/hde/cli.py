@@ -262,7 +262,7 @@ def main() -> int:
             except Exception as e:
                 print(f"Error rendering story package: {e}", file=sys.stderr)
                 return 1
-            for path in package["act images"]:
+            for path in package["act_images"]:
                 print(f"Saved plot: {path}")
             print(f"Story written: {package['report']}")
             print(f"Story written: {package['story']}")

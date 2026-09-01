@@ -10,8 +10,9 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 - **3-way PV comparison** — rent / condo / house, leveraged or all-cash, with end-of-horizon equity credited back
 - **Monte Carlo uncertainty** — full cost distributions and P(each option cheapest), seeded and reproducible
 - **Demographic priors via `ScenarioPrior`** — UN WPP → ISQ scenario → demand-model drift bands that tilt price growth and crash risk by geography
-- **Five-act story plots** — verdict, the cost race, uncertainty, home-value futures, the demographic signal ([docs/story/STORY.md](docs/story/STORY.md))
-- **MCP server for Claude** — six tools, no notebooks required
+- **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
+- **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
+- **MCP server for Claude** — six tools for non-shell consumers
 
 ## Quickstart
 
@@ -28,17 +29,17 @@ uv run hde examples/basic_config.yaml
 uv run hde examples/showcase_demographic_prior.yaml --story docs/story
 ```
 
-Renders the full five-act story under the MTL_RMR demographic prior — the committed
+Renders the full six-act story under the MTL_RMR demographic prior — the committed
 [docs/story/STORY.md](docs/story/STORY.md) is this command's output, regenerable at any time.
 
-> **Surface doctrine (2026-08-26):** the primary interface is the **`hde` CLI + the `hde` skill** (dispatch contract for agents — `~/.claude/skills/hde/`). The MCP server below remains for non-shell consumers (claude.ai web) only; it is not the registered surface for local sessions.
+> **Surface doctrine (2026-08-26):** the primary interface is the **`hde` CLI + the `hde` skill** (dispatch contract for agents — repo-local `.claude/skills/hde/SKILL.md`). The MCP server below remains for non-shell consumers (claude.ai web) only; it is not the registered surface for local sessions. `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
 
 ## MCP server
 
 ```bash
-uv run hde-mcp
+uv run --extra mcp hde-mcp
 # Register with Claude Code:
-claude mcp add hde -- uv --directory /path/to/housing-decision-engine run hde-mcp
+claude mcp add hde -- uv --directory /path/to/housing-decision-engine run --extra mcp hde-mcp
 ```
 
 For Claude Desktop, add this to `claude_desktop_config.json` (replace
@@ -66,19 +67,21 @@ in an in-process registry that resets on restart.
 ```
 src/hde/             # Core engine: models, pv, deterministic, monte_carlo,
                      #   config (YAML → ComparisonSpec), market_scenario (prior loader),
-                     #   reporting, story_plots (five acts), story_page (STORY.md), cli
+                     #   reporting, story_plots (six acts), story_page (STORY.md), cli,
+                     #   anchors (provenance registry), serialization (--json core), input_schema
 mcp_server/          # FastMCP server (stdio): main, registry, tools
 examples/            # Scenario YAMLs + ordered walkthrough (examples/README.md)
 tests/               # pytest suite (fixtures/ holds the golden ScenarioPrior)
 docs/
-  story/             # Living showcase: five-act PNGs + STORY.md + report.txt
+  story/             # Living showcase: six-act PNGs + STORY.md + report.txt
   roadmaps/ specs/ plans/ reference/ research/ archive/
 demoflow/            # Self-contained uv project — the upstream demand-model pipeline
 ```
 
 ## Going deeper
 
-- **Example walkthrough** — [examples/README.md](examples/README.md): four scenarios in reading order
+- **Example walkthrough** — [examples/README.md](examples/README.md): the smallest config that runs, then five scenarios in reading order
+- **Every figure explained** — [docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md) § Figure glossary; every default's source — `uv run hde --print-anchors`
 - **Library use** — all engines take a single `ComparisonSpec`; see `src/hde/__init__.py` exports
 - **Roadmap** — `docs/roadmaps/2026-06-07_housing-decision-engine.md`
 

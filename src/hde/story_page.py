@@ -18,7 +18,7 @@ showcase in ``docs/story/`` stays regenerable.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TypedDict
 
 from .config import single_path_run
 from .market_scenario import LoadedScenarioPrior
@@ -40,6 +40,14 @@ from .story_plots import (
 
 REPORT_FILENAME = "report.txt"
 STORY_FILENAME = "STORY.md"
+
+
+class StoryPackage(TypedDict):
+    """What render_story_package writes: the act images (in act order), the
+    text report, and the STORY.md one-pager."""
+    act_images: List[Path]
+    report: Path
+    story: Path
 
 
 def _act_sentences(
@@ -197,13 +205,12 @@ def render_story_package(
     command: str = "uv run hde <config.yaml> --story <DIR>",
     fmt: str = "png",
     warnings: Optional[List[str]] = None,
-) -> Dict[str, Path]:
+) -> StoryPackage:
     """
     Write the full story package into ``out_dir``: the six-act plots, the
     text report (``report.txt``), and the STORY.md one-pager.
 
-    Returns a mapping {name: path} with keys "act images" (list), "report",
-    and "story".
+    Returns a StoryPackage: "act_images" (list, act order), "report", "story".
     """
     if deterministic_result is None:
         raise ValueError("render_story_package requires deterministic results")
@@ -253,4 +260,4 @@ def render_story_package(
         encoding="utf-8",
     )
 
-    return {"act images": saved_images, "report": report_path, "story": story_path}
+    return {"act_images": saved_images, "report": report_path, "story": story_path}

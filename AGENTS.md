@@ -6,7 +6,9 @@ Canonical operational rules for this repo. Claude reads this first.
 
 Present value comparison engine for housing decisions: rent vs condo vs house.
 Extends to employment cash flow modeling and real estate market scenario analysis.
-Surfaces as an MCP server — Claude calls tools directly, no notebooks needed.
+Primary surface: the `hde` CLI — `--json` for agents, `--print-schema` for the input
+contract, `--print-anchors` for provenance (surface doctrine, `CLAUDE.md`). The MCP
+server remains for non-shell consumers only.
 
 ## Scope
 
@@ -17,23 +19,33 @@ money — it computes present-value comparisons from parameters you supply.
 
 ```
 src/hde/            # Core engine (Python package)
-  models.py         # Dataclasses: params + results (incl. ComparisonSpec, RentParams, IncomeParams)
-  pv.py             # Pure PV utility functions
+  anchors.py        # Provenance registry: every engine default with source/url/band/kind;
+                    #   SOURCE_KEY_CITATIONS for the demographic prior's inputs
+  models.py         # Dataclasses: params + results (ComparisonSpec, …), Verdict + compute_verdict
+  pv.py             # Pure PV utility functions (annuities, mortgage math, monthly equivalent)
   deterministic.py  # Deterministic PV engine (compute_deterministic(spec: ComparisonSpec))
   monte_carlo.py    # Monte Carlo simulation engine (run_monte_carlo(spec: ComparisonSpec))
-  config.py         # YAML config loader (load_config_dict → ComparisonSpec)
-  reporting.py      # Text reports + matplotlib figures
+  market_scenario.py# ScenarioPrior loader + validation, time-anchor guard, prior.describe()
+  config.py         # YAML config loader (load_config_dict → ComparisonSpec), warnings
+  input_schema.py   # The input contract as data (--print-schema)
+  serialization.py  # THE typed core for agent output: results, assumptions, verdict, anchors
+  reporting.py      # Text report + legacy matplotlib figures
+  story_plots.py    # The six-act decision story (plots)
+  story_page.py     # STORY.md one-pager + report.txt package (--story)
   cli.py            # CLI entry point (hde)
-mcp_server/         # MCP server (FastMCP, stdio transport)
+mcp_server/         # MCP server (FastMCP, stdio transport) — non-shell consumers only
   main.py           # FastMCP entry point + @mcp.tool wrappers
   registry.py       # In-memory ScenarioEntry store (spec: ComparisonSpec)
-  tools.py          # 6 tool implementations + serialization helpers
-tests/              # pytest suite
-examples/           # Example YAML scenario configs
+  tools.py          # 6 tool implementations (serialization via hde.serialization)
+tests/              # pytest suite (fixtures/ holds the golden ScenarioPrior)
+examples/           # Example YAML scenario configs + ordered walkthrough (README.md)
 docs/
   roadmaps/         # Roadmap spines (do not edit arc spine)
-  specs/            # Design docs produced by brainstorming sessions
-  reference/        # Architecture, API contract, config schemas (formerly context/)
+  specs/            # Design docs (incl. the provenance-remediation citation table)
+  plans/            # Implementation plans (incl. the 2026-09-01 readiness plan)
+  reference/        # ARCHITECTURE (figure glossary), API_CONTRACT, CONFIG_SCHEMAS, DEV_NOTES
+  research/         # Research records
+  story/            # Living showcase: six-act PNGs + STORY.md + report.txt
   archive/notebooks/# Deprecated Jupyter notebooks
 ```
 
@@ -55,16 +67,17 @@ Layer 1 is built; layer 2 is a constraint on everything built now, not a build i
 ## Entry points
 
 ```bash
-# CLI
-uv run hde <config.yaml> [--no-monte-carlo] [--quiet]
+# CLI (the registered surface)
+uv run hde --print-schema                                   # input contract
+uv run hde --print-anchors                                  # provenance registry
+uv run hde <config.yaml> [--no-monte-carlo] [--quiet] [--json] [--story DIR]
 
 # Tests
-uv run python -m pytest
+uv run --extra dev python -m pytest -q
 
-# MCP server
-uv run hde-mcp                         # stdio transport (Claude Code)
-# Register with Claude Code:
-# claude mcp add hde -- uv --directory /path/to/housing-decision-engine run hde-mcp
+# MCP server — non-shell consumers (claude.ai web) only; needs the `mcp` extra
+uv run --extra mcp hde-mcp
+# claude mcp add hde -- uv --directory /path/to/housing-decision-engine run --extra mcp hde-mcp
 ```
 
 ## Development setup
@@ -95,7 +108,8 @@ full-suite invocation.
 - **Scenario names** are sanitized via `Path(name).name` before joining figure paths.
 - **sweep_param** whitelist has 24 paths; rent paths require `spec.rent is not None`.
 - **Breakdown keys** centralized as `CONDO_BREAKDOWN_KEYS`, `HOUSE_BREAKDOWN_KEYS`, `RENT_BREAKDOWN_KEYS` frozensets.
-- **Anchors doctrine** — `src/hde/anchors.py` is the single source of truth for every numeric engine default; an uncited default is a defect (`AnchorError` at import). Re-anchoring a default requires a `replaces` note. Examples cite sources inline or mark values `illustrative`; the `defaults_applied` echo carries citation tags.
+- **Anchors doctrine** — `src/hde/anchors.py` is the single source of truth for every bias-critical engine default (the rates, thresholds and shock hyperparameters that shape a verdict; structural knobs such as `num_sims` and the zero vols are not anchored, by design). An uncited entry is a defect (`AnchorError` at import); re-anchoring requires a `replaces` note; a live URL requires `retrieved_on`. `tests/test_anchors.py` is generative: every anchor is wired to a dataclass default or declared consumed elsewhere, and every key the assumptions echo can emit resolves to an anchor. Examples cite sources inline or mark values `illustrative`; the `defaults_applied` echo carries citation tags; `--print-anchors` and the `assumptions` JSON block expose the full records.
+- **One verdict** — `models.compute_verdict` (MC probability floor 0.65, else 5% tie band; both anchored) is consumed by the story headline, the text report, `--json` and MCP. No surface computes its own margin.
 
 ## Roadmap
 
@@ -106,7 +120,8 @@ Sessions:
 - S2 ✅ MCP server — 6 tools (2026-06-08, PR #2)
 - S3 ✅ 3-way comparison + income model (2026-06-08, PR #3)
 - S4a ✅ Net-wealth foundation: mortgage amortization + terminal equity (2026-07-21, PR #4)
-- S4b Market scenario layer + Monte Carlo extensions — not started
+- S4b ✅ Market scenario layer: demographic drift priors + tilted price-shock channel (2026-08-26, 8ceb010 / 0e2116e; `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md`)
+- Surface + provenance ✅ CLI-first doctrine, anchors registry, one verdict, figure glossary (2026-08-26 → 2026-09-01; `docs/plans/2026-09-01-readiness-polish.md`, `docs/specs/2026-09-01-provenance-remediation-design.md`)
 
 ## Do not
 

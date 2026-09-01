@@ -115,14 +115,14 @@ class TestDegradation:
         *_, package, story = _render(tmp_path, with_mc=False)
         assert "act3_the_uncertainty" not in story
         assert "The uncertainty" not in story
-        assert len(package["act images"]) == 5
+        assert len(package["act_images"]) == 5
 
     def test_no_prior_skips_act5_and_act4_is_honest(self, tmp_path):
         *_, package, story = _render(tmp_path, with_prior=False)
         assert "act5_demographic_signal" not in story
         assert "Why" not in story
         assert "No demographic prior loaded" in story
-        assert len(package["act images"]) == 5
+        assert len(package["act_images"]) == 5
 
     def test_requires_deterministic_result(self, tmp_path):
         spec = _spec()
@@ -290,3 +290,21 @@ class TestActSentencesPinned:
         assert ("never flips" in race and "equity credit" in race) or "lead changes hands" in race
         assert re.search(r"In \d+% of [\d,]+ simulations, .* came out cheapest\.",
                          sentences["act3_the_uncertainty"])
+
+
+class TestByteStability:
+    """G.5 (CLAUDE.md claim): rendering the same config twice yields byte-identical
+    act images and report; STORY.md is identical when the regen command matches."""
+
+    def test_two_renders_are_byte_identical(self, tmp_path):
+        spec = _spec(with_prior=True)
+        prior = load_scenario_prior(GOLDEN_PRIOR, "MTL_RMR")
+        det = compute_deterministic(spec)
+        mc = run_monte_carlo(spec)
+        a = render_story_package(spec, det, mc, prior=prior, out_dir=tmp_path / "a", command="cmd")
+        b = render_story_package(spec, det, mc, prior=prior, out_dir=tmp_path / "b", command="cmd")
+        for pa, pb in zip(a["act_images"], b["act_images"]):
+            assert pa.name == pb.name
+            assert pa.read_bytes() == pb.read_bytes(), pa.name
+        assert a["report"].read_bytes() == b["report"].read_bytes()
+        assert a["story"].read_bytes() == b["story"].read_bytes()
