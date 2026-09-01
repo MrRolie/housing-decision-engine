@@ -273,8 +273,12 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"years={sim.years} < 5 — selling costs dominate short horizons"
         )
 
+    # An all-cash purchase puts the WHOLE price down — the case with the most
+    # unmodeled renter capital (readiness plan B.5; the old sum read
+    # down_payment, which is None for all_cash, so the warning never fired).
     owned_down = sum(
-        (o.down_payment or 0.0) for o in (spec.condo, spec.house) if o is not None
+        (o.initial_value if o.all_cash else (o.down_payment or 0.0))
+        for o in (spec.condo, spec.house) if o is not None
     )
     if (
         owned_down > 0

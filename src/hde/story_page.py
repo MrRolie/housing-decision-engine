@@ -80,7 +80,8 @@ def _act_sentences(
         leader = min(paid_curves, key=lambda k: paid_curves[k][-1])
         race_sentence = (
             f"{OPTION_DISPLAY[leader]} costs less out of pocket every single "
-            f"year — the ranking never flips."
+            f"year — the ranking never flips (before the end-of-horizon equity "
+            f"credit, which decides the verdict)."
         )
     acts.append(("act2_the_race", "The race", race_sentence))
 

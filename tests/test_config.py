@@ -735,7 +735,11 @@ class TestCoherenceWarnings:
             "economic": {"mode": "real"},
             "house": {"initial_value": 400_000, "all_cash": True,
                       "value_growth_rate": 0.01},
-            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01},
+            # like-for-like: the all-cash buyer puts $400k down, so the clean
+            # fixture gives the renter the same capital (B.5 made the warning
+            # fire for all_cash purchases, which it silently skipped before)
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01,
+                     "invested_down_payment": 400_000},
         }
         cfg.update(overrides)
         return load_config_dict(cfg)
@@ -878,3 +882,16 @@ class TestSinglePathRun:
             "market_scenario": {"path": "p.json", "geography": "MTL_RMR"},
         })
         assert single_path_run(spec) is False
+
+
+def test_like_for_like_warning_fires_for_all_cash_purchase():
+    """B.5: an all-cash buy puts the whole price down; with the renter's capital
+    unset the verdict is not like-for-like and the warning must say so."""
+    from hde.config import coherence_warnings, load_config_dict
+    spec = load_config_dict({
+        "years": 20, "discount_rate": 0.03,
+        "condo": {"monthly_fee": 400, "initial_value": 480_000, "all_cash": True},
+        "rent": {"monthly_rent": 2_000},
+    })
+    warns = "\n".join(coherence_warnings(spec))
+    assert "not like-for-like" in warns and "$480,000" in warns

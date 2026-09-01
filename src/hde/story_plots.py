@@ -420,6 +420,17 @@ def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResul
     lo, hi = xs[0], xs[-1]
     if break_evens:
         be = break_evens[0]
+        step = abs(xs[1] - xs[0]) if len(xs) > 1 else 0.0
+        if abs(user_rent - be) <= step:
+            # On the line (readiness plan B.6): within one grid step of the
+            # interpolated break-even, a directional claim is noise — say so.
+            return (
+                f"Your ${user_rent:,.0f}/mo sits on the break-even line "
+                f"(${be:,.0f}/mo, within the sweep's ~${step:,.0f}/mo resolution) "
+                f"— renting and buying a "
+                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} "
+                f"cost the same here."
+            )
         if user_rent < be:
             return (
                 f"Renting stays cheaper than buying a "

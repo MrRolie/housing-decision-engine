@@ -37,6 +37,8 @@ from hde.monte_carlo import run_monte_carlo
 from hde.story_plots import (
     _cumulative_cost_curves,
     _owned_at_price,
+    _sweep_axis,
+    cheapest_owned_key,
     find_break_evens,
     find_crossovers,
     market_line_sentence,
@@ -476,3 +478,26 @@ class TestAct6MarketLine:
         det = compute_deterministic(spec)
         sentence = market_line_sentence(spec, det)
         assert ("$/mo" in sentence) or ("range" in sentence) or ("/mo" in sentence)
+        # B.6 round-trip: the sentence quotes the number the solver found
+        owned = cheapest_owned_key(spec, det)
+        xs = _sweep_axis(spec.rent.monthly_rent)
+        totals = sweep_rent_totals(spec, xs)
+        break_evens = find_break_evens(xs, totals["rent"], totals[owned])
+        if break_evens:
+            assert f"${break_evens[0]:,.0f}" in sentence
+
+    def test_rent_on_the_break_even_line_is_not_a_directional_claim(self):
+        from dataclasses import replace
+        spec = _spec()
+        det = compute_deterministic(spec)
+        owned = cheapest_owned_key(spec, det)
+        # find the break-even on a WIDE axis (the fixture's own ±35% window
+        # need not contain it), then quote exactly that rent
+        xs = list(np.linspace(300.0, 8_000.0, 771))
+        totals = sweep_rent_totals(spec, xs)
+        break_evens = find_break_evens(xs, totals["rent"], totals[owned])
+        assert break_evens, "fixture must have a break-even somewhere in $300–$8,000/mo"
+        on_line = replace(spec, rent=replace(spec.rent, monthly_rent=break_evens[0]))
+        sentence = market_line_sentence(on_line, compute_deterministic(on_line))
+        assert "sits on the break-even line" in sentence
+        assert "already wins" not in sentence and "stays cheaper" not in sentence

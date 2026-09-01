@@ -23,6 +23,7 @@ from hde.market_scenario import load_scenario_prior
 from hde.monte_carlo import run_monte_carlo
 from hde.story_page import (
     REPORT_FILENAME,
+    _act_sentences,
     STORY_FILENAME,
     generate_story_markdown,
     render_story_package,
@@ -271,3 +272,16 @@ class TestSinglePathStampAndFooter:
         *_, package, _ = _render(tmp_path, with_prior=False)
         report = package["report"].read_text(encoding="utf-8")
         assert report.startswith("Assumptions")
+
+
+class TestActSentencesPinned:
+    """G.5: act-2 and act-3 sentences are pinned (they carried no test)."""
+
+    def test_no_crossover_race_sentence_names_the_equity_credit(self, tmp_path):
+        import re
+        spec, det, mc, prior, _, _ = _render(tmp_path)
+        sentences = {stem: s for stem, _, s in _act_sentences(spec, det, mc, prior)}
+        race = sentences["act2_the_race"]
+        assert ("never flips" in race and "equity credit" in race) or "lead changes hands" in race
+        assert re.search(r"In \d+% of [\d,]+ simulations, .* came out cheapest\.",
+                         sentences["act3_the_uncertainty"])
