@@ -18,7 +18,8 @@ FULL_CONFIG = {
               "value_growth_rate": 0.01, "selling_cost_rate": 0.05,
               "fee_escalation_rate": 0.02},
     "house": {"initial_value": 400_000, "all_cash": True,
-              "value_growth_rate": 0.01, "selling_cost_rate": 0.05},
+              "value_growth_rate": 0.01, "selling_cost_rate": 0.05,
+              "annual_maintenance_rate": 0.01},
     "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.025,
              "invested_down_payment": 50_000, "investment_return_rate": 0.05},
 }

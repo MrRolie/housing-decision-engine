@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .anchors import ANCHORS
 from .config import _SECTION_KEYS
+
+_NOMINAL_PLANNING = ANCHORS["economic.inflation_rate.nominal_planning"]
 
 # key -> (required?, note) per section; top-level scalars included as a section.
 _NOTES: Dict[str, Dict[str, Any]] = {
@@ -39,7 +42,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
                                        "neutral, no universal long-run real default; set "
                                        "your view or a market_scenario prior"),
-        "annual_maintenance_rate": (False, "fraction of value per year; default 0.0"),
+        "annual_maintenance_rate": (False, "fraction of value per year; DEFAULT 0.0 = no "
+                                            "maintenance modelled (neutral, warns when omitted); "
+                                            "NAHB 2019 AHS routine ≈ 0.6% of value/yr"),
         "maintenance_curve": (False, "list of {year, rate} overrides"),
         "down_payment": (False, "with mortgage_rate+term: capital structure"),
         "mortgage_rate": (False, "annual rate, decimal"),
@@ -66,7 +71,7 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     "economic": {
         "mode": (False, '"real" (DEFAULT — growth/discount must be real) or "nominal"'),
         "inflation_rate": (False, "ignored in real mode; DEFAULT 0.0 — nominal-mode "
-                                    "suggestion 0.021 (FP Canada 2026 PAG)"),
+                                    f"suggestion {_NOMINAL_PLANNING.value} ({_NOMINAL_PLANNING.short_cite})"),
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
     },
     "income": {
@@ -75,7 +80,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                         "salary growth)"),
         "affordability_threshold": (False, "cost/income ratio; DEFAULT 0.32 (legacy GDS "
                                              "32%, below CMHC's 39% cap)"),
-        "pay_drop_events": (False, "list of {year, magnitude, ...}"),
+        "pay_drop_events": (False, "list of {year, magnitude, year_jitter_std, magnitude_vol}; "
+                                    "magnitude = retained-income fraction in (0, 1] (0.8 = 20% "
+                                    "cut); shocked draws are clamped to [0.01, 1.0]"),
     },
     "simulation": {
         "num_sims": (False, "Monte Carlo paths; default 10,000"),

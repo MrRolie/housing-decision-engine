@@ -36,6 +36,11 @@ ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation"})
 _ECHO_ALIASES: Dict[str, str] = {
     "condo.selling_cost_rate": "condo.house.selling_cost_rate",
     "house.selling_cost_rate": "condo.house.selling_cost_rate",
+    # price_shock sub-keys echo per option but cite the one shock anchor
+    "condo.price_shock.severity_mean": "price_shock.severity_mean",
+    "house.price_shock.severity_mean": "price_shock.severity_mean",
+    "condo.price_shock.severity_vol": "price_shock.severity_vol",
+    "house.price_shock.severity_vol": "price_shock.severity_vol",
 }
 
 
@@ -245,11 +250,13 @@ ANCHORS: Dict[str, Anchor] = {
                "choice around price_shock.severity_mean)",
         url="none — calibration choice, see rationale",
         rationale=(
-            "Dispersion around the TREB-anchored severity mean: ±1σ keeps "
-            "severity ≈ 0.21–0.30, inside the observed nominal (−27.6%) → real "
-            "(−39.4%) span of the 1989–96 event. This vol is calibrated to the "
-            "severity anchor, not independently sourced; its band is likewise "
-            "an illustrative plausible range for the calibration."
+            "Dispersion around the TREB-anchored severity mean. The draw is "
+            "severity_mean × exp(vol·z − vol²/2) capped at 1.0 (lognormal, "
+            "median-centred: the z=0 draw is 0.249, not 0.25), so ±1σ spans "
+            "≈ 0.225–0.275 and p10–p90 ≈ 0.219–0.283 — inside the observed "
+            "nominal (−27.6%) → real (−39.4%) span of the 1989–96 event. "
+            "Calibrated to the severity anchor, not independently sourced; the "
+            "band is an illustrative plausible range for the calibration."
         ),
         band=(0.05, 0.15),
         short_cite="TREB 1989–96 (calibrated)",
@@ -309,6 +316,28 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="neutral, uncited",
         kind="neutral",
     ),
+    "house.annual_maintenance_rate": Anchor(
+        name="house.annual_maintenance_rate",
+        value=0.0,
+        as_of="2026",
+        source="hde neutrality ruling — deliberately uncited (operator default "
+               "2026-09-01, readiness plan C.1)",
+        url="none (deliberately uncited)",
+        rationale=(
+            "0.0 = no maintenance modelled. The engine does not invent a cost "
+            "the user did not state — but it must say it assumed none, so "
+            "coherence_warnings fires whenever this key is omitted (a zero-"
+            "maintenance house silently favours buying). Reference points for "
+            "the user's own value: NAHB 'Operating Costs of Owning a Home' "
+            "(2019 AHS) Table 2 — routine maintenance ≈ 0.6% of value/yr for "
+            "all homes (0.8% pre-1960 … 0.2% 2010s; narrow definition, minor "
+            "repairs only); the '1% rule' budgeting heuristic ≈ 1%. Band spans "
+            "none to 1.5%."
+        ),
+        band=(0.0, 0.015),
+        short_cite="neutral, uncited",
+        kind="neutral",
+    ),
     "rent.invested_down_payment": Anchor(
         name="rent.invested_down_payment",
         value=0.0,
@@ -348,6 +377,44 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="FP Canada 2026 PAG",
         retrieved_on="2026-09-01",
         kind="reference",
+    ),
+    # --- Planning constants consumed by code paths other than a dataclass
+    #     default (warnings text, the drift-sigma fit). Registered so the
+    #     number lives in one place and carries its source. ---
+    "economic.inflation_rate.nominal_planning": Anchor(
+        name="economic.inflation_rate.nominal_planning",
+        value=0.021,
+        as_of="2026",
+        source="FP Canada 2026 PAG §5 inflation 2.1%; PAG p.6: CPI averaged "
+               "2.5% over the 10 years to Dec 2025",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "The nominal-mode planning figure the engine SUGGESTS (never "
+            "applies): the coherence warning for nominal mode with "
+            "inflation_rate=0 and the --print-schema note both format this "
+            "value. Band top 2.5% = the realised 10-year CPI average the PAG "
+            "quotes."
+        ),
+        band=(0.021, 0.025),
+        short_cite="FP Canada 2026 PAG",
+        retrieved_on="2026-09-01",
+    ),
+    "market_scenario.drift_sigma_divisor": Anchor(
+        name="market_scenario.drift_sigma_divisor",
+        value=2.5632,
+        as_of="2026",
+        source="derivation: standard-normal p10–p90 span = 2 × z₀.₉₀ = 2 × 1.28155",
+        url="none — derivation",
+        rationale=(
+            "The demoflow emitter publishes demo_drift_p10 / demo_drift_p90 per "
+            "band. A Normal fitted so its 10th and 90th percentiles match that "
+            "band has σ = (p90 − p10) / 2.5631, so the per-path drift draws "
+            "reproduce the published deciles. A mathematical identity, not a "
+            "measurement; the band is a rounding tolerance."
+        ),
+        band=(2.5, 2.6),
+        short_cite="p10–p90 Normal fit",
+        kind="derivation",
     ),
     # --- Verdict decisiveness rule (operator-ruled 2026-09-01, readiness plan
     #     B.2). Derivations, no external source: they define what the engine

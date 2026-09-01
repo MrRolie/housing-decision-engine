@@ -713,7 +713,8 @@ class TestDefaultsApplied:
         cfg = self._config(
             economic={"mode": "real", "inflation_rate": 0.0},
             house={"initial_value": 400_000, "all_cash": True,
-                   "value_growth_rate": 0.01, "selling_cost_rate": 0.06},
+                   "value_growth_rate": 0.01, "selling_cost_rate": 0.06,
+                   "annual_maintenance_rate": 0.01},
             rent={"monthly_rent": 2_000, "rent_escalation_rate": 0.025,
                   "invested_down_payment": 50_000, "investment_return_rate": 0.05},
         )
@@ -734,7 +735,7 @@ class TestCoherenceWarnings:
             "years": 20, "discount_rate": 0.03,
             "economic": {"mode": "real"},
             "house": {"initial_value": 400_000, "all_cash": True,
-                      "value_growth_rate": 0.01},
+                      "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01},
             # like-for-like: the all-cash buyer puts $400k down, so the clean
             # fixture gives the renter the same capital (B.5 made the warning
             # fire for all_cash purchases, which it silently skipped before)

@@ -144,7 +144,10 @@ def _apply_price_shock(value_tracks, shock: PriceShockParams, tilt: float,
     No-op (no draw consumed) when the effective hazard is 0 — this keeps
     default-off byte-identical.
     """
-    hazard = shock.annual_hazard * tilt
+    # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
+    # the composed hazard is capped at certainty — the same clamp the event
+    # hazard channel applies (readiness plan C.7).
+    hazard = min(shock.annual_hazard * tilt, 1.0)
     if hazard <= 0:
         return value_tracks
     if rng.random() < hazard:
@@ -557,6 +560,12 @@ def _compute_income_affordability_once(
             if event_years[id(event)] == year:
                 if event.magnitude_vol > 0:
                     mag = event.magnitude * float(np.exp(rng.normal(0, event.magnitude_vol)))
+                    # A pay-drop event is a CUT by definition: the retained
+                    # fraction is clamped to [0.01, 1.0] — the floor keeps a
+                    # 99% cut as the worst representable outcome, the ceiling
+                    # truncates upside draws (a shocked raise is not modelled),
+                    # so the realised mean sits below event.magnitude whenever
+                    # magnitude_vol > 0. Stated in the pay_drop_events schema note.
                     mag = min(max(mag, 0.01), 1.0)
                 else:
                     mag = event.magnitude

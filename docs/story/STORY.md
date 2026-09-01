@@ -14,7 +14,7 @@ Renting wins by $32,072 over 25 years
 
 ## Act — The race
 
-Renting costs less out of pocket every single year — the ranking never flips.
+Renting costs less out of pocket every single year — the ranking never flips (before the end-of-horizon equity credit, which decides the verdict).
 
 ![The race](act2_the_race.png)
 
@@ -50,6 +50,6 @@ Full text report: [report.txt](report.txt)
 
 - mode: real terms · discount_rate 5.0%
 - condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
-- house: value growth +2.0%/yr · selling_cost_rate 5.0%
+- house: value growth +2.0%/yr · maintenance 1.2% of value/yr · selling_cost_rate 5.0%
 - rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
 - defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]

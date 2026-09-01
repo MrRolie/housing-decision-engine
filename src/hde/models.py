@@ -120,7 +120,8 @@ class CondoParams:
         reserve_growth_rate: Deterministic growth on reserves
     """
     monthly_fee: float
-    fee_escalation_rate: float = 0.0
+    # FP Canada 2026 PAG shelter 3.1% nominal ≈ 1.0% real is the upper reference; 0.0 = fees track inflation
+    fee_escalation_rate: float = ANCHORS["condo.fee_escalation_rate"].value
     events: List[EventConfig] = field(default_factory=list)
     other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
     reserve_contribution_rate: float = 0.0  # Fraction of annual fees set aside each year
@@ -128,7 +129,8 @@ class CondoParams:
     reserve_growth_rate: float = 0.0  # Deterministic annual growth on reserve balance
     # --- S4a: condo as an owned, appreciating asset + capital structure ---
     initial_value: float = 0.0
-    value_growth_rate: float = 0.0
+    # neutral, uncited — no defensible universal real appreciation default (anchors.py)
+    value_growth_rate: float = ANCHORS["condo.value_growth_rate"].value
     down_payment: Optional[float] = None
     mortgage_rate: Optional[float] = None
     mortgage_term_years: Optional[int] = None
@@ -153,8 +155,10 @@ class HouseParams:
         maintenance_curve: Optional (year, rate) points for age/condition curve; interpolated annually
     """
     initial_value: float
-    value_growth_rate: float = 0.0
-    annual_maintenance_rate: float = 0.0
+    # neutral, uncited — no defensible universal real appreciation default (anchors.py)
+    value_growth_rate: float = ANCHORS["house.value_growth_rate"].value
+    # neutral, uncited — 0.0 = no maintenance modelled; the echo + a warning say so (anchors.py)
+    annual_maintenance_rate: float = ANCHORS["house.annual_maintenance_rate"].value
     events: List[EventConfig] = field(default_factory=list)
     other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
     maintenance_curve: List[Tuple[int, float]] = field(default_factory=list)  # (year, rate) pairs sorted by year
@@ -218,7 +222,8 @@ class EconomicParams:
         inflation_vol: Volatility for annual inflation shock (used for correlation)
     """
     mode: Literal["nominal", "real"] = "real"
-    inflation_rate: float = 0.0
+    # real-mode inert value; nominal-mode planning figure lives in anchors.py (2.1%)
+    inflation_rate: float = ANCHORS["economic.inflation_rate"].value
     inflation_vol: float = 0.0
 
 

@@ -192,7 +192,7 @@ def _reject_unknown_keys(data: Dict[str, Any]) -> None:
 _ASSUMPTION_KEYS: Dict[str, tuple] = {
     "economic": ("mode", "inflation_rate"),
     "condo": ("fee_escalation_rate", "value_growth_rate", "selling_cost_rate"),
-    "house": ("value_growth_rate", "selling_cost_rate"),
+    "house": ("value_growth_rate", "annual_maintenance_rate", "selling_cost_rate"),
     "rent": ("rent_escalation_rate", "invested_down_payment", "investment_return_rate"),
     "income": ("income_growth_rate", "affordability_threshold"),
 }
@@ -207,6 +207,15 @@ def _defaults_applied(data: Dict[str, Any]) -> List[str]:
             if section == "economic" or isinstance(block, dict):
                 if not isinstance(block, dict) or key not in block:
                     applied.append(f"{section}.{key}")
+        # Nested price-shock hyperparameters (S4b slot 3): defaulted only when
+        # a price_shock block exists but omits the sub-key — the TREB-anchored
+        # severity is then applied and must be echoed like any other default.
+        if section in ("condo", "house") and isinstance(block, dict):
+            shock = block.get("price_shock")
+            if isinstance(shock, dict):
+                for sub in ("severity_mean", "severity_vol"):
+                    if sub not in shock:
+                        applied.append(f"{section}.price_shock.{sub}")
     return applied
 
 
@@ -237,14 +246,25 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         )
 
     if econ.mode == "nominal" and econ.inflation_rate == 0:
+        planning = ANCHORS["economic.inflation_rate.nominal_planning"]
         warns.append(
-            "nominal mode with inflation_rate=0 — FP Canada 2026 long-term "
-            "inflation assumption is 2.1%"
+            f"nominal mode with inflation_rate=0 — {planning.short_cite} long-term "
+            f"inflation assumption is {planning.value:.1%}"
+        )
+
+    if spec.house is not None and "house.annual_maintenance_rate" in spec.defaults_applied:
+        warns.append(
+            "house.annual_maintenance_rate defaulted to 0.0% — no maintenance "
+            "modelled, which favours the house; NAHB 2019 AHS routine ≈ 0.6% of "
+            "value/yr — set it for your property"
         )
 
     for name, opt in (("condo", spec.condo), ("house", spec.house)):
         if opt is None:
             continue
+        # 4% REAL appreciation is above every long-run Canadian metro average
+        # and right where a NOMINAL market quote (~3–5%) lands — a units
+        # tripwire, not a plausibility band (the anchor band is -1%..2%).
         if econ.mode == "real" and opt.value_growth_rate >= 0.04:
             warns.append(
                 f"{name}.value_growth_rate={opt.value_growth_rate:.1%} in real "
@@ -256,6 +276,8 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
                 f"dollars expected"
             )
 
+    # 15% is an order of magnitude above any real personal discount rate —
+    # a decimal/percent typo tripwire (0.05 vs 5), not a plausibility band.
     if not 0 <= sim.discount_rate <= 0.15:
         warns.append(
             f"discount_rate={sim.discount_rate:.1%} outside [0, 15%] — "
@@ -509,14 +531,14 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
     
     return CondoParams(
         monthly_fee=float(condo_data["monthly_fee"]),
-        fee_escalation_rate=float(condo_data.get("fee_escalation_rate", 0.0)),
+        fee_escalation_rate=float(condo_data.get("fee_escalation_rate", ANCHORS["condo.fee_escalation_rate"].value)),
         events=events,
         other_recurring_costs=other_costs,
         reserve_contribution_rate=float(condo_data.get("reserve_contribution_rate", 0.0)),
         reserve_initial_balance=float(condo_data.get("reserve_initial_balance", 0.0)),
         reserve_growth_rate=float(condo_data.get("reserve_growth_rate", 0.0)),
         initial_value=float(condo_data.get("initial_value", 0.0)),
-        value_growth_rate=float(condo_data.get("value_growth_rate", 0.0)),
+        value_growth_rate=float(condo_data.get("value_growth_rate", ANCHORS["condo.value_growth_rate"].value)),
         down_payment=(None if "down_payment" not in condo_data else float(condo_data["down_payment"])),
         mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
@@ -557,8 +579,8 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
     
     return HouseParams(
         initial_value=float(house_data["initial_value"]),
-        value_growth_rate=float(house_data.get("value_growth_rate", 0.0)),
-        annual_maintenance_rate=float(house_data.get("annual_maintenance_rate", 0.0)),
+        value_growth_rate=float(house_data.get("value_growth_rate", ANCHORS["house.value_growth_rate"].value)),
+        annual_maintenance_rate=float(house_data.get("annual_maintenance_rate", ANCHORS["house.annual_maintenance_rate"].value)),
         events=events,
         other_recurring_costs=other_costs,
         maintenance_curve=maintenance_curve,
@@ -649,7 +671,7 @@ def _parse_economic(econ_data: Optional[Dict[str, Any]]) -> EconomicParams:
     
     return EconomicParams(
         mode=mode,  # type: ignore
-        inflation_rate=float(econ_data.get("inflation_rate", 0.0)),
+        inflation_rate=float(econ_data.get("inflation_rate", ANCHORS["economic.inflation_rate"].value)),
         inflation_vol=float(econ_data.get("inflation_vol", 0.0)),
     )
 
@@ -750,12 +772,15 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
         rent = spec.rent
         if rent.monthly_rent <= 0:
             warnings.append(f"rent.monthly_rent must be positive, got {rent.monthly_rent}")
+        # Hard units tripwire (20%/yr rent escalation reads as a percent typed
+        # as a decimal); the plausibility band is the anchor's (0–2% real).
         if not (0 <= rent.rent_escalation_rate < 0.20):
-            warnings.append(f"rent.rent_escalation_rate must be between 0 and 0.20 (inclusive), got {rent.rent_escalation_rate}")
+            warnings.append(f"rent.rent_escalation_rate must be >= 0 and < 0.20, got {rent.rent_escalation_rate}")
         if rent.invested_down_payment < 0:
             warnings.append(f"rent.invested_down_payment must be non-negative, got {rent.invested_down_payment}")
+        # Hard units tripwire; the plausibility band is the anchor's (2–5% real).
         if not (0 <= rent.investment_return_rate < 0.25):
-            warnings.append(f"rent.investment_return_rate must be between 0 and 0.25 (inclusive), got {rent.investment_return_rate}")
+            warnings.append(f"rent.investment_return_rate must be >= 0 and < 0.25, got {rent.investment_return_rate}")
 
     if spec.income is not None:
         income = spec.income

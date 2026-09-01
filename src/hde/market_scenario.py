@@ -11,6 +11,8 @@ import hashlib
 import json
 import math
 import re
+
+from .anchors import ANCHORS
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -45,8 +47,9 @@ ROW_FIELDS = frozenset(
     }
 )
 
-# Normal fit through the published quartiles' span: sigma = (p90 - p10) / (2 * 1.2816).
-DRIFT_SIGMA_DIVISOR = 2.5632
+# Normal fit through the published p10–p90 DECILE span: sigma = (p90 - p10) / (2 × 1.28155).
+# The constant is a registered derivation anchor so its rationale travels with the number.
+DRIFT_SIGMA_DIVISOR = ANCHORS["market_scenario.drift_sigma_divisor"].value
 
 # Simulation year t maps to calendar year START_CALENDAR_YEAR + t; the band for a
 # calendar year is the first declared horizon at or after it (last band holds).

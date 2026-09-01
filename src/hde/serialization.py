@@ -64,10 +64,18 @@ def anchors_to_dict() -> Dict[str, Dict[str, Any]]:
 # Assumption echo (audit U1) — text lines and the structured form
 # ---------------------------------------------------------------------------
 
+def spec_value(spec: ComparisonSpec, dotted: str) -> Any:
+    """Walk a dotted key (any depth, e.g. condo.price_shock.severity_mean)."""
+    obj: Any = spec
+    for part in dotted.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def echo_value(spec: ComparisonSpec, dotted: str) -> str:
     """Format one defaults-applied value for the assumption echo (pure presentation)."""
-    section, key = dotted.split(".", 1)
-    value = getattr(getattr(spec, section), key)
+    key = dotted.rsplit(".", 1)[1]
+    value = spec_value(spec, dotted)
     if key == "mode":
         return repr(value)
     if key == "invested_down_payment":
@@ -100,6 +108,7 @@ def format_assumptions(spec: ComparisonSpec) -> List[str]:
     if spec.house is not None:
         lines.append(
             f"house: value growth {spec.house.value_growth_rate:+.1%}/yr · "
+            f"maintenance {spec.house.annual_maintenance_rate:.1%} of value/yr · "
             f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
         )
     if spec.rent is not None:
@@ -130,8 +139,8 @@ def assumptions_to_dict(spec: ComparisonSpec) -> Dict[str, Any]:
     """
     entries: List[Dict[str, Any]] = []
     for key in spec.defaults_applied:
-        section, field = key.split(".", 1)
-        raw = getattr(getattr(spec, section), field)
+        field = key.rsplit(".", 1)[1]
+        raw = spec_value(spec, key)
         anchor = ANCHORS.get(_ECHO_ALIASES.get(key, key))
         if anchor is not None:
             kind = anchor.kind
