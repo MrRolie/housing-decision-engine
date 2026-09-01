@@ -6,12 +6,13 @@ Usage:
 """
 
 import argparse
+import datetime
 import sys
 from pathlib import Path
 
 from .config import load_config, coherence_warnings, ConfigValidationError
 from .deterministic import compute_deterministic
-from .market_scenario import ScenarioPriorError
+from .market_scenario import ScenarioPriorError, time_anchor_violations
 from .models import InputError
 from .monte_carlo import run_monte_carlo
 from .reporting import format_text_report
@@ -61,7 +62,7 @@ def main() -> int:
         type=str,
         default=None,
         metavar="DIR",
-        help="Render the five-act decision story into DIR after the run",
+        help="Render the six-act decision story into DIR after the run",
     )
 
     parser.add_argument(
@@ -82,7 +83,7 @@ def main() -> int:
         type=str,
         default=None,
         metavar="DIR",
-        help="Write the full story package into DIR: five-act plots, "
+        help="Write the full story package into DIR: six-act plots, "
              "text report, and a STORY.md one-pager",
     )
 
@@ -118,6 +119,27 @@ def main() -> int:
     # and piped stdout stay clean.
     for warning in coherence_warnings(spec):
         print(f"[warning] {warning}", file=sys.stderr)
+
+    # Time-anchor staleness guard (side-effecty edge, by doctrine): with a
+    # market_scenario block, sim years reach demographic bands through the
+    # START_CALENDAR_YEAR anchor. A wall clock past that anchor means every
+    # band assignment is stale — loud stderr warning, then continue (the math
+    # is internally consistent, just anchored to an old year). The
+    # prior-vs-constant mismatch half hard-fails inside load_scenario_prior
+    # and surfaces here as a clean Error line, no traceback.
+    if spec.market_scenario is not None:
+        from .monte_carlo import _load_prior_if_any
+        try:
+            prior = _load_prior_if_any(spec)
+        except ScenarioPriorError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        constants_as_of = None
+        if prior is not None:
+            raw = prior.data_vintage.get("constants_as_of")
+            constants_as_of = raw if isinstance(raw, str) else None
+        for violation in time_anchor_violations(datetime.date.today().year, constants_as_of):
+            print(f"[warning] {violation}", file=sys.stderr)
 
     # Run analysis — typed refusals (bad prior file, mode composition, direct-
     # construction violations) exit cleanly with "Error: <msg>", no traceback.

@@ -1,5 +1,6 @@
 # mcp_server/tools.py
 from __future__ import annotations
+import datetime
 import time
 from pathlib import Path
 
@@ -9,10 +10,10 @@ import matplotlib.pyplot as plt
 
 from hde.config import load_config_dict, validate_config, coherence_warnings, ConfigValidationError
 from hde.deterministic import compute_deterministic
-from hde.market_scenario import ScenarioPriorError
+from hde.market_scenario import ScenarioPriorError, time_anchor_violations
 from hde.serialization import det_to_dict as _det_to_dict
 from hde.serialization import mc_to_dict as _mc_to_dict
-from hde.monte_carlo import run_monte_carlo
+from hde.monte_carlo import run_monte_carlo, _load_prior_if_any
 from hde.models import (
     ComparisonSpec,
     ComparisonDeterministicResult,
@@ -76,9 +77,12 @@ def define_scenario(name: str, config: dict) -> dict:
     return response
 
 
-def run_comparison(scenario_name: str, mode: str = "both") -> dict:
+def run_comparison(scenario_name: str, mode: str = "both",
+                   current_year: int | None = None) -> dict:
     """Run deterministic and/or Monte Carlo comparison for a named scenario.
-    mode: 'deterministic' | 'monte_carlo' | 'both'."""
+    mode: 'deterministic' | 'monte_carlo' | 'both'.
+    current_year: injectable wall-clock year (tests pass it explicitly; the
+    default resolves to datetime.date.today().year — never read in the engine)."""
     safe_name = Path(scenario_name).name
     if safe_name not in registry._REGISTRY:
         return {"error": f"scenario '{safe_name}' not found"}
@@ -88,6 +92,25 @@ def run_comparison(scenario_name: str, mode: str = "both") -> dict:
     entry = registry.get(safe_name)
     det_result = None
     mc_result = None
+
+    # Time-anchor guard (side-effecty edge, by doctrine): with a market_scenario
+    # present, sim years reach demographic bands through the START_CALENDAR_YEAR
+    # anchor. A wall clock past that anchor = stale band assignment — appended
+    # to the response warnings, never a refusal (the math is internally
+    # consistent, just anchored to an old year). The prior-vs-constant mismatch
+    # half hard-fails inside load_scenario_prior and returns as {error}.
+    anchor_warnings: list[str] = []
+    if entry.spec.market_scenario is not None:
+        if current_year is None:
+            current_year = datetime.date.today().year
+        try:
+            prior = _load_prior_if_any(entry.spec)
+        except ScenarioPriorError as e:
+            return {"error": str(e)}
+        if prior is not None:
+            raw = prior.data_vintage.get("constants_as_of")
+            constants_as_of = raw if isinstance(raw, str) else None
+            anchor_warnings = time_anchor_violations(current_year, constants_as_of)
 
     try:
         if mode in {"deterministic", "both"}:
@@ -112,7 +135,7 @@ def run_comparison(scenario_name: str, mode: str = "both") -> dict:
         "name": safe_name,
         "mode": mode,
         "report": report,
-        "warnings": coherence_warnings(entry.spec),
+        "warnings": coherence_warnings(entry.spec) + anchor_warnings,
     }
     if det_result is not None:
         response["deterministic"] = _det_to_dict(det_result)

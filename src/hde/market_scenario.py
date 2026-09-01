@@ -10,9 +10,10 @@ Every violation is a typed refusal naming the failing rows — never a partial l
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 # Closed enums declared by the emitter contract (§7(a)). The geography set is the
 # demoflow Geography enum's string values; the enum never crosses the file boundary.
@@ -50,6 +51,11 @@ DRIFT_SIGMA_DIVISOR = 2.5632
 # Simulation year t maps to calendar year START_CALENDAR_YEAR + t; the band for a
 # calendar year is the first declared horizon at or after it (last band holds).
 START_CALENDAR_YEAR = 2026
+
+# A prior's constants_as_of year within +/- this tolerance of START_CALENDAR_YEAR
+# still bands sim years into the intended horizons; beyond it the mapping is off.
+CONSTANTS_AS_OF_YEAR_TOLERANCE = 1
+_CONSTANTS_AS_OF_YEAR_RE = re.compile(r"^(\d{4})")
 
 
 class ScenarioPriorError(Exception):
@@ -103,6 +109,57 @@ def band_horizon_for_calendar_year(calendar_year: int) -> int:
         if h >= calendar_year:
             return h
     return HORIZON_YEARS[-1]
+
+
+def _constants_as_of_year(constants_as_of: object) -> int | None:
+    """Leading 4-digit year of constants_as_of ('2026', '2026-06-01', '2026-Q3');
+    None when unparseable (including non-string values)."""
+    if not isinstance(constants_as_of, str):
+        return None
+    m = _CONSTANTS_AS_OF_YEAR_RE.match(constants_as_of)
+    return int(m.group(1)) if m else None
+
+
+def time_anchor_violations(current_year: int, constants_as_of: str | None = None) -> List[str]:
+    """Time-anchor drift violations for the sim-year -> calendar-year -> band
+    mapping, as human-readable strings (empty = clean). Pure: the year arrives
+    as a parameter, never the wall clock.
+
+    Two checks:
+    - staleness: current_year > START_CALENDAR_YEAR — the wall clock has moved
+      past the mapping anchor, so every sim year lands on a stale calendar year
+      and band. Warning class (math internally consistent, just anchored to an
+      old year); enforced at the CLI/MCP edges, never here.
+    - prior-vs-constant drift: constants_as_of's year more than
+      CONSTANTS_AS_OF_YEAR_TOLERANCE from START_CALENDAR_YEAR, or unparseable —
+      the prior's bands were built against a different calendar, so the band
+      mapping is misaligned. Hard-fail class: load_scenario_prior raises on it
+      (silent drift here would produce confidently wrong bands).
+    """
+    violations: List[str] = []
+    if current_year > START_CALENDAR_YEAR:
+        violations.append(
+            f"time anchor stale: current year {current_year} is past "
+            f"START_CALENDAR_YEAR={START_CALENDAR_YEAR}; every simulation year "
+            f"is being mapped to a stale calendar year and demographic band"
+        )
+    if constants_as_of is not None:
+        prior_year = _constants_as_of_year(constants_as_of)
+        if prior_year is None:
+            violations.append(
+                f"data_vintage.constants_as_of {constants_as_of!r} has no "
+                f"leading 4-digit year; cannot verify alignment with "
+                f"START_CALENDAR_YEAR={START_CALENDAR_YEAR}"
+            )
+        elif abs(prior_year - START_CALENDAR_YEAR) > CONSTANTS_AS_OF_YEAR_TOLERANCE:
+            violations.append(
+                f"data_vintage.constants_as_of {constants_as_of!r} resolves to "
+                f"year {prior_year}, which is more than "
+                f"{CONSTANTS_AS_OF_YEAR_TOLERANCE} year(s) from "
+                f"START_CALENDAR_YEAR={START_CALENDAR_YEAR}; the sim-year -> "
+                f"calendar-year -> horizon-band mapping is misaligned"
+            )
+    return violations
 
 
 @dataclass
@@ -279,6 +336,16 @@ def load_scenario_prior(path: str, geography: str) -> LoadedScenarioPrior:
                 "{sha256: 64-hex, extracted_at, ...} provenance objects")
     if errors:
         raise ScenarioPriorError("\n".join(errors))
+
+    # ---- prior-vs-constant cross-check (fail loud on drift) ----
+    # constants_as_of half only: current_year == START_CALENDAR_YEAR keeps the
+    # staleness half (a side-effecty edge-layer concern) silent here. A prior
+    # whose constants were built against a misaligned calendar silently bands
+    # every sim year wrong — refuse rather than compute confidently wrong bands.
+    anchor_violations = time_anchor_violations(
+        START_CALENDAR_YEAR, vintage.get("constants_as_of"))
+    if anchor_violations:
+        raise ScenarioPriorError("\n".join(anchor_violations))
 
     # ---- row-level validation (collect ALL violations, then refuse once) ----
     rows_raw = data["scenario_priors"]

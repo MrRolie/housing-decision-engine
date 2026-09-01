@@ -238,6 +238,35 @@ class TestGeographyMatchRule:
             load_scenario_prior(path, OTHER_GEO)
 
 
+class TestTimeAnchorCrossCheck:
+    """Prior-vs-constant alignment: constants_as_of within +/- 1 year of
+    START_CALENDAR_YEAR loads; beyond it the band mapping is misaligned and
+    the loader refuses rather than silently banding every sim year wrong."""
+
+    def test_constants_as_of_one_year_off_loads(self, tmp_path):
+        data = _valid_prior()
+        data["data_vintage"]["constants_as_of"] = "2027-06-01"
+        prior = load_scenario_prior(_write_prior(tmp_path, data), GEO)
+        assert prior.data_vintage["constants_as_of"] == "2027-06-01"
+
+    @pytest.mark.parametrize("as_of", ["2028-01-01", "2024", "2020-Q3"])
+    def test_constants_as_of_two_plus_years_off_raises_naming_both_years(self, tmp_path, as_of):
+        data = _valid_prior()
+        data["data_vintage"]["constants_as_of"] = as_of
+        with pytest.raises(ScenarioPriorError) as excinfo:
+            load_scenario_prior(_write_prior(tmp_path, data), GEO)
+        msg = str(excinfo.value)
+        assert as_of[:4] in msg
+        assert "2026" in msg
+        assert "misaligned" in msg
+
+    def test_constants_as_of_without_leading_four_digit_year_raises(self, tmp_path):
+        data = _valid_prior()
+        data["data_vintage"]["constants_as_of"] = "const-2026"
+        with pytest.raises(ScenarioPriorError, match="constants_as_of"):
+            load_scenario_prior(_write_prior(tmp_path, data), GEO)
+
+
 # ---------------------------------------------------------------------------
 # Banding + additive composition arithmetic
 # ---------------------------------------------------------------------------
@@ -447,7 +476,7 @@ class TestConfigWiring:
         cfg["condo"]["price_shock"] = {"annual_hazard": 0.03}
         spec = load_config_dict(cfg)
         assert spec.condo.price_shock.annual_hazard == 0.03
-        assert spec.condo.price_shock.severity_mean == pytest.approx(0.20)
+        assert spec.condo.price_shock.severity_mean == pytest.approx(0.25)  # TREB 1989–96 anchor
         assert spec.condo.price_shock.severity_vol == pytest.approx(0.10)
         assert spec.house.price_shock is None
 
