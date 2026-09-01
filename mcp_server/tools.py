@@ -1,6 +1,5 @@
 # mcp_server/tools.py
 from __future__ import annotations
-import datetime
 import time
 from pathlib import Path
 
@@ -8,11 +7,17 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from hde.config import load_config_dict, validate_config, coherence_warnings, ConfigValidationError
+from hde.anchors import ANCHORS, _ECHO_ALIASES
+from hde.config import load_config_dict, validate_config, all_warnings, ConfigValidationError
 from hde.deterministic import compute_deterministic
-from hde.market_scenario import ScenarioPriorError, time_anchor_violations
-from hde.serialization import det_to_dict as _det_to_dict
-from hde.serialization import mc_to_dict as _mc_to_dict
+from hde.market_scenario import ScenarioPriorError
+from hde.serialization import (
+    anchor_to_dict,
+    assumptions_to_dict,
+    engine_version,
+    det_to_dict as _det_to_dict,
+    mc_to_dict as _mc_to_dict,
+)
 from hde.monte_carlo import run_monte_carlo, _load_prior_if_any
 from hde.models import (
     ComparisonSpec,
@@ -24,7 +29,7 @@ from hde.models import (
     HOUSE_BREAKDOWN_KEYS,
     RENT_BREAKDOWN_KEYS,
 )
-from hde.reporting import format_assumptions, format_text_report, plot_diff_distribution, plot_pv_distributions
+from hde.reporting import format_text_report, plot_diff_distribution, plot_pv_distributions
 from mcp_server import registry
 
 FIGURE_CACHE_DIR: Path = Path.home() / ".cache" / "hde" / "figures"
@@ -71,9 +76,10 @@ def define_scenario(name: str, config: dict) -> dict:
         response["income_annual"] = spec.income.annual_income
     if overwriting:
         response["previous_results_cleared"] = True
-    # Audit U1/U2: assumption echo + coherence warnings (surface, never refuse).
-    response["assumptions"] = format_assumptions(spec)
-    response["warnings"] = coherence_warnings(spec)
+    # Audit U1/U2: structured assumption echo (lines + anchor records) and
+    # coherence warnings (surface, never refuse) — same shape as run_comparison.
+    response["assumptions"] = assumptions_to_dict(spec)
+    response["warnings"] = all_warnings(spec)
     return response
 
 
@@ -93,24 +99,16 @@ def run_comparison(scenario_name: str, mode: str = "both",
     det_result = None
     mc_result = None
 
-    # Time-anchor guard (side-effecty edge, by doctrine): with a market_scenario
-    # present, sim years reach demographic bands through the START_CALENDAR_YEAR
-    # anchor. A wall clock past that anchor = stale band assignment — appended
-    # to the response warnings, never a refusal (the math is internally
-    # consistent, just anchored to an old year). The prior-vs-constant mismatch
-    # half hard-fails inside load_scenario_prior and returns as {error}.
-    anchor_warnings: list[str] = []
+    # The prior is loaded once at this edge: the prior-vs-constant mismatch
+    # hard-fails inside load_scenario_prior and returns as {error}; the
+    # wall-clock staleness half rides the warnings list via all_warnings.
+    prior = None
     if entry.spec.market_scenario is not None:
-        if current_year is None:
-            current_year = datetime.date.today().year
         try:
             prior = _load_prior_if_any(entry.spec)
         except ScenarioPriorError as e:
             return {"error": str(e)}
-        if prior is not None:
-            raw = prior.data_vintage.get("constants_as_of")
-            constants_as_of = raw if isinstance(raw, str) else None
-            anchor_warnings = time_anchor_violations(current_year, constants_as_of)
+    warnings = all_warnings(entry.spec, prior, current_year)
 
     try:
         if mode in {"deterministic", "both"}:
@@ -135,7 +133,9 @@ def run_comparison(scenario_name: str, mode: str = "both",
         "name": safe_name,
         "mode": mode,
         "report": report,
-        "warnings": coherence_warnings(entry.spec) + anchor_warnings,
+        "engine_version": engine_version(),
+        "warnings": warnings,
+        "assumptions": assumptions_to_dict(entry.spec),
     }
     if det_result is not None:
         response["deterministic"] = _det_to_dict(det_result)
@@ -240,7 +240,17 @@ def sweep_param(scenario_name: str, param_path: str, values: list[float]) -> dic
         except Exception as e:
             rows.append({"value": v, "error": str(e)})
 
-    return {"name": safe_name, "param_path": param_path, "rows": rows}
+    result: dict = {"name": safe_name, "param_path": param_path, "rows": rows}
+    # Provenance for the swept parameter: when it is an anchored engine default,
+    # attach the full record and flag each swept value that leaves the anchor's
+    # plausible band, so a sweep never reads as evidence for an implausible value.
+    anchor = ANCHORS.get(_ECHO_ALIASES.get(param_path, param_path))
+    if anchor is not None:
+        lo, hi = anchor.band
+        result["anchor"] = anchor_to_dict(anchor)
+        for row in rows:
+            row["outside_band"] = not (lo <= row["value"] <= hi)
+    return result
 
 
 def save_figure(scenario_name: str, figure_type: str) -> dict:

@@ -376,11 +376,37 @@ def test_define_scenario_typo_key_returns_error_with_did_you_mean():
 def test_define_scenario_returns_assumption_echo_and_warnings():
     result = define_scenario("s1", BASIC_CONFIG)
     assert result["assumptions"], "assumption echo must be present"
-    joined = "\n".join(result["assumptions"])
+    joined = "\n".join(result["assumptions"]["lines"])
     assert "mode: real terms" in joined
     assert "discount_rate 3.0%" in joined
     assert "defaults applied:" in joined
     assert isinstance(result["warnings"], list)
+    # structured half: every defaulted key carries its anchor record
+    entries = result["assumptions"]["defaults_applied"]
+    assert entries and all("kind" in e and "anchor" in e for e in entries)
+
+
+def test_run_comparison_carries_structured_assumptions_and_version():
+    define_scenario("s1", BASIC_CONFIG)
+    result = run_comparison("s1", mode="deterministic")
+    assert result["engine_version"]
+    assert result["assumptions"]["lines"] == define_scenario("s1", BASIC_CONFIG)["assumptions"]["lines"]
+    by_key = {e["key"]: e for e in result["assumptions"]["defaults_applied"]}
+    assert by_key["condo.selling_cost_rate"]["anchor"]["short_cite"] == "WOWA 2026"
+
+
+def test_sweep_of_anchored_param_attaches_anchor_and_band_flags():
+    define_scenario("s1", BASIC_CONFIG)
+    result = sweep_param("s1", "condo.selling_cost_rate", [0.02, 0.05, 0.10])
+    assert result["anchor"]["name"] == "condo.house.selling_cost_rate"
+    assert [row["outside_band"] for row in result["rows"]] == [True, False, True]
+
+
+def test_sweep_of_unanchored_param_has_no_anchor_key():
+    define_scenario("s1", BASIC_CONFIG)
+    result = sweep_param("s1", "condo.monthly_fee", [300.0, 500.0])
+    assert "anchor" not in result
+    assert all("outside_band" not in row for row in result["rows"])
 
 
 def test_define_scenario_warnings_flag_nominal_quote_experiment_a():

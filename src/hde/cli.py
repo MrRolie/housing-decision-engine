@@ -10,9 +10,9 @@ import datetime
 import sys
 from pathlib import Path
 
-from .config import load_config, coherence_warnings, ConfigValidationError
+from .config import load_config, all_warnings, ConfigValidationError
 from .deterministic import compute_deterministic
-from .market_scenario import ScenarioPriorError, time_anchor_violations
+from .market_scenario import ScenarioPriorError
 from .models import InputError
 from .monte_carlo import run_monte_carlo
 from .reporting import format_text_report
@@ -79,6 +79,13 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--print-anchors",
+        action="store_true",
+        help="Print the provenance registry — every engine default with its "
+             "value, source, URL, rationale, band, retrieved_on — and exit",
+    )
+
+    parser.add_argument(
         "--story",
         type=str,
         default=None,
@@ -95,8 +102,15 @@ def main() -> int:
         print(_json.dumps(input_schema(), indent=2))
         return 0
 
+    if args.print_anchors:
+        import json as _json
+        from .serialization import anchors_to_dict
+        print(_json.dumps(anchors_to_dict(), indent=2, ensure_ascii=False))
+        return 0
+
     if args.config is None:
-        print("Error: config path required (or use --print-schema)", file=sys.stderr)
+        print("Error: config path required (or use --print-schema / --print-anchors)",
+              file=sys.stderr)
         return 1
 
     # Validate config path
@@ -115,18 +129,10 @@ def main() -> int:
         print(f"Error loading configuration: {e}", file=sys.stderr)
         return 1
 
-    # Coherence warnings (audit U2): surface, never refuse. stderr so --quiet
-    # and piped stdout stay clean.
-    for warning in coherence_warnings(spec):
-        print(f"[warning] {warning}", file=sys.stderr)
-
-    # Time-anchor staleness guard (side-effecty edge, by doctrine): with a
-    # market_scenario block, sim years reach demographic bands through the
-    # START_CALENDAR_YEAR anchor. A wall clock past that anchor means every
-    # band assignment is stale — loud stderr warning, then continue (the math
-    # is internally consistent, just anchored to an old year). The
-    # prior-vs-constant mismatch half hard-fails inside load_scenario_prior
-    # and surfaces here as a clean Error line, no traceback.
+    # The demographic prior is loaded ONCE at this edge (the prior-vs-constant
+    # mismatch hard-fails inside load_scenario_prior and surfaces as a clean
+    # Error line, no traceback) and reused by the run, the plots and the story.
+    prior = None
     if spec.market_scenario is not None:
         from .monte_carlo import _load_prior_if_any
         try:
@@ -134,12 +140,13 @@ def main() -> int:
         except ScenarioPriorError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
-        constants_as_of = None
-        if prior is not None:
-            raw = prior.data_vintage.get("constants_as_of")
-            constants_as_of = raw if isinstance(raw, str) else None
-        for violation in time_anchor_violations(datetime.date.today().year, constants_as_of):
-            print(f"[warning] {violation}", file=sys.stderr)
+
+    # Warnings (audit U2 coherence + the time-anchor staleness guard): surface,
+    # never refuse. stderr so --quiet and piped stdout stay clean; the same list
+    # rides the --json document. The wall clock is read here, at the edge.
+    warnings = all_warnings(spec, prior, current_year=datetime.date.today().year)
+    for warning in warnings:
+        print(f"[warning] {warning}", file=sys.stderr)
 
     # Run analysis — typed refusals (bad prior file, mode composition, direct-
     # construction violations) exit cleanly with "Error: <msg>", no traceback.
@@ -159,13 +166,17 @@ def main() -> int:
     # Output results
     if args.json:
         import json as _json
-        from .serialization import det_to_dict, mc_to_dict
+        from .serialization import (
+            assumptions_to_dict, det_to_dict, engine_version, mc_to_dict,
+        )
         doc = {
-            "warnings": coherence_warnings(spec),
+            "engine_version": engine_version(),
+            "warnings": warnings,
+            "assumptions": assumptions_to_dict(spec),
             "deterministic": det_to_dict(det_result) if det_result is not None else None,
             "monte_carlo": mc_to_dict(mc_result) if mc_result is not None else None,
         }
-        print(_json.dumps(doc, indent=2))
+        print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
     elif args.quiet:
         # Print summary line only
@@ -207,10 +218,8 @@ def main() -> int:
                 file=sys.stderr,
             )
         else:
-            from .monte_carlo import _load_prior_if_any
             from .story_plots import render_decision_story
 
-            prior = _load_prior_if_any(spec)
             try:
                 saved = render_decision_story(
                     spec, det_result, mc_result, prior=prior, out_dir=args.plots,
@@ -229,10 +238,8 @@ def main() -> int:
                 file=sys.stderr,
             )
         else:
-            from .monte_carlo import _load_prior_if_any
             from .story_page import render_story_package
 
-            prior = _load_prior_if_any(spec)
             try:
                 package = render_story_package(
                     spec, det_result, mc_result, prior=prior,

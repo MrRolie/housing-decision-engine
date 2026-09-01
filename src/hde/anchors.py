@@ -27,6 +27,9 @@ class AnchorError(Exception):
     pass
 
 
+ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation"})
+
+
 # Echo aliases: dotted keys as they appear in spec.defaults_applied -> registry
 # name. condo.selling_cost_rate and house.selling_cost_rate share ONE anchor
 # (condo.house.selling_cost_rate) so the citation cannot drift between options.
@@ -52,6 +55,12 @@ class Anchor:
     # (provenance remediation 0.0, 2026-09-01). Required whenever `url` is a
     # live http(s) source; calibration/neutral entries carry no URL and no date.
     retrieved_on: str = ""
+    # What the citation IS to the value: `cited` = the source states the value
+    # (or it is a direct derivation from stated figures); `reference` = the
+    # source informs the value but does not state it (echo renders `[ref: …]`);
+    # `neutral` = a deliberate uncited neutral default; `derivation` = a
+    # calibration or mathematical derivation with no external source.
+    kind: str = "cited"
     replaces: Optional[Tuple[float, str]] = None
 
     def __post_init__(self) -> None:
@@ -73,6 +82,11 @@ class Anchor:
             raise AnchorError(
                 f"anchor {self.name!r}: central value {self.value} outside its "
                 f"own band {self.band}"
+            )
+        if self.kind not in ANCHOR_KINDS:
+            raise AnchorError(
+                f"anchor {self.name!r}: kind must be one of {sorted(ANCHOR_KINDS)}, "
+                f"got {self.kind!r}"
             )
         if self.url.startswith("http") and not self.retrieved_on.strip():
             raise AnchorError(
@@ -239,6 +253,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.05, 0.15),
         short_cite="TREB 1989–96 (calibrated)",
+        kind="derivation",
     ),
     # --- Rationale-only anchors (value unchanged; registered so the echo and
     #     the config parsers cite a single source instead of a bare literal) ---
@@ -258,6 +273,7 @@ ANCHORS: Dict[str, Anchor] = {
         band=(0.0, 0.01),
         short_cite="FP Canada 2026 PAG",
         retrieved_on="2026-09-01",
+        kind="reference",
     ),
     "house.value_growth_rate": Anchor(
         name="house.value_growth_rate",
@@ -274,6 +290,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(-0.01, 0.02),
         short_cite="neutral, uncited",
+        kind="neutral",
     ),
     "condo.value_growth_rate": Anchor(
         name="condo.value_growth_rate",
@@ -290,6 +307,26 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(-0.01, 0.02),
         short_cite="neutral, uncited",
+        kind="neutral",
+    ),
+    "rent.invested_down_payment": Anchor(
+        name="rent.invested_down_payment",
+        value=0.0,
+        as_of="2026",
+        source="hde like-for-like ruling — the renter's equivalent capital is a "
+               "user input, never a default",
+        url="none (deliberately uncited)",
+        rationale=(
+            "$0 is the only honest default: the engine cannot know what the "
+            "renter would invest instead of a down payment. Leaving it at 0 "
+            "while an owned option puts capital down charges the buyer's capital "
+            "and lets the renter's vanish — the verdict is then not like-for-like, "
+            "and coherence_warnings says so. Zero-width band: any non-zero value "
+            "is the user's, not the engine's."
+        ),
+        band=(0.0, 0.0),
+        short_cite="like-for-like: set explicitly",
+        kind="neutral",
     ),
     "economic.inflation_rate": Anchor(
         name="economic.inflation_rate",
@@ -310,12 +347,17 @@ ANCHORS: Dict[str, Anchor] = {
         band=(0.0, 0.025),
         short_cite="FP Canada 2026 PAG",
         retrieved_on="2026-09-01",
+        kind="reference",
     ),
 }
 
 
 def short_cite(name: str) -> str:
     """Short citation tag for a (possibly defaulted) dotted key, e.g.
-    "FP Canada 2026 PAG" — empty string when no anchor exists for the key."""
+    "FP Canada 2026 PAG" — empty string when no anchor exists for the key.
+    A `reference` anchor renders as "ref: <tag>" so the echo never credits a
+    source with a value it does not state."""
     anchor = ANCHORS.get(_ECHO_ALIASES.get(name, name))
-    return anchor.short_cite if anchor is not None else ""
+    if anchor is None:
+        return ""
+    return f"ref: {anchor.short_cite}" if anchor.kind == "reference" else anchor.short_cite

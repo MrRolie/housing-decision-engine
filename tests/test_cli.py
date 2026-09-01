@@ -103,3 +103,46 @@ simulation:
         assert "[warning] house.value_growth_rate=5.0%" in err
         assert "nominal quote" in err
         assert "[warning]" in err.split("\n")[0] or err.startswith("[warning]")
+
+
+class TestJsonContract:
+    """A.5: the --json document is the agent-native contract; pin its shape and
+    its provenance half (readiness plan 2026-09-01)."""
+
+    def _doc(self, tmp_path, monkeypatch, capsys, extra_args=()):
+        import json
+        config = _write_config(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--json", *extra_args])
+        assert cli_main() == 0
+        return json.loads(capsys.readouterr().out)
+
+    def test_top_level_keys(self, tmp_path, monkeypatch, capsys):
+        doc = self._doc(tmp_path, monkeypatch, capsys)
+        assert {"engine_version", "warnings", "assumptions", "deterministic",
+                "monte_carlo"} <= set(doc)
+        assert doc["engine_version"]
+        assert doc["monte_carlo"] is not None
+
+    def test_no_monte_carlo_yields_null_not_missing(self, tmp_path, monkeypatch, capsys):
+        doc = self._doc(tmp_path, monkeypatch, capsys, ["--no-monte-carlo"])
+        assert "monte_carlo" in doc and doc["monte_carlo"] is None
+
+    def test_every_defaulted_key_carries_a_source(self, tmp_path, monkeypatch, capsys):
+        doc = self._doc(tmp_path, monkeypatch, capsys, ["--no-monte-carlo"])
+        entries = doc["assumptions"]["defaults_applied"]
+        assert entries
+        for entry in entries:
+            if entry["kind"] == "mode":
+                continue
+            assert entry["anchor"]["source"], entry["key"]
+            assert entry["kind"] != "uncited", entry["key"]
+
+
+def test_print_anchors_dumps_the_registry(monkeypatch, capsys):
+    import json
+    from hde.anchors import ANCHORS
+    monkeypatch.setattr(sys, "argv", ["hde", "--print-anchors"])
+    assert cli_main() == 0
+    dump = json.loads(capsys.readouterr().out)
+    assert set(dump) == set(ANCHORS)
+    assert all(v["source"] for v in dump.values())

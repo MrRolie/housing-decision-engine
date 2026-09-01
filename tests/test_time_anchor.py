@@ -181,6 +181,15 @@ class TestCLITimeAnchorGuard:
         assert "misaligned" in err
         assert "Traceback" not in err
 
+    def test_stale_wall_clock_lands_in_json_warnings(self, tmp_path, monkeypatch, capsys):
+        """A.2: the --json document carries the same warnings stderr does."""
+        _fake_today(monkeypatch, 2027)
+        monkeypatch.setattr(sys, "argv",
+                            ["hde", _write_config(tmp_path, GOLDEN), "--json", "--no-monte-carlo"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        assert any("stale" in w for w in doc["warnings"])
+
     def test_no_market_scenario_block_skips_guard(self, tmp_path, monkeypatch, capsys):
         _fake_today(monkeypatch, 2030)
         cfg = tmp_path / "cfg.yaml"

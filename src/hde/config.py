@@ -11,7 +11,10 @@ import difflib
 
 import yaml
 
+import datetime
+
 from .anchors import ANCHORS
+from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .models import (
     CondoParams,
     HouseParams,
@@ -284,6 +287,29 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"verdict not like-for-like"
         )
 
+    return warns
+
+
+def all_warnings(
+    spec: ComparisonSpec,
+    prior: Optional[LoadedScenarioPrior] = None,
+    current_year: Optional[int] = None,
+) -> List[str]:
+    """
+    Every warning a surface should show for one run: the coherence warnings
+    plus, when a demographic prior is loaded, the time-anchor violations
+    (wall clock past START_CALENDAR_YEAR). ONE assembly for the CLI's stderr,
+    the CLI's --json `warnings`, and the MCP response, so no surface can drop
+    a class of warning the others carry (readiness plan A.2). `current_year`
+    is injectable for tests; the wall clock is read only here at the edge.
+    """
+    warns = coherence_warnings(spec)
+    if prior is not None:
+        if current_year is None:
+            current_year = datetime.date.today().year
+        raw = prior.data_vintage.get("constants_as_of")
+        warns = warns + time_anchor_violations(
+            current_year, raw if isinstance(raw, str) else None)
     return warns
 
 

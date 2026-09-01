@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 import matplotlib.figure
 from matplotlib.figure import Figure
 
-from .anchors import short_cite
 from .models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
@@ -24,58 +23,9 @@ from .models import (
     EconomicParams,
 )
 from .pv import pv_to_monthly_savings
-
-
-def _echo_value(spec: ComparisonSpec, dotted: str) -> str:
-    """Format one defaults-applied value for the assumption echo (pure presentation)."""
-    section, key = dotted.split(".", 1)
-    value = getattr(getattr(spec, section), key)
-    if key == "mode":
-        return repr(value)
-    if key == "invested_down_payment":
-        return f"${value:,.0f}"
-    return f"{value:.1%}"
-
-
-def format_assumptions(spec: ComparisonSpec) -> List[str]:
-    """
-    Assumption echo block (audit U1), serialized from the spec — pure presentation.
-
-    Lines: terms mode + discount rate, per-option growth/escalation (with
-    selling-cost rate for owned options, invested capital + return for rent),
-    and a 'defaults applied' list for any echoed assumption the user YAML did
-    not provide (spec.defaults_applied, populated by the config loader). Each
-    defaulted key carries its anchor's short citation tag (anchors.py) so the
-    consumer can ask "where did this number come from?" and get an answer.
-    """
-    lines = [
-        f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}"
-    ]
-    if spec.condo is not None:
-        lines.append(
-            f"condo: value growth {spec.condo.value_growth_rate:+.1%}/yr · "
-            f"fee escalation {spec.condo.fee_escalation_rate:+.1%}/yr · "
-            f"selling_cost_rate {spec.condo.selling_cost_rate:.1%}"
-        )
-    if spec.house is not None:
-        lines.append(
-            f"house: value growth {spec.house.value_growth_rate:+.1%}/yr · "
-            f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
-        )
-    if spec.rent is not None:
-        lines.append(
-            f"rent: escalation {spec.rent.rent_escalation_rate:+.1%}/yr · "
-            f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
-            f"{spec.rent.investment_return_rate:+.1%}/yr"
-        )
-    if spec.defaults_applied:
-        def _echo_entry(key: str) -> str:
-            cite = short_cite(key)
-            tag = f" [{cite}]" if cite else ""
-            return f"{key}={_echo_value(spec, key)}{tag}"
-        joined = ", ".join(_echo_entry(key) for key in spec.defaults_applied)
-        lines.append(f"defaults applied: {joined}")
-    return lines
+# The assumption echo lives in the typed serialization core (readiness plan
+# A.1); re-exported here so existing callers keep importing from reporting.
+from .serialization import echo_value as _echo_value, format_assumptions  # noqa: F401
 
 
 def format_text_report(
