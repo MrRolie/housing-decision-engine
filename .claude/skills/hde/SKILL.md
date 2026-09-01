@@ -54,7 +54,7 @@ Input: "what does the model need from me?"
 ## Routine (deterministic — do not hand-reproduce)
 
 Config authoring → engine run → warnings review → story rendering. The CLI
-validates, refuses unknown keys with did-you-mean, and renders all five acts.
+validates, refuses unknown keys with did-you-mean, and renders all six acts.
 Anything expressible as one of the commands above is the engine's job, not a
 reasoning task.
 
@@ -62,8 +62,9 @@ reasoning task.
 
 - Exit 0 AND every `[warning]` line addressed or surfaced to the user with the
   verdict (warnings are judgment gates in disguise, not noise).
-- `--story`: the dir holds act1..act5 PNGs + STORY.md whose headline states the
-  verdict in words.
+- `--story`: the dir holds act1..act6 PNGs + STORY.md whose headline states the
+  verdict in words (act6 "the market line" = break-even rent/price sensitivity;
+  needs rent + an owned option).
 - `--json`: `warnings` + `deterministic` + `monte_carlo` keys present.
 
 ## Escalation

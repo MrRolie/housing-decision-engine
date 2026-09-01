@@ -1,11 +1,12 @@
 """
-STORY.md one-pager: the text companion to the five-act story plots.
+STORY.md one-pager: the text companion to the six-act story plots.
 
 `render_story_package` writes three things into a directory:
-  1. the five-act plots (via ``render_decision_story`` — degradation rules
-      identical: no MC -> no Act 3, no prior -> no Act 5, Act 4 falls back
-      to the honest single-growth line; a zero-uncertainty MC run degrades
-      like no-MC and is stamped 'not a forecast');
+  1. the six-act plots (via ``render_decision_story`` — degradation rules
+      identical: no MC -> no Act 3, no prior -> no Act 5, rent-vs-owned
+      missing -> no Act 6, Act 4 falls back to the honest single-growth
+      line; a zero-uncertainty MC run degrades like no-MC and is stamped
+      'not a forecast');
   2. the text report (``report.txt``);
   3. ``STORY.md`` — a one-pager embedding the act images in order, one
      narrative sentence per act, every sentence derived from the same pure
@@ -33,6 +34,7 @@ from .story_plots import (
     _cumulative_cost_curves,
     _verdict_subtitle,
     find_crossovers,
+    market_line_sentence,
     render_decision_story,
     verdict_sentence,
 )
@@ -119,6 +121,12 @@ def _act_sentences(
             f"household demand in {prior.geography}{_vintage_clause(prior)}.",
         ))
 
+    if spec.rent is not None and (spec.house is not None or spec.condo is not None):
+        acts.append((
+            "act6_the_market_line", "The market line",
+            market_line_sentence(spec, det),
+        ))
+
     return acts
 
 
@@ -192,7 +200,7 @@ def render_story_package(
     fmt: str = "png",
 ) -> Dict[str, Path]:
     """
-    Write the full story package into ``out_dir``: the five-act plots, the
+    Write the full story package into ``out_dir``: the six-act plots, the
     text report (``report.txt``), and the STORY.md one-pager.
 
     Returns a mapping {name: path} with keys "act images" (list), "report",

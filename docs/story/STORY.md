@@ -36,4 +36,20 @@ The demographic signal itself: projected price drift from household demand in MT
 
 ![Why](act5_demographic_signal.png)
 
+## Act — The market line
+
+Renting stays cheaper than buying a house until rent passes $2,544/mo — your $2,400 is $144/mo below that line.
+
+![The market line](act6_the_market_line.png)
+
 Full text report: [report.txt](report.txt)
+
+---
+
+## Assumptions
+
+- mode: real terms · discount_rate 5.0%
+- condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
+- house: value growth +2.0%/yr · selling_cost_rate 5.0%
+- rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
+- defaults applied: economic.mode='real', economic.inflation_rate=0.0% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]

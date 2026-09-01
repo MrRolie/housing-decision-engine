@@ -55,7 +55,7 @@ class TestStoryMarkdown:
         positions = [
             story.find(f"## Act — {title}") for title in (
                 "The answer", "The race", "The uncertainty",
-                "Your home's possible futures", "Why",
+                "Your home's possible futures", "Why", "The market line",
             )
         ]
         assert all(p >= 0 for p in positions), "every act must be sectioned"
@@ -76,7 +76,7 @@ class TestStoryMarkdown:
         stems = [Path(r).stem for r in refs]
         assert stems == [
             "act1_the_answer", "act2_the_race", "act3_the_uncertainty",
-            "act4_home_futures", "act5_demographic_signal",
+            "act4_home_futures", "act5_demographic_signal", "act6_the_market_line",
         ]
 
     def test_regeneration_command_stamped_at_top(self, tmp_path):
@@ -103,14 +103,14 @@ class TestDegradation:
         *_, package, story = _render(tmp_path, with_mc=False)
         assert "act3_the_uncertainty" not in story
         assert "The uncertainty" not in story
-        assert len(package["act images"]) == 4
+        assert len(package["act images"]) == 5
 
     def test_no_prior_skips_act5_and_act4_is_honest(self, tmp_path):
         *_, package, story = _render(tmp_path, with_prior=False)
         assert "act5_demographic_signal" not in story
         assert "Why" not in story
         assert "No demographic prior loaded" in story
-        assert len(package["act images"]) == 4
+        assert len(package["act images"]) == 5
 
     def test_requires_deterministic_result(self, tmp_path):
         spec = _spec()
@@ -180,10 +180,11 @@ simulation:
         assert cli_main() == 0
         out = capsys.readouterr().out
         story = (story_dir / STORY_FILENAME).read_text(encoding="utf-8")
-        # all five acts, in order, images on disk, report present
+        # all six acts, in order, images on disk, report present
         assert story.find("The answer") < story.find("The race") \
             < story.find("The uncertainty") \
-            < story.find("Your home's possible futures") < story.find("Why")
+            < story.find("Your home's possible futures") < story.find("Why") \
+            < story.find("The market line")
         for ref in ACT_IMAGE_RE.findall(story):
             assert (story_dir / ref).exists()
         assert (story_dir / REPORT_FILENAME).exists()

@@ -7,10 +7,16 @@ Acts:
   1. The answer       — headline bar chart with the verdict stated in words.
   2. The race         — cumulative cost curves and where the lead changes hands.
   3. The uncertainty  — Monte Carlo net-cost distributions (skipped silently
-                        when no MC ran).
+                         when no MC ran).
   4. Your home's possible futures — value fan chart under the ScenarioPrior,
-                        or the honest single-growth line when none is loaded.
+                         or the honest single-growth line when none is loaded.
   5. Why              — the demographic signal itself (requires a prior).
+  6. The market line  — the verdict's sensitivity to the quoted amounts:
+                         total cost vs monthly rent and vs purchase price,
+                         with the break-even (flip) points marked. The local
+                         quotes are single data points; this act shows how much
+                         room they have before the verdict flips. Needs rent +
+                         an owned option; skipped silently otherwise.
 
 House rules enforced here:
   - One style helper; large readable labels; colorblind-safe palette.
@@ -23,8 +29,9 @@ House rules enforced here:
 were actually rendered (degraded inputs render fewer acts).
 """
 
+from dataclasses import replace
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import matplotlib
@@ -38,6 +45,7 @@ from .deterministic import (
     _event_year_deterministic,
     _financing_pv,
     _maintenance_rate_for_year,
+    compute_deterministic,
 )
 from .config import single_path_run
 from .market_scenario import (
@@ -73,6 +81,13 @@ OPTION_DISPLAY = {
 SCENARIO_COLORS = {"low": "#0072B2", "reference": "#555555", "high": "#D55E00"}
 
 PRIOR_SOURCE_LINE = "Source: UN WPP 2024-derived demand model, ISQ 2026 scenarios"
+
+# Act 6 sweep geometry: ±SWEEP_SPAN around the user's quoted amount,
+# SWEEP_POINTS per axis. Illustrative presentation choice (not an engine
+# default): wide enough to show the flip point when it exists, narrow enough
+# to stay on-scale around the user's actual market.
+SWEEP_SPAN = 0.35
+SWEEP_POINTS = 41
 
 _RC = {
     "font.size": 13,
@@ -284,6 +299,140 @@ def find_crossovers(curves: Dict[str, List[float]]) -> List[tuple[int, str, str]
         if leaders[i] != leaders[i - 1]:
             crossovers.append((i + 1, leaders[i - 1], leaders[i]))
     return crossovers
+
+
+# ---------------------------------------------------------------------------
+# Act 6 pure helpers: sensitivity of the verdict to the quoted amounts
+# ---------------------------------------------------------------------------
+
+def _sweep_axis(center: float) -> List[float]:
+    """Sweep grid around the user's quoted amount (±SWEEP_SPAN)."""
+    return list(np.linspace(center * (1 - SWEEP_SPAN), center * (1 + SWEEP_SPAN), SWEEP_POINTS))
+
+
+def _owned_at_price(params, price: float):
+    """
+    An owned option re-priced at ``price`` with its capital structure held
+    fixed: the down-payment FRACTION (not the dollar amount) stays constant,
+    so a pricier unit means a proportionally bigger loan, not a silently
+    smaller down payment. Fees/events/other costs do not scale with price
+    (they attach to the building and its components, not the listing).
+    """
+    updates: Dict[str, float] = {"initial_value": price}
+    if (
+        not params.all_cash
+        and params.down_payment is not None
+        and params.initial_value > 0
+    ):
+        fraction = params.down_payment / params.initial_value
+        updates["down_payment"] = price * fraction
+    return replace(params, **updates)
+
+
+def sweep_rent_totals(
+    spec: ComparisonSpec, monthly_rents: Sequence[float],
+) -> Dict[str, List[float]]:
+    """
+    Total deterministic PV per option across a grid of monthly rents (owned
+    options do not move; the rent line rises with the rent). The renter's
+    invested_down_payment is deliberately held fixed: it is the capital tied
+    to the buy side's down payment, not to the rent level.
+    """
+    totals: Dict[str, List[float]] = {
+        k: [] for k in ("rent", "condo", "house")
+        if getattr(spec, k) is not None
+    }
+    for monthly in monthly_rents:
+        swept = replace(spec, rent=replace(spec.rent, monthly_rent=float(monthly)))
+        det = compute_deterministic(swept)
+        for key in totals:
+            totals[key].append(getattr(det, key).total_pv)
+    return totals
+
+
+def sweep_price_totals(
+    spec: ComparisonSpec, owned_key: str, prices: Sequence[float],
+) -> Dict[str, List[float]]:
+    """
+    Total deterministic PV per option across a grid of purchase prices for
+    ``owned_key`` ("condo" or "house"). The swept option moves; every other
+    option (rent, the other dwelling) stays at the user's quoted values.
+    """
+    totals: Dict[str, List[float]] = {
+        k: [] for k in ("rent", "condo", "house") if getattr(spec, k) is not None
+    }
+    base_owned = getattr(spec, owned_key)
+    for price in prices:
+        swept = replace(
+            spec, **{owned_key: _owned_at_price(base_owned, float(price))},
+        )
+        det = compute_deterministic(swept)
+        for key in totals:
+            totals[key].append(getattr(det, key).total_pv)
+    return totals
+
+
+def find_break_evens(
+    xs: Sequence[float], ya: Sequence[float], yb: Sequence[float],
+) -> List[float]:
+    """
+    X positions where the cheaper of two total-PV series flips, with the
+    crossing linearly interpolated between the bracketing grid points.
+    Monotonic or not: every sign change of (ya - yb) is one break-even.
+    """
+    break_evens: List[float] = []
+    for i in range(1, len(xs)):
+        d0, d1 = ya[i - 1] - yb[i - 1], ya[i] - yb[i]
+        if d0 == 0.0:
+            break_evens.append(float(xs[i - 1]))
+        elif d0 * d1 < 0:
+            t = d0 / (d0 - d1)
+            break_evens.append(float(xs[i - 1] + t * (xs[i] - xs[i - 1])))
+    if ya[-1] == yb[-1]:
+        break_evens.append(float(xs[-1]))
+    return break_evens
+
+
+def cheapest_owned_key(spec: ComparisonSpec, det: ComparisonDeterministicResult) -> str:
+    """The decision-relevant buy-side competitor to rent (lowest total PV)."""
+    keys = [k for k in ("condo", "house") if getattr(spec, k) is not None]
+    return min(keys, key=lambda k: getattr(det, k).total_pv)
+
+
+def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResult) -> str:
+    """
+    Act 6 narrative, as words: where the user's rent sits against the
+    break-even rent vs the cheapest owned option.
+    """
+    owned_key = cheapest_owned_key(spec, det)
+    user_rent = spec.rent.monthly_rent
+    xs = _sweep_axis(user_rent)
+    totals = sweep_rent_totals(spec, xs)
+    break_evens = find_break_evens(xs, totals["rent"], totals[owned_key])
+    lo, hi = xs[0], xs[-1]
+    if break_evens:
+        be = break_evens[0]
+        if user_rent < be:
+            return (
+                f"Renting stays cheaper than buying a "
+                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} "
+                f"until rent passes ${be:,.0f}/mo — your ${user_rent:,.0f} is "
+                f"${be - user_rent:,.0f}/mo below that line."
+            )
+        return (
+            f"Rent is past the break-even: ${user_rent:,.0f}/mo quoted vs a "
+            f"${be:,.0f}/mo flip point — buying the cheaper option already wins "
+            f"at these rent levels."
+        )
+    if totals["rent"][-1] < totals[owned_key][-1]:
+        return (
+            f"Renting is cheaper across the whole swept range "
+            f"(${lo:,.0f}–${hi:,.0f}/mo) — the flip point sits above it."
+        )
+    return (
+        f"Buying the cheaper owned option wins across the whole swept rent "
+        f"range (${lo:,.0f}–${hi:,.0f}/mo) — renting does not catch up."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -655,6 +804,120 @@ def plot_act5_demographic_signal(
     return _save(fig, out_dir, "act5_demographic_signal", fmt)
 
 
+def plot_act6_the_market_line(
+    spec: ComparisonSpec,
+    det: ComparisonDeterministicResult,
+    fmt: str,
+    out_dir: Path,
+) -> Path:
+    """
+    The market line: total cost vs the quoted amounts.
+
+    Left panel sweeps the monthly rent (owned lines flat, rent line rising);
+    right panel sweeps the purchase price of the cheapest owned option with
+    its down-payment fraction held constant (rent flat at the user's quote).
+    Break-even points — where the verdict flips — are annotated directly, and
+    the user's actual quotes are marked so the distance to the flip point is
+    readable at a glance. Deterministic sweep; the uncertainty act (3) carries
+    the spread.
+    """
+    if spec.rent is None:
+        raise ValueError("act 6 requires the rent option")
+    if spec.condo is None and spec.house is None:
+        raise ValueError("act 6 requires an owned option")
+
+    user_rent = spec.rent.monthly_rent
+    swept_key = cheapest_owned_key(spec, det)
+    user_price = getattr(spec, swept_key).initial_value
+
+    plt.rcParams.update(_RC)
+    fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(15.5, 6.5), sharey=True)
+
+    def _plot_totals(ax: Axes, xs: List[float], totals: Dict[str, List[float]],
+                     leader_key: str) -> None:
+        for key, ys in totals.items():
+            ax.plot(
+                xs, ys, color=OPTION_COLORS[key],
+                linewidth=3.0 if key == leader_key else 2.2,
+                label=OPTION_DISPLAY[key],
+            )
+
+    # --- Left panel: verdict vs the rent you'd pay ---
+    rent_xs = _sweep_axis(user_rent)
+    rent_totals = sweep_rent_totals(spec, rent_xs)
+    rent_leader = min(rent_totals, key=lambda k: rent_totals[k][len(rent_xs) // 2])
+    _plot_totals(ax_l, rent_xs, rent_totals, rent_leader)
+    ax_l.axvline(user_rent, color="#666666", linestyle="--", linewidth=1.6)
+    ax_l.annotate(
+        f"your rent: ${user_rent:,.0f}/mo",
+        xy=(user_rent, ax_l.get_ylim()[1]), xytext=(4, -2),
+        textcoords="offset points", fontsize=11, color="#444444",
+        ha="left", va="top",
+    )
+    for owned_key in [k for k in ("condo", "house") if k in rent_totals]:
+        for be in find_break_evens(rent_xs, rent_totals["rent"], rent_totals[owned_key])[:2]:
+            # At the break-even both series are equal; interpolate either one.
+            y_at = float(np.interp(be, rent_xs, rent_totals["rent"]))
+            ax_l.plot(be, y_at, marker="o", color="#333333", markersize=7, zorder=5)
+            ax_l.annotate(
+                f"${be:,.0f}/mo — the verdict flips\n"
+                f"vs {OPTION_DISPLAY[owned_key].lower()}",
+                xy=(be, y_at), xytext=(6, 14), textcoords="offset points",
+                fontsize=11, color="#333333", fontweight="bold",
+            )
+    ax_l.set_xlabel("Monthly rent")
+    ax_l.set_title("vs the rent you'd pay", fontsize=14)
+    ax_l.legend(loc="lower right", frameon=False)
+    ax_l.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+
+    # --- Right panel: verdict vs the price you'd pay ---
+    price_xs = _sweep_axis(user_price)
+    price_totals = sweep_price_totals(spec, swept_key, price_xs)
+    det_totals = {
+        k: getattr(det, k).total_pv
+        for k in ("rent", "condo", "house") if getattr(det, k) is not None
+    }
+    flat_keys = [k for k in price_totals if k != swept_key]
+    for key in flat_keys:
+        price_totals[key] = [det_totals[key]] * len(price_xs)
+    price_leader = min(price_totals, key=lambda k: price_totals[k][len(price_xs) // 2])
+    _plot_totals(ax_r, price_xs, price_totals, price_leader)
+    ax_r.axvline(user_price, color="#666666", linestyle="--", linewidth=1.6)
+    ax_r.annotate(
+        f"your price: {_money_k(user_price)}",
+        xy=(user_price, ax_r.get_ylim()[1]), xytext=(4, -2),
+        textcoords="offset points", fontsize=11, color="#444444",
+        ha="left", va="top",
+    )
+    for be in find_break_evens(price_xs, price_totals["rent"], price_totals[swept_key])[:2]:
+        y_at = np.interp(be, price_xs, price_totals[swept_key])
+        ax_r.plot(be, y_at, marker="o", color="#333333", markersize=7, zorder=5)
+        ax_r.annotate(
+            f"{_money_k(be)} — the verdict flips\n"
+            f"vs {OPTION_DISPLAY[swept_key].lower()}",
+            xy=(be, y_at), xytext=(6, 14), textcoords="offset points",
+            fontsize=11, color="#333333", fontweight="bold",
+        )
+    ax_r.set_xlabel(f"Purchase price — {OPTION_DISPLAY[swept_key].lower()}")
+    ax_r.set_title("vs the price you'd pay", fontsize=14)
+    ax_r.legend(loc="lower right", frameon=False)
+    ax_r.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: _money_k(x)))
+
+    _set_money_axis(ax_l)
+    fig.suptitle(
+        "The market line: how much room before the verdict flips?",
+        fontsize=17, fontweight="bold", y=1.02,
+    )
+    fig.text(
+        0.0, 1.005,
+        f"total cost vs the quoted amounts · deterministic sweep ±"
+        f"{SWEEP_SPAN:.0%}, your other assumptions held fixed",
+        fontsize=12, color="#555555",
+    )
+    fig.tight_layout()
+    return _save(fig, out_dir, "act6_the_market_line", fmt)
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -668,9 +931,10 @@ def render_decision_story(
     fmt: str = "png",
 ) -> list[Path]:
     """
-    Render the five-act decision story into ``out_dir``; returns only the acts
-    actually rendered (Act 3 needs MC results, Act 5 needs a loaded prior;
-    Act 4 degrades to an honestly-labelled single-growth line without a prior).
+    Render the six-act decision story into ``out_dir``; returns only the acts
+    actually rendered (Act 3 needs MC results, Act 5 needs a loaded prior,
+    Act 6 needs rent + an owned option; Act 4 degrades to an honestly-labelled
+    single-growth line without a prior).
     """
     if deterministic_result is None:
         raise ValueError("render_decision_story requires deterministic results")
@@ -692,4 +956,6 @@ def render_decision_story(
         rendered.append(plot_act4_home_futures(spec, prior, fmt, out_path))
     if prior is not None:
         rendered.append(plot_act5_demographic_signal(spec, prior, fmt, out_path))
+    if spec.rent is not None and owned_present:
+        rendered.append(plot_act6_the_market_line(spec, deterministic_result, fmt, out_path))
     return rendered
