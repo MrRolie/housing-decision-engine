@@ -92,3 +92,12 @@ def test_claude_md_routes_housing_questions_to_the_skill():
     assert ".claude/skills/hde/SKILL.md" in text
     assert "Missing information" in text and "scenarios/" in text
     assert "scenarios/" in (root / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_project_settings_preapprove_the_user_flow():
+    """A first-time user gets one trust dialog and no per-action prompts: the
+    engine command and writing their scenario under scenarios/ are pre-approved."""
+    root = SKILL.parents[3]
+    allow = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))["permissions"]["allow"]
+    assert "Bash(uv run hde *)" in allow
+    assert {"Edit(scenarios/**)", "Write(scenarios/**)"} <= set(allow)

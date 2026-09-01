@@ -17,7 +17,9 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 
 1. Install [uv](https://docs.astral.sh/uv/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 2. `git clone https://github.com/MrRolie/housing-decision-engine.git && cd housing-decision-engine`
-3. `claude` — then ask in plain words, e.g. *"I pay $2,100 rent and condos like mine go for $450k. Should I buy?"*
+3. `claude` — accept the one-time dialog listing what this folder pre-approves (running the
+   engine, writing your scenario under `scenarios/`), then ask in plain words, e.g.
+   *"I pay $2,100 rent and condos like mine go for $450k. Should I buy?"*
 
 Claude follows the repo's `hde` skill: it asks for whatever your question is missing
 (how long you'll stay, how you'd pay, …), writes your scenario to `scenarios/` (git-ignored),
