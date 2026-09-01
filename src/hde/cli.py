@@ -181,7 +181,7 @@ def main() -> int:
         doc = {
             "engine_version": engine_version(),
             "warnings": warnings,
-            "assumptions": assumptions_to_dict(spec),
+            "assumptions": assumptions_to_dict(spec, prior),
             "verdict": verdict_to_dict(verdict),
             "deterministic": det_to_dict(det_result) if det_result is not None else None,
             "monte_carlo": mc_to_dict(mc_result) if mc_result is not None else None,
@@ -211,13 +211,15 @@ def main() -> int:
     else:
         # Print full report — requires deterministic results
         if det_result is not None:
-            report = format_text_report(det_result, mc_result, spec.simulation, spec.economic, spec=spec)
+            report = format_text_report(det_result, mc_result, spec.simulation, spec.economic,
+                                        spec=spec, prior=prior)
             print(report)
         elif mc_result is not None:
             # MC-only mode: build a minimal det result placeholder to satisfy signature
             from .models import ComparisonDeterministicResult
             empty_det = ComparisonDeterministicResult()
-            report = format_text_report(empty_det, mc_result, spec.simulation, spec.economic, spec=spec)
+            report = format_text_report(empty_det, mc_result, spec.simulation, spec.economic,
+                                        spec=spec, prior=prior)
             print(report)
 
     if args.plots:
@@ -255,6 +257,7 @@ def main() -> int:
                     spec, det_result, mc_result, prior=prior,
                     out_dir=args.story,
                     command=f"uv run hde {args.config} --story {args.story}",
+                    warnings=warnings,
                 )
             except Exception as e:
                 print(f"Error rendering story package: {e}", file=sys.stderr)

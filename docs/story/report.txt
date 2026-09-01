@@ -3,6 +3,7 @@ Assumptions
   condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
   house: value growth +2.0%/yr · maintenance 1.2% of value/yr · selling_cost_rate 5.0%
   rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
+  demographic prior: MTL_RMR (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · sha256 e73fff23ef46… [demoflow ScenarioPrior v1]
   defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
 
 Condo  total PV:  $     457,945

@@ -91,10 +91,15 @@ class TestStoryMarkdown:
         assert story.startswith("<!-- Regenerate with: uv run hde examples/x.yaml --story out")
 
     def test_prior_geography_and_vintage_cited(self, tmp_path):
+        """Discriminating on the FILE's vintage — no literal can supply these tokens."""
         *_, story = _render(tmp_path)
         assert "MTL_RMR" in story
-        assert "2026" in story          # isq_edition
-        assert "2021" in story          # census_year
+        assert "ISQ 2026 scenarios" in story          # isq_edition
+        assert "2021 census" in story                 # census_year
+        assert "constants as of 2026-07-21" in story  # constants_as_of
+        assert "simulation year 1 = calendar 2026" in story
+        assert "StatCan 98-10-0231-01" in story       # a pinned source, cited
+        assert "UN WPP" not in story                  # the retired uncorroborated literal
 
     def test_report_written_and_nonempty(self, tmp_path):
         *_, package, _ = _render(tmp_path)

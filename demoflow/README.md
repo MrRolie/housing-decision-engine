@@ -1,7 +1,7 @@
 # demoflow
 
 `demoflow/` is the upstream demand-model pipeline — a self-contained uv project
-(UN WPP → ISQ scenarios → cohort roll-forward → excess-demand rankings) whose
+(ISQ population scenarios → cohort roll-forward → excess-demand rankings) whose
 `ScenarioPrior` JSON artifacts feed hde's `market_scenario` slot. hde does NOT
 need it to run: the golden prior used by the tests and the living showcase is
 committed at `../tests/fixtures/scenario_prior_golden.json`, and the engine

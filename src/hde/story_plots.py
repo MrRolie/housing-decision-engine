@@ -81,8 +81,6 @@ OPTION_DISPLAY = {
 }
 SCENARIO_COLORS = {"low": "#0072B2", "reference": "#555555", "high": "#D55E00"}
 
-PRIOR_SOURCE_LINE = "Source: UN WPP 2024-derived demand model, ISQ 2026 scenarios"
-
 # Act 6 sweep geometry: ±SWEEP_SPAN around the user's quoted amount,
 # SWEEP_POINTS per axis. Illustrative presentation choice (not an engine
 # default): wide enough to show the flip point when it exists, narrow enough
@@ -817,7 +815,7 @@ def plot_act5_demographic_signal(
         transform=ax.transAxes, fontsize=12, color="#555555", va="bottom",
     )
     ax.text(
-        0.99, 0.03, PRIOR_SOURCE_LINE, transform=ax.transAxes,
+        0.99, 0.03, prior.source_line(), transform=ax.transAxes,
         fontsize=10, color="#777777", ha="right", va="bottom",
     )
     ax.set_xlabel("Horizon year")

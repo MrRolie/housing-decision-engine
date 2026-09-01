@@ -118,7 +118,11 @@ class TestLoaderValid:
         assert prior.assumptions_hash == "abc123"
         assert prior.geography == GEO
         block = prior.provenance_block()
-        assert set(block.keys()) == {"file_sha256", "assumptions_hash", "geography", "schema_version"}
+        assert set(block.keys()) == {
+            "file_sha256", "assumptions_hash", "geography", "schema_version",
+            "mapping_version", "isq_edition", "census_year", "constants_as_of",
+            "start_calendar_year", "horizon_years", "source_keys",
+        }
 
     def test_geography_filter_ignores_other_rows(self, tmp_path):
         path = _write_prior(tmp_path, _valid_prior(geographies=(GEO, OTHER_GEO)))

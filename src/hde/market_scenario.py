@@ -12,7 +12,7 @@ import json
 import math
 import re
 
-from .anchors import ANCHORS
+from .anchors import ANCHORS, describe_mapping_version, describe_source_key, source_key_label
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -190,12 +190,83 @@ class LoadedScenarioPrior:
             (h, s): row for (d, h, s), row in self.rows.items() if d == "all"
         }
 
-    def provenance_block(self) -> Dict[str, str]:
+    # ---- provenance, rendered ONLY from what the file carries (E.1–E.3) ----
+
+    def vintage_clause(self) -> str:
+        """' (ISQ 2026 scenarios, 2021 census)' — empty when the vintage is absent."""
+        vintage = self.data_vintage
+        parts = []
+        if vintage.get("isq_edition"):
+            parts.append(f"ISQ {vintage['isq_edition']} scenarios")
+        if vintage.get("census_year"):
+            parts.append(f"{vintage['census_year']} census")
+        return " (" + ", ".join(parts) + ")" if parts else ""
+
+    def sources(self) -> List[Dict[str, object]]:
+        """Every pinned source: key, human citation, digest(s), extraction date."""
+        raw = self.data_vintage.get("source_hashes")
+        if not isinstance(raw, dict):
+            return []
+        out: List[Dict[str, object]] = []
+        for key in sorted(raw):
+            entry = raw[key] if isinstance(raw[key], dict) else {}
+            out.append({
+                "key": key,
+                "citation": describe_source_key(key),
+                "sha256": entry.get("sha256"),
+                "extracted_at": entry.get("extracted_at"),
+            })
+        return out
+
+    def source_line(self) -> str:
+        """Plot-footer citation: the primary source families actually present
+        in the file (derived artifacts collapsed into their parents)."""
+        labels = sorted({
+            source_key_label(s["key"]) for s in self.sources()
+            if not source_key_label(s["key"]).startswith(("derived:", "uncited source:"))
+        })
+        uncited = sum(1 for s in self.sources() if source_key_label(s["key"]).startswith("uncited source:"))
+        text = "Source: " + (", ".join(labels) if labels else "no pinned sources")
+        if uncited:
+            text += f" (+{uncited} uncited)"
+        return text + f" · demoflow ScenarioPrior v{self.schema_version}"
+
+    def describe(self) -> str:
+        """One sentence a user can read: what the prior is, its vintage, the
+        calendar anchor, the mapping, and its pinned sources."""
+        vintage = self.data_vintage
+        parts = [f"{self.geography} demand model{self.vintage_clause()}"]
+        constants_as_of = vintage.get("constants_as_of")
+        if isinstance(constants_as_of, str) and constants_as_of:
+            parts.append(f"constants as of {constants_as_of}")
+        parts.append(
+            f"simulation year 1 = calendar {START_CALENDAR_YEAR}, bands "
+            f"{'/'.join(str(h) for h in HORIZON_YEARS)}"
+        )
+        parts.append(f"mapping v{self.mapping_version}: {describe_mapping_version(self.mapping_version)}")
+        srcs = self.sources()
+        if srcs:
+            parts.append(
+                f"{len(srcs)} pinned sources (sha256 in --json): "
+                + "; ".join(source_key_label(s["key"]) for s in srcs)
+            )
+        return " · ".join(parts)
+
+    def provenance_block(self) -> Dict[str, object]:
+        """Machine-readable provenance that rides every result payload."""
+        vintage = self.data_vintage
         return {
             "file_sha256": self.file_sha256,
             "assumptions_hash": self.assumptions_hash,
             "geography": self.geography,
             "schema_version": self.schema_version,
+            "mapping_version": self.mapping_version,
+            "isq_edition": vintage.get("isq_edition"),
+            "census_year": vintage.get("census_year"),
+            "constants_as_of": vintage.get("constants_as_of"),
+            "start_calendar_year": START_CALENDAR_YEAR,
+            "horizon_years": list(HORIZON_YEARS),
+            "source_keys": [s["key"] for s in self.sources()],
         }
 
 

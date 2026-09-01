@@ -128,7 +128,7 @@ def run_comparison(scenario_name: str, mode: str = "both",
         mc_result,
         entry.spec.simulation,
         entry.spec.economic,
-        spec=entry.spec,
+        spec=entry.spec, prior=prior,
     )
 
     response = {
@@ -137,7 +137,7 @@ def run_comparison(scenario_name: str, mode: str = "both",
         "report": report,
         "engine_version": engine_version(),
         "warnings": warnings,
-        "assumptions": assumptions_to_dict(entry.spec),
+        "assumptions": assumptions_to_dict(entry.spec, prior),
         "verdict": verdict_to_dict(
             compute_verdict(
                 det_result, mc_result,

@@ -30,7 +30,6 @@ from .models import (
 from .reporting import format_assumptions, format_text_report
 from .story_plots import (
     OPTION_DISPLAY,
-    PRIOR_SOURCE_LINE,
     _cumulative_cost_curves,
     _verdict_subtitle,
     find_crossovers,
@@ -122,7 +121,7 @@ def _act_sentences(
         acts.append((
             "act5_demographic_signal", "Why",
             f"The demographic signal itself: projected price drift from "
-            f"household demand in {prior.geography}{_vintage_clause(prior)}.",
+            f"household demand in {prior.geography}{prior.vintage_clause()}.",
         ))
 
     if spec.rent is not None and (spec.house is not None or spec.condo is not None):
@@ -134,18 +133,6 @@ def _act_sentences(
     return acts
 
 
-def _vintage_clause(prior: LoadedScenarioPrior) -> str:
-    vintage = prior.data_vintage
-    parts = []
-    if vintage.get("isq_edition"):
-        parts.append(f"ISQ {vintage['isq_edition']} scenarios")
-    if vintage.get("census_year"):
-        parts.append(f"{vintage['census_year']} census")
-    if not parts:
-        return ""
-    return " (" + ", ".join(parts) + ")"
-
-
 def generate_story_markdown(
     acts: List[Tuple[str, str, str]],
     image_paths: Dict[str, Path],
@@ -155,6 +142,7 @@ def generate_story_markdown(
     prior_line: Optional[str] = None,
     assumption_lines: Optional[List[str]] = None,
     single_path_note: bool = False,
+    warnings: Optional[List[str]] = None,
 ) -> str:
     """Pure assembler: build STORY.md text from rendered act metadata."""
     lines: List[str] = []
@@ -168,6 +156,12 @@ def generate_story_markdown(
         # Audit U3: stamp zero-uncertainty runs so the single line is never
         # mistaken for a forecast.
         lines.append("> single-path run: all uncertainty inputs off — not a forecast.")
+        lines.append("")
+    if warnings:
+        # An artifact that outlives the terminal carries its own warnings
+        # (coherence + time-anchor), not just stderr (readiness plan E.4).
+        for warning in warnings:
+            lines.append(f"> warning: {warning}")
         lines.append("")
     if prior_line:
         lines.append(prior_line)
@@ -202,6 +196,7 @@ def render_story_package(
     out_dir: str | Path = "story",
     command: str = "uv run hde <config.yaml> --story <DIR>",
     fmt: str = "png",
+    warnings: Optional[List[str]] = None,
 ) -> Dict[str, Path]:
     """
     Write the full story package into ``out_dir``: the six-act plots, the
@@ -229,16 +224,14 @@ def render_story_package(
 
     prior_line = None
     if prior is not None:
-        prior_line = (
-            f"Demographic prior: {prior.geography} demand model"
-            f"{_vintage_clause(prior)}. {PRIOR_SOURCE_LINE}."
-        )
+        # Rendered ONLY from what the prior file carries — no literal claims.
+        prior_line = f"Demographic prior: {prior.describe()}."
 
     report_path = out_path / REPORT_FILENAME
     report_path.write_text(
         format_text_report(
             deterministic_result, mc_result, spec.simulation, spec.economic,
-            spec=spec,
+            spec=spec, prior=prior,
         ),
         encoding="utf-8",
     )
@@ -253,8 +246,9 @@ def render_story_package(
             ),
             subtitle=_verdict_subtitle(spec),
             prior_line=prior_line,
-            assumption_lines=format_assumptions(spec),
+            assumption_lines=format_assumptions(spec, prior),
             single_path_note=mc_result is not None and single_path_run(spec),
+            warnings=warnings,
         ),
         encoding="utf-8",
     )

@@ -18,6 +18,7 @@ from importlib import metadata
 from typing import Any, Dict, List, Optional
 
 from .anchors import ANCHORS, _ECHO_ALIASES, Anchor, short_cite
+from .market_scenario import LoadedScenarioPrior
 from .models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
@@ -83,7 +84,9 @@ def echo_value(spec: ComparisonSpec, dotted: str) -> str:
     return f"{value:.1%}"
 
 
-def format_assumptions(spec: ComparisonSpec) -> List[str]:
+def format_assumptions(
+    spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
+) -> List[str]:
     """
     Assumption echo block (audit U1), serialized from the spec — pure presentation.
 
@@ -117,6 +120,13 @@ def format_assumptions(spec: ComparisonSpec) -> List[str]:
             f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
             f"{spec.rent.investment_return_rate:+.1%}/yr"
         )
+    if prior is not None:
+        constants_as_of = prior.data_vintage.get("constants_as_of")
+        as_of = f" · constants as of {constants_as_of}" if isinstance(constants_as_of, str) else ""
+        lines.append(
+            f"demographic prior: {prior.geography}{prior.vintage_clause()}{as_of} · "
+            f"sha256 {prior.file_sha256[:12]}… [demoflow ScenarioPrior v{prior.schema_version}]"
+        )
     if spec.defaults_applied:
         def _echo_entry(key: str) -> str:
             cite = short_cite(key)
@@ -127,7 +137,9 @@ def format_assumptions(spec: ComparisonSpec) -> List[str]:
     return lines
 
 
-def assumptions_to_dict(spec: ComparisonSpec) -> Dict[str, Any]:
+def assumptions_to_dict(
+    spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
+) -> Dict[str, Any]:
     """
     The structured assumption echo: what the text report's "Assumptions" block
     says, plus — for every defaulted key — the full anchor record, so an agent
@@ -160,8 +172,13 @@ def assumptions_to_dict(spec: ComparisonSpec) -> Dict[str, Any]:
         "mode": spec.economic.mode,
         "years": spec.simulation.years,
         "discount_rate": spec.simulation.discount_rate,
-        "lines": format_assumptions(spec),
+        "lines": format_assumptions(spec, prior),
         "defaults_applied": entries,
+        "demographic_prior": (
+            {**prior.provenance_block(), "description": prior.describe(),
+             "sources": prior.sources()}
+            if prior is not None else None
+        ),
     }
 
 

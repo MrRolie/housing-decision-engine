@@ -462,6 +462,85 @@ ANCHORS: Dict[str, Anchor] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Demographic-prior provenance (readiness plan E.2, 2026-09-01).
+#
+# A ScenarioPrior file carries source FILE NAMES + sha256 digests under
+# data_vintage.source_hashes; the human citation for each lives upstream in
+# demoflow's pipeline.RUN_SOURCES (`why` strings) and loaders/pins.py (StatCan
+# table ids) and is copied here so hde can say what a source IS from the file
+# alone. Form: "<short label> — <detail>"; the label precedes " — ". An unknown
+# key renders "uncited source: <key>" — never an invented citation. The emitter
+# contract binds these keys to a code-owned registry (demoflow spec §7), so
+# this is a closed vocabulary, not free text.
+# ---------------------------------------------------------------------------
+SOURCE_KEY_CITATIONS: Dict[str, str] = {
+    "pop-as-rmr-base.xlsx": (
+        "ISQ population scenarios (RMR) — Institut de la statistique du Québec, "
+        "Perspectives démographiques, population by age and sex for the census "
+        "metropolitan areas, base scenario workbook (edition per data_vintage.isq_edition)"),
+    "pop-as-ra-base.xlsx": (
+        "ISQ population scenarios (RA) — ISQ Perspectives démographiques, population by "
+        "age and sex for the administrative regions, base scenario workbook"),
+    "pop-as-qc-base.xlsx": (
+        "ISQ population scenarios (QC) — ISQ Perspectives démographiques, Québec total by "
+        "single year of age; the headship curve's denominator"),
+    "compo-rmr-base.xlsx": (
+        "ISQ arrival flows (RMR) — ISQ Perspectives démographiques, components of growth "
+        "(migration/arrival flows) for the census metropolitan areas, base scenario"),
+    "compo-ra-base.xlsx": (
+        "ISQ arrival flows (RA) — ISQ Perspectives démographiques, components of growth "
+        "for the administrative regions, base scenario"),
+    "census_tenure_age_98100231.csv": (
+        "StatCan 98-10-0231-01 — Statistics Canada, 2021 Census, tenure × age of primary "
+        "household maintainer; source of the ownership and headship surfaces"),
+    "living_arrangement_98100134.json": (
+        "StatCan 98-10-0134-01 — Statistics Canada, 2021 Census, living arrangements by sex"),
+    "hors_aligned_csd_98100232.json": (
+        "StatCan 98-10-0232-01 — Statistics Canada, 2021 Census, census-subdivision extract "
+        "aligning the outside-CMA (HORS_RMR) ownership curve"),
+    "living_arrangement.json": (
+        "derived: living-arrangement shares — computed in demoflow from StatCan "
+        "98-10-0134-01 (its _provenance records the extraction date)"),
+    "ownership_hors_aligned.json": (
+        "derived: HORS_RMR ownership curve — computed in demoflow from StatCan 98-10-0232-01 "
+        "census subdivisions"),
+    "ownership_by_geo_age.json": (
+        "derived: ownership rate by geography × age — computed in demoflow from StatCan "
+        "98-10-0231-01"),
+    "headship_by_age.json": (
+        "derived: headship rate by single year of age — StatCan 98-10-0231-01 maintainers ÷ "
+        "ISQ persons (pop-as-qc-base.xlsx)"),
+    "mortality_basis:CPM2014_combined+CPM-B": (
+        "CIA CPM2014 mortality + CPM-B scale — Canadian Institute of Actuaries, Canadian "
+        "Pensioners' Mortality 2014 (combined) with improvement scale CPM-B; the cohort "
+        "roll-forward's survival basis (via the actuarial-system package)"),
+}
+
+MAPPING_VERSION_NOTES: Dict[str, str] = {
+    "1": (
+        "excess-demand rate → real price drift through a linear-through-origin β prior "
+        "with the uniform β demoflow pinned; horizon bands (2030…2050) are piecewise-"
+        "constant with no interpolation; drawdown_weight_tilt multiplies the user's "
+        "price-shock hazard (S4b sketch §1 slots 2–3, §3)"),
+}
+
+
+def describe_source_key(key: str) -> str:
+    """Human citation for one data_vintage.source_hashes key, or an honest
+    'uncited source: <key>' when the registry does not know it."""
+    return SOURCE_KEY_CITATIONS.get(key, f"uncited source: {key}")
+
+
+def source_key_label(key: str) -> str:
+    """The short label before ' — ' (e.g. 'StatCan 98-10-0231-01')."""
+    return describe_source_key(key).split(" — ", 1)[0]
+
+
+def describe_mapping_version(version: str) -> str:
+    return MAPPING_VERSION_NOTES.get(version, f"undescribed mapping version {version}")
+
+
 def short_cite(name: str) -> str:
     """Short citation tag for a (possibly defaulted) dotted key, e.g.
     "FP Canada 2026 PAG" — empty string when no anchor exists for the key.

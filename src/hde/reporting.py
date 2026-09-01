@@ -14,6 +14,7 @@ import matplotlib.figure
 from matplotlib.figure import Figure
 
 from .config import single_path_run
+from .market_scenario import LoadedScenarioPrior
 from .models import (
     compute_verdict,
     ComparisonDeterministicResult,
@@ -39,6 +40,7 @@ def format_text_report(
     sim: SimulationParams,
     econ: EconomicParams,
     spec: Optional[ComparisonSpec] = None,
+    prior: Optional["LoadedScenarioPrior"] = None,
 ) -> str:
     """
     Generate a formatted text report of the analysis results.
@@ -58,7 +60,7 @@ def format_text_report(
 
     if spec is not None:
         lines.append("Assumptions")
-        lines.extend(f"  {line}" for line in format_assumptions(spec))
+        lines.extend(f"  {line}" for line in format_assumptions(spec, prior))
         lines.append("")
 
     # Per-option PV totals

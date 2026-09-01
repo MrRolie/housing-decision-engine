@@ -83,6 +83,8 @@ With no prior loaded, behavior is byte-identical to today (hazard defaults 0).
 
 When a prior is loaded, every result payload (deterministic summary, MC summary,
 affordability block) gains `"market_scenario": {"file_sha256", "assumptions_hash",
+"mapping_version", "isq_edition", "census_year", "constants_as_of", "start_calendar_year",
+"horizon_years", "source_keys"}` (widened 2026-09-01, readiness plan E.3 — was {"file_sha256", "assumptions_hash",
 "geography", "schema_version"}`. Two runs over different priors cannot share an
 identity silently — the same law as every other input this repo takes.
 
