@@ -1,35 +1,63 @@
 # Income shock scenario: 20% pay cut in year 3
 # Which housing option is still affordable after the shock?
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   CMHC GDS/TDS   = CMHC "Calculating GDS/TDS" (cmhc-schl.gc.ca): GDS cap 39%, TDS 44%;
+#                    legacy guideline 32%
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
+#   NBER/TAL       = NBER digest Oct 2025: continuing-tenant rents pass through ~21% of
+#                    market-rent moves; QC TAL guideline ≈ CPI for existing leases
+#
+#   discount_rate 0.05 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   fee_escalation_rate 0.03 ......... real; FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real
+#                                      is the planning reference — 3% real is a deliberate aggressive
+#                                      aging-building view
+#   rent_escalation_rate 0.04 ........ FP Canada 2026 shelter ≈ 1.0% real planning reference; NBER/TAL
+#                                      implies ≈ 0.0% real for continuing tenants — 4% real is an
+#                                      aggressive market view, justify it explicitly for your market
+#   investment_return_rate 0.03 ...... FP Canada 2026 balanced ≈ 3.0% real (equities ≈ 4.2% real,
+#                                      upper bound ≈ 5.2%); matches the engine default — see src/hde/anchors.py
+#   income_growth_rate 0.03 .......... FP Canada 2026 salary growth 3.1% nominal ≈ 1.0% real is the
+#                                      planning reference — 3% real is an optimistic career view
+#   affordability_threshold 0.35 ..... CMHC GDS/TDS: 39% GDS cap / 44% TDS, legacy 32% guideline —
+#                                      0.35 sits between legacy and GDS cap
+#   pay_drop year 3 / magnitude 0.80 . illustrative scenario premise (the shock under study)
+#   condo_fee_vol 0.08 ................ illustrative uncertainty calibration — sensitivity-test via sweep
+#
+# Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 15
-discount_rate: 0.05
+discount_rate: 0.05  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
 
 condo:
-  monthly_fee: 700
-  fee_escalation_rate: 0.03
-  initial_value: 500000
+  monthly_fee: 700  # scenario-specific market input
+  fee_escalation_rate: 0.03  # real; FP Canada 2026 shelter ≈ 1.0% real reference — aggressive aging-building view
+  initial_value: 500000  # scenario-specific market input
   all_cash: true
 
 rent:
-  monthly_rent: 2500
-  rent_escalation_rate: 0.04
+  monthly_rent: 2500  # scenario-specific market input
+  rent_escalation_rate: 0.04  # real; FP Canada 2026 shelter ≈ 1.0% real + NBER/TAL ≈ 0.0% real for continuing tenants — aggressive market view (≥2%/yr real), justify for your market
   # Equalized with the condo's all-cash purchase capital (500k): a renter who
   # skips buying invests that same capital, so the opportunity cost is like-for-like.
   invested_down_payment: 500000
-  investment_return_rate: 0.07
+  investment_return_rate: 0.03  # real; FP Canada 2026 balanced ≈ 3.0% real (was 0.07 — exceeded even the ≈5.2% real equity upper bound); engine default — see src/hde/anchors.py
 
 income:
-  annual_income: 120000
-  income_growth_rate: 0.03
-  affordability_threshold: 0.35
+  annual_income: 120000  # scenario-specific input
+  income_growth_rate: 0.03  # real; FP Canada 2026 salary growth 3.1% nominal ≈ 1.0% real reference — optimistic career view
+  affordability_threshold: 0.35  # CMHC GDS/TDS: between legacy 32% guideline and 39% GDS cap
   pay_drop_events:
-    - year: 3
-      magnitude: 0.80
+    - year: 3  # illustrative scenario timing
+      magnitude: 0.80  # illustrative shock size — the premise under study (20% pay cut)
 
 simulation:
   num_sims: 5000
   random_seed: 42
-  condo_fee_vol: 0.08
+  condo_fee_vol: 0.08  # illustrative uncertainty calibration — sensitivity-test via sweep
 
 economic:
   mode: real

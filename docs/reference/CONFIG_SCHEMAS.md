@@ -183,10 +183,13 @@ All rates are expressed as decimals:
 
 ### Volatility Parameters
 
-Volatility represents the standard deviation of a normal shock applied multiplicatively:
+Volatility is the dispersion of a multiplicative shock around the base cost.
+The default shock model is **lognormal** (see `_shock_multiplier` in
+`src/hde/monte_carlo.py`):
 
-- `cost_actual = cost_base * max(0, 1 + Normal(0, volatility))`
-- A volatility of 0.25 means costs can easily vary ±25% from baseline
+- Default (`shock_model: "lognormal"`): `cost_actual = cost_base * exp(volatility * z − volatility²/2)` with `z ~ Normal(0, 1)`; the `− volatility²/2` term centers the multiplier at 1.0, so expected cost equals base cost
+- Legacy (`shock_model: "normal"`): `cost_actual = cost_base * max(0, 1 + volatility * z)`
+- A volatility of 0.25 means costs typically vary on the order of ±25% from baseline
 
 ### Timing Parameters
 
@@ -196,38 +199,50 @@ Volatility represents the standard deviation of a normal shock applied multiplic
 
 ### Defaults Summary
 
-| Field | Default |
-|-------|---------|
-| `economic.mode` | "real" |
-| `economic.inflation_rate` | 0.0 |
-| `economic.inflation_vol` | 0.0 |
-| `condo.fee_escalation_rate` | 0.0 |
-| `condo.reserve_contribution_rate` | 0.0 |
-| `condo.reserve_initial_balance` | 0.0 |
-| `condo.reserve_growth_rate` | 0.0 |
-| `house.value_growth_rate` | 0.0 |
-| `house.annual_maintenance_rate` | 0.0 |
-| `house.maintenance_curve` | [] |
-| `event.timing_std_years` | 0.0 |
-| `event.min_year` | 1 |
-| `event.max_year` | years |
-| `event.cost_vol` | 0.0 |
-| `event.timing_model` | "jitter" |
-| `event.hazard_base` | 0.0 |
-| `event.hazard_growth` | 0.0 |
-| `event.hazard_start_year` | 1 |
-| `event.cost_distribution` | "lognormal" |
-| `other.escalation_rate` | 0.0 |
-| `simulation.num_sims` | 10000 |
-| `simulation.random_seed` | 42 |
-| `simulation.house_maintenance_vol` | 0.0 |
-| `simulation.condo_fee_vol` | 0.0 |
-| `simulation.other_cost_vol` | 0.0 |
-| `simulation.corr_inflation_house` | 0.0 |
-| `simulation.corr_inflation_condo` | 0.0 |
-| `simulation.corr_inflation_other` | 0.0 |
-| `simulation.corr_inflation_event_cost` | 0.0 |
-| `simulation.shock_model` | "lognormal" |
+| Field | Default | Source |
+|-------|---------|--------|
+| `economic.mode` | "real" | — |
+| `economic.inflation_rate` | 0.0 | FP Canada 2026 PAG |
+| `economic.inflation_vol` | 0.0 | — |
+| `condo.fee_escalation_rate` | 0.0 | FP Canada 2026 PAG |
+| `condo.reserve_contribution_rate` | 0.0 | — |
+| `condo.reserve_initial_balance` | 0.0 | — |
+| `condo.reserve_growth_rate` | 0.0 | — |
+| `condo.selling_cost_rate` | 0.05 | WOWA 2026 |
+| `house.value_growth_rate` | 0.0 | neutral, uncited (anchors.py) |
+| `house.annual_maintenance_rate` | 0.0 | — |
+| `house.maintenance_curve` | [] | — |
+| `house.selling_cost_rate` | 0.05 | WOWA 2026 |
+| `rent.rent_escalation_rate` | 0.01 | FP Canada 2026 PAG |
+| `rent.investment_return_rate` | 0.03 | FP Canada 2026 PAG |
+| `income.income_growth_rate` | 0.01 | FP Canada 2026 PAG |
+| `income.affordability_threshold` | 0.32 | CMHC GDS/TDS |
+| `price_shock.severity_mean` | 0.25 | TREB 1989–96 |
+| `price_shock.severity_vol` | 0.10 | TREB 1989–96 (calibrated) |
+| `event.timing_std_years` | 0.0 | — |
+| `event.min_year` | 1 | — |
+| `event.max_year` | years | — |
+| `event.cost_vol` | 0.0 | — |
+| `event.timing_model` | "jitter" | — |
+| `event.hazard_base` | 0.0 | — |
+| `event.hazard_growth` | 0.0 | — |
+| `event.hazard_start_year` | 1 | — |
+| `event.cost_distribution` | "lognormal" | — |
+| `other.escalation_rate` | 0.0 | — |
+| `simulation.num_sims` | 10000 | — |
+| `simulation.random_seed` | 42 | — |
+| `simulation.house_maintenance_vol` | 0.0 | — |
+| `simulation.condo_fee_vol` | 0.0 | — |
+| `simulation.other_cost_vol` | 0.0 | — |
+| `simulation.corr_inflation_house` | 0.0 | — |
+| `simulation.corr_inflation_condo` | 0.0 | — |
+| `simulation.corr_inflation_other` | 0.0 | — |
+| `simulation.corr_inflation_event_cost` | 0.0 | — |
+| `simulation.shock_model` | "lognormal" | — |
+
+All engine defaults live in src/hde/anchors.py — the single source of truth;
+every default carries as_of + source + rationale there. Rows marked "—" have no
+registered anchor.
 
 ## Validation Rules
 

@@ -4,50 +4,87 @@
 # demoflow's audited demand model → this file's rent-vs-buy decision.
 # The prior at tests/fixtures/scenario_prior_golden.json is demoflow's REAL
 # emitted artifact (see that repo's Tranche-2 build).
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   TREB 1989–96   = Toronto peak-trough −27.6% nominal (≈ −39% real), Canada's largest
+#                    observed metro correction (Better Dwelling)
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
+#   NBER/TAL       = NBER digest Oct 2025: continuing-tenant rents pass through ~21% of
+#                    market-rent moves; QC TAL guideline ≈ CPI for existing leases
+#
+#   market_scenario.path ............. demoflow-audited artifact (its own provenance chain);
+#                                      supplies the ISQ-grounded demographic drift, not a hand-picked rate
+#   discount_rate 0.05 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   fee_escalation_rate 0.03 ......... real; FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real
+#                                      is the planning reference — 3% real is a deliberate aggressive
+#                                      aging-building view
+#   value_growth_rate 0.02 ........... illustrative base drift only — the demographic tilt is layered
+#                                      on top by the prior's scenario fan (act 4); this is the
+#                                      ISQ-grounded alternative to hand-picking appreciation
+#   price_shock.annual_hazard 0.03 ... illustrative uncertainty calibration — sensitivity-test via sweep
+#   price_shock.severity_mean 0.20 ... TREB 1989–96 anchor: −27.6% nominal peak-trough ≈ 0.25 mean
+#                                      severity; 0.20 is slightly milder than the worst observed
+#                                      Toronto correction (MTL view)
+#   price_shock.severity_vol 0.10 .... illustrative uncertainty calibration — sensitivity-test via sweep
+#   annual_maintenance_rate 0.012 .... NAHB 2019 (Table 2): routine ≈ 0.6% of value/yr, narrow definition; 1%-rule budgeting family
+#   rent_escalation_rate 0.025 ....... FP Canada 2026 shelter ≈ 1.0% real planning reference; NBER/TAL
+#                                      implies ≈ 0.0% real for QC continuing tenants — 2.5% real is an
+#                                      aggressive market view, justify it explicitly
+#   investment_return_rate 0.05 ...... within FP Canada 2026 real equity range (≈ 4.2% typical,
+#                                      ≈ 5.2% upper bound) — an equity-tilted choice; the engine
+#                                      default anchor is 0.03 (see src/hde/anchors.py)
+#   event base costs / timings ....... illustrative service lives/costs — calibrate to your reserve
+#                                      study or component inventory
+#   cost_vol .......................... illustrative uncertainty calibration — sensitivity-test via sweep
+#
+# Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 25
-discount_rate: 0.05
+discount_rate: 0.05  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
 
 market_scenario:
-  path: tests/fixtures/scenario_prior_golden.json
+  path: tests/fixtures/scenario_prior_golden.json  # demoflow's audited prior — its provenance is that repo's
   geography: MTL_RMR
 
 condo:
-  monthly_fee: 800
-  fee_escalation_rate: 0.03
-  initial_value: 480000
-  value_growth_rate: 0.02
+  monthly_fee: 800  # scenario-specific market input
+  fee_escalation_rate: 0.03  # real; FP Canada 2026 shelter ≈ 1.0% real reference — aggressive aging-building view
+  initial_value: 480000  # scenario-specific market input
+  value_growth_rate: 0.02  # real; illustrative base drift — demographic tilt layered by the prior
   all_cash: true
   price_shock:
-    annual_hazard: 0.03
-    severity_mean: 0.20
-    severity_vol: 0.10
+    annual_hazard: 0.03  # illustrative uncertainty calibration — sensitivity-test via sweep
+    severity_mean: 0.20  # TREB 1989–96 anchor ≈ 0.25 mean severity (−27.6% nominal peak-trough); slightly milder MTL view
+    severity_vol: 0.10  # illustrative uncertainty calibration — sensitivity-test via sweep
   events:
     - name: "special_assessment"
-      base_cost: 15000
-      expected_year: 8
-      cost_vol: 0.2
+      base_cost: 15000  # illustrative service cost — calibrate to your reserve study
+      expected_year: 8  # illustrative timing
+      cost_vol: 0.2  # illustrative uncertainty calibration — sensitivity-test via sweep
 
 house:
-  initial_value: 550000
-  value_growth_rate: 0.02
-  annual_maintenance_rate: 0.012
+  initial_value: 550000  # scenario-specific market input
+  value_growth_rate: 0.02  # real; illustrative base drift — demographic tilt layered by the prior
+  annual_maintenance_rate: 0.012  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
   price_shock:
-    annual_hazard: 0.03
-    severity_mean: 0.20
-    severity_vol: 0.10
+    annual_hazard: 0.03  # illustrative uncertainty calibration — sensitivity-test via sweep
+    severity_mean: 0.20  # TREB 1989–96 anchor ≈ 0.25 mean severity (−27.6% nominal peak-trough); slightly milder MTL view
+    severity_vol: 0.10  # illustrative uncertainty calibration — sensitivity-test via sweep
   events:
     - name: "roof_replacement"
-      base_cost: 20000
-      expected_year: 12
-      cost_vol: 0.15
+      base_cost: 20000  # illustrative service cost — calibrate to your component inventory
+      expected_year: 12  # illustrative service life — calibrate to your reserve study
+      cost_vol: 0.15  # illustrative uncertainty calibration — sensitivity-test via sweep
 
 rent:
-  monthly_rent: 2400
-  rent_escalation_rate: 0.025
-  invested_down_payment: 145000
-  investment_return_rate: 0.05
+  monthly_rent: 2400  # scenario-specific market input
+  rent_escalation_rate: 0.025  # real; FP Canada 2026 shelter ≈ 1.0% real + NBER/TAL ≈ 0.0% real for QC continuing tenants — aggressive market view (≥2%/yr real), justify for your market
+  invested_down_payment: 145000  # scenario-specific input (not capital-equalized here)
+  investment_return_rate: 0.05  # real; within FP Canada 2026 equity range (≈4.2% typical, ≈5.2% upper) — equity-tilted; engine default 0.03 (see src/hde/anchors.py)
 
 simulation:
   num_sims: 5000

@@ -95,6 +95,7 @@ full-suite invocation.
 - **Scenario names** are sanitized via `Path(name).name` before joining figure paths.
 - **sweep_param** whitelist has 24 paths; rent paths require `spec.rent is not None`.
 - **Breakdown keys** centralized as `CONDO_BREAKDOWN_KEYS`, `HOUSE_BREAKDOWN_KEYS`, `RENT_BREAKDOWN_KEYS` frozensets.
+- **Anchors doctrine** — `src/hde/anchors.py` is the single source of truth for every numeric engine default; an uncited default is a defect (`AnchorError` at import). Re-anchoring a default requires a `replaces` note. Examples cite sources inline or mark values `illustrative`; the `defaults_applied` echo carries citation tags.
 
 ## Roadmap
 

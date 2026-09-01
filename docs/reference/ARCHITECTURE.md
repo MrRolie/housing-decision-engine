@@ -11,6 +11,7 @@ This document describes the high-level architecture of the `cvh_cost` package, a
 ```text
 src/cvh_cost/
 ├── __init__.py       # Package exports
+├── anchors.py        # Cited engine defaults — single source of truth (provenance)
 ├── models.py         # Dataclasses for parameters and results
 ├── pv.py             # Present value calculation utilities
 ├── deterministic.py  # Deterministic PV calculations
@@ -21,6 +22,23 @@ src/cvh_cost/
 ```
 
 ## Module Responsibilities
+
+### `anchors.py`
+
+Parameter provenance — the single source of truth for every numeric engine
+default. Dataclass defaults (`models.py`) and parser defaults (`config.py`) both
+read from the frozen `Anchor` registry here, with the three-way pin
+(anchors ↔ models ↔ config) enforced by tests. Each anchor carries
+value + as_of + source + rationale + band; an empty citation field or a value
+outside its own band raises `AnchorError` at import time, so an uncited default
+is a defect rather than a review comment. The reporting "defaults applied" echo
+appends each anchor's citation tag (e.g. `[FP Canada 2026 PAG]`).
+
+Relatedly, `market_scenario.py` carries a time-anchor guard:
+`time_anchor_violations(current_year, constants_as_of)` flags a wall clock past
+`START_CALENDAR_YEAR = 2026` and any `data_vintage.constants_as_of` more than a
+year from it (or unparseable) — the latter hard-fails `load_scenario_prior`,
+while the CLI/MCP surface the staleness warning.
 
 ### `models.py`
 

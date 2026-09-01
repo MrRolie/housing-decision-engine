@@ -1,54 +1,83 @@
 # Advanced Configuration Example
 # A more comprehensive scenario with multiple events, reserves, correlations, and hazard/lognormal events
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
+#
+#   discount_rate 0.035 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   inflation_rate 0.025 .............. FP Canada 2026 long-term inflation planning guideline is 2.1%;
+#                                      this example rounds up to 2.5% — a mildly conservative choice
+#   inflation_vol 0.010 ............... illustrative uncertainty calibration — sensitivity-test via sweep
+#   escalation/growth rates (all real; nominal mode adds inflation on top):
+#     fee_escalation_rate 0.015 ....... FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real is
+#                                      the planning reference — 1.5% real is a deliberate above-reference
+#                                      aging-building view
+#     recurring escalation 0.01–0.03 .. same FP Canada reference; values above ~1% real are deliberate
+#                                      local/aging views (e.g. insurance hard market)
+#     value_growth_rate 0.02 / 0.03 ... illustrative market view — no defensible universal long-run real
+#                                      appreciation default; for ISQ-grounded demographic drift see
+#                                      market_scenario (showcase_demographic_prior.yaml)
+#     reserve_growth_rate 0.02 ........ illustrative; nearest planning reference is FP Canada 2026 fixed
+#                                      income 3.2% nominal ≈ 1.1% real — 2% real is optimistic
+#   annual_maintenance_rate 0.009 ..... NAHB 2019 (Table 2): routine ≈ 0.6% of value/yr, narrow definition; 1%-rule budgeting family
+#   maintenance_curve 0.007→0.018 ..... NAHB 2019 anchor; curve shape is an illustrative age-condition profile
+#   event base costs / expected_year / hazard_* . illustrative service lives/costs — calibrate to your
+#                                      reserve study or component inventory
+#   cost_vol / *_vol / corr_* ......... illustrative uncertainty calibration — sensitivity-test via sweep
+#
+# Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 30
-discount_rate: 0.035
+discount_rate: 0.035  # illustrative — personal time-preference, sanity band [0.02, 0.06]
 
 economic:
   mode: nominal
-  inflation_rate: 0.025
-  inflation_vol: 0.010
+  inflation_rate: 0.025  # FP Canada 2026 long-term guideline is 2.1%; example rounds up — conservative
+  inflation_vol: 0.010  # illustrative uncertainty calibration — sensitivity-test via sweep
 
 condo:
-  monthly_fee: 550
-  fee_escalation_rate: 0.015  # real growth above inflation
-  initial_value: 420000
-  value_growth_rate: 0.02
+  monthly_fee: 550  # scenario-specific market input
+  fee_escalation_rate: 0.015  # real growth above inflation  # FP Canada 2026 shelter ≈ 1.0% real reference; above-reference aging-building view
+  initial_value: 420000  # scenario-specific market input
+  value_growth_rate: 0.02  # real; illustrative market view — for demographic drift see showcase example
   all_cash: true
-  reserve_contribution_rate: 0.30
-  reserve_initial_balance: 15000
-  reserve_growth_rate: 0.02
+  reserve_contribution_rate: 0.30  # illustrative governance choice (share of fee flowing to reserves)
+  reserve_initial_balance: 15000  # scenario-specific input
+  reserve_growth_rate: 0.02  # real; illustrative — nearest reference FP Canada 2026 fixed income ≈ 1.1% real; optimistic
   events:
     - name: "special_assessment_exterior"   # Hazard-style special assessment with fat-tailed costs
-      base_cost: 8000
-      expected_year: 12
+      base_cost: 8000  # illustrative service cost — calibrate to your reserve study
+      expected_year: 12  # illustrative timing
       timing_model: hazard
-      hazard_base: 0.05
-      hazard_growth: 0.03
-      hazard_start_year: 8
-      min_year: 8
-      max_year: 18
-      cost_vol: 0.35
+      hazard_base: 0.05  # illustrative uncertainty calibration — sensitivity-test via sweep
+      hazard_growth: 0.03  # illustrative uncertainty calibration
+      hazard_start_year: 8  # illustrative timing
+      min_year: 8  # illustrative timing window
+      max_year: 18  # illustrative timing window
+      cost_vol: 0.35  # illustrative uncertainty calibration — sensitivity-test via sweep
       cost_distribution: lognormal
     - name: "special_assessment_amenities"   # Jitter-style
-      base_cost: 5000
-      expected_year: 18
-      timing_std_years: 2
-      cost_vol: 0.25
+      base_cost: 5000  # illustrative service cost — calibrate to your reserve study
+      expected_year: 18  # illustrative timing
+      timing_std_years: 2  # illustrative timing uncertainty
+      cost_vol: 0.25  # illustrative uncertainty calibration
   other_recurring_costs:
     - name: "unit_insurance"
-      annual_amount: 600
-      escalation_rate: 0.02
+      annual_amount: 600  # scenario-specific market input
+      escalation_rate: 0.02  # real; FP Canada 2026 shelter ≈ 1.0% real reference — above-reference (insurance hard-market) view
     - name: "parking_fee"
-      annual_amount: 1200
-      escalation_rate: 0.01
+      annual_amount: 1200  # scenario-specific market input
+      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
 
 house:
-  initial_value: 500000
-  value_growth_rate: 0.03
-  annual_maintenance_rate: 0.009
+  initial_value: 500000  # scenario-specific market input
+  value_growth_rate: 0.03  # real; illustrative market view — for demographic drift see showcase example
+  annual_maintenance_rate: 0.009  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
-  maintenance_curve:
+  maintenance_curve:  # NAHB 2019 anchor (~0.5% routine); shape is an illustrative age-condition profile
     - year: 1
       rate: 0.007
     - year: 15
@@ -57,63 +86,63 @@ house:
       rate: 0.018
   events:
     - name: "roof_replacement"      # Hazard/lognormal with rising probability after year 18
-      base_cost: 14000
-      expected_year: 22
+      base_cost: 14000  # illustrative service cost — calibrate to your component inventory
+      expected_year: 22  # illustrative service life — calibrate to your reserve study
       timing_model: hazard
-      hazard_base: 0.03
-      hazard_growth: 0.04
-      hazard_start_year: 18
-      min_year: 15
-      max_year: 28
-      cost_vol: 0.30
+      hazard_base: 0.03  # illustrative uncertainty calibration — sensitivity-test via sweep
+      hazard_growth: 0.04  # illustrative uncertainty calibration
+      hazard_start_year: 18  # illustrative timing
+      min_year: 15  # illustrative timing window
+      max_year: 28  # illustrative timing window
+      cost_vol: 0.30  # illustrative uncertainty calibration — sensitivity-test via sweep
       cost_distribution: lognormal
     - name: "hvac_replacement"
-      base_cost: 5000
-      expected_year: 15
-      timing_std_years: 2
-      min_year: 10
-      max_year: 20
-      cost_vol: 0.20
+      base_cost: 5000  # illustrative service cost — calibrate to your component inventory
+      expected_year: 15  # illustrative service life
+      timing_std_years: 2  # illustrative timing uncertainty
+      min_year: 10  # illustrative timing window
+      max_year: 20  # illustrative timing window
+      cost_vol: 0.20  # illustrative uncertainty calibration
     - name: "water_heater"
-      base_cost: 1200
-      expected_year: 12
-      timing_std_years: 1.5
-      cost_vol: 0.15
+      base_cost: 1200  # illustrative service cost — calibrate to your component inventory
+      expected_year: 12  # illustrative service life
+      timing_std_years: 1.5  # illustrative timing uncertainty
+      cost_vol: 0.15  # illustrative uncertainty calibration
       cost_distribution: normal
     - name: "appliance_refresh"
-      base_cost: 2500
-      expected_year: 10
-      timing_std_years: 1
-      cost_vol: 0.20
+      base_cost: 2500  # illustrative service cost — calibrate to your component inventory
+      expected_year: 10  # illustrative service life
+      timing_std_years: 1  # illustrative timing uncertainty
+      cost_vol: 0.20  # illustrative uncertainty calibration
     - name: "exterior_paint"
-      base_cost: 1500
-      expected_year: 20
-      timing_std_years: 3
-      cost_vol: 0.15
+      base_cost: 1500  # illustrative service cost — calibrate to your component inventory
+      expected_year: 20  # illustrative service life
+      timing_std_years: 3  # illustrative timing uncertainty
+      cost_vol: 0.15  # illustrative uncertainty calibration
     - name: "driveway_repair"
-      base_cost: 3000
-      expected_year: 30
-      timing_std_years: 3
-      cost_vol: 0.30
+      base_cost: 3000  # illustrative service cost — calibrate to your component inventory
+      expected_year: 30  # illustrative service life
+      timing_std_years: 3  # illustrative timing uncertainty
+      cost_vol: 0.30  # illustrative uncertainty calibration
   other_recurring_costs:
     - name: "home_insurance"
-      annual_amount: 1200
-      escalation_rate: 0.03
+      annual_amount: 1200  # scenario-specific market input
+      escalation_rate: 0.03  # real; well above FP Canada 2026 shelter ≈ 1.0% real reference — deliberate insurance hard-market view
     - name: "landscaping"
-      annual_amount: 1000
-      escalation_rate: 0.01
+      annual_amount: 1000  # scenario-specific market input
+      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
     - name: "snow_removal"
-      annual_amount: 350
-      escalation_rate: 0.01
+      annual_amount: 350  # scenario-specific market input
+      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
 
 simulation:
   num_sims: 15000
   random_seed: 12345
-  house_maintenance_vol: 0.25
-  condo_fee_vol: 0.08
-  other_cost_vol: 0.12
-  corr_inflation_house: 0.40
-  corr_inflation_condo: 0.50
-  corr_inflation_other: 0.35
-  corr_inflation_event_cost: 0.25
+  house_maintenance_vol: 0.25  # illustrative uncertainty calibration — sensitivity-test via sweep
+  condo_fee_vol: 0.08  # illustrative uncertainty calibration — sensitivity-test via sweep
+  other_cost_vol: 0.12  # illustrative uncertainty calibration — sensitivity-test via sweep
+  corr_inflation_house: 0.40  # illustrative uncertainty calibration — sensitivity-test via sweep
+  corr_inflation_condo: 0.50  # illustrative uncertainty calibration — sensitivity-test via sweep
+  corr_inflation_other: 0.35  # illustrative uncertainty calibration — sensitivity-test via sweep
+  corr_inflation_event_cost: 0.25  # illustrative uncertainty calibration — sensitivity-test via sweep
   shock_model: lognormal

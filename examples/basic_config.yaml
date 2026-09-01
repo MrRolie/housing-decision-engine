@@ -1,36 +1,58 @@
 # Basic Configuration Example
 # A simple scenario for condo vs house cost comparison
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
+#
+#   discount_rate 0.03 ............ illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   inflation_rate 0.0 ............ inert in real mode (kept explicit for pedagogy)
+#   fee_escalation_rate 0.02 ...... real; FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real
+#                                   is the planning reference — 2% real is a deliberate
+#                                   aging-building view, above that reference
+#   value_growth_rate 0.01 ........ illustrative market view — no defensible universal long-run
+#                                   real appreciation default; for ISQ-grounded demographic drift
+#                                   see market_scenario (showcase_demographic_prior.yaml)
+#   annual_maintenance_rate 0.012 . NAHB 2019 (Table 2): routine maintenance ≈ 0.6% of value/yr (narrow AHS definition);
+#                                   "1% rule" budgeting family (investopedia.com)
+#   roof base_cost / timing ...... illustrative service lives/costs — calibrate to your reserve
+#                                   study or component inventory
+#   cost_vol / *_vol ............. illustrative uncertainty calibration — sensitivity-test via sweep
+#
+# Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 20
-discount_rate: 0.03
+discount_rate: 0.03  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
 
 economic:
   mode: real
-  inflation_rate: 0.0
+  inflation_rate: 0.0  # ignored in real mode — all rates below are real; set >0 only in nominal mode
 
 condo:
-  monthly_fee: 450
-  fee_escalation_rate: 0.02
-  initial_value: 350000
+  monthly_fee: 450  # scenario-specific market input
+  fee_escalation_rate: 0.02  # real; FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real — above-reference aging-building view
+  initial_value: 350000  # scenario-specific market input
   all_cash: true
   events: []
   other_recurring_costs: []
 
 house:
-  initial_value: 400000
-  value_growth_rate: 0.01
-  annual_maintenance_rate: 0.012
+  initial_value: 400000  # scenario-specific market input
+  value_growth_rate: 0.01  # real; illustrative market view — for demographic drift see showcase example
+  annual_maintenance_rate: 0.012  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
   events:
     - name: "roof"
-      base_cost: 10000
-      expected_year: 20
-      timing_std_years: 3
-      cost_vol: 0.25
+      base_cost: 10000  # illustrative service cost — calibrate to your component inventory
+      expected_year: 20  # illustrative service life — calibrate to your reserve study
+      timing_std_years: 3  # illustrative timing uncertainty
+      cost_vol: 0.25  # illustrative uncertainty calibration — sensitivity-test via sweep
   other_recurring_costs: []
 
 simulation:
   num_sims: 10000
   random_seed: 42
-  house_maintenance_vol: 0.30
-  condo_fee_vol: 0.05
+  house_maintenance_vol: 0.30  # illustrative uncertainty calibration — sensitivity-test via sweep
+  condo_fee_vol: 0.05  # illustrative uncertainty calibration — sensitivity-test via sweep
