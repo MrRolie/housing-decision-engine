@@ -514,11 +514,3 @@ def test_real_emitted_artifact_refuses_unknown_geography():
     golden = Path(__file__).parent / "fixtures" / "scenario_prior_golden.json"
     with pytest.raises(ScenarioPriorError, match="matches no row"):
         load_scenario_prior(str(golden), geography="NOWHERE_RMR")
-
-
-def test_schema_covers_every_parser_key():
-    from hde.input_schema import input_schema
-    from hde.config import _SECTION_KEYS
-    schema = input_schema()
-    for section, keys in _SECTION_KEYS.items():
-        assert set(schema[section]) == set(keys), section

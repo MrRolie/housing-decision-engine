@@ -12,30 +12,51 @@ from .config import _SECTION_KEYS
 
 _NOMINAL_PLANNING = ANCHORS["economic.inflation_rate.nominal_planning"]
 
-# key -> (required?, note) per section; top-level scalars included as a section.
+# key -> (required?, note[, required_if]) per section; top-level scalars AND the
+# section blocks themselves live under "top". `required` means "required when the
+# block is present"; `required_if` states a conditional requirement in the
+# validator's own words so the schema and the refusal can never disagree.
 _NOTES: Dict[str, Dict[str, Any]] = {
     "top": {
         "years": (True, "analysis horizon in years (>=1)"),
         "discount_rate": (True, "annual discount rate, DECIMAL (0.05 = 5%); "
                                 "real terms if economic.mode=real (default)"),
+        # Section blocks: all optional, but at least one option must be present;
+        # a key marked required inside a block is required only when the block is.
+        "condo": (False, "optional block — at least ONE of condo / house / rent must be "
+                         "present; keys marked required apply only when the block is present"),
+        "house": (False, "optional block — at least ONE of condo / house / rent must be present"),
+        "rent": (False, "optional block — at least ONE of condo / house / rent must be present"),
+        "income": (False, "optional block; enables affordability ratios"),
+        "simulation": (False, "optional block; Monte Carlo + uncertainty knobs"),
+        "economic": (False, "optional block; real (default) vs nominal mode"),
+        "market_scenario": (False, "optional block; demographic prior (path + geography)"),
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
         "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
                                        "neutral, no universal long-run real default; set "
                                        "your view or a market_scenario prior"),
-        "monthly_fee": (False, "condo fee, $/month; default 0"),
+        "monthly_fee": (True, "condo fee, $/month — REQUIRED whenever a condo: block is "
+                             "present; use 0 for a fee-free unit"),
         "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
-        "down_payment": (False, "with mortgage_rate+term: capital structure"),
-        "mortgage_rate": (False, "annual rate, decimal"),
-        "mortgage_term_years": (False, "amortization term"),
-        "all_cash": (False, "no financing; XOR with mortgage fields"),
+        "down_payment": (False, "$ paid at purchase; with mortgage_rate + mortgage_term_years "
+                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
+                                "a Canadian posted rate is semi-annually compounded — convert: "
+                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026); "
                                        "dominates short horizons"),
         "events": (False, "list of {name, base_cost, expected_year, ...}"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
+        "reserve_contribution_rate": (False, "fraction of each year's fees set aside into the "
+                                             "reserve fund; default 0 = reserve not modelled"),
+        "reserve_initial_balance": (False, "$ in the reserve fund at year 0; default 0"),
+        "reserve_growth_rate": (False, "annual growth on the reserve balance, decimal; default 0"),
     },
     "house": {
         "initial_value": (True, "purchase price in DOLLARS"),
@@ -46,10 +67,13 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                             "maintenance modelled (neutral, warns when omitted); "
                                             "NAHB 2019 AHS routine ≈ 0.6% of value/yr"),
         "maintenance_curve": (False, "list of {year, rate} overrides"),
-        "down_payment": (False, "with mortgage_rate+term: capital structure"),
-        "mortgage_rate": (False, "annual rate, decimal"),
-        "mortgage_term_years": (False, "amortization term"),
-        "all_cash": (False, "no financing; XOR with mortgage fields"),
+        "down_payment": (False, "$ paid at purchase; with mortgage_rate + mortgage_term_years "
+                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
+                                "a Canadian posted rate is semi-annually compounded — convert: "
+                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026)"),
         "events": (False, "list of {name, base_cost, expected_year, ...}"),
@@ -75,7 +99,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
     },
     "income": {
-        "annual_income": (False, "enables affordability reporting"),
+        "annual_income": (True, "$/year — REQUIRED whenever an income: block is present; "
+                                "the block itself is optional (omit it to skip affordability)"),
         "income_growth_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 PAG "
                                         "salary growth)"),
         "affordability_threshold": (False, "cost/income ratio; DEFAULT 0.32 (legacy GDS "
@@ -87,8 +112,19 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     "simulation": {
         "num_sims": (False, "Monte Carlo paths; default 10,000"),
         "random_seed": (False, "default 42 — same seed, same answer"),
-        "house_maintenance_vol": (False, "uncertainty knobs: all default 0 = "
-                                         "single-path run, NOT a forecast"),
+        "house_maintenance_vol": (False, "annual vol of house maintenance (lognormal "
+                                         "multiplicative shock); uncertainty knobs all "
+                                         "default 0 = single-path run, NOT a forecast"),
+        "condo_fee_vol": (False, "annual vol of condo fees; default 0 (see house_maintenance_vol)"),
+        "other_cost_vol": (False, "annual vol of other recurring costs; default 0"),
+        "rent_escalation_vol": (False, "vol of the rent escalation rate per path; default 0"),
+        "investment_return_vol": (False, "vol of the renter's investment return per path; default 0"),
+        "corr_inflation_house": (False, "correlation of house-maintenance shocks with the "
+                                        "inflation shock, [-1, 1]; default 0; inert unless "
+                                        "economic.inflation_vol > 0"),
+        "corr_inflation_condo": (False, "correlation of condo-fee shocks with inflation, [-1, 1]; default 0"),
+        "corr_inflation_other": (False, "correlation of other-cost shocks with inflation, [-1, 1]; default 0"),
+        "corr_inflation_event_cost": (False, "correlation of event-cost shocks with inflation, [-1, 1]; default 0"),
         "shock_model": (False, '"lognormal" (default) or "normal"'),
     },
     "market_scenario": {
@@ -103,13 +139,18 @@ def input_schema() -> dict:
     sections: Dict[str, Any] = {}
     for section, keys in _SECTION_KEYS.items():
         notes = _NOTES.get(section, {})
-        sections[section] = {
-            key: {
-                "required": bool(notes.get(key, (False, ""))[0]),
-                "note": notes.get(key, (False, ""))[1] or "see docs/examples",
+        block: Dict[str, Any] = {}
+        for key in sorted(keys):
+            required, note, *rest = notes.get(key, (False, ""))
+            entry: Dict[str, Any] = {
+                "required": bool(required),
+                "note": note or "see examples/README.md",
             }
-            for key in sorted(keys)
-        }
+            if rest and rest[0]:
+                # conditional requirement, quoting the validator's own sentence
+                entry["required_if"] = rest[0]
+            block[key] = entry
+        sections[section] = block
     sections["top_level"] = {
         key: {"required": req, "note": note}
         for key, (req, note) in sorted(_NOTES["top"].items())

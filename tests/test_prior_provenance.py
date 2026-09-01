@@ -69,6 +69,17 @@ class TestDescribeIsFileDerived:
         assert line.startswith("Source: StatCan 98-10-0231-01")
         assert "(+1 uncited)" in line and "ScenarioPrior v7" in line
 
+    def test_source_line_compacts_families(self):
+        prior = self._prior(source_hashes={
+            "pop-as-rmr-base.xlsx": {}, "pop-as-ra-base.xlsx": {}, "compo-rmr-base.xlsx": {},
+            "census_tenure_age_98100231.csv": {}, "hors_aligned_csd_98100232.json": {},
+            "headship_by_age.json": {},
+        })
+        line = prior.source_line()
+        assert "ISQ arrival flows + ISQ population scenarios" in line
+        assert "StatCan 98-10-0231-01, 98-10-0232-01" in line
+        assert "derived" not in line and line.count("ISQ") == 2
+
     def test_provenance_block_carries_the_vintage(self):
         block = self._prior().provenance_block()
         assert block["isq_edition"] == "A2026" and block["census_year"] == "1999"

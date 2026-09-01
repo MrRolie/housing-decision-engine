@@ -219,17 +219,27 @@ class LoadedScenarioPrior:
         return out
 
     def source_line(self) -> str:
-        """Plot-footer citation: the primary source families actually present
-        in the file (derived artifacts collapsed into their parents)."""
+        """Plot-footer citation: the primary source FAMILIES actually present
+        in the file, compacted (ISQ workbooks → one entry, StatCan tables →
+        their ids); derived artifacts collapse into their parents."""
         labels = sorted({
             source_key_label(s["key"]) for s in self.sources()
             if not source_key_label(s["key"]).startswith(("derived:", "uncited source:"))
         })
         uncited = sum(1 for s in self.sources() if source_key_label(s["key"]).startswith("uncited source:"))
-        text = "Source: " + (", ".join(labels) if labels else "no pinned sources")
+        isq = sorted({lbl.split(" (")[0] for lbl in labels if lbl.startswith("ISQ ")})
+        statcan = sorted(lbl.removeprefix("StatCan ") for lbl in labels if lbl.startswith("StatCan "))
+        other = [lbl for lbl in labels if not lbl.startswith(("ISQ ", "StatCan "))]
+        families = []
+        if isq:
+            families.append(" + ".join(isq))
+        if statcan:
+            families.append("StatCan " + ", ".join(statcan))
+        families.extend(other)
+        text = "Source: " + (" · ".join(families) if families else "no pinned sources")
         if uncited:
             text += f" (+{uncited} uncited)"
-        return text + f" · demoflow ScenarioPrior v{self.schema_version}"
+        return text + f"\ndemoflow ScenarioPrior v{self.schema_version}"
 
     def describe(self) -> str:
         """One sentence a user can read: what the prior is, its vintage, the
