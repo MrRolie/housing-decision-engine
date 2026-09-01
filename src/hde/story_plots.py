@@ -54,6 +54,7 @@ from .market_scenario import (
     calendar_year_for_sim_year,
 )
 from .models import (
+    compute_verdict,
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
     ComparisonSpec,
@@ -131,32 +132,39 @@ def _save(fig: Figure, out_dir: Path, stem: str, fmt: str) -> Path:
 # Pure computation helpers (unit-tested directly; plots read these)
 # ---------------------------------------------------------------------------
 
-def verdict_sentence(det: ComparisonDeterministicResult, years: int) -> str:
+def verdict_sentence(
+    det: ComparisonDeterministicResult,
+    years: int,
+    mc: Optional[ComparisonMonteCarloResult] = None,
+    *,
+    num_sims: Optional[int] = None,
+    single_path: bool = False,
+) -> str:
     """
-    Act 1 title, as words: e.g. "Renting wins by $84,000 over 25 years".
+    Act 1 title, as words: e.g. "Renting wins by $84,000 over 25 years", or —
+    when the shared decisiveness rule (models.compute_verdict) says the gap is
+    inside the noise — "Too close to call — effectively a tie: …".
 
     The margin is vs the closest competitor (the decision-relevant gap).
     """
-    costs = {
-        key: opt.total_pv
-        for key, opt in (("condo", det.condo), ("house", det.house), ("rent", det.rent))
-        if opt is not None
-    }
-    if not costs:
+    verdict = compute_verdict(det, mc, years=years, single_path=single_path)
+    if verdict is None:
         raise ValueError("no priced options in deterministic result")
-    ranked = sorted(costs.items(), key=lambda kv: kv[1])
-    if len(ranked) == 1:
-        key, pv = ranked[0]
-        return f"Only one option priced: {OPTION_DISPLAY[key]} at ${pv:,.0f} over {years} years"
-    (best_key, best_pv), (runner_key, runner_pv) = ranked[0], ranked[1]
-    margin = runner_pv - best_pv
-    if margin < 0.50:
-        a, b = OPTION_DISPLAY[best_key], OPTION_DISPLAY[runner_key]
-        return f"It is effectively a tie between {a} and {b} over {years} years"
-    return (
-        f"{OPTION_DISPLAY[best_key]} wins by ${margin:,.0f} "
-        f"over {years} years"
+    best = OPTION_DISPLAY[verdict.best]
+    if verdict.runner_up is None:
+        pv = getattr(det, verdict.best).total_pv
+        return f"Only one option priced: {best} at ${pv:,.0f} over {years} years"
+    if verdict.decisive:
+        return f"{best} wins by ${verdict.margin_pv:,.0f} over {years} years"
+    runner = OPTION_DISPLAY[verdict.runner_up].lower()
+    sentence = (
+        f"Too close to call — effectively a tie: {best} edges {runner} by "
+        f"${verdict.margin_pv:,.0f} ({verdict.margin_frac:.1%}) over {years} years"
     )
+    if verdict.rule == "mc_floor":
+        of = f"of {num_sims:,} simulations" if num_sims else "of simulations"
+        sentence += f", cheapest in only {verdict.prob_best:.0%} {of}"
+    return sentence
 
 
 def _verdict_subtitle(spec: ComparisonSpec) -> str:
@@ -483,7 +491,13 @@ def plot_act1_the_answer(
     ax.set_xticks(range(len(keys)))
     ax.set_xticklabels([OPTION_DISPLAY[k] for k in keys])
     ax.set_ylabel("Total cost, present value")
-    ax.set_title(verdict_sentence(det, spec.simulation.years), pad=24)
+    ax.set_title(
+        verdict_sentence(
+            det, spec.simulation.years, mc,
+            num_sims=spec.simulation.num_sims, single_path=single_path_run(spec),
+        ),
+        pad=24,
+    )
     ax.text(
         0.0, 1.01, _verdict_subtitle(spec),
         transform=ax.transAxes, fontsize=12, color="#555555", va="bottom",

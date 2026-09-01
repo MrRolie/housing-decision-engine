@@ -393,6 +393,8 @@ def test_run_comparison_carries_structured_assumptions_and_version():
     assert result["assumptions"]["lines"] == define_scenario("s1", BASIC_CONFIG)["assumptions"]["lines"]
     by_key = {e["key"]: e for e in result["assumptions"]["defaults_applied"]}
     assert by_key["condo.selling_cost_rate"]["anchor"]["short_cite"] == "WOWA 2026"
+    assert result["verdict"]["best"] in {"condo", "house", "rent"}
+    assert isinstance(result["verdict"]["decisive"], bool)
 
 
 def test_sweep_of_anchored_param_attaches_anchor_and_band_flags():

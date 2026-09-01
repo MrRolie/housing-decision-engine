@@ -58,7 +58,10 @@ def _act_sentences(
 
     acts.append((
         "act1_the_answer", "The answer",
-        verdict_sentence(det, years),
+        verdict_sentence(
+            det, years, mc,
+            num_sims=spec.simulation.num_sims, single_path=single_path_run(spec),
+        ),
     ))
 
     paid_curves = {
@@ -244,7 +247,8 @@ def render_story_package(
         generate_story_markdown(
             acts, image_by_stem, command,
             headline=verdict_sentence(
-                deterministic_result, spec.simulation.years,
+                deterministic_result, spec.simulation.years, mc_result,
+                num_sims=spec.simulation.num_sims, single_path=single_path_run(spec),
             ),
             subtitle=_verdict_subtitle(spec),
             prior_line=prior_line,

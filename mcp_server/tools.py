@@ -8,13 +8,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from hde.anchors import ANCHORS, _ECHO_ALIASES
-from hde.config import load_config_dict, validate_config, all_warnings, ConfigValidationError
+from hde.config import load_config_dict, validate_config, all_warnings, single_path_run, ConfigValidationError
 from hde.deterministic import compute_deterministic
 from hde.market_scenario import ScenarioPriorError
 from hde.serialization import (
     anchor_to_dict,
     assumptions_to_dict,
     engine_version,
+    verdict_to_dict,
     det_to_dict as _det_to_dict,
     mc_to_dict as _mc_to_dict,
 )
@@ -25,6 +26,7 @@ from hde.models import (
     ComparisonMonteCarloResult,
     MonteCarloSummary,
     InputError,
+    compute_verdict,
     CONDO_BREAKDOWN_KEYS,
     HOUSE_BREAKDOWN_KEYS,
     RENT_BREAKDOWN_KEYS,
@@ -136,6 +138,14 @@ def run_comparison(scenario_name: str, mode: str = "both",
         "engine_version": engine_version(),
         "warnings": warnings,
         "assumptions": assumptions_to_dict(entry.spec),
+        "verdict": verdict_to_dict(
+            compute_verdict(
+                det_result, mc_result,
+                years=entry.spec.simulation.years,
+                discount_rate=entry.spec.simulation.discount_rate,
+                single_path=single_path_run(entry.spec),
+            ) if det_result is not None else None
+        ),
     }
     if det_result is not None:
         response["deterministic"] = _det_to_dict(det_result)

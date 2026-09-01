@@ -3,7 +3,7 @@ Assumptions
   condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
   house: value growth +2.0%/yr · selling_cost_rate 5.0%
   rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
-  defaults applied: economic.mode='real', economic.inflation_rate=0.0% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
+  defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
 
 Condo  total PV:  $     457,945
   fee_pv: $     188,713
@@ -26,8 +26,9 @@ Rent   total PV:  $     389,342
   other_pv: $           0
   invested_dp_benefit_pv: $    -145,000
 
-Cheapest: Rent saves $68,603 vs Condo
-  ≈ $401/month equivalent
+Cheapest: Rent saves $32,072 vs House (runner-up)
+  ≈ $187/month equivalent
+  decisiveness: P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]
 
 Monte Carlo:
   Condo: mean $481,187  p5 $392,167  p50 $492,550  p95 $561,373

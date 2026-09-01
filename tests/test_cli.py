@@ -118,10 +118,13 @@ class TestJsonContract:
 
     def test_top_level_keys(self, tmp_path, monkeypatch, capsys):
         doc = self._doc(tmp_path, monkeypatch, capsys)
-        assert {"engine_version", "warnings", "assumptions", "deterministic",
-                "monte_carlo"} <= set(doc)
+        assert set(doc) == {"engine_version", "warnings", "assumptions", "verdict",
+                            "deterministic", "monte_carlo"}
         assert doc["engine_version"]
         assert doc["monte_carlo"] is not None
+        assert set(doc["verdict"]) == {"best", "runner_up", "margin_pv", "margin_frac",
+                                       "monthly_equivalent", "prob_best", "decisive",
+                                       "rule", "reason"}
 
     def test_no_monte_carlo_yields_null_not_missing(self, tmp_path, monkeypatch, capsys):
         doc = self._doc(tmp_path, monkeypatch, capsys, ["--no-monte-carlo"])

@@ -52,4 +52,4 @@ Full text report: [report.txt](report.txt)
 - condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
 - house: value growth +2.0%/yr · selling_cost_rate 5.0%
 - rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
-- defaults applied: economic.mode='real', economic.inflation_rate=0.0% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
+- defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]

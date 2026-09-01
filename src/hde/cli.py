@@ -10,10 +10,10 @@ import datetime
 import sys
 from pathlib import Path
 
-from .config import load_config, all_warnings, ConfigValidationError
+from .config import load_config, all_warnings, single_path_run, ConfigValidationError
 from .deterministic import compute_deterministic
 from .market_scenario import ScenarioPriorError
-from .models import InputError
+from .models import InputError, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .reporting import format_text_report
 
@@ -168,11 +168,21 @@ def main() -> int:
         import json as _json
         from .serialization import (
             assumptions_to_dict, det_to_dict, engine_version, mc_to_dict,
+            verdict_to_dict,
         )
+        verdict = None
+        if det_result is not None:
+            verdict = compute_verdict(
+                det_result, mc_result,
+                years=spec.simulation.years,
+                discount_rate=spec.simulation.discount_rate,
+                single_path=single_path_run(spec),
+            )
         doc = {
             "engine_version": engine_version(),
             "warnings": warnings,
             "assumptions": assumptions_to_dict(spec),
+            "verdict": verdict_to_dict(verdict),
             "deterministic": det_to_dict(det_result) if det_result is not None else None,
             "monte_carlo": mc_to_dict(mc_result) if mc_result is not None else None,
         }

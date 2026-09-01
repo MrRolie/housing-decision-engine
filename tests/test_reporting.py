@@ -57,6 +57,33 @@ class TestFormatAssumptions:
         assert not any(ln.startswith("defaults applied:") for ln in lines)
 
 
+class TestVerdictLines:
+    """B.4: the text report quotes the runner-up margin (the decision figure)
+    and states which decisiveness rule applied; a single-path Monte Carlo is
+    stamped 'not a forecast' instead of printing P(x cheapest): 100%."""
+
+    def test_report_quotes_runner_up_margin_and_decisiveness(self):
+        from hde.deterministic import compute_deterministic
+        spec = load_config_dict(FULL_CONFIG)
+        det = compute_deterministic(spec)
+        report = format_text_report(det, None, spec.simulation, spec.economic, spec=spec)
+        pvs = sorted(o.total_pv for o in (det.condo, det.house, det.rent))
+        assert f"${pvs[1] - pvs[0]:,.0f}" in report          # runner-up gap, not costliest
+        assert f"${pvs[2] - pvs[0]:,.0f}" not in report.split("decisiveness")[0]
+        assert "decisiveness:" in report and "hde verdict rule" in report
+
+    def test_single_path_monte_carlo_is_stamped_not_certain(self):
+        from hde.deterministic import compute_deterministic
+        from hde.monte_carlo import run_monte_carlo
+        spec = load_config_dict({**FULL_CONFIG, "simulation": {"num_sims": 30}})
+        det = compute_deterministic(spec)
+        mc = run_monte_carlo(spec)
+        report = format_text_report(det, mc, spec.simulation, spec.economic, spec=spec)
+        assert "not a forecast" in report
+        assert "100.0%" not in report
+        assert "single-path" in report.split("decisiveness:")[1].split("\n")[0]
+
+
 class TestTextReportEchoHeader:
     def test_report_with_spec_carries_assumption_header(self):
         spec = load_config_dict(FULL_CONFIG)

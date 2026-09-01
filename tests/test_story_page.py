@@ -27,6 +27,7 @@ from hde.story_page import (
     generate_story_markdown,
     render_story_package,
 )
+from hde.config import single_path_run
 from hde.story_plots import verdict_sentence
 
 from tests.test_story_plots import GOLDEN_PRIOR, _spec
@@ -62,8 +63,13 @@ class TestStoryMarkdown:
         assert positions == sorted(positions), "acts must appear in order"
 
     def test_verdict_sentence_present(self, tmp_path):
-        spec, det, _, _, _, story = _render(tmp_path)
-        assert verdict_sentence(det, spec.simulation.years) in story
+        spec, det, mc, _, _, story = _render(tmp_path)
+        # the headline is the SAME sentence verdict_sentence builds from the
+        # same inputs (det + mc + single-path flag) — one verdict, every surface
+        assert verdict_sentence(
+            det, spec.simulation.years, mc,
+            num_sims=spec.simulation.num_sims, single_path=single_path_run(spec),
+        ) in story
 
     def test_referenced_images_exist(self, tmp_path):
         *_, package, story = _render(tmp_path)

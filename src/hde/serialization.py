@@ -23,6 +23,7 @@ from .models import (
     ComparisonMonteCarloResult,
     ComparisonSpec,
     MonteCarloSummary,
+    Verdict,
 )
 
 
@@ -153,6 +154,16 @@ def assumptions_to_dict(spec: ComparisonSpec) -> Dict[str, Any]:
         "lines": format_assumptions(spec),
         "defaults_applied": entries,
     }
+
+
+# ---------------------------------------------------------------------------
+# Verdict
+# ---------------------------------------------------------------------------
+
+def verdict_to_dict(verdict: Optional[Verdict]) -> Optional[Dict[str, Any]]:
+    """The shared verdict (models.compute_verdict), JSON-shaped; None when no
+    option was priced (e.g. a Monte-Carlo-only run)."""
+    return dataclasses.asdict(verdict) if verdict is not None else None
 
 
 # ---------------------------------------------------------------------------

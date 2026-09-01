@@ -349,6 +349,49 @@ ANCHORS: Dict[str, Anchor] = {
         retrieved_on="2026-09-01",
         kind="reference",
     ),
+    # --- Verdict decisiveness rule (operator-ruled 2026-09-01, readiness plan
+    #     B.2). Derivations, no external source: they define what the engine
+    #     is willing to call a clear winner. ---
+    "verdict.prob_floor": Anchor(
+        name="verdict.prob_floor",
+        value=0.65,
+        as_of="2026",
+        source="hde verdict rule — derivation (operator-ruled 2026-09-01)",
+        url="none — derivation",
+        rationale=(
+            "When Monte Carlo ran with real uncertainty, the deterministic winner "
+            "is called a clear winner only if it is cheapest in at least 65% of "
+            "simulated futures (≈ 2:1 odds). Below that the user's own stated "
+            "uncertainty says the ranking can flip, so the verdict reads 'too "
+            "close to call' and quotes the probability. Band: 55% is barely "
+            "better than a coin flip; 80% would demand near-certainty from "
+            "inputs the user only estimated."
+        ),
+        band=(0.55, 0.80),
+        short_cite="hde verdict rule",
+        kind="derivation",
+    ),
+    "verdict.tie_band": Anchor(
+        name="verdict.tie_band",
+        value=0.05,
+        as_of="2026",
+        source="hde verdict rule — derivation (operator-ruled 2026-09-01)",
+        url="none — derivation",
+        rationale=(
+            "Fallback when no Monte Carlo ran or every uncertainty input is off: "
+            "the winner must beat the runner-up by at least 5% of its own total "
+            "PV. Derivation (measured 2026-09-01 on examples/basic_config.yaml "
+            "with house.initial_value 460000): sweeping ONE defaulted input, "
+            "selling_cost_rate, across its anchor band 0.03–0.08 moves the margin "
+            "by 2.25% of the winner's PV and inverts the Monte Carlo ranking at "
+            "the band top; a typical config defaults two or three such inputs, "
+            "so a margin inside ~5% sits within the defaults' own uncertainty "
+            "and is not a decision."
+        ),
+        band=(0.02, 0.08),
+        short_cite="hde verdict rule",
+        kind="derivation",
+    ),
 }
 
 

@@ -12,6 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .anchors import ANCHORS
+from .pv import pv_to_monthly_savings
 
 
 @dataclass
@@ -424,3 +425,102 @@ class ComparisonMonteCarloResult:
     affordability_mc: Optional[AffordabilityMCReport] = None
     # S4b provenance: present only when a ScenarioPrior was loaded
     market_scenario: Optional[Dict[str, str]] = None
+
+
+# ----- Verdict (readiness plan B.1, 2026-09-01) -----
+
+@dataclass(frozen=True)
+class Verdict:
+    """
+    The decision, computed ONCE and consumed by every surface (story headline,
+    text report, --json, MCP): which option is cheapest, by how much versus the
+    runner-up (the decision-relevant gap, never the costliest), and whether
+    that gap is decisive under the rule that applied.
+
+    rule: "single_option" | "mc_floor" | "margin_band"
+    reason: one sentence stating the rule, the measured quantity and the
+        anchored threshold, e.g. "P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]".
+    """
+    best: str
+    runner_up: Optional[str]
+    margin_pv: float
+    margin_frac: float
+    monthly_equivalent: Optional[float]
+    prob_best: Optional[float]
+    decisive: bool
+    rule: str
+    reason: str
+
+
+def compute_verdict(
+    det: "ComparisonDeterministicResult",
+    mc: Optional["ComparisonMonteCarloResult"] = None,
+    *,
+    years: int,
+    discount_rate: float = 0.0,
+    single_path: bool = False,
+) -> Optional[Verdict]:
+    """
+    Decisiveness rule (operator-ruled 2026-09-01; constants in anchors.py):
+      - primary, when Monte Carlo ran with real uncertainty (``mc`` given and
+        not ``single_path``) and carries a probability for the deterministic
+        winner: decisive ⇔ P(best cheapest) ≥ verdict.prob_floor;
+      - fallback otherwise: decisive ⇔ margin / |best PV| ≥ verdict.tie_band.
+    Returns None when no option is priced.
+    """
+    costs = {
+        key: opt.total_pv
+        for key, opt in (("condo", det.condo), ("house", det.house), ("rent", det.rent))
+        if opt is not None
+    }
+    if not costs:
+        return None
+    ranked = sorted(costs.items(), key=lambda kv: kv[1])
+    best, best_pv = ranked[0]
+    if len(ranked) == 1:
+        return Verdict(best, None, 0.0, 0.0, None, None, True, "single_option",
+                       "only one option priced — nothing to compare")
+    runner_up, runner_pv = ranked[1]
+    margin = runner_pv - best_pv
+    # Fraction of the WINNER's total PV (the ruled tie band is stated that way);
+    # a zero winner PV (net wealth exactly offsetting cost) falls back to the
+    # runner-up's magnitude so the ratio stays finite.
+    denom = abs(best_pv) if best_pv != 0 else abs(runner_pv)
+    margin_frac = margin / denom if denom > 0 else 0.0
+    monthly = (
+        pv_to_monthly_savings(margin, discount_rate, years)
+        if discount_rate > 0 and years > 0 else None
+    )
+
+    prob_best: Optional[float] = None
+    if mc is not None and not single_path:
+        prob_best = getattr(mc, f"prob_{best}_cheapest")
+
+    floor = ANCHORS["verdict.prob_floor"].value
+    band = ANCHORS["verdict.tie_band"].value
+    if prob_best is not None:
+        decisive = prob_best >= floor
+        rule = "mc_floor"
+        reason = (
+            f"P({best} cheapest) = {prob_best:.0%} {'≥' if decisive else '<'} "
+            f"{floor:.0%} floor [hde verdict rule]"
+        )
+        if not decisive:
+            others = {
+                k: getattr(mc, f"prob_{k}_cheapest") for k in costs if k != best
+            }
+            others = {k: v for k, v in others.items() if v is not None}
+            if others:
+                mc_best = max(others, key=lambda k: others[k])
+                if others[mc_best] > prob_best:
+                    reason += f"; Monte Carlo favours {mc_best} ({others[mc_best]:.1%})"
+    else:
+        decisive = margin_frac >= band
+        rule = "margin_band"
+        why = "single-path run, uncertainty inputs off" if single_path else "no Monte Carlo"
+        reason = (
+            f"margin {margin_frac:.1%} of {best} PV {'≥' if decisive else '<'} "
+            f"{band:.0%} tie band [hde verdict rule] ({why})"
+        )
+    return Verdict(best, runner_up, margin, margin_frac, monthly, prob_best,
+                   decisive, rule, reason)

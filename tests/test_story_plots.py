@@ -114,6 +114,30 @@ class TestVerdictSentence:
         det = _det_from_pvs({"condo": 400_000.0, "rent": 400_000.0})
         assert "tie" in verdict_sentence(det, 15)
 
+    # --- B.3 (readiness plan 2026-09-01): decisiveness is a rule, not a 50-cent epsilon ---
+
+    def test_quarter_percent_margin_reads_as_tie(self):
+        det = _det_from_pvs({"condo": 400_000.0, "rent": 401_000.0})
+        sentence = verdict_sentence(det, 15)
+        assert "tie" in sentence and "wins by" not in sentence
+        assert "$1,000" in sentence and "0.2%" in sentence
+
+    def test_fifteen_percent_margin_still_wins(self):
+        det = _det_from_pvs({"condo": 400_000.0, "rent": 460_000.0})
+        assert verdict_sentence(det, 15).startswith("Buying a condo wins by $60,000")
+
+    def test_coin_flip_monte_carlo_is_not_a_confident_win(self):
+        det = _det_from_pvs({"condo": 400_000.0, "house": 440_000.0})
+        mc = ComparisonMonteCarloResult(prob_condo_cheapest=0.57, prob_house_cheapest=0.43)
+        sentence = verdict_sentence(det, 20, mc=mc, num_sims=10_000)
+        assert "wins by" not in sentence
+        assert "57%" in sentence and "10,000" in sentence
+
+    def test_decisive_monte_carlo_keeps_the_plain_headline(self):
+        det = _det_from_pvs({"condo": 400_000.0, "house": 440_000.0})
+        mc = ComparisonMonteCarloResult(prob_condo_cheapest=0.81, prob_house_cheapest=0.19)
+        assert verdict_sentence(det, 20, mc=mc, num_sims=5_000) == "Buying a condo wins by $40,000 over 20 years"
+
 
 class TestCumulativeCurves:
     def test_net_curves_reconcile_to_total_pv_and_paid_is_gross(self):

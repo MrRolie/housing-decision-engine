@@ -13,7 +13,9 @@ import matplotlib.pyplot as plt
 import matplotlib.figure
 from matplotlib.figure import Figure
 
+from .config import single_path_run
 from .models import (
+    compute_verdict,
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
     ComparisonSpec,
@@ -26,6 +28,9 @@ from .pv import pv_to_monthly_savings
 # The assumption echo lives in the typed serialization core (readiness plan
 # A.1); re-exported here so existing callers keep importing from reporting.
 from .serialization import echo_value as _echo_value, format_assumptions  # noqa: F401
+
+
+_LABEL = {"condo": "Condo", "house": "House", "rent": "Rent"}
 
 
 def format_text_report(
@@ -70,21 +75,27 @@ def format_text_report(
         for k, v in det.rent.breakdown.items():
             lines.append(f"  {k}: ${v:>12,.0f}")
 
-    # Comparison line
-    present_det = [
-        (name, r)
-        for name, r in [("Condo", det.condo), ("House", det.house), ("Rent", det.rent)]
-        if r is not None
-    ]
-    if len(present_det) >= 2:
-        cheapest = min(present_det, key=lambda x: x[1].total_pv)
-        costliest = max(present_det, key=lambda x: x[1].total_pv)
-        diff = costliest[1].total_pv - cheapest[1].total_pv
-        lines.append(f"\nCheapest: {cheapest[0]} saves ${diff:,.0f} vs {costliest[0]}")
-        # Monthly equivalent (using pv_to_monthly_savings if discount_rate > 0)
-        if sim.discount_rate > 0 and sim.years > 0:
-            monthly = pv_to_monthly_savings(diff, sim.discount_rate, sim.years)
-            lines.append(f"  ≈ ${monthly:,.0f}/month equivalent")
+    # Verdict (readiness plan B.4): the SAME computation the story headline
+    # and --json use — runner-up margin, decisiveness rule stated in words.
+    single_path = spec is not None and single_path_run(spec)
+    verdict = compute_verdict(
+        det, mc, years=sim.years, discount_rate=sim.discount_rate,
+        single_path=single_path,
+    )
+    if verdict is not None and verdict.runner_up is not None:
+        best, runner = _LABEL[verdict.best], _LABEL[verdict.runner_up]
+        if verdict.decisive:
+            lines.append(
+                f"\nCheapest: {best} saves ${verdict.margin_pv:,.0f} vs {runner} (runner-up)"
+            )
+        else:
+            lines.append(
+                f"\nToo close to call: {best} edges {runner} by "
+                f"${verdict.margin_pv:,.0f} ({verdict.margin_frac:.1%})"
+            )
+        if verdict.monthly_equivalent is not None:
+            lines.append(f"  ≈ ${verdict.monthly_equivalent:,.0f}/month equivalent")
+        lines.append(f"  decisiveness: {verdict.reason}")
 
     # Affordability
     if det.income_report is not None:
@@ -100,8 +111,13 @@ def format_text_report(
                 exceed_str = str(exceeds) if exceeds else "none"
                 lines.append(f"  {name}: max ratio {max_ratio:.1%}  years exceeding: {exceed_str}")
 
-    # MC summary
+    # MC summary — a single-path run (every uncertainty input off) is stamped
+    # 'not a forecast' and its degenerate 100% probabilities are not printed
+    # (audit U3; readiness plan B.4 — the story surface already did this).
     if mc is not None:
+        if single_path:
+            lines.append("\nMonte Carlo: single-path run: all uncertainty inputs off — not a forecast")
+            return "\n".join(lines)
         lines.append("\nMonte Carlo:")
         for name, opt in [("Condo", mc.condo), ("House", mc.house), ("Rent", mc.rent)]:
             if opt is not None:
