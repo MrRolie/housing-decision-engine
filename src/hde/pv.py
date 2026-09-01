@@ -151,8 +151,14 @@ def pv_recurring_with_escalation(
 
 def mortgage_payment(principal: float, rate: float, term_years: int) -> float:
     """
-    Level (constant) annual mortgage payment that amortizes `principal` over
-    `term_years` at annual `rate`. M = P*r / (1 - (1+r)^-T); P/T when r == 0.
+    Level (constant) ANNUAL mortgage payment that amortizes `principal` over
+    `term_years` at EFFECTIVE ANNUAL `rate`. M = P*r / (1 - (1+r)^-T); P/T when r == 0.
+
+    Convention: one payment per year, annual compounding. A Canadian posted
+    mortgage rate is quoted with semi-annual compounding and monthly payments;
+    convert before use: r_eff = (1 + r_posted/2)^2 − 1 (the difference on the
+    annual outlay is ≈ 1.7% at 5%). Stated in the schema note for
+    mortgage_rate and in the figure glossary (docs/reference/ARCHITECTURE.md).
     """
     if term_years <= 0:
         raise ValueError(f"term_years must be positive, got {term_years}")
@@ -181,35 +187,27 @@ def outstanding_balance(
 
 def pv_to_monthly_savings(pv: float, rate: float, n_years: int) -> float:
     """
-    Convert a present value to equivalent monthly savings needed.
-    
-    Calculates how much you'd need to save each month to accumulate
-    the present value amount over n_years at the given rate.
-    Uses standard annuity formula inverted.
-    
-    Args:
-        pv: Present value to fund
-        rate: Annual discount/interest rate
-        n_years: Number of years to save
-    
-    Returns:
-        Monthly savings amount needed
-    
+    The level MONTHLY payment whose present value over n_years equals `pv`
+    (the report's "≈ $/month equivalent" line): an amortizing annuity, not a
+    sinking fund.
+
+    Convention (readiness plan D.4, 2026-09-01): the monthly rate is the
+    effective-annual rate converted exactly, m = (1 + rate)^(1/12) − 1, so the
+    monthly line decomposes the SAME present value the rest of the report
+    discounts at (1 + rate)^-t. (Before 2026-09-01 this used rate/12, which
+    disagreed with the annual figures by ~1%.)
+
+    PMT = pv · m / (1 − (1 + m)^−12n); pv / (12n) when rate == 0.
+
     Example:
-        >>> pv_to_monthly_savings(100_000, 0.03, 20)  # Need $100k PV over 20 years at 3%
-        549.42  # About $549/month
+        >>> round(pv_to_monthly_savings(100_000, 0.03, 20), 2)
+        551.6
     """
     if n_years <= 0 or pv == 0:
         return 0.0
-    
-    # Monthly rate
-    monthly_rate = rate / 12
     n_months = n_years * 12
-    
     if rate == 0:
         return pv / n_months
-    
-    # Annuity payment formula: PMT = PV * r / (1 - (1+r)^-n)
-    payment = pv * monthly_rate / (1 - (1 + monthly_rate) ** -n_months)
-    return payment
+    monthly_rate = (1 + rate) ** (1 / 12) - 1
+    return pv * monthly_rate / (1 - (1 + monthly_rate) ** -n_months)
 

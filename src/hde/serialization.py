@@ -120,6 +120,12 @@ def format_assumptions(
             f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
             f"{spec.rent.investment_return_rate:+.1%}/yr"
         )
+    lines.append(
+        "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and "
+        "other costs escalate before year 1, maintenance from year 1 · mortgage = level "
+        "annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 "
+        "(docs/reference/ARCHITECTURE.md figure glossary)"
+    )
     if prior is not None:
         constants_as_of = prior.data_vintage.get("constants_as_of")
         as_of = f" · constants as of {constants_as_of}" if isinstance(constants_as_of, str) else ""

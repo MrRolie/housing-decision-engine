@@ -514,3 +514,59 @@ def test_report_mentions_financing_lines():
     assert "terminal_equity_pv" in text
     assert "downpayment_pv" in text
     assert "mortgage_pv" in text
+
+
+def test_nominal_mode_affordability_composes_inflation():
+    """D.6: the affordability numerator escalates like the PV engine — in nominal
+    mode every escalation is (1+g)(1+π)−1, so year-N ratios rise with inflation."""
+    from hde.config import load_config_dict
+    base = {
+        "years": 10, "discount_rate": 0.05,
+        "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01},
+        "income": {"annual_income": 90_000, "income_growth_rate": 0.0},
+    }
+    real = compute_deterministic(load_config_dict({**base, "economic": {"mode": "real"}}))
+    nominal = compute_deterministic(load_config_dict(
+        {**base, "economic": {"mode": "nominal", "inflation_rate": 0.02}}))
+    r_real = real.income_report.rent_ratios
+    r_nom = nominal.income_report.rent_ratios
+    assert r_nom[0] == r_real[0]                       # year 1: no escalation yet
+    assert r_nom[-1] > r_real[-1] * 1.15               # year 10: (1.0302/1.01)^9 ≈ 1.19
+
+
+class TestNominalRentOtherCosts:
+    """Readiness plan D (2026-09-01): in nominal mode the rent option's other
+    recurring costs compose inflation like every other escalating flow, and
+    the zero-vol Monte Carlo reproduces the deterministic figure."""
+
+    CFG = {
+        "years": 6,
+        "discount_rate": 0.03,
+        "economic": {"mode": "nominal", "inflation_rate": 0.02},
+        "rent": {
+            "monthly_rent": 2000,
+            "rent_escalation_rate": 0.0,
+            "other_recurring_costs": [
+                {"name": "insurance", "annual_amount": 1200, "escalation_rate": 0.01},
+            ],
+        },
+        "simulation": {"num_sims": 3, "random_seed": 1},
+    }
+
+    def test_other_pv_composes_inflation(self):
+        from hde.config import load_config_dict
+        from hde.pv import pv_recurring_with_escalation
+        spec = load_config_dict(self.CFG)
+        det = compute_deterministic(spec)
+        composed = (1 + 0.01) * (1 + 0.02) - 1
+        expected = pv_recurring_with_escalation(1200, composed, 0.03, 6)
+        assert det.rent.breakdown["other_pv"] == pytest.approx(expected)
+        assert det.rent.breakdown["other_pv"] > pv_recurring_with_escalation(1200, 0.01, 0.03, 6)
+
+    def test_zero_vol_monte_carlo_matches_deterministic(self):
+        from hde.config import load_config_dict
+        from hde.monte_carlo import run_monte_carlo
+        spec = load_config_dict(self.CFG)
+        det = compute_deterministic(spec)
+        mc = run_monte_carlo(spec)
+        assert mc.rent.summary.mean == pytest.approx(det.rent.total_pv)

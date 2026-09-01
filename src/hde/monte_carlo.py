@@ -504,7 +504,10 @@ def _simulate_rent_pv_once(
             annual = cost.annual_amount * shock
         else:
             annual = cost.annual_amount
-        other_pv += pv_recurring_with_escalation(annual, cost.escalation_rate, dr, sim.years)
+        esc = cost.escalation_rate
+        if econ.mode == "nominal":  # compose inflation as the deterministic rent model does
+            esc = (1 + esc) * (1 + econ.inflation_rate) - 1
+        other_pv += pv_recurring_with_escalation(annual, esc, dr, sim.years)
 
     # Invested down-payment benefit (reduces net cost of renting).
     if rent.invested_down_payment > 0:

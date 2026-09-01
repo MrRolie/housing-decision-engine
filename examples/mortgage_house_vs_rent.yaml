@@ -1,0 +1,53 @@
+# Mortgage house vs rent — the leveraged path
+# A financed house (20% down, 25-year amortization) against renting with the
+# same down payment invested. Every earlier example is all-cash; this one
+# exercises mortgage_pv and the outstanding balance inside terminal_equity_pv.
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
+#
+#   discount_rate 0.03 ............ illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   mortgage_rate 0.0225 .......... FP Canada 2026 borrowing rate 4.4% nominal ⇒ (1.044/1.021)−1 ≈ 2.25% real.
+#                                   REAL mode: a fixed nominal contract deflated by PAG inflation 2.1%.
+#                                   The engine treats mortgage_rate as EFFECTIVE ANNUAL with annual
+#                                   payments; a posted Canadian rate compounds semi-annually —
+#                                   convert first: r_eff = (1 + r_posted/2)^2 − 1.
+#   down_payment 110000 ........... 20% of price — scenario-specific
+#   mortgage_term_years 25 ........ common Canadian amortization — scenario-specific
+#   value_growth_rate 0.01 ........ illustrative market view — see showcase example for demographic drift
+#   annual_maintenance_rate 0.01 .. NAHB 2019 Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
+#   rent_escalation_rate 0.01 ..... FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real
+#   invested_down_payment 110000 .. like-for-like: the renter invests exactly the buyer's down payment
+#   investment_return_rate 0.03 ... FP Canada 2026 PAG 60/40 ≈ 3.0% real
+#   *_vol ......................... illustrative uncertainty calibration — sensitivity-test via sweep
+#
+# Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
+
+years: 20
+discount_rate: 0.03  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
+
+economic:
+  mode: real
+
+house:
+  initial_value: 550000  # scenario-specific market input
+  down_payment: 110000  # 20% — scenario-specific
+  mortgage_rate: 0.0225  # real; FP Canada 2026 borrowing 4.4% nominal deflated by 2.1% inflation
+  mortgage_term_years: 25  # scenario-specific
+  value_growth_rate: 0.01  # real; illustrative market view
+  annual_maintenance_rate: 0.01  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
+
+rent:
+  monthly_rent: 2300  # scenario-specific market input
+  rent_escalation_rate: 0.01  # real; FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real
+  invested_down_payment: 110000  # like-for-like with the buyer's down payment
+  investment_return_rate: 0.03  # real; FP Canada 2026 PAG 60/40
+
+simulation:
+  num_sims: 5000
+  random_seed: 42
+  house_maintenance_vol: 0.30  # illustrative uncertainty calibration — sensitivity-test via sweep
+  rent_escalation_vol: 0.01  # illustrative uncertainty calibration — sensitivity-test via sweep

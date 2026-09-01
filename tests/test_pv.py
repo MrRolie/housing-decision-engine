@@ -198,7 +198,7 @@ class TestPvToMonthlySavings:
         monthly = pv_to_monthly_savings(pv, rate, years)
         
         # Manually compute PV of monthly payments
-        monthly_rate = rate / 12
+        monthly_rate = (1 + rate) ** (1 / 12) - 1   # effective monthly (D.4)
         n_months = years * 12
         reconstructed = monthly * (1 - (1 + monthly_rate) ** -n_months) / monthly_rate
         

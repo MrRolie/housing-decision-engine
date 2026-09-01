@@ -1,9 +1,11 @@
 # Configuration Schema Reference
 
-> **⚠ Out of date — do not write a config from this file.** It predates the rent, income, and
-> mortgage/net-wealth features: a config built exactly to the schema below is now REJECTED
+> **⚠ Partly out of date — do not write a config from the YAML sketches below.** They predate the
+> rent, income, and mortgage/net-wealth features: a config built exactly to them is REJECTED
 > (owned options require `initial_value > 0` and either `all_cash: true` or a mortgage block).
-> Use `examples/*.yaml` as the working reference.
+> The living contract is `uv run hde --print-schema`; `examples/*.yaml` are the working templates.
+> **Current sections:** "Volatility Parameters", "Defaults Summary" (pinned to the registry by
+> `tests/test_docs.py`), and "Validation Rules".
 
 This document describes the YAML configuration format for the `cvh_cost` package.
 
@@ -202,18 +204,20 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | Field | Default | Source |
 |-------|---------|--------|
 | `economic.mode` | "real" | — |
-| `economic.inflation_rate` | 0.0 | FP Canada 2026 PAG |
+| `economic.inflation_rate` | 0.0 | ref: FP Canada 2026 PAG |
 | `economic.inflation_vol` | 0.0 | — |
-| `condo.fee_escalation_rate` | 0.0 | FP Canada 2026 PAG |
+| `condo.fee_escalation_rate` | 0.0 | ref: FP Canada 2026 PAG |
+| `condo.value_growth_rate` | 0.0 | neutral, uncited |
 | `condo.reserve_contribution_rate` | 0.0 | — |
 | `condo.reserve_initial_balance` | 0.0 | — |
 | `condo.reserve_growth_rate` | 0.0 | — |
 | `condo.selling_cost_rate` | 0.05 | WOWA 2026 |
-| `house.value_growth_rate` | 0.0 | neutral, uncited (anchors.py) |
-| `house.annual_maintenance_rate` | 0.0 | — |
+| `house.value_growth_rate` | 0.0 | neutral, uncited |
+| `house.annual_maintenance_rate` | 0.0 | neutral, uncited |
 | `house.maintenance_curve` | [] | — |
 | `house.selling_cost_rate` | 0.05 | WOWA 2026 |
 | `rent.rent_escalation_rate` | 0.01 | FP Canada 2026 PAG |
+| `rent.invested_down_payment` | 0.0 | like-for-like: set explicitly |
 | `rent.investment_return_rate` | 0.03 | FP Canada 2026 PAG |
 | `income.income_growth_rate` | 0.01 | FP Canada 2026 PAG |
 | `income.affordability_threshold` | 0.32 | CMHC GDS/TDS |
@@ -234,22 +238,28 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.house_maintenance_vol` | 0.0 | — |
 | `simulation.condo_fee_vol` | 0.0 | — |
 | `simulation.other_cost_vol` | 0.0 | — |
+| `simulation.rent_escalation_vol` | 0.0 | — |
+| `simulation.investment_return_vol` | 0.0 | — |
 | `simulation.corr_inflation_house` | 0.0 | — |
 | `simulation.corr_inflation_condo` | 0.0 | — |
 | `simulation.corr_inflation_other` | 0.0 | — |
 | `simulation.corr_inflation_event_cost` | 0.0 | — |
 | `simulation.shock_model` | "lognormal" | — |
 
-All engine defaults live in src/hde/anchors.py — the single source of truth;
-every default carries as_of + source + rationale there. Rows marked "—" have no
-registered anchor.
+Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
+source, url, rationale, band, retrieved_on, kind); `uv run hde --print-anchors` prints
+them. `ref:` marks a source that informs the value without stating it; `neutral,
+uncited` is a deliberate zero the engine will not invent a value for (the assumptions
+echo warns when `house.annual_maintenance_rate` is omitted). Rows marked "—" are
+structural or presentation defaults with no evidentiary content. This table is pinned
+to the registry by `tests/test_docs.py`.
 
 ## Validation Rules
 
 The config loader validates:
 
 1. `years >= 1`
-2. `discount_rate >= 0`
+2. `discount_rate >= 0`, with a coherence warning outside `[0, 0.15]` (a decimal/percent typo tripwire; the examples use 0.03–0.05 real)
 3. `num_sims >= 1`
 4. `condo.monthly_fee >= 0`
 5. `house.initial_value >= 0`

@@ -147,31 +147,6 @@ def _event_year_deterministic(event: EventConfig, years: int) -> int:
     return max(1, min(year, years))
 
 
-def _compute_condo_base_pv(
-    condo: CondoParams,
-    sim: SimulationParams,
-) -> float:
-    """
-    Compute PV of condo monthly fees over the analysis horizon.
-
-    If fee_escalation_rate is 0, treats as level annuity.
-    Otherwise, uses growing annuity formula.
-    """
-    annual_fee = condo.monthly_fee * 12
-
-    if condo.fee_escalation_rate == 0:
-        return pv_annuity(annual_fee, sim.discount_rate, sim.years)
-    else:
-        # First year payment includes escalation
-        first_year_fee = annual_fee * (1 + condo.fee_escalation_rate)
-        return pv_growth_annuity(
-            first_year_fee,
-            sim.discount_rate,
-            condo.fee_escalation_rate,
-            sim.years
-        )
-
-
 def _compute_events_pv(
     events: list[EventConfig],
     discount_rate: float,
@@ -194,52 +169,23 @@ def _compute_other_recurring_pv(
     other_costs: list[RecurringOtherCost],
     discount_rate: float,
     years: int,
+    econ: EconomicParams,
 ) -> float:
     """
-    Compute PV of other recurring costs.
+    PV of other recurring costs (rent option): year-t cost = amount × (1+e)^t,
+    with e composed with inflation in nominal mode exactly as the condo/house
+    loops do (readiness plan D, 2026-09-01 — rent's other costs previously
+    skipped inflation in nominal mode, unlike every other escalating flow).
     """
     total_pv = 0.0
     for cost in other_costs:
         total_pv += pv_recurring_with_escalation(
             cost.annual_amount,
-            cost.escalation_rate,
+            _effective_growth_rate(cost.escalation_rate, econ),
             discount_rate,
             years
         )
     return total_pv
-
-
-def _compute_house_base_pv(
-    house: HouseParams,
-    sim: SimulationParams,
-) -> float:
-    """
-    Compute PV of house annual maintenance over the analysis horizon.
-
-    Maintenance in year t = annual_maintenance_rate * value_t
-    where value_t = initial_value * (1 + value_growth_rate)^(t-1)
-
-    This is a growing annuity if value_growth_rate > 0.
-    """
-    # Base annual maintenance at year 0 value
-    base_maintenance = house.annual_maintenance_rate * house.initial_value
-
-    if house.value_growth_rate == 0:
-        return pv_annuity(base_maintenance, sim.discount_rate, sim.years)
-    else:
-        # Year 1 maintenance = base_maintenance * (1 + value_growth_rate)^0 = base_maintenance
-        # Year 2 maintenance = base_maintenance * (1 + value_growth_rate)^1
-        # ...
-        # Year t maintenance = base_maintenance * (1 + value_growth_rate)^(t-1)
-        #
-        # This is equivalent to a growing annuity where the first payment is base_maintenance
-        # and growth rate is value_growth_rate
-        return pv_growth_annuity(
-            base_maintenance,
-            sim.discount_rate,
-            house.value_growth_rate,
-            sim.years
-        )
 
 
 def _compute_condo_option(
@@ -424,7 +370,7 @@ def _compute_rent_option(
     annual_rent = rent.monthly_rent * 12
     rent_pv = pv_recurring_with_escalation(annual_rent, rent_escalation, dr, sim.years)
     events_pv = _compute_events_pv(rent.events, dr, sim.years)
-    other_pv = _compute_other_recurring_pv(rent.other_recurring_costs, dr, sim.years)
+    other_pv = _compute_other_recurring_pv(rent.other_recurring_costs, dr, sim.years, econ)
 
     if rent.invested_down_payment > 0:
         r_inv = rent.investment_return_rate
@@ -490,43 +436,33 @@ def _annual_costs_for_option(
             mort_payment = _mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
             mort_term = params.mortgage_term_years
 
+    # Nominal mode composes inflation into every escalation, exactly as the PV
+    # engine does (readiness plan D.6 — `econ` was accepted and ignored here,
+    # so nominal-mode ratios silently omitted inflation).
+    def _g(rate: float) -> float:
+        return _effective_growth_rate(rate, econ)
+
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
         mort_t = mort_payment if year <= mort_term else 0.0
+        ev_cost = sum(
+            ev.base_cost for ev in params.events
+            if _event_year_deterministic(ev, sim.years) == year
+        )
+        other_cost = sum(
+            c.annual_amount * ((1 + _g(c.escalation_rate)) ** t)
+            for c in params.other_recurring_costs
+        )
         if option_type == "condo":
-            base = params.monthly_fee * 12 * ((1 + params.fee_escalation_rate) ** t)
-            ev_cost = sum(
-                ev.base_cost for ev in params.events
-                if _event_year_deterministic(ev, sim.years) == year
-            )
-            other_cost = sum(
-                c.annual_amount * ((1 + c.escalation_rate) ** t)
-                for c in params.other_recurring_costs
-            )
+            base = params.monthly_fee * 12 * ((1 + _g(params.fee_escalation_rate)) ** t)
             costs.append(base + ev_cost + other_cost + mort_t)
         elif option_type == "house":
-            house_val = params.initial_value * ((1 + params.value_growth_rate) ** t)
+            house_val = params.initial_value * ((1 + _g(params.value_growth_rate)) ** t)
             maint_rate = _maintenance_rate_for_year(params, year)
-            ev_cost = sum(
-                ev.base_cost for ev in params.events
-                if _event_year_deterministic(ev, sim.years) == year
-            )
-            other_cost = sum(
-                c.annual_amount * ((1 + c.escalation_rate) ** t)
-                for c in params.other_recurring_costs
-            )
             costs.append(house_val * maint_rate + ev_cost + other_cost + mort_t)
         elif option_type == "rent":
-            base = params.monthly_rent * 12 * ((1 + params.rent_escalation_rate) ** t)
-            ev_cost = sum(
-                ev.base_cost for ev in params.events
-                if _event_year_deterministic(ev, sim.years) == year
-            )
-            other_cost = sum(
-                c.annual_amount * ((1 + c.escalation_rate) ** t)
-                for c in params.other_recurring_costs
-            )
+            base = params.monthly_rent * 12 * ((1 + _g(params.rent_escalation_rate)) ** t)
             costs.append(base + ev_cost + other_cost)
     return costs
 

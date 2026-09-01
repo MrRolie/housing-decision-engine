@@ -283,37 +283,6 @@ class ComparisonSpec:
 # ----- Result Dataclasses -----
 
 @dataclass
-class DeterministicResult:
-    """
-    Results from deterministic present value analysis.
-    
-    All values are in present value terms.
-    
-    Attributes:
-        condo_pv_base: PV of condo monthly fees
-        condo_pv_events: PV of condo one-time events
-        condo_pv_other: PV of condo other recurring costs
-        condo_pv_total: Total PV of condo costs
-        house_pv_base: PV of house annual maintenance
-        house_pv_events: PV of house one-time events
-        house_pv_other: PV of house other recurring costs
-        house_pv_total: Total PV of house costs
-        diff_pv: house_pv_total - condo_pv_total (positive = house more expensive)
-    """
-    condo_pv_base: float
-    condo_pv_events: float
-    condo_pv_other: float
-    condo_pv_total: float
-
-    house_pv_base: float
-    house_pv_events: float
-    house_pv_other: float
-    house_pv_total: float
-
-    diff_pv: float
-
-
-@dataclass
 class MonteCarloSummary:
     """
     Summary statistics for a Monte Carlo distribution.
@@ -330,31 +299,6 @@ class MonteCarloSummary:
     p5: float
     p50: float
     p95: float
-
-
-@dataclass
-class MonteCarloResult:
-    """
-    Results from Monte Carlo simulation.
-    
-    Attributes:
-        condo_pv: Array of condo PV values (shape: num_sims,)
-        house_pv: Array of house PV values (shape: num_sims,)
-        diff_pv: Array of house - condo PV values (shape: num_sims,)
-        condo_summary: Summary statistics for condo PV distribution
-        house_summary: Summary statistics for house PV distribution
-        diff_summary: Summary statistics for difference distribution
-        prob_house_more_expensive: P(diff_pv > 0)
-    """
-    condo_pv: npt.NDArray[np.float64]
-    house_pv: npt.NDArray[np.float64]
-    diff_pv: npt.NDArray[np.float64]
-
-    condo_summary: MonteCarloSummary
-    house_summary: MonteCarloSummary
-    diff_summary: MonteCarloSummary
-
-    prob_house_more_expensive: float
 
 
 # ----- S3 Result Types -----
@@ -393,7 +337,7 @@ class AffordabilityReport:
 
 @dataclass
 class ComparisonDeterministicResult:
-    """Replaces DeterministicResult."""
+    """Per-option deterministic results + affordability + prior provenance."""
     condo: Optional[OptionResult] = None
     house: Optional[OptionResult] = None
     rent: Optional[OptionResult] = None
@@ -420,7 +364,7 @@ class AffordabilityMCReport:
 
 @dataclass
 class ComparisonMonteCarloResult:
-    """Replaces MonteCarloResult."""
+    """Per-option Monte Carlo results + P(option cheapest) + affordability MC."""
     condo: Optional[MonteCarloOptionResult] = None
     house: Optional[MonteCarloOptionResult] = None
     rent: Optional[MonteCarloOptionResult] = None

@@ -1,278 +1,57 @@
-# API Contract
+# API contract
 
-> **⚠ Out of date — do not code against this file.** It documents the pre-rename `cvh_cost`
-> package and the original four-argument engine signature. The package is now `hde`, and
-> `compute_deterministic` / `run_monte_carlo` / `load_config` each take a single `ComparisonSpec`.
-> Read the docstrings in `src/hde/` for the current contract.
+The contract is emitted by the engine itself; this page only says where.
+(Rewritten 2026-09-01 — the previous version documented the retired
+four-argument engine and result classes that no longer exist.)
 
-This document describes the public API of the `cvh_cost` package.
+## Input
 
-## Core Functions
-
-### `compute_deterministic()`
-
-Computes deterministic present values for condo and house ownership costs.
-
-```python
-def compute_deterministic(
-    condo: CondoParams,
-    house: HouseParams,
-    sim: SimulationParams,
-    econ: EconomicParams,
-) -> DeterministicResult:
+```bash
+uv run hde --print-schema
 ```
 
-**Parameters:**
+One block per YAML section. Every key carries `required` (required when the
+block is present), `note` (units, default, source), and — for the four
+capital-structure keys — `required_if`, quoting the validator's own sentence:
+an owned option declares `all_cash: true` OR the full mortgage block. The
+`top_level` block lists every accepted top-level key and the rule that at
+least one of `condo` / `house` / `rent` must be present. A key the parser does
+not know is refused with a did-you-mean.
 
-- `condo`: Condo cost parameters
-- `house`: House cost parameters
-- `sim`: Simulation parameters (uses `years`, `discount_rate`)
-- `econ`: Economic parameters (reserved for future use)
+## Output
 
-**Returns:** `DeterministicResult` with PV breakdowns
-
-**Side effects:** None (pure function)
-
----
-
-### `run_monte_carlo()`
-
-Runs Monte Carlo simulation for cost comparison.
-
-```python
-def run_monte_carlo(
-    condo: CondoParams,
-    house: HouseParams,
-    sim: SimulationParams,
-    econ: EconomicParams,
-) -> MonteCarloResult:
+```bash
+uv run hde <config.yaml> --json
 ```
 
-**Parameters:**
+| Key | What it is |
+|---|---|
+| `engine_version` | installed package version — the defaults registry changes verdicts across versions |
+| `warnings` | coherence warnings + time-anchor violations, the same list the CLI prints to stderr |
+| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block, `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, full `anchor` record), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null` |
+| `verdict` | `best`, `runner_up`, `margin_pv`, `margin_frac`, `monthly_equivalent`, `prob_best`, `decisive`, `rule`, `reason` — see the figure glossary |
+| `deterministic` | per option `total_pv` + `breakdown` (keys in the glossary), `affordability`, `market_scenario` |
+| `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
 
-- `condo`: Condo cost parameters
-- `house`: House cost parameters
-- `sim`: Simulation parameters (uses all fields including volatilities)
-- `econ`: Economic parameters (reserved for future use)
+Every figure's formula: `docs/reference/ARCHITECTURE.md` § Figure glossary.
 
-**Returns:** `MonteCarloResult` with arrays and summaries
+## Provenance
 
-**Side effects:** None (pure function, uses seeded RNG)
-
----
-
-### `load_config()`
-
-Loads configuration from a YAML file.
-
-```python
-def load_config(
-    path: str,
-) -> Tuple[CondoParams, HouseParams, SimulationParams, EconomicParams]:
+```bash
+uv run hde --print-anchors
 ```
 
-**Parameters:**
+The registry (`src/hde/anchors.py`): for every engine default its `value`,
+`as_of`, `source`, `url`, `rationale`, `band`, `short_cite`, `retrieved_on`,
+`kind` (`cited` / `reference` / `neutral` / `derivation`) and `replaces`.
 
-- `path`: Path to YAML configuration file
+## Library
 
-**Returns:** Tuple of (CondoParams, HouseParams, SimulationParams, EconomicParams)
-
-**Raises:**
-
-- `FileNotFoundError`: If config file doesn't exist
-- `ConfigValidationError`: If validation fails
-- `yaml.YAMLError`: If YAML is malformed
-
----
-
-## Data Classes
-
-### `CondoParams`
-
-```python
-@dataclass
-class CondoParams:
-    monthly_fee: float
-    fee_escalation_rate: float = 0.0
-    events: List[EventConfig] = field(default_factory=list)
-    other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
-```
-
-### `HouseParams`
-
-```python
-@dataclass
-class HouseParams:
-    initial_value: float
-    value_growth_rate: float = 0.0
-    annual_maintenance_rate: float = 0.0
-    events: List[EventConfig] = field(default_factory=list)
-    other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
-```
-
-### `SimulationParams`
-
-```python
-@dataclass
-class SimulationParams:
-    years: int                          # Analysis horizon
-    discount_rate: float                # Annual discount rate
-    num_sims: int = 10_000              # Number of Monte Carlo simulations
-    random_seed: int = 42               # RNG seed for reproducibility
-    house_maintenance_vol: float = 0.0  # Std dev for house maintenance shocks
-    condo_fee_vol: float = 0.0          # Std dev for condo fee shocks
-```
-
-### `EconomicParams`
-
-```python
-@dataclass
-class EconomicParams:
-    mode: Literal["nominal", "real"] = "real"
-    inflation_rate: float = 0.0
-```
-
-### `EventConfig`
-
-```python
-@dataclass
-class EventConfig:
-    name: str
-    base_cost: float
-    expected_year: int
-    timing_std_years: float = 0.0
-    min_year: int = 1
-    max_year: Optional[int] = None  # Defaults to sim.years
-    cost_vol: float = 0.0
-```
-
-### `RecurringOtherCost`
-
-```python
-@dataclass
-class RecurringOtherCost:
-    name: str
-    annual_amount: float
-    escalation_rate: float = 0.0
-```
-
----
-
-## Result Classes
-
-### `DeterministicResult`
-
-```python
-@dataclass
-class DeterministicResult:
-    condo_pv_base: float      # PV of monthly fees
-    condo_pv_events: float    # PV of one-time events
-    condo_pv_other: float     # PV of other recurring costs
-    condo_pv_total: float     # Total condo PV
-
-    house_pv_base: float      # PV of annual maintenance
-    house_pv_events: float    # PV of one-time events
-    house_pv_other: float     # PV of other recurring costs
-    house_pv_total: float     # Total house PV
-
-    diff_pv: float            # house_pv_total - condo_pv_total
-```
-
-### `MonteCarloResult`
-
-```python
-@dataclass
-class MonteCarloResult:
-    condo_pv: np.ndarray              # Shape: (num_sims,)
-    house_pv: np.ndarray              # Shape: (num_sims,)
-    diff_pv: np.ndarray               # Shape: (num_sims,)
-
-    condo_summary: MonteCarloSummary
-    house_summary: MonteCarloSummary
-    diff_summary: MonteCarloSummary
-
-    prob_house_more_expensive: float  # P(diff_pv > 0)
-```
-
-### `MonteCarloSummary`
-
-```python
-@dataclass
-class MonteCarloSummary:
-    mean: float
-    std: float
-    p5: float   # 5th percentile
-    p50: float  # Median
-    p95: float  # 95th percentile
-```
-
----
-
-## Reporting Functions
-
-### `format_text_report()`
-
-```python
-def format_text_report(
-    det: Optional[DeterministicResult],
-    mc: Optional[MonteCarloResult],
-    sim: SimulationParams,
-) -> str:
-```
-
-Returns a formatted string report. Either `det` or `mc` can be None.
-
-### `plot_diff_distribution()`
-
-```python
-def plot_diff_distribution(
-    mc: MonteCarloResult,
-    title: str = "House vs Condo Cost Difference Distribution",
-    bins: int = 50,
-    figsize: tuple[float, float] = (10, 6),
-) -> matplotlib.figure.Figure:
-```
-
-Returns a matplotlib Figure with histogram of `diff_pv`.
-
-### `plot_pv_distributions()`
-
-```python
-def plot_pv_distributions(
-    mc: MonteCarloResult,
-    title: str = "Present Value Distributions",
-    bins: int = 50,
-    figsize: tuple[float, float] = (12, 5),
-) -> matplotlib.figure.Figure:
-```
-
-Returns a matplotlib Figure with side-by-side histograms.
-
-### `plot_sensitivity()`
-
-```python
-def plot_sensitivity(
-    param_values: list[float],
-    probabilities: list[float],
-    param_name: str = "Parameter",
-    title: str = "Sensitivity Analysis",
-    figsize: tuple[float, float] = (8, 5),
-) -> matplotlib.figure.Figure:
-```
-
-Returns a matplotlib Figure showing how probability changes with a parameter.
-
----
-
-## PV Utility Functions
-
-Low-level functions for present value calculations:
-
-```python
-def pv_single(cost: float, rate: float, year: int) -> float
-def pv_annuity(payment: float, rate: float, n_years: int) -> float
-def pv_growth_annuity(payment: float, rate: float, growth: float, n_years: int) -> float
-def pv_series(costs_by_year: Dict[int, float], rate: float) -> float
-```
-
-These are pure functions with no side effects.
+Everything the CLI and the MCP server use is exported from `hde`
+(`src/hde/__init__.py`): `load_config` / `load_config_dict` → `ComparisonSpec`;
+`compute_deterministic`, `run_monte_carlo`; `compute_verdict`;
+`load_scenario_prior`; the serializers `det_to_dict`, `mc_to_dict`,
+`verdict_to_dict`, `assumptions_to_dict`, `anchors_to_dict`; `all_warnings`.
+The MCP tools (`mcp_server/`) wrap these same functions for non-shell
+consumers; their responses carry the same `assumptions`, `verdict` and
+`warnings` shapes.
