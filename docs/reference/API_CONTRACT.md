@@ -47,11 +47,10 @@ The registry (`src/hde/anchors.py`): for every engine default its `value`,
 
 ## Library
 
-Everything the CLI and the MCP server use is exported from `hde`
+Everything the CLI uses is exported from `hde`
 (`src/hde/__init__.py`): `load_config` / `load_config_dict` → `ComparisonSpec`;
 `compute_deterministic`, `run_monte_carlo`; `compute_verdict`;
 `load_scenario_prior`; the serializers `det_to_dict`, `mc_to_dict`,
 `verdict_to_dict`, `assumptions_to_dict`, `anchors_to_dict`; `all_warnings`.
-The MCP tools (`mcp_server/`) wrap these same functions for non-shell
-consumers; their responses carry the same `assumptions`, `verdict` and
-`warnings` shapes.
+(The MCP server that once wrapped these was removed 2026-09-01: the CLI plus
+the repo-local skill is the only surface.)

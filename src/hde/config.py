@@ -224,7 +224,7 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
     Coherence warnings (audit U2): assumptions that parse fine but smell wrong.
 
     Pure function of the spec; callers surface these (CLI stderr '[warning]',
-    MCP response 'warnings' list) and NEVER refuse — these are judgment calls
+    the --json `warnings` list) and NEVER refuse — these are judgment calls
     the operator may well have made deliberately.
     """
     warns: List[str] = []
@@ -325,7 +325,7 @@ def all_warnings(
     Every warning a surface should show for one run: the coherence warnings
     plus, when a demographic prior is loaded, the time-anchor violations
     (wall clock past START_CALENDAR_YEAR). ONE assembly for the CLI's stderr,
-    the CLI's --json `warnings`, and the MCP response, so no surface can drop
+    and the CLI's --json `warnings`, so no surface can drop
     a class of warning the others carry (readiness plan A.2). `current_year`
     is injectable for tests; the wall clock is read only here at the edge.
     """

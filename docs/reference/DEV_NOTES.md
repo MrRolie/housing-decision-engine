@@ -36,9 +36,9 @@ check that passes.
 - The input contract: `src/hde/input_schema.py` (`--print-schema`), pinned by
   `tests/test_input_schema.py` (drop-one round trip over every required key).
 - Agent-facing output: `src/hde/serialization.py` — the only serializer; the
-  CLI `--json` and the MCP tools both render from it.
+  CLI `--json` renders from it (the MCP server was removed 2026-09-01).
 - The verdict: `models.compute_verdict` — one computation for the story
-  headline, the text report, `--json` and MCP.
+  headline, the text report and `--json`.
 - The skill: `.claude/skills/hde/SKILL.md`, pinned by
   `tests/test_skill_contract.py`.
 

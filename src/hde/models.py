@@ -348,7 +348,8 @@ class ComparisonDeterministicResult:
 
 @dataclass
 class MonteCarloOptionResult:
-    """Per-option MC result. pvs array never crosses MCP boundary."""
+    """Per-option MC result. The pvs array never crosses a surface boundary — only
+    the MonteCarloSummary scalars are serialized."""
     pvs: npt.NDArray[np.float64]
     summary: MonteCarloSummary
 
@@ -382,7 +383,7 @@ class ComparisonMonteCarloResult:
 class Verdict:
     """
     The decision, computed ONCE and consumed by every surface (story headline,
-    text report, --json, MCP): which option is cheapest, by how much versus the
+    text report, --json): which option is cheapest, by how much versus the
     runner-up (the decision-relevant gap, never the costliest), and whether
     that gap is decisive under the rule that applied.
 

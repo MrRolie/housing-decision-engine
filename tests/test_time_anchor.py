@@ -6,7 +6,7 @@ calendar year -> demographic band:
 - prior-vs-constant mismatch (constants_as_of far from the anchor) — hard fail
   inside load_scenario_prior (loader-level tests live in test_market_scenario);
 - wall-clock staleness (current year past the anchor) — loud warning at the
-  side-effecty edges (CLI stderr, MCP response warnings), never a refusal.
+  side-effecty edges (CLI stderr and --json `warnings`), never a refusal.
 
 The pure helper takes the year as a parameter; the wiring keeps it injectable
 so these tests never touch the wall clock.
@@ -60,58 +60,6 @@ class TestTimeAnchorViolations:
 # ---------------------------------------------------------------------------
 # MCP wiring (year injected, wall clock untouched)
 # ---------------------------------------------------------------------------
-
-def _mcp_config(prior_path):
-    return {
-        "years": 10,
-        "discount_rate": 0.03,
-        "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.015,
-                  "all_cash": True},
-        "market_scenario": {"path": str(prior_path), "geography": GEO},
-    }
-
-
-class TestMCPTimeAnchorWarnings:
-    def test_stale_year_appends_warning_to_run_response(self, tmp_path):
-        from mcp_server import registry, tools
-        assert "error" not in tools.define_scenario(
-            "anchor-stale", _mcp_config(GOLDEN))
-        try:
-            resp = tools.run_comparison("anchor-stale", mode="deterministic",
-                                        current_year=2027)
-            assert "error" not in resp
-            stale = [w for w in resp["warnings"] if "stale" in w]
-            assert stale and "2027" in stale[0]
-        finally:
-            registry.remove("anchor-stale")
-
-    def test_current_year_adds_no_anchor_warning(self, tmp_path):
-        from mcp_server import registry, tools
-        assert "error" not in tools.define_scenario(
-            "anchor-clean", _mcp_config(GOLDEN))
-        try:
-            resp = tools.run_comparison("anchor-clean", mode="deterministic",
-                                        current_year=2026)
-            assert "error" not in resp
-            assert not [w for w in resp["warnings"] if "stale" in w]
-        finally:
-            registry.remove("anchor-clean")
-
-    def test_mismatched_prior_returns_error_dict(self, tmp_path):
-        from mcp_server import registry, tools
-        prior = json.loads(GOLDEN.read_text(encoding="utf-8"))
-        prior["data_vintage"]["constants_as_of"] = "2029-01-01"
-        path = tmp_path / "mismatched.json"
-        path.write_text(json.dumps(prior), encoding="utf-8")
-        assert "error" not in tools.define_scenario(
-            "anchor-mismatch", _mcp_config(path))
-        try:
-            resp = tools.run_comparison("anchor-mismatch", mode="deterministic",
-                                        current_year=2026)
-            assert "error" in resp
-            assert "misaligned" in resp["error"]
-        finally:
-            registry.remove("anchor-mismatch")
 
 
 # ---------------------------------------------------------------------------

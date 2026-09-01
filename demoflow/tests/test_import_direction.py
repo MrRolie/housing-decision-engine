@@ -12,8 +12,8 @@ Spec §2 "Placement & dependency topology" → bullet "Import rules (both direct
 test-enforced)"; mandated as a contract test by §10 "Testing" → "Contract tests:
 ... import-direction tests (demoflow⊥hde both ways)".
 
-The spec's rule is symmetric: `hde` and hde's `mcp_server` never import `demoflow`;
-`demoflow` never imports `hde` or hde's `mcp_server`. Coupling is the ScenarioPrior
+The spec's rule is symmetric: `hde` never imports `demoflow`;
+`demoflow` never imports `hde`. Coupling is the ScenarioPrior
 artifact file only.
 
 `actuarial` in `sys.modules` is EXPECTED and allowed: that name resolves to
@@ -33,7 +33,6 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent / "src" / "demoflow"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HDE_SRC = REPO_ROOT / "src" / "hde"
-HDE_MCP = REPO_ROOT / "mcp_server"
 
 FORBIDDEN = re.compile(r"^\s*(?:import\s+hde\b|from\s+hde\b)", re.MULTILINE)
 FORBIDDEN_DEMOFLOW = re.compile(
@@ -69,9 +68,9 @@ def test_no_source_file_imports_hde():
 def test_hde_source_does_not_import_demoflow():
     """The OTHER direction of the spec's symmetric rule (ADDED beyond the plan's three
     bodies, which only covered demoflow→hde while the task title says "both ways"):
-    hde's shipped packages — `src/hde` and the repo-root `mcp_server` — never import
+    hde's shipped package — `src/hde` — never imports
     demoflow. Read-only walk of the HDE tree; nothing outside `demoflow/**` is written."""
-    offenders = _scan(HDE_SRC, FORBIDDEN_DEMOFLOW) + _scan(HDE_MCP, FORBIDDEN_DEMOFLOW)
+    offenders = _scan(HDE_SRC, FORBIDDEN_DEMOFLOW)
     assert not offenders, f"hde source imports demoflow (forbidden): {offenders}"
 
 
@@ -185,7 +184,6 @@ def test_actuarial_compat_import_is_allowed():
     # Provenance, not just success: prove WHICH package answered.
     resolved = Path(sys.modules["actuarial"].__file__).resolve()
     assert HDE_SRC not in resolved.parents, f"resolved inside hde: {resolved}"
-    assert HDE_MCP not in resolved.parents, f"resolved inside hde's mcp_server: {resolved}"
     owners = packages_distributions().get("actuarial")
     assert owners == ["actuarial-system"], (
         f"actuarial is not unambiguously owned by actuarial-system in this env: {owners}"

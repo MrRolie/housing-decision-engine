@@ -1,12 +1,12 @@
 """Result + assumption serialization — THE typed core for agent-facing output.
 
-One source of truth (TOOL-SURFACES doctrine): the CLI's `--json`, the MCP
-tools' responses, and any future surface all render from THESE functions, so
-CLI-json-vs-MCP-schema drift dies by construction. The result serializers
-moved here verbatim from mcp_server/tools.py (2026-08-26); the assumption echo
-moved here from reporting.py (2026-09-01, readiness plan A.1) so the text
-report, STORY.md footer, JSON document and MCP responses all read one
-function. reporting.py re-exports `format_assumptions` for its callers.
+One source of truth (TOOL-SURFACES doctrine): the CLI's `--json` and any future
+surface render from THESE functions, so no two surfaces can drift. The result
+serializers were lifted from the retired MCP server (2026-08-26; the server
+itself was removed 2026-09-01 — the CLI + repo-local skill is the only
+surface); the assumption echo moved here from reporting.py (2026-09-01,
+readiness plan A.1) so the text report, STORY.md footer and JSON document all
+read one function. reporting.py re-exports `format_assumptions` for its callers.
 
 Nothing here imports matplotlib: this module must stay importable by an agent
 that only wants numbers.

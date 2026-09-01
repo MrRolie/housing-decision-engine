@@ -186,7 +186,7 @@ def generate_story_markdown(
     lines.append("")
     if assumption_lines:
         # Audit U1: assumption echo footer, same lines the text report header
-        # and the define_scenario MCP response carry.
+        # and the --json `assumptions.lines` carry.
         lines.append("---")
         lines.append("")
         lines.append("## Assumptions")

@@ -95,7 +95,7 @@ assumption-bearing number carries a provenance stamp: either a citation or an ex
 carries inline `# <cite>` comments on the lines themselves.
 
 **Convention:** values marked `illustrative` are calibration choices, not evidence —
-sensitivity-test them (e.g. via `sweep_param` on the MCP server, or by editing and re-running).
+sensitivity-test them (edit the value and re-run; act 6 sweeps rent and purchase price for you).
 
 | Assumption category | Source | Where used |
 |---|---|---|

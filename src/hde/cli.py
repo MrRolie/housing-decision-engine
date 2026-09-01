@@ -68,8 +68,8 @@ def main() -> int:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit the full result document as JSON (agent-native; same "
-             "serializers the MCP layer uses)",
+        help="Emit the full result document as JSON (agent-native; the "
+             "serialization core every surface uses)",
     )
 
     parser.add_argument(

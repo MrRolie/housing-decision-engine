@@ -132,7 +132,7 @@ def time_anchor_violations(current_year: int, constants_as_of: str | None = None
     - staleness: current_year > START_CALENDAR_YEAR — the wall clock has moved
       past the mapping anchor, so every sim year lands on a stale calendar year
       and band. Warning class (math internally consistent, just anchored to an
-      old year); enforced at the CLI/MCP edges, never here.
+      old year); enforced at the CLI edge, never here.
     - prior-vs-constant drift: constants_as_of's year more than
       CONSTANTS_AS_OF_YEAR_TOLERANCE from START_CALENDAR_YEAR, or unparseable —
       the prior's bands were built against a different calendar, so the band

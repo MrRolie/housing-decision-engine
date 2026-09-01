@@ -6,9 +6,9 @@ Canonical operational rules for this repo. Claude reads this first.
 
 Present value comparison engine for housing decisions: rent vs condo vs house.
 Extends to employment cash flow modeling and real estate market scenario analysis.
-Primary surface: the `hde` CLI — `--json` for agents, `--print-schema` for the input
-contract, `--print-anchors` for provenance (surface doctrine, `CLAUDE.md`). The MCP
-server remains for non-shell consumers only.
+Only surface: the `hde` CLI plus the repo-local skill `.claude/skills/hde/` — `--json`
+for agents, `--print-schema` for the input contract, `--print-anchors` for provenance
+(surface doctrine, `CLAUDE.md`). The MCP server was removed 2026-09-01 (superseded).
 
 ## Scope
 
@@ -33,10 +33,6 @@ src/hde/            # Core engine (Python package)
   story_plots.py    # The six-act decision story (plots)
   story_page.py     # STORY.md one-pager + report.txt package (--story)
   cli.py            # CLI entry point (hde)
-mcp_server/         # MCP server (FastMCP, stdio transport) — non-shell consumers only
-  main.py           # FastMCP entry point + @mcp.tool wrappers
-  registry.py       # In-memory ScenarioEntry store (spec: ComparisonSpec)
-  tools.py          # 6 tool implementations (serialization via hde.serialization)
 tests/              # pytest suite (fixtures/ holds the golden ScenarioPrior)
 examples/           # Example YAML scenario configs + ordered walkthrough (README.md)
 docs/
@@ -53,7 +49,7 @@ docs/
 
 This repo serves TWO consumer layers, and every output surface is designed for both:
 
-1. **Agents and other systems** — the `hde-mcp` MCP server, the `hde` CLI, and the Python
+1. **Agents and other systems** — the `hde` CLI (`--json`) and the Python
    library. Typed inputs/outputs, deterministic, seeded. demoflow consumes the actuarial
    package through this layer's discipline.
 2. **The personal consumer using Claude as the interface** — Mike making his own
@@ -75,9 +71,8 @@ uv run hde <config.yaml> [--no-monte-carlo] [--quiet] [--json] [--story DIR]
 # Tests
 uv run --extra dev python -m pytest -q
 
-# MCP server — non-shell consumers (claude.ai web) only; needs the `mcp` extra
-uv run --extra mcp hde-mcp
-# claude mcp add hde -- uv --directory /path/to/housing-decision-engine run --extra mcp hde-mcp
+# A user's session: launch Claude Code in the repo root and ask the housing question;
+# the `hde` skill dispatches to the commands above (see CLAUDE.md).
 ```
 
 ## Development setup
@@ -97,19 +92,14 @@ full-suite invocation.
 
 - **ComparisonSpec** is the single input bundle for all engines — replaces the old `(condo, house, sim, econ)` 4-tuple. All options (condo, house, rent, income) are Optional; at least one of condo/house/rent must be present.
 - **3-way comparison** — rent, condo, house are all first-class options. Rent PV includes `invested_dp_benefit_pv = dp × (1+r_inv)^N / (1+dr)^N` (negative, reduces total cost).
-- **Affordability layer** — `IncomeParams` + `PayDropEvent` produce per-year housing-cost/income ratios returned inline in `run_comparison` as `"affordability"` key.
+- **Affordability layer** — `IncomeParams` + `PayDropEvent` produce per-year housing-cost/income ratios returned as the `affordability` block of `--json`.
 - **Deterministic + Monte Carlo** run as separate engines; deterministic is the sanity check, MC is the uncertainty surface.
 - **YAML config** is the input contract — scenarios are files, not code. `load_config_dict` returns `ComparisonSpec`.
 - **Pure functions** throughout — no global state, seeded RNG for reproducibility.
-- **MCP tools** wrap the existing engine; no engine logic in the MCP layer.
-- **Session registry** (`registry.py`) is in-process, process-scoped — cleared on server restart. Stores `spec: ComparisonSpec` (not a 4-tuple).
-- **MC numpy arrays** never cross the MCP boundary; only `MonteCarloSummary` scalars + `prob_X_cheapest` returned.
-- **store_results** uses total-replace semantics — running deterministic-only clears cached MC results.
-- **Scenario names** are sanitized via `Path(name).name` before joining figure paths.
-- **sweep_param** whitelist has 24 paths; rent paths require `spec.rent is not None`.
+- **MC numpy arrays** never cross a surface boundary; only `MonteCarloSummary` scalars + `prob_X_cheapest` are serialized.
 - **Breakdown keys** centralized as `CONDO_BREAKDOWN_KEYS`, `HOUSE_BREAKDOWN_KEYS`, `RENT_BREAKDOWN_KEYS` frozensets.
 - **Anchors doctrine** — `src/hde/anchors.py` is the single source of truth for every bias-critical engine default (the rates, thresholds and shock hyperparameters that shape a verdict; structural knobs such as `num_sims` and the zero vols are not anchored, by design). An uncited entry is a defect (`AnchorError` at import); re-anchoring requires a `replaces` note; a live URL requires `retrieved_on`. `tests/test_anchors.py` is generative: every anchor is wired to a dataclass default or declared consumed elsewhere, and every key the assumptions echo can emit resolves to an anchor. Examples cite sources inline or mark values `illustrative`; the `defaults_applied` echo carries citation tags; `--print-anchors` and the `assumptions` JSON block expose the full records.
-- **One verdict** — `models.compute_verdict` (MC probability floor 0.65, else 5% tie band; both anchored) is consumed by the story headline, the text report, `--json` and MCP. No surface computes its own margin.
+- **One verdict** — `models.compute_verdict` (MC probability floor 0.65, else 5% tie band; both anchored) is consumed by the story headline, the text report and `--json`. No surface computes its own margin.
 
 ## Roadmap
 
@@ -117,7 +107,7 @@ Active roadmap: `docs/roadmaps/2026-06-07_housing-decision-engine.md`
 
 Sessions:
 - S1 ✅ Repo foundation (2026-06-07, PR #2)
-- S2 ✅ MCP server — 6 tools (2026-06-08, PR #2)
+- S2 ✅ MCP server — 6 tools (2026-06-08, PR #2); removed 2026-09-01, superseded by CLI + skill
 - S3 ✅ 3-way comparison + income model (2026-06-08, PR #3)
 - S4a ✅ Net-wealth foundation: mortgage amortization + terminal equity (2026-07-21, PR #4)
 - S4b ✅ Market scenario layer: demographic drift priors + tilted price-shock channel (2026-08-26, 8ceb010 / 0e2116e; `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md`)

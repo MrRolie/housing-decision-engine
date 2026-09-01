@@ -393,23 +393,6 @@ class TestNominalModeRefusal:
         with pytest.raises(Exception, match="[Nn]ominal"):
             compute_deterministic(spec)
 
-    def test_mcp_run_comparison_surfaces_refusal_as_error_dict(self, tmp_path):
-        from mcp_server import registry, tools
-        path = _write_prior(tmp_path, _valid_prior(), name="mcp_nominal.json")
-        cfg = {
-            "years": 10,
-            "discount_rate": 0.03,
-            "economic": {"mode": "nominal"},
-            "house": {"initial_value": 400_000, "annual_maintenance_rate": 0.015,
-                      "all_cash": True},
-            "market_scenario": {"path": path, "geography": GEO},
-        }
-        assert "error" not in tools.define_scenario("s4b-nominal-check", cfg)
-        resp = tools.run_comparison("s4b-nominal-check", mode="both")
-        assert "error" in resp
-        assert "nominal" in resp["error"].lower()
-        registry.remove("s4b-nominal-check")
-
 
 class TestPriceShockChannel:
     def test_apply_price_shock_full_hazard_exact_haircut(self):

@@ -11,7 +11,7 @@ key without a row here fails the suite.
 
 ```text
 src/hde/
-├── __init__.py         # Library surface (what the CLI and MCP tools use)
+├── __init__.py         # Library surface (what the CLI uses)
 ├── anchors.py          # Provenance registry: every engine default + source/url/band/kind;
 │                       #   SOURCE_KEY_CITATIONS for the demographic prior's inputs
 ├── models.py           # Parameter + result dataclasses; Verdict + compute_verdict
@@ -21,12 +21,11 @@ src/hde/
 ├── market_scenario.py  # ScenarioPrior loader/validation, drift banding, time-anchor guard
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
 ├── input_schema.py     # The input contract as data (--print-schema)
-├── serialization.py    # THE typed core for agent output (--json, MCP)
+├── serialization.py    # THE typed core for agent output (--json)
 ├── reporting.py        # Text report (+ legacy matplotlib figures)
 ├── story_plots.py      # The six-act decision story (figures + sentences)
 ├── story_page.py       # STORY.md + report.txt package (--story)
 └── cli.py              # `hde` entry point
-mcp_server/             # FastMCP wrappers over the same functions (non-shell consumers)
 ```
 
 Data flow: `load_config` → `ComparisonSpec` → `compute_deterministic` and
@@ -96,7 +95,7 @@ Monte Carlo (below). A price-shock block likewise affects only the Monte Carlo.
 ### The verdict — `verdict`
 
 Computed once (`models.compute_verdict`) and read by the story headline, the
-text report ("Cheapest … / decisiveness:"), `--json` and MCP.
+text report ("Cheapest … / decisiveness:") and `--json`.
 
 | Key | What it is | As computed |
 |---|---|---|

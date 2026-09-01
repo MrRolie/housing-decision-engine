@@ -7,7 +7,7 @@ demographic scenario prior, and a provenance registry for every default.
 
 Library use: build a ComparisonSpec (load_config / load_config_dict), run
 compute_deterministic and/or run_monte_carlo, and read compute_verdict for
-the decision. The CLI (`hde`) and the MCP server wrap exactly these.
+the decision. The CLI (`hde`) wraps exactly these.
 """
 
 from hde.anchors import ANCHORS, Anchor

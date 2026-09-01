@@ -12,7 +12,6 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 - **Demographic priors via `ScenarioPrior`** — UN WPP → ISQ scenario → demand-model drift bands that tilt price growth and crash risk by geography
 - **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
 - **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
-- **MCP server for Claude** — six tools for non-shell consumers
 
 ## Quickstart
 
@@ -32,35 +31,7 @@ uv run hde examples/showcase_demographic_prior.yaml --story docs/story
 Renders the full six-act story under the MTL_RMR demographic prior — the committed
 [docs/story/STORY.md](docs/story/STORY.md) is this command's output, regenerable at any time.
 
-> **Surface doctrine (2026-08-26):** the primary interface is the **`hde` CLI + the `hde` skill** (dispatch contract for agents — repo-local `.claude/skills/hde/SKILL.md`). The MCP server below remains for non-shell consumers (claude.ai web) only; it is not the registered surface for local sessions. `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
-
-## MCP server
-
-```bash
-uv run --extra mcp hde-mcp
-# Register with Claude Code:
-claude mcp add hde -- uv --directory /path/to/housing-decision-engine run --extra mcp hde-mcp
-```
-
-For Claude Desktop, add this to `claude_desktop_config.json` (replace
-`/ABS/PATH/housing-decision-engine` with your clone's absolute path):
-
-```json
-{
-  "mcpServers": {
-    "hde": {
-      "command": "uv",
-      "args": ["--directory", "/ABS/PATH/housing-decision-engine", "run", "hde-mcp"]
-    }
-  }
-}
-```
-
-Claude Desktop does not inherit your shell `PATH` — if the server fails to start, replace `"command": "uv"` with the absolute path to your uv binary (find it with `which uv`).
-
-Six tools: `define_scenario_tool`, `run_comparison_tool`, `sweep_param_tool` (24 whitelisted
-parameters), `save_figure_tool`, `list_scenarios_tool`, `delete_scenario_tool`. Scenarios live
-in an in-process registry that resets on restart.
+> **Surface doctrine (2026-08-26; MCP server removed 2026-09-01):** the interface is the **`hde` CLI + the repo-local `hde` skill** (`.claude/skills/hde/SKILL.md`, the dispatch contract Claude follows). `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
 
 ## Repo map
 
@@ -69,7 +40,6 @@ src/hde/             # Core engine: models, pv, deterministic, monte_carlo,
                      #   config (YAML → ComparisonSpec), market_scenario (prior loader),
                      #   reporting, story_plots (six acts), story_page (STORY.md), cli,
                      #   anchors (provenance registry), serialization (--json core), input_schema
-mcp_server/          # FastMCP server (stdio): main, registry, tools
 examples/            # Scenario YAMLs + ordered walkthrough (examples/README.md)
 tests/               # pytest suite (fixtures/ holds the golden ScenarioPrior)
 docs/
