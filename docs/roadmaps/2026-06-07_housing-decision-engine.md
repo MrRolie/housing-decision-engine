@@ -2,9 +2,9 @@
 
 ## Status
 
-**Overall:** S1–S4b complete; the 2026-09-01 readiness polish (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary, the clone-and-ask user flow; MCP server removed) is on branch `feat/readiness-polish`. Next: PR + merge; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
+**Overall:** S1–S4b complete; the 2026-09-01 readiness polish (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary, the clone-and-ask user flow; MCP server removed) is on branch `feat/readiness-polish`, followed by four rounds of user-model dogfood (persona runs on the models users will have — Sonnet/Opus — each critiqued) whose fixes landed 2026-09-02: a mortgage means nominal mode (defaults compose with inflation; a real-mode mortgage with an income warns), the verdict carries the Monte Carlo mean and the story headline says when it disagrees, a demographic prior runs in nominal mode, the report prints year-1 cash beside the PV view, sweeps track Monte Carlo mean flips and name their decisiveness rule. Round-four critic scores 18 / 18 / 20 out of 25 with every verdict correct for the facts. Next: PR + merge; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
 **Created:** 2026-06-07
-**Last Updated:** 2026-09-01
+**Last Updated:** 2026-09-02
 **Slug:** `housing-decision-engine`
 
 ### Session Status
@@ -37,6 +37,7 @@ A `completed` row MUST carry a real, stat-able artifact path — repo-relative h
 - **2026-06-08 (S4 design — split + leverage re-scope):** Code inspection found the engine is carrying-cost-only — `house_value` compounds but is never harvested as equity, no mortgage/interest rate, and the rent side is one-sidedly credited the invested-DP benefit. Price-drop scenarios were therefore wrong-signed/inert. Operator decisions: (D1) net-wealth comparator; (D2) **full mortgage/amortization DCF** ("full-value − financing carry", the long-term-correct model) — **re-opens the "mortgage/leverage modeling" out-of-scope boundary** (in-conversation instruction overrides roadmap, Authority Hierarchy #1); (D3) "interest rate shock" reinterpreted as discount-rate sensitivity (S4b); (D4) **split S4 → S4a foundation + S4b scenario layer**; (D5) net-wealth canonical (no legacy mode; affected tests rewritten against an independent oracle); (D6) required explicit capital structure (mortgage XOR all_cash) on owned options. Elegance-gate (architectural + strategic) both PROCEED-WITH-MODIFICATIONS, no second split; mods folded (pv_annuity reuse + closed-form balance, shared `_financing_pv`, compositional oracle-anchored test assertions, oracle-first ordering, 74-fixture `all_cash` stub pass, dual-layer fail-loud, AGENTS.md "do not add mortgage" line struck). Spec: `docs/specs/2026-06-08-net-wealth-foundation-design.md`.
 - **2026-08-26 (S4b, surface doctrine):** S4b built as demographic input slots consuming demoflow's ScenarioPrior instead of a hand-authored shock menu; CLI-first doctrine — MCP demoted to non-shell consumers.
 - **2026-09-01 (readiness):** decisiveness rule ruled (MC floor 0.65, tie band 5%); `house.annual_maintenance_rate` a registered neutral with a warning; mortgage convention disclosed, not changed; prior citations hde-side (`SOURCE_KEY_CITATIONS`), emitter contract untouched; mypy deferred.
+- **2026-09-02 (dogfood rounds 1–4, steering session):** the skill routes every financed purchase to `mode: nominal` (the lender collects the nominal payment; a real-rate level payment hid GDS breaches of 33% and 36% against 32% in two persona runs) — reversible, verdict drift measured at $83.2k → $81.9k and 3.1% → 2.9%, and it interacts with the open nominal-semantics ruling below; the S4b nominal-mode refusal of a prior was lifted (the drift is real and composes)..
 - **2026-09-01 (MCP removed):** operator ruling — the MCP server (S2) is superseded; the only surface is the CLI plus the repo-local skill, and the user flow is clone → launch Claude Code in the repo → ask, with the skill eliciting whatever the question lacks.
 
 ### Next Recommended Action
@@ -51,7 +52,11 @@ Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; r
 - Financed mortgage-insurance premium (CMHC/Sagen by LTV band, provincial tax on the premium); today `purchase_costs` approximates it as cash at purchase.
 - `value_growth_vol`: ordinary price uncertainty for the Monte Carlo (today only the jump `price_shock` channel exists).
 - An objective flag (`expected` / `p95` / end-wealth) so "smallest worst case" ranks on the figure the user cares about.
-- Probabilistic or early exit ("might move for work"); year-1 nominal monthly payment line in the report; a TAL continuing-tenant rent-control anchor; anchored defaults for property tax and purchase costs by jurisdiction.
+- Probabilistic or early exit ("might move for work"); a TAL continuing-tenant rent-control anchor; anchored defaults for property tax and purchase costs by jurisdiction (Québec welcome-tax brackets, notary) so a user's "no idea" becomes an engine-computed illustrative figure.
+- Interest/principal split of `mortgage_pv` and a `selling_cost_pv` line in the breakdown, so the owner's unrecoverable cost is a read-back over the horizon (today only year 1 is printed: `cash_year1` / `principal_year1` / `appreciation_year1`).
+- `--sweep` in the user's units: accept sticker (nominal) points in nominal mode and deflate in-engine; today the bracket is authored in real decimals by hand.
+- Mortgage-insurance premium schedule (CMHC/Sagen by LTV band + provincial tax): `financed_purchase_costs` now carries a hand-computed premium on the loan; the schedule itself is not anchored (the CMHC fetch was blocked from the build sandbox).
+- The 200-word quick-sense cap versus the mandatory disclosures: the skill now ranks content and never drops a warning; whether the cap should rise is a product call.
 
 ---
 
