@@ -359,10 +359,15 @@ def _compute_rent_option(
       - rent_pv:                 PV of escalating rent
       - events_pv:               PV of one-time events (e.g., moving costs)
       - other_pv:                PV of other recurring costs
-      - invested_dp_benefit_pv:  NEGATIVE PV of the invested down-payment benefit
-                                  (a renter keeps the down payment invested; this
-                                  reduces the net cost of renting, so it is stored
-                                  as a negative offset).
+      - invested_capital_pv:     the renter's invested capital, charged at year 0
+                                  (undiscounted) exactly as the buyer's downpayment_pv
+                                  is — the outlay half of the capital leg.
+      - invested_dp_benefit_pv:  NEGATIVE PV of that capital's terminal value
+                                  D(1+r_inv)^N/(1+dr)^N — the return half. Net capital
+                                  term = D − D(1+r_inv)^N/(1+dr)^N: zero when the renter
+                                  earns exactly the discount rate. (Before 2026-09-02 the
+                                  outlay was never charged, biasing every verdict toward
+                                  renting by exactly D — found by the user-model dogfood.)
     """
     dr = sim.discount_rate
     rent_escalation = _effective_growth_rate(rent.rent_escalation_rate, econ)
@@ -383,12 +388,14 @@ def _compute_rent_option(
     else:
         benefit = 0.0
     invested_dp_benefit_pv = -benefit  # negative = reduces cost
+    invested_capital_pv = rent.invested_down_payment  # year-0 outlay, undiscounted
 
-    total_pv = rent_pv + events_pv + other_pv + invested_dp_benefit_pv
+    total_pv = rent_pv + events_pv + other_pv + invested_capital_pv + invested_dp_benefit_pv
     breakdown = {
         "rent_pv": rent_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
+        "invested_capital_pv": invested_capital_pv,
         "invested_dp_benefit_pv": invested_dp_benefit_pv,
     }
     assert set(breakdown.keys()) == RENT_BREAKDOWN_KEYS

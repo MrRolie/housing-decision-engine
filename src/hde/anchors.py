@@ -346,10 +346,11 @@ ANCHORS: Dict[str, Anchor] = {
         url="none (deliberately uncited)",
         rationale=(
             "$0 is the only honest default: the engine cannot know what the "
-            "renter would invest instead of a down payment. Leaving it at 0 "
-            "while an owned option puts capital down charges the buyer's capital "
-            "and lets the renter's vanish — the verdict is then not like-for-like, "
-            "and coherence_warnings says so. Zero-width band: any non-zero value "
+            "renter would invest instead of a down payment. It is charged at year 0 "
+            "exactly like the buyer's down payment and credited at its terminal "
+            "value, so leaving it at 0 while an owned option puts capital down "
+            "assumes the renter's equivalent capital earns exactly the discount "
+            "rate (net present value 0) — coherence_warnings says so. Zero-width band: any non-zero value "
             "is the user's, not the engine's."
         ),
         band=(0.0, 0.0),

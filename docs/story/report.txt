@@ -22,20 +22,21 @@ House  total PV:  $     421,414
   downpayment_pv: $     550,000
   mortgage_pv: $           0
   terminal_equity_pv: $    -253,138
-Rent   total PV:  $     389,342
+Rent   total PV:  $     534,342
   rent_pv: $     534,342
   events_pv: $           0
   other_pv: $           0
+  invested_capital_pv: $     145,000
   invested_dp_benefit_pv: $    -145,000
 
-Cheapest: Rent saves $32,072 vs House (runner-up)
-  ≈ $185/month equivalent
-  decisiveness: P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]
+Cheapest: House saves $36,531 vs Condo (runner-up)
+  ≈ $211/month equivalent
+  decisiveness: P(house cheapest) = 70% ≥ 65% floor [hde verdict rule]
 
 Monte Carlo:
   Condo: mean $481,187  p5 $392,167  p50 $492,550  p95 $561,373
   House: mean $442,358  p5 $360,441  p50 $452,149  p95 $513,527
-  Rent: mean $389,342  p5 $389,342  p50 $389,342  p95 $389,342
-  P(condo cheapest): 3.3%
-  P(house cheapest): 15.7%
-  P(rent cheapest): 81.0%
+  Rent: mean $534,342  p5 $534,342  p50 $534,342  p95 $534,342
+  P(condo cheapest): 30.3%
+  P(house cheapest): 69.5%
+  P(rent cheapest): 0.1%

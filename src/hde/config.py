@@ -309,8 +309,9 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
     ):
         warns.append(
             f"owned options put ${owned_down:,.0f} down but "
-            f"rent.invested_down_payment=0 — renter capital unmodeled, "
-            f"verdict not like-for-like"
+            f"rent.invested_down_payment=0 — the renter's equivalent capital is assumed to earn "
+            f"exactly the discount rate (net present value 0); set invested_down_payment + "
+            f"investment_return_rate to model a different return (verdict not like-for-like)"
         )
 
     return warns

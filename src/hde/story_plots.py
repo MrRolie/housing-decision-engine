@@ -285,8 +285,10 @@ def _cumulative_cost_curves(
                 flows[year] += rec.annual_amount * (1 + g) ** year
         if rent.invested_down_payment > 0:
             r_inv = rent.investment_return_rate
-            # benefit PV = FV/(1+dr)^N (engine arithmetic); lift to a year-N
-            # flow so the curve discounts it exactly once.
+            # Capital leg as the engine books it: the outlay at year 0 (paid, like
+            # the buyer's down payment) and the terminal value at year N (credit);
+            # the credit is a year-N flow so the curve discounts it exactly once.
+            flows[0] = flows.get(0, 0.0) + rent.invested_down_payment
             credits[n] = -rent.invested_down_payment * ((1 + r_inv) ** n)
         curves["rent"] = _flows_to_curves(flows, credits)
 

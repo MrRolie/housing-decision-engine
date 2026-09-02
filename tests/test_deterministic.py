@@ -570,3 +570,41 @@ class TestNominalRentOtherCosts:
         det = compute_deterministic(spec)
         mc = run_monte_carlo(spec)
         assert mc.rent.summary.mean == pytest.approx(det.rent.total_pv)
+
+
+class TestRenterCapitalSymmetry:
+    """2026-09-02 (user-model dogfood): the renter's invested capital must be
+    charged at year 0 exactly as the buyer's down payment is; only the excess of
+    its return over the discount rate may move the verdict."""
+
+    def test_capital_charged_at_year_zero(self):
+        rent = RentParams(monthly_rent=1.0, rent_escalation_rate=0.0,
+                          invested_down_payment=100_000.0, investment_return_rate=0.05)
+        result = compute_deterministic(_spec(rent=rent, years=10, dr=0.05))
+        assert result.rent.breakdown["invested_capital_pv"] == 100_000.0
+        # at r_inv == dr the capital leg nets to zero: total is the rent alone
+        assert result.rent.total_pv == pytest.approx(result.rent.breakdown["rent_pv"], abs=1e-6)
+
+    def test_null_case_gap_is_only_the_time_value_of_a_non_yielding_asset(self):
+        """Buyer: all-cash V, no growth/fees/selling cost. Renter: ~no rent, D = V
+        invested at dr. Truth: buyer cost = V(1 − (1+dr)^−N), renter cost ≈ 0."""
+        from hde.config import load_config_dict
+        cfg = {"years": 10, "discount_rate": 0.03,
+               "condo": {"monthly_fee": 0, "initial_value": 100_000, "all_cash": True,
+                         "value_growth_rate": 0.0, "selling_cost_rate": 0.0},
+               "rent": {"monthly_rent": 0.01, "rent_escalation_rate": 0.0,
+                        "invested_down_payment": 100_000, "investment_return_rate": 0.03}}
+        det = compute_deterministic(load_config_dict(cfg))
+        truth = 100_000 * (1 - 1.03 ** -10)
+        assert det.condo.total_pv == pytest.approx(truth, rel=1e-9)
+        assert det.rent.total_pv == pytest.approx(0.0, abs=2.0)
+
+    def test_monte_carlo_books_the_same_capital_leg(self):
+        from hde.config import load_config_dict
+        from hde.monte_carlo import run_monte_carlo
+        cfg = {"years": 10, "discount_rate": 0.03,
+               "rent": {"monthly_rent": 1500, "invested_down_payment": 80_000,
+                        "investment_return_rate": 0.04},
+               "simulation": {"num_sims": 3, "random_seed": 1}}
+        spec = load_config_dict(cfg)
+        assert run_monte_carlo(spec).rent.summary.mean == pytest.approx(compute_deterministic(spec).rent.total_pv)

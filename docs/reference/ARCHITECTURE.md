@@ -89,8 +89,9 @@ Monte Carlo (below). A price-shock block likewise affects only the Monte Carlo.
 | `rent_pv` | PV of rent | `Σ_t 12·rent·(1 + e_eff)^t · (1 + dr)^-t` (closed form: growing annuity with first payment `12·rent·(1 + e_eff)`), `e_eff` from `rent_escalation_rate` |
 | `events_pv` | one-time events (e.g. moving) | `base_cost · (1 + dr)^-year` at `expected_year` clamped to `[1, N]` |
 | `other_pv` | other recurring costs | as for owned options |
-| `invested_dp_benefit_pv` | the renter's invested capital, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `D = invested_down_payment`, `r_inv = investment_return_rate` as entered (not inflation-composed); 0 when `D = 0` |
-| `total_pv` | net cost of renting | sum of the four |
+| `invested_capital_pv` | the renter's capital charged at year 0 — the mirror of `downpayment_pv` | `D = invested_down_payment`, undiscounted |
+| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` as entered (not inflation-composed). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
+| `total_pv` | net cost of renting | sum of the five |
 
 ### The verdict — `verdict`
 

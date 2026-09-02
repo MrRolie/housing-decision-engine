@@ -312,7 +312,7 @@ HOUSE_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
     {"maintenance_pv", "events_pv", "other_pv",
      "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
 )
-RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"rent_pv", "events_pv", "other_pv", "invested_dp_benefit_pv"})
+RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"invested_capital_pv", "rent_pv", "events_pv", "other_pv", "invested_dp_benefit_pv"})
 
 
 @dataclass

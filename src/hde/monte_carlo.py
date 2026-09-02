@@ -509,7 +509,8 @@ def _simulate_rent_pv_once(
             esc = (1 + esc) * (1 + econ.inflation_rate) - 1
         other_pv += pv_recurring_with_escalation(annual, esc, dr, sim.years)
 
-    # Invested down-payment benefit (reduces net cost of renting).
+    # Capital leg, mirroring the owned side (downpayment_pv + terminal equity):
+    # the renter's capital is charged at year 0 and its terminal value credited.
     if rent.invested_down_payment > 0:
         if sim.investment_return_vol > 0:
             z_inv = float(rng.normal())
@@ -521,7 +522,7 @@ def _simulate_rent_pv_once(
     else:
         benefit = 0.0
 
-    return rent_pv + events_pv + other_pv - benefit
+    return rent_pv + events_pv + other_pv + rent.invested_down_payment - benefit
 
 
 def _compute_income_affordability_once(
