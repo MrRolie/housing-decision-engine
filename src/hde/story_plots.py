@@ -154,7 +154,10 @@ def verdict_sentence(
         pv = getattr(det, verdict.best).total_pv
         return f"Only one option priced: {best} at ${pv:,.0f} over {years} years"
     if verdict.decisive:
-        return f"{best} wins by ${verdict.margin_pv:,.0f} over {years} years"
+        sentence = f"{best} wins by ${verdict.margin_pv:,.0f} over {years} years"
+        if verdict.mc_mean_best is not None and verdict.mc_mean_best != verdict.best:
+            sentence += f" — the Monte Carlo mean favours {OPTION_DISPLAY[verdict.mc_mean_best].lower()}"
+        return sentence
     runner = OPTION_DISPLAY[verdict.runner_up].lower()
     sentence = (
         f"Too close to call — effectively a tie: {best} edges {runner} by "
@@ -163,6 +166,8 @@ def verdict_sentence(
     if verdict.rule == "mc_floor":
         of = f"of {num_sims:,} simulations" if num_sims else "of simulations"
         sentence += f", cheapest in only {verdict.prob_best:.0%} {of}"
+    if verdict.mc_mean_best is not None and verdict.mc_mean_best != verdict.best:
+        sentence += f" — the Monte Carlo mean favours {OPTION_DISPLAY[verdict.mc_mean_best].lower()}"
     return sentence
 
 

@@ -45,6 +45,14 @@ def engine_version() -> str:
 # Anchors (provenance records)
 # ---------------------------------------------------------------------------
 
+# Rates _effective_growth_rate composes with inflation in nominal mode (the
+# spec keeps the REAL value; the PV engine and affordability numerator compose).
+_COMPOSED_AT_COMPUTE = frozenset({
+    "value_growth_rate", "fee_escalation_rate", "rent_escalation_rate",
+    "investment_return_rate", "income_growth_rate",
+})
+
+
 def anchor_to_dict(anchor: Anchor) -> Dict[str, Any]:
     """Every field of one anchor, JSON-shaped (tuples become lists)."""
     doc = dataclasses.asdict(anchor)
@@ -175,6 +183,8 @@ def assumptions_to_dict(
     no registry entry at all (that last case is a defect the tests pin against).
     """
     entries: List[Dict[str, Any]] = []
+    nominal = spec.economic.mode == "nominal"
+    pi = spec.economic.inflation_rate
     for key in spec.defaults_applied:
         field = key.rsplit(".", 1)[1]
         raw = spec_value(spec, key)
@@ -185,12 +195,25 @@ def assumptions_to_dict(
             kind = "mode"
         else:
             kind = "uncited"
+        # Nominal mode: the anchor is a REAL rate. The discount rate is composed
+        # at parse time (value ≠ anchor.value); growth/escalation/return rates
+        # keep the real value and are composed at compute time. Say which, so an
+        # agent can reconcile `value` with `anchor.value` without reading source.
+        note: Optional[str] = None
+        if nominal and anchor is not None:
+            if key == "simulation.discount_rate":
+                note = (f"composed at parse: (1 + {anchor.value:.1%} real)(1 + {pi:.1%} "
+                        f"inflation_rate) − 1 = {raw:.2%} nominal")
+            elif field in _COMPOSED_AT_COMPUTE:
+                note = (f"REAL rate; the engine composes inflation_rate on top at compute "
+                        f"time: (1 + {raw:.1%})(1 + {pi:.1%}) − 1 = {(1 + raw) * (1 + pi) - 1:.2%} nominal")
         entries.append({
             "key": key,
             "value": raw,
             "formatted": echo_value(spec, key),
             "cite": short_cite(key) or None,
             "kind": kind,
+            "note": note,
             "anchor": anchor_to_dict(anchor) if anchor is not None else None,
         })
     return {

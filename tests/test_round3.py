@@ -15,6 +15,8 @@ critics converged on the same engine gaps:
    rent −$5.8k). The verdict now carries `mc_mean_best` and says so.
 """
 
+import re
+
 import numpy as np
 import pytest
 
@@ -28,7 +30,9 @@ from hde.models import (
     OptionResult,
     compute_verdict,
 )
-from hde.serialization import format_assumptions
+from hde.serialization import assumptions_to_dict, format_assumptions
+from hde.story_plots import verdict_sentence
+from hde.sweep import format_sweep
 
 REAL_DR = ANCHORS["simulation.discount_rate"].value
 
@@ -142,3 +146,45 @@ class TestVerdictMonteCarloMean:
         assert compute_verdict(det, None, years=7).mc_mean_best is None
         mc = _mc({"condo": 150_000.0, "rent": 170_000.0}, {"condo": 1.0, "rent": 0.0})
         assert compute_verdict(det, mc, years=7, single_path=True).mc_mean_best is None
+
+
+class TestComposedDefaultsAreReconcilableInJson:
+    def test_discount_rate_entry_says_composed(self):
+        spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021}))
+        entries = {e["key"]: e for e in assumptions_to_dict(spec)["defaults_applied"]}
+        e = entries["simulation.discount_rate"]
+        assert e["value"] == pytest.approx((1 + REAL_DR) * 1.021 - 1)
+        assert e["anchor"]["value"] == pytest.approx(REAL_DR)
+        assert e["note"].startswith("composed at parse") and "5.16%" in e["note"]
+
+    def test_compute_time_composition_is_named(self):
+        spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021}))
+        entries = {e["key"]: e for e in assumptions_to_dict(spec)["defaults_applied"]}
+        e = entries["rent.investment_return_rate"]
+        assert e["value"] == pytest.approx(0.03)
+        assert "REAL rate" in e["note"] and "5.16%" in e["note"]
+
+    def test_real_mode_entries_carry_no_note(self):
+        spec = load_config_dict(_base())
+        assert all(e["note"] is None for e in assumptions_to_dict(spec)["defaults_applied"])
+
+
+class TestMeanDisagreementReachesTheStoryAndTheSweep:
+    def test_story_headline_names_the_mean_winner(self):
+        det = _det({"condo": 152_000.0, "rent": 156_700.0})
+        mc = _mc({"condo": 162_955.0, "rent": 157_128.0}, {"condo": 0.504, "rent": 0.496})
+        s = verdict_sentence(det, 7, mc, num_sims=100)
+        assert s.startswith("Too close to call") and s.endswith("— the Monte Carlo mean favours renting")
+
+    def test_story_headline_silent_when_they_agree(self):
+        det = _det({"condo": 150_000.0, "rent": 170_000.0})
+        mc = _mc({"condo": 151_000.0, "rent": 171_000.0}, {"condo": 0.9, "rent": 0.1})
+        assert "mean favours" not in verdict_sentence(det, 7, mc, num_sims=100)
+
+    def test_sweep_table_carries_the_mean_column(self):
+        rows = [{"value": 5, "totals": {"condo": 1.0, "rent": 2.0}, "best": "condo", "runner_up": "rent",
+                 "margin_pv": 1.0, "margin_frac": 0.5, "decisive": False, "prob_best": 0.5,
+                 "mc_mean_best": "rent", "reason": "", "monte_carlo": None}]
+        text = format_sweep({"key": "years", "values": [5], "rows": rows, "flips": []})
+        assert "MC-mean best" in text
+        assert any(re.search(r"\|\s+rent$", l) for l in text.splitlines())

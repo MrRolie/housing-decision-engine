@@ -256,8 +256,9 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             warns.append(
                 f"affordability: {name} ratios use the level payment at the REAL mortgage_rate "
                 f"{opt.mortgage_rate:.2%} (${pay:,.0f}/yr); the lender collects the payment at the "
-                f"quoted NOMINAL rate, which is higher and can breach the threshold where this does "
-                f"not — run mode: nominal with the quoted rate (effective annual) for the cash GDS/TDS ratio"
+                f"quoted NOMINAL rate — higher whenever the rate entered here is a real rate — and can "
+                f"breach the threshold where this does not; run mode: nominal with the quoted rate "
+                f"(effective annual) for the cash GDS/TDS ratio"
             )
 
     if spec.rent is not None and "rent.rent_escalation_rate" in spec.defaults_applied:

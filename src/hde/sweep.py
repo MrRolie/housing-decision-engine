@@ -119,7 +119,7 @@ def format_sweep(result: Dict[str, Any]) -> str:
     lines = [f"\nSweep {key} ({len(rows)} points; every other input held at its base value — "
              f"a joint question needs a second --sweep on the edited config; per-point Monte Carlo "
              f"percentiles ride --json):"]
-    head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive | P(best)"
+    head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive | P(best) | MC-mean best"
     lines.append(head)
     for r in rows:
         val = _fmt_value(key, r["value"])
@@ -128,9 +128,10 @@ def format_sweep(result: Dict[str, Any]) -> str:
             continue
         totals = " | ".join(f"${r['totals'][o]:>11,.0f}" for o in opts)
         prob = f"{r['prob_best']:.0%}" if r["prob_best"] is not None else "n/a"
+        mean_best = r.get("mc_mean_best") or "n/a"
         lines.append(
             f"  {val:>{max(len(key), 10)}} | {totals} | {r['best']:>8} | "
-            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>8} | {prob:>7}"
+            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>8} | {prob:>7} | {mean_best:>12}"
         )
     if result["flips"]:
         for f in result["flips"]:
