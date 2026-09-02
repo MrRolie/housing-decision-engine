@@ -361,3 +361,42 @@ class TestAssumptionsLineCarriesTheHorizonDrift:
         line = next(l for l in assumptions_to_dict(spec, prior)["lines"] if l.startswith("demographic prior:"))
         assert "reference REAL drift over this 8-year run" in line
         assert "(2030 band)" in line and "(2035 band)" in line and "2050" not in line
+
+
+class TestFinancingLineAndAffordabilityHeader:
+    """Round 6 (restructured-skill serves on Sonnet and Opus): both personas computed
+    the loan-to-value and the distance to the 20% insurance line by hand and landed
+    $250 over it; the report's affordability header named only the 32% figure."""
+
+    def test_assumptions_carry_the_financing_line_for_a_mortgage(self):
+        from hde.serialization import assumptions_to_dict
+        spec = load_config_dict(_base(condo={**_base()["condo"], "down_payment": 80_250, "purchase_costs": 9_750}))
+        line = next(l for l in assumptions_to_dict(spec, None)["lines"] if l.startswith("condo financing:"))
+        assert "down payment $80,250 = 20.06% of price" in line
+        assert "$250 above the 20% mortgage-insurance line ($80,000)" in line
+        assert "year-0 cash $90,000 (down payment + purchase_costs)" in line
+
+    def test_financing_line_says_below_when_insured(self):
+        from hde.serialization import assumptions_to_dict
+        spec = load_config_dict(_base(condo={**_base()["condo"], "down_payment": 60_000,
+                                              "financed_purchase_costs": 9_520}))
+        line = next(l for l in assumptions_to_dict(spec, None)["lines"] if l.startswith("condo financing:"))
+        assert "$20,000 below the 20% mortgage-insurance line" in line
+        assert "financed_purchase_costs $9,520 on the loan" in line
+
+    def test_all_cash_has_no_financing_line(self):
+        from hde.serialization import assumptions_to_dict
+        spec = load_config_dict({"years": 10, "rent": {"monthly_rent": 2000},
+                                 "condo": {"initial_value": 400_000, "monthly_fee": 300, "all_cash": True}})
+        assert not any(l.startswith("condo financing:") for l in assumptions_to_dict(spec, None)["lines"])
+
+    def test_affordability_header_names_the_three_thresholds(self):
+        spec = load_config_dict(_base(income={"annual_income": 90_000}))
+        det = compute_deterministic(spec)
+        text = format_text_report(det, None, spec.simulation, spec.economic, spec)
+        assert "Affordability (threshold: 32% — a GDS-shaped ratio" in text
+        assert "legacy guideline, CMHC caps GDS at 39%, TDS at 44%" in text
+
+    def test_schema_states_the_like_for_like_sizing(self):
+        from hde.input_schema import input_schema
+        assert "down_payment + purchase_costs" in input_schema()["rent"]["invested_down_payment"]["note"]

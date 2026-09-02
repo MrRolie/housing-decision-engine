@@ -121,8 +121,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "rent_escalation_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 "
                                           "PAG shelter-cost growth)"),
         "invested_down_payment": (False, "capital the renter keeps invested instead of buying: charged at year 0 like "
-                                        "the buyer's down payment and credited at its terminal value; "
-                                        "DEFAULT 0 = assume it earns exactly the discount rate"),
+                                        "the buyer's down payment and credited at its terminal value; like-for-like "
+                                        "= the buyer's TOTAL year-0 cash, down_payment + purchase_costs (all cash: "
+                                        "price + purchase_costs); DEFAULT 0 = assume it earns exactly the discount rate"),
         "investment_return_rate": (False, "annual, REAL (composed with inflation in nominal "
                                             "mode like value growth); DEFAULT 0.03 (FP Canada "
                                             "2026 PAG 60/40)"),

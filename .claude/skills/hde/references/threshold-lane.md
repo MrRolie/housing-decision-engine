@@ -35,14 +35,26 @@ uv run hde scenarios/<slug>.yaml --break-even rent.monthly_rent \
 - **Then the largest labelled dollar estimate** (maintenance 1.2% vs 0.6%).
 - **Then every default the engine warned on** (the 1% real rent escalation:
   a Québec continuing lease is ≈ 0% real).
-- The brackets interact: a bracket end that flips the verdict is a claim
-  about a combination (gate 5), so state what else that end assumes and quote
-  it under the other maintenance figure too — "at 2% growth your $1,900 puts
-  buying ahead with 0.6% maintenance; with 1.2% the band is $1,961–$2,162 and
-  renting still wins". Never call a single base rate "the point estimate".
+- Each `--sweep` varies ONE input with every other held at its base value;
+  the `across` blocks are single-axis, never a cross-product. A bracket end
+  that flips the verdict is therefore a claim about a combination (gate 5):
+  say what else that end assumes ("at 2% growth, with 0.6% maintenance and
+  1% real rent escalation held, your $1,900 puts buying ahead"), and when the
+  combination matters, run it — edit the config to the other maintenance
+  figure and repeat the growth sweep — or write "not run". Never call a
+  single base rate "the point estimate".
 - If the engine reports that the config refuses part of the bracket (a price
   below the down payment), quote the searched range, not the bracket asked
   for.
+
+## Which brackets lead
+
+Four `across` blocks give twelve threshold sentences; the answer does not
+carry them all. The headline sentence is the base threshold plus the growth
+bracket (the input with no evidence). Every other bracket gets one clause
+each ("at 1.2% maintenance the band is $2,768–$3,052; at 0% rent escalation
+$2,588–$2,853; ten years barely moves it"), unless its end flips the verdict
+at the user's rent — then it joins the headline with its conditions.
 
 ## The threshold sentence
 

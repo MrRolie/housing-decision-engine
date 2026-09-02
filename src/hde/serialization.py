@@ -141,6 +141,23 @@ def format_assumptions(
             f"maintenance {spec.house.annual_maintenance_rate:.1%} of value/yr · "
             f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
         )
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None or opt.all_cash or opt.down_payment is None:
+            continue
+        # Loan-to-value and the distance to the 20% insurance line (round-6
+        # dogfood: every persona computed it by hand and landed $250 over).
+        down_frac = opt.down_payment / opt.initial_value if opt.initial_value else 0.0
+        year0 = opt.down_payment + opt.purchase_costs
+        line = 0.20 * opt.initial_value
+        gap = opt.down_payment - line
+        side = "above" if gap >= 0 else "below"
+        lines.append(
+            f"{name} financing: down payment ${opt.down_payment:,.0f} = {down_frac:.2%} of price, "
+            f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
+            f"year-0 cash ${year0:,.0f} (down payment + purchase_costs)"
+            + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
+               if opt.financed_purchase_costs else "")
+        )
     if spec.rent is not None:
         lines.append(
             f"rent: escalation {_g(spec.rent.rent_escalation_rate)} · "

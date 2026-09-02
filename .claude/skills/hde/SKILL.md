@@ -21,6 +21,9 @@ a labelled estimate with the direction it biases the verdict).
 
 ## Which reference to open (read it before the step it names)
 
+Reference files live beside this file under `.claude/skills/hde/references/`;
+`examples/`, `docs/` and `tests/fixtures/` paths are repo-root paths.
+
 | When | Read |
 |---|---|
 | The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at my rent, what price is worth buying?", "how long would I have to stay?" | `references/threshold-lane.md`, before authoring the config |
@@ -106,9 +109,9 @@ the engine refuses a missing required key with the exact message — show it.
 | Contract question (what inputs exist, what is required) | `uv run hde --print-schema` |
 | "Where did that number come from?" (source, URL, band, what it replaced) | `uv run hde --print-anchors` |
 | Quick estimate from a ready config | `uv run hde <config.yaml>` |
-| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` |
+| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` — on the config whose verdict the answer leads with (on a threshold question, the one at the user's actual rent with uncertainty on) |
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point | `--sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
-| The threshold on ONE input — rent, price, years | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30`; beside `--sweep` it is re-solved at every sweep point (`across`); two priced options only; the lane is `references/threshold-lane.md` |
+| The threshold on ONE input — rent, price, years | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination needs a second config with the other value typed, then the same command); two priced options only; the lane is `references/threshold-lane.md` |
 | Agent-consumable result | append `--json` |
 | Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns; a financed buyer keeps `mode: nominal` |
 
@@ -163,13 +166,19 @@ answer; the cap of any lane ranks what stays and never drops an item:
       bias (a dropped warning fails the answer at any length)
 - [ ] `defaults applied:` — with an owned option, the two largest engine-set
       numbers, `selling_cost_rate` (5%, WOWA) and the discount rate, named
-      with their source; every other figure you proposed, with its label
+      with their source; every other figure you proposed, with its label —
+      including the values you TYPED on the user's behalf (a 0% rent
+      escalation, a 25-year amortization, a maintenance rate): a typed value
+      leaves `defaults applied` and its warning never fires, so your intake
+      message is the only record — carry each into the answer yourself
 - [ ] `decisiveness:` — the verdict's rule, its margin or probability, and
       `mc_mean_best` when it disagrees
 - [ ] the flip point or threshold, in the user's units, quoted at both ends
       of any estimate it rests on
-- [ ] `Year-1 cash` — both sides, principal, unrecoverable; the year-0 cash
-      total the config commits and the distance to the 20% line
+- [ ] `Year-1 cash` — both sides, principal, unrecoverable; the assumptions
+      line's `financing:` entry (year-0 cash the config commits, loan-to-value,
+      the distance to the 20% line) — a clearance within one price step of the
+      line is the same cliff as a shortfall: say what it rests on
 - [ ] `Affordability` — max ratio and breach years, quoting the affordability
       `[warning]` line verbatim (it names the 32% guideline, the 39% GDS cap
       and the 44% TDS cap)
@@ -178,8 +187,10 @@ answer; the cap of any lane ranks what stays and never drops an item:
 - [ ] **Not modelled:** every item with a direction
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 
-Then the prose per `references/answer-template.md`, under 500 words; the
-quick-sense cap and its cut order are in `references/quick-sense.md`.
+Then the prose per `references/answer-template.md`. One cap applies: under
+500 words, or the quick-sense cap and its cut order in
+`references/quick-sense.md` when the user asked for a quick sense — the
+lane's cap overrides the template's.
 
 ## Verification
 

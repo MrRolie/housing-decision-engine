@@ -10,8 +10,9 @@ whatever they were vague about, and offer the deeper pass at the end.
 ## The cap
 
 Under 200 words. With a mortgage, an income and a threshold question
-together, the answer checklist needs 250–300 words: exceed the cap before
-dropping an item. Cut in this order:
+together, the answer checklist needs 250–350 words: exceed the cap before
+dropping an item (this lane's cap overrides the answer template's 500). Cut
+in this order:
 
 1. the story path;
 2. the SOURCE of every default other than `selling_cost_rate` (5%, WOWA) and

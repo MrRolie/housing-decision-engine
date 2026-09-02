@@ -123,7 +123,8 @@ def format_text_report(
     # Affordability
     if det.income_report is not None:
         rpt = det.income_report
-        lines.append(f"\nAffordability (threshold: {rpt.threshold:.0%})")
+        lines.append(f"\nAffordability (threshold: {rpt.threshold:.0%} — a GDS-shaped ratio, housing cost incl. "
+                     f"maintenance over income; the 32% figure is the legacy guideline, CMHC caps GDS at 39%, TDS at 44%)")
         for name, ratios, exceeds in [
             ("Rent",  rpt.rent_ratios,  rpt.years_rent_exceeds),
             ("Condo", rpt.condo_ratios, rpt.years_condo_exceeds),
