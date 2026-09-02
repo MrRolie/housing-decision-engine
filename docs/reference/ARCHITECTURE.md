@@ -147,8 +147,9 @@ path, which the report stamps "not a forecast"):
   year t the band is the first of {2030, 2035, 2040, 2045, 2050} ≥ 2026 + t (the last band
   holds); the year's growth is `value_growth_rate + demo_drift_mean(h, s) + z_h · σ_h`,
   `σ_h = (demo_drift_p90 − demo_drift_p10) / 2.5632` (a Normal fitted through the published
-  decile span; the divisor is the anchor `market_scenario.drift_sigma_divisor`). Real
-  terms only — a nominal run with a prior is refused.
+  decile span; the divisor is the anchor `market_scenario.drift_sigma_divisor`). The drift
+  is a real rate: in nominal mode the sum composes with inflation like `value_growth_rate`
+  (the S4b-era refusal of a nominal run with a prior was lifted 2026-09-02).
 - **Price-shock channel (only with a `price_shock` block).** Each year, with probability
   `min(annual_hazard × tilt, 1)` — `tilt` = the path scenario's `drawdown_weight_tilt`
   row, 1 without a prior — the value drops by `severity = min(severity_mean · exp(σ_s z − σ_s²/2), 1)`.

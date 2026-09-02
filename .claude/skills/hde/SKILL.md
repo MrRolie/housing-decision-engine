@@ -115,7 +115,7 @@ committed.
 | Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story <dir>` |
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point on any input | `uv run hde <config.yaml> --sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
 | Agent-consumable result | append `--json` (typed doc: verdict + assumptions + warnings + deterministic + MC, plus `sweeps` when asked) |
-| Demographic prior run (Montréal only — `MTL_RMR` is the one geography shipped) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior committed at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo must be on — the prior adds drift there only |
+| Demographic prior run (Montréal only — `MTL_RMR` is the one geography shipped) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior committed at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo must be on — the prior adds drift there only; it runs in either mode (the drift is real; nominal mode composes it), so a financed buyer keeps `mode: nominal` |
 
 **Example 1:**
 Input: "I pay 2400/mo rent, similar condos go for 480k — is buying worth it over 15 years?"

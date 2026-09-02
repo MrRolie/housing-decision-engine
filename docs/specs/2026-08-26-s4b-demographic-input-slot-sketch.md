@@ -44,6 +44,7 @@ Per year t, real drift used by the engine =
 `user_value_growth_rate + demo_drift(draw)`.
 
 Ruled semantics (stated here so neither side improvises):
+  *(Lifted 2026-09-02: the drift is a real rate and nominal mode composes it with inflation like every other real input; a financed buyer runs nominal mode and must reach the prior.)*
 - The user's scalar remains their NON-demographic view (their macro view); the prior
   contributes the demographic component. Additive keeps both meaningful and keeps
   `value_growth_rate = 0` runs interpretable ("drift is exactly what demography says").

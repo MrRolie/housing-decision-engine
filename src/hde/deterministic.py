@@ -573,12 +573,12 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
     if spec.income is not None:
         income_report = _compute_affordability_report(spec.income, spec)
 
-    # S4b: a loaded ScenarioPrior stamps its identity on the result payload and
-    # is REAL-terms only — same law as the MC engine (refusal before any math).
+    # S4b: a loaded ScenarioPrior stamps its identity on the result payload
+    # (its drift enters the Monte Carlo only; real in either mode — nominal
+    # mode composes it with inflation like value_growth_rate).
     provenance = None
     if spec.market_scenario is not None:
-        from .monte_carlo import _require_real_mode, _load_prior_if_any
-        _require_real_mode(spec)
+        from .monte_carlo import _load_prior_if_any
         provenance = _load_prior_if_any(spec).provenance_block()
 
     return ComparisonDeterministicResult(

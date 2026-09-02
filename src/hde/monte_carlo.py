@@ -30,7 +30,6 @@ from .models import (
     IncomeParams,
     PayDropEvent,
     PriceShockParams,
-    InputError,
 )
 from .market_scenario import (
     LoadedScenarioPrior,
@@ -101,14 +100,13 @@ def _load_prior_if_any(spec: ComparisonSpec):
     )
 
 
-def _require_real_mode(spec: ComparisonSpec) -> None:
-    """Nominal-mode refusal (S4b Slot 1): composing a REAL-terms prior into a
-    nominal run is the confident-wrong-answer class — refuse before any math."""
-    if spec.market_scenario is not None and spec.economic.mode == "nominal":
-        raise InputError(
-            "market_scenario is a REAL-terms (CPI-deflated) prior but "
-            f"econ.mode == 'nominal'; refusing to compose. Use mode='real'."
-        )
+# The prior's drift is a REAL rate. In nominal mode it is added to the (real)
+# value_growth_rate and the sum is composed with inflation by
+# _effective_growth_rate — the same contract as every other real input, so a
+# nominal run with a prior is coherent. The S4b-era refusal of that
+# combination was lifted 2026-09-02 (round-four dogfood: a financed Montréal
+# buyer must run nominal mode for the lender's payment, and the shipped
+# Montréal prior was unreachable from it).
 
 
 def _draw_drift_context(prior_rows, rng):
@@ -645,7 +643,6 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
         _require_valued_growth(spec.house.value_growth_rate, "house")
 
     # S4b: nominal-mode refusal + ScenarioPrior load/validation (fail-loud).
-    _require_real_mode(spec)
     prior = _load_prior_if_any(spec)
     condo_prior_rows = prior.rows_for_dwelling("condo") if prior is not None and spec.condo is not None else None
     house_prior_rows = prior.rows_for_dwelling("house") if prior is not None and spec.house is not None else None

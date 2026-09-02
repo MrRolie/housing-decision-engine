@@ -374,24 +374,33 @@ class TestMCComposition:
         assert loaded.market_scenario is not None
 
 
-class TestNominalModeRefusal:
-    def test_run_monte_carlo_refuses_nominal_with_prior(self, tmp_path):
-        path = _write_prior(tmp_path, _valid_prior())
-        spec = _spec(
-            market_scenario=MarketScenario(path=path, geography=GEO),
-            econ=EconomicParams(mode="nominal"),
-        )
-        with pytest.raises(Exception, match="[Nn]ominal"):
-            run_monte_carlo(spec)
+class TestNominalModeComposesThePrior:
+    """The refusal of a prior in nominal mode was lifted 2026-09-02: the drift
+    is a REAL rate and composes with inflation exactly like value_growth_rate
+    (a financed buyer runs nominal mode for the lender's payment and must still
+    be able to check the shipped prior)."""
 
-    def test_compute_deterministic_refuses_nominal_with_prior(self, tmp_path):
+    def test_nominal_run_with_prior_is_accepted_by_both_engines(self, tmp_path):
         path = _write_prior(tmp_path, _valid_prior())
         spec = _spec(
             market_scenario=MarketScenario(path=path, geography=GEO),
-            econ=EconomicParams(mode="nominal"),
+            econ=EconomicParams(mode="nominal", inflation_rate=0.021),
         )
-        with pytest.raises(Exception, match="[Nn]ominal"):
-            compute_deterministic(spec)
+        mc = run_monte_carlo(spec)
+        assert mc.market_scenario is not None and mc.market_scenario["geography"] == GEO
+        assert compute_deterministic(spec).market_scenario is not None
+
+    def test_zero_inflation_nominal_equals_real_and_inflation_moves_it(self, tmp_path):
+        path = _write_prior(tmp_path, _valid_prior())
+        ms = MarketScenario(path=path, geography=GEO)
+        real = run_monte_carlo(_spec(market_scenario=ms, econ=EconomicParams(mode="real")))
+        nominal0 = run_monte_carlo(_spec(market_scenario=ms,
+                                         econ=EconomicParams(mode="nominal", inflation_rate=0.0)))
+        nominal = run_monte_carlo(_spec(market_scenario=ms,
+                                        econ=EconomicParams(mode="nominal", inflation_rate=0.021)))
+        # Composition with zero inflation is the identity: the prior path is mode-agnostic.
+        assert np.allclose(real.condo.pvs, nominal0.condo.pvs)
+        assert not np.allclose(real.condo.pvs, nominal.condo.pvs)
 
 
 class TestPriceShockChannel:
