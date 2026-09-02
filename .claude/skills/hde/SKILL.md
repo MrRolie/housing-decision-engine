@@ -44,6 +44,20 @@ its bias (renewal risk with any mortgage; every defaulted escalation the
 engine warned on) · one next step. Defaults' provenance beyond the two
 largest and the story path can go; a warning cannot.
 
+**One side known.** Most people arrive certain about one side and vague about
+the other: "I'm looking at houses in Duvernay around $650k — what rent would
+keep renting the better deal?", or "I pay $1,900; at what price is buying
+worth it?", or "how long would I have to stay?". That is a threshold
+question, not a verdict question: author the config with their known side
+and a placeholder for the other (the engine needs a `monthly_rent` / an
+`initial_value` to run — use their current rent or the middle of the price
+band, and say so), then run `--break-even` on the unknown input and lead
+with the threshold in their units: "renting is cheaper below $X/month, too
+close to call between $A and $B, buying is cheaper above $B". Everything
+property-specific they cannot know yet (tax, fees, maintenance, purchase
+costs) is an estimate you label and, for the least certain one, sweep — the
+threshold moves with it, so quote the threshold at both ends of that sweep.
+
 Then gather the schema keys: consult `--print-schema` for exact keys, the
 `required` flags, and `required_if` (an owned option must declare
 `all_cash: true` OR the full mortgage block). Describe the schema only from
@@ -118,6 +132,7 @@ over it.
 | a posted 5-year fixed rate | `mortgage_rate` = effective annual: `(1 + r/2)^2 − 1`, used AS IS in `mode: nominal` (gate 3: a mortgage means nominal mode — never a real conversion of the mortgage); `mortgage_term_years` is the AMORTIZATION (usually 25), never the 5-year term | the rate is held for the whole amortization — say that renewal risk is not modelled (biases toward buying when rates are rising) |
 | "prices here grow 3%", "rent goes up 3%", "my portfolio makes 6%" | `value_growth_rate`, `rent_escalation_rate`, `investment_return_rate` — a colloquial rate is a STICKER (nominal) figure unless the user says "above inflation": convert every one of them the same way, real ≈ (1 + quoted)/(1 + 2.1%) − 1 — never just the mortgage | gate 3 |
 | "I might move for work" | run the shorter horizon as a second config | no probabilistic exit in the engine |
+| browsing a market, no specific property ("houses in <area> around $650k") | the price band is THEIR number (`--sweep` or `--break-even` across it); everything property-specific is an estimate you label — tax from the municipality's rate or "≈ x% of value (illustrative)", maintenance NAHB ≈ 0.6% of value, fees typical for the building type, purchase costs ≈ 1.5% of price — and the least certain one gets a `--sweep` | say which figures are estimates and that a real listing's tax bill and fees replace them |
 
 ## Cases → dispatch
 
@@ -133,7 +148,8 @@ committed.
 | Quick estimate from a ready config | `uv run hde <config.yaml>` |
 | Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story <dir>` |
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point on any input | `uv run hde <config.yaml> --sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
-| Agent-consumable result | append `--json` (typed doc: verdict + assumptions + warnings + deterministic + MC, plus `sweeps` when asked) |
+| "What rent keeps renting the better deal?" / "at my rent, what price makes buying worth it?" / "how long before buying wins?" — the threshold on ONE input | `uv run hde <config.yaml> --break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30` (solves the crossing and the tie-band edges; two priced options only; money inputs get a ¼×–4× bracket by default, anything else takes `=lo:hi`) |
+| Agent-consumable result | append `--json` (typed doc: verdict + assumptions + warnings + deterministic + MC, plus `sweeps` / `break_evens` when asked) |
 | Demographic prior run (Montréal only — `MTL_RMR` is the one geography shipped) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior committed at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo must be on — the prior adds drift there only; it runs in either mode (the drift is real; nominal mode composes it), so a financed buyer keeps `mode: nominal` |
 
 **Example 1:**

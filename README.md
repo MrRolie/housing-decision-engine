@@ -32,6 +32,7 @@ Without Claude:
 uv run hde examples/basic_config.yaml   # a worked scenario
 uv run hde --print-schema               # every input and what is required
 uv run hde --print-anchors              # where every default comes from
+uv run hde examples/mortgage_house_vs_rent.yaml --break-even rent.monthly_rent   # the rent at which renting and buying tie
 ```
 
 ## The showcase

@@ -126,6 +126,25 @@ class TestJsonContract:
                                        "monthly_equivalent", "prob_best", "decisive",
                                        "rule", "reason", "mc_mean_best"}
 
+    def test_break_even_rides_json(self, tmp_path, monkeypatch, capsys):
+        import json
+        cfg = tmp_path / "two.yaml"
+        cfg.write_text(
+            "years: 10\n"
+            "rent:\n  monthly_rent: 2000\n  rent_escalation_rate: 0.0\n  invested_down_payment: 85000\n"
+            "condo:\n  initial_value: 400000\n  monthly_fee: 300\n  value_growth_rate: 0.0\n"
+            "  down_payment: 80000\n  mortgage_rate: 0.04\n  mortgage_term_years: 25\n  purchase_costs: 5000\n"
+            "  other_recurring_costs:\n    - {name: tax, annual_amount: 3000, escalation_rate: 0.0}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--json", "--no-monte-carlo",
+                                          "--break-even", "rent.monthly_rent"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        assert "break_evens" in doc and doc["break_evens"][0]["key"] == "rent.monthly_rent"
+        assert set(doc["break_evens"][0]) >= {"options", "bracket", "base_value", "tie_band_fraction", "break_evens"}
+        assert doc["break_evens"][0]["break_evens"][0]["cheaper_below"] == "rent"
+
     def test_no_monte_carlo_yields_null_not_missing(self, tmp_path, monkeypatch, capsys):
         doc = self._doc(tmp_path, monkeypatch, capsys, ["--no-monte-carlo"])
         assert "monte_carlo" in doc and doc["monte_carlo"] is None

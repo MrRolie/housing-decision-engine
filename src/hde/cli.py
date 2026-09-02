@@ -103,6 +103,16 @@ def main() -> int:
              "--sweep years=5,10,20 or --sweep condo.value_growth_rate=0:0.04:5; prints "
              "per-point verdicts and where the cheapest option flips; rides --json as 'sweeps'",
     )
+    parser.add_argument(
+        "--break-even",
+        action="append",
+        default=[],
+        metavar="KEY|KEY=lo:hi",
+        help="Solve one input for the value where the two priced options' total PVs cross, "
+             "with the tie-band edges around it (repeatable), e.g. --break-even rent.monthly_rent "
+             "or --break-even condo.initial_value=300000:900000; needs exactly two options; "
+             "rides --json as 'break_evens'",
+    )
     args = parser.parse_args()
 
     if args.print_schema:
@@ -191,6 +201,20 @@ def main() -> int:
                 return 1
             sweeps.append(run_sweep(raw, key, values, monte_carlo=not args.no_monte_carlo))
 
+    # Break-evens (threshold questions) — same loader, deterministic line.
+    break_evens = []
+    if args.break_even:
+        import yaml as _yaml
+        from .break_even import parse_break_even, solve_break_even
+        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        for be_arg in args.break_even:
+            try:
+                key, lo, hi = parse_break_even(be_arg)
+                break_evens.append(solve_break_even(raw, key, lo, hi))
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+
     # Output results
     if args.json:
         import json as _json
@@ -216,6 +240,8 @@ def main() -> int:
         }
         if args.sweep:
             doc["sweeps"] = sweeps
+        if args.break_even:
+            doc["break_evens"] = break_evens
         print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
     elif args.quiet:
@@ -276,6 +302,10 @@ def main() -> int:
         from .sweep import format_sweep
         for sweep_result in sweeps:
             print(format_sweep(sweep_result))
+    if break_evens and not args.json:
+        from .break_even import format_break_even
+        for be_result in break_evens:
+            print(format_break_even(be_result))
 
     if args.story:
         if det_result is None:

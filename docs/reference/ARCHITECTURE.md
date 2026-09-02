@@ -192,6 +192,18 @@ point the loader refuses (e.g. an event past a shortened horizon) is reported
 as `error`, not skipped silently. Monte Carlo runs per point unless
 `--no-monte-carlo` or the point is a single-path run.
 
+### Break-evens — `--break-even KEY` or `KEY=lo:hi`
+
+The threshold on one input (`src/hde/break_even.py`): with exactly two priced
+options, a nine-point scan of the bracket finds every sign change of
+`total_pv(A) − total_pv(B)` on the deterministic line, bisection refines each
+crossing, and the tie-band edges around it are solved the same way on the
+verdict's own denominator (`|gap| / |cheaper PV| = verdict.tie_band`). Money
+inputs default to a ¼×–4× bracket around the YAML value; every other key
+takes `=lo:hi`. Integer inputs (`years`, amortization) are step functions and
+report the first value where the other side is cheaper. Rides `--json` as
+`break_evens`; the story's act 6 is the same crossing for rent, drawn.
+
 ### Assumptions block — `assumptions`
 
 `mode`, `years`, `discount_rate`; `lines` (the text echo, including the
