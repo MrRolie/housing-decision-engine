@@ -33,12 +33,12 @@ Rent   total PV:  $     534,342
 
 Too close to call: House edges Condo by $3,115 (0.6%)
   ≈ $18/month equivalent
-  decisiveness: P(house cheapest) = 35% < 65% floor [hde verdict rule]
+  decisiveness: P(house cheapest) = 36% < 65% floor [hde verdict rule]
 
 Monte Carlo:
-  Condo: mean $538,999  p5 $449,862  p50 $551,199  p95 $618,651
-  House: mean $533,253  p5 $451,335  p50 $543,533  p95 $605,107
-  Rent: mean $534,342  p5 $534,342  p50 $534,342  p95 $534,342
-  P(condo cheapest): 32.4%
-  P(house cheapest): 35.5%
-  P(rent cheapest): 32.1%
+  Condo: mean $538,151  p5 $450,774  p50 $550,065  p95 $618,432
+  House: mean $534,778  p5 $452,387  p50 $544,320  p95 $604,915
+  Rent: mean $534,231  p5 $391,540  p50 $550,119  p95 $622,465
+  P(condo cheapest): 32.0%
+  P(house cheapest): 35.6%
+  P(rent cheapest): 32.3%

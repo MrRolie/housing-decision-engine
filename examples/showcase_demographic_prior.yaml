@@ -102,3 +102,4 @@ rent:
 simulation:
   num_sims: 5000
   random_seed: 42
+  investment_return_vol: 0.10  # illustrative — annual vol of a 60/40 portfolio's gross return; matches the owned side's price_shock channel (like-for-like tails)

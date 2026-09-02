@@ -2,15 +2,13 @@
 
 # The story of this housing decision
 
-**Too close to call — effectively a tie: Buying a house edges buying a condo by $3,115 (0.6%) over 25 years, cheapest in only 35% of 5,000 simulations** — under MTL_RMR demographic conditions · 25-year horizon.
-
-> warning: asymmetric tails: an owned option carries a price_shock channel while simulation.investment_return_vol=0 leaves the renter's capital unable to lose — set investment_return_vol (0.10 ≈ 60/40 portfolio) or drop price_shock for a like-for-like worst case
+**Too close to call — effectively a tie: Buying a house edges buying a condo by $3,115 (0.6%) over 25 years, cheapest in only 36% of 5,000 simulations** — under MTL_RMR demographic conditions · 25-year horizon.
 
 Demographic prior: MTL_RMR demand model (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · simulation year 1 = calendar 2026, bands 2030/2035/2040/2045/2050 · mapping v1: excess-demand rate → real price drift through a linear-through-origin β prior with the uniform β demoflow pinned; horizon bands (2030…2050) are piecewise-constant with no interpolation; drawdown_weight_tilt multiplies the user's price-shock hazard (S4b sketch §1 slots 2–3, §3) · 13 pinned sources (sha256 in --json): StatCan 98-10-0231-01; ISQ arrival flows (RA); ISQ arrival flows (RMR); derived: headship rate by single year of age; StatCan 98-10-0232-01; derived: living-arrangement shares; StatCan 98-10-0134-01; CIA CPM2014 mortality + CPM-B scale; derived: ownership rate by geography × age; derived: HORS_RMR ownership curve; ISQ population scenarios (QC); ISQ population scenarios (RA); ISQ population scenarios (RMR).
 
 ## Act — The answer
 
-Too close to call — effectively a tie: Buying a house edges buying a condo by $3,115 (0.6%) over 25 years, cheapest in only 35% of 5,000 simulations
+Too close to call — effectively a tie: Buying a house edges buying a condo by $3,115 (0.6%) over 25 years, cheapest in only 36% of 5,000 simulations
 
 ![The answer](act1_the_answer.png)
 
@@ -22,7 +20,7 @@ Renting costs less out of pocket every single year — the ranking never flips (
 
 ## Act — The uncertainty
 
-In 35% of 5,000 simulations, buying a house came out cheapest.
+In 36% of 5,000 simulations, buying a house came out cheapest.
 
 ![The uncertainty](act3_the_uncertainty.png)
 
