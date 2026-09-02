@@ -52,7 +52,7 @@ This repo serves TWO consumer layers, and every output surface is designed for b
 1. **Agents and other systems** — the `hde` CLI (`--json`) and the Python
    library. Typed inputs/outputs, deterministic, seeded. demoflow consumes the actuarial
    package through this layer's discipline.
-2. **The personal consumer using Claude as the interface** — Mike making his own
+2. **The personal consumer using Claude as the interface** — the operator making their own
    rent/buy/house decisions through conversation. Not a separate build yet; today's CLI,
    YAML scenarios, and reports are its seed.
 
@@ -110,7 +110,7 @@ Sessions:
 - S2 ✅ MCP server — 6 tools (2026-06-08, PR #2); removed 2026-09-01, superseded by CLI + skill
 - S3 ✅ 3-way comparison + income model (2026-06-08, PR #3)
 - S4a ✅ Net-wealth foundation: mortgage amortization + terminal equity (2026-07-21, PR #4)
-- S4b ✅ Market scenario layer: demographic drift priors + tilted price-shock channel (2026-08-26, 8ceb010 / 0e2116e; `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md`)
+- S4b ✅ Market scenario layer: demographic drift priors + tilted price-shock channel (2026-08-26; `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md`)
 - Surface + provenance ✅ CLI-first doctrine, anchors registry, one verdict, figure glossary (2026-08-26 → 2026-09-01; `docs/plans/2026-09-01-readiness-polish.md`, `docs/specs/2026-09-01-provenance-remediation-design.md`)
 
 ## Do not

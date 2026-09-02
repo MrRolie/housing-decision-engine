@@ -177,8 +177,8 @@ def test_the_public_api_stays_pandas_free():
 
 
 def test_actuarial_compat_import_is_allowed():
-    # This resolves to actuarial-system's `actuarial.compat` shim (the consumer-first
-    # layout's sanctioned legacy surface — mandate D3), NOT to anything in hde — must succeed.
+    # This resolves to actuarial-system's `actuarial.compat` shim (its supported
+    # legacy import surface), NOT to anything in hde — must succeed.
     from actuarial.compat import get_qx  # noqa: F401
 
     # Provenance, not just success: prove WHICH package answered.

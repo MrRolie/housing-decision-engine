@@ -95,8 +95,7 @@ class Anchor:
             )
         if self.url.startswith("http") and not self.retrieved_on.strip():
             raise AnchorError(
-                f"anchor {self.name!r}: a live URL needs retrieved_on — an "
-                f"unverified citation is a prediction dressed as an observation"
+                f"anchor {self.name!r}: a live URL needs retrieved_on (the date the source was retrieved)"
             )
         if self.replaces is not None:
             if not isinstance(self.replaces, tuple) or len(self.replaces) != 2:

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Overall:** S1–S4b complete; the 2026-09-01 readiness polish landed on `feat/readiness-polish` (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary). **Remote caveat (2026-09-01):** `origin` was rebuilt the same day as a fresh single-commit history (`fb840ee`); this branch shares no history with it. Reconcile by a fresh clone plus replaying these commits' content — never merge, rebase, or force-push the existing branch — and pass the operator's content scan before opening a PR. Then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
+**Overall:** S1–S4b complete; the 2026-09-01 readiness polish (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary, the clone-and-ask user flow; MCP server removed) is on branch `feat/readiness-polish`. Next: PR + merge; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).
 **Created:** 2026-06-07
 **Last Updated:** 2026-09-01
 **Slug:** `housing-decision-engine`
@@ -15,7 +15,7 @@
 | 2 | brainstorm-to-execute | `completed` | `mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
 | 4a | brainstorm-to-execute | `completed` | `docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
-| 4b | brainstorm-to-execute | `completed` | `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md` — commits `8ceb010`, `0e2116e` (2026-08-26) | Market scenario layer: demographic drift priors (demoflow ScenarioPrior) + tilted price-shock channel; correlated market+income shocks and the pre-canned stress configs were NOT built — the prior replaced the hand-authored scenario menu. |
+| 4b | brainstorm-to-execute | `completed` | `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md` (2026-08-26) | Market scenario layer: demographic drift priors (demoflow ScenarioPrior) + tilted price-shock channel; correlated market+income shocks and the pre-canned stress configs were NOT built — the prior replaced the hand-authored scenario menu. |
 | readiness | plan-to-execute | `completed` | `docs/plans/2026-09-01-readiness-polish.md` (branch `feat/readiness-polish`) | Provenance + verdict + intake + glossary + hygiene; suite 440+ tests. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
@@ -23,7 +23,7 @@ A `completed` row MUST carry a real, stat-able artifact path — repo-relative h
 
 ### Hand-off Payload
 
-- **Next session:** replay `feat/readiness-polish` onto a fresh clone of the rebuilt `origin` (content replay, not a push of this branch), run the operator's content scan, then PR + merge; then the deferred ruling on mypy (fix + gate, or drop the config) and whether demoflow's emitter should embed source citations (plan E.5, cross-contract).
+- **Next session:** PR + merge of `feat/readiness-polish`; then the deferred ruling on mypy (fix + gate, or drop the config) and whether demoflow's emitter should embed source citations (plan E.5, cross-contract).
 - **Input artifacts it consumes:** the readiness plan, `docs/specs/2026-09-01-provenance-remediation-design.md` (citation table), `tests/test_anchors.py` (generative pins).
 - **Mid-session resume state:** N/A.
 
@@ -41,7 +41,7 @@ A `completed` row MUST carry a real, stat-able artifact path — repo-relative h
 
 ### Next Recommended Action
 
-Operator-triggered: fresh clone of the rebuilt `origin`, replay the `feat/readiness-polish` commits' content onto it, content scan, then the PR (run `bash scripts/test-all.sh` there first; regenerate `docs/story/` and confirm `git status` clean on a second render). Do not push, merge, or rebase this clone's existing branches.
+Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; regenerate `docs/story/` and confirm `git status` clean on a second render).
 
 ---
 

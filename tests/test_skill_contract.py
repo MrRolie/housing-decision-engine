@@ -76,7 +76,7 @@ def test_skill_points_at_the_docs_that_exist():
 
 def test_skill_has_no_machine_specific_paths():
     """A cloned repo runs anywhere: the skill may not name this machine's paths."""
-    for needle in ("~/", "/home/", "ai_system"):
+    for needle in ("~/", "/home/", "/Users/"):
         assert needle not in TEXT, needle
 
 

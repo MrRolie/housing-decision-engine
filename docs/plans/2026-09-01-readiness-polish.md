@@ -7,15 +7,8 @@ engine that (G1) gets to know the user and their housing goals first, (G2) tells
 clear winning option exists, and (G3) can answer any question about the figures, calculations,
 rates, hyperparameters and where the data came from. G3 is why every number needs an anchor.
 
-**How this was measured:** nine read-only finders (one per goal facet: intake, verdict, JSON
-surface, constants, formulas, prior provenance, a reproduce-by-hand probe, docs drift, tests of
-claims), then a two-lens refute pass (correctness, materiality) on every deduped finding.
-73 verdicts returned, 1 refuted. Everything below was re-read in the working tree.
-**Not measured:** the completeness critic was stopped before it ran, so nominal-mode paths,
-leveraged (mortgage) paths, the library API in `src/hde/__init__.py`, and the example YAML
-provenance headers' accuracy against their citations were not swept. And no finder checked
-whether any cited figure is what its source actually says — every anchor was checked for
-internal consistency only (see Step 0.0).
+**How this was measured:** a read-only audit against each goal facet (intake, verdict, JSON surface, constants, formulas, prior provenance, a reproduce-by-hand probe, docs drift, tests of claims), every finding re-checked for correctness and materiality, then re-read in the working tree.
+**Not measured:** nominal-mode paths, leveraged (mortgage) paths, the library API in `src/hde/__init__.py`, and the example YAML provenance headers' accuracy against their citations were not swept; and nothing checked whether a cited figure is what its source actually says — every anchor was checked for internal consistency only (see Step 0.0).
 
 **Minimum readiness cut:** Step 0 + A + B + F.1–F.3 + E.1 flips the verdict from not-ready to
 ready. C, D, E.2–E.6, F.4–F.5, G are polish behind it and can run afterwards or in parallel.

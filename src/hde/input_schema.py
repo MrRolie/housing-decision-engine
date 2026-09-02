@@ -1,4 +1,4 @@
-"""The input contract, emitted as data (TOOL-SURFACES: agents query the living
+"""The input contract, emitted as data (agents query the living
 schema; docs rot, this cannot). REQUIRED flags and NOTES are hand-curated beside
 the machine key-sets; a test pins completeness against `_SECTION_KEYS` so a key
 added to the parser without a schema entry fails the suite.

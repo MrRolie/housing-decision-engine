@@ -1,6 +1,6 @@
 """Result + assumption serialization — THE typed core for agent-facing output.
 
-One source of truth (TOOL-SURFACES doctrine): the CLI's `--json` and any future
+One source of truth: the CLI's `--json` and any future
 surface render from THESE functions, so no two surfaces can drift. The result
 serializers were lifted from the retired MCP server (2026-08-26; the server
 itself was removed 2026-09-01 — the CLI + repo-local skill is the only
