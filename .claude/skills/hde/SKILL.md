@@ -57,6 +57,14 @@ close to call between $A and $B, buying is cheaper above $B". Everything
 property-specific they cannot know yet (tax, fees, maintenance, purchase
 costs) is an estimate you label and, for the least certain one, sweep — the
 threshold moves with it, so quote the threshold at both ends of that sweep.
+The break-even is the deterministic crossing; with any uncertainty input on,
+the verdict's decisiveness is the Monte Carlo floor, so quote it as "the
+deterministic threshold", cross-check it against the sweep's `mean flip:`
+line on the same input, and never present it as the tie the verdict would
+call. A price break-even holds `down_payment` fixed (a fixed cash pile), so
+the loan-to-value and any insurance premium change along the scan — say so.
+If the engine reports that the config refuses part of the bracket (a price
+below the down payment), quote the searched range, not the bracket asked for.
 
 Then gather the schema keys: consult `--print-schema` for exact keys, the
 `required` flags, and `required_if` (an owned option must declare

@@ -20,7 +20,7 @@ import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .anchors import ANCHORS
-from .config import load_config_dict
+from .config import ConfigValidationError, load_config_dict
 from .deterministic import compute_deterministic
 from .sweep import INT_KEYS, _fmt_value, with_value
 
@@ -73,8 +73,13 @@ def solve_break_even(
     (A, B in the order condo, house, rent). A coarse scan of the bracket finds
     every sign change (the gap need not be monotone in the input); each is
     refined by bisection, and the tie-band edges around it are solved the same
-    way. Raises ValueError when the config prices more or fewer than two
-    options, or when the key is not in the YAML and no bracket was given.
+    way, walking outward from the crossing one grid cell at a time (a second
+    crossing ends the band: that edge is None). Grid points the loader refuses
+    (a price below the fixed down payment) are recorded under "refused" and
+    the search shrinks to the accepted run(s), reported as "searched". Raises
+    ValueError when the config prices more or fewer than two options, when the
+    key is not in the YAML and no bracket was given, or when every point of
+    the bracket is refused.
     """
     options = _priced_options(raw)
     if len(options) != 2:
@@ -95,14 +100,37 @@ def solve_break_even(
     is_int = key in INT_KEYS
     band = ANCHORS["verdict.tie_band"].value
 
-    cache: Dict[float, Tuple[float, float]] = {}
+    cache: Dict[float, Optional[Tuple[float, float]]] = {}
+    refused: List[Tuple[float, str]] = []
 
-    def totals(v: float) -> Tuple[float, float]:
+    def totals_or_none(v: float) -> Optional[Tuple[float, float]]:
+        """The two totals at v, or None when the loader refuses that value (a
+        price below the fixed down payment, a rate outside its bounds): the
+        refusal is recorded, never raised — the search shrinks to what the
+        config accepts and the output says so."""
         vv = int(round(v)) if is_int else float(v)
         if vv not in cache:
-            det = compute_deterministic(load_config_dict(with_value(raw, key, vv)))
-            cache[vv] = (getattr(det, a).total_pv, getattr(det, b).total_pv)
+            try:
+                det = compute_deterministic(load_config_dict(with_value(raw, key, vv)))
+            except (ConfigValidationError, ValueError) as e:
+                cache[vv] = None
+                refused.append((vv, str(e).strip().splitlines()[-1].strip()))
+            else:
+                cache[vv] = (getattr(det, a).total_pv, getattr(det, b).total_pv)
         return cache[vv]
+
+    def totals(v: float) -> Tuple[float, float]:
+        t = totals_or_none(v)
+        if t is None:
+            raise ValueError(
+                f"--break-even {key}: the loader refused {_fmt_value(key, v)} inside a bracket "
+                f"whose ends it accepted ({refused[-1][1]}) — give a bracket the config accepts (KEY=lo:hi)"
+            )
+        return t
+
+    def gap_or_none(v: float) -> Optional[float]:
+        t = totals_or_none(v)
+        return None if t is None else t[0] - t[1]
 
     def gap(v: float) -> float:
         ta, tb = totals(v)
@@ -131,55 +159,117 @@ def solve_break_even(
                 x1, f1 = mid, fm
         return 0.5 * (x0 + x1)
 
-    n = 9 if not is_int else max(2, min(9, int(hi - lo) + 1))
-    xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
-    ys = [gap(x) for x in xs]
-    crossings: List[Tuple[float, float]] = []
-    for i in range(1, n):
-        if ys[i - 1] == 0.0:
-            crossings.append((xs[i - 1], xs[i - 1]))
-        elif ys[i - 1] * ys[i] < 0:
-            crossings.append((xs[i - 1], xs[i]))
+    def scan(x_lo: float, x_hi: float) -> Tuple[List[float], List[Optional[float]]]:
+        n = 9 if not is_int else max(2, min(9, int(x_hi - x_lo) + 1))
+        pts = [x_lo + (x_hi - x_lo) * i / (n - 1) for i in range(n)]
+        return pts, [gap_or_none(x) for x in pts]
+
+    def solve_run(xs: List[float], ys: List[Optional[float]]) -> List[Dict[str, Any]]:
+        """Every sign change on one accepted run of the grid, each refined by
+        bisection, with the tie-band edges found by walking outward from the
+        crossing one grid cell at a time — so a second crossing further along
+        the grid ends the band (edge None) instead of being searched across."""
+
+        def edge(v: float, j: int, step: int) -> Optional[float]:
+            inner, side = v, 0.0
+            while 0 <= j < len(xs):
+                if ys[j] is None:
+                    return None
+                outer = xs[j]
+                fo = frac(outer)
+                if side == 0.0:
+                    side = 1.0 if fo > 0 else (-1.0 if fo < 0 else 0.0)
+                elif fo != 0.0 and (fo > 0) != (side > 0):
+                    return None  # the next crossing comes before the band edge
+                if side and abs(fo) >= band:
+                    target = side * band
+                    return bisect(lambda x: frac(x) - target, min(inner, outer), max(inner, outer))
+                inner = outer
+                j += step
+            return None
+
+        found: List[Dict[str, Any]] = []
+        for i in range(1, len(xs)):
+            y0, y1 = ys[i - 1], ys[i]
+            if y0 is None or y1 is None:
+                continue
+            if y0 == 0.0:
+                x0 = x1 = xs[i - 1]
+            elif y0 * y1 < 0:
+                x0, x1 = xs[i - 1], xs[i]
+            else:
+                continue
+            v = x0 if x0 == x1 else bisect(gap, x0, x1)
+            if x0 == x1:
+                probe = min(x1 + 1e-9 * max(1.0, abs(x1)), xs[-1])
+                below, above = (a, b) if gap(probe) > 0 else (b, a)
+                left = edge(v, i - 2, -1)
+            else:
+                below, above = (a, b) if y0 < 0 else (b, a)  # gap<0 ⇒ A cheaper
+                left = edge(v, i - 1, -1)
+            right = edge(v, i, +1)
+            if is_int:
+                # An integer input is a step function: report the first value where
+                # the above-side option is cheaper, and integer band edges.
+                first_above = int(math.ceil(v - 1e-9))
+                if gap(first_above) == 0.0 or ((gap(first_above) < 0) == (a == below)):
+                    first_above += 1
+                found.append({
+                    "value": first_above, "last_value_below": first_above - 1,
+                    "cheaper_below": below, "cheaper_above": above,
+                    "tie_band": [None if left is None else int(math.floor(left)),
+                                 None if right is None else int(math.ceil(right))],
+                })
+            else:
+                found.append({
+                    "value": v,
+                    "cheaper_below": below, "cheaper_above": above,
+                    "tie_band": [left, right],
+                })
+        return found
+
+    xs, ys = scan(lo, hi)
+    # Contiguous runs of grid points the loader accepted. A run narrower than the
+    # bracket is re-scanned at full resolution: a refused tail costs no precision,
+    # and the output reports what was actually searched.
+    runs: List[List[float]] = []
+    cur: List[float] = []
+    for x, y in zip(xs, ys):
+        if y is None:
+            if len(cur) >= 2:
+                runs.append(cur)
+            cur = []
+        else:
+            cur.append(x)
+    if len(cur) >= 2:
+        runs.append(cur)
+    if not runs:
+        raise ValueError(
+            f"--break-even {key}: the loader refused every point in the bracket "
+            f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)} ({refused[0][1]}) — "
+            f"give a bracket the config accepts (KEY=lo:hi)"
+        )
 
     break_evens: List[Dict[str, Any]] = []
-    for x0, x1 in crossings:
-        v = x0 if x0 == x1 else bisect(gap, x0, x1)
-        below, above = (a, b) if gap(x0) < 0 else (b, a)  # gap<0 ⇒ A cheaper
-        if x0 == x1:
-            below, above = (a, b) if gap(min(x1 + 1e-9 * max(1.0, abs(x1)), hi)) > 0 else (b, a)
-        # Tie-band edges: where |frac| == band on each side of the crossing.
-        def edge(side_lo: float, side_hi: float, target: float) -> Optional[float]:
-            g = lambda x: frac(x) - target  # noqa: E731
-            if (g(side_lo) < 0) == (g(side_hi) < 0):
-                return None
-            return bisect(g, side_lo, side_hi)
-        s_lo, s_hi = frac(lo), frac(hi)
-        left = edge(lo, v, band if s_lo > 0 else -band)
-        right = edge(v, hi, band if s_hi > 0 else -band)
-        if is_int:
-            # An integer input is a step function: report the first value where
-            # the above-side option is cheaper, and integer band edges.
-            first_above = int(math.ceil(v - 1e-9))
-            if gap(first_above) == 0.0 or ((gap(first_above) < 0) == (a == below)):
-                first_above += 1
-            break_evens.append({
-                "value": first_above, "last_value_below": first_above - 1,
-                "cheaper_below": below, "cheaper_above": above,
-                "tie_band": [None if left is None else int(math.floor(left)),
-                             None if right is None else int(math.ceil(right))],
-            })
-        else:
-            break_evens.append({
-                "value": v,
-                "cheaper_below": below, "cheaper_above": above,
-                "tie_band": [left, right],
-            })
+    searched: List[List[float]] = []
+    first_gap: Optional[float] = None
+    for run in runs:
+        r_lo, r_hi = run[0], run[-1]
+        rxs, rys = (xs, ys) if (r_lo, r_hi) == (lo, hi) else scan(r_lo, r_hi)
+        searched.append([r_lo, r_hi])
+        if first_gap is None:
+            first_gap = next((y for y in rys if y is not None), None)
+        break_evens.extend(solve_run(rxs, rys))
+
     out: Dict[str, Any] = {
-        "key": key, "options": [a, b], "bracket": [lo, hi], "base_value": base,
-        "tie_band_fraction": band, "break_evens": break_evens,
+        "key": key, "options": [a, b], "bracket": [lo, hi], "searched": searched,
+        "base_value": base, "tie_band_fraction": band, "break_evens": break_evens,
     }
+    if refused:
+        out["refused"] = {"count": len(refused), "values": [r[0] for r in refused],
+                          "reason": refused[0][1]}
     if not break_evens:
-        out["cheaper_throughout"] = a if ys[0] < 0 else b
+        out["cheaper_throughout"] = a if (first_gap or 0.0) < 0 else b
     return out
 
 
@@ -187,8 +277,12 @@ def format_break_even(result: Dict[str, Any]) -> str:
     key = result["key"]
     a, b = result["options"]
     lo, hi = result["bracket"]
-    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line; bracket searched "
+    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line; bracket "
              f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input held at its base value):"]
+    if result.get("refused"):
+        r = result["refused"]
+        span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
+        lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
     if not result["break_evens"]:
         lines.append(f"  no crossing in the bracket: {result['cheaper_throughout']} is cheaper throughout")
         return "\n".join(lines)

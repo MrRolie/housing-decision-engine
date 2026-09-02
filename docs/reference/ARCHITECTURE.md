@@ -198,11 +198,18 @@ The threshold on one input (`src/hde/break_even.py`): with exactly two priced
 options, a nine-point scan of the bracket finds every sign change of
 `total_pv(A) − total_pv(B)` on the deterministic line, bisection refines each
 crossing, and the tie-band edges around it are solved the same way on the
-verdict's own denominator (`|gap| / |cheaper PV| = verdict.tie_band`). Money
-inputs default to a ¼×–4× bracket around the YAML value; every other key
-takes `=lo:hi`. Integer inputs (`years`, amortization) are step functions and
-report the first value where the other side is cheaper. Rides `--json` as
-`break_evens`; the story's act 6 is the same crossing for rent, drawn.
+verdict's own denominator (`|gap| / |cheaper PV| = verdict.tie_band`), walking
+outward from the crossing one grid cell at a time — a second crossing ends the
+band (that edge is `null`). Grid points the loader refuses (a price below the
+fixed `down_payment`) are recorded under `refused` and the search shrinks to
+the accepted run(s), reported as `searched`; a bracket refused throughout is a
+clean error. Money inputs default to a ¼×–4× bracket around the YAML value;
+every other key takes `=lo:hi`. Integer inputs (`years`, amortization) are step
+functions and report the first value where the other side is cheaper. The
+crossing is deterministic: with uncertainty inputs on, the verdict's
+decisiveness is the Monte Carlo floor, and the sweep's `mean flip:` line is the
+criterion-consistent cross-check. Rides `--json` as `break_evens`; the story's
+act 6 is the same crossing for rent, drawn.
 
 ### Assumptions block — `assumptions`
 

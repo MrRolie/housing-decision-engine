@@ -120,3 +120,55 @@ class TestIntegerInputs:
         assert (g_below > 0) != (g_above > 0)
         assert all(e is None or isinstance(e, int) for e in be["tie_band"])
         assert "is cheaper up to years=" in format_break_even(out)
+
+
+class TestRefusedPoints:
+    """A bracket end the loader refuses (price below the fixed down payment) must
+    shrink the search and say so — never surface as a traceback (advisor, 2026-09-02)."""
+
+    def test_refused_tail_shrinks_the_search_and_is_reported(self):
+        raw = _base()
+        raw["condo"]["down_payment"] = 120_000
+        raw["rent"]["invested_down_payment"] = 125_000
+        out = solve_break_even(raw, "condo.initial_value")  # default bracket 100k–1.6M; 100k < down payment
+        assert out["bracket"] == [100_000.0, 1_600_000.0]
+        assert out["refused"]["count"] == 1 and "down_payment" in out["refused"]["reason"]
+        assert out["searched"] == [[287_500.0, 1_600_000.0]]
+        text = format_break_even(out)
+        assert "refuses 1 point(s)" in text and "searched 287,500–1,600,000" in text
+
+    def test_every_point_refused_is_a_clear_error(self):
+        raw = _base()
+        raw["condo"]["down_payment"] = 120_000
+        raw["rent"]["invested_down_payment"] = 125_000
+        with pytest.raises(ValueError, match="refused every point"):
+            solve_break_even(raw, "condo.initial_value", lo=10_000, hi=50_000)
+
+    def test_cli_reports_a_refused_bracket_without_a_traceback(self, tmp_path, monkeypatch, capsys):
+        import sys
+        from hde.cli import main as cli_main
+        cfg = tmp_path / "refused.yaml"
+        cfg.write_text(
+            "years: 10\nrent:\n  monthly_rent: 2000\n  invested_down_payment: 125000\n"
+            "condo:\n  initial_value: 400000\n  monthly_fee: 300\n  down_payment: 120000\n"
+            "  mortgage_rate: 0.04\n  mortgage_term_years: 25\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo",
+                                          "--break-even", "condo.initial_value=10000:50000"])
+        assert cli_main() == 1
+        err = capsys.readouterr().err
+        assert "refused every point" in err and "Traceback" not in err
+
+
+class TestBandEdges:
+    def test_edges_sit_where_the_gap_equals_the_tie_band(self):
+        raw = _base()
+        out = solve_break_even(raw, "rent.monthly_rent")
+        be = out["break_evens"][0]
+        left, right = be["tie_band"]
+        assert left is not None and right is not None and left < be["value"] < right
+        for edge_v in (left, right):
+            det = compute_deterministic(load_config_dict(with_value(raw, "rent.monthly_rent", edge_v)))
+            cheaper = min(det.rent.total_pv, det.condo.total_pv)
+            assert abs(det.rent.total_pv - det.condo.total_pv) / cheaper == pytest.approx(BAND, rel=1e-6)
