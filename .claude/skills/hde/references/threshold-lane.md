@@ -37,12 +37,14 @@ uv run hde scenarios/<slug>.yaml --break-even rent.monthly_rent \
   a Québec continuing lease is ≈ 0% real).
 - Each `--sweep` varies ONE input with every other held at its base value;
   the `across` blocks are single-axis, never a cross-product. A bracket end
-  that flips the verdict is therefore a claim about a combination (gate 5):
-  say what else that end assumes ("at 2% growth, with 0.6% maintenance and
-  1% real rent escalation held, your $1,900 puts buying ahead"), and when the
-  combination matters, run it — edit the config to the other maintenance
-  figure and repeat the growth sweep — or write "not run". Never call a
-  single base rate "the point estimate".
+  that flips the verdict at the user's number is therefore a claim about a
+  combination (gate 5): name what that end holds fixed ("at 2% growth, with
+  0.6% maintenance and 1% real rent escalation held, your $1,900 puts buying
+  ahead"), then run the combination — a SECOND config with the other
+  maintenance figure typed, the same `--break-even` + growth `--sweep`
+  command — and quote both ("with 1.2% maintenance the 2% band moves up and
+  renting still wins"). Never quote a combination you did not run; write
+  "not run". Never call a single base rate "the point estimate".
 - If the engine reports that the config refuses part of the bracket (a price
   below the down payment), quote the searched range, not the bracket asked
   for.

@@ -400,3 +400,24 @@ class TestFinancingLineAndAffordabilityHeader:
     def test_schema_states_the_like_for_like_sizing(self):
         from hde.input_schema import input_schema
         assert "down_payment + purchase_costs" in input_schema()["rent"]["invested_down_payment"]["note"]
+
+
+class TestUnderTwentyPercentWarnsAndSweepRowsCarryAffordability:
+    def test_under_twenty_with_nothing_financed_warns(self):
+        cfg = _base(condo={**_base()["condo"], "down_payment": 60_000})
+        warns = coherence_warnings(load_config_dict(cfg))
+        assert any(w.startswith("condo: down payment 15.00% of price is under the 20%") for w in warns)
+        quiet = _base(condo={**_base()["condo"], "down_payment": 60_000, "financed_purchase_costs": 9_520})
+        assert not any("under the 20%" in w for w in coherence_warnings(load_config_dict(quiet)))
+        at_line = _base()  # 80,000 on 400,000 = 20.00%
+        assert not any("under the 20%" in w for w in coherence_warnings(load_config_dict(at_line)))
+
+    def test_sweep_rows_carry_the_affordability_ratio(self):
+        from hde.sweep import run_sweep
+        out = run_sweep(_base(income={"annual_income": 90_000}), "condo.monthly_fee", [300, 900], monte_carlo=False)
+        rows = out["rows"]
+        assert rows[0]["affordability"]["condo"]["max_ratio"] < rows[1]["affordability"]["condo"]["max_ratio"]
+        assert "years_exceeding" in rows[1]["affordability"]["condo"]
+        cfg = _base(); del cfg["income"]
+        no_income = run_sweep(cfg, "condo.monthly_fee", [300], monte_carlo=False)
+        assert no_income["rows"][0]["affordability"] is None

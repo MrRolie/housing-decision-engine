@@ -1,5 +1,9 @@
 # Quick-sense lane ("not a spreadsheet")
 
+This lane fires only on the user's own words ("quick sense", "not a
+spreadsheet", "just roughly") — never because the question looks casual. A
+user who did not ask for brevity gets the full answer and the story.
+
 Ask only six things in one message — dwelling, rent, price, how they'd pay,
 horizon, income — plus the labelled defaults you will take ("25-year
 amortization when only the term was quoted, the engine's 3% real return, 1%
@@ -10,9 +14,9 @@ whatever they were vague about, and offer the deeper pass at the end.
 ## The cap
 
 Under 200 words. With a mortgage, an income and a threshold question
-together, the answer checklist needs 250–350 words: exceed the cap before
-dropping an item (this lane's cap overrides the answer template's 500). Cut
-in this order:
+together, the answer checklist needs 250–350 words (the higher end when the
+prior's verdict band is quoted too): exceed the cap before dropping an item
+(this lane's cap overrides the answer template's 500). Cut in this order:
 
 1. the story path;
 2. the SOURCE of every default other than `selling_cost_rate` (5%, WOWA) and

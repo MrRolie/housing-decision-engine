@@ -27,7 +27,7 @@ Reference files live beside this file under `.claude/skills/hde/references/`;
 | When | Read |
 |---|---|
 | The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at my rent, what price is worth buying?", "how long would I have to stay?" | `references/threshold-lane.md`, before authoring the config |
-| The user asks for a quick sense ("not a spreadsheet") | `references/quick-sense.md`, before the intake message |
+| The user asks, in their own words, for a quick sense ("not a spreadsheet", "just roughly") — never on anticipation | `references/quick-sense.md`, before the intake message |
 | A user phrase you cannot place in the schema — a posted rate, "prices grow 3%", an insurance premium, "houses around $650k" | `references/translation.md` |
 | Writing the answer | the checklist below, then `references/answer-template.md` |
 | Why a gate exists, or the worked phrasing that satisfies it | `references/gates.md` |
@@ -171,11 +171,13 @@ answer; the cap of any lane ranks what stays and never drops an item:
       escalation, a 25-year amortization, a maintenance rate): a typed value
       leaves `defaults applied` and its warning never fires, so your intake
       message is the only record — carry each into the answer yourself
-- [ ] `decisiveness:` — the verdict's rule, its margin or probability, and
-      `mc_mean_best` when it disagrees
+- [ ] `decisiveness:` — the verdict's rule with its threshold (the 5% tie
+      band or the 65% floor), its margin or probability, and `mc_mean_best`
+      when it disagrees
 - [ ] the flip point or threshold, in the user's units, quoted at both ends
       of any estimate it rests on
-- [ ] `Year-1 cash` — both sides, principal, unrecoverable; the assumptions
+- [ ] `Year-1 cash` — both sides in $/month, principal, unrecoverable, beside
+      the verdict's `≈ $/month equivalent` (PV, not cash); the assumptions
       line's `financing:` entry (year-0 cash the config commits, loan-to-value,
       the distance to the 20% line) — a clearance within one price step of the
       line is the same cliff as a shortfall: say what it rests on

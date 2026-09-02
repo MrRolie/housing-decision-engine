@@ -381,6 +381,21 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
                 f"(a market_scenario prior adds drift in the Monte Carlo only)"
             )
 
+    # Under 20% down with nothing financed (round 6): a Canadian mortgage below
+    # 20% down carries a mortgage-insurance premium; a config that omits it
+    # understates the loan and the payment.
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None or opt.all_cash or opt.down_payment is None or not opt.initial_value:
+            continue
+        if opt.down_payment < 0.20 * opt.initial_value and opt.financed_purchase_costs == 0:
+            warns.append(
+                f"{name}: down payment {opt.down_payment / opt.initial_value:.2%} of price is under the 20% "
+                f"mortgage-insurance line with no financed_purchase_costs — an insured mortgage carries a "
+                f"premium on the loan (CMHC/Sagen by loan-to-value band; the schedule is not in the engine: "
+                f"compute it, put it in financed_purchase_costs, and label it), which raises the payment "
+                f"and the balance; omitting it biases the verdict toward buying"
+            )
+
     # Asymmetric tails (review F4 + dogfood round 2): an owned option with a
     # price-shock channel against a renter whose capital cannot lose.
     if (spec.rent is not None and spec.rent.invested_down_payment > 0

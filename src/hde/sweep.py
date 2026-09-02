@@ -89,6 +89,16 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
             "decisive": verdict.decisive, "rule": verdict.rule, "prob_best": verdict.prob_best,
             "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
+            # Round 6: a maintenance bracket moved the affordability ratio from
+            # 34% to 37% in every year and the lane's command could not see it.
+            "affordability": (
+                {k: {"max_ratio": max(r), "years_exceeding": ex}
+                 for k, r, ex in (("rent", det.income_report.rent_ratios, det.income_report.years_rent_exceeds),
+                                  ("condo", det.income_report.condo_ratios, det.income_report.years_condo_exceeds),
+                                  ("house", det.income_report.house_ratios, det.income_report.years_house_exceeds))
+                 if r}
+                if det.income_report is not None else None
+            ),
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
                 if mc is not None else None
