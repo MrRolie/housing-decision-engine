@@ -11,6 +11,18 @@ assumptions and warnings back → the verdict with its decisiveness → the stor
 Everything runs as `uv run hde …` from this directory; the first run installs
 the engine's own dependencies (only `uv` is needed).
 
+## Honesty contract (every answer, 2026-09-02)
+
+Never tell the user something that is not so. Every number in an answer
+carries its source class: the user's own figure, an engine anchor (cited by
+name), or an estimate the assistant chose (labelled, with the direction it
+biases the verdict). Missing information is said plainly ("no source for
+Laval property tax; 0.85% of value is a placeholder") and never filled
+silently; every engine warning reaches the user; a breach is never softened
+into "not a breach" without naming both thresholds. A "no source for X" line
+is not a failure of the answer: what the assistant had to estimate or could
+not anchor is what the engine builds next.
+
 ## Surface doctrine (2026-08-26; MCP server removed 2026-09-01)
 
 The `hde` CLI plus that skill is the only surface. Agent output: `--json`;

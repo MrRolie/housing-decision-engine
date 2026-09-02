@@ -132,7 +132,7 @@ class TestIntegerInputs:
 
 class TestRefusedPoints:
     """A bracket end the loader refuses (price below the fixed down payment) must
-    shrink the search and say so — never surface as a traceback (advisor, 2026-09-02)."""
+    shrink the search and say so — never surface as a traceback (review, 2026-09-02)."""
 
     def test_refused_tail_shrinks_the_search_and_is_reported(self):
         raw = _base()

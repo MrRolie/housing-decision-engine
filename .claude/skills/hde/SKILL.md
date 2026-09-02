@@ -47,8 +47,8 @@ one clause and never cut), the years bracket to one clause ("barely moves at
 years, the short end of your 8–10", so every PV figure has a horizon), the
 prior to two sentences, every reassurance phrase. The cap ranks what stays,
 it never drops a warning: every default the engine warned on, each with its
-rerun figure or its bias (the 1% real rent escalation default is the one
-dropped three serves running — the Québec continuing lease is ≈ 0% real, so
+rerun figure or its bias (the 1% real rent escalation default was dropped
+in every 2026-09-02 dogfood run — the Québec continuing lease is ≈ 0% real, so
 put `--sweep rent.rent_escalation_rate=0,0.01` in the same command and quote
 the threshold at 0%) · verdict with its decisiveness · the flip point in
 their units — and if it rests on an estimate you chose, quoted at both ends
@@ -79,8 +79,9 @@ costs) is an estimate you label and, for the least certain one, sweep — the
 threshold moves with it, so quote the threshold at both ends of that sweep.
 When the user has no price-growth view, `value_growth_rate` is the least
 certain estimate by construction (the engine's default is neutral, uncited).
-Put `--sweep house.value_growth_rate=0:0.02:3` beside the `--break-even` on
-the same command: the engine re-solves the threshold at every sweep point
+Put `--sweep house.value_growth_rate=0:0.02:3 --no-monte-carlo` beside the
+`--break-even` on the same command (the threshold pass is deterministic; the
+flag keeps it fast): the engine re-solves the threshold at every sweep point
 (the `across` block) and both ends go into the threshold sentence —
 "renting is cheaper below $2,715 if Laval prices only track inflation, below
 $1,864 if they grow 2%/yr above it — at 2% your $1,900 is a toss-up". Then
@@ -381,7 +382,10 @@ other debts were asked, and never soften an engine "exceeds" warning to "not
 a breach" without saying which threshold each refers to · **every uncertainty input and every cost you
 proposed** (a crash hazard, a vol, an illustrative insurance figure) named in
 the user's text with its label ("illustrative, not cited") and what it sets
-("this is what makes the p95") · **Not modelled:** each item with its
+("this is what makes the p95") · **No source for:** every figure you had to
+estimate because neither the user nor the anchor registry had it (a
+property-tax rate, an insurance quote, a purchase-cost rate) — said plainly,
+never filled silently; this line is what the engine anchors next · **Not modelled:** each item with its
 direction of bias ("renewal risk — biases toward buying") · where the story
 is (`scenarios/<slug>/STORY.md` and the act PNGs) · the one next step. Under
 500 words (under 200 on the quick-sense lane, 300 when its never-drop list forces it); the report is on disk for
