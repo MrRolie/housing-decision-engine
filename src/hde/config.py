@@ -362,7 +362,11 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             continue
         missing = []
         if opt.purchase_costs == 0:
-            missing.append("purchase_costs (land-transfer tax, notary, mortgage-insurance premium)")
+            # A financed premium is modelled (it rides the loan) — do not list it
+            # as missing (round-four dogfood 2026-09-02).
+            premium = ("" if opt.financed_purchase_costs > 0
+                       else ", mortgage-insurance premium")
+            missing.append(f"purchase_costs (land-transfer tax, notary{premium})")
         if not opt.other_recurring_costs:
             missing.append("other_recurring_costs (property tax, insurance)")
         if missing:

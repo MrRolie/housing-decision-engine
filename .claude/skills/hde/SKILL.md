@@ -35,7 +35,12 @@ user's language, folded into the ONE intake message below, never as a quiz:
 **Quick-sense lane.** If the user asks for a quick sense ("not a spreadsheet"),
 ask only six things in one message — dwelling, rent, price, how they'd pay,
 horizon, income — decide the sweep yourself from whatever they were vague
-about, keep the answer under 200 words, and offer the deeper pass.
+about, keep the answer under 200 words, and offer the deeper pass. The cap
+ranks what stays, it never drops a warning: verdict with its decisiveness ·
+the flip point in their units · the affordability line · not modelled with
+its bias (renewal risk with any mortgage; every defaulted escalation the
+engine warned on) · one next step. Defaults' provenance beyond the two
+largest and the story path can go; a warning cannot.
 
 Then gather the schema keys: consult `--print-schema` for exact keys, the
 `required` flags, and `required_if` (an owned option must declare
@@ -71,7 +76,12 @@ is right; a config built on a contradiction is worse than a second message.
    inspection, mortgage-insurance premium)** — "give me the number, a guess
    I'll label, or say skip and I'll report it as not modelled". If they
    cannot give one, offer to bracket it (two configs) rather than pick for
-   them.
+   them. Exception — purchase costs when they named the cash they have: "no
+   idea" must NOT become `purchase_costs: 0`; take the examples' illustrative
+   figure (welcome/land-transfer tax + notary ≈ 1.5% of price, labelled
+   illustrative), deduct it from their cash to get the real down payment,
+   and recompute the loan-to-value band and the insurance premium from that
+   — closing costs come out of the same pile as the down payment.
 3. **Modelling parameters — may be proposed, always labelled:** discount rate
    (engine default 3% real, cited), growth and escalation rates, maintenance
    rate (NAHB ≈ 0.6% of value), the uncertainty vols. Say "I'll use X because
@@ -219,7 +229,11 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    the discrepancy and the breakdown line that carries it.
 8. **"Not modelled" is mandatory.** Every answer names what was left out
    (renewal risk, a financed insurance premium, rent control, taxes on the
-   investment return, a probabilistic exit) with the direction of bias.
+   investment return, a probabilistic exit) with the direction of bias. With
+   a mortgage, renewal risk is always on the list (the quoted rate is held
+   for the whole amortization — biases toward buying when rates are rising),
+   and so is any default the engine warned on (a 1% real rent escalation
+   defaulted for a Québec continuing lease biases toward buying).
 
 ## The answer (what the user actually reads)
 

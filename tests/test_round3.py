@@ -188,3 +188,19 @@ class TestMeanDisagreementReachesTheStoryAndTheSweep:
         text = format_sweep({"key": "years", "values": [5], "rows": rows, "flips": []})
         assert "MC-mean best" in text
         assert any(re.search(r"\|\s+rent$", l) for l in text.splitlines())
+
+
+class TestFinancedPremiumIsNotReportedMissing:
+    def test_premium_dropped_from_the_warning_when_financed(self):
+        cfg = _base()
+        cfg["condo"]["purchase_costs"] = 0
+        cfg["condo"]["financed_purchase_costs"] = 9_520
+        warns = [w for w in coherence_warnings(load_config_dict(cfg)) if w.startswith("condo: not modelled")]
+        assert len(warns) == 1
+        assert "land-transfer tax, notary)" in warns[0] and "premium" not in warns[0]
+
+    def test_premium_listed_when_nothing_is_financed(self):
+        cfg = _base()
+        cfg["condo"]["purchase_costs"] = 0
+        warns = [w for w in coherence_warnings(load_config_dict(cfg)) if w.startswith("condo: not modelled")]
+        assert len(warns) == 1 and "mortgage-insurance premium" in warns[0]
