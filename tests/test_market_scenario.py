@@ -121,7 +121,7 @@ class TestLoaderValid:
         assert set(block.keys()) == {
             "file_sha256", "assumptions_hash", "geography", "schema_version",
             "mapping_version", "isq_edition", "census_year", "constants_as_of",
-            "start_calendar_year", "horizon_years", "source_keys",
+            "start_calendar_year", "horizon_years", "source_keys", "encoded_drift",
         }
 
     def test_geography_filter_ignores_other_rows(self, tmp_path):

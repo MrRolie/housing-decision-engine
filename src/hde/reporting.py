@@ -88,7 +88,11 @@ def format_text_report(
         if r.principal_year1:
             line += f" — of which ${r.principal_year1:,.0f} principal repaid; the rest is unrecoverable"
         if r.appreciation_year1:
-            line += f"; expected appreciation ${r.appreciation_year1:,.0f} (value × growth, not cash)"
+            # Round 5b: at 0 real growth in nominal mode this is inflation carry
+            # alone; say what the growth is so it is not read as a market view.
+            how = ("value × nominal growth = real growth composed with inflation; not cash"
+                   if econ is not None and econ.mode == "nominal" else "value × real growth, not cash")
+            line += f"; expected appreciation ${r.appreciation_year1:,.0f} ({how})"
         cash_lines.append(line)
     if cash_lines:
         lines.append("Year-1 cash (undiscounted; PV totals above credit equity at sale)")

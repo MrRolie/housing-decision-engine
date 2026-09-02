@@ -111,6 +111,7 @@ def main() -> int:
         help="Solve one input for the value where the two priced options' total PVs cross, "
              "with the tie-band edges around it (repeatable), e.g. --break-even rent.monthly_rent "
              "or --break-even condo.initial_value=300000:900000; needs exactly two options; "
+             "beside --sweep the threshold is re-solved at every sweep point ('across'); "
              "rides --json as 'break_evens'",
     )
     args = parser.parse_args()
@@ -189,6 +190,7 @@ def main() -> int:
 
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []
+    sweep_specs = []  # (key, values) pairs; --break-even re-solves at each
     if args.sweep:
         import yaml as _yaml
         from .sweep import parse_sweep, run_sweep
@@ -200,17 +202,25 @@ def main() -> int:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
             sweeps.append(run_sweep(raw, key, values, monte_carlo=not args.no_monte_carlo))
+            sweep_specs.append((key, values))
 
     # Break-evens (threshold questions) — same loader, deterministic line.
     break_evens = []
     if args.break_even:
         import yaml as _yaml
-        from .break_even import parse_break_even, solve_break_even
+        from .break_even import parse_break_even, solve_break_even, solve_break_even_across
         raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
         for be_arg in args.break_even:
             try:
                 key, lo, hi = parse_break_even(be_arg)
-                break_evens.append(solve_break_even(raw, key, lo, hi))
+                result = solve_break_even(raw, key, lo, hi)
+                # Beside --sweep, the threshold is re-solved at every sweep point
+                # ("the rent threshold at 0% and at 2% growth" in one call).
+                across = [solve_break_even_across(raw, key, lo, hi, skey, vals)
+                          for skey, vals in sweep_specs if skey != key]
+                if across:
+                    result["across"] = across
+                break_evens.append(result)
             except ValueError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1

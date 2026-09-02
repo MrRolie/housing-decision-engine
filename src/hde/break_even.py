@@ -265,6 +265,10 @@ def solve_break_even(
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": searched,
         "base_value": base, "tie_band_fraction": band, "break_evens": break_evens,
     }
+    if "market_scenario" in raw:
+        out["note"] = ("deterministic line: the market_scenario prior does not move this threshold "
+                       "(its drift enters the Monte Carlo only) — sweep value_growth_rate for the "
+                       "threshold's growth sensitivity; read the sweep's decisive flags for the prior's")
     if refused:
         out["refused"] = {"count": len(refused), "values": [r[0] for r in refused],
                           "reason": refused[0][1]}
@@ -273,34 +277,73 @@ def solve_break_even(
     return out
 
 
-def format_break_even(result: Dict[str, Any]) -> str:
-    key = result["key"]
-    a, b = result["options"]
-    lo, hi = result["bracket"]
-    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line; bracket "
-             f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input held at its base value):"]
-    if result.get("refused"):
-        r = result["refused"]
-        span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
-        lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
-    if not result["break_evens"]:
-        lines.append(f"  no crossing in the bracket: {result['cheaper_throughout']} is cheaper throughout")
-        return "\n".join(lines)
-    for be in result["break_evens"]:
+def solve_break_even_across(
+    raw: Dict[str, Any], key: str, lo: Optional[float], hi: Optional[float],
+    sweep_key: str, values: List[Any], **kw: Any,
+) -> Dict[str, Any]:
+    """
+    The threshold re-solved at each value of a SECOND input (--break-even
+    beside --sweep): "the rent threshold at 0% and at 2% growth" in one call.
+    Round 5b dogfood: the skill asked for the threshold at both ends of the
+    growth bracket and the persona could not produce it — --break-even solved
+    the base config once and --sweep reported verdicts at the placeholder rent.
+    """
+    rows: List[Dict[str, Any]] = []
+    for v in values:
+        r = solve_break_even(with_value(raw, sweep_key, v), key, lo, hi, **kw)
+        row: Dict[str, Any] = {"value": v, "break_evens": r["break_evens"]}
+        for carried in ("cheaper_throughout", "refused"):
+            if carried in r:
+                row[carried] = r[carried]
+        rows.append(row)
+    return {"key": sweep_key, "rows": rows}
+
+
+def _threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> List[str]:
+    """The threshold in words, one sentence per crossing (or the no-crossing line)."""
+    if not result_like["break_evens"]:
+        return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
+    out = []
+    for be in result_like["break_evens"]:
         left, right = be["tie_band"]
         band_txt = (
             f"too close to call between {_fmt_value(key, left) if left is not None else 'below the bracket'} "
             f"and {_fmt_value(key, right) if right is not None else 'above the bracket'} "
-            f"({result['tie_band_fraction']:.0%} of the cheaper option's PV)"
+            f"({band:.0%} of the cheaper option's PV)"
         )
         if "last_value_below" in be:
-            lines.append(
-                f"  {be['cheaper_below']} is cheaper up to {key}={be['last_value_below']}, "
+            out.append(
+                f"{be['cheaper_below']} is cheaper up to {key}={be['last_value_below']}, "
                 f"{be['cheaper_above']} is cheaper from {key}={be['value']}; {band_txt}"
             )
         else:
-            lines.append(
-                f"  {_fmt_value(key, be['value'])}: {be['cheaper_below']} is cheaper below, "
+            out.append(
+                f"{_fmt_value(key, be['value'])}: {be['cheaper_below']} is cheaper below, "
                 f"{be['cheaper_above']} is cheaper above; {band_txt}"
             )
+    return out
+
+
+def format_break_even(result: Dict[str, Any]) -> str:
+    key = result["key"]
+    a, b = result["options"]
+    lo, hi = result["bracket"]
+    band = result["tie_band_fraction"]
+    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line; bracket "
+             f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input held at its base value):"]
+    if result.get("note"):
+        lines.append(f"  {result['note']}")
+    if result.get("refused"):
+        r = result["refused"]
+        span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
+        lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
+    lines.extend(f"  {t}" for t in _threshold_sentences(key, result, band))
+    for across in result.get("across", []):
+        skey = across["key"]
+        lines.append(f"  across {skey} (the threshold re-solved at each value):")
+        for row in across["rows"]:
+            sentences = _threshold_sentences(key, row, band)
+            if row.get("refused"):
+                sentences.append(f"config refuses {row['refused']['count']} point(s) ({row['refused']['reason']})")
+            lines.append(f"    {skey}={_fmt_value(skey, row['value'])}: " + "; ".join(sentences))
     return "\n".join(lines)

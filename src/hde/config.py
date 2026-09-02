@@ -402,8 +402,9 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         warns.append(
             "one-sided uncertainty: the market_scenario prior makes the owned option's value "
             "stochastic while simulation.investment_return_vol=0 leaves the renter's PV a point "
-            "mass — P(cheapest) compares a distribution to a point; set investment_return_vol "
-            "(0.10 ≈ 60/40 portfolio) or read the deterministic line"
+            "mass — P(cheapest) compares a distribution to a point and is OVERconfident: the "
+            "too-close-to-call zone is wider than shown; set investment_return_vol (0.10 ≈ 60/40 "
+            "portfolio) for a like-for-like band, or read the deterministic line"
         )
 
     return warns

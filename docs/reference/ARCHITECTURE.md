@@ -208,8 +208,10 @@ every other key takes `=lo:hi`. Integer inputs (`years`, amortization) are step
 functions and report the first value where the other side is cheaper. The
 crossing is deterministic: with uncertainty inputs on, the verdict's
 decisiveness is the Monte Carlo floor, and the sweep's `mean flip:` line is the
-criterion-consistent cross-check. Rides `--json` as `break_evens`; the story's
-act 6 is the same crossing for rent, drawn.
+criterion-consistent cross-check. Beside `--sweep`, the threshold is re-solved
+at every sweep point (`across`): "the rent threshold at 0% and at 2% growth"
+is one command. A `market_scenario` prior never moves it (`note`). Rides
+`--json` as `break_evens`; the story's act 6 is the same crossing for rent, drawn.
 
 ### Assumptions block — `assumptions`
 

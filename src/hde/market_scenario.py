@@ -192,6 +192,28 @@ class LoadedScenarioPrior:
 
     # ---- provenance, rendered ONLY from what the file carries (E.1–E.3) ----
 
+    def encoded_drift(self) -> Dict[str, Dict[str, object]]:
+        """The growth view the prior encodes, per dwelling type and band: the
+        reference scenario's demo_drift_mean (REAL decimal/yr) and the range of
+        scenario means. Round 5b dogfood: a persona introduced a flat Laval prior
+        as "instead of flat prices" because nothing printed what it encodes."""
+        out: Dict[str, Dict[str, object]] = {}
+        for (d, h, s), row in sorted(self.rows.items()):
+            entry = out.setdefault(d, {"reference_by_band": {}, "scenario_min": None, "scenario_max": None})
+            if s == "reference":
+                entry["reference_by_band"][h] = row.demo_drift_mean
+            lo, hi = entry["scenario_min"], entry["scenario_max"]
+            entry["scenario_min"] = row.demo_drift_mean if lo is None else min(lo, row.demo_drift_mean)
+            entry["scenario_max"] = row.demo_drift_mean if hi is None else max(hi, row.demo_drift_mean)
+        return out
+
+    def encoded_drift_clause(self) -> str:
+        parts = []
+        for d, e in self.encoded_drift().items():
+            bands = ", ".join(f"{h} {v:+.2%}/yr" for h, v in sorted(e["reference_by_band"].items()))
+            parts.append(f"{d}: reference {bands} (scenarios {e['scenario_min']:+.2%}…{e['scenario_max']:+.2%})")
+        return "encoded REAL drift by band, added to value_growth_rate in the Monte Carlo — " + "; ".join(parts)
+
     def vintage_clause(self) -> str:
         """' (ISQ 2026 scenarios, 2021 census)' — empty when the vintage is absent."""
         vintage = self.data_vintage
@@ -254,6 +276,8 @@ class LoadedScenarioPrior:
             f"{'/'.join(str(h) for h in HORIZON_YEARS)}"
         )
         parts.append(f"mapping v{self.mapping_version}: {describe_mapping_version(self.mapping_version)}")
+        if self.rows:
+            parts.append(self.encoded_drift_clause())
         srcs = self.sources()
         if srcs:
             parts.append(
@@ -277,6 +301,7 @@ class LoadedScenarioPrior:
             "start_calendar_year": START_CALENDAR_YEAR,
             "horizon_years": list(HORIZON_YEARS),
             "source_keys": [s["key"] for s in self.sources()],
+            "encoded_drift": self.encoded_drift(),
         }
 
 

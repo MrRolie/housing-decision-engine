@@ -280,7 +280,7 @@ class TestYearOneAppreciation:
         assert det.rent.appreciation_year1 == 0.0
         assert "appreciation_year1" in det_to_dict(det)["condo"]
         text = format_text_report(det, None, spec.simulation, spec.economic, spec)
-        assert "expected appreciation" in text
+        assert "expected appreciation" in text and "composed with inflation" in text
 
 
 class TestRoundFiveWarningsAndNotes:
@@ -334,3 +334,17 @@ class TestVerdictReasonNamesTheFloorForTheOtherSide:
         mc = _mc({"condo": 150_000.0, "rent": 160_000.0}, {"condo": 0.60, "rent": 0.40})
         v = compute_verdict(det, mc, years=9, discount_rate=0.05)
         assert "Monte Carlo favours condo (60.0%)" in v.reason and "above the" not in v.reason
+
+
+class TestPriorSaysWhatItEncodes:
+    def test_describe_and_provenance_carry_the_reference_drift(self):
+        from hde.market_scenario import load_scenario_prior
+        prior = load_scenario_prior("tests/fixtures/scenario_prior_golden.json", "LAVAL_RA13")
+        text = prior.describe()
+        assert "encoded REAL drift by band" in text and "reference 2030" in text and "scenarios" in text
+        block = prior.provenance_block()
+        ref = next(iter(block["encoded_drift"].values()))["reference_by_band"]
+        assert set(ref) >= {2030, 2035}
+        # the clause quotes the fixture's own reference rows
+        ref_row = next(r for (d, h, s), r in prior.rows.items() if s == "reference" and h == 2030)
+        assert f"2030 {ref_row.demo_drift_mean:+.2%}/yr" in text

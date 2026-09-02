@@ -12,7 +12,8 @@ call between $A and $B, buying is cheaper above $B".
 import pytest
 
 from hde.anchors import ANCHORS
-from hde.break_even import format_break_even, parse_break_even, solve_break_even
+from hde.break_even import (format_break_even, parse_break_even, solve_break_even,
+                            solve_break_even_across)
 from hde.config import load_config_dict
 from hde.deterministic import compute_deterministic
 from hde.sweep import with_value
@@ -172,3 +173,70 @@ class TestBandEdges:
             det = compute_deterministic(load_config_dict(with_value(raw, "rent.monthly_rent", edge_v)))
             cheaper = min(det.rent.total_pv, det.condo.total_pv)
             assert abs(det.rent.total_pv - det.condo.total_pv) / cheaper == pytest.approx(BAND, rel=1e-6)
+
+
+class TestPriorDoesNotMoveTheThreshold:
+    """Round 5b: the persona ran a demographic-prior variant to test the threshold's
+    growth sensitivity; the prior's drift enters the Monte Carlo only, so the
+    deterministic crossing is identical and the output must say so."""
+
+    def test_identical_crossing_and_a_note(self):
+        raw = _base()
+        raw["house"] = {**raw.pop("condo"), "annual_maintenance_rate": 0.01}
+        del raw["house"]["monthly_fee"]
+        base = solve_break_even(raw, "rent.monthly_rent")
+        with_prior = solve_break_even(
+            {**raw, "market_scenario": {"path": "tests/fixtures/scenario_prior_golden.json",
+                                        "geography": "LAVAL_RA13"}},
+            "rent.monthly_rent")
+        assert with_prior["break_evens"][0]["value"] == pytest.approx(base["break_evens"][0]["value"])
+        assert "note" not in base and "does not move this threshold" in with_prior["note"]
+        assert "does not move this threshold" in format_break_even(with_prior)
+
+
+class TestAcrossASweep:
+    """Round 5b: 'the threshold at 0% and at 2% growth' must be one command —
+    --break-even re-solved at every --sweep point."""
+
+    def test_threshold_re_solved_at_each_growth_point(self):
+        raw = _base()
+        across = solve_break_even_across(raw, "rent.monthly_rent", None, None,
+                                         "condo.value_growth_rate", [0.0, 0.02])
+        assert across["key"] == "condo.value_growth_rate" and len(across["rows"]) == 2
+        t0 = across["rows"][0]["break_evens"][0]["value"]
+        t2 = across["rows"][1]["break_evens"][0]["value"]
+        assert t2 < t0  # faster appreciation: renting needs a lower rent to stay ahead
+        assert t0 == pytest.approx(solve_break_even(raw, "rent.monthly_rent")["break_evens"][0]["value"])
+
+    def test_cli_prints_and_rides_json(self, tmp_path, monkeypatch, capsys):
+        import json, sys
+        from hde.cli import main as cli_main
+        import yaml
+        cfg = tmp_path / "two.yaml"
+        cfg.write_text(yaml.safe_dump(_base()), encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo", "--json",
+                                          "--break-even", "rent.monthly_rent",
+                                          "--sweep", "condo.value_growth_rate=0:0.02:3"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        rows = doc["break_evens"][0]["across"][0]["rows"]
+        assert [r["value"] for r in rows] == [0.0, 0.01, 0.02]
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo",
+                                          "--break-even", "rent.monthly_rent",
+                                          "--sweep", "condo.value_growth_rate=0:0.02:3"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        assert "across condo.value_growth_rate (the threshold re-solved at each value):" in out
+        assert out.count("condo.value_growth_rate=") >= 3
+
+    def test_sweeping_the_break_even_key_itself_adds_no_across_block(self, tmp_path, monkeypatch, capsys):
+        import json, sys
+        from hde.cli import main as cli_main
+        import yaml
+        cfg = tmp_path / "two.yaml"
+        cfg.write_text(yaml.safe_dump(_base()), encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo", "--json",
+                                          "--break-even", "rent.monthly_rent",
+                                          "--sweep", "rent.monthly_rent=1500:3000:4"])
+        assert cli_main() == 0
+        assert "across" not in json.loads(capsys.readouterr().out)["break_evens"][0]
