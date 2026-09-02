@@ -97,9 +97,12 @@ return, 1% real rent escalation — 0% for a Québec continuing lease — and
 ONE follow-up is right when their answers open a new question (the arithmetic
 does not close, one number contradicts another); a config built on a
 contradiction is worse than a second message. Exception: a cash shortfall
-smaller than the insurance premium it would trigger → run BOTH branches ("you
-find the cash" / "insured mortgage at the lower down payment") and read back
-both verdicts. Run only once every item in (2) is known or explicitly waived;
+smaller than the insurance premium it would trigger, OR a clearance of the
+20% line smaller than the uncertainty in the purchase-cost estimate it rests
+on (the assumptions line's `financing:` entry prints the distance) → run BOTH
+branches ("uninsured at 20%" / "insured mortgage at the lower down payment
+with the premium in `financed_purchase_costs`") and read back both verdicts;
+a pro-buying clause that holds only on the uninsured branch says so. Run only once every item in (2) is known or explicitly waived;
 the engine refuses a missing required key with the exact message — show it.
 
 ## Cases → dispatch
@@ -168,9 +171,11 @@ answer; the cap of any lane ranks what stays and never drops an item:
       numbers, `selling_cost_rate` (5%, WOWA) and the discount rate, named
       with their source; every other figure you proposed, with its label —
       including the values you TYPED on the user's behalf (a 0% rent
-      escalation, a 25-year amortization, a maintenance rate): a typed value
+      escalation, the 25-year amortization, a maintenance rate): a typed value
       leaves `defaults applied` and its warning never fires, so your intake
-      message is the only record — carry each into the answer yourself
+      message is the only record — carry each into the answer yourself, under
+      "No source for" or the defaults clause, never under "Not modelled" (it
+      was modelled, at your number)
 - [ ] `decisiveness:` — the verdict's rule with its threshold (the 5% tie
       band or the 65% floor), its margin or probability, and `mc_mean_best`
       when it disagrees
@@ -179,8 +184,9 @@ answer; the cap of any lane ranks what stays and never drops an item:
 - [ ] `Year-1 cash` — both sides in $/month, principal, unrecoverable, beside
       the verdict's `≈ $/month equivalent` (PV, not cash); the assumptions
       line's `financing:` entry (year-0 cash the config commits, loan-to-value,
-      the distance to the 20% line) — a clearance within one price step of the
-      line is the same cliff as a shortfall: say what it rests on
+      the distance to the 20% line) — a clearance smaller than the estimate it
+      rests on is the same cliff as a shortfall: the insured branch was run
+      (Missing information) and its verdict is quoted beside this one
 - [ ] `Affordability` — max ratio and breach years, quoting the affordability
       `[warning]` line verbatim (it names the 32% guideline, the 39% GDS cap
       and the 44% TDS cap)

@@ -95,9 +95,13 @@ uv run hde scenarios/<slug>-prior.yaml \
 
 Read `decisive`, `prob_best` and `mc_mean_best` per row and quote where
 `decisive` flips ("under the Laval prior the Monte Carlo calls rent decisive
-up to $2,300 and buying from $2,800, neither between $2,400 and $2,700"). When
-the user's rent sits outside both bands one clause suffices; inside either,
-both bands lead. With only the owned side stochastic (a prior and
+up to $2,300 and buying from $2,800, neither between $2,400 and $2,700"). On a
+threshold question that band IS the answer when uncertainty is on: the
+deterministic edge is where the best-guess line crosses, the verdict band is
+where the engine stops calling the user's side decisive — always quote both,
+and lead with the verdict band's near edge ("renting is the decisive call up
+to about $2,400 under the Laval prior; the best-guess crossing is $2,600").
+Never drop the band you ran because the user's rent sits far from it. With only the owned side stochastic (a prior and
 `investment_return_vol` 0) the engine warns `one-sided uncertainty`: the
 probabilities are OVERconfident and the true toss-up zone is wider — never
 "the simulation overstates the uncertainty". Cross-check the sweep's `mean

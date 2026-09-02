@@ -62,6 +62,9 @@ Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; r
 - Laval vs metro prior: `LAVAL_RA13` reads materially differently from `MTL_RMR` on the same house (buying lean 55.8% vs 66.4%; Laval's reference drift turns negative from 2040) — the geography list is now on `--print-schema` and pinned to the fixture, and the prior's provenance line prints the real drift it encodes per band.
 - A `cash_available` input for the owned option: the engine nets `purchase_costs` (and a computed insurance premium) out of a stated cash pile into `down_payment`, prints the loan-to-value and the distance to the 20% line under `assumptions` — today that arithmetic is the agent's, unchecked (every threshold persona landed at 20.04% down by hand).
 - `--print-schema` / `--print-anchors` filtering by section or key (both are multi-KB blobs loaded for a two-field check).
+- Anchors for property tax and home insurance by jurisdiction: both are placeholders in every persona run (about 15% of a Laval house's year-1 cash); the `--print-anchors` registry has 18 entries and neither.
+- Act 6 solves the crossing it draws: today the market line sweeps ±35% around the quoted rent and reports "renting is cheaper across the whole swept range" when the crossing lies outside it; `--break-even` already solves it — act 6 should call the same solver.
+- Typed values flagged on the assumptions line: a value the assistant types on the user's behalf (a 0% rent escalation, a 25-year amortization) leaves `defaults applied` and silences its warning; an `assistant-typed:` marker (or an `inputs-not-in-the-question` echo from the skill's intake) would let the read-back surface it.
 
 ---
 

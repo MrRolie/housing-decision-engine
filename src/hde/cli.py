@@ -305,8 +305,11 @@ def main() -> int:
             except Exception as e:
                 print(f"Error rendering story plots: {e}", file=sys.stderr)
                 return 1
+            # Under --json stdout is the document; status lines go to stderr
+            # (round-6 dogfood: a saved `--story --json` output did not parse).
+            status_out = sys.stderr if args.json else sys.stdout
             for path in saved:
-                print(f"Saved plot: {path}")
+                print(f"Saved plot: {path}", file=status_out)
 
     if sweeps and not args.json:
         from .sweep import format_sweep
@@ -337,10 +340,11 @@ def main() -> int:
             except Exception as e:
                 print(f"Error rendering story package: {e}", file=sys.stderr)
                 return 1
+            status_out = sys.stderr if args.json else sys.stdout
             for path in package["act_images"]:
-                print(f"Saved plot: {path}")
-            print(f"Story written: {package['report']}")
-            print(f"Story written: {package['story']}")
+                print(f"Saved plot: {path}", file=status_out)
+            print(f"Story written: {package['report']}", file=status_out)
+            print(f"Story written: {package['story']}", file=status_out)
 
     return 0
 

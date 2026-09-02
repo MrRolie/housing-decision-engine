@@ -168,3 +168,19 @@ def test_print_anchors_dumps_the_registry(monkeypatch, capsys):
     dump = json.loads(capsys.readouterr().out)
     assert set(dump) == set(ANCHORS)
     assert all(v["source"] for v in dump.values())
+
+
+def test_story_status_lines_never_pollute_json_stdout(tmp_path, monkeypatch, capsys):
+    """Round-6 dogfood: `--story DIR --json` printed 'Saved plot:' lines after the
+    document and the saved output did not parse. Under --json, stdout is the
+    document alone; status goes to stderr."""
+    import json
+    cfg = _write_config(tmp_path)
+    out_dir = tmp_path / "story"
+    monkeypatch.setattr(sys, "argv", ["hde", cfg, "--json", "--no-monte-carlo", "--story", str(out_dir)])
+    assert cli_main() == 0
+    captured = capsys.readouterr()
+    doc = json.loads(captured.out)  # the whole of stdout parses
+    assert "engine_version" in doc
+    assert "Story written:" in captured.err and "Saved plot:" in captured.err
+    assert (out_dir / "STORY.md").exists()
