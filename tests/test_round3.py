@@ -30,7 +30,10 @@ from hde.models import (
     OptionResult,
     compute_verdict,
 )
-from hde.serialization import assumptions_to_dict, format_assumptions
+from hde.deterministic import compute_deterministic
+from hde.pv import mortgage_payment
+from hde.reporting import format_text_report
+from hde.serialization import assumptions_to_dict, det_to_dict, format_assumptions
 from hde.story_plots import verdict_sentence
 from hde.sweep import format_sweep
 
@@ -204,3 +207,38 @@ class TestFinancedPremiumIsNotReportedMissing:
         cfg["condo"]["purchase_costs"] = 0
         warns = [w for w in coherence_warnings(load_config_dict(cfg)) if w.startswith("condo: not modelled")]
         assert len(warns) == 1 and "mortgage-insurance premium" in warns[0]
+
+
+class TestYearOneCashLine:
+    """A sticker-cash user reads the $/month PV equivalent as out-of-pocket;
+    the engine now prints year-1 cash (undiscounted) and the principal repaid
+    so the answer can say 'the owner pays $X/month MORE in cash; the PV win is
+    equity at sale' from an engine line, not hand arithmetic."""
+
+    def test_condo_and_rent_year1_cash_and_principal(self):
+        spec = load_config_dict(_base())
+        det = compute_deterministic(spec)
+        loan = 400_000 - 80_000
+        pay = mortgage_payment(loan, 0.04, 25)
+        assert det.condo.cash_year1 == pytest.approx(300 * 12 + 3_000 + pay)
+        assert det.condo.principal_year1 == pytest.approx(pay - loan * 0.04)
+        assert det.rent.cash_year1 == pytest.approx(2000 * 12)
+        assert det.rent.principal_year1 == 0.0
+
+    def test_all_cash_has_no_principal(self):
+        cfg = _base()
+        cfg["condo"] = {"initial_value": 400_000, "monthly_fee": 300, "all_cash": True,
+                        "value_growth_rate": 0.0, "purchase_costs": 5_000,
+                        "other_recurring_costs": cfg["condo"]["other_recurring_costs"]}
+        det = compute_deterministic(load_config_dict(cfg))
+        assert det.condo.cash_year1 == pytest.approx(300 * 12 + 3_000)
+        assert det.condo.principal_year1 == 0.0
+
+    def test_json_and_report_carry_it(self):
+        spec = load_config_dict(_base())
+        det = compute_deterministic(spec)
+        d = det_to_dict(det)
+        assert {"cash_year1", "principal_year1"} <= set(d["condo"]) and {"cash_year1", "principal_year1"} <= set(d["rent"])
+        text = format_text_report(det, None, spec.simulation, spec.economic, spec)
+        assert "Year-1 cash (undiscounted" in text
+        assert "principal repaid" in text

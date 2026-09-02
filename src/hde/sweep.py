@@ -87,7 +87,7 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                        if getattr(det, k) is not None},
             "best": verdict.best, "runner_up": verdict.runner_up,
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
-            "decisive": verdict.decisive, "prob_best": verdict.prob_best,
+            "decisive": verdict.decisive, "rule": verdict.rule, "prob_best": verdict.prob_best,
             "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
@@ -118,8 +118,9 @@ def format_sweep(result: Dict[str, Any]) -> str:
     opts = [o for o in ("condo", "house", "rent") if any(o in r.get("totals", {}) for r in rows)]
     lines = [f"\nSweep {key} ({len(rows)} points; every other input held at its base value — "
              f"a joint question needs a second --sweep on the edited config; per-point Monte Carlo "
-             f"percentiles ride --json):"]
-    head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive | P(best) | MC-mean best"
+             f"percentiles ride --json; 'decisive' is judged by the rule shown — mc_floor when Monte "
+             f"Carlo ran with uncertainty on, else margin_band):"]
+    head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive (rule) | P(best) | MC-mean best"
     lines.append(head)
     for r in rows:
         val = _fmt_value(key, r["value"])
@@ -131,7 +132,7 @@ def format_sweep(result: Dict[str, Any]) -> str:
         mean_best = r.get("mc_mean_best") or "n/a"
         lines.append(
             f"  {val:>{max(len(key), 10)}} | {totals} | {r['best']:>8} | "
-            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>8} | {prob:>7} | {mean_best:>12}"
+            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>5} ({r.get('rule', '?')}) | {prob:>7} | {mean_best:>12}"
         )
     if result["flips"]:
         for f in result["flips"]:

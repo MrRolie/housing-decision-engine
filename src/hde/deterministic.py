@@ -581,6 +581,16 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
         from .monte_carlo import _load_prior_if_any
         provenance = _load_prior_if_any(spec).provenance_block()
 
+    # Year-1 cash and principal repaid, per option (see OptionResult).
+    for option_type, params, result in (
+        ("condo", spec.condo, condo_result), ("house", spec.house, house_result),
+        ("rent", spec.rent, rent_result),
+    ):
+        if result is None:
+            continue
+        result.cash_year1 = _annual_costs_for_option(option_type, params, spec.simulation, spec.economic)[0]
+        result.principal_year1 = _principal_repaid_year1(option_type, params)
+
     return ComparisonDeterministicResult(
         condo=condo_result,
         house=house_result,
@@ -588,3 +598,15 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
         income_report=income_report,
         market_scenario=provenance,
     )
+
+
+def _principal_repaid_year1(option_type: str, params) -> float:
+    """Principal repaid in year 1 of a level-payment mortgage: payment − loan × rate
+    (0 for rent, all-cash, or no mortgage block)."""
+    if option_type not in ("house", "condo") or getattr(params, "all_cash", False):
+        return 0.0
+    if (params.down_payment is None or params.mortgage_rate is None
+            or params.mortgage_term_years is None):
+        return 0.0
+    loan = params.initial_value - params.down_payment + params.financed_purchase_costs
+    return mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years) - loan * params.mortgage_rate

@@ -77,6 +77,21 @@ def format_text_report(
         for k, v in det.rent.breakdown.items():
             lines.append(f"  {k}: ${v:>12,.0f}")
 
+    # Year-1 cash, undiscounted — what leaves the account, as opposed to the
+    # PV totals above (round-four dogfood: the $/month PV equivalent was read
+    # as out-of-pocket and had the wrong sign for that reading).
+    cash_lines = []
+    for name, r in (("Condo", det.condo), ("House", det.house), ("Rent", det.rent)):
+        if r is None or r.cash_year1 is None:
+            continue
+        line = f"  {name}: ${r.cash_year1:>10,.0f}/yr (${r.cash_year1 / 12:,.0f}/mo)"
+        if r.principal_year1:
+            line += f" — of which ${r.principal_year1:,.0f} principal repaid; the rest is unrecoverable"
+        cash_lines.append(line)
+    if cash_lines:
+        lines.append("Year-1 cash (undiscounted; PV totals above credit equity at sale)")
+        lines.extend(cash_lines)
+
     # Verdict (readiness plan B.4): the SAME computation the story headline
     # and --json use — runner-up margin, decisiveness rule stated in words.
     single_path = spec is not None and single_path_run(spec)

@@ -21,9 +21,11 @@ user's language, folded into the ONE intake message below, never as a quiz:
 1. **How long do you expect to stay, and how sure are you?** → `years`. Under
    five years the selling cost dominates and the engine warns; if they are not
    sure, that is a range → bracket it (gate 5).
-2. **How would you pay?** → all cash, or down payment + quoted rate + amortization
-   (the mortgage block); a down payment under 20% means a mortgage-insurance
-   premium (purchase_costs).
+2. **How would you pay, and how much cash do you have for day one?** → all
+   cash, or down payment + quoted rate + amortization (the mortgage block);
+   the down payment AND the purchase costs come out of that cash, so ask for
+   the amount, not a percentage; a down payment under 20% means a
+   mortgage-insurance premium (financed_purchase_costs).
 3. **What does "best" mean to you — lowest expected cost, smallest worst case,
    or most wealth at the end?** → which figure is the answer (gate 6).
 4. **What is your income, and how stable is it?** → an `income` block turns on
@@ -55,11 +57,13 @@ the engine echoes back with its source.
 A question rarely carries everything the config needs. Before writing any
 YAML, work out what is missing and ask for ALL of it in ONE message, in the
 user's words, grouped so it reads as a short form — not a drip of one
-question per turn, and never a run on guessed numbers. Keep it to the numbers
-without which the run cannot happen plus the owner costs as one line — six
-asks at most; everything else goes in the same message as a labelled default
+question per turn, and never a run on guessed numbers. Group it into four
+lines they can answer in one reply — (1) how long, how they'd pay and the
+cash they have for day one; (2) fees, tax, insurance, closing costs; (3)
+income; (4) what "best" means and any view on prices — and put every
+modelling default you will take in the same message as a labelled default
 they can overrule ("I'll take 25 years and the engine's 3% real return unless
-you say otherwise"), so a one-line reply is enough. When their answers open a
+you say otherwise"). Six asks on the quick-sense lane. When their answers open a
 new question — the arithmetic does not close (down payment + purchase costs
 above the cash they named), or one number contradicts another — ONE follow-up
 is right; a config built on a contradiction is worse than a second message.
@@ -213,7 +217,10 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    Monte Carlo MEAN: read `verdict.mc_mean_best` (the report's `mean` per
    option) and when it disagrees with `best` say so with both means (the
    `reason` line carries the clause); "too close to call" survives, the sign
-   does not go unmentioned. Smallest worst case → turn the uncertainty inputs ON
+   does not go unmentioned. When the mean disagrees only because of an
+   uncertainty input YOU chose (a crash hazard, a vol), say that the input is
+   yours and sweep it (`--sweep condo.price_shock.annual_hazard=…`) so the
+   user sees where their fear starts to matter. Smallest worst case → turn the uncertainty inputs ON
    (`simulation.*_vol`, `price_shock`), label them illustrative, and read the
    p95 and `prob_*_cheapest`. `investment_return_vol` is the ANNUAL volatility
    of the renter's return (0.10 ≈ a 60/40 portfolio, 0.16 ≈ equities); with a
@@ -222,23 +229,34 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    repeated path and "P(x cheapest): 100%" means nothing was modelled. Most
    wealth at the end → compare `total_pv` (net cost including the terminal
    assets of both sides); `terminal_equity_pv` is a component, not the answer.
-7. **Sanity line.** Beside the margin, state each side's annual unrecoverable
-   cost (owner: interest + fees + tax + maintenance + amortised purchase and
-   selling costs; renter: rent) from the breakdown. If the engine margin and
-   that arithmetic disagree in sign, do not call the result decisive — report
-   the discrepancy and the breakdown line that carries it.
+7. **Cash line — cash is not PV.** Beside the $/month PV equivalent, quote
+   the report's `Year-1 cash` line: each side's year-1 outlay, the principal
+   repaid, and the owner's unrecoverable cash (cash − principal, plus the
+   purchase and selling costs amortised over the horizon). The owner usually
+   pays MORE cash per month while the PV verdict favours buying — that is
+   equity at sale being credited, not a defect: say "you pay $X/month more
+   in cash; buying still wins by $Y in present value because you leave with
+   equity". Only when the breakdown's `terminal_equity_pv` does not explain
+   the gap is there a discrepancy to report.
 8. **"Not modelled" is mandatory.** Every answer names what was left out
    (renewal risk, a financed insurance premium, rent control, taxes on the
    investment return, a probabilistic exit) with the direction of bias. With
    a mortgage, renewal risk is always on the list (the quoted rate is held
    for the whole amortization — biases toward buying when rates are rising),
    and so is any default the engine warned on (a 1% real rent escalation
-   defaulted for a Québec continuing lease biases toward buying).
+   defaulted for a Québec continuing lease biases toward buying); "no chance
+   you move early" biases toward buying too (an early exit pays the selling
+   cost sooner) — every item gets a direction, none gets none.
 
 ## The answer (what the user actually reads)
 
 The verdict in words with its decisiveness · the two or three things it rests
-on (from the breakdown and `defaults applied`) · the two largest engine-set
+on (from the breakdown and `defaults applied`; the owner's driver is always
+"equity at sale = value after growth × (1 − selling cost) − remaining
+mortgage; purchase and selling costs are sunk; the renter's capital is
+credited at its terminal value too" — never "closing costs come back as
+equity" or "renting has no equity") · the cash line (gate 7) and the year-0
+cash total the config commits · the two largest engine-set
 numbers whenever an owned option is present — `selling_cost_rate` (5%, WOWA)
 and the discount rate — named with their source · the flip point from the
 sweep, in the user's units · the sanity line · the affordability line (max

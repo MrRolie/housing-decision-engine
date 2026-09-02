@@ -110,6 +110,8 @@ text report ("Cheapest … / decisiveness:") and `--json`.
 | `monthly_equivalent` | "≈ $/month equivalent" | `pv_to_monthly_savings(margin_pv, dr, N)` = `margin · m / (1 − (1 + m)^−12N)`, `m = (1 + dr)^(1/12) − 1`; `null` when `dr = 0` |
 | `prob_best` | Monte Carlo probability the deterministic winner is cheapest | `prob_<best>_cheapest` from the MC run; `null` without MC or on a single-path run |
 | `mc_mean_best` | the option with the lowest Monte Carlo MEAN total PV | argmin of the per-option MC `mean`; `null` without MC or on a single-path run. When it differs from `best` (a jump process such as `price_shock` moves the mean without moving the deterministic line) `reason` says so with both means — "lowest expected cost" is then the mean, not `best` |
+| `cash_year1` | undiscounted year-1 cash outlay per option | the affordability numerator's first year: fees/maintenance + other recurring costs + year-1 events + the full mortgage payment (owned); rent × 12 (rent). Not a PV — the PV totals credit equity at sale |
+| `principal_year1` | principal repaid in year 1 | `mortgage_payment(loan, r, N) − loan × r` with `loan = initial_value − down_payment + financed_purchase_costs`; 0 without a mortgage. `cash_year1 − principal_year1` is the owner's year-1 unrecoverable cash before amortised purchase/selling costs |
 | `decisive` / `rule` / `reason` | whether the gap clears the anchored threshold | `mc_floor`: `prob_best ≥ verdict.prob_floor` (0.65); `margin_band` (no MC, or every uncertainty input off): `margin_frac ≥ verdict.tie_band` (0.05); `single_option`: nothing to compare. `reason` quotes the measured quantity and the threshold; both constants are `--print-anchors` entries |
 
 ### Monte Carlo — `monte_carlo`

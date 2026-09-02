@@ -321,9 +321,19 @@ RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"invested_capital_pv", "rent_pv
 
 @dataclass
 class OptionResult:
-    """Per-option deterministic result."""
+    """Per-option deterministic result.
+
+    cash_year1 / principal_year1 (round-four dogfood 2026-09-02): the
+    UNDISCOUNTED year-1 cash outlay (the affordability numerator: fees, tax,
+    other costs, the full mortgage payment; rent for the renter) and the
+    principal repaid in year 1 (payment − loan × rate; 0 without a mortgage).
+    A sticker-cash reader takes the $/month PV equivalent as out-of-pocket;
+    these two figures let the answer say what the cash gap is and that the
+    PV win is equity at sale."""
     total_pv: float
     breakdown: Dict[str, float]  # keys defined by {CONDO,HOUSE,RENT}_BREAKDOWN_KEYS
+    cash_year1: Optional[float] = None
+    principal_year1: Optional[float] = None
 
 
 @dataclass
