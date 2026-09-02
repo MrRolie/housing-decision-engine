@@ -38,6 +38,11 @@ condo:
   initial_value: 480000  # scenario-specific market input
   value_growth_rate: 0.02  # real; illustrative market view — for demographic drift see showcase example
   all_cash: true
+  purchase_costs: 7200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
+  other_recurring_costs:
+    - name: property_tax
+      annual_amount: 3600  # illustrative — municipal + school tax ≈ 0.75% of value/yr; scenario-specific (use the listing's tax bill)
+      escalation_rate: 0.0  # real; tax tracks assessed value
   events:
     - name: "special_assessment"
       base_cost: 15000  # illustrative service cost — calibrate to your reserve study
@@ -49,6 +54,14 @@ house:
   value_growth_rate: 0.03  # real; illustrative market view — for demographic drift see showcase example
   annual_maintenance_rate: 0.012  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
+  purchase_costs: 8200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
+  other_recurring_costs:
+    - name: property_tax
+      annual_amount: 4700  # illustrative — municipal + school tax ≈ 0.85% of value/yr; scenario-specific (use the listing's tax bill)
+      escalation_rate: 0.0  # real; tax tracks assessed value
+    - name: home_insurance
+      annual_amount: 1200  # illustrative — scenario-specific
+      escalation_rate: 0.0
   events:
     - name: "roof_replacement"
       base_cost: 20000  # illustrative service cost — calibrate to your component inventory

@@ -52,7 +52,8 @@ def test_json_keys_the_skill_promises_are_the_document(tmp_path, monkeypatch, ca
 
 
 def test_skill_states_the_act_gating_the_renderer_implements():
-    assert "acts 1–4 always" in TEXT
+    assert "acts 1 and 2 always" in TEXT
+    assert "act 3" in TEXT and "uncertainty input is on" in TEXT   # single-path runs skip act 3
     assert "act 5" in TEXT and "market_scenario" in TEXT
     assert "act 6" in TEXT and "owned option" in TEXT
 
@@ -60,7 +61,8 @@ def test_skill_states_the_act_gating_the_renderer_implements():
 def test_skill_elicits_goals_and_reads_defaults_back():
     assert "## Elicit first" in TEXT
     for phrase in ("How long do you expect to stay", "What does \"best\" mean",
-                   "Which uncertainties", "assumptions read-back", "defaults applied"):
+                   "Which of your numbers are you least sure of", "assumptions read-back",
+                   "defaults applied"):
         assert phrase in TEXT, phrase
     assert "Decisiveness is not the headline" in TEXT
 
@@ -104,3 +106,10 @@ def test_project_settings_preapprove_the_user_flow():
     # A Write(...) path rule is accepted but never consulted and warns at
     # startup (Claude Code permissions docs, "Read and Edit") — friction, not cover.
     assert not any(r.startswith("Write(") for r in allow)
+
+
+def test_skill_translates_real_world_items_and_dispatches_sweeps():
+    """The dogfood's top friction: owner costs silently zero, flip points hand-rolled."""
+    for phrase in ("property tax", "other_recurring_costs", "purchase_costs", "--sweep",
+                   "Not modelled", "A range is two configs", "Sanity line"):
+        assert phrase in TEXT, phrase

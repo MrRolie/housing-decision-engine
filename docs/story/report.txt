@@ -7,20 +7,20 @@ Assumptions
   demographic prior: MTL_RMR (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · sha256 e73fff23ef46… [demoflow ScenarioPrior v1]
   defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
 
-Condo  total PV:  $     457,945
-  purchase_costs_pv: $           0
+Condo  total PV:  $     515,883
+  purchase_costs_pv: $       7,200
   fee_pv: $     188,713
   events_pv: $      10,153
-  other_pv: $           0
+  other_pv: $      50,738
   reserve_pv: $           0
   downpayment_pv: $     480,000
   mortgage_pv: $           0
   terminal_equity_pv: $    -220,921
-House  total PV:  $     421,414
-  purchase_costs_pv: $           0
+House  total PV:  $     512,768
+  purchase_costs_pv: $       8,200
   maintenance_pv: $     113,415
   events_pv: $      11,137
-  other_pv: $           0
+  other_pv: $      83,154
   downpayment_pv: $     550,000
   mortgage_pv: $           0
   terminal_equity_pv: $    -253,138
@@ -31,14 +31,14 @@ Rent   total PV:  $     534,342
   invested_capital_pv: $     145,000
   invested_dp_benefit_pv: $    -145,000
 
-Cheapest: House saves $36,531 vs Condo (runner-up)
-  ≈ $211/month equivalent
-  decisiveness: P(house cheapest) = 70% ≥ 65% floor [hde verdict rule]
+Too close to call: House edges Condo by $3,115 (0.6%)
+  ≈ $18/month equivalent
+  decisiveness: P(house cheapest) = 35% < 65% floor [hde verdict rule]
 
 Monte Carlo:
-  Condo: mean $481,187  p5 $392,167  p50 $492,550  p95 $561,373
-  House: mean $442,358  p5 $360,441  p50 $452,149  p95 $513,527
+  Condo: mean $538,999  p5 $449,862  p50 $551,199  p95 $618,651
+  House: mean $533,253  p5 $451,335  p50 $543,533  p95 $605,107
   Rent: mean $534,342  p5 $534,342  p50 $534,342  p95 $534,342
-  P(condo cheapest): 30.3%
-  P(house cheapest): 69.5%
-  P(rent cheapest): 0.1%
+  P(condo cheapest): 32.4%
+  P(house cheapest): 35.5%
+  P(rent cheapest): 32.1%

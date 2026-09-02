@@ -44,6 +44,7 @@ condo:
   initial_value: 420000  # scenario-specific market input
   value_growth_rate: 0.02  # real; illustrative market view — for demographic drift see showcase example
   all_cash: true
+  purchase_costs: 6300  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   reserve_contribution_rate: 0.30  # illustrative governance choice (share of fee flowing to reserves)
   reserve_initial_balance: 15000  # scenario-specific input
   reserve_growth_rate: 0.02  # real; illustrative — nearest reference FP Canada 2026 fixed income ≈ 1.1% real; optimistic
@@ -77,6 +78,7 @@ house:
   value_growth_rate: 0.03  # real; illustrative market view — for demographic drift see showcase example
   annual_maintenance_rate: 0.009  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
+  purchase_costs: 7500  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   maintenance_curve:  # NAHB 2019 anchor (~0.5% routine); shape is an illustrative age-condition profile
     - year: 1
       rate: 0.007

@@ -37,6 +37,14 @@ house:
   down_payment: 110000  # 20% — scenario-specific
   mortgage_rate: 0.0225  # real; FP Canada 2026 borrowing 4.4% nominal deflated by 2.1% inflation
   mortgage_term_years: 25  # scenario-specific
+  purchase_costs: 8200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
+  other_recurring_costs:
+    - name: property_tax
+      annual_amount: 4700  # illustrative — municipal + school tax ≈ 0.85% of value/yr; scenario-specific (use the listing's tax bill)
+      escalation_rate: 0.0  # real; tax tracks assessed value
+    - name: home_insurance
+      annual_amount: 1200  # illustrative — scenario-specific
+      escalation_rate: 0.0
   value_growth_rate: 0.01  # real; illustrative market view
   annual_maintenance_rate: 0.01  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
 

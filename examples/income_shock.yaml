@@ -37,6 +37,11 @@ condo:
   fee_escalation_rate: 0.03  # real; FP Canada 2026 shelter ≈ 1.0% real reference — aggressive aging-building view
   initial_value: 500000  # scenario-specific market input
   all_cash: true
+  purchase_costs: 7500  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
+  other_recurring_costs:
+    - name: property_tax
+      annual_amount: 3800  # illustrative — municipal + school tax ≈ 0.75% of value/yr; scenario-specific (use the listing's tax bill)
+      escalation_rate: 0.0  # real; tax tracks assessed value
 
 rent:
   monthly_rent: 2500  # scenario-specific market input

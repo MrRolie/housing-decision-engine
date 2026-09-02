@@ -91,7 +91,7 @@ full-suite invocation.
 ## Key design decisions (stable)
 
 - **ComparisonSpec** is the single input bundle for all engines — replaces the old `(condo, house, sim, econ)` 4-tuple. All options (condo, house, rent, income) are Optional; at least one of condo/house/rent must be present.
-- **3-way comparison** — rent, condo, house are all first-class options. Rent PV includes `invested_dp_benefit_pv = dp × (1+r_inv)^N / (1+dr)^N` (negative, reduces total cost).
+- **3-way comparison** — rent, condo, house are all first-class options. Rent PV books the renter's capital exactly like the buyer's: `invested_capital_pv = +D` at year 0 and `invested_dp_benefit_pv = −D × (1+r_inv)^N / (1+dr)^N` at the horizon (2026-09-02 fix — the outlay was missing, biasing every verdict toward renting by D).
 - **Affordability layer** — `IncomeParams` + `PayDropEvent` produce per-year housing-cost/income ratios returned as the `affordability` block of `--json`.
 - **Deterministic + Monte Carlo** run as separate engines; deterministic is the sanity check, MC is the uncertainty surface.
 - **YAML config** is the input contract — scenarios are files, not code. `load_config_dict` returns `ComparisonSpec`.

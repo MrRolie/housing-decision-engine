@@ -248,6 +248,8 @@ uv run hde examples/rent_vs_condo_vs_house.yaml --json | python -c 'import json,
 uv run hde examples/showcase_demographic_prior.yaml --story docs/story && git status --short docs/story   # clean on 2nd run
 ```
 
+> 2026-09-02 note: the figures quoted below predate the capital-leg fix (renter's capital now charged at year 0), the owner-cost fields and the examples' purchase/carrying costs — the acceptance conditions still hold, the numbers differ.
+
 Readiness probe re-run (the acceptance test for G3): reproduce `rent_pv`, `terminal_equity_pv`, `invested_dp_benefit_pv`, `≈ $/mo` using ONLY
 `--json` + `docs/reference/` — every figure must reproduce without opening `src/`. G2 acceptance: `examples/basic_config.yaml` with
 `house.initial_value: 460000` renders "too close to call" (1.4% margin, P=57%), the showcase still renders "Renting wins". G1 acceptance: a config
