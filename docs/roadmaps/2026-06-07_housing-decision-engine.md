@@ -57,6 +57,9 @@ Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; r
 - `--sweep` in the user's units: accept sticker (nominal) points in nominal mode and deflate in-engine; today the bracket is authored in real decimals by hand.
 - Mortgage-insurance premium schedule (CMHC/Sagen by LTV band + provincial tax): `financed_purchase_costs` now carries a hand-computed premium on the loan; the schedule itself is not anchored (the CMHC fetch was blocked from the build sandbox).
 - The 200-word quick-sense cap versus the mandatory disclosures: the skill now ranks content and never drops a warning; whether the cap should rise is a product call.
+- **Decisiveness keys to the deterministic best (RULING):** with the prior on, P(house)=66.4% at rent $1,900 reads "not decisive" (rent is the deterministic best at 33.6%) and 66.6% at $1,950 reads "decisive" — the reason line now says when the other side clears the floor; whether `decisive`/`best` should key to the max-probability option instead is the operator's call (rule ruled 2026-09-01).
+- `--break-even` under the verdict's own criterion: alongside the deterministic tie band, the interval where `decisive` is false and the Monte Carlo-mean crossing on the same bracket (today a hand-densified `--sweep`; Monte Carlo per bisection point is the cost).
+- Laval vs metro prior: `LAVAL_RA13` reads materially differently from `MTL_RMR` on the same house (buying lean 55.8% vs 66.4%; Laval's reference drift turns negative from 2040) — the geography list is now on `--print-schema` and pinned to the fixture; a per-geography drift summary on `--print-anchors` would let an agent say why.
 
 ---
 

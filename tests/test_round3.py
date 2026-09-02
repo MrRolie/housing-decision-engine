@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from hde.anchors import ANCHORS
-from hde.config import coherence_warnings, load_config_dict
+from hde.config import affordability_warnings, coherence_warnings, load_config_dict
 from hde.models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
@@ -281,3 +281,56 @@ class TestYearOneAppreciation:
         assert "appreciation_year1" in det_to_dict(det)["condo"]
         text = format_text_report(det, None, spec.simulation, spec.economic, spec)
         assert "expected appreciation" in text
+
+
+class TestRoundFiveWarningsAndNotes:
+    """Dogfood round 5 (Duvernay threshold): the persona reached for the TDS cap,
+    inferred the prior's base-growth convention from an example comment, and
+    compared a stochastic owner to a point-mass renter without a warning."""
+
+    PRIOR = {"path": "tests/fixtures/scenario_prior_golden.json", "geography": "LAVAL_RA13"}
+
+    def test_one_sided_uncertainty_warns_with_a_prior_and_no_return_vol(self):
+        cfg = _base(market_scenario=self.PRIOR,
+                    rent={"monthly_rent": 2000, "rent_escalation_rate": 0.0, "invested_down_payment": 85_000})
+        assert any(w.startswith("one-sided uncertainty") for w in coherence_warnings(load_config_dict(cfg)))
+        quiet = {**cfg, "simulation": {"investment_return_vol": 0.1}}
+        assert not any(w.startswith("one-sided uncertainty") for w in coherence_warnings(load_config_dict(quiet)))
+        no_prior = _base(rent=cfg["rent"])
+        assert not any(w.startswith("one-sided uncertainty") for w in coherence_warnings(load_config_dict(no_prior)))
+
+    def test_affordability_warning_names_the_ratio_shape_and_the_gds_cap(self):
+        spec = load_config_dict(_base(income={"annual_income": 40_000}))
+        det = compute_deterministic(spec)
+        warns = affordability_warnings(det)
+        assert warns and "GDS-shaped" in warns[0] and "39% GDS" in warns[0] and "44% TDS" in warns[0]
+
+    def test_schema_states_the_prior_base_convention_and_the_shipped_geographies(self):
+        import json
+        from hde.input_schema import input_schema
+        schema = input_schema()
+        for section in ("condo", "house"):
+            assert "ADDED to this base" in schema[section]["value_growth_rate"]["note"]
+        note = schema["market_scenario"]["geography"]["note"]
+        fixture = json.load(open("tests/fixtures/scenario_prior_golden.json"))
+        for geo in sorted({r["geography"] for r in fixture["scenario_priors"]}):
+            assert geo in note, geo
+
+
+class TestVerdictReasonNamesTheFloorForTheOtherSide:
+    """Round 5: at $1,900 the persona's run read P(house)=66.4% as 'not decisive'
+    because decisiveness keys to the deterministic best (rent, 33.6%); the reason
+    line must say the other side clears the floor."""
+
+    def test_other_side_above_floor_is_said(self):
+        det = _det({"condo": 156_000.0, "rent": 155_000.0})  # rent is the deterministic best
+        mc = _mc({"condo": 150_000.0, "rent": 160_000.0}, {"condo": 0.664, "rent": 0.336})
+        v = compute_verdict(det, mc, years=9, discount_rate=0.05)
+        assert v.best == "rent" and not v.decisive
+        assert "Monte Carlo favours condo (66.4%, above the 65% floor — decisiveness keys to the deterministic best)" in v.reason
+
+    def test_other_side_below_floor_keeps_the_short_clause(self):
+        det = _det({"condo": 156_000.0, "rent": 155_000.0})
+        mc = _mc({"condo": 150_000.0, "rent": 160_000.0}, {"condo": 0.60, "rent": 0.40})
+        v = compute_verdict(det, mc, years=9, discount_rate=0.05)
+        assert "Monte Carlo favours condo (60.0%)" in v.reason and "above the" not in v.reason

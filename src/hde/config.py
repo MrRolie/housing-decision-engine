@@ -392,6 +392,19 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             "investment_return_vol (0.10 ≈ 60/40 portfolio) or drop price_shock for a like-for-like "
             "worst case"
         )
+    # One-sided uncertainty (dogfood round 5): a demographic prior makes the
+    # owned value stochastic while the renter's capital stays a point mass, so
+    # P(cheapest) compares a distribution to a point.
+    if (spec.rent is not None and spec.rent.invested_down_payment > 0
+            and spec.simulation.investment_return_vol == 0
+            and spec.market_scenario is not None
+            and any(o is not None for o in (spec.condo, spec.house))):
+        warns.append(
+            "one-sided uncertainty: the market_scenario prior makes the owned option's value "
+            "stochastic while simulation.investment_return_vol=0 leaves the renter's PV a point "
+            "mass — P(cheapest) compares a distribution to a point; set investment_return_vol "
+            "(0.10 ≈ 60/40 portfolio) or read the deterministic line"
+        )
 
     return warns
 
@@ -412,7 +425,9 @@ def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
         if ratios and exceeds:
             warns.append(
                 f"affordability: {name} housing cost exceeds {rpt.threshold:.0%} of income "
-                f"in years {exceeds} (max {max(ratios):.1%})"
+                f"in years {exceeds} (max {max(ratios):.1%}) — GDS-shaped ratio (housing cost "
+                f"incl. maintenance over income, no other debts): CMHC's cap for that shape is "
+                f"39% GDS, not the 44% TDS [income.affordability_threshold]"
             )
     return warns
 

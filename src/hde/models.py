@@ -489,7 +489,13 @@ def compute_verdict(
             if others:
                 mc_best = max(others, key=lambda k: others[k])
                 if others[mc_best] > prob_best:
-                    reason += f"; Monte Carlo favours {mc_best} ({others[mc_best]:.1%})"
+                    reason += f"; Monte Carlo favours {mc_best} ({others[mc_best]:.1%}"
+                    # Decisiveness keys to the deterministic best (ruled 2026-09-01);
+                    # when the other side clears the floor, say so rather than let
+                    # "not decisive" read as "nobody wins".
+                    if others[mc_best] >= floor:
+                        reason += f", above the {floor:.0%} floor — decisiveness keys to the deterministic best"
+                    reason += ")"
     else:
         decisive = margin_frac >= band
         rule = "margin_band"

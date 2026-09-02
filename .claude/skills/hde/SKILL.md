@@ -39,10 +39,14 @@ ask only six things in one message — dwelling, rent, price, how they'd pay,
 horizon, income — decide the sweep yourself from whatever they were vague
 about, keep the answer under 200 words, and offer the deeper pass. The cap
 ranks what stays, it never drops a warning: verdict with its decisiveness ·
-the flip point in their units · the affordability line · not modelled with
-its bias (renewal risk with any mortgage; every defaulted escalation the
-engine warned on) · one next step. Defaults' provenance beyond the two
-largest and the story path can go; a warning cannot.
+the flip point in their units — and if it rests on an estimate you chose,
+quoted at both ends of that estimate in the same sentence · the cash line
+(down payment + purchase costs against the cash named, and the distance to
+the 20% line when it is within one price step of it) · the affordability line
+· every default the engine warned on, each with its rerun figure or its bias
+· not modelled with its bias (renewal risk with any mortgage) · one next
+step. Defaults' provenance beyond the two largest and the story path can go;
+a warning cannot.
 
 **One side known.** Most people arrive certain about one side and vague about
 the other: "I'm looking at houses in Duvernay around $650k — what rent would
@@ -57,11 +61,21 @@ close to call between $A and $B, buying is cheaper above $B". Everything
 property-specific they cannot know yet (tax, fees, maintenance, purchase
 costs) is an estimate you label and, for the least certain one, sweep — the
 threshold moves with it, so quote the threshold at both ends of that sweep.
-The break-even is the deterministic crossing; with any uncertainty input on,
-the verdict's decisiveness is the Monte Carlo floor, so quote it as "the
-deterministic threshold", cross-check it against the sweep's `mean flip:`
-line on the same input, and never present it as the tie the verdict would
-call. A price break-even holds `down_payment` fixed (a fixed cash pile), so
+When the user has no price-growth view, `value_growth_rate` is the least
+certain estimate by construction (the engine's default is neutral, uncited):
+sweep it across the anchor band (`--sweep house.value_growth_rate=0:0.02:3`)
+and quote the threshold at 0% and at the top; then sweep the largest labelled
+dollar estimate (usually maintenance). Never call a single base rate "the
+point estimate". The threshold sentence reads "A is cheaper below the band's
+low edge, too close to call inside it, B is cheaper above the high edge" —
+never a bare crossing and a band in the same breath (they contradict on the
+gap between them). The break-even is the deterministic crossing; with any
+uncertainty input on, the verdict's decisiveness is the Monte Carlo floor, so
+quote BOTH bands: the deterministic tie band from `--break-even`, and the
+verdict's band from a densified `--sweep` on the same input (the points where
+`decisive` is false), saying where the engine calls the other side decisive;
+cross-check the sweep's `mean flip:` line on the same input. A price
+break-even holds `down_payment` fixed (a fixed cash pile), so
 the loan-to-value and any insurance premium change along the scan — say so.
 If the engine reports that the config refuses part of the bracket (a price
 below the down payment), quote the searched range, not the bracket asked for.
@@ -115,7 +129,10 @@ between questions.
    — closing costs come out of the same pile as the down payment.
 3. **Modelling parameters — may be proposed, always labelled:** discount rate
    (engine default 3% real, cited), growth and escalation rates, maintenance
-   rate (NAHB ≈ 0.6% of value), the uncertainty vols. Say "I'll use X because
+   rate (NAHB routine ≈ 0.6% of value, narrow; the examples use 1.2% = routine
+   + the 1%-rule budgeting family — either is illustrative: name the one you
+   take and sweep between them when it moves the threshold), the uncertainty
+   vols. Say "I'll use X because
    <source or 'illustrative'>" and let the engine echo it back under
    `defaults applied`; a user's "I don't know" here means take the default
    and name it, not stop. A user's RANGE ("2–3%?") is not a midpoint — it is
@@ -138,9 +155,9 @@ over it.
 | realtor commission + notary at sale | `selling_cost_rate` (default 5%, WOWA 2026) | dominates short horizons |
 | the money the renter keeps instead of buying | `rent.invested_down_payment` + `investment_return_rate` | charged at year 0 and credited at its terminal value, exactly like the buyer's down payment; omitted = assume it earns the discount rate |
 | a posted 5-year fixed rate | `mortgage_rate` = effective annual: `(1 + r/2)^2 − 1`, used AS IS in `mode: nominal` (gate 3: a mortgage means nominal mode — never a real conversion of the mortgage); `mortgage_term_years` is the AMORTIZATION (usually 25), never the 5-year term | the rate is held for the whole amortization — say that renewal risk is not modelled (biases toward buying when rates are rising) |
-| "prices here grow 3%", "rent goes up 3%", "my portfolio makes 6%" | `value_growth_rate`, `rent_escalation_rate`, `investment_return_rate` — a colloquial rate is a STICKER (nominal) figure unless the user says "above inflation": convert every one of them the same way, real ≈ (1 + quoted)/(1 + 2.1%) − 1 — never just the mortgage | gate 3 |
+| "prices here grow 3%", "rent goes up 3%", "my portfolio makes 6%" | `value_growth_rate`, `rent_escalation_rate`, `investment_return_rate` — a colloquial GROWTH or RETURN rate is a STICKER (nominal) figure unless the user says "above inflation": convert each to real, (1 + quoted)/(1 + 2.1%) − 1, before typing it (nominal mode composes inflation back on). The mortgage is the exception: its only conversion is compounding, (1 + r/2)² − 1, used as entered in nominal mode — never an inflation conversion | gate 3 |
 | "I might move for work" | run the shorter horizon as a second config | no probabilistic exit in the engine |
-| browsing a market, no specific property ("houses in <area> around $650k") | the price band is THEIR number (`--sweep` or `--break-even` across it); everything property-specific is an estimate you label — tax from the municipality's rate or "≈ x% of value (illustrative)", maintenance NAHB ≈ 0.6% of value, fees typical for the building type, purchase costs ≈ 1.5% of price — and the least certain one gets a `--sweep` | say which figures are estimates and that a real listing's tax bill and fees replace them |
+| browsing a market, no specific property ("houses in <area> around $650k") | the price band is THEIR number (`--sweep` or `--break-even` across it); everything property-specific is an estimate you label — tax from the municipality's rate or "≈ x% of value (illustrative)", maintenance NAHB routine ≈ 0.6% of value or the examples' 1.2% (name which), fees typical for the building type, purchase costs ≈ 1.5% of price — and the least certain one gets a `--sweep` | say which figures are estimates and that a real listing's tax bill and fees replace them |
 
 ## Cases → dispatch
 
@@ -158,7 +175,7 @@ committed.
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point on any input | `uv run hde <config.yaml> --sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
 | "What rent keeps renting the better deal?" / "at my rent, what price makes buying worth it?" / "how long before buying wins?" — the threshold on ONE input | `uv run hde <config.yaml> --break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30` (solves the crossing and the tie-band edges; two priced options only; money inputs get a ¼×–4× bracket by default, anything else takes `=lo:hi`) |
 | Agent-consumable result | append `--json` (typed doc: verdict + assumptions + warnings + deterministic + MC, plus `sweeps` / `break_evens` when asked) |
-| Demographic prior run (Montréal only — `MTL_RMR` is the one geography shipped) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior committed at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo must be on — the prior adds drift there only; it runs in either mode (the drift is real; nominal mode composes it), so a financed buyer keeps `mode: nominal` |
+| Demographic prior run (Québec only — the shipped prior carries `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR`; use the finest geography that contains the user's area — Laval → `LAVAL_RA13`, the island → `MTL_ISLAND_RA06`, the rest of the metro → `MTL_RMR`, Québec City → `QC_RMR`, outside any CMA → `HORS_RMR` — and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior committed at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo must be on — the prior ADDS its drift to `value_growth_rate` there only; the deterministic line uses the base alone. With no user view leave the base at the engine default (0, it warns) so the prior is the growth view; a non-zero base is a second view stacked on the prior — label it and sweep it. Runs in either mode (the drift is real; nominal mode composes it), so a financed buyer keeps `mode: nominal` |
 
 **Example 1:**
 Input: "I pay 2400/mo rent, similar condos go for 480k — is buying worth it over 15 years?"
@@ -214,10 +231,11 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    (1 + 2.1%) − 1). `mortgage_rate` is an effective annual rate with annual
    payments; a Canadian posted rate compounds semi-annually — convert it
    (schema note).
-   Every colloquial rate a member of the public quotes — mortgage, price
-   growth, rent growth, portfolio return — is a sticker rate unless they say
-   "above inflation"; convert them ALL with the same formula, never just the
-   mortgage.
+   Every colloquial GROWTH or RETURN rate a member of the public quotes —
+   price growth, rent growth, portfolio return — is a sticker rate unless they
+   say "above inflation": convert each to real before typing it. The mortgage
+   is the exception: its only conversion is compounding (posted → effective
+   annual); in nominal mode it is used as entered, never inflation-converted.
 4. **Like-for-like renter capital.** Put the buyer's total year-0 cash —
    down payment + purchase costs (all cash = the whole price + purchase costs)
    — in `rent.invested_down_payment`; the engine charges it at
@@ -298,7 +316,11 @@ numbers whenever an owned option is present — `selling_cost_rate` (5%, WOWA)
 and the discount rate — named with their source · the flip point from the
 sweep, in the user's units · the sanity line · the affordability line (max
 ratio and breach years) whenever an income was given, from the nominal-mode
-run when there is a mortgage · **every uncertainty input and every cost you
+run when there is a mortgage — the engine's ratio is housing cost including
+maintenance over income: GDS-shaped with a broader numerator and no other
+debts, so compare it to CMHC's 39% GDS cap, never the 44% TDS cap unless
+other debts were asked, and never soften an engine "exceeds" warning to "not
+a breach" without saying which threshold each refers to · **every uncertainty input and every cost you
 proposed** (a crash hazard, a vol, an illustrative insurance figure) named in
 the user's text with its label ("illustrative, not cited") and what it sets
 ("this is what makes the p95") · **Not modelled:** each item with its

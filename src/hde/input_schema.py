@@ -40,7 +40,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
         "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
                                        "neutral, no universal long-run real default; set "
-                                       "your view or a market_scenario prior"),
+                                       "your view or a market_scenario prior. With a prior, "
+                                       "its drift is ADDED to this base in the Monte Carlo; "
+                                       "the deterministic line uses this base alone"),
         "monthly_fee": (True, "condo fee, $/month — REQUIRED whenever a condo: block is "
                              "present; use 0 for a fee-free unit"),
         "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
@@ -80,7 +82,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "initial_value": (True, "purchase price in DOLLARS"),
         "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
                                        "neutral, no universal long-run real default; set "
-                                       "your view or a market_scenario prior"),
+                                       "your view or a market_scenario prior. With a prior, "
+                                       "its drift is ADDED to this base in the Monte Carlo; "
+                                       "the deterministic line uses this base alone"),
         "annual_maintenance_rate": (False, "fraction of value per year; DEFAULT 0.0 = no "
                                             "maintenance modelled (neutral, warns when omitted); "
                                             "NAHB 2019 AHS routine ≈ 0.6% of value/yr"),
@@ -173,7 +177,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     },
     "market_scenario": {
         "path": (True, "ScenarioPrior JSON (see examples/showcase_demographic_prior.yaml)"),
-        "geography": (True, "exact string, e.g. MTL_RMR; refusal lists what exists"),
+        "geography": (True, "exact string; the shipped prior (tests/fixtures/scenario_prior_golden.json) carries "
+                            "HORS_RMR, LAVAL_RA13, MTL_ISLAND_RA06, MTL_RMR, QC_RMR — use the finest one that "
+                            "contains the user's area; a refusal lists what the file has"),
     },
 }
 
