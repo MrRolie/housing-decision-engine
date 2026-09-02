@@ -213,7 +213,7 @@ F.5 `examples/README.md`: "Start here" section inlining an 8-line minimal rent-v
 
 G.1 `AGENTS.md`: line 9 → CLI-first sentence pointing at CLAUDE.md's surface doctrine; Entry points list `--print-schema`, `--json`, `--story`, demote
     the MCP block to "non-shell consumers only"; package layout adds `anchors`, `serialization`, `input_schema`, `market_scenario`, `story_plots`,
-    `story_page` and `docs/{plans,research,story}`; Sessions: S4b ✅ 2026-08-26 (8ceb010, 0e2116e, sketch path) + the provenance remediation row;
+    `story_page` and `docs/{plans,research,story}`; Sessions: S4b ✅ 2026-08-26 (sketch path) + the provenance remediation row;
     line 98 reworded to "every bias-critical engine default" with the covered set named (the "every default" claim is not enforced and C.4's test is what makes it true).
 G.2 Roadmap Status block (mutable half only): overall, Last Updated, row 4b completed with its stat-able path, hand-off payload, delete the stale
     "Start Session 1" action.
