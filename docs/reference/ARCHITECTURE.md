@@ -73,6 +73,7 @@ the exact breakdown / JSON keys.
 | `events_pv` | PV of one-time events, GROSS of reserve coverage | each event at its `expected_year` clamped to `[min_year, max_year] ∩ [1, N]`: `base_cost · (1 + dr)^-year` |
 | `other_pv` | PV of "other recurring" costs | `Σ_t amount · (1 + e_eff)^t · (1 + dr)^-t` per cost |
 | `reserve_pv` (condo) | reserve-fund coverage of events, as a NEGATIVE offset | balance evolves yearly `B ← B(1 + r_res,eff) + 12·fee_t · reserve_contribution_rate`; at an event `covered = min(B, cost)`, `reserve_pv −= covered · (1 + dr)^-year` |
+| `purchase_costs_pv` | closing costs paid at purchase (land-transfer tax, notary, inspection, a cash-paid mortgage-insurance premium) | `purchase_costs`, year 0, undiscounted; excluded from the affordability ratio |
 | `downpayment_pv` | capital paid at year 0 | `initial_value` when `all_cash`, else `down_payment`; undiscounted |
 | `mortgage_pv` | PV of the level annual payments | `M · [1 − (1 + dr)^−n] / dr`, `n = min(N, mortgage_term_years)`; 0 when `all_cash` |
 | `terminal_equity_pv` | the end-of-horizon equity credit (NEGATIVE = reduces cost) | `−[V_N (1 − selling_cost_rate) − B_N] · (1 + dr)^-N`, `V_N = V0 (1 + g_eff)^N`, `B_N = L(1 + r)^N − M[(1 + r)^N − 1]/r` (0 once `N ≥ T`) |
@@ -170,6 +171,16 @@ Present only with an `income` block.
 | 4 Home-value futures | a fan of value paths | the user's growth plus the prior row's `demo_drift_p10` / mean / `demo_drift_p90` per band, compounded yearly (deterministic quantile paths, not MC paths) |
 | 5 The demographic signal | the prior itself | `demo_drift_mean` with the p10–p90 band per horizon and scenario, footer from the file's own vintage fields |
 | 6 The market line | break-even rent vs the cheapest owned option | rent swept ±35% around the quoted rent on 41 points; each point re-runs the deterministic engine; the break-even is the linearly interpolated crossing of `total_pv(rent)` and `total_pv(cheapest owned)`; "on the line" = within one grid step |
+
+### Sweeps — `--sweep KEY=v1,v2,…` or `KEY=start:stop:n`
+
+Each point re-runs the comparison through the same loader (validated, defaults
+echoed) and the same verdict rule; `rows` carry per-option `total_pv` and the
+verdict fields, `flips` list consecutive points whose cheapest option differs.
+Integer inputs (`years`, `num_sims`, `mortgage_term_years`) are rounded; a
+point the loader refuses (e.g. an event past a shortened horizon) is reported
+as `error`, not skipped silently. Monte Carlo runs per point unless
+`--no-monte-carlo` or the point is a single-path run.
 
 ### Assumptions block — `assumptions`
 

@@ -10,7 +10,7 @@ import datetime
 import sys
 from pathlib import Path
 
-from .config import load_config, all_warnings, single_path_run, ConfigValidationError
+from .config import load_config, all_warnings, affordability_warnings, single_path_run, ConfigValidationError
 from .deterministic import compute_deterministic
 from .market_scenario import ScenarioPriorError
 from .models import InputError, compute_verdict
@@ -94,6 +94,15 @@ def main() -> int:
              "text report, and a STORY.md one-pager",
     )
 
+    parser.add_argument(
+        "--sweep",
+        action="append",
+        default=[],
+        metavar="KEY=v1,v2,...|KEY=start:stop:n",
+        help="Re-run the comparison across values of one input (repeatable), e.g. "
+             "--sweep years=5,10,20 or --sweep condo.value_growth_rate=0:0.04:5; prints "
+             "per-point verdicts and where the cheapest option flips; rides --json as 'sweeps'",
+    )
     args = parser.parse_args()
 
     if args.print_schema:
@@ -156,12 +165,31 @@ def main() -> int:
     try:
         if not args.no_deterministic:
             det_result = compute_deterministic(spec)
+            # Warnings that need the result (affordability breaches) join the
+            # same channel — stderr now, the --json `warnings` list below.
+            for warning in affordability_warnings(det_result):
+                warnings.append(warning)
+                print(f"[warning] {warning}", file=sys.stderr)
 
         if not args.no_monte_carlo:
             mc_result = run_monte_carlo(spec)
     except (ConfigValidationError, InputError, ScenarioPriorError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+
+    # Parameter sweeps (flip points) — through the same loader and verdict rule.
+    sweeps = []
+    if args.sweep:
+        import yaml as _yaml
+        from .sweep import parse_sweep, run_sweep
+        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        for sweep_arg in args.sweep:
+            try:
+                key, values = parse_sweep(sweep_arg)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+            sweeps.append(run_sweep(raw, key, values, monte_carlo=not args.no_monte_carlo))
 
     # Output results
     if args.json:
@@ -186,6 +214,8 @@ def main() -> int:
             "deterministic": det_to_dict(det_result) if det_result is not None else None,
             "monte_carlo": mc_to_dict(mc_result) if mc_result is not None else None,
         }
+        if args.sweep:
+            doc["sweeps"] = sweeps
         print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
     elif args.quiet:
@@ -241,6 +271,11 @@ def main() -> int:
                 return 1
             for path in saved:
                 print(f"Saved plot: {path}")
+
+    if sweeps and not args.json:
+        from .sweep import format_sweep
+        for sweep_result in sweeps:
+            print(format_sweep(sweep_result))
 
     if args.story:
         if det_result is None:

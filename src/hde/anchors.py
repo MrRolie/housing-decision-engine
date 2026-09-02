@@ -337,6 +337,26 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="neutral, uncited",
         kind="neutral",
     ),
+    "simulation.discount_rate": Anchor(
+        name="simulation.discount_rate",
+        value=0.03,
+        as_of="2026",
+        source="derivation: equals rent.investment_return_rate — FP Canada 2026 PAG "
+               "60/40 balanced ≈ 3.0% real, the household's opportunity cost",
+        url="https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+        rationale=(
+            "A present-value comparison discounts at the return the household could "
+            "otherwise earn. With the renter's alternative anchored at 3.0% real, the "
+            "same figure is the coherent default: a renter earning the default return "
+            "then nets exactly zero on the capital leg, and neither side is handed a "
+            "spread by construction. A stronger personal time preference overrides "
+            "it; the coherence tripwire warns outside [0, 15%] (units typo)."
+        ),
+        band=(0.02, 0.06),
+        short_cite="FP Canada 2026 PAG (60/40 real)",
+        retrieved_on="2026-09-01",
+        kind="derivation",
+    ),
     "rent.invested_down_payment": Anchor(
         name="rent.invested_down_payment",
         value=0.0,

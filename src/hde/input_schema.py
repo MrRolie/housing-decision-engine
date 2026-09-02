@@ -19,7 +19,9 @@ _NOMINAL_PLANNING = ANCHORS["economic.inflation_rate.nominal_planning"]
 _NOTES: Dict[str, Dict[str, Any]] = {
     "top": {
         "years": (True, "analysis horizon in years (>=1)"),
-        "discount_rate": (True, "annual discount rate, DECIMAL (0.05 = 5%); "
+        "discount_rate": (False, "annual discount rate, DECIMAL (0.05 = 5%); DEFAULT 0.03 "
+                                  "real = the anchored investment return (FP Canada 2026 PAG "
+                                  "60/40), the household's opportunity cost; "
                                 "real terms if economic.mode=real (default)"),
         # Section blocks: all optional, but at least one option must be present;
         # a key marked required inside a block is required only when the block is.
@@ -50,8 +52,18 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026); "
                                        "dominates short horizons"),
-        "events": (False, "list of {name, base_cost, expected_year, ...}"),
-        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+        "purchase_costs": (False, "$ paid at purchase (year 0, undiscounted, outside the "
+                                   "affordability ratio): land-transfer/welcome tax, notary, "
+                                   "inspection, a mortgage-insurance premium paid in cash; "
+                                   "default 0 — warns when an owned option models no purchase "
+                                   "or carrying costs"),
+        "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
+                          "the horizon (roof, appliances, special assessment); purchase-time "
+                          "costs belong in purchase_costs"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
+                                         "property tax, home/unit insurance, utilities the "
+                                         "owner pays; escalation_rate is REAL (composed with "
+                                         "inflation in nominal mode)"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
         "reserve_contribution_rate": (False, "fraction of each year's fees set aside into the "
                                              "reserve fund; default 0 = reserve not modelled"),
@@ -76,8 +88,18 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026)"),
-        "events": (False, "list of {name, base_cost, expected_year, ...}"),
-        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+        "purchase_costs": (False, "$ paid at purchase (year 0, undiscounted, outside the "
+                                   "affordability ratio): land-transfer/welcome tax, notary, "
+                                   "inspection, a mortgage-insurance premium paid in cash; "
+                                   "default 0 — warns when an owned option models no purchase "
+                                   "or carrying costs"),
+        "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
+                          "the horizon (roof, appliances, special assessment); purchase-time "
+                          "costs belong in purchase_costs"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
+                                         "property tax, home/unit insurance, utilities the "
+                                         "owner pays; escalation_rate is REAL (composed with "
+                                         "inflation in nominal mode)"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
     },
     "rent": {
@@ -89,8 +111,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                         "DEFAULT 0 = assume it earns exactly the discount rate"),
         "investment_return_rate": (False, "annual; DEFAULT 0.03 real (FP Canada 2026 "
                                             "PAG 60/40)"),
-        "events": (False, "list of {name, base_cost, expected_year, ...}"),
-        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate}"),
+        "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs such as "
+                          "moving costs"),
+        "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
+                                         "tenant insurance, parking, utilities the tenant pays"),
     },
     "economic": {
         "mode": (False, '"real" (DEFAULT — growth/discount must be real) or "nominal"'),

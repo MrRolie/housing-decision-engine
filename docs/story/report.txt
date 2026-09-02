@@ -8,6 +8,7 @@ Assumptions
   defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
 
 Condo  total PV:  $     457,945
+  purchase_costs_pv: $           0
   fee_pv: $     188,713
   events_pv: $      10,153
   other_pv: $           0
@@ -16,6 +17,7 @@ Condo  total PV:  $     457,945
   mortgage_pv: $           0
   terminal_equity_pv: $    -220,921
 House  total PV:  $     421,414
+  purchase_costs_pv: $           0
   maintenance_pv: $     113,415
   events_pv: $      11,137
   other_pv: $           0

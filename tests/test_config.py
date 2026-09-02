@@ -184,16 +184,17 @@ class TestValidation:
         with pytest.raises(ConfigValidationError, match="years"):
             load_config_dict(config)
     
-    def test_missing_discount_rate(self):
-        """Test that missing discount_rate raises error."""
+    def test_missing_discount_rate_defaults_to_the_anchor(self):
+        """discount_rate is optional since 2026-09-02: it defaults to the anchored
+        investment return and is echoed under defaults applied."""
+        from hde.anchors import ANCHORS
         config = {
             "years": 20,
-            "condo": {"monthly_fee": 400},
-            "house": {"initial_value": 400000},
+            "condo": {"monthly_fee": 400, "initial_value": 400000, "all_cash": True},
         }
-        
-        with pytest.raises(ConfigValidationError, match="discount_rate"):
-            load_config_dict(config)
+        spec = load_config_dict(config)
+        assert spec.simulation.discount_rate == ANCHORS["simulation.discount_rate"].value
+        assert "simulation.discount_rate" in spec.defaults_applied
     
     def test_missing_condo(self):
         """Test that a house-only config (no condo) is now valid."""
@@ -735,7 +736,11 @@ class TestCoherenceWarnings:
             "years": 20, "discount_rate": 0.03,
             "economic": {"mode": "real"},
             "house": {"initial_value": 400_000, "all_cash": True,
-                      "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01},
+                      "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01,
+                      # 2026-09-02: owner costs must be stated for a quiet run
+                      "purchase_costs": 8_000,
+                      "other_recurring_costs": [{"name": "tax", "annual_amount": 3_000,
+                                                 "escalation_rate": 0.0}]},
             # like-for-like: the all-cash buyer puts $400k down, so the clean
             # fixture gives the renter the same capital (B.5 made the warning
             # fire for all_cash purchases, which it silently skipped before)

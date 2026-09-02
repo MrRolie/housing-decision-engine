@@ -260,8 +260,10 @@ def _compute_condo_option(
         value_N, discount_rate, sim.years,
     )
     total_pv = (fee_pv + events_pv + other_pv + reserve_pv
-                + downpayment_pv + mortgage_pv + terminal_equity_pv)
+                + downpayment_pv + mortgage_pv + terminal_equity_pv
+                + condo.purchase_costs)
     breakdown = {
+        "purchase_costs_pv": condo.purchase_costs,
         "fee_pv": fee_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,
@@ -334,8 +336,10 @@ def _compute_house_option(
         value_N, discount_rate, sim.years,
     )
     total_pv = (maintenance_pv + events_pv + other_pv
-                + downpayment_pv + mortgage_pv + terminal_equity_pv)
+                + downpayment_pv + mortgage_pv + terminal_equity_pv
+                + house.purchase_costs)
     breakdown = {
+        "purchase_costs_pv": house.purchase_costs,
         "maintenance_pv": maintenance_pv,
         "events_pv": events_pv,
         "other_pv": other_pv,

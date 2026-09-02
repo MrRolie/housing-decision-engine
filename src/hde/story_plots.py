@@ -217,7 +217,7 @@ def _cumulative_cost_curves(
             params.mortgage_term_years, params.all_cash, params.selling_cost_rate,
             value_n, dr, n,
         )
-        flows: Dict[int, float] = {0: dp_pv}
+        flows: Dict[int, float] = {0: dp_pv + params.purchase_costs}
         if not params.all_cash:
             loan = params.initial_value - params.down_payment
             payment = mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)

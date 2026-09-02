@@ -218,6 +218,9 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `house.selling_cost_rate` | 0.05 | WOWA 2026 |
 | `rent.rent_escalation_rate` | 0.01 | FP Canada 2026 PAG |
 | `rent.invested_down_payment` | 0.0 | like-for-like: set explicitly |
+| `simulation.discount_rate` | 0.03 | FP Canada 2026 PAG (60/40 real) |
+| `condo.purchase_costs` | 0.0 | — |
+| `house.purchase_costs` | 0.0 | — |
 | `rent.investment_return_rate` | 0.03 | FP Canada 2026 PAG |
 | `income.income_growth_rate` | 0.01 | FP Canada 2026 PAG |
 | `income.affordability_threshold` | 0.32 | CMHC GDS/TDS |

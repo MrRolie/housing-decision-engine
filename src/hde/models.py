@@ -137,6 +137,7 @@ class CondoParams:
     all_cash: bool = False
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
+    purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -169,6 +170,7 @@ class HouseParams:
     all_cash: bool = False
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
+    purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -193,7 +195,7 @@ class SimulationParams:
         shock_model: "lognormal" (default) or "normal" for multiplicative shocks
     """
     years: int
-    discount_rate: float
+    discount_rate: float = ANCHORS["simulation.discount_rate"].value
     num_sims: int = 10_000
     random_seed: int = 42
     house_maintenance_vol: float = 0.0
@@ -305,11 +307,11 @@ class MonteCarloSummary:
 
 # Breakdown key constants — drift protection when fields are renamed
 CONDO_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
-    {"fee_pv", "events_pv", "other_pv", "reserve_pv",
+    {"purchase_costs_pv", "fee_pv", "events_pv", "other_pv", "reserve_pv",
      "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
 )
 HOUSE_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
-    {"maintenance_pv", "events_pv", "other_pv",
+    {"purchase_costs_pv", "maintenance_pv", "events_pv", "other_pv",
      "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
 )
 RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"invested_capital_pv", "rent_pv", "events_pv", "other_pv", "invested_dp_benefit_pv"})

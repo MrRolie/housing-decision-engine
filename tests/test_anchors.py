@@ -26,13 +26,13 @@ from hde.models import (
     IncomeParams,
     PriceShockParams,
     RentParams,
+    SimulationParams,
 )
 from hde.serialization import format_assumptions, spec_value
 
 # Every anchored key omitted below, so the parsers fall back to anchors.
 BASE_CONFIG = {
     "years": 20,
-    "discount_rate": 0.03,
     "economic": {"mode": "real"},
     "condo": {
         "monthly_fee": 500,
@@ -55,6 +55,7 @@ WIRING = {
     "rent.rent_escalation_rate": (lambda: RentParams(monthly_rent=1_000), "rent_escalation_rate"),
     "rent.investment_return_rate": (lambda: RentParams(monthly_rent=1_000), "investment_return_rate"),
     "rent.invested_down_payment": (lambda: RentParams(monthly_rent=1_000), "invested_down_payment"),
+    "simulation.discount_rate": (lambda: SimulationParams(years=1), "discount_rate"),
     "income.income_growth_rate": (lambda: IncomeParams(annual_income=1), "income_growth_rate"),
     "income.affordability_threshold": (lambda: IncomeParams(annual_income=1), "affordability_threshold"),
     "condo.house.selling_cost_rate": (lambda: HouseParams(initial_value=1), "selling_cost_rate"),

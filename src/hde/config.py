@@ -16,6 +16,7 @@ import datetime
 from .anchors import ANCHORS
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .models import (
+    ComparisonDeterministicResult,
     CondoParams,
     HouseParams,
     SimulationParams,
@@ -57,12 +58,12 @@ _TOP_LEVEL_HINTS = {"monte_carlo": "simulation"}
 _CONDO_KEYS = frozenset({
     "monthly_fee", "fee_escalation_rate", "events", "other_recurring_costs",
     "reserve_contribution_rate", "reserve_initial_balance",
-    "reserve_growth_rate", "initial_value", "value_growth_rate",
+    "reserve_growth_rate", "initial_value", "purchase_costs", "value_growth_rate",
     "down_payment", "mortgage_rate", "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock",
 })
 _HOUSE_KEYS = frozenset({
-    "initial_value", "value_growth_rate", "annual_maintenance_rate", "events",
+    "initial_value", "purchase_costs", "value_growth_rate", "annual_maintenance_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
     "price_shock",
@@ -201,6 +202,8 @@ _ASSUMPTION_KEYS: Dict[str, tuple] = {
 def _defaults_applied(data: Dict[str, Any]) -> List[str]:
     """Dotted names of assumption keys whose values came from defaults."""
     applied: List[str] = []
+    if "discount_rate" not in data:
+        applied.append("simulation.discount_rate")
     for section, keys in _ASSUMPTION_KEYS.items():
         block = data.get(section)
         for key in keys:
@@ -314,6 +317,50 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"investment_return_rate to model a different return (verdict not like-for-like)"
         )
 
+    # Owner carrying and purchase costs left at zero understate the buy side;
+    # say so by name (2026-09-02 user-model dogfood: every persona's property
+    # tax, insurance and closing costs were silently zero).
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None:
+            continue
+        missing = []
+        if opt.purchase_costs == 0:
+            missing.append("purchase_costs (land-transfer tax, notary, mortgage-insurance premium)")
+        if not opt.other_recurring_costs:
+            missing.append("other_recurring_costs (property tax, insurance)")
+        if missing:
+            warns.append(
+                f"{name}: not modelled — {'; '.join(missing)} — owner costs are "
+                f"understated, which biases the verdict toward buying"
+            )
+        if opt.value_growth_rate == 0:
+            warns.append(
+                f"{name}.value_growth_rate=0.0% — no appreciation modelled (neutral); "
+                f"the verdict is sensitive to it: state a view or bracket it "
+                f"(a market_scenario prior adds drift in the Monte Carlo only)"
+            )
+
+    return warns
+
+
+def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
+    """Warnings that need the deterministic result: an option whose housing
+    cost/income ratio breaches the threshold in any year (the report prints the
+    ratios, but a breach must also reach the `[warning]` channel)."""
+    warns: List[str] = []
+    rpt = det.income_report
+    if rpt is None:
+        return warns
+    for name, ratios, exceeds in (
+        ("rent", rpt.rent_ratios, rpt.years_rent_exceeds),
+        ("condo", rpt.condo_ratios, rpt.years_condo_exceeds),
+        ("house", rpt.house_ratios, rpt.years_house_exceeds),
+    ):
+        if ratios and exceeds:
+            warns.append(
+                f"affordability: {name} housing cost exceeds {rpt.threshold:.0%} of income "
+                f"in years {exceeds} (max {max(ratios):.1%})"
+            )
     return warns
 
 
@@ -546,6 +593,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
+        purchase_costs=float(condo_data.get("purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -591,6 +639,7 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
+        purchase_costs=float(house_data.get("purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None
@@ -769,6 +818,10 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
                 f"Event '{event.name}' cost_distribution must be 'normal' or 'lognormal', got {event.cost_distribution}"
             )
 
+    for _name, _opt in (("condo", spec.condo), ("house", spec.house)):
+        if _opt is not None and _opt.purchase_costs < 0:
+            warnings.append(f"{_name}.purchase_costs must be non-negative, got {_opt.purchase_costs}")
+
     if spec.rent is not None:
         rent = spec.rent
         if rent.monthly_rent <= 0:
@@ -884,11 +937,11 @@ def load_config(path: str) -> ComparisonSpec:
     # Required top-level fields
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")
-    if "discount_rate" not in data:
-        raise ConfigValidationError("Missing required field: discount_rate")
-
     years = int(data["years"])
-    discount_rate = float(data["discount_rate"])
+    # discount_rate defaults to the anchored investment return (simulation.discount_rate)
+    # and is echoed under `defaults applied` when the YAML omits it.
+    discount_rate = (float(data["discount_rate"]) if "discount_rate" in data
+                     else ANCHORS["simulation.discount_rate"].value)
 
     condo = _parse_condo(data["condo"], years) if "condo" in data else None
     house = _parse_house(data["house"], years) if "house" in data else None
@@ -924,11 +977,11 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
 
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")
-    if "discount_rate" not in data:
-        raise ConfigValidationError("Missing required field: discount_rate")
-
     years = int(data["years"])
-    discount_rate = float(data["discount_rate"])
+    # discount_rate defaults to the anchored investment return (simulation.discount_rate)
+    # and is echoed under `defaults applied` when the YAML omits it.
+    discount_rate = (float(data["discount_rate"]) if "discount_rate" in data
+                     else ANCHORS["simulation.discount_rate"].value)
 
     condo = _parse_condo(data["condo"], years) if "condo" in data else None
     house = _parse_house(data["house"], years) if "house" in data else None

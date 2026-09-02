@@ -361,7 +361,7 @@ def _simulate_condo_pv_once(
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
         terminal_value, r, sim.years,
     )
-    pv += dp_pv + mort_pv + term_eq_pv
+    pv += dp_pv + mort_pv + term_eq_pv + condo.purchase_costs
     return pv
 
 
@@ -441,7 +441,7 @@ def _simulate_house_pv_once(
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
         terminal_value, r, sim.years,
     )
-    pv += dp_pv + mort_pv + term_eq_pv
+    pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs
     return pv
 
 

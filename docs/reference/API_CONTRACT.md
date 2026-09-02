@@ -32,6 +32,7 @@ uv run hde <config.yaml> --json
 | `verdict` | `best`, `runner_up`, `margin_pv`, `margin_frac`, `monthly_equivalent`, `prob_best`, `decisive`, `rule`, `reason` — see the figure glossary |
 | `deterministic` | per option `total_pv` + `breakdown` (keys in the glossary), `affordability`, `market_scenario` |
 | `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
+| `sweeps` | only with `--sweep`: one entry per flag — `key`, `values`, per-point `rows` (`value`, `totals` per option, the verdict fields `best` / `runner_up` / `margin_pv` / `margin_frac` / `decisive` / `prob_best` / `reason`, or `error` when that point is refused) and `flips` (consecutive points whose cheapest option differs) |
 
 Every figure's formula: `docs/reference/ARCHITECTURE.md` § Figure glossary.
 

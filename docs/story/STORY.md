@@ -4,6 +4,9 @@
 
 **Buying a house wins by $36,531 over 25 years** — under MTL_RMR demographic conditions · 25-year horizon.
 
+> warning: condo: not modelled — purchase_costs (land-transfer tax, notary, mortgage-insurance premium); other_recurring_costs (property tax, insurance) — owner costs are understated, which biases the verdict toward buying
+> warning: house: not modelled — purchase_costs (land-transfer tax, notary, mortgage-insurance premium); other_recurring_costs (property tax, insurance) — owner costs are understated, which biases the verdict toward buying
+
 Demographic prior: MTL_RMR demand model (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · simulation year 1 = calendar 2026, bands 2030/2035/2040/2045/2050 · mapping v1: excess-demand rate → real price drift through a linear-through-origin β prior with the uniform β demoflow pinned; horizon bands (2030…2050) are piecewise-constant with no interpolation; drawdown_weight_tilt multiplies the user's price-shock hazard (S4b sketch §1 slots 2–3, §3) · 13 pinned sources (sha256 in --json): StatCan 98-10-0231-01; ISQ arrival flows (RA); ISQ arrival flows (RMR); derived: headship rate by single year of age; StatCan 98-10-0232-01; derived: living-arrangement shares; StatCan 98-10-0134-01; CIA CPM2014 mortality + CPM-B scale; derived: ownership rate by geography × age; derived: HORS_RMR ownership curve; ISQ population scenarios (QC); ISQ population scenarios (RA); ISQ population scenarios (RMR).
 
 ## Act — The answer
