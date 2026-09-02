@@ -249,7 +249,8 @@ def det_to_dict(det: ComparisonDeterministicResult) -> dict:
         if r is None:
             return None
         return {"total_pv": r.total_pv, "breakdown": r.breakdown,
-                "cash_year1": r.cash_year1, "principal_year1": r.principal_year1}
+                "cash_year1": r.cash_year1, "principal_year1": r.principal_year1,
+                "appreciation_year1": r.appreciation_year1}
 
     result = {
         "condo": _opt(det.condo),

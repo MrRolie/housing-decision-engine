@@ -35,7 +35,7 @@ from hde.pv import mortgage_payment
 from hde.reporting import format_text_report
 from hde.serialization import assumptions_to_dict, det_to_dict, format_assumptions
 from hde.story_plots import verdict_sentence
-from hde.sweep import format_sweep
+from hde.sweep import format_sweep, run_sweep
 
 REAL_DR = ANCHORS["simulation.discount_rate"].value
 
@@ -242,3 +242,42 @@ class TestYearOneCashLine:
         text = format_text_report(det, None, spec.simulation, spec.economic, spec)
         assert "Year-1 cash (undiscounted" in text
         assert "principal repaid" in text
+
+
+class TestSweepTracksTheMonteCarloMean:
+    """Opus persona critic: flips tracked only the deterministic cheapest, so a
+    sweep whose Monte Carlo mean changed sides printed 'no flip'."""
+
+    def test_mc_mean_flips_are_detected_and_printed(self):
+        rows = [
+            {"value": 5, "totals": {"condo": 1.0, "rent": 2.0}, "best": "condo", "runner_up": "rent",
+             "margin_pv": 1.0, "margin_frac": 0.5, "decisive": False, "rule": "mc_floor",
+             "prob_best": 0.5, "mc_mean_best": "rent", "reason": "", "monte_carlo": None},
+            {"value": 10, "totals": {"condo": 1.0, "rent": 2.0}, "best": "condo", "runner_up": "rent",
+             "margin_pv": 1.0, "margin_frac": 0.5, "decisive": False, "rule": "mc_floor",
+             "prob_best": 0.6, "mc_mean_best": "condo", "reason": "", "monte_carlo": None},
+        ]
+        from hde.sweep import find_flips
+        det_flips, mean_flips = find_flips(rows)
+        assert det_flips == []
+        assert mean_flips == [{"from_value": 5, "from_best": "rent", "to_value": 10, "to_best": "condo"}]
+        text = format_sweep({"key": "years", "values": [5, 10], "rows": rows,
+                             "flips": det_flips, "mc_mean_flips": mean_flips})
+        assert "no flip" in text and "mean flip: Monte Carlo mean favours rent (years=5) then condo (years=10)" in text
+
+    def test_run_sweep_carries_both_flip_lists(self):
+        raw = _base()
+        out = run_sweep(raw, "years", [5, 10], monte_carlo=False)
+        assert "flips" in out and "mc_mean_flips" in out and out["mc_mean_flips"] == []
+
+
+class TestYearOneAppreciation:
+    def test_owner_expected_appreciation_in_nominal_mode(self):
+        spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021},
+                                      condo={**_base()["condo"], "value_growth_rate": 0.01}))
+        det = compute_deterministic(spec)
+        assert det.condo.appreciation_year1 == pytest.approx(400_000 * ((1.01 * 1.021) - 1))
+        assert det.rent.appreciation_year1 == 0.0
+        assert "appreciation_year1" in det_to_dict(det)["condo"]
+        text = format_text_report(det, None, spec.simulation, spec.economic, spec)
+        assert "expected appreciation" in text

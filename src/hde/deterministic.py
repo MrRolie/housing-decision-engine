@@ -590,6 +590,10 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
             continue
         result.cash_year1 = _annual_costs_for_option(option_type, params, spec.simulation, spec.economic)[0]
         result.principal_year1 = _principal_repaid_year1(option_type, params)
+        result.appreciation_year1 = (
+            params.initial_value * _effective_growth_rate(params.value_growth_rate, spec.economic)
+            if option_type in ("condo", "house") else 0.0
+        )
 
     return ComparisonDeterministicResult(
         condo=condo_result,

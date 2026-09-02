@@ -94,17 +94,28 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                 if mc is not None else None
             ),
         })
-    flips: List[Dict[str, Any]] = []
-    prev = None
-    for row in rows:
-        if "error" in row:
-            prev = None
-            continue
-        if prev is not None and row["best"] != prev["best"]:
-            flips.append({"from_value": prev["value"], "from_best": prev["best"],
-                          "to_value": row["value"], "to_best": row["best"]})
-        prev = row
-    return {"key": key, "values": values, "rows": rows, "flips": flips}
+    flips, mc_mean_flips = find_flips(rows)
+    return {"key": key, "values": values, "rows": rows, "flips": flips, "mc_mean_flips": mc_mean_flips}
+
+
+def find_flips(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Consecutive points whose cheapest option differs — once for the
+    deterministic `best`, once for `mc_mean_best` (the Monte Carlo mean can
+    change sides where the deterministic line does not; round-four dogfood
+    2026-09-02 printed 'no flip' on exactly such a sweep)."""
+    def _track(field: str) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        prev = None
+        for row in rows:
+            if "error" in row or row.get(field) is None:
+                prev = None
+                continue
+            if prev is not None and row[field] != prev[field]:
+                out.append({"from_value": prev["value"], "from_best": prev[field],
+                            "to_value": row["value"], "to_best": row[field]})
+            prev = row
+        return out
+    return _track("best"), _track("mc_mean_best")
 
 
 def _fmt_value(key: str, v: Any) -> str:
@@ -142,4 +153,9 @@ def format_sweep(result: Dict[str, Any]) -> str:
             )
     else:
         lines.append("  no flip: the same option is cheapest across the whole sweep")
+    for f in result.get("mc_mean_flips", []):
+        lines.append(
+            f"  mean flip: Monte Carlo mean favours {f['from_best']} ({key}={_fmt_value(key, f['from_value'])}) "
+            f"then {f['to_best']} ({key}={_fmt_value(key, f['to_value'])})"
+        )
     return "\n".join(lines)

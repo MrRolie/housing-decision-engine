@@ -31,8 +31,8 @@ Rent   total PV:  $     534,342
   invested_capital_pv: $     145,000
   invested_dp_benefit_pv: $    -145,000
 Year-1 cash (undiscounted; PV totals above credit equity at sale)
-  Condo: $    13,200/yr ($1,100/mo)
-  House: $    12,500/yr ($1,042/mo)
+  Condo: $    13,200/yr ($1,100/mo); expected appreciation $9,600 (value × growth, not cash)
+  House: $    12,500/yr ($1,042/mo); expected appreciation $11,000 (value × growth, not cash)
   Rent: $    28,800/yr ($2,400/mo)
 
 Too close to call: House edges Condo by $3,115 (0.6%)

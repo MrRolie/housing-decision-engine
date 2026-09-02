@@ -334,6 +334,7 @@ class OptionResult:
     breakdown: Dict[str, float]  # keys defined by {CONDO,HOUSE,RENT}_BREAKDOWN_KEYS
     cash_year1: Optional[float] = None
     principal_year1: Optional[float] = None
+    appreciation_year1: Optional[float] = None  # owned: initial_value × effective growth (composed in nominal mode); 0 for rent
 
 
 @dataclass

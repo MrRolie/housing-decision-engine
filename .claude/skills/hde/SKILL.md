@@ -67,6 +67,11 @@ you say otherwise"). Six asks on the quick-sense lane. When their answers open a
 new question — the arithmetic does not close (down payment + purchase costs
 above the cash they named), or one number contradicts another — ONE follow-up
 is right; a config built on a contradiction is worse than a second message.
+One exception needs no follow-up: when the shortfall is smaller than the
+mortgage-insurance premium it would trigger, run BOTH branches — "you find
+the cash" and "insured mortgage at the lower down payment" — as two configs
+and read back both verdicts; the user chooses between outcomes, not
+between questions.
 
 1. **Which options the question implies** → which sections: "keep renting or
    buy a condo" = `rent` + `condo`; "house or condo" = `condo` + `house`;
@@ -208,10 +213,14 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    bracket is too coarse to act on, densify with the range form
    (`--sweep key=lo:hi:n`) and rerun — never interpolate a flip from two
    points. The tie band is a range too: quote the points where `decisive` is
-   false ("too close to call between X and Y"). "It would not flip" about an
-   input you did not sweep is a guess — sweep it, or write "not run"; the
-   same for any claim about a combination of inputs (edit the config and
-   sweep the second key).
+   false ("too close to call between X and Y"). Every flip point in the
+   answer is stated under the user's criterion: with uncertainty on and
+   "lowest expected cost" as the criterion, the flip is the sweep's `mean
+   flip:` line (`mc_mean_flips` in JSON), not the deterministic `flip:` —
+   never mix the two in one answer, and say when the mean never changes
+   sides across the bracket. "It would not flip" about an input you did not
+   sweep is a guess — sweep it, or write "not run"; the same for any claim
+   about a combination of inputs (edit the config and sweep the second key).
 6. **Match the figure to their criterion.** Lowest expected cost → the
    verdict margin — but with any uncertainty input on, "expected cost" is the
    Monte Carlo MEAN: read `verdict.mc_mean_best` (the report's `mean` per
@@ -236,8 +245,12 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    pays MORE cash per month while the PV verdict favours buying — that is
    equity at sale being credited, not a defect: say "you pay $X/month more
    in cash; buying still wins by $Y in present value because you leave with
-   equity". Only when the breakdown's `terminal_equity_pv` does not explain
-   the gap is there a discrepancy to report.
+   equity". The line's `expected appreciation` figure is the term a
+   cash-only comparison omits (in nominal mode the levered asset grows with
+   inflation while the debt does not): owner economic cost ≈ cash −
+   principal − appreciation + amortised purchase and selling costs. Only when
+   the breakdown's `terminal_equity_pv` does not explain the gap is there a
+   discrepancy to report.
 8. **"Not modelled" is mandatory.** Every answer names what was left out
    (renewal risk, a financed insurance premium, rent control, taxes on the
    investment return, a probabilistic exit) with the direction of bias. With

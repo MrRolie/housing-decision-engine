@@ -87,6 +87,8 @@ def format_text_report(
         line = f"  {name}: ${r.cash_year1:>10,.0f}/yr (${r.cash_year1 / 12:,.0f}/mo)"
         if r.principal_year1:
             line += f" — of which ${r.principal_year1:,.0f} principal repaid; the rest is unrecoverable"
+        if r.appreciation_year1:
+            line += f"; expected appreciation ${r.appreciation_year1:,.0f} (value × growth, not cash)"
         cash_lines.append(line)
     if cash_lines:
         lines.append("Year-1 cash (undiscounted; PV totals above credit equity at sale)")
