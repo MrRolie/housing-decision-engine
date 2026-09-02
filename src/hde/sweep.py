@@ -17,6 +17,7 @@ from .config import single_path_run
 from .deterministic import compute_deterministic
 from .models import compute_verdict
 from .monte_carlo import run_monte_carlo
+from .serialization import mc_to_dict
 
 # Inputs the parser reads as integers.
 INT_KEYS = frozenset({
@@ -87,6 +88,10 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
             "best": verdict.best, "runner_up": verdict.runner_up,
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
             "decisive": verdict.decisive, "prob_best": verdict.prob_best, "reason": verdict.reason,
+            "monte_carlo": (
+                {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
+                if mc is not None else None
+            ),
         })
     flips: List[Dict[str, Any]] = []
     prev = None
@@ -110,7 +115,9 @@ def _fmt_value(key: str, v: Any) -> str:
 def format_sweep(result: Dict[str, Any]) -> str:
     key, rows = result["key"], result["rows"]
     opts = [o for o in ("condo", "house", "rent") if any(o in r.get("totals", {}) for r in rows)]
-    lines = [f"\nSweep {key} ({len(rows)} points):"]
+    lines = [f"\nSweep {key} ({len(rows)} points; every other input held at its base value — "
+             f"a joint question needs a second --sweep on the edited config; per-point Monte Carlo "
+             f"percentiles ride --json):"]
     head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive | P(best)"
     lines.append(head)
     for r in rows:

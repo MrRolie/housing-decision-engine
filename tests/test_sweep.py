@@ -58,7 +58,7 @@ class TestCli:
                                           "--sweep", "rent.monthly_rent=500,6000"])
         assert cli_main() == 0
         out = capsys.readouterr().out
-        assert "Sweep rent.monthly_rent (2 points):" in out and "flip: cheapest changes from rent" in out
+        assert "Sweep rent.monthly_rent (2 points;" in out and "flip: cheapest changes from rent" in out
 
     def test_json_carries_sweeps_only_when_asked(self, tmp_path, monkeypatch, capsys):
         cfg = self._cfg(tmp_path)

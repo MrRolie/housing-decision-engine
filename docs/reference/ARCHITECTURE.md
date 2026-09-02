@@ -51,7 +51,8 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
   "other recurring" costs escalate before year 1: year-t amount = `base × (1 + e_eff)^t`.
   House maintenance and home value do not: year-t value = `V0 × (1 + g_eff)^(t−1)`.
 - **Mortgage = level ANNUAL payment at an EFFECTIVE ANNUAL rate**, `M = L·r / (1 − (1 + r)^−T)`
-  (`P/T` when `r = 0`), `L = initial_value − down_payment`. A Canadian posted rate compounds
+  (`P/T` when `r = 0`), `L = initial_value − down_payment + financed_purchase_costs` (a financed
+  mortgage-insurance premium rides in the loan, never in year-0 cash). A Canadian posted rate compounds
   semi-annually with monthly payments — convert first: `r_eff = (1 + r_posted/2)^2 − 1`
   (≈ 1.7% difference on the annual outlay at 5%).
 - **Monthly equivalent** annuitizes a PV over `12N` months at `m = (1 + dr)^(1/12) − 1`,
@@ -134,8 +135,10 @@ path, which the report stamps "not a forecast"):
   draw falls under `hazard_base + hazard_growth · (year − hazard_start_year)` (clamped
   to `[0, 1]`), possibly never. Cost: `base_cost × shock(cost_vol)` under `cost_distribution`.
 - **Rent side.** `rent_escalation_vol` shocks the escalation RATE once per path
-  (`e × shock`); `investment_return_vol` shocks `r_inv` the same way; `other_cost_vol`
-  shocks the level of each other cost.
+  (`e × shock`); `investment_return_vol` is the ANNUAL volatility of the gross return:
+  one mean-preserving shock per year on `(1 + r_inv)`, so the capital's terminal value is
+  `D · Π_t (1 + r_inv)·shock_t` and can end below principal (0.10 ≈ a 60/40 portfolio);
+  `other_cost_vol` shocks the level of each other cost.
 - **Demographic drift (only with `market_scenario`).** Per path: one scenario drawn
   uniformly from {low, reference, high}, and one `z_h` per horizon band. For simulation
   year t the band is the first of {2030, 2035, 2040, 2045, 2050} ≥ 2026 + t (the last band

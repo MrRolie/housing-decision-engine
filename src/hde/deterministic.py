@@ -70,9 +70,13 @@ def _financing_pv(
     value_N: float,
     dr: float,
     n_years: int,
+    financed_purchase_costs: float = 0.0,
 ) -> Tuple[float, float, float]:
     """
     (downpayment_pv, mortgage_pv, terminal_equity_pv) for an owned option.
+    financed_purchase_costs (a financed mortgage-insurance premium) is added to
+    the loan principal: it raises the level payment and the outstanding balance,
+    never year-0 cash.
 
     Fail-loud (strategic Mod 5): direct-construction callers that declare neither
     all_cash nor a complete mortgage block raise here, not compute silent garbage.
@@ -101,7 +105,7 @@ def _financing_pv(
         if mortgage_term_years <= 0:
             raise ValueError(f"owned option mortgage_term_years must be > 0, got {mortgage_term_years}")
         downpayment_pv = down_payment
-        loan = initial_value - down_payment
+        loan = initial_value - down_payment + financed_purchase_costs
         payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
         mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
         balance_N = outstanding_balance(
@@ -259,7 +263,7 @@ def _compute_condo_option(
     downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
-        value_N, discount_rate, sim.years,
+        value_N, discount_rate, sim.years, condo.financed_purchase_costs,
     )
     total_pv = (fee_pv + events_pv + other_pv + reserve_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
@@ -335,7 +339,7 @@ def _compute_house_option(
     downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
-        value_N, discount_rate, sim.years,
+        value_N, discount_rate, sim.years, house.financed_purchase_costs,
     )
     total_pv = (maintenance_pv + events_pv + other_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
@@ -453,7 +457,7 @@ def _annual_costs_for_option(
         if (params.down_payment is not None and params.mortgage_rate is not None
                 and params.mortgage_term_years is not None):
             from .pv import mortgage_payment as _mortgage_payment
-            loan = params.initial_value - params.down_payment
+            loan = params.initial_value - params.down_payment + params.financed_purchase_costs
             mort_payment = _mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
             mort_term = params.mortgage_term_years
 

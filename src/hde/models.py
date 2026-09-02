@@ -138,6 +138,7 @@ class CondoParams:
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
+    financed_purchase_costs: float = 0.0  # $ rolled into the loan principal (e.g. a financed mortgage-insurance premium)
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -171,6 +172,7 @@ class HouseParams:
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
+    financed_purchase_costs: float = 0.0  # $ rolled into the loan principal (e.g. a financed mortgage-insurance premium)
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 

@@ -32,6 +32,11 @@ user's language, folded into the ONE intake message below, never as a quiz:
    (Never ask a member of the public "which uncertainties matter"; ask which
    numbers they would not bet on.)
 
+**Quick-sense lane.** If the user asks for a quick sense ("not a spreadsheet"),
+ask only six things in one message — dwelling, rent, price, how they'd pay,
+horizon, income — decide the sweep yourself from whatever they were vague
+about, keep the answer under 200 words, and offer the deeper pass.
+
 Then gather the schema keys: consult `--print-schema` for exact keys, the
 `required` flags, and `required_if` (an owned option must declare
 `all_cash: true` OR the full mortgage block). Describe the schema only from
@@ -79,12 +84,12 @@ over it.
 |---|---|---|
 | property tax, home/unit insurance, utilities the owner pays | `condo.other_recurring_costs` / `house.other_recurring_costs` `{name, annual_amount, escalation_rate}` | escalation is REAL (0 = tracks inflation); the engine warns when an owned option has none |
 | welcome / land-transfer tax, notary, inspection, mortgage-insurance premium paid in cash | `purchase_costs` (owned option) | paid at year 0, outside the affordability ratio |
-| mortgage-insurance premium rolled into the loan (<20% down) | not modelled as financing — put the premium in `purchase_costs` and SAY it is approximated as cash at purchase | engine gap: no CMHC schedule, no financed premium |
+| mortgage-insurance premium rolled into the loan (<20% down) | `financed_purchase_costs` (owned option) — added to the loan principal, so it raises the payment and the balance; the provincial tax on the premium is cash → `purchase_costs` | the premium schedule is not in the engine yet: compute it, say so, label it |
 | roof, appliances, special assessment, moving costs | `events` `{name, base_cost, expected_year}` | one-offs during the horizon; they DO enter that year's affordability ratio |
 | realtor commission + notary at sale | `selling_cost_rate` (default 5%, WOWA 2026) | dominates short horizons |
 | the money the renter keeps instead of buying | `rent.invested_down_payment` + `investment_return_rate` | charged at year 0 and credited at its terminal value, exactly like the buyer's down payment; omitted = assume it earns the discount rate |
-| a posted 5-year fixed rate | `mortgage_rate` = effective annual: `(1 + r/2)^2 − 1`, then real if `mode: real` | the rate is held for the whole amortization — say that renewal risk is not modelled |
-| "prices here grow 3%", "rent goes up 3%" | `value_growth_rate`, `rent_escalation_rate` — REAL in real mode; in nominal mode the engine ADDS `inflation_rate` on top | gate 3 |
+| a posted 5-year fixed rate | `mortgage_rate` = effective annual: `(1 + r/2)^2 − 1`, then real if `mode: real`; `mortgage_term_years` is the AMORTIZATION (usually 25), never the 5-year term | the rate is held for the whole amortization — say that renewal risk is not modelled |
+| "prices here grow 3%", "rent goes up 3%", "my portfolio makes 6%" | `value_growth_rate`, `rent_escalation_rate`, `investment_return_rate` — a colloquial rate is a STICKER (nominal) figure unless the user says "above inflation": convert every one of them the same way, real ≈ (1 + quoted)/(1 + 2.1%) − 1 — never just the mortgage | gate 3 |
 | "I might move for work" | run the shorter horizon as a second config | no probabilistic exit in the engine |
 
 ## Cases → dispatch
@@ -147,18 +152,30 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    into nominal mode — it is inflated twice. `mortgage_rate` is an effective
    annual rate with annual payments; a Canadian posted rate compounds
    semi-annually — convert it (schema note).
-4. **Like-for-like renter capital.** Put the buyer's down payment (all cash =
-   the whole price) in `rent.invested_down_payment`; the engine charges it at
+   Every colloquial rate a member of the public quotes — mortgage, price
+   growth, rent growth, portfolio return — is a sticker rate unless they say
+   "above inflation"; convert them ALL with the same formula, never just the
+   mortgage.
+4. **Like-for-like renter capital.** Put the buyer's total year-0 cash —
+   down payment + purchase costs (all cash = the whole price + purchase costs)
+   — in `rent.invested_down_payment`; the engine charges it at
    year 0 and credits its terminal value, mirroring the buyer. Omitting it
    assumes the renter earns exactly the discount rate — say so if you do.
 5. **A range is two configs.** When the user gives a range on a decision-
    relevant input (growth, horizon, price), bracket it — `--sweep` — and lead
    with whether the verdict survives the bracket; never quietly take the
-   midpoint.
+   midpoint. Author brackets in the USER's units and include their stated
+   value, zero in their units (flat sticker prices = −2.1% real) and one step
+   below; read the flip point back in their units. A claim about a
+   combination of inputs you did not run is a guess — edit the config and
+   sweep the second key, or write "not run".
 6. **Match the figure to their criterion.** Lowest expected cost → the
    verdict margin. Smallest worst case → turn the uncertainty inputs ON
    (`simulation.*_vol`, `price_shock`), label them illustrative, and read the
-   p95 and `prob_*_cheapest`; with every vol at 0 the Monte Carlo is one
+   p95 and `prob_*_cheapest`. `investment_return_vol` is the ANNUAL volatility
+   of the renter's return (0.10 ≈ a 60/40 portfolio, 0.16 ≈ equities); with a
+   `price_shock` on the owned side and 0 here the renter's capital cannot lose
+   — the engine warns, so set both or neither; with every vol at 0 the Monte Carlo is one
    repeated path and "P(x cheapest): 100%" means nothing was modelled. Most
    wealth at the end → compare `total_pv` (net cost including the terminal
    assets of both sides); `terminal_equity_pv` is a component, not the answer.
@@ -174,10 +191,14 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
 ## The answer (what the user actually reads)
 
 The verdict in words with its decisiveness · the two or three things it rests
-on (from the breakdown and `defaults applied`) · the flip point from the sweep
-· the sanity line · **Not modelled:** … · where the story is
-(`scenarios/<slug>/STORY.md` and the act PNGs) · the one next step. No wall of
-engine output; the report is on disk for anyone who wants it.
+on (from the breakdown and `defaults applied`) · the flip point from the sweep,
+in the user's units · the sanity line · **every uncertainty input and every
+cost you proposed** (a crash hazard, a vol, an illustrative insurance figure)
+named in the user's text with its label ("illustrative, not cited") and what
+it sets ("this is what makes the p95") · **Not modelled:** … · where the story
+is (`scenarios/<slug>/STORY.md` and the act PNGs) · the one next step. Under
+500 words (under 200 on the quick-sense lane); the report is on disk for
+anyone who wants it.
 
 ## Routine (deterministic — do not hand-reproduce)
 

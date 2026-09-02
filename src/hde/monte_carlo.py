@@ -359,7 +359,7 @@ def _simulate_condo_pv_once(
     dp_pv, mort_pv, term_eq_pv = _financing_pv(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
-        terminal_value, r, sim.years,
+        terminal_value, r, sim.years, condo.financed_purchase_costs,
     )
     pv += dp_pv + mort_pv + term_eq_pv + condo.purchase_costs
     return pv
@@ -439,7 +439,7 @@ def _simulate_house_pv_once(
     dp_pv, mort_pv, term_eq_pv = _financing_pv(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
-        terminal_value, r, sim.years,
+        terminal_value, r, sim.years, house.financed_purchase_costs,
     )
     pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs
     return pv
@@ -515,13 +515,20 @@ def _simulate_rent_pv_once(
         base_r = rent.investment_return_rate
         if econ.mode == "nominal":  # a REAL input, composed like value growth
             base_r = (1 + base_r) * (1 + econ.inflation_rate) - 1
+        # investment_return_vol is the ANNUAL volatility of the gross return
+        # (1 + r): one mean-preserving shock per year on (1 + r), so a run of
+        # bad years can leave the renter's capital below principal, exactly as
+        # the owned side can be hit by a price shock. (Before 2026-09-02 the
+        # knob scaled the RATE once per path — the renter could never lose and
+        # 0.10 moved a 3% return by ±0.3pp; the dogfood found both.)
+        growth = 1.0
         if sim.investment_return_vol > 0:
-            z_inv = float(rng.normal())
-            r_shock = _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
-            r_inv = base_r * r_shock
+            for _ in range(sim.years):
+                z_inv = float(rng.normal())
+                growth *= (1 + base_r) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
         else:
-            r_inv = base_r
-        benefit = rent.invested_down_payment * ((1 + r_inv) ** sim.years) / ((1 + dr) ** sim.years)
+            growth = (1 + base_r) ** sim.years
+        benefit = rent.invested_down_payment * growth / ((1 + dr) ** sim.years)
     else:
         benefit = 0.0
 

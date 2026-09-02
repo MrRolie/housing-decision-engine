@@ -57,6 +57,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "inspection, a mortgage-insurance premium paid in cash; "
                                    "default 0 — warns when an owned option models no purchase "
                                    "or carrying costs"),
+        "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
+                                            "mortgage-insurance premium (CMHC/Sagen, due under 20% "
+                                            "down): raises the payment and the balance, never year-0 "
+                                            "cash; requires the mortgage block; default 0"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
                           "costs belong in purchase_costs"),
@@ -93,6 +97,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "inspection, a mortgage-insurance premium paid in cash; "
                                    "default 0 — warns when an owned option models no purchase "
                                    "or carrying costs"),
+        "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
+                                            "mortgage-insurance premium (CMHC/Sagen, due under 20% "
+                                            "down): raises the payment and the balance, never year-0 "
+                                            "cash; requires the mortgage block; default 0"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
                           "costs belong in purchase_costs"),
@@ -147,7 +155,12 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "condo_fee_vol": (False, "annual vol of condo fees; default 0 (see house_maintenance_vol)"),
         "other_cost_vol": (False, "annual vol of other recurring costs; default 0"),
         "rent_escalation_vol": (False, "vol of the rent escalation rate per path; default 0"),
-        "investment_return_vol": (False, "vol of the renter's investment return per path; default 0"),
+        "investment_return_vol": (False, "ANNUAL volatility of the renter's gross return "
+                                           "(one mean-preserving shock per year on 1 + r, so "
+                                           "capital can end below principal): 0.10 ≈ a 60/40 "
+                                           "portfolio, 0.16 ≈ all equities; default 0 = risk-free "
+                                           "at investment_return_rate (asymmetric against an "
+                                           "owned option with price_shock — the engine warns)"),
         "corr_inflation_house": (False, "correlation of house-maintenance shocks with the "
                                         "inflation shock, [-1, 1]; default 0; inert unless "
                                         "economic.inflation_vol > 0"),

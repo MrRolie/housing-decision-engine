@@ -58,12 +58,12 @@ _TOP_LEVEL_HINTS = {"monte_carlo": "simulation"}
 _CONDO_KEYS = frozenset({
     "monthly_fee", "fee_escalation_rate", "events", "other_recurring_costs",
     "reserve_contribution_rate", "reserve_initial_balance",
-    "reserve_growth_rate", "initial_value", "purchase_costs", "value_growth_rate",
+    "reserve_growth_rate", "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate",
     "down_payment", "mortgage_rate", "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock",
 })
 _HOUSE_KEYS = frozenset({
-    "initial_value", "purchase_costs", "value_growth_rate", "annual_maintenance_rate", "events",
+    "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate", "annual_maintenance_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
     "price_shock",
@@ -356,6 +356,18 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
                 f"(a market_scenario prior adds drift in the Monte Carlo only)"
             )
 
+    # Asymmetric tails (review F4 + dogfood round 2): an owned option with a
+    # price-shock channel against a renter whose capital cannot lose.
+    if (spec.rent is not None and spec.rent.invested_down_payment > 0
+            and spec.simulation.investment_return_vol == 0
+            and any(o is not None and o.price_shock is not None for o in (spec.condo, spec.house))):
+        warns.append(
+            "asymmetric tails: an owned option carries a price_shock channel while "
+            "simulation.investment_return_vol=0 leaves the renter's capital unable to lose — set "
+            "investment_return_vol (0.10 ≈ 60/40 portfolio) or drop price_shock for a like-for-like "
+            "worst case"
+        )
+
     return warns
 
 
@@ -610,6 +622,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         purchase_costs=float(condo_data.get("purchase_costs", 0.0)),
+        financed_purchase_costs=float(condo_data.get("financed_purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -656,6 +669,7 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         purchase_costs=float(house_data.get("purchase_costs", 0.0)),
+        financed_purchase_costs=float(house_data.get("financed_purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None
@@ -837,6 +851,10 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     for _name, _opt in (("condo", spec.condo), ("house", spec.house)):
         if _opt is not None and _opt.purchase_costs < 0:
             warnings.append(f"{_name}.purchase_costs must be non-negative, got {_opt.purchase_costs}")
+        if _opt is not None and _opt.financed_purchase_costs < 0:
+            warnings.append(f"{_name}.financed_purchase_costs must be non-negative, got {_opt.financed_purchase_costs}")
+        if _opt is not None and _opt.financed_purchase_costs > 0 and _opt.all_cash:
+            warnings.append(f"{_name}.financed_purchase_costs requires a mortgage block (nothing to finance under all_cash)")
 
     if spec.rent is not None:
         rent = spec.rent

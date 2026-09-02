@@ -47,6 +47,7 @@ from .deterministic import (
     _maintenance_rate_for_year,
     compute_deterministic,
 )
+from .anchors import ANCHORS
 from .config import single_path_run
 from .market_scenario import (
     LoadedScenarioPrior,
@@ -215,11 +216,11 @@ def _cumulative_cost_curves(
         dp_pv, mort_pv, term_eq_pv = _financing_pv(
             params.initial_value, params.down_payment, params.mortgage_rate,
             params.mortgage_term_years, params.all_cash, params.selling_cost_rate,
-            value_n, dr, n,
+            value_n, dr, n, params.financed_purchase_costs,
         )
         flows: Dict[int, float] = {0: dp_pv + params.purchase_costs}
         if not params.all_cash:
-            loan = params.initial_value - params.down_payment
+            loan = params.initial_value - params.down_payment + params.financed_purchase_costs
             payment = mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
             for y in range(1, min(n, params.mortgage_term_years) + 1):
                 flows[y] = flows.get(y, 0.0) + payment
@@ -418,6 +419,12 @@ def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResul
     totals = sweep_rent_totals(spec, xs)
     break_evens = find_break_evens(xs, totals["rent"], totals[owned_key])
     lo, hi = xs[0], xs[-1]
+    # The same tie band act 1 uses (models.compute_verdict): inside it, a
+    # directional "already wins" contradicts the headline (dogfood round 2).
+    rent_total, owned_total = det.rent.total_pv, getattr(det, owned_key).total_pv
+    denom = abs(min(rent_total, owned_total)) or abs(max(rent_total, owned_total))
+    gap_frac = abs(rent_total - owned_total) / denom if denom else 0.0
+    inside_band = gap_frac < ANCHORS["verdict.tie_band"].value
     if break_evens:
         be = break_evens[0]
         step = abs(xs[1] - xs[0]) if len(xs) > 1 else 0.0
@@ -430,6 +437,14 @@ def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResul
                 f"— renting and buying a "
                 f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} "
                 f"cost the same here."
+            )
+        if inside_band:
+            where = "below" if user_rent < be else "past"
+            return (
+                f"Your ${user_rent:,.0f}/mo is ${abs(be - user_rent):,.0f}/mo {where} the "
+                f"break-even line (${be:,.0f}/mo) — inside the tie band ({gap_frac:.1%} apart "
+                f"on total cost), so renting and buying a "
+                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} are too close to call here."
             )
         if user_rent < be:
             return (

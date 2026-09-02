@@ -111,5 +111,7 @@ def test_project_settings_preapprove_the_user_flow():
 def test_skill_translates_real_world_items_and_dispatches_sweeps():
     """The dogfood's top friction: owner costs silently zero, flip points hand-rolled."""
     for phrase in ("property tax", "other_recurring_costs", "purchase_costs", "--sweep",
-                   "Not modelled", "A range is two configs", "Sanity line"):
+                   "Not modelled", "A range is two configs", "Sanity line", "sticker",
+                   "financed_purchase_costs", "Quick-sense lane", '"not run"',
+                   "down payment + purchase costs", "ANNUAL volatility"):
         assert phrase in TEXT, phrase
