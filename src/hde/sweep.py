@@ -87,7 +87,8 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                        if getattr(det, k) is not None},
             "best": verdict.best, "runner_up": verdict.runner_up,
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
-            "decisive": verdict.decisive, "prob_best": verdict.prob_best, "reason": verdict.reason,
+            "decisive": verdict.decisive, "prob_best": verdict.prob_best,
+            "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
                 if mc is not None else None

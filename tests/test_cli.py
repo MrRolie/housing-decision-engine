@@ -124,7 +124,7 @@ class TestJsonContract:
         assert doc["monte_carlo"] is not None
         assert set(doc["verdict"]) == {"best", "runner_up", "margin_pv", "margin_frac",
                                        "monthly_equivalent", "prob_best", "decisive",
-                                       "rule", "reason"}
+                                       "rule", "reason", "mc_mean_best"}
 
     def test_no_monte_carlo_yields_null_not_missing(self, tmp_path, monkeypatch, capsys):
         doc = self._doc(tmp_path, monkeypatch, capsys, ["--no-monte-carlo"])

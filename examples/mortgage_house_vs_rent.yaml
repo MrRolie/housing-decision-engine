@@ -9,12 +9,17 @@
 #                    2026 Projection Assumption Guidelines (fpcanada.ca)
 #   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
 #
-#   discount_rate 0.03 ............ illustrative — personal time-preference; sanity band [0.02, 0.06]
-#   mortgage_rate 0.0225 .......... FP Canada 2026 borrowing rate 4.4% nominal ⇒ (1.044/1.021)−1 ≈ 2.25% real.
-#                                   REAL mode: a fixed nominal contract deflated by PAG inflation 2.1%.
-#                                   The engine treats mortgage_rate as EFFECTIVE ANNUAL with annual
-#                                   payments; a posted Canadian rate compounds semi-annually —
-#                                   convert first: r_eff = (1 + r_posted/2)^2 − 1.
+#   economic.mode nominal ......... a mortgage is a NOMINAL contract: nominal mode keeps the payment
+#                                   the lender actually collects (a real-rate level payment understates
+#                                   year-1 cash and hides affordability breaches — the engine warns).
+#                                   Growth, escalation and return inputs below stay REAL; the engine
+#                                   composes inflation_rate on top of them.
+#   inflation_rate 0.021 .......... FP Canada 2026 PAG long-term inflation assumption
+#   discount_rate (omitted) ....... engine default: 3% real (FP Canada 2026 PAG 60/40) composed with
+#                                   inflation ⇒ 5.2% nominal, echoed under `defaults applied`
+#   mortgage_rate 0.044 ........... FP Canada 2026 borrowing rate 4.4% nominal, used as an EFFECTIVE
+#                                   ANNUAL rate with annual payments. A POSTED Canadian rate compounds
+#                                   semi-annually — convert it first: r_eff = (1 + r_posted/2)^2 − 1.
 #   down_payment 110000 ........... 20% of price — scenario-specific
 #   mortgage_term_years 25 ........ common Canadian amortization — scenario-specific
 #   value_growth_rate 0.01 ........ illustrative market view — see showcase example for demographic drift
@@ -27,15 +32,16 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 20
-discount_rate: 0.03  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
+# discount_rate omitted on purpose: the engine composes its 3% real default with inflation (5.2%)
 
 economic:
-  mode: real
+  mode: nominal
+  inflation_rate: 0.021  # FP Canada 2026 PAG long-term inflation
 
 house:
   initial_value: 550000  # scenario-specific market input
   down_payment: 110000  # 20% — scenario-specific
-  mortgage_rate: 0.0225  # real; FP Canada 2026 borrowing 4.4% nominal deflated by 2.1% inflation
+  mortgage_rate: 0.044  # NOMINAL effective annual; FP Canada 2026 borrowing rate — used as entered in nominal mode
   mortgage_term_years: 25  # scenario-specific
   purchase_costs: 8200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   other_recurring_costs:
@@ -45,7 +51,7 @@ house:
     - name: home_insurance
       annual_amount: 1200  # illustrative — scenario-specific
       escalation_rate: 0.0
-  value_growth_rate: 0.01  # real; illustrative market view
+  value_growth_rate: 0.01  # real (nominal mode composes inflation on top); illustrative market view
   annual_maintenance_rate: 0.01  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
 
 rent:

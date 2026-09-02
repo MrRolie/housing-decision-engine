@@ -22,7 +22,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "discount_rate": (False, "annual discount rate, DECIMAL (0.05 = 5%); DEFAULT 0.03 "
                                   "real = the anchored investment return (FP Canada 2026 PAG "
                                   "60/40), the household's opportunity cost; "
-                                "real terms if economic.mode=real (default)"),
+                                "real terms if economic.mode=real (default); in nominal mode the "
+                                 "DEFAULT composes with inflation_rate ((1+0.03)(1+π)−1) while a "
+                                 "typed value is used as entered"),
         # Section blocks: all optional, but at least one option must be present;
         # a key marked required inside a block is required only when the block is.
         "condo": (False, "optional block — at least ONE of condo / house / rent must be "

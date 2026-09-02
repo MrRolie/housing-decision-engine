@@ -112,8 +112,12 @@ def format_assumptions(
         eff = (1 + rate) * (1 + pi) - 1
         return f"{rate:+.1%}/yr real → {eff:+.1%}/yr nominal (incl. {pi:.1%} inflation)"
 
+    dr_note = ""
+    if nominal and "simulation.discount_rate" in spec.defaults_applied:
+        dr_note = (f" ({ANCHORS['simulation.discount_rate'].value:.1%} real default composed "
+                   f"with inflation_rate)")
     lines = [
-        f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}"
+        f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}{dr_note}"
         + (" (growth, escalation and investment-return inputs are REAL and composed with "
            "inflation_rate; discount_rate and mortgage_rate are used as entered)" if nominal else "")
     ]

@@ -74,9 +74,14 @@ This is the repo's living showcase: [docs/story/STORY.md](../docs/story/STORY.md
 
 ## 5. `mortgage_house_vs_rent.yaml` — the leveraged path
 
-**Question:** a financed house (20% down, 25-year amortization at a real rate derived from the
-FP Canada borrowing assumption) against renting with that same down payment invested — does
-leverage change the answer?
+**Question:** a financed house (20% down, 25-year amortization at the FP Canada nominal borrowing
+rate) against renting with that same down payment invested — does leverage change the answer?
+This is the reference for any financed purchase: a mortgage is a nominal contract, so the example runs
+`economic.mode: nominal` with the 2.1% planning inflation, keeps every growth/escalation/return
+input REAL (the engine composes inflation on top), and omits `discount_rate` so the engine's 3%
+real default is composed to 5.2% and echoed. Running a mortgage in real mode prices a level
+real-rate payment that understates the lender's cash payment — the engine warns when an income
+block is present.
 
 ```bash
 uv run hde examples/mortgage_house_vs_rent.yaml
@@ -112,7 +117,7 @@ sensitivity-test them (edit the value and re-run; act 6 sweeps rent and purchase
 | Discount rate (0.03–0.05 real) | DEFAULT 0.03 real = the anchored investment return (FP Canada 2026 PAG 60/40), the household's opportunity cost; the examples state their own view; sanity band [0.02, 0.06]; the engine warns outside [0, 0.15] (units tripwire) | `discount_rate` in all examples |
 | Property tax, insurance (`other_recurring_costs`) | illustrative — scenario-specific; use the listing's tax bill and an insurance quote (Montréal residential tax ≈ 0.7–0.9% of assessed value is a rough sanity check, not a source) | every owned option |
 | Purchase costs (`purchase_costs`) | illustrative — Québec welcome tax (droits de mutation, bracketed) + notary ≈ 1.5% of price; mortgage-insurance premium if paid in cash; scenario-specific | every owned option |
-| Mortgage / financing | FP Canada 2026 borrowing rate 4.4% nominal ⇒ ≈ 2.25% real; engine convention: level ANNUAL payment at an EFFECTIVE ANNUAL rate (posted Canadian rates compound semi-annually — convert) | `mortgage_house_vs_rent.yaml` |
+| Mortgage / financing | FP Canada 2026 borrowing rate 4.4% nominal, run in nominal mode as entered; engine convention: level ANNUAL payment at an EFFECTIVE ANNUAL rate (posted Canadian rates compound semi-annually — convert) | `mortgage_house_vs_rent.yaml` |
 | `value_growth_rate` | illustrative market view — no defensible universal long-run real appreciation default | all owned-option examples; see `showcase_demographic_prior.yaml` for the demographic alternative |
 | Event costs, service lives, timings (roof, HVAC, water heater, appliances, paint, driveway, special assessments) | illustrative — calibrate to your reserve study or component inventory | `events:` blocks in all examples |
 | Vols, correlations, hazard rates (`cost_vol`, `*_vol`, `corr_*`, `hazard_*`) | illustrative uncertainty calibration — sensitivity-test via sweep | `events:` and `simulation:` blocks in all examples |

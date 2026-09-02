@@ -14,6 +14,7 @@ import yaml
 import datetime
 
 from .anchors import ANCHORS
+from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .models import (
     ComparisonDeterministicResult,
@@ -239,6 +240,25 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"economic.inflation_rate={econ.inflation_rate:.1%} is set but "
             f"ignored in real mode (mode='real')"
         )
+
+    # Real mode prices the mortgage as a level payment at the REAL rate; the
+    # lender collects the payment at the quoted NOMINAL rate, which is higher.
+    # Round-three dogfood 2026-09-02: two persona runs reported 27.9% / 30.2%
+    # against a 32% threshold where the cash ratio was 33.2% / 35.8%.
+    if econ.mode == "real" and spec.income is not None:
+        for name, opt in (("condo", spec.condo), ("house", spec.house)):
+            if opt is None or getattr(opt, "all_cash", False) or opt.mortgage_rate is None:
+                continue
+            if opt.down_payment is None or opt.mortgage_term_years is None:
+                continue
+            loan = opt.initial_value - opt.down_payment + opt.financed_purchase_costs
+            pay = mortgage_payment(loan, opt.mortgage_rate, opt.mortgage_term_years)
+            warns.append(
+                f"affordability: {name} ratios use the level payment at the REAL mortgage_rate "
+                f"{opt.mortgage_rate:.2%} (${pay:,.0f}/yr); the lender collects the payment at the "
+                f"quoted NOMINAL rate, which is higher and can breach the threshold where this does "
+                f"not — run mode: nominal with the quoted rate (effective annual) for the cash GDS/TDS ratio"
+            )
 
     if spec.rent is not None and "rent.rent_escalation_rate" in spec.defaults_applied:
         warns.append(
@@ -936,6 +956,21 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     return warnings
 
 
+def _discount_rate_for(data: Dict[str, Any], econ: EconomicParams) -> float:
+    """The discount rate: as entered, else the anchored REAL return
+    (simulation.discount_rate, echoed under `defaults applied`) — composed with
+    inflation_rate in nominal mode like every other real input there. Round-
+    three dogfood 2026-09-02: the real anchor used as a nominal rate priced the
+    future at ~0.9% real and mis-fired the capital-spread warning against the
+    composed investment return."""
+    if "discount_rate" in data:
+        return float(data["discount_rate"])
+    real = ANCHORS["simulation.discount_rate"].value
+    if econ.mode == "nominal":
+        return (1 + real) * (1 + econ.inflation_rate) - 1
+    return real
+
+
 def load_config(path: str) -> ComparisonSpec:
     """
     Load configuration from a YAML file.
@@ -972,17 +1007,14 @@ def load_config(path: str) -> ComparisonSpec:
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")
     years = int(data["years"])
-    # discount_rate defaults to the anchored investment return (simulation.discount_rate)
-    # and is echoed under `defaults applied` when the YAML omits it.
-    discount_rate = (float(data["discount_rate"]) if "discount_rate" in data
-                     else ANCHORS["simulation.discount_rate"].value)
+    econ = _parse_economic(data.get("economic"))
+    discount_rate = _discount_rate_for(data, econ)
 
     condo = _parse_condo(data["condo"], years) if "condo" in data else None
     house = _parse_house(data["house"], years) if "house" in data else None
     rent = _parse_rent(data["rent"], years) if "rent" in data else None
     income = _parse_income(data["income"]) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)
-    econ = _parse_economic(data.get("economic"))
     market_scenario = (
         _parse_market_scenario(data["market_scenario"]) if "market_scenario" in data else None
     )
@@ -1012,17 +1044,14 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")
     years = int(data["years"])
-    # discount_rate defaults to the anchored investment return (simulation.discount_rate)
-    # and is echoed under `defaults applied` when the YAML omits it.
-    discount_rate = (float(data["discount_rate"]) if "discount_rate" in data
-                     else ANCHORS["simulation.discount_rate"].value)
+    econ = _parse_economic(data.get("economic"))
+    discount_rate = _discount_rate_for(data, econ)
 
     condo = _parse_condo(data["condo"], years) if "condo" in data else None
     house = _parse_house(data["house"], years) if "house" in data else None
     rent = _parse_rent(data["rent"], years) if "rent" in data else None
     income = _parse_income(data["income"]) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)
-    econ = _parse_economic(data.get("economic"))
     market_scenario = (
         _parse_market_scenario(data["market_scenario"]) if "market_scenario" in data else None
     )

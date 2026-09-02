@@ -394,6 +394,11 @@ class Verdict:
     rule: "single_option" | "mc_floor" | "margin_band"
     reason: one sentence stating the rule, the measured quantity and the
         anchored threshold, e.g. "P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]".
+    mc_mean_best: the option with the lowest Monte Carlo MEAN total PV when
+        Monte Carlo ran with real uncertainty (None otherwise). When it
+        differs from `best` — a jump process such as price_shock moves the
+        mean without moving the deterministic line — `reason` says so with
+        both means; "lowest expected cost" is then the mean, not `best`.
     """
     best: str
     runner_up: Optional[str]
@@ -404,6 +409,7 @@ class Verdict:
     decisive: bool
     rule: str
     reason: str
+    mc_mean_best: Optional[str] = None
 
 
 def compute_verdict(
@@ -447,8 +453,13 @@ def compute_verdict(
     )
 
     prob_best: Optional[float] = None
+    means: Dict[str, float] = {}
+    mc_mean_best: Optional[str] = None
     if mc is not None and not single_path:
         prob_best = getattr(mc, f"prob_{best}_cheapest")
+        means = {k: getattr(mc, k).summary.mean for k in costs if getattr(mc, k) is not None}
+        if means:
+            mc_mean_best = min(means, key=lambda k: means[k])
 
     floor = ANCHORS["verdict.prob_floor"].value
     band = ANCHORS["verdict.tie_band"].value
@@ -476,5 +487,8 @@ def compute_verdict(
             f"margin {margin_frac:.1%} of {best} PV {'≥' if decisive else '<'} "
             f"{band:.0%} tie band [hde verdict rule] ({why})"
         )
+    if mc_mean_best is not None and mc_mean_best != best:
+        reason += (f"; Monte Carlo mean favours {mc_mean_best} "
+                   f"(${means[mc_mean_best]:,.0f} vs ${means[best]:,.0f})")
     return Verdict(best, runner_up, margin, margin_frac, monthly, prob_best,
-                   decisive, rule, reason)
+                   decisive, rule, reason, mc_mean_best)

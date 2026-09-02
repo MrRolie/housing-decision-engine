@@ -13,7 +13,7 @@ This document describes the YAML configuration format for the `cvh_cost` package
 
 ```yaml
 years: <integer>           # Required: Analysis horizon in years
-discount_rate: <float>     # Required: Annual discount rate (e.g., 0.03 for 3%)
+discount_rate: <float>     # Optional: annual discount rate (e.g., 0.03 for 3%); default = the anchored 3% real, composed with inflation_rate in nominal mode
 
 economic:                  # Optional: Economic assumptions
   mode: <string>           # "real" or "nominal" (default: "real")
@@ -248,6 +248,8 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.corr_inflation_other` | 0.0 | — |
 | `simulation.corr_inflation_event_cost` | 0.0 | — |
 | `simulation.shock_model` | "lognormal" | — |
+
+The discount-rate default is a REAL return: in `mode: nominal` an omitted `discount_rate` is composed with `inflation_rate` (`(1 + 0.03)(1 + π) − 1`, echoed as such); a typed value is used as entered in either mode.
 
 Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
 source, url, rationale, band, retrieved_on, kind); `uv run hde --print-anchors` prints

@@ -45,6 +45,8 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
 - **Years are 1-indexed; cash flows fall at the END of year t and discount at
   `(1 + dr)^-t`** (`pv_single`). Year-0 outlays (the buyer's down payment and purchase costs, the renter's invested capital) are undiscounted.
   `dr` = `discount_rate`, in the same terms (real or nominal) as every rate.
+  An omitted `discount_rate` is the anchored 3% real return, composed with
+  `inflation_rate` in nominal mode (`(1 + 0.03)(1 + π) − 1`) and echoed as such.
 - **Nominal mode composes inflation into every escalation:** `g_eff = (1 + g)(1 + π) − 1`
   (`_effective_growth_rate`); in real mode `g_eff = g`. Defaults are REAL terms.
 - **Two escalation-start conventions coexist by design.** Condo fees, rent and
@@ -107,6 +109,7 @@ text report ("Cheapest … / decisiveness:") and `--json`.
 | `margin_frac` | the gap as a fraction of the winner's PV | `margin_pv / |total_pv(best)|` (`|total_pv(runner_up)|` when the winner's PV is exactly 0) |
 | `monthly_equivalent` | "≈ $/month equivalent" | `pv_to_monthly_savings(margin_pv, dr, N)` = `margin · m / (1 − (1 + m)^−12N)`, `m = (1 + dr)^(1/12) − 1`; `null` when `dr = 0` |
 | `prob_best` | Monte Carlo probability the deterministic winner is cheapest | `prob_<best>_cheapest` from the MC run; `null` without MC or on a single-path run |
+| `mc_mean_best` | the option with the lowest Monte Carlo MEAN total PV | argmin of the per-option MC `mean`; `null` without MC or on a single-path run. When it differs from `best` (a jump process such as `price_shock` moves the mean without moving the deterministic line) `reason` says so with both means — "lowest expected cost" is then the mean, not `best` |
 | `decisive` / `rule` / `reason` | whether the gap clears the anchored threshold | `mc_floor`: `prob_best ≥ verdict.prob_floor` (0.65); `margin_band` (no MC, or every uncertainty input off): `margin_frac ≥ verdict.tie_band` (0.05); `single_option`: nothing to compare. `reason` quotes the measured quantity and the threshold; both constants are `--print-anchors` entries |
 
 ### Monte Carlo — `monte_carlo`
