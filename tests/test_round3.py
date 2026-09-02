@@ -348,3 +348,16 @@ class TestPriorSaysWhatItEncodes:
         # the clause quotes the fixture's own reference rows
         ref_row = next(r for (d, h, s), r in prior.rows.items() if s == "reference" and h == 2030)
         assert f"2030 {ref_row.demo_drift_mean:+.2%}/yr" in text
+
+
+class TestAssumptionsLineCarriesTheHorizonDrift:
+    def test_eight_year_run_quotes_2030_and_2035_bands_only(self):
+        from hde.market_scenario import load_scenario_prior
+        from hde.serialization import assumptions_to_dict
+        cfg = _base(years=8, market_scenario={"path": "tests/fixtures/scenario_prior_golden.json",
+                                              "geography": "LAVAL_RA13"})
+        spec = load_config_dict(cfg)
+        prior = load_scenario_prior(cfg["market_scenario"]["path"], "LAVAL_RA13")
+        line = next(l for l in assumptions_to_dict(spec, prior)["lines"] if l.startswith("demographic prior:"))
+        assert "reference REAL drift over this 8-year run" in line
+        assert "(2030 band)" in line and "(2035 band)" in line and "2050" not in line

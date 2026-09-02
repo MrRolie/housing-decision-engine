@@ -207,6 +207,22 @@ class LoadedScenarioPrior:
             entry["scenario_max"] = row.demo_drift_mean if hi is None else max(hi, row.demo_drift_mean)
         return out
 
+    def horizon_drift_clause(self, years: int) -> str:
+        """The reference drift for the bands an N-year run from START_CALENDAR_YEAR
+        touches — so an agent quotes 2030/2035 for an 8-year run, never 2050."""
+        touched = sorted({band_horizon_for_calendar_year(calendar_year_for_sim_year(y))
+                          for y in range(1, max(1, int(years)) + 1)})
+        parts = []
+        for d, e in self.encoded_drift().items():
+            ref = e["reference_by_band"]
+            bands = ", ".join(f"{ref[h]:+.2%}/yr ({h} band)" for h in touched if h in ref)
+            if bands:
+                parts.append(f"{d}: {bands}")
+        if not parts:
+            return ""
+        return (f"reference REAL drift over this {int(years)}-year run — " + "; ".join(parts)
+                + " (added to value_growth_rate in the Monte Carlo; all bands and the scenario range in --json)")
+
     def encoded_drift_clause(self) -> str:
         parts = []
         for d, e in self.encoded_drift().items():

@@ -156,9 +156,11 @@ def format_assumptions(
     if prior is not None:
         constants_as_of = prior.data_vintage.get("constants_as_of")
         as_of = f" · constants as of {constants_as_of}" if isinstance(constants_as_of, str) else ""
+        drift = prior.horizon_drift_clause(spec.simulation.years)
         lines.append(
             f"demographic prior: {prior.geography}{prior.vintage_clause()}{as_of} · "
             f"sha256 {prior.file_sha256[:12]}… [demoflow ScenarioPrior v{prior.schema_version}]"
+            + (f" · {drift}" if drift else "")
         )
     if spec.defaults_applied:
         def _echo_entry(key: str) -> str:

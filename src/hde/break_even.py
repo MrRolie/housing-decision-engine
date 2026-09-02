@@ -214,18 +214,22 @@ def solve_break_even(
                 first_above = int(math.ceil(v - 1e-9))
                 if gap(first_above) == 0.0 or ((gap(first_above) < 0) == (a == below)):
                     first_above += 1
-                found.append({
+                entry: Dict[str, Any] = {
                     "value": first_above, "last_value_below": first_above - 1,
                     "cheaper_below": below, "cheaper_above": above,
                     "tie_band": [None if left is None else int(math.floor(left)),
                                  None if right is None else int(math.ceil(right))],
-                })
+                }
             else:
-                found.append({
+                entry = {
                     "value": v,
                     "cheaper_below": below, "cheaper_above": above,
                     "tie_band": [left, right],
-                })
+                }
+            # Band-first, and FIRST in the entry: three dogfood serves copied the
+            # crossing-first shape into the user's text ("$2,663: renting below,
+            # buying above; too close between…" contradicts itself on the gap).
+            found.append({"sentence": _band_sentence(key, entry, band), **entry})
         return found
 
     xs, ys = scan(lo, hi)
@@ -299,29 +303,36 @@ def solve_break_even_across(
     return {"key": sweep_key, "rows": rows}
 
 
+def _band_sentence(key: str, be: Dict[str, Any], band: float) -> str:
+    """The threshold as the user should read it: band-first, the edges named.
+    "rent is cheaper below 2,537; too close to call between 2,537 and 2,797;
+    house is cheaper above 2,797 (crossing 2,663; band = 5% of the cheaper PV)"."""
+    left, right = be["tie_band"]
+    if "last_value_below" in be:
+        # Integer input (a step function): whole values on each side of the band.
+        up_to = f"{key}={left - 1}" if left is not None else "the bracket's low end"
+        from_ = f"{key}={right + 1}" if right is not None else "the bracket's high end"
+        band_txt = (f"from {key}={left} to {key}={right}" if left is not None and right is not None
+                    else f"between {up_to} and {from_}")
+        return (
+            f"{be['cheaper_below']} is cheaper up to {up_to}; too close to call {band_txt}; "
+            f"{be['cheaper_above']} is cheaper from {from_} "
+            f"({be['cheaper_above']} first cheaper at {key}={be['value']}; band = {band:.0%} of the cheaper option's PV)"
+        )
+    lo_txt = _fmt_value(key, left) if left is not None else "the bracket's low end"
+    hi_txt = _fmt_value(key, right) if right is not None else "the bracket's high end"
+    return (
+        f"{be['cheaper_below']} is cheaper below {lo_txt}; too close to call between {lo_txt} and "
+        f"{hi_txt}; {be['cheaper_above']} is cheaper above {hi_txt} "
+        f"(crossing {_fmt_value(key, be['value'])}; band = {band:.0%} of the cheaper option's PV)"
+    )
+
+
 def _threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> List[str]:
     """The threshold in words, one sentence per crossing (or the no-crossing line)."""
     if not result_like["break_evens"]:
         return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
-    out = []
-    for be in result_like["break_evens"]:
-        left, right = be["tie_band"]
-        band_txt = (
-            f"too close to call between {_fmt_value(key, left) if left is not None else 'below the bracket'} "
-            f"and {_fmt_value(key, right) if right is not None else 'above the bracket'} "
-            f"({band:.0%} of the cheaper option's PV)"
-        )
-        if "last_value_below" in be:
-            out.append(
-                f"{be['cheaper_below']} is cheaper up to {key}={be['last_value_below']}, "
-                f"{be['cheaper_above']} is cheaper from {key}={be['value']}; {band_txt}"
-            )
-        else:
-            out.append(
-                f"{_fmt_value(key, be['value'])}: {be['cheaper_below']} is cheaper below, "
-                f"{be['cheaper_above']} is cheaper above; {band_txt}"
-            )
-    return out
+    return [be.get("sentence") or _band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
 def format_break_even(result: Dict[str, Any]) -> str:
@@ -329,8 +340,9 @@ def format_break_even(result: Dict[str, Any]) -> str:
     a, b = result["options"]
     lo, hi = result["bracket"]
     band = result["tie_band_fraction"]
-    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line; bracket "
-             f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input held at its base value):"]
+    lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line — a market_scenario prior "
+             f"does not move it; bracket {_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input "
+             f"held at its base value):"]
     if result.get("note"):
         lines.append(f"  {result['note']}")
     if result.get("refused"):

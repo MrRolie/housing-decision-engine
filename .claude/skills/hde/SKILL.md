@@ -40,18 +40,29 @@ horizon, income — decide the sweep yourself from whatever they were vague
 about, keep the answer under 200 words, and offer the deeper pass. With a
 mortgage, an income and a threshold question together the never-drop list
 needs 250–300 words: exceed the cap before dropping an item, and cut in this
-order — the story path, provenance beyond the two largest defaults, the
-years bracket to one clause ("barely moves at 8 or 10 years"), the prior to
-two sentences, every reassurance phrase. The cap
-ranks what stays, it never drops a warning: verdict with its decisiveness ·
-the flip point in their units — and if it rests on an estimate you chose,
-quoted at both ends of that estimate in the same sentence · the cash line
-(down payment + purchase costs against the cash named, and the distance to
-the 20% line when it is within one price step of it) · the affordability line
-· every default the engine warned on, each with its rerun figure or its bias
-· not modelled with its bias (renewal risk with any mortgage) · one next
-step. Defaults' provenance beyond the two largest and the story path can go;
-a warning cannot.
+order — the story path, the SOURCE of every default other than
+`selling_cost_rate` (5%, WOWA) and the discount rate (those two are named in
+one clause and never cut), the years bracket to one clause ("barely moves at
+8 or 10 years" — and say once which end of their range is the base, "over 8
+years, the short end of your 8–10", so every PV figure has a horizon), the
+prior to two sentences, every reassurance phrase. The cap ranks what stays,
+it never drops a warning: every default the engine warned on, each with its
+rerun figure or its bias (the 1% real rent escalation default is the one
+dropped three serves running — the Québec continuing lease is ≈ 0% real, so
+put `--sweep rent.rent_escalation_rate=0,0.01` in the same command and quote
+the threshold at 0%) · verdict with its decisiveness · the flip point in
+their units — and if it rests on an estimate you chose, quoted at both ends
+of that estimate in the same sentence · the cash line (down payment +
+purchase costs against the cash named, and the distance to the 20% line when
+it is within one price step of it) · the affordability line · not modelled
+with its bias — renewal risk with any mortgage, early exit, the renter's
+investment taxes: cut words, never items · one next step. A dropped warning
+fails the answer at any length; if the cap binds, the story path goes first
+— it is never the item you keep while a warning goes. Ask the six things
+plus the labelled defaults you will take in the same message — amortization
+when only the term was quoted, the 3% real return, the rent escalation (1%
+real; 0% for a Québec continuing lease), the maintenance figure — each as
+"unless you say otherwise".
 
 **One side known.** Most people arrive certain about one side and vague about
 the other: "I'm looking at houses in Duvernay around $650k — what rent would
@@ -73,8 +84,14 @@ the same command: the engine re-solves the threshold at every sweep point
 (the `across` block) and both ends go into the threshold sentence —
 "renting is cheaper below $2,715 if Laval prices only track inflation, below
 $1,864 if they grow 2%/yr above it — at 2% your $1,900 is a toss-up". Then
-the same on the largest labelled dollar estimate (maintenance 1.2% vs 0.6%).
-Never call a single base rate "the point estimate". A `market_scenario`
+the same on the largest labelled dollar estimate (maintenance 1.2% vs 0.6%)
+and on the warned rent-escalation default — several `--sweep` flags ride one
+command, each giving its own `across` block. The brackets interact: a bracket
+end that flips the verdict is a claim about a combination (gate 5), so state
+what else that end assumes and quote it under the other maintenance figure
+too — "at 2% growth your $1,900 puts buying ahead with 0.6% maintenance; with
+1.2% the band is $1,961–$2,162 and renting still wins". Never call a single
+base rate "the point estimate". A `market_scenario`
 prior does NOT move `--break-even`: its drift enters the Monte Carlo only,
 so the prior run answers "does the verdict at their rent survive the
 demographic view?", never "where is the threshold?" — it is not the growth
@@ -84,13 +101,22 @@ the high edge". Write: "renting is cheaper below $2,715/month, too close to
 call between $2,715 and $2,993, buying is cheaper above $2,993." Never: "the
 crossing is $2,850 — below that renting is cheaper; between $2,715 and $2,993
 it's too close" — the crossing sits inside the band and the reader cannot
-tell which clause wins on $2,715–$2,850. The break-even is the deterministic
+tell which clause wins on $2,715–$2,850. The engine's `sentence` field on
+every break-even entry and `across` row is already band-first: quote it in
+the user's units, and never write "above that" after a band — name the edge. The break-even is the deterministic
 crossing; with any uncertainty input on, the verdict's decisiveness is the
 Monte Carlo floor, so quote BOTH bands: the deterministic tie band from
 `--break-even`, and the verdict's band from a densified `--sweep` on the
 same input (the points where `decisive` is false), saying at which value
 each side becomes decisive ("the Monte Carlo calls rent decisive up to
-$2,750 and buying from $2,900, neither between"). With only the owned side
+$2,750 and buying from $2,900, neither between"). The command for that
+second band is the uncertainty config (prior or vols on, Monte Carlo on)
+with `--sweep rent.monthly_rent=<band low − 10%>:<band high + 10%>:11
+--json`; read `decisive`, `prob_best` and `mc_mean_best` per row and quote
+where `decisive` flips ("under the Laval prior the Monte Carlo calls rent
+decisive up to $2,300 and buying from $2,800, neither between $2,400 and
+$2,700"). When the user's rent sits outside both bands one clause suffices;
+when it sits inside either, both bands lead. With only the owned side
 stochastic (a prior and `investment_return_vol` 0) the verdict's band sits
 INSIDE the deterministic band and the engine warns `one-sided uncertainty`:
 that means the probabilities are OVERconfident and the true toss-up zone is
@@ -238,8 +264,12 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    back. On a threshold question the prior informs the verdict band only (a
    break-even is deterministic and does not move), so the growth sweep in
    "One side known" still runs. Say what growth the prior encodes — the run's
-   `demographic prior:` line prints the reference drift by band — so a flat
-   prior is never introduced as "instead of flat prices".
+   `demographic prior:` assumptions line prints the reference drift for the
+   bands the horizon touches (all bands and the scenario range are in
+   `--json` under the prior's provenance `encoded_drift`) — so a flat prior is
+   never introduced as "instead of flat prices". Quote only the bands inside
+   the horizon: an 8-year run from 2026 touches 2030 and 2035, never a 2050
+   figure for a 2034 exit.
 3. **Real vs nominal — the contract, not a vibe.** Defaults are REAL terms.
    **With a mortgage, run `mode: nominal`:** `economic: {mode: nominal,
    inflation_rate: 0.021}`, `mortgage_rate` = the quoted rate's effective

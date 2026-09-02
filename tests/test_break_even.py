@@ -103,9 +103,16 @@ class TestFormat:
     def test_text_reads_as_a_threshold_sentence(self):
         out = solve_break_even(_base(), "rent.monthly_rent")
         text = format_break_even(out)
-        assert "Break-even rent.monthly_rent" in text
+        assert "Break-even rent.monthly_rent" in text and "a market_scenario prior does not move it" in text
         assert "rent is cheaper below" in text and "condo is cheaper above" in text
         assert "too close to call between" in text
+        # Band-first, and the JSON entry leads with the same sentence (three dogfood
+        # serves copied a crossing-first shape into the user's text).
+        be = out["break_evens"][0]
+        assert list(be)[0] == "sentence"
+        lo, hi = be["tie_band"]
+        assert be["sentence"].startswith(f"rent is cheaper below {lo:,.0f}; too close to call between {lo:,.0f} and {hi:,.0f}; condo is cheaper above {hi:,.0f}")
+        assert be["sentence"] in text
 
 
 class TestIntegerInputs:

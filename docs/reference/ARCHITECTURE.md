@@ -210,7 +210,9 @@ crossing is deterministic: with uncertainty inputs on, the verdict's
 decisiveness is the Monte Carlo floor, and the sweep's `mean flip:` line is the
 criterion-consistent cross-check. Beside `--sweep`, the threshold is re-solved
 at every sweep point (`across`): "the rent threshold at 0% and at 2% growth"
-is one command. A `market_scenario` prior never moves it (`note`). Rides
+is one command. Every entry leads with a band-first `sentence` ("A is cheaper
+below L; too close to call between L and H; B is cheaper above H") — the
+shape the user should read. A `market_scenario` prior never moves it (`note`). Rides
 `--json` as `break_evens`; the story's act 6 is the same crossing for rent, drawn.
 
 ### Assumptions block — `assumptions`
