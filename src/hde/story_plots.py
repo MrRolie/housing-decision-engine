@@ -284,7 +284,7 @@ def _cumulative_cost_curves(
                 g = _effective_growth_rate(rec.escalation_rate, econ)
                 flows[year] += rec.annual_amount * (1 + g) ** year
         if rent.invested_down_payment > 0:
-            r_inv = rent.investment_return_rate
+            r_inv = _effective_growth_rate(rent.investment_return_rate, econ)
             # Capital leg as the engine books it: the outlay at year 0 (paid, like
             # the buyer's down payment) and the terminal value at year N (credit);
             # the credit is a year-N flow so the curve discounts it exactly once.
@@ -558,7 +558,7 @@ def plot_act2_the_race(
         credit = paid[-1] - curve["net"][-1]
         if abs(credit) > 1.0:
             credit_label = (
-                "down payment kept invested" if key == "rent"
+                "invested capital's terminal value" if key == "rent"
                 else "equity returned at sale"
             )
             ax.plot(

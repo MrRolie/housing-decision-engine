@@ -314,8 +314,24 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"owned options put ${owned_down:,.0f} down but "
             f"rent.invested_down_payment=0 — the renter's equivalent capital is assumed to earn "
             f"exactly the discount rate (net present value 0); set invested_down_payment + "
-            f"investment_return_rate to model a different return (verdict not like-for-like)"
+            f"investment_return_rate to model a different return"
         )
+    # The other half of that sentence (review F1, 2026-09-02): with capital
+    # stated, the verdict-moving residual is D·[1 − ((1+r_inv)/(1+dr))^N] —
+    # zero only when the renter earns exactly the discount rate. Say it in dollars.
+    if spec.rent is not None and spec.rent.invested_down_payment > 0:
+        r_inv = spec.rent.investment_return_rate
+        if spec.economic.mode == "nominal":
+            r_inv = (1 + r_inv) * (1 + spec.economic.inflation_rate) - 1
+        dr, n_years, capital = spec.simulation.discount_rate, spec.simulation.years, spec.rent.invested_down_payment
+        if abs(r_inv - dr) > 1e-12:
+            net = capital * (1 - ((1 + r_inv) / (1 + dr)) ** n_years)
+            side = "charged to" if net > 0 else "credited to"
+            warns.append(
+                f"rent: invested capital ${capital:,.0f} earns {r_inv:.1%} vs discount_rate {dr:.1%} — "
+                f"net capital term ${abs(net):,.0f} {side} the renter over {n_years} years; set "
+                f"investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately"
+            )
 
     # Owner carrying and purchase costs left at zero understate the buy side;
     # say so by name (2026-09-02 user-model dogfood: every persona's property

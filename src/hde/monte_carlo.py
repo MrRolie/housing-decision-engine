@@ -512,12 +512,15 @@ def _simulate_rent_pv_once(
     # Capital leg, mirroring the owned side (downpayment_pv + terminal equity):
     # the renter's capital is charged at year 0 and its terminal value credited.
     if rent.invested_down_payment > 0:
+        base_r = rent.investment_return_rate
+        if econ.mode == "nominal":  # a REAL input, composed like value growth
+            base_r = (1 + base_r) * (1 + econ.inflation_rate) - 1
         if sim.investment_return_vol > 0:
             z_inv = float(rng.normal())
             r_shock = _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
-            r_inv = rent.investment_return_rate * r_shock
+            r_inv = base_r * r_shock
         else:
-            r_inv = rent.investment_return_rate
+            r_inv = base_r
         benefit = rent.invested_down_payment * ((1 + r_inv) ** sim.years) / ((1 + dr) ** sim.years)
     else:
         benefit = 0.0
@@ -528,6 +531,7 @@ def _simulate_rent_pv_once(
 def _compute_income_affordability_once(
     income: IncomeParams,
     sim: SimulationParams,
+    econ: EconomicParams,
     condo_annual_costs: List[float],
     house_annual_costs: List[float],
     rent_annual_costs: List[float],
@@ -543,6 +547,9 @@ def _compute_income_affordability_once(
     housing choice).
     """
     threshold = income.affordability_threshold
+    growth = income.income_growth_rate
+    if econ.mode == "nominal":  # REAL input, composed like the cost numerator
+        growth = (1 + growth) * (1 + econ.inflation_rate) - 1
 
     # Pre-draw jittered years for each pay-drop event (once per sim path).
     # Drawing inside the year loop would allow a single event to fire in
@@ -576,7 +583,7 @@ def _compute_income_affordability_once(
                 inc *= mag
         traj.append(inc)
         if t < sim.years - 1:
-            inc *= (1 + income.income_growth_rate)
+            inc *= (1 + growth)
 
     result = {}
     for option_type, costs in [
@@ -684,7 +691,7 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
             rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, rng)
         if spec.income is not None:
             flags = _compute_income_affordability_once(
-                spec.income, sim,
+                spec.income, sim, econ,
                 afford_condo_costs, afford_house_costs, afford_rent_costs,
                 rng,
             )

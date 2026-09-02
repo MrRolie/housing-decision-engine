@@ -517,21 +517,24 @@ def test_report_mentions_financing_lines():
 
 
 def test_nominal_mode_affordability_composes_inflation():
-    """D.6: the affordability numerator escalates like the PV engine — in nominal
-    mode every escalation is (1+g)(1+π)−1, so year-N ratios rise with inflation."""
+    """Nominal mode composes inflation into the cost NUMERATOR exactly as the PV
+    engine does (readiness plan D.6) — and, since the 2026-09-02 review, into
+    income too, so the ratio itself does not drift on inflation."""
     from hde.config import load_config_dict
-    base = {
-        "years": 10, "discount_rate": 0.05,
-        "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01},
-        "income": {"annual_income": 90_000, "income_growth_rate": 0.0},
-    }
-    real = compute_deterministic(load_config_dict({**base, "economic": {"mode": "real"}}))
-    nominal = compute_deterministic(load_config_dict(
-        {**base, "economic": {"mode": "nominal", "inflation_rate": 0.02}}))
-    r_real = real.income_report.rent_ratios
-    r_nom = nominal.income_report.rent_ratios
-    assert r_nom[0] == r_real[0]                       # year 1: no escalation yet
-    assert r_nom[-1] > r_real[-1] * 1.15               # year 10: (1.0302/1.01)^9 ≈ 1.19
+    from hde.deterministic import _annual_costs_for_option, _compute_income_trajectory
+    base = {"years": 6, "discount_rate": 0.03,
+            "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True,
+                      "fee_escalation_rate": 0.01},
+            "income": {"annual_income": 80_000, "income_growth_rate": 0.01}}
+    real = load_config_dict(base)
+    nominal = load_config_dict({**base, "economic": {"mode": "nominal", "inflation_rate": 0.02}})
+    costs_r = _annual_costs_for_option("condo", real.condo, real.simulation, real.economic)
+    costs_n = _annual_costs_for_option("condo", nominal.condo, nominal.simulation, nominal.economic)
+    inc_r = _compute_income_trajectory(real.income, 6, real.economic)
+    inc_n = _compute_income_trajectory(nominal.income, 6, nominal.economic)
+    for t in range(6):
+        assert costs_n[t] / costs_r[t] == pytest.approx(1.02 ** t)
+        assert inc_n[t] / inc_r[t] == pytest.approx(1.02 ** t)
 
 
 class TestNominalRentOtherCosts:
@@ -608,3 +611,58 @@ class TestRenterCapitalSymmetry:
                "simulation": {"num_sims": 3, "random_seed": 1}}
         spec = load_config_dict(cfg)
         assert run_monte_carlo(spec).rent.summary.mean == pytest.approx(compute_deterministic(spec).rent.total_pv)
+
+
+class TestReviewModifications:
+    """Findings of the 2026-09-02 adversarial review of the capital-leg fix."""
+
+    def test_f2_nominal_mode_keeps_the_capital_legs_symmetric(self):
+        """House all-cash V at real growth g vs renter D = V at real return g:
+        the capital gap is zero in real mode AND in nominal mode."""
+        from hde.config import load_config_dict
+        for econ in ({"mode": "real"}, {"mode": "nominal", "inflation_rate": 0.021}):
+            cfg = {"years": 25, "discount_rate": 0.03, "economic": econ,
+                   "house": {"initial_value": 480_000, "all_cash": True, "value_growth_rate": 0.02,
+                             "annual_maintenance_rate": 0.0, "selling_cost_rate": 0.0,
+                             "purchase_costs": 0},
+                   "rent": {"monthly_rent": 0.01, "rent_escalation_rate": 0.0,
+                            "invested_down_payment": 480_000, "investment_return_rate": 0.02}}
+            det = compute_deterministic(load_config_dict(cfg))
+            assert det.house.total_pv == pytest.approx(det.rent.total_pv, abs=5.0), econ
+
+    def test_f2_nominal_mode_income_grows_with_the_numerator(self):
+        """Affordability ratios do not drift on inflation: nominal == real when
+        nothing is financed (the mortgage payment is nominal-as-entered by design)."""
+        from hde.config import load_config_dict
+        base = {"years": 8, "discount_rate": 0.03,
+                "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True,
+                          "fee_escalation_rate": 0.01},
+                "income": {"annual_income": 80_000, "income_growth_rate": 0.01}}
+        real = compute_deterministic(load_config_dict(base)).income_report.condo_ratios
+        nominal = compute_deterministic(load_config_dict(
+            {**base, "economic": {"mode": "nominal", "inflation_rate": 0.02}})).income_report.condo_ratios
+        assert real == pytest.approx(nominal)
+
+    def test_f3_rent_events_honour_min_year(self):
+        from hde.config import load_config_dict
+        from hde.monte_carlo import run_monte_carlo
+        from hde.pv import pv_single
+        from hde.story_plots import _cumulative_cost_curves
+        cfg = {"years": 10, "discount_rate": 0.03,
+               "rent": {"monthly_rent": 1_000, "rent_escalation_rate": 0.0,
+                        "events": [{"name": "move", "base_cost": 10_000, "expected_year": 3, "min_year": 5}]},
+               "simulation": {"num_sims": 2, "random_seed": 1}}
+        spec = load_config_dict(cfg)
+        det = compute_deterministic(spec)
+        assert det.rent.breakdown["events_pv"] == pytest.approx(pv_single(10_000, 0.03, 5))
+        assert run_monte_carlo(spec).rent.summary.mean == pytest.approx(det.rent.total_pv)
+        assert _cumulative_cost_curves(spec)["rent"]["net"][-1] == pytest.approx(det.rent.total_pv)
+
+    def test_f1_capital_spread_is_warned_in_dollars(self):
+        from hde.config import coherence_warnings, load_config_dict
+        cfg = {"years": 15, "discount_rate": 0.05,
+               "rent": {"monthly_rent": 2_000, "invested_down_payment": 480_000, "investment_return_rate": 0.03}}
+        warns = [w for w in coherence_warnings(load_config_dict(cfg)) if w.startswith("rent: invested capital")]
+        assert len(warns) == 1 and "charged to the renter" in warns[0] and "$120," in warns[0]
+        neutral = {**cfg, "rent": {**cfg["rent"], "investment_return_rate": 0.05}}
+        assert not any(w.startswith("rent: invested capital") for w in coherence_warnings(load_config_dict(neutral)))

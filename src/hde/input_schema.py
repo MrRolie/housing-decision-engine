@@ -109,15 +109,20 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "invested_down_payment": (False, "capital the renter keeps invested instead of buying: charged at year 0 like "
                                         "the buyer's down payment and credited at its terminal value; "
                                         "DEFAULT 0 = assume it earns exactly the discount rate"),
-        "investment_return_rate": (False, "annual; DEFAULT 0.03 real (FP Canada 2026 "
-                                            "PAG 60/40)"),
+        "investment_return_rate": (False, "annual, REAL (composed with inflation in nominal "
+                                            "mode like value growth); DEFAULT 0.03 (FP Canada "
+                                            "2026 PAG 60/40)"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs such as "
                           "moving costs"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "tenant insurance, parking, utilities the tenant pays"),
     },
     "economic": {
-        "mode": (False, '"real" (DEFAULT — growth/discount must be real) or "nominal"'),
+        "mode": (False, '"real" (DEFAULT — every rate you enter is real) or "nominal": '
+                        'growth, escalation and return inputs (value, fee, rent, other, income, '
+                        'investment_return_rate) stay REAL and the engine composes '
+                        'inflation_rate on top of them, while discount_rate and mortgage_rate '
+                        'are used as entered — never type a sticker growth rate into nominal mode'),
         "inflation_rate": (False, "ignored in real mode; DEFAULT 0.0 — nominal-mode "
                                     f"suggestion {_NOMINAL_PLANNING.value} ({_NOMINAL_PLANNING.short_cite})"),
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),

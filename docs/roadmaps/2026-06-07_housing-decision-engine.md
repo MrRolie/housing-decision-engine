@@ -46,7 +46,7 @@ Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; r
 
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
-- **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount/investment/mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.
+- **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount and mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.
 - Mortgage term vs amortization: one rate for the whole amortization; no renewal-rate scenario for a 5-year fixed — the largest buy-side risk in Canada is invisible.
 - Financed mortgage-insurance premium (CMHC/Sagen by LTV band, provincial tax on the premium); today `purchase_costs` approximates it as cash at purchase.
 - `value_growth_vol`: ordinary price uncertainty for the Monte Carlo (today only the jump `price_shock` channel exists).

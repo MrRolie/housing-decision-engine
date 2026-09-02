@@ -155,12 +155,14 @@ def _compute_events_pv(
     """
     Compute PV of one-time events using their expected_year (deterministic).
 
-    Events with expected_year outside [1, years] are clamped to valid range.
+    Placement is `_event_year_deterministic` (expected_year clamped by
+    min_year / max_year and the horizon) — the same rule the owned options,
+    the affordability numerator, the story curves and the Monte Carlo use
+    (review F3, 2026-09-02: this path ignored min/max_year).
     """
     total_pv = 0.0
     for event in events:
-        # Clamp year to valid range
-        year = max(1, min(event.expected_year, years))
+        year = _event_year_deterministic(event, years)
         total_pv += pv_single(event.base_cost, discount_rate, year)
     return total_pv
 
@@ -382,7 +384,10 @@ def _compute_rent_option(
     other_pv = _compute_other_recurring_pv(rent.other_recurring_costs, dr, sim.years, econ)
 
     if rent.invested_down_payment > 0:
-        r_inv = rent.investment_return_rate
+        # The renter's return is a REAL input like value_growth_rate: composed
+        # with inflation in nominal mode (review F2, 2026-09-02 — it was used as
+        # entered, handing the buyer a 2.1% spread in nominal mode).
+        r_inv = _effective_growth_rate(rent.investment_return_rate, econ)
         # Future value of the invested down payment, discounted back to today.
         benefit = (
             rent.invested_down_payment
@@ -406,11 +411,16 @@ def _compute_rent_option(
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
 
 
-def _compute_income_trajectory(income: IncomeParams, years: int) -> List[float]:
+def _compute_income_trajectory(
+    income: IncomeParams, years: int, econ: Optional[EconomicParams] = None,
+) -> List[float]:
     """
     Year-by-year income. Pay-drop events apply at their year and persist
     (the cut is permanent: income compounds from the post-drop level).
+    income_growth_rate is REAL; in nominal mode it is composed with inflation
+    exactly as the cost numerator is, so the ratio does not drift on inflation.
     """
+    growth = _effective_growth_rate(income.income_growth_rate, econ) if econ is not None else income.income_growth_rate
     trajectory: List[float] = []
     current = income.annual_income
     for t in range(years):
@@ -420,7 +430,7 @@ def _compute_income_trajectory(income: IncomeParams, years: int) -> List[float]:
                 current *= event.magnitude
         trajectory.append(current)
         if t < years - 1:
-            current *= (1 + income.income_growth_rate)
+            current *= (1 + growth)
     return trajectory
 
 
@@ -487,7 +497,7 @@ def _compute_affordability_report(
     for each present option, the per-year cost/income ratio and the list of
     years where that ratio exceeds the affordability threshold.
     """
-    incomes = _compute_income_trajectory(income, spec.simulation.years)
+    incomes = _compute_income_trajectory(income, spec.simulation.years, spec.economic)
     threshold = income.affordability_threshold
 
     def ratios_and_exceeds(option_type, params):

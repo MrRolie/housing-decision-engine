@@ -98,3 +98,23 @@ class TestAssumptionsToDict:
 
 def test_engine_version_is_the_installed_version():
     assert engine_version() not in {"", "unknown"}
+
+
+class TestNominalEcho:
+    """2026-09-02: nominal mode shows the effective composed rate next to the input."""
+
+    def test_nominal_mode_echoes_effective_rates(self):
+        from hde.config import load_config_dict
+        from hde.serialization import format_assumptions
+        cfg = {"years": 5, "economic": {"mode": "nominal", "inflation_rate": 0.02},
+               "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.03}}
+        joined = "\n".join(format_assumptions(load_config_dict(cfg)))
+        assert "rent: escalation +3.0%/yr real → +5.1%/yr nominal (incl. 2.0% inflation)" in joined
+        assert "composed with inflation_rate" in joined
+
+    def test_real_mode_unchanged(self):
+        from hde.config import load_config_dict
+        from hde.serialization import format_assumptions
+        cfg = {"years": 5, "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.03}}
+        joined = "\n".join(format_assumptions(load_config_dict(cfg)))
+        assert "rent: escalation +3.0%/yr ·" in joined and "nominal" not in joined.split("\n")[1]

@@ -142,8 +142,8 @@ read back `source`, `rationale`, `band` and `replaces` in one paragraph.
    In `mode: real` every rate you enter is real: convert a quoted nominal
    mortgage or growth rate first (real ≈ (1 + nominal)/(1 + 2.1%) − 1). In
    `mode: nominal` the engine keeps growth/escalation inputs as REAL and
-   composes `inflation_rate` on top; `discount_rate`, `investment_return_rate`
-   and `mortgage_rate` are used as entered. Never type a sticker growth rate
+   composes `inflation_rate` on top (that includes `investment_return_rate`);
+   `discount_rate` and `mortgage_rate` are used as entered. Never type a sticker growth rate
    into nominal mode — it is inflated twice. `mortgage_rate` is an effective
    annual rate with annual payments; a Canadian posted rate compounds
    semi-annually — convert it (schema note).

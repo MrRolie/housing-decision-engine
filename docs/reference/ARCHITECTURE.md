@@ -43,7 +43,7 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
 ## Conventions (every figure below obeys these)
 
 - **Years are 1-indexed; cash flows fall at the END of year t and discount at
-  `(1 + dr)^-t`** (`pv_single`). Year-0 outlays (the down payment) are undiscounted.
+  `(1 + dr)^-t`** (`pv_single`). Year-0 outlays (the buyer's down payment and purchase costs, the renter's invested capital) are undiscounted.
   `dr` = `discount_rate`, in the same terms (real or nominal) as every rate.
 - **Nominal mode composes inflation into every escalation:** `g_eff = (1 + g)(1 + π) − 1`
   (`_effective_growth_rate`); in real mode `g_eff = g`. Defaults are REAL terms.
@@ -91,7 +91,7 @@ Monte Carlo (below). A price-shock block likewise affects only the Monte Carlo.
 | `events_pv` | one-time events (e.g. moving) | `base_cost · (1 + dr)^-year` at `expected_year` clamped to `[1, N]` |
 | `other_pv` | other recurring costs | as for owned options |
 | `invested_capital_pv` | the renter's capital charged at year 0 — the mirror of `downpayment_pv` | `D = invested_down_payment`, undiscounted |
-| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` as entered (not inflation-composed). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
+| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` (REAL; composed with inflation in nominal mode like `value_growth_rate`). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
 | `total_pv` | net cost of renting | sum of the five |
 
 ### The verdict — `verdict`
@@ -155,7 +155,7 @@ Present only with an `income` block.
 
 | Key | What it is | As computed |
 |---|---|---|
-| `annual_incomes` | income by year | `income_1 = annual_income`; each later year `× (1 + income_growth_rate)`; a `pay_drop_events` entry multiplies income by `magnitude` in its year and the cut persists |
+| `annual_incomes` | income by year | `income_1 = annual_income`; each later year `× (1 + g_eff)` with `income_growth_rate` a REAL input (inflation-composed in nominal mode, like the cost numerator); a `pay_drop_events` entry multiplies income by `magnitude` in its year and the cut persists |
 | `threshold` | the ratio that counts as a breach | `affordability_threshold` (default anchored, 0.32) |
 | `ratios` | year-t housing cost ÷ year-t income | numerator = UNDISCOUNTED year-t outlay: fees `12·fee(1 + e_eff)^(t−1)` or maintenance `rate(t)·V0(1 + g_eff)^(t−1)` or rent `12·rent(1 + e_eff)^(t−1)`, plus the mortgage payment while `t ≤ term`, events in their year, other costs `(1 + e_eff)^(t−1)`. Note the exponent: the affordability numerator escalates from year 2, one year later than the PV engine's fee/rent convention — a documented divergence, not a rounding difference |
 | `years_exceeding` | years whose ratio exceeds the threshold | `[t : ratio_t > threshold]` |

@@ -99,26 +99,41 @@ def format_assumptions(
     a reference-only anchor renders as `[ref: …]` because the source informs
     the value without stating it.
     """
+    nominal = spec.economic.mode == "nominal"
+    pi = spec.economic.inflation_rate
+
+    def _g(rate: float) -> str:
+        """A growth/escalation input, with its effective composed rate in
+        nominal mode so a sticker rate typed into nominal mode is visible
+        as the double count it is (2026-09-02 dogfood: the echo printed the
+        raw rate and every nominal-thinking user was inflated twice)."""
+        if not nominal:
+            return f"{rate:+.1%}/yr"
+        eff = (1 + rate) * (1 + pi) - 1
+        return f"{rate:+.1%}/yr real → {eff:+.1%}/yr nominal (incl. {pi:.1%} inflation)"
+
     lines = [
         f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}"
+        + (" (growth, escalation and investment-return inputs are REAL and composed with "
+           "inflation_rate; discount_rate and mortgage_rate are used as entered)" if nominal else "")
     ]
     if spec.condo is not None:
         lines.append(
-            f"condo: value growth {spec.condo.value_growth_rate:+.1%}/yr · "
-            f"fee escalation {spec.condo.fee_escalation_rate:+.1%}/yr · "
+            f"condo: value growth {_g(spec.condo.value_growth_rate)} · "
+            f"fee escalation {_g(spec.condo.fee_escalation_rate)} · "
             f"selling_cost_rate {spec.condo.selling_cost_rate:.1%}"
         )
     if spec.house is not None:
         lines.append(
-            f"house: value growth {spec.house.value_growth_rate:+.1%}/yr · "
+            f"house: value growth {_g(spec.house.value_growth_rate)} · "
             f"maintenance {spec.house.annual_maintenance_rate:.1%} of value/yr · "
             f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
         )
     if spec.rent is not None:
         lines.append(
-            f"rent: escalation {spec.rent.rent_escalation_rate:+.1%}/yr · "
+            f"rent: escalation {_g(spec.rent.rent_escalation_rate)} · "
             f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
-            f"{spec.rent.investment_return_rate:+.1%}/yr"
+            f"{_g(spec.rent.investment_return_rate)}"
         )
     lines.append(
         "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and "

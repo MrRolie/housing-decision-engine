@@ -50,7 +50,7 @@ Acts 1–4 render here (no rent option, no prior). The six acts:
 uv run hde examples/rent_vs_condo_vs_house.yaml
 ```
 
-Acts 1–4 and 6, now three runners in the race. Watch act 2: the renter's invested capital is charged at year 0 exactly like the buyer's down payment, so the runners start level on capital and separate on carrying costs; the crossover year — if any — is the whole decision.
+Acts 1–4 and 6, now three runners in the race. Watch act 2: the renter's invested capital is charged at year 0 exactly like the buyer's down payment, so each runner starts with its own capital outlay and they separate on carrying costs; the crossover year — if any — is the whole decision.
 
 ## 3. `income_shock.yaml` — affordability under a pay cut
 

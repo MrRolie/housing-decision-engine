@@ -97,6 +97,8 @@ def test_breakdown_key_constants():
     assert "maintenance_pv" in HOUSE_BREAKDOWN_KEYS
     assert "rent_pv" in RENT_BREAKDOWN_KEYS
     assert "invested_dp_benefit_pv" in RENT_BREAKDOWN_KEYS
+    assert "invested_capital_pv" in RENT_BREAKDOWN_KEYS  # the year-0 charge (2026-09-02)
+    assert "purchase_costs_pv" in CONDO_BREAKDOWN_KEYS and "purchase_costs_pv" in HOUSE_BREAKDOWN_KEYS
 
 
 def test_house_params_capital_structure_fields():

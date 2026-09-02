@@ -802,7 +802,7 @@ class TestCoherenceWarnings:
             "rent": {"monthly_rent": 2_000},
         })
         warns = coherence_warnings(spec)
-        assert any("rent.invested_down_payment=0" in w and "not like-for-like" in w
+        assert any("rent.invested_down_payment=0" in w and "net present value 0" in w
                    for w in warns)
 
     def test_modeled_renter_capital_not_flagged(self):
@@ -900,4 +900,4 @@ def test_like_for_like_warning_fires_for_all_cash_purchase():
         "rent": {"monthly_rent": 2_000},
     })
     warns = "\n".join(coherence_warnings(spec))
-    assert "not like-for-like" in warns and "$480,000" in warns
+    assert "net present value 0" in warns and "$480,000" in warns
