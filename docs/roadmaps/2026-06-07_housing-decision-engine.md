@@ -15,11 +15,11 @@
 | 2 | brainstorm-to-execute | `completed` | `mcp_server/` — PR #2 commit `79b3a56` | 6 MCP tools, 115 tests, FastMCP stdio |
 | 3 | brainstorm-to-execute | `completed` | `docs/plans/archive/2026-06/2026-06-08-rent-income-model.md` — PR #3 commit `6121f1a` | ComparisonSpec refactor, RentParams + PV, IncomeParams + AffordabilityReport, 151 tests |
 | 4a | brainstorm-to-execute | `completed` | `docs/specs/2026-06-08-net-wealth-foundation-design.md` — PR #4, branch tip `b99a6b3`, 176 tests pass (2026-07-21) | Net-wealth foundation: rent-vs-buy DCF (mortgage amortization + terminal equity, house+condo). Split out of original S4. |
-| 4b | brainstorm-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md` — commits `8ceb010`, `0e2116e` (2026-08-26) | Market scenario layer: demographic drift priors (demoflow ScenarioPrior) + tilted price-shock channel; correlated market+income shocks and the pre-canned stress configs were NOT built — the prior replaced the hand-authored scenario menu. |
-| readiness | plan-to-execute | `completed` | `/home/mm-mike/ai_system/projects/housing-decision-engine/docs/plans/2026-09-01-readiness-polish.md` (branch `feat/readiness-polish`) | Provenance + verdict + intake + glossary + hygiene; suite 440+ tests. |
+| 4b | brainstorm-to-execute | `completed` | `docs/specs/2026-08-26-s4b-demographic-input-slot-sketch.md` — commits `8ceb010`, `0e2116e` (2026-08-26) | Market scenario layer: demographic drift priors (demoflow ScenarioPrior) + tilted price-shock channel; correlated market+income shocks and the pre-canned stress configs were NOT built — the prior replaced the hand-authored scenario menu. |
+| readiness | plan-to-execute | `completed` | `docs/plans/2026-09-01-readiness-polish.md` (branch `feat/readiness-polish`) | Provenance + verdict + intake + glossary + hygiene; suite 440+ tests. |
 
 Status values: `not_started`, `in_progress`, `blocked`, `completed`.
-A `completed` row MUST carry a real, stat-able **absolute** artifact path.
+A `completed` row MUST carry a real, stat-able artifact path — repo-relative here, because this repo is public and an absolute path discloses the machine's layout.
 
 ### Hand-off Payload
 
