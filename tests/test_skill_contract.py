@@ -15,7 +15,28 @@ import pytest
 from hde.cli import main as cli_main
 
 SKILL = Path(__file__).resolve().parents[1] / ".claude" / "skills" / "hde" / "SKILL.md"
-TEXT = SKILL.read_text(encoding="utf-8")
+TEXT = SKILL.read_text(encoding="utf-8")                     # the hot path, loaded on every trigger
+REFERENCES = sorted((SKILL.parent / "references").glob("*.md"))
+ALL_TEXT = TEXT + "".join(r.read_text(encoding="utf-8") for r in REFERENCES)  # hot path + references
+
+
+def test_every_reference_file_is_pointed_at_and_every_pointer_resolves():
+    """Progressive disclosure (skill restructure 2026-09-02): SKILL.md is the hot
+    path and names each reference file with when to read it; a file nobody
+    points at is dead weight, a pointer to a missing file is a broken step."""
+    assert REFERENCES, "references/ is empty"
+    for ref in REFERENCES:
+        assert f"references/{ref.name}" in TEXT, ref.name
+    for name in set(re.findall(r"references/([a-z-]+\.md)", ALL_TEXT)):
+        assert (SKILL.parent / "references" / name).exists(), name
+
+
+def test_hot_path_stays_under_the_documented_body_budget():
+    """Claude Code's skill guidance: keep SKILL.md under 500 lines and move
+    reference material out; the dogfood rounds grew it to 436 lines / 5,400
+    words before the restructure. Pin the hot path well under both."""
+    assert TEXT.count("\n") < 300, TEXT.count("\n")
+    assert len(TEXT.split()) < 2600, len(TEXT.split())
 
 
 def _help(monkeypatch, capsys) -> str:
@@ -72,14 +93,14 @@ def test_skill_points_at_the_docs_that_exist():
     for rel in ("examples/README.md", "docs/reference/ARCHITECTURE.md",
                 "tests/fixtures/scenario_prior_golden.json",
                 "examples/showcase_demographic_prior.yaml"):
-        assert rel in TEXT, rel
+        assert rel in ALL_TEXT, rel
         assert (root / rel).exists(), rel
 
 
 def test_skill_has_no_machine_specific_paths():
     """A cloned repo runs anywhere: the skill may not name this machine's paths."""
     for needle in ("~/", "/home/", "/Users/"):
-        assert needle not in TEXT, needle
+        assert needle not in ALL_TEXT, needle
 
 
 def test_skill_gates_on_missing_information():
@@ -109,9 +130,23 @@ def test_project_settings_preapprove_the_user_flow():
 
 
 def test_skill_translates_real_world_items_and_dispatches_sweeps():
-    """The dogfood's top friction: owner costs silently zero, flip points hand-rolled."""
-    for phrase in ("property tax", "other_recurring_costs", "purchase_costs", "--sweep",
-                   "Not modelled", "A range is two configs", "Cash line", "sticker",
-                   "financed_purchase_costs", "Quick-sense lane", '"not run"',
-                   "down payment + purchase costs", "ANNUAL volatility"):
+    """The dogfood's top friction: owner costs silently zero, flip points hand-rolled.
+    Hot-path pins are the rules applied on every run; the rest live in references/."""
+    for phrase in ("property tax", "purchase_costs", "--sweep", "Not modelled",
+                   "A range is two configs", "Cash line", "sticker",
+                   "financed_purchase_costs", '"not run"', "down payment + purchase costs",
+                   "ANNUAL volatility"):
         assert phrase in TEXT, phrase
+    for phrase in ("other_recurring_costs", "Quick-sense lane", "One side known"):
+        assert phrase in ALL_TEXT, phrase
+
+
+def test_answer_checklist_reads_the_engine_lines_back():
+    """Adherence fix (three threshold serves dropped a warned default that the
+    prose required at several sites): the answer step is a checklist naming the
+    engine line to read, placed before the prose."""
+    assert "checklist first" in TEXT
+    for item in ("every `[warning]` line", "`defaults applied:`", "`decisiveness:`",
+                 "`Year-1 cash`", "`Affordability`", "No source for", "Not modelled"):
+        assert item in TEXT, item
+    assert TEXT.index("checklist first") < TEXT.index("## Verification")

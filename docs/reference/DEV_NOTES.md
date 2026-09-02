@@ -39,8 +39,12 @@ check that passes.
   CLI `--json` renders from it (the MCP server was removed 2026-09-01).
 - The verdict: `models.compute_verdict` — one computation for the story
   headline, the text report and `--json`.
-- The skill: `.claude/skills/hde/SKILL.md`, pinned by
-  `tests/test_skill_contract.py`.
+- The skill: `.claude/skills/hde/SKILL.md` is the hot path (order of
+  operations, intake, gates as one rule each, the answer checklist); the
+  lanes, translation table, worked phrasings and rationale live in
+  `.claude/skills/hde/references/`, each named in SKILL.md with when to read
+  it (Claude Code's skill guidance: body under 500 lines, depth in referenced
+  files). Pinned by `tests/test_skill_contract.py` over both.
 
 ## Conventions the numbers follow
 

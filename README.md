@@ -44,7 +44,7 @@ uv run hde examples/showcase_demographic_prior.yaml --story docs/story
 Renders the full six-act story under the MTL_RMR demographic prior — the committed
 [docs/story/STORY.md](docs/story/STORY.md) is this command's output, regenerable at any time.
 
-> **Surface doctrine (2026-08-26; MCP server removed 2026-09-01):** the interface is the **`hde` CLI + the repo-local `hde` skill** (`.claude/skills/hde/SKILL.md`, the dispatch contract Claude follows). `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
+> **Surface doctrine (2026-08-26; MCP server removed 2026-09-01):** the interface is the **`hde` CLI + the repo-local `hde` skill** (`.claude/skills/hde/SKILL.md` plus its `references/`, the dispatch contract Claude follows). `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
 
 ## Repo map
 
