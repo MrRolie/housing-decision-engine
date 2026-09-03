@@ -38,7 +38,7 @@ The demographic signal itself: projected price drift from household demand in MT
 
 ## Act — The market line
 
-Your $2,400/mo is $97/mo past the break-even line ($2,303/mo) — inside the tie band (4.2% apart on total cost), so renting and buying a house are too close to call here.
+Your $2,400/mo sits inside the tie band around the crossing — renting is cheaper below $2,193/mo; too close to call between $2,193/mo and $2,418/mo; buying a house is cheaper above $2,418/mo (crossing $2,303/mo; band = 5% of the cheaper option's PV).
 
 ![The market line](act6_the_market_line.png)
 

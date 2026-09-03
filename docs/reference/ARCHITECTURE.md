@@ -180,7 +180,7 @@ Present only with an `income` block.
 | 3 The uncertainty | overlaid per-path `total_pv` histograms | p10 / median / p90 of the same arrays `p5`–`p95` summarise |
 | 4 Home-value futures | a fan of value paths | the user's growth plus the prior row's `demo_drift_p10` / mean / `demo_drift_p90` per band, compounded yearly (deterministic quantile paths, not MC paths) |
 | 5 The demographic signal | the prior itself | `demo_drift_mean` with the p10–p90 band per horizon and scenario, footer from the file's own vintage fields |
-| 6 The market line | break-even rent vs the cheapest owned option | rent swept ±35% around the quoted rent on 41 points; each point re-runs the deterministic engine; the break-even is the linearly interpolated crossing of `total_pv(rent)` and `total_pv(cheapest owned)`; "on the line" = within one grid step |
+| 6 The market line | the solved break-even rent vs the cheapest owned option | the rent threshold is SOLVED, not read off the grid: `story_plots.solve_rent_threshold` calls the same `break_even.solve_crossings` as `--break-even rent.monthly_rent`, on the same ¼×–4× bracket and the verdict's tie band, so a crossing outside the drawn window is found rather than reported absent. The left panel draws 41 points over the ±35% window WIDENED to hold the crossing and its band (the window stays drawn, shaded, when it did widen); the crossing is marked at its exact height (one more engine run), the tie band shaded, and the caption is the engine's own band-first `sentence` rendered in $/mo with the acts' option names. No crossing in the bracket: the act and the caption name the bracket and which option is cheaper throughout. The right panel still sweeps the purchase price ±35% and interpolates its crossing between grid points |
 
 ### Sweeps — `--sweep KEY=v1,v2,…` or `KEY=start:stop:n`
 
@@ -213,7 +213,9 @@ at every sweep point (`across`): "the rent threshold at 0% and at 2% growth"
 is one command. Every entry leads with a band-first `sentence` ("A is cheaper
 below L; too close to call between L and H; B is cheaper above H") — the
 shape the user should read. A `market_scenario` prior never moves it (`note`). Rides
-`--json` as `break_evens`; the story's act 6 is the same crossing for rent, drawn.
+`--json` as `break_evens`; the story's act 6 calls the same solver for the rent
+threshold, so the crossing it draws, the band it shades and the sentence it
+prints are the ones described here.
 
 ### Assumptions block — `assumptions`
 

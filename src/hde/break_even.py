@@ -24,7 +24,10 @@ from .config import ConfigValidationError, load_config_dict
 from .deterministic import compute_deterministic
 from .sweep import INT_KEYS, _fmt_value, with_value
 
-# Inputs whose default bracket is [¼·base, 4·base]; anything else needs lo:hi.
+# The default bracket for a money input, as multiples of its base value; any
+# other key needs lo:hi. The story's act 6 solves the rent threshold on this
+# same bracket, so the act and `--break-even rent.monthly_rent` search alike.
+MONEY_BRACKET = (0.25, 4.0)
 _MONEY_KEYS = frozenset({
     "monthly_rent", "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "monthly_fee", "invested_down_payment", "annual_income",
@@ -64,67 +67,58 @@ def _priced_options(raw: Dict[str, Any]) -> List[str]:
     return [o for o in ("condo", "house", "rent") if o in raw]
 
 
-def solve_break_even(
-    raw: Dict[str, Any], key: str, lo: Optional[float] = None, hi: Optional[float] = None,
-    *, iterations: int = 60,
+def solve_crossings(
+    key: str,
+    options: Tuple[str, str],
+    lo: float,
+    hi: float,
+    totals_at: Callable[[float], Optional[Tuple[float, float]]],
+    *,
+    is_int: bool = False,
+    iterations: int = 60,
+    refused: Optional[List[Tuple[float, str]]] = None,
 ) -> Dict[str, Any]:
     """
-    Bisection on gap(v) = total_pv(A) − total_pv(B) for the two priced options
-    (A, B in the order condo, house, rent). A coarse scan of the bracket finds
-    every sign change (the gap need not be monotone in the input); each is
-    refined by bisection, and the tie-band edges around it are solved the same
-    way, walking outward from the crossing one grid cell at a time (a second
-    crossing ends the band: that edge is None). Grid points the loader refuses
-    (a price below the fixed down payment) are recorded under "refused" and
-    the search shrinks to the accepted run(s), reported as "searched". Raises
-    ValueError when the config prices more or fewer than two options, when the
-    key is not in the YAML and no bracket was given, or when every point of
-    the bracket is refused.
-    """
-    options = _priced_options(raw)
-    if len(options) != 2:
-        raise ValueError(
-            f"--break-even needs exactly two priced options, got {options or 'none'} — "
-            f"drop one section or answer the pairwise question in two runs"
-        )
-    a, b = options
-    base = _raw_value(raw, key)
-    if lo is None or hi is None:
-        field = key.rsplit(".", 1)[-1]
-        if base is None or field not in _MONEY_KEYS:
-            raise ValueError(
-                f"--break-even {key}: give the bracket as {key}=lo:hi "
-                f"({'the key is not in the YAML' if base is None else 'only money inputs get a default bracket'})"
-            )
-        lo, hi = 0.25 * float(base), 4.0 * float(base)
-    is_int = key in INT_KEYS
-    band = ANCHORS["verdict.tie_band"].value
+    The solver itself, over ANY pair of total-PV curves. A coarse scan of the
+    bracket finds every sign change of gap(v) = total_pv(A) − total_pv(B) (the
+    gap need not be monotone in the input); each is refined by bisection, and
+    the tie-band edges around it are solved the same way, walking outward from
+    the crossing one grid cell at a time (a second crossing ends the band: that
+    edge is None).
 
+    ``totals_at(v)`` returns the two totals at v, or None when the caller
+    refuses that value (its reason appended to the ``refused`` list the caller
+    passes in); each distinct v is asked for once. The search shrinks to the
+    accepted run(s), reported as "searched", and a bracket refused throughout
+    raises. Those refusal messages name ``--break-even`` because it is the only
+    surface that refuses — the story's act 6 sweeps an already-validated spec.
+
+    Two callers, one crossing: ``solve_break_even`` wraps this with the YAML
+    loader, ``story_plots.solve_rent_threshold`` with a spec-level rent sweep,
+    so the act draws and phrases the threshold the CLI reports.
+    """
+    a, b = options
+    band = ANCHORS["verdict.tie_band"].value
+    refused = [] if refused is None else refused
     cache: Dict[float, Optional[Tuple[float, float]]] = {}
-    refused: List[Tuple[float, str]] = []
 
     def totals_or_none(v: float) -> Optional[Tuple[float, float]]:
-        """The two totals at v, or None when the loader refuses that value (a
+        """The two totals at v, or None when the caller refuses that value (a
         price below the fixed down payment, a rate outside its bounds): the
         refusal is recorded, never raised — the search shrinks to what the
         config accepts and the output says so."""
         vv = int(round(v)) if is_int else float(v)
         if vv not in cache:
-            try:
-                det = compute_deterministic(load_config_dict(with_value(raw, key, vv)))
-            except (ConfigValidationError, ValueError) as e:
-                cache[vv] = None
-                refused.append((vv, str(e).strip().splitlines()[-1].strip()))
-            else:
-                cache[vv] = (getattr(det, a).total_pv, getattr(det, b).total_pv)
+            cache[vv] = totals_at(vv)
         return cache[vv]
 
     def totals(v: float) -> Tuple[float, float]:
         t = totals_or_none(v)
         if t is None:
+            reason = refused[-1][1] if refused else "value refused"
             raise ValueError(
                 f"--break-even {key}: the loader refused {_fmt_value(key, v)} inside a bracket "
-                f"whose ends it accepted ({refused[-1][1]}) — give a bracket the config accepts (KEY=lo:hi)"
+                f"whose ends it accepted ({reason}) — give a bracket the config accepts (KEY=lo:hi)"
             )
         return t
 
@@ -229,7 +223,7 @@ def solve_break_even(
             # Band-first, and FIRST in the entry: three dogfood serves copied the
             # crossing-first shape into the user's text ("$2,663: renting below,
             # buying above; too close between…" contradicts itself on the gap).
-            found.append({"sentence": _band_sentence(key, entry, band), **entry})
+            found.append({"sentence": band_sentence(key, entry, band), **entry})
         return found
 
     xs, ys = scan(lo, hi)
@@ -248,9 +242,10 @@ def solve_break_even(
     if len(cur) >= 2:
         runs.append(cur)
     if not runs:
+        reason = refused[0][1] if refused else "every point refused"
         raise ValueError(
             f"--break-even {key}: the loader refused every point in the bracket "
-            f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)} ({refused[0][1]}) — "
+            f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)} ({reason}) — "
             f"give a bracket the config accepts (KEY=lo:hi)"
         )
 
@@ -267,7 +262,62 @@ def solve_break_even(
 
     out: Dict[str, Any] = {
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": searched,
-        "base_value": base, "tie_band_fraction": band, "break_evens": break_evens,
+        "tie_band_fraction": band, "break_evens": break_evens,
+    }
+    if not break_evens:
+        out["cheaper_throughout"] = a if (first_gap or 0.0) < 0 else b
+    return out
+
+
+def solve_break_even(
+    raw: Dict[str, Any], key: str, lo: Optional[float] = None, hi: Optional[float] = None,
+    *, iterations: int = 60,
+) -> Dict[str, Any]:
+    """
+    The threshold on one YAML input, for the two priced options (A, B in the
+    order condo, house, rent): every grid point re-runs the comparison through
+    the same loader, and ``solve_crossings`` does the searching. Grid points the
+    loader refuses (a price below the fixed down payment) are recorded under
+    "refused" and the search shrinks to the accepted run(s), reported as
+    "searched". Raises ValueError when the config prices more or fewer than two
+    options, when the key is not in the YAML and no bracket was given, or when
+    every point of the bracket is refused.
+    """
+    options = _priced_options(raw)
+    if len(options) != 2:
+        raise ValueError(
+            f"--break-even needs exactly two priced options, got {options or 'none'} — "
+            f"drop one section or answer the pairwise question in two runs"
+        )
+    a, b = options
+    base = _raw_value(raw, key)
+    if lo is None or hi is None:
+        field = key.rsplit(".", 1)[-1]
+        if base is None or field not in _MONEY_KEYS:
+            raise ValueError(
+                f"--break-even {key}: give the bracket as {key}=lo:hi "
+                f"({'the key is not in the YAML' if base is None else 'only money inputs get a default bracket'})"
+            )
+        lo, hi = MONEY_BRACKET[0] * float(base), MONEY_BRACKET[1] * float(base)
+    refused: List[Tuple[float, str]] = []
+
+    def totals_at(v: float) -> Optional[Tuple[float, float]]:
+        """The two totals at v, or None when the loader refuses that value."""
+        try:
+            det = compute_deterministic(load_config_dict(with_value(raw, key, v)))
+        except (ConfigValidationError, ValueError) as e:
+            refused.append((v, str(e).strip().splitlines()[-1].strip()))
+            return None
+        return getattr(det, a).total_pv, getattr(det, b).total_pv
+
+    core = solve_crossings(
+        key, (a, b), lo, hi, totals_at,
+        is_int=key in INT_KEYS, iterations=iterations, refused=refused,
+    )
+    out: Dict[str, Any] = {
+        "key": key, "options": [a, b], "bracket": [lo, hi], "searched": core["searched"],
+        "base_value": base, "tie_band_fraction": core["tie_band_fraction"],
+        "break_evens": core["break_evens"],
     }
     if "market_scenario" in raw:
         out["note"] = ("deterministic line: the market_scenario prior does not move this threshold "
@@ -276,8 +326,8 @@ def solve_break_even(
     if refused:
         out["refused"] = {"count": len(refused), "values": [r[0] for r in refused],
                           "reason": refused[0][1]}
-    if not break_evens:
-        out["cheaper_throughout"] = a if (first_gap or 0.0) < 0 else b
+    if "cheaper_throughout" in core:
+        out["cheaper_throughout"] = core["cheaper_throughout"]
     return out
 
 
@@ -303,10 +353,23 @@ def solve_break_even_across(
     return {"key": sweep_key, "rows": rows}
 
 
-def _band_sentence(key: str, be: Dict[str, Any], band: float) -> str:
+def band_sentence(
+    key: str, be: Dict[str, Any], band: float,
+    *,
+    fmt: Optional[Callable[[float], str]] = None,
+    label: Optional[Callable[[str], str]] = None,
+) -> str:
     """The threshold as the user should read it: band-first, the edges named.
     "rent is cheaper below 2,537; too close to call between 2,537 and 2,797;
-    house is cheaper above 2,797 (crossing 2,663; band = 5% of the cheaper PV)"."""
+    house is cheaper above 2,797 (crossing 2,663; band = 5% of the cheaper PV)".
+
+    ``fmt`` renders one value and ``label`` one option name; both default to the
+    CLI's own rendering. The story's act 6 passes "$2,663/mo" and "buying a
+    house" — one grammar, so the drawn crossing and the reported one read the
+    same, in each surface's own units.
+    """
+    show = fmt or (lambda v: _fmt_value(key, v))
+    name = label or (lambda option: option)
     left, right = be["tie_band"]
     if "last_value_below" in be:
         # Integer input (a step function): whole values on each side of the band.
@@ -315,16 +378,16 @@ def _band_sentence(key: str, be: Dict[str, Any], band: float) -> str:
         band_txt = (f"from {key}={left} to {key}={right}" if left is not None and right is not None
                     else f"between {up_to} and {from_}")
         return (
-            f"{be['cheaper_below']} is cheaper up to {up_to}; too close to call {band_txt}; "
-            f"{be['cheaper_above']} is cheaper from {from_} "
-            f"({be['cheaper_above']} first cheaper at {key}={be['value']}; band = {band:.0%} of the cheaper option's PV)"
+            f"{name(be['cheaper_below'])} is cheaper up to {up_to}; too close to call {band_txt}; "
+            f"{name(be['cheaper_above'])} is cheaper from {from_} "
+            f"({name(be['cheaper_above'])} first cheaper at {key}={be['value']}; band = {band:.0%} of the cheaper option's PV)"
         )
-    lo_txt = _fmt_value(key, left) if left is not None else "the bracket's low end"
-    hi_txt = _fmt_value(key, right) if right is not None else "the bracket's high end"
+    lo_txt = show(left) if left is not None else "the bracket's low end"
+    hi_txt = show(right) if right is not None else "the bracket's high end"
     return (
-        f"{be['cheaper_below']} is cheaper below {lo_txt}; too close to call between {lo_txt} and "
-        f"{hi_txt}; {be['cheaper_above']} is cheaper above {hi_txt} "
-        f"(crossing {_fmt_value(key, be['value'])}; band = {band:.0%} of the cheaper option's PV)"
+        f"{name(be['cheaper_below'])} is cheaper below {lo_txt}; too close to call between {lo_txt} and "
+        f"{hi_txt}; {name(be['cheaper_above'])} is cheaper above {hi_txt} "
+        f"(crossing {show(be['value'])}; band = {band:.0%} of the cheaper option's PV)"
     )
 
 
@@ -332,7 +395,7 @@ def _threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> 
     """The threshold in words, one sentence per crossing (or the no-crossing line)."""
     if not result_like["break_evens"]:
         return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
-    return [be.get("sentence") or _band_sentence(key, be, band) for be in result_like["break_evens"]]
+    return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
 def format_break_even(result: Dict[str, Any]) -> str:

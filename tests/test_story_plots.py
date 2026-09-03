@@ -44,6 +44,7 @@ from hde.story_plots import (
     market_line_sentence,
     plot_act6_the_market_line,
     render_decision_story,
+    solve_rent_threshold,
     sweep_price_totals,
     sweep_rent_totals,
     verdict_sentence,
@@ -477,27 +478,84 @@ class TestAct6MarketLine:
         spec = _spec()
         det = compute_deterministic(spec)
         sentence = market_line_sentence(spec, det)
-        assert ("$/mo" in sentence) or ("range" in sentence) or ("/mo" in sentence)
-        # B.6 round-trip: the sentence quotes the number the solver found
-        owned = cheapest_owned_key(spec, det)
-        xs = _sweep_axis(spec.rent.monthly_rent)
-        totals = sweep_rent_totals(spec, xs)
-        break_evens = find_break_evens(xs, totals["rent"], totals[owned])
+        assert "/mo" in sentence
+        # B.6 round-trip: the caption quotes the crossing the solver found
+        break_evens = solve_rent_threshold(spec, det)["break_evens"]
         if break_evens:
-            assert f"${break_evens[0]:,.0f}" in sentence
+            assert f"${break_evens[0]['value']:,.0f}/mo" in sentence
 
     def test_rent_on_the_break_even_line_is_not_a_directional_claim(self):
         from dataclasses import replace
         spec = _spec()
         det = compute_deterministic(spec)
-        owned = cheapest_owned_key(spec, det)
-        # find the break-even on a WIDE axis (the fixture's own ±35% window
-        # need not contain it), then quote exactly that rent
-        xs = list(np.linspace(300.0, 8_000.0, 771))
-        totals = sweep_rent_totals(spec, xs)
-        break_evens = find_break_evens(xs, totals["rent"], totals[owned])
-        assert break_evens, "fixture must have a break-even somewhere in $300–$8,000/mo"
-        on_line = replace(spec, rent=replace(spec.rent, monthly_rent=break_evens[0]))
+        # quote exactly the solved crossing: the tie band, never a direction
+        break_evens = solve_rent_threshold(spec, det)["break_evens"]
+        assert break_evens, "fixture must have a crossing in the searched bracket"
+        on_line = replace(spec, rent=replace(spec.rent, monthly_rent=break_evens[0]["value"]))
         sentence = market_line_sentence(on_line, compute_deterministic(on_line))
-        assert "sits on the break-even line" in sentence
+        assert "inside the tie band" in sentence
+        assert "too close to call between" in sentence
         assert "already wins" not in sentence and "stays cheaper" not in sentence
+
+
+# ---------------------------------------------------------------------------
+# Act 6 solves the crossing it draws (the engine's break-even solver, not the
+# sweep grid): a crossing outside the ±35% window is still named, and a
+# bracket with no crossing is named as the bracket that was searched.
+# ---------------------------------------------------------------------------
+
+class TestAct6SolvedCrossing:
+    def test_crossing_outside_the_window_is_solved_and_named(self):
+        # The fixture's crossing (~$991/mo) sits BELOW its ±35% window
+        # ($1,235–$2,565): the old caption said "across the whole swept range".
+        spec = _spec()
+        det = compute_deterministic(spec)
+        window = _sweep_axis(spec.rent.monthly_rent)
+        owned = cheapest_owned_key(spec, det)
+        totals = sweep_rent_totals(spec, window)
+        assert not find_break_evens(window, totals["rent"], totals[owned]), \
+            "fixture must have NO crossing inside the ±35% window"
+
+        threshold = solve_rent_threshold(spec, det)
+        assert threshold["break_evens"], "solver must find the crossing in its bracket"
+        crossing = threshold["break_evens"][0]["value"]
+        assert not (window[0] <= crossing <= window[-1])
+
+        sentence = market_line_sentence(spec, det)
+        assert f"${crossing:,.0f}/mo" in sentence          # the solved crossing
+        assert "too close to call between" in sentence      # the band-first spine
+        assert "swept range" not in sentence
+
+    def test_no_crossing_in_the_bracket_names_the_bracket(self):
+        spec = _spec()
+        spec.condo = None
+        spec.house = HouseParams(
+            initial_value=4_000_000, value_growth_rate=-0.02,
+            annual_maintenance_rate=0.012, all_cash=True,
+        )
+        det = compute_deterministic(spec)
+        threshold = solve_rent_threshold(spec, det)
+        assert not threshold["break_evens"]
+        lo, hi = threshold["bracket"]
+
+        sentence = market_line_sentence(spec, det)
+        assert "no crossing" in sentence.lower()
+        assert f"${lo:,.0f}/mo" in sentence and f"${hi:,.0f}/mo" in sentence
+        assert "renting" in sentence.lower()
+
+    def test_act6_renders_with_a_crossing_outside_the_window(self, tmp_path):
+        spec = _spec()
+        det = compute_deterministic(spec)
+        path = plot_act6_the_market_line(spec, det, "png", tmp_path)
+        assert path.stat().st_size > MIN_FIG_BYTES
+
+    def test_act6_renders_without_a_crossing(self, tmp_path):
+        spec = _spec()
+        spec.condo = None
+        spec.house = HouseParams(
+            initial_value=4_000_000, value_growth_rate=-0.02,
+            annual_maintenance_rate=0.012, all_cash=True,
+        )
+        det = compute_deterministic(spec)
+        path = plot_act6_the_market_line(spec, det, "png", tmp_path)
+        assert path.stat().st_size > MIN_FIG_BYTES

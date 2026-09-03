@@ -12,11 +12,15 @@ Acts:
                          or the honest single-growth line when none is loaded.
   5. Why              — the demographic signal itself (requires a prior).
   6. The market line  — the verdict's sensitivity to the quoted amounts:
-                         total cost vs monthly rent and vs purchase price,
-                         with the break-even (flip) points marked. The local
-                         quotes are single data points; this act shows how much
-                         room they have before the verdict flips. Needs rent +
-                         an owned option; skipped silently otherwise.
+                         total cost vs monthly rent and vs purchase price. The
+                         rent crossing is SOLVED by the engine's own break-even
+                         solver (same bracket, tie band and sentence as
+                         `--break-even rent.monthly_rent`) and then drawn, so a
+                         crossing outside the swept window is still marked and
+                         named. The local quotes are single data points; this
+                         act shows how much room they have before the verdict
+                         flips. Needs rent + an owned option; skipped silently
+                         otherwise.
 
 House rules enforced here:
   - One style helper; large readable labels; colorblind-safe palette.
@@ -31,7 +35,7 @@ were actually rendered (degraded inputs render fewer acts).
 
 from dataclasses import replace
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import matplotlib
@@ -47,7 +51,7 @@ from .deterministic import (
     _maintenance_rate_for_year,
     compute_deterministic,
 )
-from .anchors import ANCHORS
+from .break_even import MONEY_BRACKET, band_sentence, solve_crossings
 from .config import single_path_run
 from .market_scenario import (
     LoadedScenarioPrior,
@@ -83,13 +87,19 @@ OPTION_DISPLAY = {
 SCENARIO_COLORS = {"low": "#0072B2", "reference": "#555555", "high": "#D55E00"}
 
 # Act 6 sweep geometry: ±SWEEP_SPAN around the user's quoted amount,
-# SWEEP_POINTS per axis. Illustrative presentation choice (not an engine
-# default): wide enough to show the flip point when it exists, narrow enough
-# to stay on-scale around the user's actual market.
+# SWEEP_POINTS per axis. A DRAWING choice (not an engine default): the window
+# that shows how much room the user's own quote has. It no longer decides what
+# the act can find — the rent crossing is solved on the break-even bracket and
+# the rent axis widens to hold it — but it still sets the price panel's sweep
+# and stays drawn as the "room around your quote" band.
 SWEEP_SPAN = 0.35
 SWEEP_POINTS = 41
 
 _RC = {
+    # Captions carry literal dollar signs; two in one string ("no crossing
+    # between $475 and $7,600/mo") would otherwise be read as a mathtext span
+    # and rendered as italic maths with the dollars eaten.
+    "text.parse_math": False,
     "font.size": 13,
     "axes.titlesize": 17,
     "axes.titleweight": "bold",
@@ -413,65 +423,112 @@ def cheapest_owned_key(spec: ComparisonSpec, det: ComparisonDeterministicResult)
     return min(keys, key=lambda k: getattr(det, k).total_pv)
 
 
-def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResult) -> str:
+RENT_KEY = "rent.monthly_rent"
+
+
+def _rent_money(value: float) -> str:
+    """A monthly rent as act 6 writes it (the CLI writes bare numbers)."""
+    return f"${value:,.0f}/mo"
+
+
+def solve_rent_threshold(
+    spec: ComparisonSpec, det: ComparisonDeterministicResult,
+) -> Dict[str, Any]:
     """
-    Act 6 narrative, as words: where the user's rent sits against the
-    break-even rent vs the cheapest owned option.
+    The rent at which the verdict flips, SOLVED — the engine's own break-even
+    solver (``break_even.solve_crossings``) against the cheapest owned option,
+    on the same ¼×–4× bracket `--break-even rent.monthly_rent` uses for a money
+    input, with the same tie band. Act 6 draws and phrases the threshold the
+    CLI reports instead of reading a crossing off its own sweep grid, so a
+    crossing outside the ±SWEEP_SPAN window is found rather than reported
+    absent.
     """
     owned_key = cheapest_owned_key(spec, det)
-    user_rent = spec.rent.monthly_rent
-    xs = _sweep_axis(user_rent)
-    totals = sweep_rent_totals(spec, xs)
-    break_evens = find_break_evens(xs, totals["rent"], totals[owned_key])
-    lo, hi = xs[0], xs[-1]
-    # The same tie band act 1 uses (models.compute_verdict): inside it, a
-    # directional "already wins" contradicts the headline (dogfood round 2).
-    rent_total, owned_total = det.rent.total_pv, getattr(det, owned_key).total_pv
-    denom = abs(min(rent_total, owned_total)) or abs(max(rent_total, owned_total))
-    gap_frac = abs(rent_total - owned_total) / denom if denom else 0.0
-    inside_band = gap_frac < ANCHORS["verdict.tie_band"].value
-    if break_evens:
-        be = break_evens[0]
-        step = abs(xs[1] - xs[0]) if len(xs) > 1 else 0.0
-        if abs(user_rent - be) <= step:
-            # On the line (readiness plan B.6): within one grid step of the
-            # interpolated break-even, a directional claim is noise — say so.
-            return (
-                f"Your ${user_rent:,.0f}/mo sits on the break-even line "
-                f"(${be:,.0f}/mo, within the sweep's ~${step:,.0f}/mo resolution) "
-                f"— renting and buying a "
-                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} "
-                f"cost the same here."
-            )
-        if inside_band:
-            where = "below" if user_rent < be else "past"
-            return (
-                f"Your ${user_rent:,.0f}/mo is ${abs(be - user_rent):,.0f}/mo {where} the "
-                f"break-even line (${be:,.0f}/mo) — inside the tie band ({gap_frac:.1%} apart "
-                f"on total cost), so renting and buying a "
-                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} are too close to call here."
-            )
-        if user_rent < be:
-            return (
-                f"Renting stays cheaper than buying a "
-                f"{OPTION_DISPLAY[owned_key].lower().removeprefix('buying a ')} "
-                f"until rent passes ${be:,.0f}/mo — your ${user_rent:,.0f} is "
-                f"${be - user_rent:,.0f}/mo below that line."
-            )
-        return (
-            f"Rent is past the break-even: ${user_rent:,.0f}/mo quoted vs a "
-            f"${be:,.0f}/mo flip point — buying the cheaper option already wins "
-            f"at these rent levels."
+    user_rent = float(spec.rent.monthly_rent)
+    a, b = [k for k in ("condo", "house", "rent") if k in (owned_key, "rent")]
+
+    def totals_at(monthly: float) -> Tuple[float, float]:
+        swept = compute_deterministic(
+            replace(spec, rent=replace(spec.rent, monthly_rent=float(monthly)))
         )
-    if totals["rent"][-1] < totals[owned_key][-1]:
-        return (
-            f"Renting is cheaper across the whole swept range "
-            f"(${lo:,.0f}–${hi:,.0f}/mo) — the flip point sits above it."
-        )
-    return (
-        f"Buying the cheaper owned option wins across the whole swept rent "
-        f"range (${lo:,.0f}–${hi:,.0f}/mo) — renting does not catch up."
+        return getattr(swept, a).total_pv, getattr(swept, b).total_pv
+
+    return solve_crossings(
+        RENT_KEY, (a, b),
+        MONEY_BRACKET[0] * user_rent, MONEY_BRACKET[1] * user_rent,
+        totals_at,
     )
+
+
+def _rent_axis_span(
+    user_rent: float, threshold: Dict[str, Any],
+) -> Tuple[float, float]:
+    """
+    The left panel's x-range: the ±SWEEP_SPAN window around the quoted rent,
+    widened (with a margin) to hold every solved crossing and the tie-band
+    edges around it. The crossing is the headline — it is never off-panel —
+    and the window stays drawn inside it. Without a crossing the window is the
+    range; the caption names the searched bracket, which is wider.
+    """
+    lo, hi = user_rent * (1 - SWEEP_SPAN), user_rent * (1 + SWEEP_SPAN)
+    marks: List[float] = []
+    for be in threshold["break_evens"]:
+        marks.append(float(be["value"]))
+        marks.extend(float(e) for e in be["tie_band"] if e is not None)
+    if marks and (min(marks) < lo or max(marks) > hi):
+        margin = 0.06 * (max(hi, max(marks)) - min(lo, min(marks)))
+        lo, hi = min(lo, min(marks) - margin), max(hi, max(marks) + margin)
+    return max(lo, 1.0), hi
+
+
+def market_line_sentence(spec: ComparisonSpec, det: ComparisonDeterministicResult) -> str:
+    """
+    Act 6 narrative, as words: the solved crossing in the engine's own
+    band-first sentence (rendered in $/mo with the acts' option names), and
+    where the user's quoted rent sits against it. No crossing in the searched
+    bracket: the bracket is named, never implied by the drawn window.
+    """
+    user_rent = float(spec.rent.monthly_rent)
+    threshold = solve_rent_threshold(spec, det)
+    crossings = threshold["break_evens"]
+    bracket_lo, bracket_hi = threshold["bracket"]
+
+    if not crossings:
+        # Name the bracket that was searched — "no crossing" is only honest
+        # with the range it holds for.
+        cheaper = threshold["cheaper_throughout"]
+        return (
+            f"No crossing between {_rent_money(bracket_lo)} and "
+            f"{_rent_money(bracket_hi)} — the searched bracket, "
+            f"{MONEY_BRACKET[0]:g}× to {MONEY_BRACKET[1]:g}× your "
+            f"{_rent_money(user_rent)}: {OPTION_DISPLAY[cheaper].lower()} is "
+            f"cheaper at every rent in it."
+        )
+
+    # More than one crossing (the gap need not be monotone): the nearest one
+    # is the user's, and the count says the others exist.
+    be = min(crossings, key=lambda c: abs(c["value"] - user_rent))
+    left, right = be["tie_band"]
+    inside_band = (left is None or user_rent >= left) and (right is None or user_rent <= right)
+    if inside_band:
+        where = (
+            f"Your {_rent_money(user_rent)} sits inside the tie band around the "
+            f"crossing"
+        )
+    else:
+        distance = be["value"] - user_rent
+        where = (
+            f"Your {_rent_money(user_rent)} is ${abs(distance):,.0f}/mo "
+            f"{'below' if distance > 0 else 'above'} the crossing"
+        )
+    others = (
+        f" ({len(crossings)} crossings in the searched bracket; this is the nearest)"
+        if len(crossings) > 1 else ""
+    )
+    return f"{where}{others} — " + band_sentence(
+        RENT_KEY, be, threshold["tie_band_fraction"],
+        fmt=_rent_money, label=lambda option: OPTION_DISPLAY[option].lower(),
+    ) + "."
 
 
 # ---------------------------------------------------------------------------
@@ -861,10 +918,14 @@ def plot_act6_the_market_line(
     Left panel sweeps the monthly rent (owned lines flat, rent line rising);
     right panel sweeps the purchase price of the cheapest owned option with
     its down-payment fraction held constant (rent flat at the user's quote).
-    Break-even points — where the verdict flips — are annotated directly, and
-    the user's actual quotes are marked so the distance to the flip point is
-    readable at a glance. Deterministic sweep; the uncertainty act (3) carries
-    the spread.
+
+    The rent crossing is SOLVED, not read off the grid: ``solve_rent_threshold``
+    runs the engine's break-even solver on the ¼×–4× bracket, the rent axis
+    widens to hold the crossing when it falls outside the ±SWEEP_SPAN window
+    (which stays drawn), the tie band around it is shaded, and a bracket with
+    no crossing says so and names itself. The user's actual quotes are marked
+    so the distance to the flip point is readable at a glance. Deterministic;
+    the uncertainty act (3) carries the spread.
     """
     if spec.rent is None:
         raise ValueError("act 6 requires the rent option")
@@ -876,7 +937,10 @@ def plot_act6_the_market_line(
     user_price = getattr(spec, swept_key).initial_value
 
     plt.rcParams.update(_RC)
-    fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(15.5, 6.5), sharey=True)
+    # Each panel scales its own y-axis: a crossing far from the quoted rent
+    # stretches the left panel's range, and a shared axis would squash the
+    # price panel into a sliver of it.
+    fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(15.5, 6.5))
 
     def _plot_totals(ax: Axes, xs: List[float], totals: Dict[str, List[float]],
                      leader_key: str) -> None:
@@ -888,10 +952,26 @@ def plot_act6_the_market_line(
             )
 
     # --- Left panel: verdict vs the rent you'd pay ---
-    rent_xs = _sweep_axis(user_rent)
+    # Solve first, draw second: the axis is chosen to hold the crossing.
+    threshold = solve_rent_threshold(spec, det)
+    crossings = threshold["break_evens"]
+    axis_lo, axis_hi = _rent_axis_span(user_rent, threshold)
+    rent_xs = list(np.linspace(axis_lo, axis_hi, SWEEP_POINTS))
     rent_totals = sweep_rent_totals(spec, rent_xs)
     rent_leader = min(rent_totals, key=lambda k: rent_totals[k][len(rent_xs) // 2])
     _plot_totals(ax_l, rent_xs, rent_totals, rent_leader)
+
+    window_lo, window_hi = user_rent * (1 - SWEEP_SPAN), user_rent * (1 + SWEEP_SPAN)
+    if axis_lo < window_lo or axis_hi > window_hi:
+        # The axis widened to reach the crossing; the ±SWEEP_SPAN window still
+        # answers "how much room does MY quote have?", so keep it drawn.
+        ax_l.axvspan(window_lo, window_hi, color="#0072B2", alpha=0.06, zorder=0)
+        ax_l.annotate(
+            f"±{SWEEP_SPAN:.0%} around your rent",
+            xy=(window_lo, ax_l.get_ylim()[1]), xytext=(4, -24),
+            textcoords="offset points", fontsize=10, color="#666666",
+            ha="left", va="top",
+        )
     ax_l.axvline(user_rent, color="#666666", linestyle="--", linewidth=1.6)
     ax_l.annotate(
         f"your rent: ${user_rent:,.0f}/mo",
@@ -899,17 +979,35 @@ def plot_act6_the_market_line(
         textcoords="offset points", fontsize=11, color="#444444",
         ha="left", va="top",
     )
-    for owned_key in [k for k in ("condo", "house") if k in rent_totals]:
-        for be in find_break_evens(rent_xs, rent_totals["rent"], rent_totals[owned_key])[:2]:
-            # At the break-even both series are equal; interpolate either one.
-            y_at = float(np.interp(be, rent_xs, rent_totals["rent"]))
-            ax_l.plot(be, y_at, marker="o", color="#333333", markersize=7, zorder=5)
-            ax_l.annotate(
-                f"${be:,.0f}/mo — the verdict flips\n"
-                f"vs {OPTION_DISPLAY[owned_key].lower()}",
-                xy=(be, y_at), xytext=(6, 14), textcoords="offset points",
-                fontsize=11, color="#333333", fontweight="bold",
-            )
+    for be in crossings[:2]:
+        band_lo, band_hi = be["tie_band"]
+        # An edge the solver could not place (a second crossing, or the
+        # bracket's end) shades to the panel edge rather than being dropped.
+        ax_l.axvspan(axis_lo if band_lo is None else band_lo,
+                     axis_hi if band_hi is None else band_hi,
+                     color="#666666", alpha=0.15, zorder=0)
+        # The crossing is exact, so is its height: one more engine run at it.
+        y_at = sweep_rent_totals(spec, [be["value"]])["rent"][0]
+        ax_l.plot(be["value"], y_at, marker="o", color="#333333", markersize=7, zorder=5)
+        ax_l.annotate(
+            f"${be['value']:,.0f}/mo — the verdict flips\n"
+            f"vs {OPTION_DISPLAY[swept_key].lower()}\n"
+            f"(shaded: too close to call)",
+            xy=(be["value"], y_at), xytext=(6, 14), textcoords="offset points",
+            fontsize=11, color="#333333", fontweight="bold",
+        )
+    if not crossings:
+        bracket_lo, bracket_hi = threshold["bracket"]
+        ax_l.annotate(
+            f"no crossing between ${bracket_lo:,.0f} and ${bracket_hi:,.0f}/mo\n"
+            f"(the searched bracket, {MONEY_BRACKET[0]:g}×–{MONEY_BRACKET[1]:g}× your rent) —\n"
+            f"{OPTION_DISPLAY[threshold['cheaper_throughout']].lower()} is cheaper throughout",
+            xy=(0.03, 0.90), xycoords="axes fraction", ha="left", va="top",
+            fontsize=11, color="#333333", fontweight="bold",
+            # The note lands wherever the flat owned line happens to run.
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+                      edgecolor="#cccccc", alpha=0.9),
+        )
     ax_l.set_xlabel("Monthly rent")
     ax_l.set_title("vs the rent you'd pay", fontsize=14)
     ax_l.legend(loc="lower right", frameon=False)
@@ -949,15 +1047,16 @@ def plot_act6_the_market_line(
     ax_r.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: _money_k(x)))
 
     _set_money_axis(ax_l)
+    _set_money_axis(ax_r)
     fig.suptitle(
         "The market line: how much room before the verdict flips?",
-        fontsize=17, fontweight="bold", y=1.02,
+        fontsize=17, fontweight="bold", y=1.10,
     )
     fig.text(
-        0.0, 1.005,
-        f"total cost vs the quoted amounts · deterministic sweep ±"
-        f"{SWEEP_SPAN:.0%}, your other assumptions held fixed",
-        fontsize=12, color="#555555",
+        0.5, 1.02,
+        f"rent crossing solved on {MONEY_BRACKET[0]:g}×–{MONEY_BRACKET[1]:g}× your rent · "
+        f"price swept ±{SWEEP_SPAN:.0%} · deterministic, your other assumptions held fixed",
+        fontsize=12, color="#555555", ha="center",
     )
     fig.tight_layout()
     return _save(fig, out_dir, "act6_the_market_line", fmt)
