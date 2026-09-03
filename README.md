@@ -12,6 +12,7 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 - **Demographic priors via `ScenarioPrior`** — UN WPP → ISQ scenario → demand-model drift bands that tilt price growth and crash risk by geography
 - **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
 - **Insured mortgages priced, not recalled** — `mortgage_insurance: auto` picks the CMHC tier from the anchored premium schedule, finances the premium and pays the provincial tax on it in cash, re-deriving the tier at every `--sweep` / `--break-even` grid point
+- **A source class for every value you state** — an optional `sources:` block marks each input `user`, `assistant` or `anchor:<name>`, so the read-back can tell your numbers from the ones someone typed for you; when Monte Carlo decisiveness rests on uncertainty inputs you never stated, the engine says so and prices the deterministic alternative
 - **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
 - **Published property-tax and home-insurance figures by jurisdiction** — municipal rates for Laval, Montréal, Québec City and Toronto, and provincial home-insurance figures for QC and ON, each with the figure as its source quotes it and the base it is levied on (assessed value, which is not market value). The engine applies none of them: they are there so your own figure gets cited when it matches, and so a jurisdiction with no source says `source: none` (Gatineau, Ottawa) instead of guessing
 
@@ -54,7 +55,8 @@ Renders the full six-act story under the MTL_RMR demographic prior — the commi
 src/hde/             # Core engine: models, pv, deterministic, monte_carlo,
                      #   config (YAML → ComparisonSpec), market_scenario (prior loader),
                      #   reporting, story_plots (six acts), story_page (STORY.md), cli,
-                     #   anchors (provenance registry), serialization (--json core), input_schema
+                     #   anchors (provenance registry), sources (who stated each value),
+                     #   serialization (--json core), input_schema
 examples/            # Scenario YAMLs + ordered walkthrough (examples/README.md)
 tests/               # pytest suite (fixtures/ holds the golden ScenarioPrior)
 docs/

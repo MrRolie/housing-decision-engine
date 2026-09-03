@@ -103,3 +103,45 @@ simulation:
   num_sims: 5000
   random_seed: 42
   investment_return_vol: 0.10  # illustrative — annual vol of a 60/40 portfolio's gross return; matches the owned side's price_shock channel (like-for-like tails)
+
+# WHO stated each value (2026-09-03). No effect on any computation: it splits
+# the assumption echo into user-stated / assistant-typed / anchor-sourced lines
+# and lets the engine say when Monte Carlo decisiveness rests on numbers the
+# household never gave. Here "user" = this scenario's household (their horizon,
+# their listings, their rent, their capital), "assistant" = a calibration this
+# file chose for them (every line marked "illustrative" above), and "anchor:" =
+# a value taken exactly from the provenance registry (uv run hde --print-anchors).
+# A key the config does not set, an unknown class or an unknown anchor refuses.
+sources:
+  years: user
+  discount_rate: assistant
+  market_scenario.path: assistant
+  market_scenario.geography: user
+  condo.monthly_fee: user
+  condo.fee_escalation_rate: assistant
+  condo.initial_value: user
+  condo.value_growth_rate: assistant
+  condo.all_cash: user
+  condo.purchase_costs: assistant
+  condo.other_recurring_costs: assistant
+  condo.price_shock.annual_hazard: assistant
+  condo.price_shock.severity_mean: assistant   # 0.20 is a milder MTL view than the 0.25 TREB anchor — a choice, not the anchor
+  condo.price_shock.severity_vol: anchor:price_shock.severity_vol
+  condo.events: assistant
+  house.initial_value: user
+  house.value_growth_rate: assistant
+  house.annual_maintenance_rate: assistant
+  house.all_cash: user
+  house.purchase_costs: assistant
+  house.other_recurring_costs: assistant
+  house.price_shock.annual_hazard: assistant
+  house.price_shock.severity_mean: assistant
+  house.price_shock.severity_vol: anchor:price_shock.severity_vol
+  house.events: assistant
+  rent.monthly_rent: user
+  rent.rent_escalation_rate: assistant
+  rent.invested_down_payment: user
+  rent.investment_return_rate: assistant
+  simulation.num_sims: assistant
+  simulation.random_seed: assistant
+  simulation.investment_return_vol: assistant

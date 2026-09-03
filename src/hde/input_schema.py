@@ -53,6 +53,17 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                             "(Bill 99) — the engine applies 9% and names it. SK taxes the "
                             "premium but its rate is not anchored: state an explicit "
                             "schedule instead of being charged 0%"),
+        "sources": (False, "optional block; WHO stated each value — a mapping from a dotted "
+                           "config key the config actually sets (e.g. rent.monthly_rent, "
+                           "simulation.investment_return_vol, house.events for a whole list) to "
+                           "'user' (the user's own figure), 'assistant' (a value typed on their "
+                           "behalf) or 'anchor:<name>' (a name from --print-anchors). Affects NO "
+                           "computation: it splits the assumption echo into user-stated / "
+                           "assistant-typed / anchor-sourced / unattributed lines, and lets the "
+                           "engine warn when Monte Carlo decisiveness rests on uncertainty inputs "
+                           "the user never stated. Declare a key that the config does not set, a "
+                           "value outside those three forms, or an anchor name outside the "
+                           "registry, and the load refuses"),
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),

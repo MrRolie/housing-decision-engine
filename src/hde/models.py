@@ -14,6 +14,7 @@ import numpy.typing as npt
 from .anchors import ANCHORS
 from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
+from .sources import SourceEcho
 
 
 @dataclass
@@ -311,6 +312,11 @@ class ComparisonSpec:
     # loader; empty when the spec is constructed directly. Pure provenance —
     # reports serialize it, engines never read it.
     defaults_applied: List[str] = field(default_factory=list)
+    # --- Source classes (2026-09-03): who put each STATED value there — the
+    # user, the assistant answering for them, or a cited anchor. Populated by
+    # the config loader from the optional `sources:` block; empty when the spec
+    # is constructed directly. Pure provenance — engines never read it.
+    sources: Optional[SourceEcho] = None
 
 
 # ----- Result Dataclasses -----

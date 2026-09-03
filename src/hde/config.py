@@ -21,8 +21,10 @@ from .mortgage_insurance import (
 )
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
+from .sources import build_source_echo, unstated_uncertainty
 from .models import (
     ComparisonDeterministicResult,
+    compute_verdict,
     CondoParams,
     HouseParams,
     SimulationParams,
@@ -54,7 +56,7 @@ class ConfigValidationError(Exception):
 
 _TOP_LEVEL_KEYS = frozenset({
     "years", "discount_rate", "condo", "house", "rent", "income",
-    "simulation", "economic", "market_scenario", "province",
+    "simulation", "economic", "market_scenario", "province", "sources",
 })
 # Legacy/alias top-level names → the section that replaced them. There is no
 # top-level monte_carlo section (and never was in this engine); a config that
@@ -477,6 +479,49 @@ def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
                 f"39% GDS, not the 44% TDS [income.affordability_threshold]"
             )
     return warns
+
+
+def uncertainty_source_warnings(
+    spec: ComparisonSpec,
+    det: "ComparisonDeterministicResult",
+    verdict: Optional[Any] = None,
+) -> List[str]:
+    """
+    The decisiveness-provenance warning (2026-09-03): when Monte Carlo DECIDES
+    the verdict and the inputs that widen the distribution are not the user's,
+    say so — and price the alternative.
+
+    Fires only under the `mc_floor` rule; the deterministic tie band reads no
+    uncertainty input, so nothing rests on one there. Every uncertainty input
+    (the same set `single_path_run` reads) that is assistant-typed or
+    unattributed is named with its value, and the closing clause states what
+    the deterministic line alone says: in three of five dogfood answers the
+    decision was called "too close to call" on volatility the user never
+    stated, while the deterministic margin was decisive.
+    """
+    if verdict is None or verdict.rule != "mc_floor":
+        return []
+    unstated = unstated_uncertainty(spec.sources)
+    if not unstated:
+        return []
+    det_only = compute_verdict(
+        det, None, years=spec.simulation.years,
+        discount_rate=spec.simulation.discount_rate,
+    )
+    if det_only is None:
+        return []
+    band = ANCHORS["verdict.tie_band"].value
+    named = ", ".join(
+        f"{e.key}={e.formatted}" + (f" ({e.detail})" if e.detail else "")
+        + f" ({e.source})"
+        for e in unstated
+    )
+    return [
+        f"decisiveness rests on uncertainty inputs the user did not state: {named} — "
+        f"the deterministic line alone says {det_only.best} by "
+        f"${det_only.margin_pv:,.0f} ({det_only.margin_frac:.1%} of its PV — "
+        f"{'' if det_only.decisive else 'not '}decisive under the {band:.0%} band)"
+    ]
 
 
 def all_warnings(
@@ -1274,6 +1319,12 @@ def load_config(path: str) -> ComparisonSpec:
     spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
                           market_scenario=market_scenario)
     spec.defaults_applied = _defaults_applied(data)
+    # Source classes: who stated each value (2026-09-03). Parsed against the
+    # config it describes, so a key the config does not set is refused here
+    # rather than echoed as an attribution of nothing.
+    spec.sources, source_problems = build_source_echo(data)
+    if source_problems:
+        raise ConfigValidationError("\n".join(source_problems))
     warnings = validate_config(spec)
     if warnings:
         raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))
@@ -1311,6 +1362,12 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
     spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
                           market_scenario=market_scenario)
     spec.defaults_applied = _defaults_applied(data)
+    # Source classes: who stated each value (2026-09-03). Parsed against the
+    # config it describes, so a key the config does not set is refused here
+    # rather than echoed as an attribution of nothing.
+    spec.sources, source_problems = build_source_echo(data)
+    if source_problems:
+        raise ConfigValidationError("\n".join(source_problems))
     warnings = validate_config(spec)
     if warnings:
         raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))

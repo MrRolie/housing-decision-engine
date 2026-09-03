@@ -91,3 +91,38 @@ simulation:
 economic:
   mode: real
   inflation_rate: 0.0  # ignored in real mode — all rates above are real; setting >0 here triggers the coherence warning. Switch mode to nominal and set ≈0.021 (FP Canada 2026) to model inflation.
+
+# WHO stated each value (2026-09-03) — see the block in
+# examples/showcase_demographic_prior.yaml for the full convention. Affects no
+# computation; it splits the assumption echo by source class. `user` = this
+# scenario's household, `assistant` = a calibration this file chose for them,
+# `anchor:<name>` = exactly the registry's value (uv run hde --print-anchors).
+sources:
+  years: user
+  discount_rate: assistant
+  condo.monthly_fee: user
+  condo.fee_escalation_rate: assistant
+  condo.initial_value: user
+  condo.value_growth_rate: assistant
+  condo.all_cash: user
+  condo.purchase_costs: assistant
+  condo.other_recurring_costs: assistant
+  condo.events: assistant
+  house.initial_value: user
+  house.value_growth_rate: assistant
+  house.annual_maintenance_rate: assistant
+  house.all_cash: user
+  house.purchase_costs: assistant
+  house.other_recurring_costs: assistant
+  house.events: assistant
+  rent.monthly_rent: user
+  rent.rent_escalation_rate: assistant
+  rent.invested_down_payment: user
+  rent.investment_return_rate: anchor:rent.investment_return_rate
+  rent.events: assistant
+  simulation.num_sims: assistant
+  simulation.random_seed: assistant
+  simulation.house_maintenance_vol: assistant
+  simulation.condo_fee_vol: assistant
+  economic.mode: user
+  economic.inflation_rate: anchor:economic.inflation_rate

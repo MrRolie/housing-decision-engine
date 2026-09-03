@@ -99,6 +99,17 @@ assumption-bearing number carries a provenance stamp: either a citation or an ex
 `illustrative` marker. Each YAML opens with a `# --- Parameter provenance ---` block and
 carries inline `# <cite>` comments on the lines themselves.
 
+Comments are for the reader; the ENGINE reads the optional `sources:` block, which
+`showcase_demographic_prior.yaml` and `rent_vs_condo_vs_house.yaml` both carry. It maps
+each key the config sets to `user` (the household's own figure), `assistant` (a
+calibration typed on their behalf — every line marked `illustrative`) or
+`anchor:<name>` (exactly a registry value, `uv run hde --print-anchors`). The
+assumption echo then splits into `user-stated:` / `assistant-typed:` /
+`anchor-sourced:` / `unattributed:` lines, and a run whose decisiveness rests on
+uncertainty inputs the user never stated says so as a `[warning]`. Copy the block with
+the config and re-classify every line for your own scenario — a config with no block
+echoes one line saying the read-back cannot tell the two apart.
+
 **Convention:** values marked `illustrative` are calibration choices, not evidence —
 sensitivity-test them (edit the value and re-run; act 6 sweeps rent and purchase price for you).
 

@@ -1,0 +1,358 @@
+"""
+The source-class echo (2026-09-03): every value in a config carries who put it
+there — the user, the assistant answering for them, or a cited anchor — so the
+read-back can tell one from the other.
+
+Five dogfood reviews found the same failure: numbers the assistant typed on the
+user's behalf (a 0% rent escalation, `investment_return_vol: 0.10`, a 25-year
+amortization) left no trace — they are not `defaults applied` (the YAML DID
+state them) and fired no warning, and in three of five answers the Monte Carlo
+"too close to call" verdict rested entirely on assistant-typed volatility the
+user never saw. These tests pin the block, the four echo lines, the JSON shape
+and the one warning that names the unstated uncertainty.
+"""
+
+import copy
+
+import pytest
+
+from hde.config import (
+    ConfigValidationError,
+    load_config_dict,
+    single_path_run,
+    uncertainty_source_warnings,
+)
+from hde.deterministic import compute_deterministic
+from hde.models import compute_verdict
+from hde.monte_carlo import run_monte_carlo
+from hde.serialization import assumptions_to_dict, format_assumptions
+from hde.sources import attributable_keys, format_source_value, uncertainty_keys
+
+# Uncertainty ON (investment_return_vol), so Monte Carlo decides the verdict.
+BASE = {
+    "years": 10,
+    "discount_rate": 0.03,
+    "condo": {"initial_value": 300_000, "monthly_fee": 400, "all_cash": True},
+    "rent": {"monthly_rent": 1_500, "invested_down_payment": 300_000,
+             "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 200, "random_seed": 7, "investment_return_vol": 0.10},
+}
+
+ALL_KEYS = [
+    "years", "discount_rate",
+    "condo.initial_value", "condo.monthly_fee", "condo.all_cash",
+    "rent.monthly_rent", "rent.invested_down_payment", "rent.investment_return_rate",
+    "simulation.num_sims", "simulation.random_seed", "simulation.investment_return_vol",
+]
+
+
+def cfg(sources=None, **overrides):
+    data = copy.deepcopy(BASE)
+    for key, value in overrides.items():
+        data[key] = value
+    if sources is not None:
+        data["sources"] = sources
+    return data
+
+
+def lines(data):
+    return format_assumptions(load_config_dict(data))
+
+
+def line_starting(data, prefix):
+    hits = [ln for ln in lines(data) if ln.startswith(prefix)]
+    assert len(hits) == 1, (prefix, hits)
+    return hits[0]
+
+
+# ---------------------------------------------------------------------------
+# 1. The block: what it accepts and the three refusals
+# ---------------------------------------------------------------------------
+
+class TestBlockParsing:
+    def test_the_three_forms_parse(self):
+        spec = load_config_dict(cfg({
+            "rent.monthly_rent": "user",
+            "simulation.investment_return_vol": "assistant",
+            "rent.investment_return_rate": "anchor:rent.investment_return_rate",
+        }))
+        echo = spec.sources
+        assert echo.declared is True
+        assert echo.classify("rent.monthly_rent") == "user"
+        assert echo.classify("simulation.investment_return_vol") == "assistant"
+        assert echo.classify("rent.investment_return_rate") == "anchor"
+        assert echo.anchor_name("rent.investment_return_rate") == "rent.investment_return_rate"
+
+    def test_no_block_leaves_every_key_unattributed(self):
+        spec = load_config_dict(cfg())
+        assert spec.sources.declared is False
+        assert [e.key for e in spec.sources.entries] == ALL_KEYS
+        assert all(e.source == "unattributed" for e in spec.sources.entries)
+
+    def test_a_key_not_set_in_the_config_is_refused(self):
+        # condo is all-cash: mortgage_rate is a real schema key, but this config
+        # does not state it, so there is nothing to attribute.
+        with pytest.raises(ConfigValidationError, match="condo.mortgage_rate"):
+            load_config_dict(cfg({"condo.mortgage_rate": "user"}))
+
+    def test_a_typo_gets_a_did_you_mean(self):
+        with pytest.raises(ConfigValidationError, match=r"did you mean 'rent.monthly_rent'"):
+            load_config_dict(cfg({"rent.montly_rent": "user"}))
+
+    def test_a_container_key_is_not_attributable(self):
+        # 'condo' IS set — saying "not a value this config states" would be the
+        # untrue refusal; it is a block, and the refusal points at its leaves.
+        with pytest.raises(ConfigValidationError,
+                           match=r"'condo' is a block, not a value.*condo.initial_value"):
+            load_config_dict(cfg({"condo": "user"}))
+
+    def test_a_value_outside_the_three_forms_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="'user', 'assistant' or 'anchor:"):
+            load_config_dict(cfg({"rent.monthly_rent": "guess"}))
+
+    def test_a_non_string_value_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="'user', 'assistant' or 'anchor:"):
+            load_config_dict(cfg({"rent.monthly_rent": 3}))
+
+    def test_an_unknown_anchor_name_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="unknown anchor 'rent.no_such_rate'"):
+            load_config_dict(cfg({"rent.monthly_rent": "anchor:rent.no_such_rate"}))
+
+    def test_an_unknown_anchor_gets_a_did_you_mean(self):
+        with pytest.raises(ConfigValidationError, match=r"did you mean 'rent.investment_return_rate'"):
+            load_config_dict(cfg({"rent.monthly_rent": "anchor:rent.investment_return_rat"}))
+
+    def test_a_non_mapping_block_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="sources"):
+            load_config_dict(cfg(sources=["rent.monthly_rent"]))
+
+    def test_the_block_changes_no_number(self):
+        plain = compute_deterministic(load_config_dict(cfg()))
+        attributed = compute_deterministic(load_config_dict(cfg({
+            k: "user" for k in ALL_KEYS
+        })))
+        assert plain.condo.total_pv == attributed.condo.total_pv
+        assert plain.rent.total_pv == attributed.rent.total_pv
+
+
+# ---------------------------------------------------------------------------
+# 2. The echo lines
+# ---------------------------------------------------------------------------
+
+class TestAssumptionLines:
+    def test_no_block_says_so_in_one_line(self):
+        line = line_starting(cfg(), "sources:")
+        assert line == ("sources: none declared — the read-back cannot tell the "
+                        "user's numbers from the assistant's")
+        assert not any(ln.startswith(("user-stated:", "assistant-typed:",
+                                      "anchor-sourced:", "unattributed:"))
+                       for ln in lines(cfg()))
+
+    def test_user_stated_line(self):
+        data = cfg({"rent.monthly_rent": "user", "years": "user"})
+        line = line_starting(data, "user-stated:")
+        assert line == "user-stated: years=10, rent.monthly_rent=$1,500/mo"
+
+    def test_assistant_typed_line(self):
+        data = cfg({"simulation.investment_return_vol": "assistant"})
+        assert (line_starting(data, "assistant-typed:")
+                == "assistant-typed: simulation.investment_return_vol=10.0%")
+
+    def test_anchor_sourced_line_names_the_anchor(self):
+        data = cfg({"rent.investment_return_rate": "anchor:rent.investment_return_rate"})
+        assert (line_starting(data, "anchor-sourced:")
+                == "anchor-sourced: rent.investment_return_rate=3.0% "
+                   "[rent.investment_return_rate]")
+
+    def test_unattributed_line_lists_what_the_block_left_out(self):
+        data = cfg({"rent.monthly_rent": "user"})
+        line = line_starting(data, "unattributed:")
+        assert "rent.monthly_rent" not in line
+        assert "condo.monthly_fee=$400/mo" in line
+        assert "simulation.investment_return_vol=10.0%" in line
+
+    def test_a_fully_attributed_config_has_no_unattributed_line(self):
+        data = cfg({k: "user" for k in ALL_KEYS})
+        assert not any(ln.startswith("unattributed:") for ln in lines(data))
+        assert not any(ln.startswith("sources: none declared") for ln in lines(data))
+
+    def test_values_are_in_the_configs_own_units(self):
+        assert format_source_value("rent.monthly_rent", 1500) == "$1,500/mo"
+        assert format_source_value("condo.initial_value", 300000) == "$300,000"
+        assert format_source_value("simulation.investment_return_vol", 0.1) == "10.0%"
+        assert format_source_value("house.mortgage_term_years", 25) == "25"
+        assert format_source_value("simulation.num_sims", 10000) == "10,000"
+        assert format_source_value("condo.all_cash", True) == "true"
+        assert format_source_value("economic.mode", "real") == "'real'"
+        assert format_source_value("house.events", [{"name": "roof"}]) == "1 entry"
+        assert format_source_value("house.events", [{}, {}]) == "2 entries"
+
+
+# ---------------------------------------------------------------------------
+# 3. The JSON shape
+# ---------------------------------------------------------------------------
+
+class TestJsonShape:
+    def test_sources_block_shape(self):
+        spec = load_config_dict(cfg({
+            "rent.monthly_rent": "user",
+            "simulation.investment_return_vol": "assistant",
+            "rent.investment_return_rate": "anchor:rent.investment_return_rate",
+        }))
+        doc = assumptions_to_dict(spec)["sources"]
+        assert set(doc) == {"declared", "user", "assistant", "anchor", "unattributed"}
+        assert doc["declared"] is True
+        assert doc["user"] == [{"key": "rent.monthly_rent", "value": 1500,
+                                "formatted": "$1,500/mo"}]
+        assert doc["assistant"] == [{"key": "simulation.investment_return_vol",
+                                     "value": 0.10, "formatted": "10.0%"}]
+        assert doc["anchor"] == {"rent.investment_return_rate": "rent.investment_return_rate"}
+        assert {e["key"] for e in doc["unattributed"]} == set(ALL_KEYS) - {
+            "rent.monthly_rent", "simulation.investment_return_vol",
+            "rent.investment_return_rate"}
+        for entry in doc["unattributed"]:
+            assert set(entry) == {"key", "value", "formatted"}
+
+    def test_no_block_json(self):
+        doc = assumptions_to_dict(load_config_dict(cfg()))["sources"]
+        assert doc["declared"] is False
+        assert doc["user"] == [] and doc["assistant"] == [] and doc["anchor"] == {}
+        assert [e["key"] for e in doc["unattributed"]] == ALL_KEYS
+
+
+# ---------------------------------------------------------------------------
+# 4. The warning: decisiveness resting on numbers the user never stated
+# ---------------------------------------------------------------------------
+
+def run(data):
+    spec = load_config_dict(data)
+    det = compute_deterministic(spec)
+    mc = run_monte_carlo(spec)
+    verdict = compute_verdict(det, mc, years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate,
+                              single_path=single_path_run(spec))
+    return spec, det, verdict
+
+
+class TestUncertaintyWarning:
+    def test_fires_when_monte_carlo_decides_and_the_vol_is_unattributed(self):
+        spec, det, verdict = run(cfg())
+        assert verdict.rule == "mc_floor"
+        warns = uncertainty_source_warnings(spec, det, verdict)
+        assert len(warns) == 1
+        assert warns[0].startswith("decisiveness rests on uncertainty inputs the user did not state:")
+        assert "simulation.investment_return_vol=10.0% (unattributed)" in warns[0]
+
+    def test_names_an_assistant_typed_input_as_assistant(self):
+        spec, det, verdict = run(cfg({"simulation.investment_return_vol": "assistant"}))
+        warns = uncertainty_source_warnings(spec, det, verdict)
+        assert "simulation.investment_return_vol=10.0% (assistant)" in warns[0]
+
+    def test_carries_the_deterministic_line(self):
+        spec, det, verdict = run(cfg())
+        clause = uncertainty_source_warnings(spec, det, verdict)[0].split("—", 1)[1]
+        det_only = compute_verdict(det, None, years=spec.simulation.years,
+                                   discount_rate=spec.simulation.discount_rate)
+        assert f"the deterministic line alone says {det_only.best}" in clause
+        assert f"${det_only.margin_pv:,.0f}" in clause
+        assert ("decisive under the 5% band" in clause)
+        assert (("not decisive" in clause) is (not det_only.decisive))
+
+    def test_silent_when_every_uncertainty_input_is_user_stated(self):
+        spec, det, verdict = run(cfg({"simulation.investment_return_vol": "user"}))
+        assert uncertainty_source_warnings(spec, det, verdict) == []
+
+    def test_silent_when_every_key_is_user_stated(self):
+        spec, det, verdict = run(cfg({k: "user" for k in ALL_KEYS}))
+        assert uncertainty_source_warnings(spec, det, verdict) == []
+
+    def test_silent_without_monte_carlo(self):
+        spec = load_config_dict(cfg())
+        det = compute_deterministic(spec)
+        verdict = compute_verdict(det, None, years=spec.simulation.years,
+                                  discount_rate=spec.simulation.discount_rate)
+        assert verdict.rule == "margin_band"
+        assert uncertainty_source_warnings(spec, det, verdict) == []
+
+    def test_silent_on_a_single_path_run(self):
+        data = cfg()
+        data["simulation"].pop("investment_return_vol")
+        spec, det, verdict = run(data)
+        assert single_path_run(spec)
+        assert verdict.rule == "margin_band"
+        assert uncertainty_source_warnings(spec, det, verdict) == []
+
+    def test_names_price_shock_and_event_uncertainty_too(self):
+        data = cfg()
+        data["condo"]["price_shock"] = {"annual_hazard": 0.03, "severity_mean": 0.20,
+                                        "severity_vol": 0.10}
+        data["condo"]["events"] = [{"name": "assessment", "base_cost": 15000,
+                                    "expected_year": 5, "cost_vol": 0.2}]
+        data["sources"] = {"simulation.investment_return_vol": "user"}
+        spec, det, verdict = run(data)
+        text = uncertainty_source_warnings(spec, det, verdict)[0]
+        assert "condo.price_shock.annual_hazard=3.0% (unattributed)" in text
+        assert "condo.events=1 entry" in text
+        assert "cost_vol 20.0%" in text
+        assert "simulation.investment_return_vol" not in text
+
+
+# ---------------------------------------------------------------------------
+# 5. The uncertainty-input set is the engine's own definition
+# ---------------------------------------------------------------------------
+
+class TestUncertaintyKeysMirrorSinglePath:
+    """Whatever `uncertainty_keys` names must be exactly what stops
+    `single_path_run` — one definition of "widens the distribution", so the
+    warning can never miss an input the engine treats as uncertainty."""
+
+    RICH = {
+        "years": 10,
+        "condo": {
+            "initial_value": 300_000, "monthly_fee": 400, "all_cash": True,
+            "price_shock": {"annual_hazard": 0.03, "severity_mean": 0.2, "severity_vol": 0.1},
+            "events": [{"name": "assessment", "base_cost": 10_000,
+                        "expected_year": 5, "cost_vol": 0.2, "timing_std_years": 2}],
+        },
+        "house": {"initial_value": 400_000, "all_cash": True,
+                  "annual_maintenance_rate": 0.01},
+        "rent": {"monthly_rent": 1_500},
+        "income": {"annual_income": 90_000,
+                   "pay_drop_events": [{"year": 4, "magnitude": 0.8,
+                                        "magnitude_vol": 0.1, "year_jitter_std": 1}]},
+        "economic": {"inflation_vol": 0.01},
+        "simulation": {"num_sims": 50, "house_maintenance_vol": 0.2,
+                       "condo_fee_vol": 0.05, "other_cost_vol": 0.05,
+                       "rent_escalation_vol": 0.01, "investment_return_vol": 0.1},
+    }
+
+    def test_a_rich_config_is_not_single_path(self):
+        assert not single_path_run(load_config_dict(copy.deepcopy(self.RICH)))
+
+    def test_turning_off_every_named_key_makes_it_single_path(self):
+        data = copy.deepcopy(self.RICH)
+        named = uncertainty_keys(data)
+        assert named, "the detector named nothing in a config full of uncertainty"
+        for key in named:
+            parts = key.split(".")
+            block = data
+            for part in parts[:-1]:
+                block = block[part]
+            leaf = block[parts[-1]]
+            if isinstance(leaf, list):
+                block[parts[-1]] = []
+            else:
+                block[parts[-1]] = 0.0
+        assert single_path_run(load_config_dict(data)), named
+
+    def test_market_scenario_counts_as_uncertainty(self):
+        # The prior draws demographic drift per path — `single_path_run` says so,
+        # and the detector must agree.
+        data = copy.deepcopy(self.RICH)
+        data["market_scenario"] = {"path": "tests/fixtures/scenario_prior_golden.json",
+                                   "geography": "MTL_RMR"}
+        assert "market_scenario.path" in uncertainty_keys(data)
+
+    def test_every_named_key_is_attributable(self):
+        data = copy.deepcopy(self.RICH)
+        assert set(uncertainty_keys(data)) <= set(attributable_keys(data))

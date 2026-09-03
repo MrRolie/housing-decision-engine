@@ -27,6 +27,7 @@ from .models import (
     MonteCarloSummary,
     Verdict,
 )
+from .sources import source_echo_to_dict, source_lines
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +200,10 @@ def format_assumptions(
     defaulted key carries its anchor's short citation tag (anchors.py) so the
     consumer can ask "where did this number come from?" and get an answer;
     a reference-only anchor renders as `[ref: …]` because the source informs
-    the value without stating it.
+    the value without stating it. The block closes with the source-class echo
+    (sources.source_lines): who STATED the values the YAML does carry — or, with
+    no `sources:` block, the one line saying the read-back cannot tell the
+    user's numbers from the assistant's.
     """
     nominal = spec.economic.mode == "nominal"
     pi = spec.economic.inflation_rate
@@ -320,6 +324,10 @@ def format_assumptions(
             return f"{key}={echo_value(spec, key)}{tag}"
         joined = ", ".join(_echo_entry(key) for key in spec.defaults_applied)
         lines.append(f"defaults applied: {joined}")
+    # Source classes (2026-09-03): which STATED values are the user's own, which
+    # the assistant typed for them, which an anchor supplied — and, with no
+    # `sources:` block, the one line saying the echo cannot tell them apart.
+    lines.extend(source_lines(spec.sources))
     return lines
 
 
@@ -334,6 +342,9 @@ def assumptions_to_dict(
     `kind` per entry: the anchor's kind (`cited` / `reference` / `neutral` /
     `derivation`), `mode` for a mode flag, or `uncited` when a defaulted key has
     no registry entry at all (that last case is a defect the tests pin against).
+
+    `sources` is the other half of the provenance question — `defaults_applied`
+    says what the engine filled in, `sources` says who stated the rest.
     """
     entries: List[Dict[str, Any]] = []
     nominal = spec.economic.mode == "nominal"
@@ -378,6 +389,7 @@ def assumptions_to_dict(
         # Jurisdiction figures the USER supplied that a published source agrees
         # with (empty `matches` = the engine knows of no source for that line).
         "reference_matches": reference_matches(spec),
+        "sources": source_echo_to_dict(spec.sources),
         "demographic_prior": (
             {**prior.provenance_block(), "description": prior.describe(),
              "sources": prior.sources()}

@@ -21,6 +21,8 @@ src/hde/
 ├── market_scenario.py  # ScenarioPrior loader/validation, drift banding, time-anchor guard
 ├── mortgage_insurance.py # Insured-mortgage premium: schedule, tier, financed premium, cash tax
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
+├── sources.py          # Source classes: who stated each value (`sources:` block, the
+│                       #   echo lines, the unstated-uncertainty warning's input set)
 ├── input_schema.py     # The input contract as data (--print-schema)
 ├── serialization.py    # THE typed core for agent output (--json)
 ├── reporting.py        # Text report (+ legacy matplotlib figures)
@@ -339,4 +341,26 @@ anchor record — `uv run hde --print-anchors` lists the same records);
 `reference_matches` (each owned-option property-tax or home-insurance line, its
 implied rate, and every jurisdiction anchor whose published figure equals it —
 empty `matches` says plainly that no source agrees);
-`demographic_prior` (the loaded file's provenance and cited sources, or `null`).
+`demographic_prior` (the loaded file's provenance and cited sources, or `null`);
+and `sources` — the source-class echo.
+
+**Source classes (`sources`).** `defaults_applied` answers "what did the engine
+fill in?"; the source echo answers the other half, "who stated the rest?". The
+optional top-level `sources:` block maps a dotted key the config SETS
+(`rent.monthly_rent`, `simulation.investment_return_vol`, `house.events` for a
+whole list) to `user`, `assistant`, or `anchor:<registry name>`; it feeds four
+echo lines — `user-stated:`, `assistant-typed:`, `anchor-sourced: key=value
+[anchor name]`, and `unattributed:` for stated keys the block omits — and, with
+no block at all, the single line `sources: none declared — the read-back cannot
+tell the user's numbers from the assistant's`. Values are echoed in the config's
+own units ($/mo, dollars, percentages, counts, `N entries` for a list). It
+changes NO computation: a declared key the config does not set, a class outside
+those three forms, or an anchor name outside the registry all refuse at load.
+
+Its one consequence is the decisiveness-provenance `[warning]`: when the
+`mc_floor` rule decides the verdict, every uncertainty input that is
+`assistant`-typed or unattributed is named with its value, followed by what the
+deterministic line alone says and whether that margin clears the tie band.
+`sources.uncertainty_inputs` mirrors `config.single_path_run` — one definition
+of "widens the distribution", pinned by a test — so the warning cannot miss an
+input the engine treats as uncertainty.

@@ -10,7 +10,10 @@ import datetime
 import sys
 from pathlib import Path
 
-from .config import load_config, all_warnings, affordability_warnings, single_path_run, ConfigValidationError
+from .config import (
+    load_config, all_warnings, affordability_warnings, single_path_run,
+    uncertainty_source_warnings, ConfigValidationError,
+)
 from .deterministic import compute_deterministic
 from .market_scenario import ScenarioPriorError
 from .models import InputError, compute_verdict
@@ -188,6 +191,22 @@ def main() -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
+    # The decision, computed ONCE here: the source echo's warning needs it (a
+    # Monte-Carlo verdict resting on uncertainty inputs the user never stated),
+    # and --json serializes this same object. Before the sweeps, so the story
+    # package's `warnings=` list carries the warning too.
+    verdict = None
+    if det_result is not None:
+        verdict = compute_verdict(
+            det_result, mc_result,
+            years=spec.simulation.years,
+            discount_rate=spec.simulation.discount_rate,
+            single_path=single_path_run(spec),
+        )
+        for warning in uncertainty_source_warnings(spec, det_result, verdict):
+            warnings.append(warning)
+            print(f"[warning] {warning}", file=sys.stderr)
+
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []
     sweep_specs = []  # (key, values) pairs; --break-even re-solves at each
@@ -234,14 +253,6 @@ def main() -> int:
             assumptions_to_dict, det_to_dict, engine_version, mc_to_dict,
             verdict_to_dict,
         )
-        verdict = None
-        if det_result is not None:
-            verdict = compute_verdict(
-                det_result, mc_result,
-                years=spec.simulation.years,
-                discount_rate=spec.simulation.discount_rate,
-                single_path=single_path_run(spec),
-            )
         doc = {
             "engine_version": engine_version(),
             "warnings": warnings,
