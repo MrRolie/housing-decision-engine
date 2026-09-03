@@ -10,17 +10,20 @@ After the checklist in SKILL.md, the prose, in this order:
    × (1 − selling cost) − remaining mortgage; purchase and selling costs are
    sunk; the renter's capital is credited at its terminal value too" — never
    "closing costs come back as equity" or "renting has no equity".
-3. **The cash line** (gate 7) and the year-0 cash total the config commits,
-   with the distance to the 20% down-payment line when it is within one price
-   step.
+3. **The cash line** (gate 7) and the `financing:` line — the netting, the
+   loan-to-value, the distance to the 20% line; on a price threshold, quoted
+   at the crossing.
 4. **The two largest engine-set numbers** whenever an owned option is present
    — `selling_cost_rate` (5%, WOWA) and the discount rate — named with their
    source; every other uncertainty input and cost you proposed (a crash
    hazard, a vol, an illustrative insurance figure) named with its label
    ("illustrative, not cited") and what it sets ("this is what makes the
    p95").
-5. **The flip point or threshold**, in the user's units, at both ends of any
-   estimate it rests on; the sanity line.
+5. **The flip point or threshold** — the engine's `sentence` verbatim, at both
+   ends of any estimate it rests on, every bracket that ran in one clause
+   each; when a story exists, the story's headline and the answer agree (a
+   story at the placeholder seed is never linked as if it were the verdict at
+   the user's number — say which price it is at).
 6. **The affordability line** whenever an income was given, from the
    nominal-mode run when there is a mortgage: max ratio and breach years,
    quoting the engine's affordability warning (it names the 32% guideline,
@@ -29,9 +32,10 @@ After the checklist in SKILL.md, the prose, in this order:
    "exceeds" to "not a breach" without naming which threshold each refers
    to).
 7. **No source for:** every figure you had to estimate because neither the
-   user nor the anchor registry had it (a property-tax rate, an insurance
-   quote, a purchase-cost rate) — said plainly, never filled silently; this
-   line is what the engine anchors next.
+   user nor the anchor registry had it (an Ottawa tax rate, an insurance
+   quote, a purchase-cost rate, an Ontario land-transfer tax) — said plainly,
+   never filled silently; outside the anchored jurisdictions say the registry
+   does not cover them; this line is what the engine anchors next.
 8. **Not modelled:** each item with its direction of bias ("renewal risk —
    biases toward buying").
 9. **Where the story is** (`scenarios/<slug>/STORY.md` and the act PNGs) and

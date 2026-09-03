@@ -8,12 +8,19 @@ would I have to stay?". That is a threshold question, not a verdict question.
 ## Author the config
 
 Their known side is the config's number. The unknown side needs a placeholder
-so the engine can run (a `monthly_rent`, an `initial_value`): use their
-current rent or the middle of the price band, and say so in the answer.
-Everything property-specific they cannot know yet (tax, fees, maintenance,
-purchase costs) is an estimate you label. A price break-even holds
-`down_payment` fixed (a fixed cash pile), so the loan-to-value and any
-insurance premium change along the scan — say so.
+so the engine can run (a `monthly_rent`, an `initial_value`): for a rent
+threshold their current rent or a market rent you label; for a price threshold
+the price their cash supports at 20% down (cash × 5, less purchase costs) —
+and say so in the answer. Everything property-specific they cannot know yet
+(tax, fees, maintenance, purchase costs) is an estimate you label; check
+`--print-anchors` first. State the cash pile as `cash_available` (never a
+hand-computed `down_payment`): along a price scan the engine re-nets it at
+every point, so the loan-to-value, the 20% line and the premium tier move
+with the price — quote the `financing:` line at the crossing. Dollar-form
+inputs (a tax bill, `purchase_costs`, a premium) stay fixed along the scan:
+read back the engine's coherence `note` with its direction (sized for the
+seed, they favour buying above it and renting below), or scale them with the
+rate forms when the schema offers them.
 
 ## One command, several brackets
 
@@ -77,11 +84,12 @@ toss-up".
 ## The prior and the second band
 
 A `market_scenario` prior does NOT move `--break-even` (the header says so):
-its drift enters the Monte Carlo only. The prior run answers "does the verdict
-at their rent survive the demographic view?", never "where is the threshold?"
-— it is not the growth sweep and does not replace it. Quote the drift the
-assumptions line prints for the horizon's bands, so a flat prior is never
-introduced as "instead of flat prices".
+its drift enters the Monte Carlo only, so the prior run never replaces the
+growth sweep — both run. What the prior run gives is the verdict BAND (where
+the engine stops calling the user's side decisive), quoted beside the
+deterministic band as the next section says. Quote the drift the assumptions
+line prints for the horizon's bands, so a flat prior is never introduced as
+"instead of flat prices".
 
 With any uncertainty input on, the verdict's decisiveness is the Monte Carlo
 floor, so quote BOTH bands: the deterministic tie band from `--break-even`,
@@ -93,8 +101,9 @@ uv run hde scenarios/<slug>-prior.yaml \
   --sweep rent.monthly_rent=<band low − 10%>:<band high + 10%>:11 --json
 ```
 
-Read `decisive`, `prob_best` and `mc_mean_best` per row and quote where
-`decisive` flips ("under the Laval prior the Monte Carlo calls rent decisive
+Read `decisive`, `prob_best` and `mc_mean_best` per row (densify the grid
+around a flip before quoting an edge — a 45k-wide cell is not an edge) and
+quote where `decisive` flips ("under the Laval prior the Monte Carlo calls rent decisive
 up to $2,300 and buying from $2,800, neither between $2,400 and $2,700"). On a
 threshold question that band IS the answer when uncertainty is on: the
 deterministic edge is where the best-guess line crosses, the verdict band is

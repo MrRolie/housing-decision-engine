@@ -12,12 +12,10 @@ Elicit → **Missing information** gate (ONE message) → config in
 **assumptions read-back** → warnings → verdict with its decisiveness → story →
 the answer, via the checklist below. Everything runs as `uv run hde …` from
 the repo root (the directory with `pyproject.toml`); `scenarios/` is
-git-ignored, so the user's numbers are never committed. The engine validates,
-refuses unknown keys with did-you-mean, and renders the acts the config
-supports — anything expressible as a command is the engine's job, not a
-reasoning task. The repo's `CLAUDE.md` carries the honesty contract: every
-number in an answer names its source class (the user's, an engine anchor, or
-a labelled estimate with the direction it biases the verdict).
+git-ignored, so the user's numbers are never committed. Anything expressible
+as a command is the engine's job, not a reasoning task. The repo's `CLAUDE.md` carries the honesty contract: every
+number names its source class (the user's, an anchor, or a labelled estimate
+with the direction it biases the verdict).
 
 ## Which reference to open (read it before the step it names)
 
@@ -28,7 +26,7 @@ Reference files live beside this file under `.claude/skills/hde/references/`;
 |---|---|
 | The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at my rent, what price is worth buying?", "how long would I have to stay?" | `references/threshold-lane.md`, before authoring the config |
 | The user asks, in their own words, for a quick sense ("not a spreadsheet", "just roughly") — never on anticipation | `references/quick-sense.md`, before the intake message |
-| A user phrase you cannot place in the schema — a posted rate, "prices grow 3%", an insurance premium, "houses around $650k" | `references/translation.md` |
+| A user phrase you cannot place in the schema (a posted rate, "houses around $650k") | `references/translation.md` |
 | Writing the answer | the checklist below, then `references/answer-template.md` |
 | Why a gate exists, or the worked phrasing that satisfies it | `references/gates.md` |
 | A worked example of intake → run → read-back | `references/examples.md` |
@@ -42,18 +40,18 @@ language, folded into the ONE intake message, never as a quiz:
 
 1. **How long do you expect to stay, and how sure are you?** → `years`;
    "not sure" is a range → bracket it (gate 5).
-2. **How would you pay, and how much cash do you have for day one?** → all
-   cash, or down payment + quoted rate + amortization; the down payment AND
-   the purchase costs come out of that cash, so ask for the amount, not a
-   percentage; under 20% down means a mortgage-insurance premium
-   (`financed_purchase_costs`).
+2. **How would you pay, how much cash do you have for day one, and where
+   does that money sit today if you do not buy?** → all cash, or the cash pile
+   + quoted rate + amortization: ask for the AMOUNT, never a percentage — it
+   goes in as `cash_available` and the engine nets the purchase costs and
+   prints the loan-to-value; under 20% down means a mortgage-insurance premium
+   (`financed_purchase_costs`); the renter's alternative sets
+   `rent.investment_return_rate` (an index fund is not a savings account).
 3. **What does "best" mean to you — lowest expected cost, smallest worst case,
    or most wealth at the end?** → which figure is the answer (gate 6).
 4. **What is your income, and how stable is it?** → an `income` block turns on
    affordability ratios; a feared pay cut is a `pay_drop_events` entry.
 5. **Which of your numbers are you least sure of?** → those get a `--sweep`.
-   (Ask which numbers they would not bet on, never "which uncertainties
-   matter".)
 
 Then the schema: `uv run hde --print-schema` for the exact keys, the
 `required` flags and `required_if` (an owned option declares `all_cash: true`
@@ -69,41 +67,45 @@ they'd pay, the cash for day one; (2) fees, tax, insurance, closing costs;
 (3) income; (4) what "best" means and any view on prices — with every
 modelling default you will take stated in the same message as a labelled
 default they can overrule ("25-year amortization, the engine's 3% real
-return, 1% real rent escalation — 0% for a Québec continuing lease — and
-0.6% maintenance, unless you say otherwise").
+return, 1% real rent escalation, 0.6% maintenance — unless you say
+otherwise").
 
 1. **Which options the question implies** → which sections: "keep renting or
    buy a condo" = `rent` + `condo`; "house or condo" = `condo` + `house`; no
    dwelling named = ask which.
 2. **The user's own numbers — always theirs, never yours:** rent; price;
-   condo fees; how they'd pay and the cash they have for year 0 (down payment
-   + purchase costs must fit in it); how long; income; **owner costs** — the
-   property tax bill, home or unit insurance, purchase costs (welcome or
-   land-transfer tax, notary, inspection, insurance premium) — "give me the
-   number, a guess I'll label, or say skip and I'll report it as not
-   modelled"; offer to bracket rather than pick. Exception — purchase costs
-   when they named their cash: "no idea" must NOT become `purchase_costs: 0`;
-   take the illustrative ≈ 1.5% of price (labelled), deduct it from their cash
-   to get the real down payment, and recompute the loan-to-value band and the
-   premium.
+   condo fees; how they'd pay and the cash they have for year 0
+   (`cash_available`); how long; income; **owner costs** — the property tax
+   bill, home or unit insurance, purchase costs (welcome or land-transfer tax,
+   notary, inspection, insurance premium) — "give me the number, a guess I'll
+   label, or say skip and I'll report it as not modelled"; offer to bracket
+   rather than pick. Before guessing an owner cost run `uv run hde
+   --print-anchors`: property-tax rates on ASSESSED value for Laval, Montréal,
+   Québec City and Toronto (the read-back cites a match), explicit no-source
+   entries for Gatineau and Ottawa, household-average insurance floors for QC
+   and ON. Purchase costs when they named their cash: "no idea" must NOT
+   become `purchase_costs: 0` — take the illustrative ≈ 1.5% of price
+   (labelled) and let the engine net it from `cash_available`; never type a
+   hand-computed `down_payment`.
 3. **Modelling parameters — may be proposed, always labelled:** discount rate
    (engine default 3% real, cited), growth and escalation rates, maintenance
-   (NAHB routine ≈ 0.6% of value; the examples' 1.2% adds the 1%-rule
-   budgeting family — name which), the uncertainty vols. "I don't know" here
+   (0.6% NAHB routine or the examples' 1.2% — name which), the uncertainty
+   vols. "I don't know" here
    means take the default and name it; a RANGE is two configs (gate 5).
 4. **Units and terms:** decimals in the YAML; quoted rates are usually sticker
    figures — settle real vs nominal (gate 3).
 
 ONE follow-up is right when their answers open a new question (the arithmetic
 does not close, one number contradicts another); a config built on a
-contradiction is worse than a second message. Exception: a cash shortfall
-smaller than the insurance premium it would trigger, OR a clearance of the
-20% line smaller than the uncertainty in the purchase-cost estimate it rests
-on (the assumptions line's `financing:` entry prints the distance) → run BOTH
-branches ("uninsured at 20%" / "insured mortgage at the lower down payment
-with the premium in `financed_purchase_costs`") and read back both verdicts;
-a pro-buying clause that holds only on the uninsured branch says so. Run only once every item in (2) is known or explicitly waived;
-the engine refuses a missing required key with the exact message — show it.
+contradiction is worse than a second message — and it never asks the user to
+pick a method or a dwelling they said they do not care about. Exception: a
+cash shortfall smaller than the premium it would trigger, OR a 20% clearance
+smaller than the purchase-cost estimate it rests on (the `financing:` line
+prints the distance) → run BOTH branches (uninsured at 20% / insured with the
+premium in `financed_purchase_costs`) and quote both verdicts and thresholds;
+a pro-buying clause that holds only uninsured says so. Run only once every
+item in (2) is known or explicitly waived; the engine refuses a missing
+required key with the exact message — show it.
 
 ## Cases → dispatch
 
@@ -112,11 +114,11 @@ the engine refuses a missing required key with the exact message — show it.
 | Contract question (what inputs exist, what is required) | `uv run hde --print-schema` |
 | "Where did that number come from?" (source, URL, band, what it replaced) | `uv run hde --print-anchors` |
 | Quick estimate from a ready config | `uv run hde <config.yaml>` |
-| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` — on the config whose verdict the answer leads with (on a threshold question, the one at the user's actual rent with uncertainty on) |
+| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` — on the config whose verdict the answer leads with (a rent threshold: the one at the user's actual rent with uncertainty on; a price threshold: at the shop-under edge, never the placeholder seed — say which price the story is at) |
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point | `--sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
-| The threshold on ONE input — rent, price, years | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination needs a second config with the other value typed, then the same command); two priced options only; the lane is `references/threshold-lane.md` |
+| The threshold on ONE input — rent, price, years, growth | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30` · `--break-even condo.value_growth_rate=-0.02:0.05` (a comparison with a prior on quotes the prior's drift against this band — it is what settles a coin flip); beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination needs a second config with the other value typed, then the same command); two priced options only; the lane is `references/threshold-lane.md` |
 | Agent-consumable result | append `--json` |
-| Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml` (prior at `tests/fixtures/scenario_prior_golden.json`); Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns; a financed buyer keeps `mode: nominal` |
+| Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml`; Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns; a financed buyer keeps `mode: nominal` |
 
 ## Judgment gates (one rule each; the why and the worked phrasing are in `references/gates.md`)
 
@@ -127,19 +129,19 @@ the engine refuses a missing required key with the exact message — show it.
    back before the verdict, each with its source; `[neutral, uncited]` means
    no evidence. No price-growth view in a shipped-prior geography → run the
    prior as a second config (it is the growth view), leave the base growth at
-   0, and quote the drift the assumptions line prints for the horizon's bands.
+   0, and quote the drift the assumptions line prints for the horizon's bands
+   — in ADDITION to the growth sweep, never instead of it.
 3. **A mortgage means `mode: nominal`** (`inflation_rate: 0.021`,
    `mortgage_rate` = the quote's effective annual, `discount_rate` omitted);
    growth, escalation and return inputs stay REAL and the engine composes
-   inflation. `mode: real` for all-cash and rent-only. Colloquial growth and
-   return rates are sticker figures — convert to real, (1 + quoted)/(1 + 2.1%)
-   − 1; the mortgage's only conversion is compounding.
+   inflation. `mode: real` for all-cash and rent-only. Quoted growth and
+   return rates are sticker figures — convert to real (`references/translation.md`).
 4. **Like-for-like renter capital.** `rent.invested_down_payment` = the
    buyer's total year-0 cash (down payment + purchase costs; all cash = price
    + purchase costs). Never call that capital a drag or an advantage — only
    the engine's capital-spread warning says which way it cuts.
-5. **A range is two configs.** Bracket with `--sweep` in the user's units
-   (their value, zero in their units, one step below); the flip is the
+5. **A range is two configs.** Bracket with `--sweep` in the user's units;
+   the flip is the
    engine's `flip:` line — densify, never interpolate; the tie band is the
    points where `decisive` is false; under "expected cost" with uncertainty
    on, the flip is the `mean flip:` line, never mixed with the deterministic
@@ -148,9 +150,8 @@ the engine refuses a missing required key with the exact message — show it.
    with uncertainty on the Monte Carlo MEAN (`verdict.mc_mean_best`; say so
    when it disagrees); worst case → vols and `price_shock` on, labelled, read
    p95 and `prob_*_cheapest`; `investment_return_vol` is the ANNUAL volatility
-   of the renter's return (0.10 ≈ 60/40) — both sides carry uncertainty or
-   neither; every vol at 0 means nothing was modelled; most wealth →
-   `total_pv`.
+   of the renter's return — both sides carry uncertainty or neither; most
+   wealth → `total_pv`.
 7. **Cash line — cash is not PV.** Quote the report's `Year-1 cash` line
    beside the $/month PV equivalent: outlay, principal, unrecoverable cash,
    and the `expected appreciation` term with the engine's label (at 0% real
@@ -169,29 +170,43 @@ answer; the cap of any lane ranks what stays and never drops an item:
       bias (a dropped warning fails the answer at any length)
 - [ ] `defaults applied:` — with an owned option, the two largest engine-set
       numbers, `selling_cost_rate` (5%, WOWA) and the discount rate, named
-      with their source; every other figure you proposed, with its label —
-      including the values you TYPED on the user's behalf (a 0% rent
-      escalation, the 25-year amortization, a maintenance rate): a typed value
-      leaves `defaults applied` and its warning never fires, so your intake
-      message is the only record — carry each into the answer yourself, under
-      "No source for" or the defaults clause, never under "Not modelled" (it
-      was modelled, at your number)
+      with their source; then every value you TYPED on the user's behalf (a 0%
+      rent escalation, the 25-year amortization, a maintenance rate, every
+      vol): declare each config key in a `sources:` block as `user`,
+      `assistant` or `anchor:<name>` and quote the read-back's
+      `assistant-typed:` line — a typed value leaves `defaults applied` and its
+      warning never fires, so that line is the user's only record; never under
+      "Not modelled" (it was modelled, at your number)
 - [ ] `decisiveness:` — the verdict's rule with its threshold (the 5% tie
       band or the 65% floor), its margin or probability, and `mc_mean_best`
-      when it disagrees
-- [ ] the flip point or threshold, in the user's units, quoted at both ends
-      of any estimate it rests on
+      when it disagrees; when Monte Carlo decides, every uncertainty input
+      with its source class and what the deterministic line says without them
+      (the engine's warning carries both)
+- [ ] the flip point or threshold — the engine's band-first `sentence` copied
+      verbatim (the `--break-even` entry or the act-6 caption), never a bare
+      crossing; at both ends of any estimate it rests on; every bracket that
+      ran gets its clause (growth, maintenance, escalation, years) — a run you
+      drop is a claim you hide; on an insured branch both thresholds side by
+      side; on a price scan the engine's coherence `note` (dollar inputs held
+      fixed while the price moves) with its direction
 - [ ] `Year-1 cash` — both sides in $/month, principal, unrecoverable, beside
       the verdict's `≈ $/month equivalent` (PV, not cash); the assumptions
-      line's `financing:` entry (year-0 cash the config commits, loan-to-value,
-      the distance to the 20% line) — a clearance smaller than the estimate it
+      line's `financing:` entry (the netting `cash − purchase_costs = down
+      payment`, loan-to-value, the distance to the 20% line) — a clearance smaller than the estimate it
       rests on is the same cliff as a shortfall: the insured branch was run
       (Missing information) and its verdict is quoted beside this one
 - [ ] `Affordability` — max ratio and breach years, quoting the affordability
       `[warning]` line verbatim (it names the 32% guideline, the 39% GDS cap
-      and the 44% TDS cap)
+      and the 44% TDS cap) — and at the threshold: the break-even's
+      affordability at the crossing and band edges, or the sweep rows'
+      `affordability`; a range you call cheaper is checked against the same
+      lines
 - [ ] **No source for:** every figure you estimated because neither the user
-      nor the anchor registry had it
+      nor the anchor registry had it; outside the anchored jurisdictions say so
+      (the registry is Québec-shaped plus Toronto — an Ontario land-transfer
+      tax or an Ottawa rate has no anchor); a placeholder above ~10% of year-1
+      cash (a tax bill, insurance) gets a two-point `--sweep`, both points
+      quoted with the direction
 - [ ] **Not modelled:** every item with a direction
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 
@@ -203,8 +218,7 @@ lane's cap overrides the template's.
 ## Verification
 
 - Exit 0 AND every `[warning]` line surfaced with the verdict (warnings are
-  judgment gates in disguise): owner costs not modelled, zero appreciation,
-  affordability breaches, a mortgage run in real mode, one-sided uncertainty.
+  judgment gates in disguise).
 - `--story`: STORY.md's headline states the verdict in words; the acts the
   config supports — acts 1 and 2 always; act 4 ("Home-value futures") with an
   owned option; act 3 ("The uncertainty") only when at least one
@@ -222,5 +236,4 @@ Config errors: show the exact message; values are the user's decision. A
 prior or geography refusal lists the valid geographies — choose with the
 user. Trade execution, money movement, market timing: out of scope; the engine
 computes present-value comparisons only. Deeper guidance: `examples/README.md`
-walks every config template; `docs/reference/ARCHITECTURE.md` carries the
-figure glossary (what every printed number is and how it is computed).
+(every config template); `docs/reference/ARCHITECTURE.md` (the figure glossary).

@@ -1,8 +1,26 @@
 # Quick-sense lane ("not a spreadsheet")
 
-This lane fires only on the user's own words ("quick sense", "not a
-spreadsheet", "just roughly") — never because the question looks casual. A
-user who did not ask for brevity gets the full answer and the story.
+This lane fires on the user's own words asking for brevity — "quick sense",
+"not a spreadsheet", "just roughly", "the gist", "short answer", "don't write
+me an essay", "just tell me" — never because the question looks casual. A user
+who did not ask for brevity gets the full answer and the story.
+
+## No listing, no plan — the shape
+
+A user with no property in view and no plan to buy within about two years
+("is it dumb to just rent forever?") is not asking for a price threshold. Ask
+at most three things in one message (rent, income, savings — and whether a
+listing or a date exists), then answer in under 120 words: two sentences of
+verdict at their numbers ("renting at $1,600 with $35k saved is not throwing
+money away: over 5 years it is the cheaper choice and over 10 it is too close
+to call") plus ONE conditional naming what would change it ("buying starts to
+compete only if you would stay 10+ years in a place under roughly $330k — a
+band the engine solved with placeholders for tax, insurance and the insurance
+premium, held fixed while the price moved, so it is generous to buying").
+State plainly that every property-specific figure is a placeholder and offer
+the full pass for a real listing. The dollar band is deferred, and said to be
+deferred, never dropped silently. The follow-up round never asks the user to
+choose a method or a dwelling they said they do not care about.
 
 Ask only six things in one message — dwelling, rent, price, how they'd pay,
 horizon, income — plus the labelled defaults you will take ("25-year
