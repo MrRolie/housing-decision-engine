@@ -47,12 +47,20 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                              "present; use 0 for a fee-free unit"),
         "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
         "down_payment": (False, "$ paid at purchase; with mortgage_rate + mortgage_term_years "
-                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "cash_available": (False, "$ of cash you bring to the closing table — an ALTERNATIVE to "
+                                   "down_payment, never both: the engine nets purchase_costs out of "
+                                   "it and the remainder IS the down payment (financed_purchase_costs "
+                                   "ride the loan and are NOT netted). Use it when you know the pile "
+                                   "rather than the split; the assumptions line shows the netting, and "
+                                   "the loan-to-value and the 20% mortgage-insurance test read the "
+                                   "computed figure. Like-for-like rent.invested_down_payment = this "
+                                   "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
                                 "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026); "
                                        "dominates short horizons"),
@@ -90,12 +98,20 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                             "NAHB 2019 AHS routine ≈ 0.6% of value/yr"),
         "maintenance_curve": (False, "list of {year, rate} overrides"),
         "down_payment": (False, "$ paid at purchase; with mortgage_rate + mortgage_term_years "
-                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                               "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "cash_available": (False, "$ of cash you bring to the closing table — an ALTERNATIVE to "
+                                   "down_payment, never both: the engine nets purchase_costs out of "
+                                   "it and the remainder IS the down payment (financed_purchase_costs "
+                                   "ride the loan and are NOT netted). Use it when you know the pile "
+                                   "rather than the split; the assumptions line shows the netting, and "
+                                   "the loan-to-value and the 20% mortgage-insurance test read the "
+                                   "computed figure. Like-for-like rent.invested_down_payment = this "
+                                   "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
                                 "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment + mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026)"),
         "purchase_costs": (False, "$ paid at purchase (year 0, undiscounted, outside the "

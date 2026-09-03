@@ -218,7 +218,7 @@ shape the user should read. A `market_scenario` prior never moves it (`note`). R
 ### Assumptions block — `assumptions`
 
 `mode`, `years`, `discount_rate`; `lines` (the text echo, including the
-`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the year-0 cash the config commits, and any `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
+`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — and drops the year-0 cash clause, which is the pile — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
 `demographic_prior` (the loaded file's provenance and cited sources, or `null`).

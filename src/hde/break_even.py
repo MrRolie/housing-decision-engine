@@ -26,7 +26,7 @@ from .sweep import INT_KEYS, _fmt_value, with_value
 
 # Inputs whose default bracket is [¼·base, 4·base]; anything else needs lo:hi.
 _MONEY_KEYS = frozenset({
-    "monthly_rent", "initial_value", "down_payment", "purchase_costs",
+    "monthly_rent", "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "monthly_fee", "invested_down_payment", "annual_income",
 })
 

@@ -146,15 +146,30 @@ def format_assumptions(
             continue
         # Loan-to-value and the distance to the 20% insurance line (round-6
         # dogfood: every persona computed it by hand and landed $250 over).
+        # With cash_available the head shows the netting itself (round-7: the
+        # subtraction was done FOR the user, off-engine and unchecked) — the
+        # down payment still appears exactly once, as its result.
         down_frac = opt.down_payment / opt.initial_value if opt.initial_value else 0.0
         year0 = opt.down_payment + opt.purchase_costs
         line = 0.20 * opt.initial_value
         gap = opt.down_payment - line
         side = "above" if gap >= 0 else "below"
+        # The loan the engine actually finances, financed_purchase_costs and all.
+        loan = opt.initial_value - opt.down_payment + opt.financed_purchase_costs
+        ltv = loan / opt.initial_value if opt.initial_value else 0.0
+        if opt.cash_available is not None:
+            head = (f"cash available ${opt.cash_available:,.0f} − purchase_costs "
+                    f"${opt.purchase_costs:,.0f} = down payment ${opt.down_payment:,.0f}")
+            # year-0 cash IS the pile in this form; naming it twice is noise.
+            year0_clause = ""
+        else:
+            head = f"down payment ${opt.down_payment:,.0f}"
+            year0_clause = f" · year-0 cash ${year0:,.0f} (down payment + purchase_costs)"
         lines.append(
-            f"{name} financing: down payment ${opt.down_payment:,.0f} = {down_frac:.2%} of price, "
+            f"{name} financing: {head} = {down_frac:.2%} of price, "
             f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
-            f"year-0 cash ${year0:,.0f} (down payment + purchase_costs)"
+            f"loan-to-value {ltv:.2%}"
+            + year0_clause
             + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
                if opt.financed_purchase_costs else "")
         )

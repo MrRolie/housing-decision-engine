@@ -132,6 +132,11 @@ class CondoParams:
     # neutral, uncited — no defensible universal real appreciation default (anchors.py)
     value_growth_rate: float = ANCHORS["condo.value_growth_rate"].value
     down_payment: Optional[float] = None
+    # The cash pile the buyer brings, when stated instead of down_payment: the
+    # loader nets purchase_costs out of it into down_payment (financed costs
+    # ride the loan and are never netted). Kept on the params so the assumption
+    # echo can show the netting rather than only its result.
+    cash_available: Optional[float] = None
     mortgage_rate: Optional[float] = None
     mortgage_term_years: Optional[int] = None
     all_cash: bool = False
@@ -166,6 +171,11 @@ class HouseParams:
     maintenance_curve: List[Tuple[int, float]] = field(default_factory=list)  # (year, rate) pairs sorted by year
     # --- S4a capital structure (net-wealth model) ---
     down_payment: Optional[float] = None
+    # The cash pile the buyer brings, when stated instead of down_payment: the
+    # loader nets purchase_costs out of it into down_payment (financed costs
+    # ride the loan and are never netted). Kept on the params so the assumption
+    # echo can show the netting rather than only its result.
+    cash_available: Optional[float] = None
     mortgage_rate: Optional[float] = None
     mortgage_term_years: Optional[int] = None
     all_cash: bool = False

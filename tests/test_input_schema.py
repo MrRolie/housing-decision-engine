@@ -89,7 +89,11 @@ class TestRequiredFlagsAreTrue:
             load_config_dict(cfg)
 
     def test_capital_structure_is_conditional_not_required(self):
-        assert {k for _, k in CONDITIONAL} == {"all_cash", "down_payment", "mortgage_rate", "mortgage_term_years"}
+        # cash_available is the second way to satisfy the mortgage block (it
+        # nets purchase_costs into the down payment), so it carries the same
+        # conditional sentence rather than a bare note.
+        assert {k for _, k in CONDITIONAL} == {"all_cash", "down_payment", "cash_available",
+                                               "mortgage_rate", "mortgage_term_years"}
         for section, key in CONDITIONAL:
             assert not SCHEMA[section][key]["required"], (section, key)
             assert "declare all_cash: true OR" in SCHEMA[section][key]["required_if"]

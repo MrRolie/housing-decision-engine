@@ -6,7 +6,7 @@ them into the appropriate dataclass instances.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import difflib
 
 import yaml
@@ -60,12 +60,12 @@ _CONDO_KEYS = frozenset({
     "monthly_fee", "fee_escalation_rate", "events", "other_recurring_costs",
     "reserve_contribution_rate", "reserve_initial_balance",
     "reserve_growth_rate", "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate",
-    "down_payment", "mortgage_rate", "mortgage_term_years", "all_cash",
+    "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock",
 })
 _HOUSE_KEYS = frozenset({
     "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate", "annual_maintenance_rate", "events",
-    "other_recurring_costs", "maintenance_curve", "down_payment",
+    "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
     "price_shock",
 })
@@ -644,6 +644,31 @@ def _parse_market_scenario(data: Dict[str, Any]) -> MarketScenario:
     return MarketScenario(path=data["path"], geography=data["geography"])
 
 
+def _net_down_payment(
+    data: Dict[str, Any], name: str,
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    The owned option's down payment and the cash pile it was netted from.
+
+    `cash_available` is the figure a buyer actually knows — the pile they bring
+    to the closing table. The down payment is what survives paying the CASH
+    purchase costs out of it; `financed_purchase_costs` ride the loan and are
+    never netted. Stating both inputs is ambiguous intent, so it is refused by
+    name rather than resolved by precedence (2026-09-03: every threshold serve
+    hand-computed this subtraction for the user, unchecked).
+    """
+    down = None if "down_payment" not in data else float(data["down_payment"])
+    cash = None if "cash_available" not in data else float(data["cash_available"])
+    if down is not None and cash is not None:
+        raise ConfigValidationError(
+            f"{name}: down_payment and cash_available are both set — declare exactly one "
+            f"(cash_available states the pile you bring and the engine nets purchase_costs "
+            f"out of it; down_payment states the resulting figure directly)")
+    if cash is not None:
+        down = cash - float(data.get("purchase_costs", 0.0))
+    return down, cash
+
+
 def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
     """
     Parse condo parameters from YAML data.
@@ -661,6 +686,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         for c in condo_data.get("other_recurring_costs", [])
     ]
     
+    down_payment, cash_available = _net_down_payment(condo_data, "condo")
+
     return CondoParams(
         monthly_fee=float(condo_data["monthly_fee"]),
         fee_escalation_rate=float(condo_data.get("fee_escalation_rate", ANCHORS["condo.fee_escalation_rate"].value)),
@@ -671,7 +698,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         reserve_growth_rate=float(condo_data.get("reserve_growth_rate", 0.0)),
         initial_value=float(condo_data.get("initial_value", 0.0)),
         value_growth_rate=float(condo_data.get("value_growth_rate", ANCHORS["condo.value_growth_rate"].value)),
-        down_payment=(None if "down_payment" not in condo_data else float(condo_data["down_payment"])),
+        down_payment=down_payment,
+        cash_available=cash_available,
         mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
@@ -711,6 +739,8 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         maintenance_curve.append((int(point["year"]), float(point["rate"])))
     maintenance_curve.sort(key=lambda x: x[0])
     
+    down_payment, cash_available = _net_down_payment(house_data, "house")
+
     return HouseParams(
         initial_value=float(house_data["initial_value"]),
         value_growth_rate=float(house_data.get("value_growth_rate", ANCHORS["house.value_growth_rate"].value)),
@@ -718,7 +748,8 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         events=events,
         other_recurring_costs=other_costs,
         maintenance_curve=maintenance_curve,
-        down_payment=(None if "down_payment" not in house_data else float(house_data["down_payment"])),
+        down_payment=down_payment,
+        cash_available=cash_available,
         mortgage_rate=(None if "mortgage_rate" not in house_data else float(house_data["mortgage_rate"])),
         mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
@@ -810,6 +841,23 @@ def _parse_economic(econ_data: Optional[Dict[str, Any]]) -> EconomicParams:
         inflation_rate=float(econ_data.get("inflation_rate", ANCHORS["economic.inflation_rate"].value)),
         inflation_vol=float(econ_data.get("inflation_vol", 0.0)),
     )
+
+
+def _capital_bound_message(name: str, opt: Any) -> str:
+    """The down-payment bound refusal, in the inputs the user actually typed.
+
+    A config stating `cash_available` never typed a down payment, so quoting
+    one back at it is a dead end; the refusal names the pile, the costs netted
+    out of it and the figure that resulted.
+    """
+    if opt.cash_available is None:
+        return f"{name}: down_payment must be in [0, initial_value]"
+    if opt.down_payment < 0:
+        return (f"{name}: cash_available ${opt.cash_available:,.0f} does not cover "
+                f"purchase_costs ${opt.purchase_costs:,.0f} — nothing is left for a down payment")
+    return (f"{name}: cash_available ${opt.cash_available:,.0f} less purchase_costs "
+            f"${opt.purchase_costs:,.0f} nets a down payment of ${opt.down_payment:,.0f}, "
+            f"above the price ${opt.initial_value:,.0f}")
 
 
 def validate_config(spec: ComparisonSpec) -> List[str]:
@@ -964,6 +1012,7 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             warnings.append(f"{name}: initial_value must be > 0 in the net-wealth model")
         mortgage_fields_set = (
             opt.down_payment is not None
+            or opt.cash_available is not None
             or opt.mortgage_rate is not None
             or opt.mortgage_term_years is not None
         )
@@ -973,14 +1022,15 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             if mortgage_fields_set:
                 warnings.append(
                     f"{name}: all_cash: true is set together with mortgage fields "
-                    f"(down_payment / mortgage_rate / mortgage_term_years); declare exactly one")
+                    f"(down_payment / cash_available / mortgage_rate / mortgage_term_years); "
+                    f"declare exactly one")
         else:
             if opt.down_payment is None or opt.mortgage_rate is None or opt.mortgage_term_years is None:
                 warnings.append(
                     f"{name}: declare all_cash: true OR a mortgage block "
-                    f"(down_payment + mortgage_rate + mortgage_term_years)")
+                    f"(down_payment OR cash_available, plus mortgage_rate + mortgage_term_years)")
             elif not (0 <= opt.down_payment <= opt.initial_value):
-                warnings.append(f"{name}: down_payment must be in [0, initial_value]")
+                warnings.append(_capital_bound_message(name, opt))
             elif opt.mortgage_rate < 0 or opt.mortgage_term_years <= 0:
                 warnings.append(f"{name}: mortgage_rate >= 0 and mortgage_term_years > 0 required")
         if not (0 <= opt.selling_cost_rate < 1):
