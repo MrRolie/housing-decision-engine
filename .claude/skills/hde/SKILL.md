@@ -44,8 +44,10 @@ language, folded into the ONE intake message, never as a quiz:
    does that money sit today if you do not buy?** → all cash, or the cash pile
    + quoted rate + amortization: ask for the AMOUNT, never a percentage — it
    goes in as `cash_available` and the engine nets the purchase costs and
-   prints the loan-to-value; under 20% down means a mortgage-insurance premium
-   (`financed_purchase_costs`); the renter's alternative sets
+   prints the loan-to-value; under 20% down means a mortgage-insurance premium:
+   set `mortgage_insurance: auto` and ask which province, never compute it
+   yourself (`financed_purchase_costs` only carries one the user was quoted);
+   the renter's alternative sets
    `rent.investment_return_rate` (an index fund is not a savings account).
 3. **What does "best" mean to you — lowest expected cost, smallest worst case,
    or most wealth at the end?** → which figure is the answer (gate 6).
@@ -101,8 +103,8 @@ contradiction is worse than a second message — and it never asks the user to
 pick a method or a dwelling they said they do not care about. Exception: a
 cash shortfall smaller than the premium it would trigger, OR a 20% clearance
 smaller than the purchase-cost estimate it rests on (the `financing:` line
-prints the distance) → run BOTH branches (uninsured at 20% / insured with the
-premium in `financed_purchase_costs`) and quote both verdicts and thresholds;
+prints the distance) → run BOTH branches (uninsured at 20% / insured with
+`mortgage_insurance: auto`) and quote both verdicts and thresholds;
 a pro-buying clause that holds only uninsured says so. Run only once every
 item in (2) is known or explicitly waived; the engine refuses a missing
 required key with the exact message — show it.

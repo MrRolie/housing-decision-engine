@@ -259,6 +259,36 @@ echo warns when `house.annual_maintenance_rate` is omitted). Rows marked "—" a
 structural or presentation defaults with no evidentiary content. This table is pinned
 to the registry by `tests/test_docs.py`.
 
+### Mortgage-insurance premium schedule
+
+Not a per-field default but a table, so it sits outside the summary above; the
+bands are registry entries all the same (`mortgage_insurance.*` in
+`--print-anchors`), and `mortgage_insurance.anchored_schedule` builds the
+schedule from them. CMHC, "Mortgage Loan Insurance: Premium Information for
+Homeowner and Small Rental Loans", retrieved 2026-09-03; Sagen publishes the
+identical bands and rates.
+
+| Loan-to-value | Premium on the loan |
+|---|---|
+| up to and including 65% | 0.60% |
+| 65.01% to 75% | 1.70% |
+| 75.01% to 80% | 2.40% |
+| 80.01% to 85% | 2.80% |
+| 85.01% to 90% | 3.10% |
+| 90.01% to 95% | 4.00% |
+
+Maximum loan-to-value 95% (refused above it, quoting both figures). An
+amortization beyond 25 years adds a 0.20% surcharge. A purchase at or under 80%
+is conventional and pays nothing, whatever the sub-80% rows say — those belong
+to CMHC's other products. The 4.50% non-traditional-down-payment row is recorded
+in the anchor's source text but has no config key.
+
+Tax on the premium, paid in CASH at closing (CMHC: it "can't be added to the
+loan amount"): Québec 9% (Revenu Québec; rising to 9.975% for premiums paid
+after 2026-12-31 under Bill 99 — re-read the anchor for a 2027 closing),
+Ontario 8% (Ontario RST), `other` 0%. Saskatchewan taxes the premium but its
+rate is not anchored: state an explicit schedule rather than be charged 0%.
+
 ## Validation Rules
 
 The config loader validates:

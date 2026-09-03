@@ -82,6 +82,20 @@ CONSUMED_ELSEWHERE = {
     "market_scenario.drift_sigma_divisor": "market_scenario.DRIFT_SIGMA_DIVISOR",
     "verdict.prob_floor": "models.compute_verdict",
     "verdict.tie_band": "models.compute_verdict",
+    # The premium schedule is a table, not a per-field default: it has no
+    # dataclass default to pin, and mortgage_insurance.anchored_schedule builds
+    # the schedule FROM these entries (tests/test_mortgage_insurance.py pins the
+    # rates against the quoted table).
+    "mortgage_insurance.premium_rate.ltv_65": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_rate.ltv_65_75": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_rate.ltv_75_80": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_rate.ltv_80_85": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_rate.ltv_85_90": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_rate.ltv_90_95": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.max_ltv": "mortgage_insurance.PremiumSchedule.max_ltv",
+    "mortgage_insurance.amortization_surcharge": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_tax_rate.qc": "mortgage_insurance.anchored_schedule",
+    "mortgage_insurance.premium_tax_rate.on": "mortgage_insurance.anchored_schedule",
 }
 
 

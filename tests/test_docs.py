@@ -37,9 +37,11 @@ def test_defaults_table_matches_the_registry():
     # need not). Jurisdiction reference tables are excluded because they are not
     # defaults at all — the engine never applies one, so a "Defaults Summary" row
     # for them would claim the opposite of the truth. Their own doc surface is
-    # `hde --print-anchors`, pinned in test_reference_anchors.
+    # `hde --print-anchors`, pinned in test_reference_anchors. The mortgage-insurance
+    # schedule is a table of bands, not a per-field default, documented under its
+    # own heading in CONFIG_SCHEMAS.md.
     expected = {n for n in ANCHORS
-                if not n.startswith(("verdict.", "market_scenario."))
+                if not n.startswith(("verdict.", "market_scenario.", "mortgage_insurance."))
                 and not is_reference(n)
                 and n != "economic.inflation_rate.nominal_planning"}
     assert expected <= seen, sorted(expected - seen)

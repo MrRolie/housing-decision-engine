@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from .anchors import ANCHORS, _ECHO_ALIASES, Anchor, match_reference, short_cite
 from .market_scenario import LoadedScenarioPrior
+from .mortgage_insurance import financing_clause
 from .models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
@@ -248,23 +249,40 @@ def format_assumptions(
         gap = opt.down_payment - line
         side = "above" if gap >= 0 else "below"
         # The loan the engine actually finances, financed_purchase_costs and all.
+        # With a derived insurance premium the headline loan-to-value is the one
+        # the TIER was chosen on — before the premium is rolled in; the insured
+        # clause then states the premium and the loan it produces (round 7).
+        record = opt.mortgage_insurance
         loan = opt.initial_value - opt.down_payment + opt.financed_purchase_costs
         ltv = loan / opt.initial_value if opt.initial_value else 0.0
+        if record is not None:
+            ltv = record.ltv
+        # The premium tax is cash at closing, so it is a term of BOTH cash
+        # sentences: it comes out of the pile before the down payment, and it is
+        # part of the year-0 cash a stated down payment commits. An equation
+        # that silently omits it does not balance (round 7).
+        taxed = record is not None and record.premium_tax
         if opt.cash_available is not None:
+            tax_term = f" − premium tax ${record.premium_tax:,.0f}" if taxed else ""
             head = (f"cash available ${opt.cash_available:,.0f} − purchase_costs "
-                    f"${opt.purchase_costs:,.0f} = down payment ${opt.down_payment:,.0f}")
+                    f"${opt.purchase_costs:,.0f}{tax_term} = down payment "
+                    f"${opt.down_payment:,.0f}")
             # year-0 cash IS the pile in this form; naming it twice is noise.
             year0_clause = ""
         else:
             head = f"down payment ${opt.down_payment:,.0f}"
-            year0_clause = f" · year-0 cash ${year0:,.0f} (down payment + purchase_costs)"
+            parts = "down payment + purchase_costs" + (" + premium tax" if taxed else "")
+            year0_clause = f" · year-0 cash ${year0:,.0f} ({parts})"
         lines.append(
             f"{name} financing: {head} = {down_frac:.2%} of price, "
             f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
             f"loan-to-value {ltv:.2%}"
             + year0_clause
+            # The premium the engine derived is never echoed as a typed
+            # financed_purchase_cost: the user did not type it.
             + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
-               if opt.financed_purchase_costs else "")
+               if opt.financed_purchase_costs and record is None else "")
+            + (f" · {financing_clause(record)}" if record is not None else "")
         )
     matches = reference_matches(spec)
     for option_name in ("condo", "house"):

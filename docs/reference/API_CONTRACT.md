@@ -28,7 +28,7 @@ uv run hde <config.yaml> --json
 |---|---|
 | `engine_version` | installed package version — the defaults registry changes verdicts across versions |
 | `warnings` | coherence warnings + time-anchor violations, the same list the CLI prints to stderr |
-| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), `reference_matches` (one entry per owned-option `other_recurring_costs` line naming a property tax or home-insurance premium: `option`, `cost_name`, `annual_amount`, `family`, `implied_rate` — the amount as a fraction of `initial_value`, `null` for insurance — and `matches`, the full anchor record of every jurisdiction whose published figure equals it; an empty `matches` means no source agrees, which is reported rather than hidden), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null` |
+| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`; with `mortgage_insurance` active it adds an `insured:` clause — the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — and the loan-to-value it quotes is the tier basis, before the premium), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), `reference_matches` (one entry per owned-option `other_recurring_costs` line naming a property tax or home-insurance premium: `option`, `cost_name`, `annual_amount`, `family`, `implied_rate` — the amount as a fraction of `initial_value`, `null` for insurance — and `matches`, the full anchor record of every jurisdiction whose published figure equals it; an empty `matches` means no source agrees, which is reported rather than hidden `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null` |
 | `verdict` | `best`, `runner_up`, `margin_pv`, `margin_frac`, `monthly_equivalent`, `prob_best`, `decisive`, `rule`, `reason`, `mc_mean_best` — see the figure glossary |
 | `deterministic` | per option `total_pv` + `breakdown` (keys in the glossary) + `cash_year1` / `principal_year1` / `appreciation_year1` (undiscounted year-1 cash, principal repaid and expected appreciation — the cash view beside the PV view), `affordability`, `market_scenario` |
 | `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
@@ -72,6 +72,14 @@ Each carries two fields the defaults do not need:
 records what was tried, and `short_cite` reads `source: none`. It is the only
 kind permitted to carry no figure, and no other kind may serialize a null
 `value`.
+
+The `mortgage_insurance.*` entries are the premium schedule the engine applies:
+one entry per CMHC loan-to-value band (`premium_rate.ltv_80_85` = 2.80% and so
+on), `max_ltv` (95%), `amortization_surcharge` (0.20% beyond 25 years) and the
+provincial taxes on the premium (`premium_tax_rate.qc` 9%, `premium_tax_rate.on`
+8%). Saskatchewan taxes the premium too but its rate is NOT anchored, so a
+`province: SK` config is refused with a pointer to an explicit schedule rather
+than charged 0%.
 
 ## Library
 

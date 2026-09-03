@@ -12,6 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .anchors import ANCHORS
+from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
 
 
@@ -144,6 +145,15 @@ class CondoParams:
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
     financed_purchase_costs: float = 0.0  # $ rolled into the loan principal (e.g. a financed mortgage-insurance premium)
+    # --- Round 7: the insured mortgage, derived in the loader ---
+    # `province` picks the provincial tax on the premium (stated on the option,
+    # else the top-level default — an Ottawa-vs-Gatineau config prices two
+    # provinces at once). `mortgage_insurance` is what the loader derived: the
+    # tier, the financed premium and the cash tax. When it is present the
+    # premium is already inside financed_purchase_costs, so nothing downstream
+    # changes; the assumption echo reads the record to say what was computed.
+    province: Optional[str] = None
+    mortgage_insurance: Optional[MortgageInsurance] = None
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -183,6 +193,15 @@ class HouseParams:
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
     purchase_costs: float = 0.0  # $ paid at purchase (closing costs), year 0, outside the affordability ratio
     financed_purchase_costs: float = 0.0  # $ rolled into the loan principal (e.g. a financed mortgage-insurance premium)
+    # --- Round 7: the insured mortgage, derived in the loader ---
+    # `province` picks the provincial tax on the premium (stated on the option,
+    # else the top-level default — an Ottawa-vs-Gatineau config prices two
+    # provinces at once). `mortgage_insurance` is what the loader derived: the
+    # tier, the financed premium and the cash tax. When it is present the
+    # premium is already inside financed_purchase_costs, so nothing downstream
+    # changes; the assumption echo reads the record to say what was computed.
+    province: Optional[str] = None
+    mortgage_insurance: Optional[MortgageInsurance] = None
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 

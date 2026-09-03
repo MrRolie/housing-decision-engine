@@ -878,6 +878,169 @@ ANCHORS: Dict[str, Anchor] = {
 
 
 # ---------------------------------------------------------------------------
+# Mortgage loan insurance (round 7, 2026-09-03).
+#
+# An insured mortgage's premium is a step function of loan-to-value, and every
+# insured serve of round 7 computed it by hand from recalled tiers — twice with
+# the wrong provincial tax rate, once held fixed while a price scan walked the
+# loan-to-value across a band edge. The schedule below was FETCHED on
+# 2026-09-03 and every band is registered as its own anchor, so
+# `hde --print-anchors` shows the table the engine actually applies and
+# src/hde/mortgage_insurance.py builds the schedule FROM this registry (one
+# edit, not two).
+#
+# CMHC, Sagen and Canada Guaranty publish the identical standard schedule;
+# CMHC is the anchor and Sagen was fetched the same day as a cross-check.
+# ---------------------------------------------------------------------------
+
+_CMHC_URL = (
+    "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/"
+    "mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/"
+    "premium-information-for-homeowner-and-small-rental-loans"
+)
+_CMHC_SOURCE = (
+    "CMHC, 'Mortgage Loan Insurance: Premium Information for Homeowner and Small "
+    "Rental Loans' — premium schedule for homeowner loans, quoted as published: "
+    "up to and including 65% 0.60%; 65.01% to 75% 1.70%; 75.01% to 80% 2.40%; "
+    "80.01% to 85% 2.80%; 85.01% to 90% 3.10%; 90.01% to 95% 4.00%; "
+    "90.01% to 95% with a non-traditional down payment 4.50%. Maximum "
+    "loan-to-value 95%. 'An amortization period beyond 25 years is subject to a "
+    "0.20% surcharge.' 'Some provinces (currently Ontario, Quebec and "
+    "Saskatchewan) apply provincial sales tax to the mortgage loan insurance "
+    "premium. The sales tax can't be added to the loan amount.' Sagen's premium "
+    "rates chart (https://www.sagen.ca/tools-and-resources/premium-rates-chart/, "
+    "retrieved 2026-09-03) carries the identical bands and rates."
+)
+# (registry key suffix, upper LTV edge inclusive, rate, the band as published)
+_CMHC_PREMIUM_BANDS = (
+    ("ltv_65", 0.65, 0.0060, "up to and including 65%"),
+    ("ltv_65_75", 0.75, 0.0170, "65.01% to 75%"),
+    ("ltv_75_80", 0.80, 0.0240, "75.01% to 80%"),
+    ("ltv_80_85", 0.85, 0.0280, "80.01% to 85%"),
+    ("ltv_85_90", 0.90, 0.0310, "85.01% to 90%"),
+    ("ltv_90_95", 0.95, 0.0400, "90.01% to 95%"),
+)
+
+ANCHORS.update({
+    f"mortgage_insurance.premium_rate.{key}": Anchor(
+        name=f"mortgage_insurance.premium_rate.{key}",
+        value=rate,
+        as_of="2026",
+        source=_CMHC_SOURCE,
+        url=_CMHC_URL,
+        rationale=(
+            f"The published premium on the total loan amount for the {label} "
+            f"loan-to-value band. A quoted schedule rate, not an estimate: it has "
+            f"no plausible range, so its band is the rate itself. The premium is "
+            f"charged on the loan BEFORE it is added to the loan, and a purchase "
+            f"at or under 80% loan-to-value is conventional and pays no premium "
+            f"at all — the sub-80% rows belong to CMHC's other products and are "
+            f"registered for provenance, not applied to a purchase."
+        ),
+        band=(rate, rate),
+        short_cite="CMHC 2026 premium schedule",
+        retrieved_on="2026-09-03",
+    )
+    for key, _edge, rate, label in _CMHC_PREMIUM_BANDS
+})
+
+ANCHORS["mortgage_insurance.max_ltv"] = Anchor(
+    name="mortgage_insurance.max_ltv",
+    value=0.95,
+    as_of="2026",
+    source=_CMHC_SOURCE,
+    url=_CMHC_URL,
+    rationale=(
+        "'Maximum Loan-to-Value Ratio: 95%' — the schedule's top band ends there "
+        "and no insured purchase is written above it, so a config asking for more "
+        "is refused with both figures rather than silently priced at the top "
+        "tier. Measured on the loan BEFORE the financed premium: the premium "
+        "itself pushes the balance past 95% of price by design."
+    ),
+    band=(0.95, 0.95),
+    short_cite="CMHC 2026 premium schedule",
+    retrieved_on="2026-09-03",
+)
+
+ANCHORS["mortgage_insurance.amortization_surcharge"] = Anchor(
+    name="mortgage_insurance.amortization_surcharge",
+    value=0.0020,
+    as_of="2026",
+    source=_CMHC_SOURCE,
+    url=_CMHC_URL,
+    rationale=(
+        "'An amortization period beyond 25 years is subject to a 0.20% "
+        "surcharge.' Added to the band rate whenever mortgage_term_years — the "
+        "amortization — exceeds 25. Sagen states the same surcharge for "
+        "amortizations up to 30 years; beyond 30 the engine still applies only "
+        "this surcharge, and insured eligibility beyond 30 years is not modelled."
+    ),
+    band=(0.0020, 0.0020),
+    short_cite="CMHC 2026 premium schedule",
+    retrieved_on="2026-09-03",
+)
+
+ANCHORS["mortgage_insurance.premium_tax_rate.qc"] = Anchor(
+    name="mortgage_insurance.premium_tax_rate.qc",
+    value=0.09,
+    as_of="2026",
+    source=(
+        "Revenu Québec, 'Harmonization of the insurance premiums tax rate with "
+        "the QST rate' (tax news, 2026-04-09), enacting Bill 99 (2025, c. 27): "
+        "the tax on insurance premiums rises from 9% to 9.975% for premiums paid "
+        "after 2026-12-31. revenuquebec.ca refused automated retrieval (HTTP 403 "
+        "on 2026-09-03), so the figure is cited through two independently fetched "
+        "quotations of that notice — Norton Rose Fulbright (the URL here) and "
+        "Baker Tilly Canada "
+        "(https://www.bakertilly.ca/insights/taxalert-qc-2026-budget) — and not "
+        "from the primary page"
+    ),
+    url="https://www.nortonrosefulbright.com/en/knowledge/publications/252de415/quebec-ipt-rate-increase-and-fapi-clarifications",
+    rationale=(
+        "Québec taxes the mortgage-insurance premium at 9%, paid in cash at "
+        "closing — CMHC: 'The sales tax can't be added to the loan amount.' 9% is "
+        "the rate for a closing on or before 2026-12-31; a closing after that pays "
+        "9.975%, so the band spans the step and this anchor must be re-read for "
+        "any 2027 closing. The engine applies 9% and the assumptions line names "
+        "the rate it used."
+    ),
+    band=(0.09, 0.09975),
+    short_cite="Revenu Québec IPT",
+    retrieved_on="2026-09-03",
+)
+
+ANCHORS["mortgage_insurance.premium_tax_rate.on"] = Anchor(
+    name="mortgage_insurance.premium_tax_rate.on",
+    value=0.08,
+    as_of="2026",
+    source=(
+        "Ontario Ministry of Finance, Retail Sales Tax — Insurance and Benefits "
+        "Plans: 'Retail Sales Tax (RST) at the rate of eight per cent applies to "
+        "premiums paid under taxable insurance contracts.' The same page notes "
+        "that 'Initiation and underwriting fees in respect of mortgage insurance "
+        "are also non-taxable' — the fees, not the premium; CMHC names Ontario as "
+        "a province that applies provincial sales tax to the mortgage loan "
+        "insurance premium"
+    ),
+    url="https://www.ontario.ca/document/retail-sales-tax/insurance-and-benefits-plans",
+    rationale=(
+        "Ontario's 8% RST on the mortgage-insurance premium, paid in cash at "
+        "closing (it cannot be added to the loan). A legislated rate: the band is "
+        "the rate itself."
+    ),
+    band=(0.08, 0.08),
+    short_cite="Ontario RST",
+    retrieved_on="2026-09-03",
+)
+
+# Saskatchewan also taxes the premium (CMHC names Ontario, Québec and
+# Saskatchewan) but its rate was not fetched, so there is NO anchor for it: a
+# config declaring province: SK is refused with a pointer to an explicit
+# schedule rather than silently charged 0% tax.
+PREMIUM_TAX_UNANCHORED = ("SK",)
+
+
+# ---------------------------------------------------------------------------
 # Demographic-prior provenance (readiness plan E.2, 2026-09-01).
 #
 # A ScenarioPrior file carries source FILE NAMES + sha256 digests under

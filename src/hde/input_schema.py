@@ -43,6 +43,16 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "simulation": (False, "optional block; Monte Carlo + uncertainty knobs"),
         "economic": (False, "optional block; real (default) vs nominal mode"),
         "market_scenario": (False, "optional block; demographic prior (path + geography)"),
+        "province": (False, "QC | ON | other — the jurisdiction whose tax on insurance "
+                            "premiums applies to a mortgage-insurance premium (CMHC: the "
+                            "tax 'can't be added to the loan amount', so it is cash at "
+                            "closing). REQUIRED with mortgage_insurance: auto; an option "
+                            "may override it (an Ottawa-vs-Gatineau config prices two "
+                            "provinces at once). Rates: QC 9%, ON 8%, other 0%. Québec's "
+                            "rate rises to 9.975% for premiums paid after 2026-12-31 "
+                            "(Bill 99) — the engine applies 9% and names it. SK taxes the "
+                            "premium but its rate is not anchored: state an explicit "
+                            "schedule instead of being charged 0%"),
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
@@ -96,7 +106,27 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
                                             "mortgage-insurance premium (CMHC/Sagen, due under 20% "
                                             "down): raises the payment and the balance, never year-0 "
-                                            "cash; requires the mortgage block; default 0"),
+                                            "cash; requires the mortgage block; default 0. The MANUAL "
+                                            "path: prefer mortgage_insurance: auto, which derives the "
+                                            "premium from the anchored schedule and re-derives it at "
+                                            "every --sweep / --break-even grid point. Refused together "
+                                            "with mortgage_insurance (double counting)"),
+        "mortgage_insurance": (False, "'none' (DEFAULT — nothing priced, today's behaviour), 'auto' "
+                                       "(the anchored CMHC schedule — --print-anchors lists every "
+                                       "band), or an explicit {bands: [{ltv_max, rate}], "
+                                       "premium_tax_rate} schedule for your lender's own sheet. With "
+                                       "auto above 80% loan-to-value the engine picks the tier on the "
+                                       "loan BEFORE the premium, ADDS the premium to the loan, and "
+                                       "pays the provincial tax on it in CASH — netted out of "
+                                       "cash_available when stated, else added to purchase_costs "
+                                       "(CMHC: the tax 'can't be added to the loan amount'). Adds "
+                                       "0.20% when mortgage_term_years exceeds 25. Needs province; "
+                                       "refuses all_cash, financed_purchase_costs, and a loan-to-value "
+                                       "above the schedule maximum (95%), quoting both figures"),
+        "province": (False, "QC | ON | other for THIS option, overriding the top-level province: the "
+                             "tax on the mortgage-insurance premium follows the property's own "
+                             "jurisdiction, so an Ottawa-vs-Gatineau comparison prices each side "
+                             "correctly. See the top-level province note for the rates"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
                           "costs belong in purchase_costs"),
@@ -176,7 +206,27 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
                                             "mortgage-insurance premium (CMHC/Sagen, due under 20% "
                                             "down): raises the payment and the balance, never year-0 "
-                                            "cash; requires the mortgage block; default 0"),
+                                            "cash; requires the mortgage block; default 0. The MANUAL "
+                                            "path: prefer mortgage_insurance: auto, which derives the "
+                                            "premium from the anchored schedule and re-derives it at "
+                                            "every --sweep / --break-even grid point. Refused together "
+                                            "with mortgage_insurance (double counting)"),
+        "mortgage_insurance": (False, "'none' (DEFAULT — nothing priced, today's behaviour), 'auto' "
+                                       "(the anchored CMHC schedule — --print-anchors lists every "
+                                       "band), or an explicit {bands: [{ltv_max, rate}], "
+                                       "premium_tax_rate} schedule for your lender's own sheet. With "
+                                       "auto above 80% loan-to-value the engine picks the tier on the "
+                                       "loan BEFORE the premium, ADDS the premium to the loan, and "
+                                       "pays the provincial tax on it in CASH — netted out of "
+                                       "cash_available when stated, else added to purchase_costs "
+                                       "(CMHC: the tax 'can't be added to the loan amount'). Adds "
+                                       "0.20% when mortgage_term_years exceeds 25. Needs province; "
+                                       "refuses all_cash, financed_purchase_costs, and a loan-to-value "
+                                       "above the schedule maximum (95%), quoting both figures"),
+        "province": (False, "QC | ON | other for THIS option, overriding the top-level province: the "
+                             "tax on the mortgage-insurance premium follows the property's own "
+                             "jurisdiction, so an Ottawa-vs-Gatineau comparison prices each side "
+                             "correctly. See the top-level province note for the rates"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
                           "costs belong in purchase_costs"),

@@ -14,6 +14,11 @@ import yaml
 import datetime
 
 from .anchors import ANCHORS
+from .mortgage_insurance import (
+    MortgageInsurance,
+    MortgageInsuranceError,
+    resolve as resolve_mortgage_insurance,
+)
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .models import (
@@ -49,7 +54,7 @@ class ConfigValidationError(Exception):
 
 _TOP_LEVEL_KEYS = frozenset({
     "years", "discount_rate", "condo", "house", "rent", "income",
-    "simulation", "economic", "market_scenario",
+    "simulation", "economic", "market_scenario", "province",
 })
 # Legacy/alias top-level names → the section that replaced them. There is no
 # top-level monte_carlo section (and never was in this engine); a config that
@@ -62,14 +67,14 @@ _CONDO_KEYS = frozenset({
     "reserve_growth_rate", "initial_value", "purchase_costs", "purchase_costs_rate",
     "financed_purchase_costs", "value_growth_rate", "property_tax_rate",
     "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years", "all_cash",
-    "selling_cost_rate", "price_shock",
+    "selling_cost_rate", "price_shock", "mortgage_insurance", "province",
 })
 _HOUSE_KEYS = frozenset({
     "initial_value", "purchase_costs", "purchase_costs_rate", "financed_purchase_costs",
     "value_growth_rate", "annual_maintenance_rate", "property_tax_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
-    "price_shock",
+    "price_shock", "mortgage_insurance", "province",
 })
 _RENT_KEYS = frozenset({
     "monthly_rent", "rent_escalation_rate", "invested_down_payment",
@@ -363,7 +368,13 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         if opt is None:
             continue
         missing = []
-        if opt.purchase_costs == 0:
+        # What the USER typed: when the engine derived an insured mortgage on a
+        # stated down payment it put the premium tax into purchase_costs, and
+        # that tax alone must not silence the land-transfer/notary ask.
+        typed_purchase_costs = opt.purchase_costs
+        if opt.mortgage_insurance is not None and opt.cash_available is None:
+            typed_purchase_costs -= opt.mortgage_insurance.premium_tax
+        if typed_purchase_costs <= 0.005:
             # A financed premium is modelled (it rides the loan) — do not list it
             # as missing (round-four dogfood 2026-09-02).
             premium = ("" if opt.financed_purchase_costs > 0
@@ -389,13 +400,31 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
     for name, opt in (("condo", spec.condo), ("house", spec.house)):
         if opt is None or opt.all_cash or opt.down_payment is None or not opt.initial_value:
             continue
-        if opt.down_payment < 0.20 * opt.initial_value and opt.financed_purchase_costs == 0:
+        if opt.down_payment >= 0.20 * opt.initial_value:
+            continue
+        record = opt.mortgage_insurance
+        share = opt.down_payment / opt.initial_value
+        if record is not None and record.required:
+            # The engine priced it: say what it charged, not what to go compute.
+            tax_clause = (
+                f", plus ${record.premium_tax:,.0f} of provincial tax on the premium paid in "
+                f"cash at closing (it cannot be added to the loan)"
+                if record.premium_tax else ", with no provincial tax on the premium"
+            )
             warns.append(
-                f"{name}: down payment {opt.down_payment / opt.initial_value:.2%} of price is under the 20% "
+                f"{name}: down payment {share:.2%} of price is under the 20% mortgage-insurance "
+                f"line — the engine priced the insured mortgage at {record.ltv:.2%} loan-to-value: "
+                f"{record.rate:.2%} = ${record.premium:,.0f} added to the loan{tax_clause} "
+                f"[{record.cite}]. The premium is non-refundable and carries interest for the "
+                f"whole amortization"
+            )
+        elif opt.financed_purchase_costs == 0:
+            warns.append(
+                f"{name}: down payment {share:.2%} of price is under the 20% "
                 f"mortgage-insurance line with no financed_purchase_costs — an insured mortgage carries a "
-                f"premium on the loan (CMHC/Sagen by loan-to-value band; the schedule is not in the engine: "
-                f"compute it, put it in financed_purchase_costs, and label it), which raises the payment "
-                f"and the balance; omitting it biases the verdict toward buying"
+                f"premium on the loan (CMHC/Sagen by loan-to-value band). Set mortgage_insurance: auto to "
+                f"have the engine price it from the anchored schedule, or compute it, put it in "
+                f"financed_purchase_costs, and label it; omitting it biases the verdict toward buying"
             )
 
     # Asymmetric tails (review F4 + dogfood round 2): an owned option with a
@@ -746,7 +775,42 @@ def _property_tax_cost(
     )
 
 
-def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
+def _apply_mortgage_insurance(
+    data: Dict[str, Any], name: str, top_province: Optional[str],
+    initial_value: float, down_payment: Optional[float], cash_available: Optional[float],
+    purchase_costs: float,
+) -> Tuple[Optional[float], float, float, Optional[MortgageInsurance]]:
+    """
+    Derive the insured mortgage (src/hde/mortgage_insurance.py) and fold its two
+    money legs back into the option: the premium joins `financed_purchase_costs`
+    (it rides the loan, so nothing downstream needs to know), and the provincial
+    tax on it is cash — netted out of a stated `cash_available`, else added to
+    `purchase_costs`.
+
+    Derived HERE, in the loader, so `--sweep` and `--break-even` — which re-run
+    the loader at every grid point — re-derive the tier per point instead of
+    freezing the base config's premium (round-7 dogfood 2026-09-03: a price scan
+    held a 2.80% premium fixed while the loan-to-value crossed into 3.10%).
+    """
+    try:
+        return resolve_mortgage_insurance(
+            data, name,
+            top_province=top_province,
+            initial_value=initial_value,
+            down_payment=down_payment,
+            cash_available=cash_available,
+            purchase_costs=purchase_costs,
+            financed_purchase_costs=float(data.get("financed_purchase_costs", 0.0)),
+            all_cash=_parse_bool(data.get("all_cash", False), f"{name}.all_cash"),
+            mortgage_term_years=(None if "mortgage_term_years" not in data
+                                 else int(data["mortgage_term_years"])),
+        )
+    except MortgageInsuranceError as exc:
+        raise ConfigValidationError(str(exc)) from exc
+
+
+def _parse_condo(condo_data: Dict[str, Any], years: int,
+                 top_province: Optional[str] = None) -> CondoParams:
     """
     Parse condo parameters from YAML data.
     """
@@ -769,6 +833,11 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
 
     purchase_costs = _purchase_costs(condo_data, "condo")
     down_payment, cash_available = _net_down_payment(condo_data, "condo", purchase_costs)
+    (down_payment, purchase_costs, financed_purchase_costs,
+     insurance) = _apply_mortgage_insurance(
+        condo_data, "condo", top_province,
+        float(condo_data.get("initial_value", 0.0)), down_payment, cash_available,
+        purchase_costs)
 
     return CondoParams(
         monthly_fee=float(condo_data["monthly_fee"]),
@@ -788,7 +857,9 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         purchase_costs=purchase_costs,
-        financed_purchase_costs=float(condo_data.get("financed_purchase_costs", 0.0)),
+        financed_purchase_costs=financed_purchase_costs,
+        province=condo_data.get("province", top_province),
+        mortgage_insurance=insurance,
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -796,7 +867,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
     )
 
 
-def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
+def _parse_house(house_data: Dict[str, Any], years: int,
+                 top_province: Optional[str] = None) -> HouseParams:
     """
     Parse house parameters from YAML data.
     """
@@ -827,6 +899,11 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
 
     purchase_costs = _purchase_costs(house_data, "house")
     down_payment, cash_available = _net_down_payment(house_data, "house", purchase_costs)
+    (down_payment, purchase_costs, financed_purchase_costs,
+     insurance) = _apply_mortgage_insurance(
+        house_data, "house", top_province,
+        float(house_data["initial_value"]), down_payment, cash_available,
+        purchase_costs)
 
     return HouseParams(
         initial_value=float(house_data["initial_value"]),
@@ -843,7 +920,9 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
         purchase_costs=purchase_costs,
-        financed_purchase_costs=float(house_data.get("financed_purchase_costs", 0.0)),
+        financed_purchase_costs=financed_purchase_costs,
+        province=house_data.get("province", top_province),
+        mortgage_insurance=insurance,
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None
@@ -1183,8 +1262,8 @@ def load_config(path: str) -> ComparisonSpec:
     econ = _parse_economic(data.get("economic"))
     discount_rate = _discount_rate_for(data, econ)
 
-    condo = _parse_condo(data["condo"], years) if "condo" in data else None
-    house = _parse_house(data["house"], years) if "house" in data else None
+    condo = _parse_condo(data["condo"], years, data.get("province")) if "condo" in data else None
+    house = _parse_house(data["house"], years, data.get("province")) if "house" in data else None
     rent = _parse_rent(data["rent"], years) if "rent" in data else None
     income = _parse_income(data["income"]) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)
@@ -1220,8 +1299,8 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
     econ = _parse_economic(data.get("economic"))
     discount_rate = _discount_rate_for(data, econ)
 
-    condo = _parse_condo(data["condo"], years) if "condo" in data else None
-    house = _parse_house(data["house"], years) if "house" in data else None
+    condo = _parse_condo(data["condo"], years, data.get("province")) if "condo" in data else None
+    house = _parse_house(data["house"], years, data.get("province")) if "house" in data else None
     rent = _parse_rent(data["rent"], years) if "rent" in data else None
     income = _parse_income(data["income"]) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)

@@ -19,6 +19,7 @@ src/hde/
 ├── deterministic.py    # Deterministic PV engine (compute_deterministic)
 ├── monte_carlo.py      # Monte Carlo engine (run_monte_carlo)
 ├── market_scenario.py  # ScenarioPrior loader/validation, drift banding, time-anchor guard
+├── mortgage_insurance.py # Insured-mortgage premium: schedule, tier, financed premium, cash tax
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
 ├── input_schema.py     # The input contract as data (--print-schema)
 ├── serialization.py    # THE typed core for agent output (--json)
@@ -36,7 +37,11 @@ verdict and the same assumption echo; none re-derives a figure.
 
 Provenance chain: `anchors.py` is the single source of truth for every
 bias-critical default (dataclass default == parser default == anchor, pinned
-generatively in `tests/test_anchors.py`); `market_scenario.py` guards the
+generatively in `tests/test_anchors.py`) and for the mortgage-insurance premium
+schedule — each CMHC band, the 95% maximum, the 0.20% amortization surcharge and
+the Québec/Ontario taxes on the premium are registered entries, and
+`mortgage_insurance.anchored_schedule` builds the schedule from them, so a rate
+has exactly one home and `--print-anchors` shows the table the engine applies; `market_scenario.py` guards the
 demographic prior (schema, closed enums, `constants_as_of` within a year of
 `START_CALENDAR_YEAR = 2026`) and renders its provenance only from the file.
 
@@ -110,6 +115,23 @@ flip presented as a fact.
   mortgage-insurance premium rides in the loan, never in year-0 cash). A Canadian posted rate compounds
   semi-annually with monthly payments — convert first: `r_eff = (1 + r_posted/2)^2 − 1`
   (≈ 1.7% difference on the annual outlay at 5%).
+- **Mortgage insurance is derived in the loader** (`mortgage_insurance.py`, key
+  `mortgage_insurance: auto | none | {bands, premium_tax_rate}`). Above 80%
+  loan-to-value the tier is chosen on `L₀ = initial_value − down_payment`, i.e.
+  BEFORE the premium: `premium = rate(L₀ / initial_value) · L₀`, added to
+  `financed_purchase_costs` so it rides the loan (`L = L₀ + premium`, routinely
+  above 95% of price — by design, never a refusal). The provincial tax on the
+  premium is CASH at closing (CMHC: it "can't be added to the loan amount"):
+  netted out of `cash_available` when stated, else added to `purchase_costs`.
+  `mortgage_term_years > 25` adds the 0.20% amortization surcharge. Netting the
+  tax out of a cash pile is circular — the tax shrinks the down payment, which
+  raises the loan and can raise the tier — so the loader solves
+  `L = (price − cash + purchase_costs) / (1 − t·r(L / price))` by iteration; `r`
+  is non-decreasing in `L`, so iterating from the zero-tax loan reaches the
+  least self-consistent tier. Deriving it in the loader is what makes `--sweep`
+  and `--break-even` re-derive the tier at every grid point. A loan-to-value
+  above the schedule maximum (95%) is refused with both figures, so a scan
+  records the point under `refused` and shrinks its search.
 - **Monthly equivalent** annuitizes a PV over `12N` months at `m = (1 + dr)^(1/12) − 1`,
   so it decomposes the same PV the annual figures discount.
 - **A cost is positive; a credit is negative.** Every option's `total_pv` is a net
@@ -311,7 +333,7 @@ clear-win edge that moved $35k). Two things close it:
 ### Assumptions block — `assumptions`
 
 `mode`, `years`, `discount_rate`; `lines` (the text echo, including the
-`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — and drops the year-0 cash clause, which is the pile — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
+`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — and drops the year-0 cash clause, which is the pile; with `mortgage_insurance` active the quoted loan-to-value is the one the TIER was chosen on (before the premium) and an `insured:` clause states the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — `insured: 88.46% LTV → 3.10% tier = $14,260 financed; premium tax 9% (QC) = $1,283 cash → loan $474,260 = 91.20% LTV` — reading `mortgage_insurance: auto → none required (…)` when the option clears 80%, and the derived premium is never echoed as a typed `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
 `reference_matches` (each owned-option property-tax or home-insurance line, its
