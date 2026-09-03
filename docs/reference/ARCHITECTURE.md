@@ -166,7 +166,7 @@ text report ("Cheapest … / decisiveness:") and `--json`.
 | `cash_year1` | undiscounted year-1 cash outlay per option | the affordability numerator's first year: fees/maintenance + other recurring costs + year-1 events + the full mortgage payment (owned); rent × 12 (rent). Not a PV — the PV totals credit equity at sale |
 | `principal_year1` | principal repaid in year 1 | `mortgage_payment(loan, r, N) − loan × r` with `loan = initial_value − down_payment + financed_purchase_costs`; 0 without a mortgage. `cash_year1 − principal_year1` is the owner's year-1 unrecoverable cash before amortised purchase/selling costs |
 | `appreciation_year1` | expected year-1 appreciation of an owned option (not cash) | `initial_value × g_eff`, `g_eff` = `value_growth_rate` composed with inflation in nominal mode; 0 for rent. The owner's year-1 economic cost ≈ `cash_year1 − principal_year1 − appreciation_year1` (+ amortised purchase/selling costs) — the term a cash-only sanity line omits |
-| `decisive` / `rule` / `reason` | whether the gap clears the anchored threshold | `mc_floor`: `prob_best ≥ verdict.prob_floor` (0.65); `margin_band` (no MC, or every uncertainty input off): `margin_frac ≥ verdict.tie_band` (0.05); `single_option`: nothing to compare. `reason` quotes the measured quantity and the threshold; both constants are `--print-anchors` entries |
+| `decisive` / `rule` / `reason` | whether the gap clears the anchored threshold | `mc_floor`: `prob_best ≥ verdict.prob_floor` (0.65); `margin_band` (no MC, or every uncertainty input off): `margin_frac ≥ verdict.tie_band` (0.05); `single_option`: nothing to compare. `reason` quotes the measured quantity and the threshold; both constants are `--print-anchors` entries. The two are printed at whole percent, escalating to as many decimals (up to 4) as it takes for them to differ on the page — 0.6499 must not read "65% < 65% floor"; an exact tie still reads "65% ≥ 65%", which is true |
 
 ### Monte Carlo — `monte_carlo`
 
@@ -240,10 +240,13 @@ Present only with an `income` block.
 Each point re-runs the comparison through the same loader (validated, defaults
 echoed) and the same verdict rule; `rows` carry per-option `total_pv` and the
 verdict fields, `flips` list consecutive points whose cheapest option differs.
-Integer inputs (`years`, `num_sims`, `mortgage_term_years`) are rounded; a
+Integer inputs (`years`, `num_sims`, `mortgage_term_years`) are rounded, and
+the duplicates that rounding creates collapse — `years=7:8:5` is five requested
+points and two distinct ones, run once each, with a `note` saying so; a
 point the loader refuses (e.g. an event past a shortened horizon) is reported
 as `error`, not skipped silently. Monte Carlo runs per point unless
-`--no-monte-carlo` or the point is a single-path run.
+`--no-monte-carlo` or the point is a single-path run. A sweep of an owned
+option's `initial_value` also carries the price-scan coherence note below.
 
 ### Break-evens — `--break-even KEY` or `KEY=lo:hi`
 
@@ -257,7 +260,12 @@ band (that edge is `null`). Grid points the loader refuses (a price below the
 fixed `down_payment`) are recorded under `refused` and the search shrinks to
 the accepted run(s), reported as `searched`; a bracket refused throughout is a
 clean error. Money inputs default to a ¼×–4× bracket around the YAML value;
-every other key takes `=lo:hi`. Integer inputs (`years`, amortization) are step
+rate inputs take an ABSOLUTE default bracket instead (a multiple of a rate is
+meaningless — 0% growth × 4 is still 0%): `value_growth_rate` −2%…5%,
+`rent_escalation_rate` −1%…5%, `annual_maintenance_rate` 0…3%, `mortgage_rate`
+1%…10%, `discount_rate` 0…8%, and a rate key absent from the YAML still gets
+its bracket. The bracket actually used is always printed. Every other key takes
+`=lo:hi`. Integer inputs (`years`, amortization) are step
 functions and report the first value where the other side is cheaper. The
 crossing is deterministic: with uncertainty inputs on, the verdict's
 decisiveness is the Monte Carlo floor, and the sweep's `mean flip:` line is the
@@ -265,10 +273,40 @@ criterion-consistent cross-check. Beside `--sweep`, the threshold is re-solved
 at every sweep point (`across`): "the rent threshold at 0% and at 2% growth"
 is one command. Every entry leads with a band-first `sentence` ("A is cheaper
 below L; too close to call between L and H; B is cheaper above H") — the
-shape the user should read. A `market_scenario` prior never moves it (`note`). Rides
-`--json` as `break_evens`; the story's act 6 calls the same solver for the rent
-threshold, so the crossing it draws, the band it shades and the sentence it
-prints are the ones described here.
+shape the user should read. With an `income` block each entry also carries
+`affordability` at the crossing and at both band edges (per option, the highest
+cost/income ratio and the years above the threshold, printed too): a threshold
+that says "buy up to $X" has to say what $X costs against income, and the band's
+high edge is where it bites hardest. A `market_scenario` prior never moves it
+(`note`). Rides `--json` as `break_evens`; the story's act 6 calls the same
+solver for the rent threshold, so the crossing it draws, the band it shades and
+the sentence it prints are the ones described here.
+
+### Price-scan coherence — `--break-even` / `--sweep` on `initial_value`
+
+Every grid point re-runs the whole loader, so whatever the loader DERIVES from
+the price moves with the price and whatever is typed in dollars does not. The
+property-tax bill, `purchase_costs`, `financed_purchase_costs` and insurance
+are all price-proportional in reality, so a price scan holds them at the seed
+price's size and the band it reports is wrong by that much (two reviewed
+answers, 2026-09-03: a "buying wins above" edge that moved ~$50k, and a
+clear-win edge that moved $35k). Two things close it:
+
+- **Rate alternatives, re-derived every load.** `purchase_costs_rate` (fraction
+  of the price; mutually exclusive with `purchase_costs`, and the figure
+  `cash_available` nets) and `property_tax_rate` (fraction of value per year;
+  mutually exclusive with an `other_recurring_costs` line whose name says tax —
+  the schema has no dollar property-tax key, only that line). The derived tax
+  bill is `rate × initial_value` escalating at the option's own
+  `value_growth_rate`, so it stays that fraction of the home's value; it rides
+  the other-recurring-cost escalation convention, one year ahead of the value's
+  (§ Conventions), which is the documented divergence, not a second choice.
+- **The coherence note.** Whenever a price scan leaves a dollar form in place,
+  the break-even / sweep block's `note` names each held-fixed key with its
+  value, the seed price it was sized for, and which side of the price it biases
+  (understated owner costs above the seed favour buying; overstated below
+  favour renting). The check reads the RAW YAML, so a figure the loader itself
+  derived from the price is never flagged.
 
 ### Assumptions block — `assumptions`
 

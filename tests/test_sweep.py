@@ -74,3 +74,29 @@ class TestCli:
         monkeypatch.setattr(sys, "argv", ["hde", str(self._cfg(tmp_path)), "--sweep", "years"])
         assert cli_main() == 1
         assert "--sweep expects" in capsys.readouterr().err
+
+
+class TestIntegerCollapse:
+    """A range on an integer key produces duplicate grid points (2026-09-03
+    review: `years=7:8:5` ran [7, 7, 8, 8, 8] and printed five rows, three of
+    them the same answer). Dedupe after the cast, keep order, say so."""
+
+    def test_duplicates_dropped_order_kept_and_noted(self):
+        key, values = parse_sweep("years=7:8:5")
+        assert values == [7, 7, 8, 8, 8]
+        result = run_sweep(RAW, key, values, monte_carlo=False)
+        assert result["values"] == [7, 8]
+        assert [r["value"] for r in result["rows"]] == [7, 8]
+        assert "5 requested points collapse to 2" in result["note"]
+
+    def test_no_note_when_nothing_collapses(self):
+        assert run_sweep(RAW, "years", [5, 10], monte_carlo=False).get("note") is None
+
+    def test_the_note_reaches_the_text_output(self, tmp_path, monkeypatch, capsys):
+        import yaml
+        cfg = tmp_path / "c.yaml"; cfg.write_text(yaml.safe_dump(RAW))
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo",
+                                          "--sweep", "years=7:8:5"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        assert "Sweep years (2 points;" in out and "collapse to 2" in out

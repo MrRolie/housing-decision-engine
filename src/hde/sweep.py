@@ -8,14 +8,14 @@ and the same verdict rule as the main run.
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from .config import ConfigValidationError, load_config_dict
 from .config import single_path_run
 from .deterministic import compute_deterministic
-from .models import compute_verdict
+from .models import ComparisonDeterministicResult, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .serialization import mc_to_dict
 
@@ -51,6 +51,92 @@ def parse_sweep(arg: str) -> Tuple[str, List[Any]]:
     return key, values
 
 
+def dedupe(key: str, values: List[Any]) -> Tuple[List[Any], Optional[str]]:
+    """Distinct grid points in the order asked for, and the note when some
+    collapsed. `--sweep years=7:8:5` casts to [7, 7, 8, 8, 8]: five rows, three
+    of them the same answer, and no hint that the range was finer than the
+    input's grain (2026-09-03 review)."""
+    seen: List[Any] = []
+    for v in values:
+        if v not in seen:
+            seen.append(v)
+    if len(seen) == len(values):
+        return seen, None
+    why = ("the input takes whole numbers only" if key in INT_KEYS
+           else "the same value was asked for more than once")
+    return seen, (
+        f"{len(values)} requested points collapse to {len(seen)} distinct values — {why}, "
+        f"so duplicates were dropped (order kept); widen the range or ask for fewer points"
+    )
+
+
+# Dollar-denominated inputs that are price-proportional in reality: a price scan
+# re-derives nothing about them, so they stay sized for the seed price. The
+# check reads the RAW YAML, not the parsed spec, so a figure the loader itself
+# derived from the price is never flagged.
+_PRICE_PROPORTIONAL_DOLLARS = ("purchase_costs", "financed_purchase_costs")
+_PROPORTIONAL_COST_NAMES = ("tax", "insurance")
+
+
+def price_scan_note(raw: Dict[str, Any], key: str) -> Optional[str]:
+    """The coherence note for a break-even or sweep that moves an owned
+    option's `initial_value` while a price-proportional input is stated in
+    dollars — the band it reports moves once those inputs scale (one reviewed
+    answer's "buying wins above $346k" moved ~$50k, another's edge $35k)."""
+    option, _, field = key.rpartition(".")
+    if field != "initial_value" or option not in ("condo", "house"):
+        return None
+    block = raw.get(option)
+    if not isinstance(block, dict) or not block.get("initial_value"):
+        return None
+    held: List[str] = []
+    for dollar_key in _PRICE_PROPORTIONAL_DOLLARS:
+        amount = block.get(dollar_key)
+        if amount:
+            held.append(f"{option}.{dollar_key}=${float(amount):,.0f}")
+    for cost in block.get("other_recurring_costs") or []:
+        if not isinstance(cost, dict) or not cost.get("annual_amount"):
+            continue
+        name = str(cost.get("name", ""))
+        if any(word in name.lower() for word in _PROPORTIONAL_COST_NAMES):
+            held.append(f"{option}.other_recurring_costs[{name}]="
+                        f"${float(cost['annual_amount']):,.0f}/yr")
+    if not held:
+        return None
+    return (
+        f"held fixed in dollars while the price moves: {', '.join(held)} — sized for "
+        f"${float(block['initial_value']):,.0f}, this understates owner costs above it "
+        f"(favours buying) and overstates them below (favours renting); use "
+        f"property_tax_rate / purchase_costs_rate to scale them"
+    )
+
+
+def join_notes(*notes: Optional[str]) -> Optional[str]:
+    """The notes a block carries, as one sentence-joined string (or None)."""
+    present = [n for n in notes if n]
+    return "; ".join(present) if present else None
+
+
+def affordability_of(det: ComparisonDeterministicResult) -> Optional[Dict[str, Dict[str, Any]]]:
+    """Per-option `{max_ratio, years_exceeding}`, or None without an `income`
+    block. Round 6: a maintenance bracket moved the affordability ratio from
+    34% to 37% in every year and the lane's command could not see it; round 7:
+    an answer called a price range "cheaper on average" while the engine's own
+    ratios there were above the cap the answer itself quoted."""
+    report = det.income_report
+    if report is None:
+        return None
+    return {
+        name: {"max_ratio": max(ratios), "years_exceeding": exceeds}
+        for name, ratios, exceeds in (
+            ("condo", report.condo_ratios, report.years_condo_exceeds),
+            ("house", report.house_ratios, report.years_house_exceeds),
+            ("rent", report.rent_ratios, report.years_rent_exceeds),
+        )
+        if ratios
+    }
+
+
 def with_value(raw: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
     """A deep copy of the raw YAML mapping with one dotted key set."""
     doc = copy.deepcopy(raw)
@@ -68,7 +154,11 @@ def with_value(raw: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
 
 def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: bool = True) -> Dict[str, Any]:
     """Re-run the comparison at each value; rows carry per-option totals and the
-    shared verdict; flips mark consecutive points whose cheapest option differs."""
+    shared verdict; flips mark consecutive points whose cheapest option differs.
+    Duplicate grid points collapse (the block says so), and a scan that moves a
+    price while a price-proportional input is stated in dollars carries the
+    coherence note."""
+    values, collapse = dedupe(key, values)
     rows: List[Dict[str, Any]] = []
     for v in values:
         try:
@@ -89,23 +179,19 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
             "decisive": verdict.decisive, "rule": verdict.rule, "prob_best": verdict.prob_best,
             "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
-            # Round 6: a maintenance bracket moved the affordability ratio from
-            # 34% to 37% in every year and the lane's command could not see it.
-            "affordability": (
-                {k: {"max_ratio": max(r), "years_exceeding": ex}
-                 for k, r, ex in (("rent", det.income_report.rent_ratios, det.income_report.years_rent_exceeds),
-                                  ("condo", det.income_report.condo_ratios, det.income_report.years_condo_exceeds),
-                                  ("house", det.income_report.house_ratios, det.income_report.years_house_exceeds))
-                 if r}
-                if det.income_report is not None else None
-            ),
+            "affordability": affordability_of(det),
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
                 if mc is not None else None
             ),
         })
     flips, mc_mean_flips = find_flips(rows)
-    return {"key": key, "values": values, "rows": rows, "flips": flips, "mc_mean_flips": mc_mean_flips}
+    out: Dict[str, Any] = {"key": key, "values": values, "rows": rows,
+                           "flips": flips, "mc_mean_flips": mc_mean_flips}
+    note = join_notes(collapse, price_scan_note(raw, key))
+    if note:
+        out["note"] = note
+    return out
 
 
 def find_flips(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -141,6 +227,8 @@ def format_sweep(result: Dict[str, Any]) -> str:
              f"a joint question needs a second --sweep on the edited config; per-point Monte Carlo "
              f"percentiles ride --json; 'decisive' is judged by the rule shown — mc_floor when Monte "
              f"Carlo ran with uncertainty on, else margin_band):"]
+    if result.get("note"):
+        lines.append(f"  {result['note']}")
     head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive (rule) | P(best) | MC-mean best"
     lines.append(head)
     for r in rows:

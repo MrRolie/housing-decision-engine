@@ -22,7 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict
 from .deterministic import compute_deterministic
-from .sweep import INT_KEYS, _fmt_value, with_value
+from .sweep import (INT_KEYS, _fmt_value, affordability_of, join_notes,
+                    price_scan_note, with_value)
 
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
@@ -32,6 +33,20 @@ _MONEY_KEYS = frozenset({
     "monthly_rent", "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "monthly_fee", "invested_down_payment", "annual_income",
 })
+
+# A rate has no natural multiple of itself (0% growth × 4 is still 0%), so its
+# default bracket is absolute: the plausible range for that rate, wide enough to
+# hold the crossing and narrow enough that every point loads. 2026-09-03 review:
+# `--break-even condo.value_growth_rate` refused with "only money inputs get a
+# default bracket", and the threshold question users actually ask about growth
+# needed a bracket they had no way to guess. The bracket used is always printed.
+RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
+    "value_growth_rate": (-0.02, 0.05),        # real: a shrinking market to a hot one
+    "rent_escalation_rate": (-0.01, 0.05),     # real shelter-cost growth
+    "annual_maintenance_rate": (0.0, 0.03),    # nothing modelled to a high-upkeep house
+    "mortgage_rate": (0.01, 0.10),             # effective annual, two decades of Canadian rates
+    "discount_rate": (0.0, 0.08),              # the loader refuses outside [0, 15%]
+}
 
 
 def parse_break_even(arg: str) -> Tuple[str, Optional[float], Optional[float]]:
@@ -293,12 +308,18 @@ def solve_break_even(
     base = _raw_value(raw, key)
     if lo is None or hi is None:
         field = key.rsplit(".", 1)[-1]
-        if base is None or field not in _MONEY_KEYS:
+        if field in RATE_BRACKETS:
+            # A rate's default bracket is absolute, so it does not need the key
+            # to be in the YAML: an omitted growth rate defaulted to 0% is still
+            # a threshold question ("what growth would make buying win?").
+            lo, hi = RATE_BRACKETS[field]
+        elif base is not None and field in _MONEY_KEYS:
+            lo, hi = MONEY_BRACKET[0] * float(base), MONEY_BRACKET[1] * float(base)
+        else:
             raise ValueError(
                 f"--break-even {key}: give the bracket as {key}=lo:hi "
-                f"({'the key is not in the YAML' if base is None else 'only money inputs get a default bracket'})"
+                f"({'the key is not in the YAML' if base is None else 'only money and rate inputs get a default bracket'})"
             )
-        lo, hi = MONEY_BRACKET[0] * float(base), MONEY_BRACKET[1] * float(base)
     refused: List[Tuple[float, str]] = []
 
     def totals_at(v: float) -> Optional[Tuple[float, float]]:
@@ -314,21 +335,62 @@ def solve_break_even(
         key, (a, b), lo, hi, totals_at,
         is_int=key in INT_KEYS, iterations=iterations, refused=refused,
     )
+    for entry in core["break_evens"]:
+        entry["affordability"] = _affordability_at(raw, key, entry)
+
     out: Dict[str, Any] = {
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": core["searched"],
         "base_value": base, "tie_band_fraction": core["tie_band_fraction"],
         "break_evens": core["break_evens"],
     }
+    prior_note = None
     if "market_scenario" in raw:
-        out["note"] = ("deterministic line: the market_scenario prior does not move this threshold "
-                       "(its drift enters the Monte Carlo only) — sweep value_growth_rate for the "
-                       "threshold's growth sensitivity; read the sweep's decisive flags for the prior's")
+        prior_note = ("deterministic line: the market_scenario prior does not move this threshold "
+                      "(its drift enters the Monte Carlo only) — sweep value_growth_rate for the "
+                      "threshold's growth sensitivity; read the sweep's decisive flags for the prior's")
+    note = join_notes(prior_note, price_scan_note(raw, key))
+    if note:
+        out["note"] = note
     if refused:
         out["refused"] = {"count": len(refused), "values": [r[0] for r in refused],
                           "reason": refused[0][1]}
     if "cheaper_throughout" in core:
         out["cheaper_throughout"] = core["cheaper_throughout"]
     return out
+
+
+def _affordability_at(
+    raw: Dict[str, Any], key: str, entry: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """The affordability ratios where the threshold actually puts the user: at
+    the crossing and at both tie-band edges, mirroring the entry's own `value`
+    and `tie_band` keys.
+
+    2026-09-03 review: an answer called a price range "cheaper on average"
+    while the engine's own sweep showed 40.9% of income inside it — above the
+    39% cap the answer itself had cited. A threshold that says "buy up to $X"
+    has to say what $X costs against income; the band edges are where it bites
+    hardest. `None` without an `income` block, like a sweep row's.
+    """
+    threshold: Optional[float] = None
+
+    def at(value: Any) -> Optional[Dict[str, Dict[str, Any]]]:
+        nonlocal threshold
+        if value is None:
+            return None
+        try:
+            det = compute_deterministic(load_config_dict(with_value(raw, key, value)))
+        except (ConfigValidationError, ValueError):
+            return None
+        if det.income_report is not None:
+            threshold = det.income_report.threshold
+        return affordability_of(det)
+
+    crossing = at(entry["value"])
+    if crossing is None:
+        return None
+    edges = [at(edge) for edge in entry["tie_band"]]
+    return {"threshold": threshold, "value": crossing, "tie_band": edges}
 
 
 def solve_break_even_across(
@@ -398,6 +460,32 @@ def _threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> 
     return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
+def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
+    """What the threshold and its band edges cost against income — the lines a
+    "cheaper on average" answer needs beside the crossing it quotes."""
+    aff = be.get("affordability")
+    if not aff:
+        return []
+    threshold = aff.get("threshold")
+    head = "affordability at the crossing and the band edges (highest cost/income ratio"
+    head += f"; years above the {threshold:.0%} threshold):" if threshold is not None else "):"
+    lines = [head]
+    lo, hi = be["tie_band"]
+    points = [("at the crossing", be["value"], aff["value"]),
+              ("at the band's low edge", lo, aff["tie_band"][0]),
+              ("at the band's high edge", hi, aff["tie_band"][1])]
+    for label, value, per_option in points:
+        if per_option is None or value is None:
+            continue
+        parts = ", ".join(
+            f"{option} {per_option[option]['max_ratio']:.1%}"
+            f" ({len(per_option[option]['years_exceeding'])} yr(s) over)"
+            for option in ("condo", "house", "rent") if option in per_option
+        )
+        lines.append(f"  {label} {_fmt_value(key, value)}: {parts}")
+    return lines
+
+
 def format_break_even(result: Dict[str, Any]) -> str:
     key = result["key"]
     a, b = result["options"]
@@ -413,6 +501,9 @@ def format_break_even(result: Dict[str, Any]) -> str:
         span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
         lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
     lines.extend(f"  {t}" for t in _threshold_sentences(key, result, band))
+    for be in result["break_evens"]:
+        lines.extend(f"  {t}" for t in _affordability_lines(key, be))
+    # `across` rows keep their one-line shape; their affordability rides --json.
     for across in result.get("across", []):
         skey = across["key"]
         lines.append(f"  across {skey} (the threshold re-solved at each value):")

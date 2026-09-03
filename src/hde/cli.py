@@ -202,7 +202,9 @@ def main() -> int:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
             sweeps.append(run_sweep(raw, key, values, monte_carlo=not args.no_monte_carlo))
-            sweep_specs.append((key, values))
+            # the sweep's own (deduped) grid, so a break-even re-solved "across"
+            # it does not repeat itself at a collapsed integer point
+            sweep_specs.append((key, sweeps[-1]["values"]))
 
     # Break-evens (threshold questions) — same loader, deterministic line.
     break_evens = []

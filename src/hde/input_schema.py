@@ -76,7 +76,23 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "affordability ratio): land-transfer/welcome tax, notary, "
                                    "inspection, a mortgage-insurance premium paid in cash; "
                                    "default 0 — warns when an owned option models no purchase "
-                                   "or carrying costs"),
+                                   "or carrying costs. Use purchase_costs_rate instead when the "
+                                   "price is the thing being swept or solved"),
+        "purchase_costs_rate": (False, "closing costs as a FRACTION of the price (0.03 = 3%) — an "
+                                        "ALTERNATIVE to purchase_costs, never both: the loader "
+                                        "derives the dollars from initial_value on EVERY load, so "
+                                        "--sweep / --break-even on the price re-derive them (a "
+                                        "dollar figure stays sized for the seed price and moves the "
+                                        "threshold it reports); cash_available nets the DERIVED "
+                                        "figure"),
+        "property_tax_rate": (False, "annual property tax as a FRACTION of value (0.0085 = 0.85%/yr) "
+                                      "— an ALTERNATIVE to an other_recurring_costs tax line, never "
+                                      "both: the loader derives the bill from initial_value on EVERY "
+                                      "load, so a price sweep or break-even re-derives it, and it "
+                                      "escalates at this option's value_growth_rate so it stays that "
+                                      "fraction of the home's value. No default: absent means no "
+                                      "property tax is modelled, and the missing-costs warning "
+                                      "fires only if other_recurring_costs is empty too"),
         "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
                                             "mortgage-insurance premium (CMHC/Sagen, due under 20% "
                                             "down): raises the payment and the balance, never year-0 "
@@ -140,7 +156,23 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "affordability ratio): land-transfer/welcome tax, notary, "
                                    "inspection, a mortgage-insurance premium paid in cash; "
                                    "default 0 — warns when an owned option models no purchase "
-                                   "or carrying costs"),
+                                   "or carrying costs. Use purchase_costs_rate instead when the "
+                                   "price is the thing being swept or solved"),
+        "purchase_costs_rate": (False, "closing costs as a FRACTION of the price (0.03 = 3%) — an "
+                                        "ALTERNATIVE to purchase_costs, never both: the loader "
+                                        "derives the dollars from initial_value on EVERY load, so "
+                                        "--sweep / --break-even on the price re-derive them (a "
+                                        "dollar figure stays sized for the seed price and moves the "
+                                        "threshold it reports); cash_available nets the DERIVED "
+                                        "figure"),
+        "property_tax_rate": (False, "annual property tax as a FRACTION of value (0.0085 = 0.85%/yr) "
+                                      "— an ALTERNATIVE to an other_recurring_costs tax line, never "
+                                      "both: the loader derives the bill from initial_value on EVERY "
+                                      "load, so a price sweep or break-even re-derives it, and it "
+                                      "escalates at this option's value_growth_rate so it stays that "
+                                      "fraction of the home's value. No default: absent means no "
+                                      "property tax is modelled, and the missing-costs warning "
+                                      "fires only if other_recurring_costs is empty too"),
         "financed_purchase_costs": (False, "$ rolled INTO THE LOAN at purchase — a financed "
                                             "mortgage-insurance premium (CMHC/Sagen, due under 20% "
                                             "down): raises the payment and the balance, never year-0 "

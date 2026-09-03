@@ -59,12 +59,14 @@ _TOP_LEVEL_HINTS = {"monte_carlo": "simulation"}
 _CONDO_KEYS = frozenset({
     "monthly_fee", "fee_escalation_rate", "events", "other_recurring_costs",
     "reserve_contribution_rate", "reserve_initial_balance",
-    "reserve_growth_rate", "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate",
+    "reserve_growth_rate", "initial_value", "purchase_costs", "purchase_costs_rate",
+    "financed_purchase_costs", "value_growth_rate", "property_tax_rate",
     "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock",
 })
 _HOUSE_KEYS = frozenset({
-    "initial_value", "purchase_costs", "financed_purchase_costs", "value_growth_rate", "annual_maintenance_rate", "events",
+    "initial_value", "purchase_costs", "purchase_costs_rate", "financed_purchase_costs",
+    "value_growth_rate", "annual_maintenance_rate", "property_tax_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
     "price_shock",
@@ -645,7 +647,7 @@ def _parse_market_scenario(data: Dict[str, Any]) -> MarketScenario:
 
 
 def _net_down_payment(
-    data: Dict[str, Any], name: str,
+    data: Dict[str, Any], name: str, purchase_costs: float,
 ) -> Tuple[Optional[float], Optional[float]]:
     """
     The owned option's down payment and the cash pile it was netted from.
@@ -656,6 +658,10 @@ def _net_down_payment(
     never netted. Stating both inputs is ambiguous intent, so it is refused by
     name rather than resolved by precedence (2026-09-03: every threshold serve
     hand-computed this subtraction for the user, unchecked).
+
+    `purchase_costs` is the RESOLVED figure — the dollar key or the one derived
+    from `purchase_costs_rate` — so a price sweep re-nets the pile at every grid
+    point instead of subtracting the seed price's closing costs throughout.
     """
     down = None if "down_payment" not in data else float(data["down_payment"])
     cash = None if "cash_available" not in data else float(data["cash_available"])
@@ -665,8 +671,79 @@ def _net_down_payment(
             f"(cash_available states the pile you bring and the engine nets purchase_costs "
             f"out of it; down_payment states the resulting figure directly)")
     if cash is not None:
-        down = cash - float(data.get("purchase_costs", 0.0))
+        down = cash - purchase_costs
     return down, cash
+
+
+# ---------------------------------------------------------------------------
+# Price-proportional inputs, derived per load (2026-09-03 answer reviews)
+#
+# `--break-even <option>.initial_value` and `--sweep` on the same key re-run the
+# whole loader at every grid point, so whatever the loader DERIVES from the
+# price moves with it and whatever is typed in dollars does not. Closing costs
+# and the property-tax bill are price-proportional in reality; held at the seed
+# price's size they moved one answer's "buying wins above" band by ~$50k and
+# another's clear-win edge by $35k. These two keys are the rate alternatives:
+# stated once, re-derived every load.
+# ---------------------------------------------------------------------------
+
+def _purchase_costs(data: Dict[str, Any], name: str) -> float:
+    """`purchase_costs` in dollars, or `purchase_costs_rate` × the price."""
+    if "purchase_costs_rate" not in data:
+        return float(data.get("purchase_costs", 0.0))
+    if "purchase_costs" in data:
+        raise ConfigValidationError(
+            f"{name}: purchase_costs and purchase_costs_rate are both set — declare exactly "
+            f"one (purchase_costs_rate is a fraction of initial_value, re-derived at every "
+            f"price a sweep or break-even tries; purchase_costs states the dollars directly)")
+    rate = float(data["purchase_costs_rate"])
+    if rate < 0:
+        raise ConfigValidationError(
+            f"{name}.purchase_costs_rate={rate} is negative — it is a fraction of the "
+            f"purchase price (0.03 = 3%)")
+    return rate * float(data.get("initial_value", 0.0))
+
+
+# A recurring cost whose name says "tax" IS the annual tax bill (property or
+# school): both are levied on assessed value, so both are what property_tax_rate
+# replaces. Matching on the name is what the schema gives — there is no dollar
+# property-tax key, only an `other_recurring_costs` line.
+def _tax_lines(other_costs: List[RecurringOtherCost]) -> List[RecurringOtherCost]:
+    return [c for c in other_costs if "tax" in c.name.lower()]
+
+
+def _property_tax_cost(
+    data: Dict[str, Any], name: str, other_costs: List[RecurringOtherCost],
+) -> Optional[RecurringOtherCost]:
+    """The property-tax line derived from `property_tax_rate`, or None.
+
+    "Fraction of value per year": the year-1 bill is `rate × initial_value` and
+    it escalates at the option's own `value_growth_rate`, so it stays that
+    fraction of the home's value the way `annual_maintenance_rate` does. (The
+    two ride different escalation conventions — other costs compound from year 1,
+    the value from year 2; the one-year offset is the documented divergence in
+    ARCHITECTURE.md § Conventions, not a second modelling choice made here.)
+    """
+    if "property_tax_rate" not in data:
+        return None
+    clash = _tax_lines(other_costs)
+    if clash:
+        raise ConfigValidationError(
+            f"{name}: property_tax_rate and the other_recurring_costs line "
+            f"{clash[0].name!r} are both set — declare exactly one (the rate is a fraction "
+            f"of initial_value, re-derived at every price a sweep or break-even tries; the "
+            f"dollar line states one year's bill and stays fixed while the price moves)")
+    rate = float(data["property_tax_rate"])
+    if rate < 0:
+        raise ConfigValidationError(
+            f"{name}.property_tax_rate={rate} is negative — it is a fraction of value "
+            f"per year (0.0085 = 0.85%)")
+    growth_anchor = ANCHORS[f"{name}.value_growth_rate"].value
+    return RecurringOtherCost(
+        name=f"property tax ({rate:.2%} of value)",
+        annual_amount=rate * float(data.get("initial_value", 0.0)),
+        escalation_rate=float(data.get("value_growth_rate", growth_anchor)),
+    )
 
 
 def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
@@ -686,7 +763,12 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         for c in condo_data.get("other_recurring_costs", [])
     ]
     
-    down_payment, cash_available = _net_down_payment(condo_data, "condo")
+    tax = _property_tax_cost(condo_data, "condo", other_costs)
+    if tax is not None:
+        other_costs.append(tax)
+
+    purchase_costs = _purchase_costs(condo_data, "condo")
+    down_payment, cash_available = _net_down_payment(condo_data, "condo", purchase_costs)
 
     return CondoParams(
         monthly_fee=float(condo_data["monthly_fee"]),
@@ -705,7 +787,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int) -> CondoParams:
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
-        purchase_costs=float(condo_data.get("purchase_costs", 0.0)),
+        purchase_costs=purchase_costs,
         financed_purchase_costs=float(condo_data.get("financed_purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
@@ -739,7 +821,12 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         maintenance_curve.append((int(point["year"]), float(point["rate"])))
     maintenance_curve.sort(key=lambda x: x[0])
     
-    down_payment, cash_available = _net_down_payment(house_data, "house")
+    tax = _property_tax_cost(house_data, "house", other_costs)
+    if tax is not None:
+        other_costs.append(tax)
+
+    purchase_costs = _purchase_costs(house_data, "house")
+    down_payment, cash_available = _net_down_payment(house_data, "house", purchase_costs)
 
     return HouseParams(
         initial_value=float(house_data["initial_value"]),
@@ -755,7 +842,7 @@ def _parse_house(house_data: Dict[str, Any], years: int) -> HouseParams:
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
-        purchase_costs=float(house_data.get("purchase_costs", 0.0)),
+        purchase_costs=purchase_costs,
         financed_purchase_costs=float(house_data.get("financed_purchase_costs", 0.0)),
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")

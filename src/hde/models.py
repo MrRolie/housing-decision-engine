@@ -347,6 +347,28 @@ class OptionResult:
     appreciation_year1: Optional[float] = None  # owned: initial_value × effective growth (composed in nominal mode); 0 for rent
 
 
+def _against(
+    value: float, threshold: float, *, decimals: int = 0, max_decimals: int = 4,
+) -> Tuple[str, str]:
+    """Render a measured quantity and the threshold it is judged against so the
+    two never print as the same number when they are not the same number.
+
+    2026-09-03 review: P(best) = 0.6499 printed "65% < 65% floor" — a sentence
+    that contradicts itself, and the one place whole-percent rounding can
+    mislead a reader into thinking a verdict was decided on a coin flip's worth
+    of nothing. Precision escalates only when the two collide, so every clear
+    case keeps the short form (81% ≥ 65%), and an exact tie still prints
+    "65% ≥ 65%" — which is true, because the rule is ≥.
+    """
+    if value != threshold:
+        d = decimals
+        while d < max_decimals and f"{value:.{d}%}" == f"{threshold:.{d}%}":
+            d += 1
+        if d != decimals:
+            return f"{value:.{d}%}", f"{threshold:.{d}%}"
+    return f"{value:.{decimals}%}", f"{threshold:.0%}"
+
+
 @dataclass
 class AffordabilityReport:
     """Deterministic affordability layer."""
@@ -487,9 +509,10 @@ def compute_verdict(
     if prob_best is not None:
         decisive = prob_best >= floor
         rule = "mc_floor"
+        measured, threshold_txt = _against(prob_best, floor)
         reason = (
-            f"P({best} cheapest) = {prob_best:.0%} {'≥' if decisive else '<'} "
-            f"{floor:.0%} floor [hde verdict rule]"
+            f"P({best} cheapest) = {measured} {'≥' if decisive else '<'} "
+            f"{threshold_txt} floor [hde verdict rule]"
         )
         if not decisive:
             others = {
@@ -510,9 +533,10 @@ def compute_verdict(
         decisive = margin_frac >= band
         rule = "margin_band"
         why = "single-path run, uncertainty inputs off" if single_path else "no Monte Carlo"
+        measured, threshold_txt = _against(margin_frac, band, decimals=1)
         reason = (
-            f"margin {margin_frac:.1%} of {best} PV {'≥' if decisive else '<'} "
-            f"{band:.0%} tie band [hde verdict rule] ({why})"
+            f"margin {measured} of {best} PV {'≥' if decisive else '<'} "
+            f"{threshold_txt} tie band [hde verdict rule] ({why})"
         )
     if mc_mean_best is not None and mc_mean_best != best:
         reason += (f"; Monte Carlo mean favours {mc_mean_best} "

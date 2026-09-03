@@ -247,3 +247,41 @@ class TestAcrossASweep:
                                           "--sweep", "rent.monthly_rent=1500:3000:4"])
         assert cli_main() == 0
         assert "across" not in json.loads(capsys.readouterr().out)["break_evens"][0]
+
+
+class TestRateKeyBrackets:
+    """2026-09-03 review: `--break-even condo.value_growth_rate` refused with
+    "only money inputs get a default bracket" — the threshold question users
+    actually ask about growth needed a bracket they had no way to guess. Rate
+    keys get sensible defaults, and the output says which bracket was used."""
+
+    def test_defaults_cover_the_rate_keys(self):
+        from hde.break_even import RATE_BRACKETS
+        assert RATE_BRACKETS["value_growth_rate"] == (-0.02, 0.05)
+        assert RATE_BRACKETS["rent_escalation_rate"] == (-0.01, 0.05)
+        assert RATE_BRACKETS["annual_maintenance_rate"] == (0.0, 0.03)
+        assert RATE_BRACKETS["mortgage_rate"] == (0.01, 0.10)
+        assert RATE_BRACKETS["discount_rate"] == (0.0, 0.08)
+
+    def test_growth_solves_without_a_manual_bracket(self):
+        out = solve_break_even(_base(), "condo.value_growth_rate")
+        assert out["bracket"] == [-0.02, 0.05]
+        assert out["break_evens"] or "cheaper_throughout" in out
+
+    def test_a_rate_key_absent_from_the_yaml_still_gets_its_bracket(self):
+        raw = _base()
+        raw["condo"].pop("value_growth_rate")
+        out = solve_break_even(raw, "condo.value_growth_rate")
+        assert out["bracket"] == [-0.02, 0.05] and out["base_value"] is None
+
+    def test_a_manual_bracket_still_wins(self):
+        out = solve_break_even(_base(), "condo.value_growth_rate", -0.01, 0.03)
+        assert out["bracket"] == [-0.01, 0.03]
+
+    def test_the_output_says_the_bracket_used(self):
+        out = solve_break_even(_base(), "condo.value_growth_rate")
+        assert "bracket -2.00%–5.00%" in format_break_even(out)
+
+    def test_a_key_that_is_neither_money_nor_rate_still_asks_for_one(self):
+        with pytest.raises(ValueError, match="lo:hi"):
+            solve_break_even(_base(), "condo.mortgage_term_years")
