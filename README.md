@@ -12,6 +12,7 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 - **Demographic priors via `ScenarioPrior`** — UN WPP → ISQ scenario → demand-model drift bands that tilt price growth and crash risk by geography
 - **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
 - **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
+- **Published property-tax and home-insurance figures by jurisdiction** — municipal rates for Laval, Montréal, Québec City and Toronto, and provincial home-insurance figures for QC and ON, each with the figure as its source quotes it and the base it is levied on (assessed value, which is not market value). The engine applies none of them: they are there so your own figure gets cited when it matches, and so a jurisdiction with no source says `source: none` (Gatineau, Ottawa) instead of guessing
 
 ## Test drive
 

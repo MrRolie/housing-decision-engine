@@ -40,6 +40,59 @@ generatively in `tests/test_anchors.py`); `market_scenario.py` guards the
 demographic prior (schema, closed enums, `constants_as_of` within a year of
 `START_CALENDAR_YEAR = 2026`) and renders its provenance only from the file.
 
+### Anchors: two kinds of entry
+
+The registry holds **engine defaults** and, since 2026-09-03, **jurisdiction
+reference tables**. They are opposite in how they reach a run.
+
+| | engine default | jurisdiction reference |
+|---|---|---|
+| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `home_insurance.<province>` |
+| applied by the engine? | yes, when the YAML omits the key | **never** — the user supplies the figure |
+| cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one |
+| extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on) |
+
+Property tax and home insurance were the two largest unsourced numbers in a
+typical run — together roughly 15% of an owned option's year-1 cash. They stay
+the user's own `other_recurring_costs` dollar figures, per option: the engine
+adds a published figure to compare against, not a default to apply, and it is
+deliberately **not** wired to `market_scenario.geography` — a demographic prior
+says where the population is going, not what a municipality levies.
+
+Three rules hold across the reference tables, enforced at import time by
+`Anchor.__post_init__` and pinned in `tests/test_reference_anchors.py`:
+
+1. **Assessed is not market.** Every municipal rate is levied on the assessment
+   roll. Québec publishes the gap as the *proportion médiane*; Ontario's is
+   dated — MPAC assesses the 2026 tax year on January 1, 2016 values, so an
+   Ontario rate applied to a 2026 purchase price is a **ceiling**, not an
+   estimate. `unit` says so on every entry and the read-back reprints it beside
+   every citation it makes.
+2. **Ad valorem only.** Flat per-dwelling charges (Laval's $486 water service,
+   Québec City's $386 + $195 tariffs) are real money and are *not* in the rate.
+3. **The band is published, not imagined** — narrowest to broadest reading of
+   the same source (municipal-only to full ad-valorem bill), zero-width where
+   the source publishes one figure.
+
+`kind: "unsourced"` is a first-class state, not an omission: `value` is `None`,
+`url` records what was tried, and it prints as `source: none`. Gatineau and
+Ottawa hold it today — Gatineau because it taxes by neighbourhood unit, so no
+single city-wide rate exists to cite; Ottawa because the rate by-law was not
+reachable. An unsourced entry can never match a user's figure, so a run in
+either city gets silence rather than a borrowed number.
+
+`serialization.reference_matches` does the matching: owned options only (a
+renter's tenant policy and a mortgage-insurance line are different products and
+never borrow a homeowner citation), a property-tax line compared as
+`annual_amount / initial_value`, an insurance line as the amount itself. The
+bar is **equality, not resemblance**: the property-tax window is half a basis
+point, wide enough only to absorb rounding the annual amount to the nearest
+dollar. A looser window once cited Québec City for a 0.750%-of-price line in a
+Montréal scenario — the citation was true and the impression false. A near miss
+reads `no anchor match`, which is the useful answer. Every match is reported —
+two municipalities may levy the same rate, and choosing one would be a coin
+flip presented as a fact.
+
 ## Conventions (every figure below obeys these)
 
 - **Years are 1-indexed; cash flows fall at the END of year t and discount at
@@ -223,4 +276,7 @@ prints are the ones described here.
 `conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — and drops the year-0 cash clause, which is the pile — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
+`reference_matches` (each owned-option property-tax or home-insurance line, its
+implied rate, and every jurisdiction anchor whose published figure equals it —
+empty `matches` says plainly that no source agrees);
 `demographic_prior` (the loaded file's provenance and cited sources, or `null`).

@@ -28,7 +28,7 @@ uv run hde <config.yaml> --json
 |---|---|
 | `engine_version` | installed package version — the defaults registry changes verdicts across versions |
 | `warnings` | coherence warnings + time-anchor violations, the same list the CLI prints to stderr |
-| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null` |
+| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), `reference_matches` (one entry per owned-option `other_recurring_costs` line naming a property tax or home-insurance premium: `option`, `cost_name`, `annual_amount`, `family`, `implied_rate` — the amount as a fraction of `initial_value`, `null` for insurance — and `matches`, the full anchor record of every jurisdiction whose published figure equals it; an empty `matches` means no source agrees, which is reported rather than hidden), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null` |
 | `verdict` | `best`, `runner_up`, `margin_pv`, `margin_frac`, `monthly_equivalent`, `prob_best`, `decisive`, `rule`, `reason`, `mc_mean_best` — see the figure glossary |
 | `deterministic` | per option `total_pv` + `breakdown` (keys in the glossary) + `cash_year1` / `principal_year1` / `appreciation_year1` (undiscounted year-1 cash, principal repaid and expected appreciation — the cash view beside the PV view), `affordability`, `market_scenario` |
 | `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
@@ -44,8 +44,24 @@ uv run hde --print-anchors
 ```
 
 The registry (`src/hde/anchors.py`): for every engine default its `value`,
-`as_of`, `source`, `url`, `rationale`, `band`, `short_cite`, `retrieved_on`,
-`kind` (`cited` / `reference` / `neutral` / `derivation`) and `replaces`.
+`as_of`, `source`, `url`, `rationale`, `band`, `short_cite`, `quoted`, `unit`,
+`retrieved_on`, `kind` (`cited` / `reference` / `neutral` / `derivation` /
+`unsourced`) and `replaces`.
+
+The registry also carries **jurisdiction reference tables** — keys
+`property_tax.<municipality>` and `home_insurance.<province>` — which are *not*
+engine defaults: nothing falls back to them and the engine never applies one.
+Each carries two fields the defaults do not need:
+
+| field | meaning |
+|---|---|
+| `quoted` | the figure exactly as the source prints it, in the source's own notation |
+| `unit` | the base the figure is stated on — for a municipal rate, always **assessed** value, which is not market value |
+
+`kind: "unsourced"` is the `source: none` state: `value` is `null`, `url`
+records what was tried, and `short_cite` reads `source: none`. It is the only
+kind permitted to carry no figure, and no other kind may serialize a null
+`value`.
 
 ## Library
 

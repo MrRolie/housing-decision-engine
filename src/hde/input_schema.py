@@ -12,6 +12,14 @@ from .config import _SECTION_KEYS
 
 _NOMINAL_PLANNING = ANCHORS["economic.inflation_rate.nominal_planning"]
 
+# Jurisdictions the registry has no source for, read OFF the registry so the
+# note cannot claim "source: none" for a city that has since been sourced.
+_UNSOURCED_JURISDICTIONS = ", ".join(
+    name.split(".", 1)[1].replace("_", " ").title()
+    for name, anchor in sorted(ANCHORS.items())
+    if name.startswith("property_tax.") and anchor.kind == "unsourced"
+)
+
 # key -> (required?, note[, required_if]) per section; top-level scalars AND the
 # section blocks themselves live under "top". `required` means "required when the
 # block is present"; `required_if` states a conditional requirement in the
@@ -79,7 +87,21 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
                                          "owner pays; escalation_rate is REAL (composed with "
-                                         "inflation in nominal mode)"),
+                                         "inflation in nominal mode). PROPERTY TAX AND HOME "
+                                         "INSURANCE ARE YOUR OWN FIGURES — the engine applies "
+                                         "no default for either. Published figures to check "
+                                         "them against: `hde --print-anchors`, keys "
+                                         "property_tax.<municipality> and "
+                                         "home_insurance.<province>; a line named 'property "
+                                         "tax' or 'insurance' is cited by name in the "
+                                         "assumptions read-back when your figure equals a "
+                                         "published one. Municipal rates are levied on "
+                                         "ASSESSED value, which is not market value (Ontario's "
+                                         "2026 assessments are January 2016 values), so a rate "
+                                         "× purchase price is an approximation. Québec's "
+                                         "school tax is a separate provincial levy on top "
+                                         "of the municipal rate (school_tax.qc). No source "
+                                         f"registered for: {_UNSOURCED_JURISDICTIONS}"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
         "reserve_contribution_rate": (False, "fraction of each year's fees set aside into the "
                                              "reserve fund; default 0 = reserve not modelled"),
@@ -129,7 +151,21 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
                                          "owner pays; escalation_rate is REAL (composed with "
-                                         "inflation in nominal mode)"),
+                                         "inflation in nominal mode). PROPERTY TAX AND HOME "
+                                         "INSURANCE ARE YOUR OWN FIGURES — the engine applies "
+                                         "no default for either. Published figures to check "
+                                         "them against: `hde --print-anchors`, keys "
+                                         "property_tax.<municipality> and "
+                                         "home_insurance.<province>; a line named 'property "
+                                         "tax' or 'insurance' is cited by name in the "
+                                         "assumptions read-back when your figure equals a "
+                                         "published one. Municipal rates are levied on "
+                                         "ASSESSED value, which is not market value (Ontario's "
+                                         "2026 assessments are January 2016 values), so a rate "
+                                         "× purchase price is an approximation. Québec's "
+                                         "school tax is a separate provincial levy on top "
+                                         "of the municipal rate (school_tax.qc). No source "
+                                         f"registered for: {_UNSOURCED_JURISDICTIONS}"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
     },
     "rent": {
@@ -146,7 +182,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs such as "
                           "moving costs"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
-                                         "tenant insurance, parking, utilities the tenant pays"),
+                                         "tenant insurance, parking, utilities the tenant pays. "
+                                         "The home_insurance.* anchors are HOMEOWNER premiums "
+                                         "and are deliberately never matched against a tenant "
+                                         "policy: different product, different price"),
     },
     "economic": {
         "mode": (False, '"real" (DEFAULT — every rate you enter is real) or "nominal": '

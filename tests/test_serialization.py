@@ -4,7 +4,7 @@ surface — anchor records, the structured assumption echo, engine identity.
 Readiness plan A.1/A.5 (2026-09-01).
 """
 
-from hde.anchors import ANCHORS, _ECHO_ALIASES
+from hde.anchors import ANCHOR_KINDS, ANCHORS, _ECHO_ALIASES
 from hde.config import load_config_dict
 from hde.serialization import (
     anchor_to_dict,
@@ -22,7 +22,7 @@ MINIMAL_CONFIG = {
 
 ANCHOR_FIELDS = {
     "name", "value", "as_of", "source", "url", "rationale", "band",
-    "short_cite", "retrieved_on", "kind", "replaces",
+    "short_cite", "quoted", "unit", "retrieved_on", "kind", "replaces",
 }
 
 
@@ -42,7 +42,12 @@ class TestAnchorRecords:
         for name, doc in dump.items():
             assert doc["name"] == name
             assert doc["source"].strip(), name
-            assert doc["kind"] in {"cited", "reference", "neutral", "derivation"}, name
+            assert doc["kind"] in ANCHOR_KINDS, name
+            # `unsourced` is the ONE kind allowed to carry no figure; every
+            # other kind printing a null value would be a number with nothing
+            # behind it.
+            if doc["kind"] != "unsourced":
+                assert doc["value"] is not None, name
 
     def test_live_urls_are_dated(self):
         for name, doc in anchors_to_dict().items():

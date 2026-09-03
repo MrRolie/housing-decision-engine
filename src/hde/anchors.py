@@ -19,7 +19,7 @@ measurement (e.g. price_shock.severity_vol), the rationale says so explicitly.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class AnchorError(Exception):
@@ -27,7 +27,43 @@ class AnchorError(Exception):
     pass
 
 
-ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation"})
+ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsourced"})
+
+# Dotted-key prefixes of the JURISDICTION REFERENCE TABLES (property tax by
+# municipality, home insurance by province). These are NOT engine defaults: no
+# dataclass falls back to one and the engine never applies one. They are
+# published figures the user — or an assistant writing the YAML — chooses from,
+# and `serialization.reference_matches` cites one by name when the user's own
+# number equals the published number.
+#
+# Entries here carry two fields the rest of the registry does not need:
+# `quoted` (the figure exactly as the source prints it) and `unit` (the base
+# that figure is stated on). Both are required at import time, because a
+# municipal rate quoted without its base is the most dangerous number in this
+# file: a rate on ASSESSED value read as a rate on market value is wrong by
+# however far the assessment roll lags the market.
+REFERENCE_FAMILIES = ("property_tax.", "school_tax.", "home_insurance.")
+
+# How close a user's own figure must sit to a published one to be called the
+# same number. The bar is EQUALITY, not resemblance, and the tolerance exists
+# only to absorb rounding in the dollar amount the user typed: half a basis
+# point (0.0005pp) covers rounding an annual amount to the nearest dollar on
+# any plausible price, and nothing else.
+#
+# ANCHOR 2026-09-03: a looser 0.005pp window cited « Ville de Québec » for an
+# illustrative 0.750%-of-price line in a MONTRÉAL scenario, because Québec
+# City's published 0.7464% happened to land inside it. The citation was true
+# and the impression it left was false. A near-miss must read "no anchor
+# match" — which is itself the useful answer.
+_MATCH_TOLERANCE: Dict[str, float] = {
+    "property_tax.": 5e-6,
+    "home_insurance.": 1.0,
+}
+
+
+def is_reference(name: str) -> bool:
+    """True for a jurisdiction reference entry (never an engine default)."""
+    return name.startswith(REFERENCE_FAMILIES)
 
 
 # Echo aliases: dotted keys as they appear in spec.defaults_applied -> registry
@@ -49,13 +85,23 @@ class Anchor:
     """One cited engine default: value + provenance + plausible band."""
 
     name: str
-    value: float
+    # None ONLY for kind="unsourced": a jurisdiction with no fetchable primary
+    # source holds no figure at all, rather than a plausible-looking guess.
+    value: Optional[float]
     as_of: str
     source: str
     url: str
     rationale: str
     band: Tuple[float, float]
     short_cite: str
+    # The figure EXACTLY as the source prints it, in the source's own notation
+    # (e.g. "0,4973 $ par 100 $ d'évaluation municipale"). Required for a
+    # jurisdiction reference entry: `value` is the engine's decimal reading of
+    # it, and a reader who opens the URL must be able to reconcile the two.
+    quoted: str = ""
+    # What `value` is a rate or amount OF — the base, stated plainly. Required
+    # for a jurisdiction reference entry.
+    unit: str = ""
     # ISO date the cited URL was fetched and the quoted figure confirmed
     # (provenance remediation 0.0, 2026-09-01). Required whenever `url` is a
     # live http(s) source; calibration/neutral entries carry no URL and no date.
@@ -83,16 +129,54 @@ class Anchor:
         lo, hi = self.band
         if not lo <= hi:
             raise AnchorError(f"anchor {self.name!r}: band endpoints out of order: {self.band}")
-        if not lo <= self.value <= hi:
-            raise AnchorError(
-                f"anchor {self.name!r}: central value {self.value} outside its "
-                f"own band {self.band}"
-            )
         if self.kind not in ANCHOR_KINDS:
             raise AnchorError(
                 f"anchor {self.name!r}: kind must be one of {sorted(ANCHOR_KINDS)}, "
                 f"got {self.kind!r}"
             )
+        if self.kind == "unsourced":
+            # The whole point of the state: no source, therefore no figure. An
+            # unsourced entry carrying a number would be exactly the defect —
+            # a plausible value with nothing behind it — that this registry exists
+            # to make impossible.
+            if self.value is not None:
+                raise AnchorError(
+                    f"anchor {self.name!r}: kind='unsourced' carries value "
+                    f"{self.value} — a figure with no source does not go in"
+                )
+            if self.url.startswith("http"):
+                raise AnchorError(
+                    f"anchor {self.name!r}: kind='unsourced' with a live URL — "
+                    f"if the URL carries the figure, cite it"
+                )
+            if len(self.url.strip()) <= len("none") + 4:
+                raise AnchorError(
+                    f"anchor {self.name!r}: an unsourced entry must say WHAT WAS "
+                    f"TRIED in `url`, not just {self.url!r}"
+                )
+            if not self.short_cite.strip().startswith("source: none"):
+                raise AnchorError(
+                    f"anchor {self.name!r}: an unsourced entry must read "
+                    f"'source: none' wherever it is cited, got {self.short_cite!r}"
+                )
+        else:
+            if self.value is None:
+                raise AnchorError(
+                    f"anchor {self.name!r}: only kind='unsourced' may hold no value"
+                )
+            if not lo <= self.value <= hi:
+                raise AnchorError(
+                    f"anchor {self.name!r}: central value {self.value} outside its "
+                    f"own band {self.band}"
+                )
+            if is_reference(self.name):
+                for field_name in ("quoted", "unit"):
+                    if not getattr(self, field_name).strip():
+                        raise AnchorError(
+                            f"anchor {self.name!r}: a jurisdiction reference entry "
+                            f"needs {field_name} — a published figure without the "
+                            f"base it is stated on cannot be applied safely"
+                        )
         if self.url.startswith("http") and not self.retrieved_on.strip():
             raise AnchorError(
                 f"anchor {self.name!r}: a live URL needs retrieved_on (the date the source was retrieved)"
@@ -479,6 +563,317 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="hde verdict rule",
         kind="derivation",
     ),
+
+    # --- JURISDICTION REFERENCE TABLES (2026-09-03) -------------------------
+    #
+    # Property tax and home insurance were the two largest UNSOURCED numbers in
+    # a typical run — together roughly 15% of an owned option's year-1 cash,
+    # and both were whatever percentage of value the assistant reached for. The
+    # engine still applies neither: `other_recurring_costs` stays the user's own
+    # dollar figure. What the registry adds is a published figure to compare it
+    # against, and a citation when the two agree.
+    #
+    # THREE RULES HOLD ACROSS THIS SECTION.
+    #
+    # 1. ASSESSED IS NOT MARKET. Every municipal rate below is levied on the
+    #    ASSESSMENT ROLL, not on what the property would sell for today, and no
+    #    entry converts one to the other. Québec publishes the gap as the
+    #    `proportion médiane` — "un indicateur du niveau général des valeurs
+    #    inscrites au rôle d'évaluation d'une municipalité", the ratio of roll
+    #    value to actual sale price — and warns that a roll value scaled by the
+    #    facteur comparatif is an "évaluation foncière uniformisée", explicitly
+    #    a standardised figure rather than a market estimate
+    #    (quebec.ca/habitation-territoire/information-fonciere/evaluation-fonciere/
+    #    proportions-medianes/a-propos, retrieved 2026-09-03). Ontario's gap is
+    #    larger and precisely dated: MPAC states that "Property assessments for
+    #    the 2026 property tax year will continue to be based on fully phased-in
+    #    January 1, 2016 current values", the province-wide reassessment having
+    #    been postponed by regulation filed 2023-08-16
+    #    (mpac.ca/en/UnderstandingYourAssessment/AssessmentCycle, retrieved
+    #    2026-09-03). An Ontario rate applied to a 2026 PURCHASE PRICE therefore
+    #    OVERSTATES the tax by however much the property has appreciated since
+    #    January 2016. `unit` says this on every entry, and the read-back
+    #    reprints it beside any citation it makes.
+    #
+    # 2. AD VALOREM ONLY. `value` is the sum of the rate lines charged per
+    #    dollar of assessment. Flat per-dwelling charges — Laval's $486 water
+    #    service, Québec City's $386 aqueduct and $195 waste tariffs — are real
+    #    money and are NOT in the rate; a user's own figure that includes them
+    #    will legitimately fail to match, and the rationale says so.
+    #
+    # 3. THE BAND IS PUBLISHED, NOT IMAGINED. It spans the narrowest to the
+    #    broadest reading of the SAME source (municipal-only to full ad-valorem
+    #    bill), never an invented plausible range. Where the source publishes
+    #    one figure, the band has zero width.
+    #
+    # School tax is a separate provincial levy in Québec and the education rate
+    # is set by Ontario, not the municipality; each entry says which of the two
+    # it includes.
+    "property_tax.laval": Anchor(
+        name="property_tax.laval",
+        value=0.005909,
+        as_of="2026",
+        source="Ville de Laval, budget 2026 — « Autres statistiques : Évolution de "
+               "certains taux de taxation, de tarification et de redevance » (p. 73), "
+               "régime des taux variés, taux de base (résidentiel 1–5 logements)",
+        url="https://www.laval.ca/wp-content/uploads/2026/02/evolution-taux-taxation-tarification.pdf",
+        quoted="2026, taux de base, par 100 $ d'évaluation municipale : taxe foncière "
+               "générale 0,4973 $ ; taxe foncière spéciale — infrastructures d'eau potable "
+               "et d'eaux usées 0,0111 $ ; taxe foncière spéciale — financement de la "
+               "contribution à l'ARTM 0,0825 $",
+        unit="rate on ASSESSED value (0,5909 $ per 100 $ of municipal assessment) "
+             "— assessed ≠ market",
+        rationale=(
+            "The three ad-valorem lines a Laval residential owner pays, summed: "
+            "0,4973 + 0,0111 + 0,0825 = 0,5909 $ per 100 $ = 0.5909% of assessed "
+            "value. Band bottom is the general tax alone (0,4973 $), band top the "
+            "full ad-valorem total. EXCLUDED and material: the water-service "
+            "tariff, a FLAT 486,00 $ per dwelling in 2026 (up from 337,00 $), plus "
+            "85,00 $ per pool — not a rate, so not in this figure. Also excluded: "
+            "the Québec school tax, levied provincially. Laval's rate fell from "
+            "0,5562 $ in 2025 because the roll rose; the rate alone does not say "
+            "which way a bill moved. School tax excluded — cited separately as "
+            "`school_tax.qc`, which a Laval owner also pays."
+        ),
+        band=(0.004973, 0.005909),
+        short_cite="Ville de Laval 2026",
+        retrieved_on="2026-09-03",
+    ),
+    "property_tax.montreal": Anchor(
+        name="property_tax.montreal",
+        value=0.005556,
+        as_of="2026",
+        source="Ville de Montréal, « Taux de taxes 2026 » (table « Taux de taxation "
+               "2026 (en $ / 100 $) », document 2026_taux_taxes.pdf linked from the "
+               "city's 2026 tax-rates article; the PDF itself sits behind a document "
+               "viewer with no stable direct URL), column « Immeubles résidentiels », "
+               "whose footnote reads « le taux applicable aux immeubles de la sous-"
+               "catégorie des immeubles 6 logements ou plus et celle qui est "
+               "résiduelle » — i.e. it covers ordinary houses and condos",
+        url="https://montreal.ca/articles/taux-de-taxes-pour-2026-106147",
+        quoted="Taux de taxation 2026 (en $ / 100 $), immeubles résidentiels — taxes "
+               "applicables à tous les immeubles de la Ville de Montréal : taxe "
+               "foncière générale 0,4631 ; taxe relative à l'ARTM 0,0070 ; taxe "
+               "relative au service de la voirie 0,0024 ; taxe relative au service de "
+               "l'eau 0,0831",
+        unit="rate on ASSESSED value (0,5556 $ per 100 $ of municipal assessment, "
+             "CITY-WIDE LINES ONLY — the borough adds more) — assessed ≠ market",
+        rationale=(
+            "MONTRÉAL HAS NO SINGLE RESIDENTIAL RATE, and the anchor is honest about "
+            "which half it holds. The four lines above are levied on every property "
+            "in the city and sum to 0,5556 $ per 100 $ = 0.5556% of assessed value; "
+            "that is `value`. On top of it every owner also pays two BOROUGH-VARYING "
+            "lines from the same table — « taxe relative aux dettes des anciennes "
+            "villes » (residential 0,0010 in Lachine to 0,0196 in nine boroughs, « s. "
+            "o. » in L'Île-Bizard–Sainte-Geneviève and Pierrefonds–Roxboro) and the "
+            "arrondissement's own services + investissements taxes. Worked totals "
+            "from the same table: Le Plateau-Mont-Royal 0,5556 + 0,0196 + 0,0513 + "
+            "0,0246 = 0,6511 $ per 100 $ (0.6511%); Ville-Marie 0,6229% is the "
+            "lowest borough total and Anjou 0,7403% the highest. The band spans "
+            "city-wide-only to the highest borough total, so a Montréal figure "
+            "matches this anchor only when it is deliberately the city-wide part. "
+            "NOT IN THIS SOURCE, and not folded in from anywhere else: the Québec "
+            "school tax, levied by the centre de services scolaire — cited "
+            "separately as `school_tax.qc`, which a Montréal owner also pays."
+        ),
+        band=(0.005556, 0.007403),
+        short_cite="Ville de Montréal 2026 (city-wide lines)",
+        retrieved_on="2026-09-03",
+    ),
+    "property_tax.quebec_city": Anchor(
+        name="property_tax.quebec_city",
+        value=0.007464,
+        as_of="2026",
+        source="Ville de Québec, « Taux de taxes » (profil financier), exercice "
+               "financier 2026, adopted by Règlement sur l'imposition des taxes et "
+               "des compensations pour l'exercice financier 2026, R.V.Q. 3492",
+        url="https://www.ville.quebec.qc.ca/apropos/profil-financier/taux-taxation.aspx",
+        quoted="Par 100 $ d'évaluation — « Immeubles résidentiels de 1 à 5 "
+               "logements » : 0.7464 (2026)",
+        unit="rate on ASSESSED value (0,7464 $ per 100 $ of municipal assessment) "
+             "— assessed ≠ market",
+        rationale=(
+            "The single ad-valorem residential rate in the city's own 2026 table: "
+            "0,7464 $ per 100 $ = 0.7464% of assessed value. Zero-width band — the "
+            "source publishes one rate for this class, so there is no second "
+            "reading to bracket it with. EXCLUDED and material: the flat per-"
+            "dwelling tariffs the same table lists — 386 $ aqueduc et égout and "
+            "195 $ matières résiduelles — which together add roughly $580 a year "
+            "regardless of value. School tax excluded — cited separately as "
+            "`school_tax.qc`, which a Québec owner also pays."
+        ),
+        band=(0.007464, 0.007464),
+        short_cite="Ville de Québec 2026",
+        retrieved_on="2026-09-03",
+    ),
+    "property_tax.toronto": Anchor(
+        name="property_tax.toronto",
+        value=0.00767311,
+        as_of="2026",
+        source="City of Toronto, « Property Tax Rates & Fees », 2026 residential "
+               "rate table (municipal rate set by Council; education rate set by "
+               "the Province of Ontario)",
+        url="https://www.toronto.ca/services-payments/property-taxes-utilities/property-tax/property-tax-rates-and-fees/",
+        quoted="Residential (2026): City Tax Rate 0.605295%, Education Tax Rate "
+               "0.153000%, City Building Fund 0.009016%, Total Tax Rate 0.767311%",
+        unit="rate on ASSESSED value (MPAC CVA — a January 1, 2016 value in the "
+             "2026 tax year) — assessed ≠ market",
+        rationale=(
+            "Total 2026 residential rate 0.767311% of CVA, education included. "
+            "Band bottom is the municipal share alone (City 0.605295% + City "
+            "Building Fund 0.009016% = 0.614311%), band top the total with the "
+            "provincial education rate. THE ASSESSMENT LAG IS A DECADE: MPAC "
+            "assesses the 2026 tax year on fully phased-in January 1, 2016 "
+            "values, the province-wide reassessment having been postponed. "
+            "Applying this rate to a 2026 purchase price overstates the tax by "
+            "the whole 2016→2026 appreciation — for the engine's purposes that "
+            "makes it a CEILING on the true bill, not an estimate of it."
+        ),
+        band=(0.00614311, 0.00767311),
+        short_cite="City of Toronto 2026",
+        retrieved_on="2026-09-03",
+    ),
+    "school_tax.qc": Anchor(
+        name="school_tax.qc",
+        value=0.0007899,
+        as_of="2026-2027",
+        source="Centre de services scolaire des Patriotes (gouv.qc.ca), « Taxe "
+               "scolaire » — the single province-wide school tax rate set by the "
+               "Québec government under the Loi visant l'instauration d'un taux "
+               "unique de taxation scolaire",
+        url="https://cssp.gouv.qc.ca/a-propos/taxe-scolaire/",
+        quoted="« Un taux unique de taxation scolaire applicable dans l'ensemble du "
+               "Québec pour 2026-2027, fixé à 0,07899 $ par 100 $ d'évaluation » ; "
+               "« Une exemption pour les premiers 25 000 $ de valeur de l'immeuble »",
+        unit="rate on ASSESSED value (0,07899 $ per 100 $ of évaluation uniformisée "
+             "ajustée, first $25,000 exempt) — assessed ≠ market",
+        rationale=(
+            "SEPARATE FROM THE MUNICIPAL RATE, and deliberately in its own family so "
+            "the read-back can never cite it for a municipal line. Québec's school "
+            "tax is levied by the centre de services scolaire, not the city, and none "
+            "of the municipal sources above includes it — so a Québec owner's total "
+            "property-tax bill is the municipal rate PLUS this. One rate covers the "
+            "whole province for 2026-2027. Two adjustments the flat rate hides: the "
+            "base is the évaluation uniformisée AJUSTÉE (the roll value scaled by the "
+            "municipality's comparative factor), not the raw roll value, and the "
+            "first $25,000 is exempt — on a $600,000 assessment the exemption alone "
+            "cuts the effective rate by about 4%. Zero-width band: one published "
+            "rate."
+        ),
+        band=(0.0007899, 0.0007899),
+        short_cite="Québec taux unique 2026-2027",
+        retrieved_on="2026-09-03",
+    ),
+    "property_tax.gatineau": Anchor(
+        name="property_tax.gatineau",
+        value=None,
+        as_of="2026",
+        source="none — no single city-wide residential rate exists to cite",
+        url="none — tried gatineau.ca's taxes municipales pages and the 2026 budget "
+            "documents; the budget's « Taux de taxes 2026 » pages are image-only "
+            "scans with no extractable text, and the 2026 explanatory notes PDF "
+            "(gatineau.ca/docs/guichet_municipal/taxes_municipales/"
+            "notes_explicatives.fr-CA.pdf) likewise carries no machine-readable text",
+        rationale=(
+            "NOT merely a failed fetch — a structural absence, which is the more "
+            "useful finding. Since 2024 Gatineau levies a rate per NEIGHBOURHOOD "
+            "UNIT rather than one rate across the city, expressly to damp the "
+            "assessment roll's effect on individual bills, so 'the Gatineau "
+            "residential rate' is not a quantity that exists. A Gatineau run must "
+            "take the rate from the property's own tax bill or the city's online "
+            "tax roll for that address; any single percentage offered for the city "
+            "is the assistant's own estimate and must be labelled one. The only "
+            "2026 figure confirmed is the budgeted residential increase, which is "
+            "a change, not a rate."
+        ),
+        band=(0.0, 0.0),
+        short_cite="source: none",
+        kind="unsourced",
+    ),
+    "property_tax.ottawa": Anchor(
+        name="property_tax.ottawa",
+        value=None,
+        as_of="2026",
+        source="none — the 2026 rate-setting by-law was not located in fetchable form",
+        url="none — tried ottawa.ca's property-tax-rates and calculating-your-property-"
+            "taxes pages (both returned empty), the City's 2026 final-tax mailer at "
+            "documents.ottawa.ca (dollar totals only, no rate), and the 2026 tax-policy "
+            "report on the Council agenda portal (tax RATIOS by class, not rates); the "
+            "Ontario education rate on e-Laws sits behind a JavaScript shell",
+        rationale=(
+            "No figure is registered rather than a plausible one. Ottawa's rate is "
+            "set annually by by-law and the components (city-wide, transit, police, "
+            "urban-area, provincial education) are published separately; none was "
+            "reached. An Ottawa run must take the rate from the property's own tax "
+            "bill, the City's online property-tax estimator, or the rate by-law; a "
+            "percentage typed from anywhere else is the assistant's estimate and "
+            "must be labelled one. What DOES carry over from the Toronto entry is "
+            "the base: Ontario assesses the 2026 tax year on January 1, 2016 MPAC "
+            "values (mpac.ca AssessmentCycle, retrieved 2026-09-03), so any Ontario "
+            "rate applied to a 2026 purchase price overstates the bill."
+        ),
+        band=(0.0, 0.0),
+        short_cite="source: none",
+        kind="unsourced",
+    ),
+    "home_insurance.qc": Anchor(
+        name="home_insurance.qc",
+        value=813.0,
+        as_of="2023",
+        source="Statistics Canada, table 11-10-0222-01, Household spending by "
+               "province (Survey of Household Spending), reference year 2023, "
+               "released 2025-05-21; line item « Homeowners' insurance premiums "
+               "for owned living quarters », statistic « Average expenditure per "
+               "household », Quebec",
+        url="https://www150.statcan.gc.ca/n1/tbl/csv/11100222-eng.zip",
+        quoted="Quebec, Homeowners' insurance premiums for owned living quarters, "
+               "average expenditure per household (2023): $813",
+        unit="$/yr averaged over ALL Québec households, renters included at $0 "
+             "— a floor, not a typical premium",
+        rationale=(
+            "BIASED LOW AS A HOMEOWNER'S PREMIUM, and by an amount this source "
+            "cannot quantify: the denominator is every household in the province, "
+            "so every renter enters at $0. Treat it as a FLOOR, not a typical "
+            "premium — an owner's actual premium is above it, and a placeholder "
+            "the assistant scales up from this floor must be labelled as the "
+            "assistant's estimate, never as this figure. No per-province "
+            "'average among insured homeowners' source was found: the Insurance "
+            "Bureau of Canada Facts Book publishes national totals only, and "
+            "StatCan's conditional (reporting-households) series is archived at "
+            "2009. Zero-width band: one published figure, no second reading. "
+            "Reference year 2023 — three years before the run."
+        ),
+        band=(813.0, 813.0),
+        short_cite="StatCan SHS 2023 (QC)",
+        retrieved_on="2026-09-03",
+    ),
+    "home_insurance.on": Anchor(
+        name="home_insurance.on",
+        value=1053.0,
+        as_of="2023",
+        source="Statistics Canada, table 11-10-0222-01, Household spending by "
+               "province (Survey of Household Spending), reference year 2023, "
+               "released 2025-05-21; line item « Homeowners' insurance premiums "
+               "for owned living quarters », statistic « Average expenditure per "
+               "household », Ontario",
+        url="https://www150.statcan.gc.ca/n1/tbl/csv/11100222-eng.zip",
+        quoted="Ontario, Homeowners' insurance premiums for owned living quarters, "
+               "average expenditure per household (2023): $1,053",
+        unit="$/yr averaged over ALL Ontario households, renters included at $0 "
+             "— a floor, not a typical premium",
+        rationale=(
+            "BIASED LOW AS A HOMEOWNER'S PREMIUM, same construction as the Québec "
+            "entry: every renter enters the average at $0. A FLOOR, not a typical "
+            "premium; a placeholder scaled up from it is the assistant's estimate "
+            "and must be labelled so. No per-province 'average among insured "
+            "homeowners' source was found (IBC Facts Book is national-only; the "
+            "StatCan conditional series is archived at 2009). Zero-width band. "
+            "Reference year 2023."
+        ),
+        band=(1053.0, 1053.0),
+        short_cite="StatCan SHS 2023 (ON)",
+        retrieved_on="2026-09-03",
+    ),
 }
 
 
@@ -559,6 +954,27 @@ def source_key_label(key: str) -> str:
 
 def describe_mapping_version(version: str) -> str:
     return MAPPING_VERSION_NOTES.get(version, f"undescribed mapping version {version}")
+
+
+def match_reference(family: str, value: Optional[float], tol: Optional[float] = None) -> List[Anchor]:
+    """Every jurisdiction entry in `family` whose published figure equals
+    `value`, within the family's tolerance.
+
+    The read-back's whole trigger: the engine never applies these figures, so
+    the only honest moment to name one is when the user's own number IS it.
+    Returns ALL matches in name order — two jurisdictions can levy the same
+    rate, and picking one of them would be a coin flip presented as a fact.
+    An unsourced entry (no value) can never match.
+    """
+    if value is None:
+        return []
+    if tol is None:
+        tol = _MATCH_TOLERANCE.get(family, 0.0)
+    return [
+        anchor for name, anchor in sorted(ANCHORS.items())
+        if name.startswith(family) and anchor.value is not None
+        and abs(anchor.value - value) <= tol
+    ]
 
 
 def short_cite(name: str) -> str:

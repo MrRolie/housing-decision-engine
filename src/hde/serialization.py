@@ -17,7 +17,7 @@ import dataclasses
 from importlib import metadata
 from typing import Any, Dict, List, Optional
 
-from .anchors import ANCHORS, _ECHO_ALIASES, Anchor, short_cite
+from .anchors import ANCHORS, _ECHO_ALIASES, Anchor, match_reference, short_cite
 from .market_scenario import LoadedScenarioPrior
 from .models import (
     ComparisonDeterministicResult,
@@ -72,6 +72,99 @@ def anchors_to_dict() -> Dict[str, Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Assumption echo (audit U1) — text lines and the structured form
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Jurisdiction reference match (2026-09-03)
+#
+# The registry's jurisdiction tables are never applied by the engine, so the
+# defaults echo — which cites what the engine SUPPLIED — can never reach them.
+# Their trigger is the opposite one: the user supplied a figure, and it happens
+# to BE a published figure. Then, and only then, the read-back names the source.
+#
+# Two lines are deliberately never matched. A rent option's tenant insurance is
+# a different product from a homeowner's premium, and a mortgage-insurance line
+# is not property insurance at all; borrowing either citation would be a false
+# statement of provenance dressed as a helpful one.
+# ---------------------------------------------------------------------------
+
+_TAX_WORDS = ("property tax", "property taxes", "municipal tax", "taxe fonci",
+              "taxe municipale", "taxes municipales")
+_INSURANCE_WORDS = ("insurance", "assurance")
+# A line naming one of these is some other product, whatever else it says.
+_NOT_HOME_INSURANCE = ("mortgage", "hypothéc", "hypothec", "tenant", "renter", "locataire")
+# The Québec school tax is a provincial levy, not the municipal rate.
+_NOT_PROPERTY_TAX = ("school", "scolaire", "welcome", "bienvenue", "mutation")
+
+
+def _cost_family(cost_name: str) -> Optional[str]:
+    """Which jurisdiction table a recurring-cost line belongs to, or None.
+
+    Separators are normalised first: the repo's own examples write
+    `property_tax` and `home_insurance`, and a matcher that only saw
+    "property tax" would silently skip exactly the configs it ships with.
+    """
+    low = cost_name.lower().replace("_", " ").replace("-", " ")
+    if any(word in low for word in _NOT_PROPERTY_TAX):
+        return None
+    if any(word in low for word in _TAX_WORDS):
+        return "property_tax."
+    if any(word in low for word in _NOT_HOME_INSURANCE):
+        return None
+    if any(word in low for word in _INSURANCE_WORDS):
+        return "home_insurance."
+    return None
+
+
+def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
+    """One entry per OWNED-option recurring cost that names a property tax or a
+    home-insurance premium, with every jurisdiction anchor whose published
+    figure equals it.
+
+    `matches` is empty when nothing published agrees — which is reported, not
+    hidden: an unmatched tax line is the honest "no source for this" the answer
+    is required to say out loud.
+    """
+    entries: List[Dict[str, Any]] = []
+    for option_name in ("condo", "house"):
+        option = getattr(spec, option_name, None)
+        if option is None:
+            continue
+        for cost in option.other_recurring_costs:
+            family = _cost_family(cost.name)
+            if family is None:
+                continue
+            if family == "property_tax.":
+                implied = (cost.annual_amount / option.initial_value
+                           if option.initial_value else None)
+                probe = implied
+            else:
+                implied = None
+                probe = cost.annual_amount
+            entries.append({
+                "option": option_name,
+                "cost_name": cost.name,
+                "annual_amount": cost.annual_amount,
+                "family": family,
+                "implied_rate": implied,
+                "matches": [anchor_to_dict(a) for a in match_reference(family, probe)],
+            })
+    return entries
+
+
+def _reference_line(entry: Dict[str, Any]) -> str:
+    """One recurring-cost line for the assumption echo. A citation ALWAYS
+    carries the anchor's unit: a municipal rate names the base it is levied
+    on, because that base is not the price the user typed."""
+    head = f"{entry['cost_name']} ${entry['annual_amount']:,.0f}/yr"
+    if entry["implied_rate"] is not None:
+        head += f" = {entry['implied_rate']:.3%} of price"
+    if not entry["matches"]:
+        return f"{head} [no anchor match — hde --print-anchors]"
+    cites = " ; ".join(
+        f"{m['short_cite']} · {m['unit']}" for m in entry["matches"]
+    )
+    return f"{head} [{cites}]"
+
 
 def spec_value(spec: ComparisonSpec, dotted: str) -> Any:
     """Walk a dotted key (any depth, e.g. condo.price_shock.severity_mean)."""
@@ -173,6 +266,14 @@ def format_assumptions(
             + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
                if opt.financed_purchase_costs else "")
         )
+    matches = reference_matches(spec)
+    for option_name in ("condo", "house"):
+        own = [e for e in matches if e["option"] == option_name]
+        if own:
+            lines.append(
+                f"{option_name} other costs: "
+                + " · ".join(_reference_line(entry) for entry in own)
+            )
     if spec.rent is not None:
         lines.append(
             f"rent: escalation {_g(spec.rent.rent_escalation_rate)} · "
@@ -256,6 +357,9 @@ def assumptions_to_dict(
         "discount_rate": spec.simulation.discount_rate,
         "lines": format_assumptions(spec, prior),
         "defaults_applied": entries,
+        # Jurisdiction figures the USER supplied that a published source agrees
+        # with (empty `matches` = the engine knows of no source for that line).
+        "reference_matches": reference_matches(spec),
         "demographic_prior": (
             {**prior.provenance_block(), "description": prior.describe(),
              "sources": prior.sources()}

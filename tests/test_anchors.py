@@ -17,7 +17,15 @@ import math
 
 import pytest
 
-from hde.anchors import ANCHORS, ANCHOR_KINDS, Anchor, AnchorError, _ECHO_ALIASES, short_cite
+from hde.anchors import (
+    ANCHORS,
+    ANCHOR_KINDS,
+    Anchor,
+    AnchorError,
+    _ECHO_ALIASES,
+    is_reference,
+    short_cite,
+)
 from hde.config import _ASSUMPTION_KEYS, coherence_warnings, load_config_dict
 from hde.models import (
     CondoParams,
@@ -88,7 +96,13 @@ def _parser_paths(name: str):
 
 class TestRegistryDiscipline:
     def test_every_anchor_is_wired_or_declared_consumed(self):
-        declared = set(WIRING) | set(CONSUMED_ELSEWHERE)
+        # Jurisdiction reference tables are a THIRD class: never an engine
+        # default, consumed by serialization.reference_matches when a user's own
+        # figure equals the published one. Declared by family, not one by one,
+        # so adding a municipality does not need a line here — but adding a new
+        # FAMILY does. Their own discipline is pinned in test_reference_anchors.
+        declared = (set(WIRING) | set(CONSUMED_ELSEWHERE)
+                    | {n for n in ANCHORS if is_reference(n)})
         assert declared == set(ANCHORS), {
             "unwired anchors": sorted(set(ANCHORS) - declared),
             "stale wiring": sorted(declared - set(ANCHORS)),
@@ -110,8 +124,11 @@ class TestRegistryDiscipline:
             assert anchor.name == name
             for field in ("as_of", "source", "url", "rationale", "short_cite"):
                 assert getattr(anchor, field).strip(), f"{name}: empty {field}"
-            assert anchor.band[0] <= anchor.value <= anchor.band[1], name
             assert anchor.kind in ANCHOR_KINDS, name
+            if anchor.kind == "unsourced":
+                assert anchor.value is None, f"{name}: unsourced entry holds a value"
+            else:
+                assert anchor.band[0] <= anchor.value <= anchor.band[1], name
             if anchor.url.startswith("http"):
                 assert anchor.retrieved_on, f"{name}: live URL without retrieved_on"
 
