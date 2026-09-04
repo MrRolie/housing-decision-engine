@@ -22,9 +22,15 @@ The optional top-level `sources:` block records WHO stated each value: a
 mapping from a dotted key the config sets (`rent.monthly_rent`,
 `simulation.investment_return_vol`, `house.events` for a whole list) to `user`,
 `assistant` (a value typed on the user's behalf) or `anchor:<name>` from
-`--print-anchors`. It affects no computation — it splits the assumption echo by
-source class and arms one warning. A key the config does not set, a value
-outside those three forms, or an unknown anchor name refuses at load.
+`--print-anchors` — and `anchor:<name>+<name>` when the value is the SUM of two
+published figures (`anchor:property_tax.laval+school_tax.qc`: a Québec owner's
+rate is the municipal rate plus the province's school rate), which echoes both.
+It affects no computation — it splits the assumption echo by source class and
+arms one warning. A key the config does not set, a value outside those forms, an
+unknown anchor name, a `source: none` anchor (it holds no figure), and an anchor
+whose figure is not the number the config states all refuse at load: the value
+must equal the anchor's — or the sum, or a declared `restatement` of it — within
+the same equality window the read-back matcher uses.
 
 ## Output
 
@@ -36,7 +42,7 @@ uv run hde <config.yaml> --json
 |---|---|
 | `engine_version` | installed package version — the defaults registry changes verdicts across versions |
 | `warnings` | coherence warnings + time-anchor violations + affordability breaches + the decisiveness-provenance warning (`decisiveness rests on uncertainty inputs the user did not state: …` — fires only under the `mc_floor` verdict rule, names every uncertainty input that is `assistant` or unattributed with its value, and closes with what the deterministic line alone says and whether that margin clears the tie band), the same list the CLI prints to stderr |
-| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`; with `mortgage_insurance` active it adds an `insured:` clause — the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — and the loan-to-value it quotes is the tier basis, before the premium), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), `reference_matches` (one entry per owned-option `other_recurring_costs` line naming a property tax or home-insurance premium: `option`, `cost_name`, `annual_amount`, `family`, `implied_rate` — the amount as a fraction of `initial_value`, `null` for insurance — and `matches`, the full anchor record of every jurisdiction whose published figure equals it; an empty `matches` means no source agrees, which is reported rather than hidden `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null`, and `sources` — the source-class echo: `declared` (false when the config carries no `sources:` block, and then the lines say so in one sentence), `user` / `assistant` / `unattributed` (each a list of `{key, value, formatted}`, `formatted` in the config's own units) and `anchor` (a `{key: anchor name}` mapping) |
+| `assumptions` | `mode`, `years`, `discount_rate`, the text `lines` of the Assumptions block (the `<option> financing:` line carries the down payment, its share of price, the distance to the 20% mortgage-insurance line and the loan-to-value; with `cash_available` it leads with the netting `cash − purchase_costs = down payment`; with `mortgage_insurance` active it adds an `insured:` clause — the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — and the loan-to-value it quotes is the tier basis, before the premium), `defaults_applied` (one entry per key the YAML omitted: `key`, `value`, `formatted`, `cite`, `kind`, `note` — how `value` relates to `anchor.value` when nominal mode composed it, else `null` — and the full `anchor` record), `reference_matches` (one entry per owned-option `other_recurring_costs` line naming a property tax or home-insurance premium: `option`, `cost_name`, `annual_amount`, `family`, `implied_rate` — the amount as a fraction of `initial_value`, `null` for insurance — `matches`, the full anchor record of every anchor cited for the line, and `citations`, how they combine: one `{kind, anchors, total}` record per claim, `kind` either `single` (one published figure equals the line) or `sum` (a municipal rate plus its province's school rate — the bill a Québec owner actually pays), `anchors` the registry names in citation order and `total` the published figure the line was matched against. Both lists empty means no source agrees, which is reported rather than hidden), and `demographic_prior` (provenance block + `description` + cited `sources`) or `null`, and `sources` — the source-class echo: `declared` (false when the config carries no `sources:` block, and then the lines say so in one sentence), `user` / `assistant` / `unattributed` (each a list of `{key, value, formatted}`, `formatted` in the config's own units) and `anchor` (a `{key: anchor name}` mapping) |
 | `verdict` | `best`, `runner_up`, `margin_pv`, `margin_frac`, `monthly_equivalent`, `prob_best`, `decisive`, `rule`, `reason`, `mc_mean_best` — see the figure glossary |
 | `deterministic` | per option `total_pv` + `breakdown` (keys in the glossary) + `cash_year1` / `principal_year1` / `appreciation_year1` (undiscounted year-1 cash, principal repaid and expected appreciation — the cash view beside the PV view), `affordability`, `market_scenario` |
 | `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
@@ -63,18 +69,22 @@ uv run hde --print-anchors
 
 The registry (`src/hde/anchors.py`): for every engine default its `value`,
 `as_of`, `source`, `url`, `rationale`, `band`, `short_cite`, `quoted`, `unit`,
-`retrieved_on`, `kind` (`cited` / `reference` / `neutral` / `derivation` /
-`unsourced`) and `replaces`.
+`province`, `retrieved_on`, `kind` (`cited` / `reference` / `neutral` /
+`derivation` / `unsourced`), `restatements` and `replaces`.
 
-The registry also carries **jurisdiction reference tables** — keys
-`property_tax.<municipality>` and `home_insurance.<province>` — which are *not*
+The registry also carries **reference tables** — keys
+`property_tax.<municipality>`, `school_tax.<province>`,
+`home_insurance.<province>` and `mortgage_rate.posted_5y` — which are *not*
 engine defaults: nothing falls back to them and the engine never applies one.
-Each carries two fields the defaults do not need:
+They are published figures a user picks from, cited when the user's own number
+IS one. Each carries fields the defaults do not need:
 
 | field | meaning |
 |---|---|
 | `quoted` | the figure exactly as the source prints it, in the source's own notation |
-| `unit` | the base the figure is stated on — for a municipal rate, always **assessed** value, which is not market value |
+| `unit` | the base the figure is stated on — for a municipal rate, always **assessed** value, which is not market value; for `mortgage_rate.posted_5y`, a POSTED rate (a list price: contracted rates run lower, so it is a ceiling) quoted semi-annually compounded |
+| `province` | which province the entry is in — required for `property_tax.*` and `school_tax.*`, because a municipal rate is summed only with its OWN province's school rate |
+| `restatements` | the same published figure in another convention, each `{value, why}` — 6.09% posted and 6.1827% effective annual are one figure, so a config stating either may cite the anchor |
 
 `kind: "unsourced"` is the `source: none` state: `value` is `null`, `url`
 records what was tried, and `short_cite` reads `source: none`. It is the only

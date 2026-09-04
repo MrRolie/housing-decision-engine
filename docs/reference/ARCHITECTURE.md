@@ -49,15 +49,16 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
 
 ### Anchors: two kinds of entry
 
-The registry holds **engine defaults** and, since 2026-09-03, **jurisdiction
-reference tables**. They are opposite in how they reach a run.
+The registry holds **engine defaults** and, since 2026-09-03, **reference
+tables** — jurisdiction tax and insurance figures, and since 2026-09-04 the
+posted mortgage rate. They are opposite in how they reach a run.
 
 | | engine default | jurisdiction reference |
 |---|---|---|
-| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `home_insurance.<province>` |
+| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `school_tax.<province>`, `home_insurance.<province>`, `mortgage_rate.posted_5y` |
 | applied by the engine? | yes, when the YAML omits the key | **never** — the user supplies the figure |
-| cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one |
-| extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on) |
+| cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one; in `anchor-sourced:`, when a `sources:` line declares it |
+| extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on), `province` (property/school tax), `restatements` (the same figure in another convention) |
 
 Property tax and home insurance were the two largest unsourced numbers in a
 typical run — together roughly 15% of an owned option's year-1 cash. They stay
@@ -88,6 +89,19 @@ single city-wide rate exists to cite; Ottawa because the rate by-law was not
 reachable. An unsourced entry can never match a user's figure, so a run in
 either city gets silence rather than a borrowed number.
 
+**`mortgage_rate.posted_5y`** (2026-09-04) is the same idea for financing: the
+Bank of Canada's weekly posted 5-year conventional rate (Valet series
+V80691335), so a user with no lender quote has something to bracket a guess
+against instead of an unanchored number. It is a POSTED rate — a list price. The
+series makes the point itself: every one of the 52 weekly observations to
+2026-09-02 reads 6.09, last changed 2025-05-14, hence the zero-width band, which
+is the finding and not a gap. What borrowers actually contracted is in the
+anchor's rationale, from the same API and equally cited, so the posted figure
+brackets a guess from ABOVE and is never mistaken for a quote. It is quoted
+semi-annually compounded while `mortgage_rate` takes an effective annual rate;
+the conversion is a `restatement` on the entry, so a config stating either form
+may cite it.
+
 `serialization.reference_matches` does the matching: owned options only (a
 renter's tenant policy and a mortgage-insurance line are different products and
 never borrow a homeowner citation), a property-tax line compared as
@@ -99,6 +113,32 @@ Montréal scenario — the citation was true and the impression false. A near mi
 reads `no anchor match`, which is the useful answer. Every match is reported —
 two municipalities may levy the same rate, and choosing one would be a coin
 flip presented as a fact.
+
+**Sums of anchors** (2026-09-04). A Québec owner's property-tax bill IS the
+municipal rate plus the province-wide school rate, and the two are separate
+entries because separate bodies levy them. Three answers set `property_tax_rate`
+to that sum — both halves anchored — and the read-back printed `no anchor match`
+on a figure built entirely from anchors: the citation degraded exactly where the
+care went in. `anchors.match_reference_sum` now recognises it and the line cites
+BOTH, with both units and the arithmetic:
+
+```
+property tax (0.67% of value) $4,019/yr = 0.670% of price [Ville de Laval 2026
++ Québec taux unique 2026-2027 · 0.5909% + 0.0790% = 0.6699% · rate on ASSESSED
+value (0,5909 $ per 100 $ …) — assessed ≠ market · rate on ASSESSED value
+(0,07899 $ per 100 $ …, first $25,000 exempt) — assessed ≠ market]
+```
+
+Exactly one combination is recognised, and the limits are the point: singles are
+tried first (a figure that IS a published rate is never re-explained as
+somebody's sum); a sum of two municipal rates is not a bill anyone pays; and the
+pairing is within ONE province — Toronto's published total already contains
+Ontario's education rate, so adding Québec's school rate to it would invent a
+bill. That is what the required `province` field enforces. Both units are
+printed rather than a compact joint one, because a unit can carry a caveat its
+neighbour does not: Montréal's says *city-wide lines only — the borough adds
+more*, and dropping it would understate the bill the citation appears to vouch
+for.
 
 ## Conventions (every figure below obeys these)
 
@@ -348,14 +388,24 @@ and `sources` — the source-class echo.
 fill in?"; the source echo answers the other half, "who stated the rest?". The
 optional top-level `sources:` block maps a dotted key the config SETS
 (`rent.monthly_rent`, `simulation.investment_return_vol`, `house.events` for a
-whole list) to `user`, `assistant`, or `anchor:<registry name>`; it feeds four
-echo lines — `user-stated:`, `assistant-typed:`, `anchor-sourced: key=value
+whole list) to `user`, `assistant`, or `anchor:<registry name>` — and, for a
+value that is the sum of two published figures, `anchor:<name>+<name>`
+(`anchor:property_tax.laval+school_tax.qc`), which echoes both. A declaration is
+checked by FIGURE, not only by name: the stated value must equal the anchor's
+(or the sum, or a declared restatement — 6.09% posted and 6.1827% effective
+annual are one figure) within the read-back matcher's own window, and a
+`source: none` entry can never be declared, because it holds no figure. Anchor
+2026-09-04: `anchor:property_tax.quebec_city` was accepted on a 0.82539% rate
+and the same read-back printed `anchor-sourced` beside `no anchor match` for
+that one number — a name-only check dresses an estimate as a citation, which is
+worse than declaring nothing. It feeds four echo lines — `user-stated:`, `assistant-typed:`, `anchor-sourced: key=value
 [anchor name]`, and `unattributed:` for stated keys the block omits — and, with
 no block at all, the single line `sources: none declared — the read-back cannot
 tell the user's numbers from the assistant's`. Values are echoed in the config's
 own units ($/mo, dollars, percentages, counts, `N entries` for a list). It
 changes NO computation: a declared key the config does not set, a class outside
-those three forms, or an anchor name outside the registry all refuse at load.
+those three forms, an anchor name outside the registry, and an anchor whose
+figure is not the one the config states all refuse at load.
 
 Its one consequence is the decisiveness-provenance `[warning]`: when the
 `mc_floor` rule decides the verdict, every uncertainty input that is

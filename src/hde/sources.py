@@ -23,13 +23,15 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .anchors import ANCHORS
+from .anchors import ANCHORS, match_window
 
 # The three declarable classes. `unattributed` is not declarable — it is what
 # the echo calls a config key no `sources:` entry covers.
 SOURCE_CLASSES: Tuple[str, ...] = ("user", "assistant", "anchor")
 
-_VALUE_FORMS = "'user', 'assistant' or 'anchor:<anchor name>'"
+_VALUE_FORMS = ("'user', 'assistant' or 'anchor:<anchor name>' — and "
+                "'anchor:<name>+<name>' when the value is the sum of two "
+                "published figures, e.g. 'anchor:property_tax.laval+school_tax.qc'")
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +285,67 @@ def _anchor_problem(key: str, name: str) -> str:
     return message
 
 
+def _anchor_declaration(
+    data: Dict[str, Any], key: str, declaration: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Validate one `anchor:<name>` (or `anchor:<a>+<b>`) declaration against
+    the value it claims to source. Returns (registry name(s), problem).
+
+    BY NAME IS NOT ENOUGH (2026-09-04). A config declared
+    `anchor:property_tax.quebec_city` on a 0.82539% rate — the anchor publishes
+    0.7464% — and the same read-back printed "anchor-sourced" beside "no anchor
+    match" for the one number. A name-only check lets a declaration claim
+    provenance the figure does not have, which is worse than declaring nothing:
+    it dresses an estimate as a citation. So the stated value must EQUAL the
+    anchor's figure, within the same window the read-back matcher uses.
+
+    The `+` form is for a value that is the sum of two anchors — a Québec
+    owner's property-tax rate is the municipal rate plus the province's school
+    rate — and is checked against the sum.
+    """
+    parts = [part.strip() for part in declaration[len("anchor:"):].split("+")]
+    if not all(parts):
+        return None, _value_problem(key, declaration)
+    for name in parts:
+        if name not in ANCHORS:
+            return None, _anchor_problem(key, name)
+    joined = "+".join(parts)
+    anchors = [ANCHORS[name] for name in parts]
+
+    unsourced = [a for a in anchors if a.value is None]
+    if unsourced:
+        return None, (
+            f"sources: '{key}' declared anchor:{joined} — '{unsourced[0].name}' is a "
+            f"'source: none' entry and holds no figure, so it cannot be the source of "
+            f"a number (uv run hde --print-anchors)"
+        )
+
+    stated = raw_value(data, key)
+    if isinstance(stated, bool) or not isinstance(stated, (int, float)):
+        return None, (
+            f"sources: '{key}' declared anchor:{joined} but the config states "
+            f"{stated!r} — an anchor sources a number, not {type(stated).__name__}"
+        )
+
+    window = max(match_window(a.name) for a in anchors)
+    # A sum is checked against the sum of the published figures; a single
+    # anchor also accepts its declared restatements (the same figure in the
+    # convention the engine's key is stated in).
+    candidates = ([sum(a.value for a in anchors)] if len(anchors) > 1
+                  else list(anchors[0].stated_values()))
+    if not any(abs(candidate - float(stated)) <= window for candidate in candidates):
+        published = " + ".join(f"{a.value:g}" for a in anchors)
+        if len(anchors) > 1:
+            published += f" = {sum(a.value for a in anchors):g}"
+        return None, (
+            f"sources: '{key}' declared anchor:{joined} but the anchor's figure is "
+            f"{published} and the config states {float(stated):g} — a declaration says "
+            f"where the number CAME FROM, so the two have to be the same number "
+            f"(uv run hde --print-anchors)"
+        )
+    return joined, None
+
+
 def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
     """Parse `sources:` against the config it describes.
 
@@ -312,9 +375,9 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
                 elif value in ("user", "assistant"):
                     declared_map[key] = (value, None)
                 elif value.startswith("anchor:"):
-                    name = value[len("anchor:"):].strip()
-                    if name not in ANCHORS:
-                        problems.append(_anchor_problem(key, name))
+                    name, problem = _anchor_declaration(data, key, value)
+                    if problem is not None:
+                        problems.append(problem)
                     else:
                         declared_map[key] = ("anchor", name)
                 else:

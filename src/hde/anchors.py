@@ -29,8 +29,9 @@ class AnchorError(Exception):
 
 ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsourced"})
 
-# Dotted-key prefixes of the JURISDICTION REFERENCE TABLES (property tax by
-# municipality, home insurance by province). These are NOT engine defaults: no
+# Dotted-key prefixes of the REFERENCE TABLES (property tax by municipality,
+# school tax and home insurance by province, and the posted mortgage rate a
+# borrower with no quote can bracket against). These are NOT engine defaults: no
 # dataclass falls back to one and the engine never applies one. They are
 # published figures the user — or an assistant writing the YAML — chooses from,
 # and `serialization.reference_matches` cites one by name when the user's own
@@ -42,7 +43,19 @@ ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsour
 # municipal rate quoted without its base is the most dangerous number in this
 # file: a rate on ASSESSED value read as a rate on market value is wrong by
 # however far the assessment roll lags the market.
-REFERENCE_FAMILIES = ("property_tax.", "school_tax.", "home_insurance.")
+REFERENCE_FAMILIES = ("property_tax.", "school_tax.", "home_insurance.",
+                      "mortgage_rate.")
+
+# The families whose entries a single bill can legitimately ADD UP: in Québec an
+# owner's property-tax bill IS the municipal rate plus the province-wide school
+# rate, and nothing else in the registry composes that way.
+_SUMMABLE_WITH_SCHOOL = "property_tax."
+_SCHOOL_FAMILY = "school_tax."
+# Families whose entries must say which province they are in, because the sum
+# above is only valid WITHIN a province: Toronto's total already contains
+# Ontario's education rate, so adding Québec's school rate to it would invent a
+# bill nobody pays.
+_PROVINCE_REQUIRED = (_SUMMABLE_WITH_SCHOOL, _SCHOOL_FAMILY)
 
 # How close a user's own figure must sit to a published one to be called the
 # same number. The bar is EQUALITY, not resemblance, and the tolerance exists
@@ -59,6 +72,18 @@ _MATCH_TOLERANCE: Dict[str, float] = {
     "property_tax.": 5e-6,
     "home_insurance.": 1.0,
 }
+# Every other figure is a rate or a fraction, so the rate window governs.
+_DEFAULT_MATCH_TOLERANCE = 5e-6
+
+
+def match_window(name: str) -> float:
+    """The equality window for one anchor's figure — the same bar the read-back
+    matcher applies, so `sources:` and the read-back can never disagree about
+    whether a number IS a published one."""
+    for family, tol in _MATCH_TOLERANCE.items():
+        if name.startswith(family):
+            return tol
+    return _DEFAULT_MATCH_TOLERANCE
 
 
 def is_reference(name: str) -> bool:
@@ -102,6 +127,9 @@ class Anchor:
     # What `value` is a rate or amount OF — the base, stated plainly. Required
     # for a jurisdiction reference entry.
     unit: str = ""
+    # Province code (e.g. "qc", "on") — required for a property-tax or
+    # school-tax entry, because those two are summed only within one province.
+    province: str = ""
     # ISO date the cited URL was fetched and the quoted figure confirmed
     # (provenance remediation 0.0, 2026-09-01). Required whenever `url` is a
     # live http(s) source; calibration/neutral entries carry no URL and no date.
@@ -112,6 +140,13 @@ class Anchor:
     # `neutral` = a deliberate uncited neutral default; `derivation` = a
     # calibration or mathematical derivation with no external source.
     kind: str = "cited"
+    # The SAME published figure restated in another convention, each with the
+    # conversion that produced it: `(value, why)`. A posted Canadian mortgage
+    # rate is quoted semi-annually compounded while the engine takes an
+    # effective annual rate — 6.09% posted and 6.1827% effective are one figure
+    # in two conventions, not two figures, so a config stating either one may
+    # cite this anchor as its source.
+    restatements: Tuple[Tuple[float, str], ...] = ()
     replaces: Optional[Tuple[float, str]] = None
 
     def __post_init__(self) -> None:
@@ -177,10 +212,28 @@ class Anchor:
                             f"needs {field_name} — a published figure without the "
                             f"base it is stated on cannot be applied safely"
                         )
+        if self.name.startswith(_PROVINCE_REQUIRED) and not self.province.strip():
+            raise AnchorError(
+                f"anchor {self.name!r}: a property-tax or school-tax entry needs "
+                f"`province` — the municipal + school sum is only a real bill "
+                f"within one province"
+            )
         if self.url.startswith("http") and not self.retrieved_on.strip():
             raise AnchorError(
                 f"anchor {self.name!r}: a live URL needs retrieved_on (the date the source was retrieved)"
             )
+        for entry in self.restatements:
+            if (not isinstance(entry, tuple) or len(entry) != 2
+                    or not isinstance(entry[1], str) or not entry[1].strip()):
+                raise AnchorError(
+                    f"anchor {self.name!r}: each restatement must be "
+                    f"(value, the conversion that produced it), got {entry!r}"
+                )
+            if self.value is None:
+                raise AnchorError(
+                    f"anchor {self.name!r}: a restatement of a figure that does "
+                    f"not exist — an unsourced entry has nothing to restate"
+                )
         if self.replaces is not None:
             if not isinstance(self.replaces, tuple) or len(self.replaces) != 2:
                 raise AnchorError(
@@ -190,6 +243,13 @@ class Anchor:
                 raise AnchorError(
                     f"anchor {self.name!r}: replaces entry must state why the default changed"
                 )
+
+    def stated_values(self) -> Tuple[float, ...]:
+        """Every form in which this anchor's figure may legitimately appear in
+        a config — the published value and its declared restatements."""
+        if self.value is None:
+            return ()
+        return (self.value,) + tuple(v for v, _ in self.restatements)
 
 
 ANCHORS: Dict[str, Anchor] = {
@@ -637,6 +697,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.004973, 0.005909),
         short_cite="Ville de Laval 2026",
+        province="qc",
         retrieved_on="2026-09-03",
     ),
     "property_tax.montreal": Anchor(
@@ -678,6 +739,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.005556, 0.007403),
         short_cite="Ville de Montréal 2026 (city-wide lines)",
+        province="qc",
         retrieved_on="2026-09-03",
     ),
     "property_tax.quebec_city": Anchor(
@@ -704,6 +766,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.007464, 0.007464),
         short_cite="Ville de Québec 2026",
+        province="qc",
         retrieved_on="2026-09-03",
     ),
     "property_tax.toronto": Anchor(
@@ -731,6 +794,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.00614311, 0.00767311),
         short_cite="City of Toronto 2026",
+        province="on",
         retrieved_on="2026-09-03",
     ),
     "school_tax.qc": Anchor(
@@ -762,6 +826,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.0007899, 0.0007899),
         short_cite="Québec taux unique 2026-2027",
+        province="qc",
         retrieved_on="2026-09-03",
     ),
     "property_tax.gatineau": Anchor(
@@ -788,6 +853,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.0, 0.0),
         short_cite="source: none",
+        province="qc",
         kind="unsourced",
     ),
     "property_tax.ottawa": Anchor(
@@ -814,6 +880,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(0.0, 0.0),
         short_cite="source: none",
+        province="on",
         kind="unsourced",
     ),
     "home_insurance.qc": Anchor(
@@ -873,6 +940,51 @@ ANCHORS: Dict[str, Anchor] = {
         band=(1053.0, 1053.0),
         short_cite="StatCan SHS 2023 (ON)",
         retrieved_on="2026-09-03",
+    ),
+    # --- Mortgage rate: a POSTED rate, which is a list price -----------------
+    "mortgage_rate.posted_5y": Anchor(
+        name="mortgage_rate.posted_5y",
+        value=0.0609,
+        as_of="2026-09-02",
+        source="Bank of Canada, Valet series V80691335 « Conventional mortgage: "
+               "5-year » — « The interest rate for a 5-year conventional mortgage "
+               "offered by chartered banks in Canada », published weekly on "
+               "« Interest rates posted for selected products by the major "
+               "chartered banks » (bankofcanada.ca/rates/banking-and-financial-"
+               "statistics/posted-interest-rates-offered-by-chartered-banks/, "
+               "where the same series is labelled « Conventional mortgage - "
+               "5-year »)",
+        url="https://www.bankofcanada.ca/valet/observations/V80691335/json?recent=52",
+        quoted='{"d": "2026-09-02", "V80691335": {"v": "6.09"}} — the latest of '
+               'the 52 weekly observations returned, 2025-09-10 through 2026-09-02',
+        unit="POSTED conventional 5-year rate, percent per year, semi-annually "
+             "compounded (Canadian convention) — 6.09% posted = 6.1827% EFFECTIVE "
+             "annual, which is what `mortgage_rate` takes. A list price, not a "
+             "quote: rates actually contracted are LOWER (see rationale), so a "
+             "run at the posted rate is a CEILING on the financing cost",
+        rationale=(
+            "THE POSTED RATE IS NOT WHAT ANYONE PAYS, and the series says so "
+            "itself: all 52 weekly observations from 2025-09-10 to 2026-09-02 "
+            "read 6.09, and the last change in the series was 2025-05-14 "
+            "(6.49 → 6.09). A rate that has not moved in sixteen months is a "
+            "posted list price that moves in steps, not a market rate — hence "
+            "the zero-width band, which is the finding rather than a gap. What "
+            "borrowers actually contracted, from the same Valet API (group "
+            "A4_RATES_MORTGAGES, « Interest rates charged for new and existing "
+            "lending by chartered banks », funds advanced, fixed rate 5 years "
+            "and over, reference month 2026-06-01, retrieved 2026-09-04): "
+            "V122667786 uninsured 4.35%, V122667780 insured 4.01%. Use the "
+            "posted figure to bracket a guess from ABOVE and the borrower's own "
+            "quote whenever there is one; a rate typed between them is the "
+            "assistant's estimate and must be labelled one."
+        ),
+        band=(0.0609, 0.0609),
+        short_cite="BoC posted 5-yr 2026-09-02",
+        retrieved_on="2026-09-04",
+        restatements=((0.0618270225,
+                       "the engine's `mortgage_rate` is an EFFECTIVE annual rate "
+                       "and the posted figure is semi-annually compounded: "
+                       "(1 + 0.0609/2)^2 − 1 = 0.0618270225"),),
     ),
 }
 
@@ -1138,6 +1250,47 @@ def match_reference(family: str, value: Optional[float], tol: Optional[float] = 
         if name.startswith(family) and anchor.value is not None
         and abs(anchor.value - value) <= tol
     ]
+
+
+def match_reference_sum(
+    family: str, value: Optional[float], tol: Optional[float] = None,
+) -> List[Tuple[Anchor, Anchor]]:
+    """Every (municipal property tax, school tax) pair whose published rates SUM
+    to `value`, within the family's tolerance.
+
+    A Québec owner's property-tax bill IS the municipal rate plus the province-
+    wide school rate — the two are separate entries precisely because separate
+    bodies levy them, and a config that sets `property_tax_rate` to their sum is
+    the most careful configuration there is. Before this, that number matched
+    nothing and the read-back printed "no anchor match" on a figure built
+    entirely from anchors: the citation degraded exactly where the care went in.
+
+    Only this ONE combination is recognised. A sum of two municipal rates is not
+    a bill anyone pays, and a municipal rate from one province plus another
+    province's school rate is not either — Toronto's published total already
+    contains Ontario's education rate. Pairing is therefore municipal + school
+    WITHIN one province, by the `province` field both are required to carry.
+    Returns the pairs in municipal-name order (the school anchor is second).
+    """
+    if value is None or family != _SUMMABLE_WITH_SCHOOL:
+        return []
+    if tol is None:
+        tol = _MATCH_TOLERANCE.get(family, 0.0)
+    schools = {
+        anchor.province: anchor
+        for name, anchor in sorted(ANCHORS.items())
+        if name.startswith(_SCHOOL_FAMILY) and anchor.value is not None
+    }
+    pairs: List[Tuple[Anchor, Anchor]] = []
+    for name, municipal in sorted(ANCHORS.items()):
+        if not name.startswith(_SUMMABLE_WITH_SCHOOL) or municipal.value is None:
+            continue
+        school = schools.get(municipal.province)
+        if school is None:
+            continue
+        if abs(municipal.value + school.value - value) <= tol:
+            pairs.append((municipal, school))
+    return pairs
 
 
 def short_cite(name: str) -> str:

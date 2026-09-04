@@ -15,9 +15,16 @@ from __future__ import annotations
 
 import dataclasses
 from importlib import metadata
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from .anchors import ANCHORS, _ECHO_ALIASES, Anchor, match_reference, short_cite
+from .anchors import (
+    ANCHORS,
+    _ECHO_ALIASES,
+    Anchor,
+    match_reference,
+    match_reference_sum,
+    short_cite,
+)
 from .market_scenario import LoadedScenarioPrior
 from .mortgage_insurance import financing_clause
 from .models import (
@@ -63,6 +70,8 @@ def anchor_to_dict(anchor: Anchor) -> Dict[str, Any]:
         {"value": anchor.replaces[0], "why": anchor.replaces[1]}
         if anchor.replaces is not None else None
     )
+    doc["restatements"] = [{"value": value, "why": why}
+                           for value, why in anchor.restatements]
     return doc
 
 
@@ -117,14 +126,49 @@ def _cost_family(cost_name: str) -> Optional[str]:
     return None
 
 
+def _citations(family: str, probe: Optional[float]) -> Tuple[
+    List[Anchor], List[Dict[str, Any]],
+]:
+    """The anchors cited for one cost line, and how they combine into a claim.
+
+    Two shapes: `single` — one published figure equals the user's — and `sum`,
+    a municipal property-tax rate plus its province's school rate, which is the
+    bill a Québec owner actually pays. Singles are tried first; the sum is only
+    consulted when nothing published equals the figure on its own, so a value
+    that IS a published rate can never be re-explained as somebody's sum.
+
+    Returns (anchors cited, in citation order and de-duplicated; the citation
+    records). Both are empty when nothing agrees — the honest "no source for
+    this", which is reported rather than hidden.
+    """
+    cited: List[Anchor] = []
+    citations: List[Dict[str, Any]] = []
+    for anchor in match_reference(family, probe):
+        cited.append(anchor)
+        citations.append({"kind": "single", "anchors": [anchor.name],
+                          "total": anchor.value})
+    if not citations:
+        for pair in match_reference_sum(family, probe):
+            citations.append({
+                "kind": "sum",
+                "anchors": [a.name for a in pair],
+                "total": sum(a.value for a in pair),
+            })
+            cited.extend(a for a in pair if a not in cited)
+    return cited, citations
+
+
 def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
     """One entry per OWNED-option recurring cost that names a property tax or a
     home-insurance premium, with every jurisdiction anchor whose published
-    figure equals it.
+    figure equals it — alone, or summed with the school tax of its province.
 
-    `matches` is empty when nothing published agrees — which is reported, not
-    hidden: an unmatched tax line is the honest "no source for this" the answer
-    is required to say out loud.
+    `matches` carries the full record of every anchor cited for the line, so a
+    consumer that reads only that list still sees BOTH halves of a summed rate;
+    `citations` says how they combine (`single` or `sum`), which is what the
+    text line renders. Both are empty when nothing published agrees — reported,
+    not hidden: an unmatched tax line is the honest "no source for this" the
+    answer is required to say out loud.
     """
     entries: List[Dict[str, Any]] = []
     for option_name in ("condo", "house"):
@@ -142,29 +186,44 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
             else:
                 implied = None
                 probe = cost.annual_amount
+            cited, citations = _citations(family, probe)
             entries.append({
                 "option": option_name,
                 "cost_name": cost.name,
                 "annual_amount": cost.annual_amount,
                 "family": family,
                 "implied_rate": implied,
-                "matches": [anchor_to_dict(a) for a in match_reference(family, probe)],
+                "matches": [anchor_to_dict(a) for a in cited],
+                "citations": citations,
             })
     return entries
 
 
+def _cite_text(citation: Dict[str, Any], by_name: Dict[str, Dict[str, Any]]) -> str:
+    """One citation, rendered. A citation ALWAYS carries the unit of every
+    anchor in it: a municipal rate names the base it is levied on, because that
+    base is not the price the user typed — and on a SUM both units have to
+    survive, since one of them may carry a caveat the other does not (Montréal's
+    says « city-wide lines only — the borough adds more », and a compact joint
+    unit would quietly drop it)."""
+    parts = [by_name[name] for name in citation["anchors"]]
+    names = " + ".join(p["short_cite"] for p in parts)
+    units = " · ".join(p["unit"] for p in parts)
+    if citation["kind"] == "single":
+        return f"{names} · {units}"
+    arithmetic = " + ".join(f"{p['value']:.4%}" for p in parts)
+    return f"{names} · {arithmetic} = {citation['total']:.4%} · {units}"
+
+
 def _reference_line(entry: Dict[str, Any]) -> str:
-    """One recurring-cost line for the assumption echo. A citation ALWAYS
-    carries the anchor's unit: a municipal rate names the base it is levied
-    on, because that base is not the price the user typed."""
+    """One recurring-cost line for the assumption echo."""
     head = f"{entry['cost_name']} ${entry['annual_amount']:,.0f}/yr"
     if entry["implied_rate"] is not None:
         head += f" = {entry['implied_rate']:.3%} of price"
-    if not entry["matches"]:
+    if not entry["citations"]:
         return f"{head} [no anchor match — hde --print-anchors]"
-    cites = " ; ".join(
-        f"{m['short_cite']} · {m['unit']}" for m in entry["matches"]
-    )
+    by_name = {m["name"]: m for m in entry["matches"]}
+    cites = " ; ".join(_cite_text(c, by_name) for c in entry["citations"])
     return f"{head} [{cites}]"
 
 

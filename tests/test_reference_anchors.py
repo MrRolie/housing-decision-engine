@@ -26,6 +26,7 @@ from hde.anchors import (
     AnchorError,
     is_reference,
     match_reference,
+    match_reference_sum,
     short_cite,
 )
 from hde.config import load_config_dict
@@ -88,13 +89,13 @@ class TestReferenceRegistry:
         with pytest.raises(AnchorError):
             Anchor(name="property_tax.nowhere", value=0.01, as_of="2026", source="s",
                    url="https://example.org", rationale="r", band=(0.0, 0.02),
-                   short_cite="s", retrieved_on="2026-09-03", quoted="1.0%")
+                   short_cite="s", province="qc", retrieved_on="2026-09-03", quoted="1.0%")
 
     def test_construction_refuses_a_reference_entry_without_the_quoted_figure(self):
         with pytest.raises(AnchorError):
             Anchor(name="property_tax.nowhere", value=0.01, as_of="2026", source="s",
                    url="https://example.org", rationale="r", band=(0.0, 0.02),
-                   short_cite="s", retrieved_on="2026-09-03",
+                   short_cite="s", province="qc", retrieved_on="2026-09-03",
                    unit="rate on assessed value")
 
 
@@ -112,17 +113,27 @@ class TestUnsourcedEntries:
                       "2026 residential rate in fetchable form. No figure is registered.",
             band=(0.0, 0.0),
             short_cite="source: none",
+            province="qc",
             kind="unsourced",
         )
 
     def test_an_unsourced_entry_holds_no_value(self):
         assert self._unsourced().value is None
 
+    def test_construction_refuses_a_tax_entry_without_a_province(self):
+        """The municipal + school sum is only a real bill within one province,
+        so an entry that cannot say which one it is in cannot be paired."""
+        with pytest.raises(AnchorError):
+            Anchor(name="property_tax.nowhere", value=0.01, as_of="2026", source="s",
+                   url="https://example.org", rationale="r", band=(0.0, 0.02),
+                   short_cite="s", retrieved_on="2026-09-03", quoted="1.0%",
+                   unit="rate on assessed value")
+
     def test_unsourced_entries_must_say_what_was_tried(self):
         with pytest.raises(AnchorError):
             Anchor(name="property_tax.nowhere", value=None, as_of="2026",
                    source="none", url="none", rationale="r", band=(0.0, 0.0),
-                   short_cite="source: none", kind="unsourced")
+                   short_cite="source: none", province="qc", kind="unsourced")
 
     def test_unsourced_entries_refuse_a_value(self):
         """A `source: none` entry carrying a number is the exact failure this
@@ -306,3 +317,195 @@ class TestReadBack:
         """Landscaping is neither; the read-back must not invent a rate for it."""
         spec = _spec([{"name": "landscaping", "annual_amount": 1_200}])
         assert reference_matches(spec) == []
+
+
+# ---------------------------------------------------------------------------
+# Sums of anchors (2026-09-04)
+#
+# A Québec owner's tax bill IS the municipal rate plus the province's school
+# rate: three answers this week set `property_tax_rate` to that sum — both
+# halves anchored — and the read-back printed "no anchor match" on a number
+# built entirely from anchors. The citation degraded on the most careful
+# configs, which is the wrong way round.
+# ---------------------------------------------------------------------------
+
+class TestSumMatcher:
+    def _pair(self):
+        muni = ANCHORS["property_tax.laval"]
+        school = ANCHORS["school_tax.qc"]
+        return muni, school, muni.value + school.value
+
+    def test_a_municipal_plus_school_rate_matches_both_anchors(self):
+        muni, school, total = self._pair()
+        pairs = match_reference_sum(PROPERTY_TAX, total)
+        assert [[a.name for a in p] for p in pairs] == [[muni.name, school.name]]
+
+    def test_a_sum_of_two_municipal_rates_never_matches(self):
+        """The pairing is municipal + school BY CONSTRUCTION. Two cities'
+        rates summed is not a bill anyone pays, and citing both for it would
+        be an invented total."""
+        laval = ANCHORS["property_tax.laval"].value
+        montreal = ANCHORS["property_tax.montreal"].value
+        assert match_reference_sum(PROPERTY_TAX, laval + montreal) == []
+
+    def test_a_school_tax_is_only_summed_within_its_own_province(self):
+        """Toronto + the Québec school rate is not an Ontario owner's bill —
+        Ontario's education rate is already inside the Toronto total."""
+        toronto = ANCHORS["property_tax.toronto"].value
+        school = ANCHORS["school_tax.qc"].value
+        assert match_reference_sum(PROPERTY_TAX, toronto + school) == []
+
+    def test_the_sum_window_is_the_same_half_basis_point(self):
+        muni, school, total = self._pair()
+        assert match_reference_sum(PROPERTY_TAX, total + 4e-6)
+        assert match_reference_sum(PROPERTY_TAX, total + 5e-5) == []
+
+    def test_rounding_the_dollar_amount_still_matches_a_sum(self):
+        _, _, total = self._pair()
+        rounded = round(total * 600_000) / 600_000
+        assert [a.name for a in match_reference_sum(PROPERTY_TAX, rounded)[0]] == [
+            "property_tax.laval", "school_tax.qc"]
+
+    def test_an_unsourced_municipality_never_sums(self):
+        """Gatineau holds no figure, so no sum containing it can exist."""
+        school = ANCHORS["school_tax.qc"].value
+        assert all("gatineau" not in a.name
+                   for pair in match_reference_sum(PROPERTY_TAX, 0.006 + school)
+                   for a in pair)
+
+    def test_single_anchor_matching_is_unchanged_by_the_sum_rule(self):
+        muni, _, _ = self._pair()
+        assert [a.name for a in match_reference(PROPERTY_TAX, muni.value)] == [muni.name]
+        assert match_reference_sum(PROPERTY_TAX, muni.value) == []
+
+    def test_home_insurance_amounts_are_never_summed(self):
+        qc = ANCHORS["home_insurance.qc"]
+        assert match_reference_sum(HOME_INSURANCE, qc.value * 2) == []
+
+    def test_every_pairable_anchor_declares_its_province(self):
+        """The pairing is by province; an entry that does not say which one it
+        is in cannot be paired, so the registry refuses it at import."""
+        for name, anchor in ANCHORS.items():
+            if name.startswith((PROPERTY_TAX, "school_tax.")):
+                assert anchor.province.strip(), f"{name}: no province"
+
+
+class TestSumReadBack:
+    def _spec_at_the_sum(self):
+        muni = ANCHORS["property_tax.laval"]
+        school = ANCHORS["school_tax.qc"]
+        total = muni.value + school.value
+        return _spec([{"name": "property tax",
+                       "annual_amount": round(total * 600_000, 2)}]), muni, school
+
+    def test_the_read_back_cites_both_anchors_by_name(self):
+        spec, muni, school = self._spec_at_the_sum()
+        text = " ".join(format_assumptions(spec))
+        assert muni.short_cite in text
+        assert school.short_cite in text
+        assert "no anchor match" not in text
+
+    def test_the_citation_carries_both_units(self):
+        spec, muni, school = self._spec_at_the_sum()
+        text = " ".join(format_assumptions(spec))
+        assert muni.unit in text
+        assert school.unit in text
+
+    def test_the_structured_form_lists_both_anchors_for_the_line(self):
+        spec, muni, school = self._spec_at_the_sum()
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert [m["name"] for m in entry["matches"]] == [muni.name, school.name]
+        assert entry["citations"] == [{
+            "kind": "sum",
+            "anchors": [muni.name, school.name],
+            "total": pytest.approx(muni.value + school.value),
+        }]
+
+    def test_a_single_match_still_reports_one_citation(self):
+        laval = ANCHORS["property_tax.laval"]
+        spec = _spec([{"name": "property tax",
+                       "annual_amount": round(laval.value * 600_000, 2)}])
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert entry["citations"] == [{
+            "kind": "single",
+            "anchors": [laval.name],
+            "total": pytest.approx(laval.value),
+        }]
+
+    def test_a_rate_form_config_is_cited_the_same_way(self):
+        """`property_tax_rate` is the price-proportional form the threshold
+        lane uses; the line it synthesizes must cite the sum too."""
+        muni = ANCHORS["property_tax.laval"]
+        school = ANCHORS["school_tax.qc"]
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True,
+                      "property_tax_rate": muni.value + school.value},
+            "rent": {"monthly_rent": 2_000},
+        })
+        text = " ".join(format_assumptions(spec))
+        assert muni.short_cite in text and school.short_cite in text
+
+    def test_an_unmatched_sum_still_says_no_anchor_match(self):
+        spec = _spec([{"name": "property tax", "annual_amount": 9_999}])
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert entry["matches"] == [] and entry["citations"] == []
+        assert "no anchor" in " ".join(format_assumptions(spec)).lower()
+
+
+# ---------------------------------------------------------------------------
+# The posted mortgage rate (2026-09-04)
+#
+# No anchor existed for a mortgage rate, so a user with no quote got an
+# assistant's guess with nothing to bracket it.
+# ---------------------------------------------------------------------------
+
+class TestPostedMortgageRate:
+    NAME = "mortgage_rate.posted_5y"
+
+    def test_it_is_registered(self):
+        assert self.NAME in ANCHORS
+
+    def test_it_carries_url_date_value_and_unit_or_says_source_none(self):
+        anchor = ANCHORS[self.NAME]
+        if anchor.kind == "unsourced":
+            assert anchor.value is None
+            assert anchor.short_cite.startswith("source: none")
+            assert "tried" in anchor.url.lower()
+            return
+        assert anchor.url.startswith("http")
+        assert anchor.retrieved_on.strip()
+        assert anchor.value is not None
+        assert anchor.quoted.strip()
+        assert anchor.unit.strip()
+        assert anchor.band[0] <= anchor.value <= anchor.band[1]
+
+    def test_the_unit_says_posted_and_that_contracted_rates_run_lower(self):
+        anchor = ANCHORS[self.NAME]
+        if anchor.kind == "unsourced":
+            pytest.skip("no posted rate fetched")
+        low = anchor.unit.lower()
+        assert "posted" in low
+        assert "lower" in low or "discount" in low
+
+    def test_it_is_never_applied_as_an_engine_default(self):
+        """Like the jurisdiction tables: cited when the user's figure comes
+        from it, never silently supplied."""
+        assert is_reference(self.NAME)
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True},
+            "rent": {"monthly_rent": 2_000},
+        })
+        assert not any("mortgage_rate" in k for k in spec.defaults_applied)
+
+    def test_print_anchors_lists_it_with_its_quoted_figure(self):
+        printed = anchors_to_dict()[self.NAME]
+        assert printed["source"]
+        if printed["kind"] != "unsourced":
+            assert printed["quoted"] and printed["unit"] and printed["retrieved_on"]
+
+    def test_the_schema_note_points_at_it(self):
+        from hde.input_schema import input_schema
+        text = str(input_schema())
+        assert self.NAME in text

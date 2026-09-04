@@ -356,3 +356,165 @@ class TestUncertaintyKeysMirrorSinglePath:
     def test_every_named_key_is_attributable(self):
         data = copy.deepcopy(self.RICH)
         assert set(uncertainty_keys(data)) <= set(attributable_keys(data))
+
+
+# ---------------------------------------------------------------------------
+# Summed anchor declarations (2026-09-04)
+#
+# A Québec owner's property-tax rate is the municipal rate PLUS the province's
+# school rate. Both halves are anchored, so the declaration must be able to say
+# so — and name both, rather than degrade to `assistant`.
+# ---------------------------------------------------------------------------
+
+SUM_DECL = "anchor:property_tax.laval+school_tax.qc"
+
+
+def _tax_cfg(source):
+    return {
+        "years": 10,
+        "house": {"initial_value": 600_000, "all_cash": True,
+                  "property_tax_rate": 0.0066989},
+        "rent": {"monthly_rent": 2_000},
+        "sources": {"house.property_tax_rate": source},
+    }
+
+
+class TestSummedAnchorDeclarations:
+    def test_a_sum_of_two_registered_names_is_accepted(self):
+        spec = load_config_dict(_tax_cfg(SUM_DECL))
+        echo = spec.sources
+        assert echo.classify("house.property_tax_rate") == "anchor"
+        assert echo.anchor_name("house.property_tax_rate") == (
+            "property_tax.laval+school_tax.qc")
+
+    def test_the_echo_prints_both_anchors(self):
+        line = [ln for ln in format_assumptions(load_config_dict(_tax_cfg(SUM_DECL)))
+                if ln.startswith("anchor-sourced:")]
+        assert line == ["anchor-sourced: house.property_tax_rate=0.7% "
+                        "[property_tax.laval+school_tax.qc]"]
+
+    def test_the_json_echo_carries_both_anchors(self):
+        doc = assumptions_to_dict(load_config_dict(_tax_cfg(SUM_DECL)))
+        assert doc["sources"]["anchor"] == {
+            "house.property_tax_rate": "property_tax.laval+school_tax.qc"}
+
+    def test_each_name_in_a_sum_is_validated(self):
+        with pytest.raises(ConfigValidationError, match="unknown anchor 'school_tax.zz'"):
+            load_config_dict(_tax_cfg("anchor:property_tax.laval+school_tax.zz"))
+
+    def test_a_typo_in_a_summed_name_gets_a_did_you_mean(self):
+        with pytest.raises(ConfigValidationError, match=r"did you mean 'school_tax.qc'"):
+            load_config_dict(_tax_cfg("anchor:property_tax.laval+school_tax.q"))
+
+    def test_an_empty_half_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="'user', 'assistant' or 'anchor:"):
+            load_config_dict(_tax_cfg("anchor:property_tax.laval+"))
+
+    def test_whitespace_around_each_half_is_tolerated(self):
+        spec = load_config_dict(_tax_cfg("anchor: property_tax.laval + school_tax.qc "))
+        assert spec.sources.anchor_name("house.property_tax_rate") == (
+            "property_tax.laval+school_tax.qc")
+
+    def test_the_posted_mortgage_rate_can_be_declared(self):
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "down_payment": 200_000,
+                      "mortgage_rate": 0.0618272, "mortgage_term_years": 25},
+            "rent": {"monthly_rent": 2_000},
+            "sources": {"house.mortgage_rate": "anchor:mortgage_rate.posted_5y"},
+        })
+        assert spec.sources.anchor_name("house.mortgage_rate") == "mortgage_rate.posted_5y"
+
+
+# ---------------------------------------------------------------------------
+# A declaration is validated by FIGURE, not just by name (2026-09-04)
+#
+# `anchor:property_tax.quebec_city` was accepted on a 0.82539% rate — the
+# anchor publishes 0.7464% — and the same run printed "anchor-sourced" beside
+# "no anchor match" for the one number. A name-only check lets a declaration
+# claim provenance the figure does not have, which is worse than no block at
+# all: it dresses an assistant's estimate as a cited one.
+# ---------------------------------------------------------------------------
+
+class TestDeclarationsAreValidatedByFigure:
+    def test_the_right_name_on_the_wrong_figure_is_refused(self):
+        with pytest.raises(ConfigValidationError,
+                           match="house.property_tax_rate.*property_tax.quebec_city"):
+            load_config_dict(_tax_cfg("anchor:property_tax.quebec_city"))
+
+    def test_the_refusal_names_both_figures(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(_tax_cfg("anchor:property_tax.quebec_city"))
+        message = str(excinfo.value)
+        assert "0.007464" in message      # what the anchor publishes
+        assert "0.0066989" in message     # what the config states
+
+    def test_a_second_plausible_name_is_refused_on_the_same_figure(self):
+        with pytest.raises(ConfigValidationError, match="property_tax.toronto"):
+            load_config_dict(_tax_cfg("anchor:property_tax.toronto"))
+
+    def test_the_matching_figure_is_still_accepted(self):
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True,
+                      "property_tax_rate": 0.007464},
+            "rent": {"monthly_rent": 2_000},
+            "sources": {"house.property_tax_rate": "anchor:property_tax.quebec_city"},
+        })
+        assert spec.sources.anchor_name("house.property_tax_rate") == "property_tax.quebec_city"
+
+    def test_a_summed_declaration_is_checked_against_the_sum(self):
+        with pytest.raises(ConfigValidationError, match="property_tax.montreal"):
+            load_config_dict(_tax_cfg("anchor:property_tax.montreal+school_tax.qc"))
+
+    def test_a_source_none_anchor_cannot_be_declared(self):
+        """Gatineau holds no figure at all; a declaration pointing at it would
+        cite an absence as a source."""
+        with pytest.raises(ConfigValidationError, match="source: none"):
+            load_config_dict(_tax_cfg("anchor:property_tax.gatineau"))
+
+    def test_the_window_is_the_matcher_s_own_half_basis_point(self):
+        near = 0.0066989 + 4e-6
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True,
+                      "property_tax_rate": near},
+            "rent": {"monthly_rent": 2_000},
+            "sources": {"house.property_tax_rate": SUM_DECL},
+        })
+        assert spec.sources.classify("house.property_tax_rate") == "anchor"
+        with pytest.raises(ConfigValidationError, match="property_tax.laval"):
+            load_config_dict({
+                "years": 10,
+                "house": {"initial_value": 600_000, "all_cash": True,
+                          "property_tax_rate": 0.0066989 + 5e-5},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"house.property_tax_rate": SUM_DECL},
+            })
+
+    def test_a_non_numeric_value_cannot_be_anchor_sourced(self):
+        with pytest.raises(ConfigValidationError, match="condo.all_cash"):
+            load_config_dict(cfg({"condo.all_cash": "anchor:rent.investment_return_rate"}))
+
+    def test_the_posted_mortgage_rate_is_accepted_at_its_effective_restatement(self):
+        """6.09% posted is quoted semi-annually compounded; `mortgage_rate` is
+        an effective annual rate. They are one figure in two conventions, and
+        the registry says so — so the effective form is a valid declaration."""
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "down_payment": 200_000,
+                      "mortgage_rate": 0.0618270225, "mortgage_term_years": 25},
+            "rent": {"monthly_rent": 2_000},
+            "sources": {"house.mortgage_rate": "anchor:mortgage_rate.posted_5y"},
+        })
+        assert spec.sources.anchor_name("house.mortgage_rate") == "mortgage_rate.posted_5y"
+
+    def test_a_rate_that_is_neither_the_posted_nor_the_effective_form_is_refused(self):
+        with pytest.raises(ConfigValidationError, match="mortgage_rate.posted_5y"):
+            load_config_dict({
+                "years": 10,
+                "house": {"initial_value": 600_000, "down_payment": 200_000,
+                          "mortgage_rate": 0.045, "mortgage_term_years": 25},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"house.mortgage_rate": "anchor:mortgage_rate.posted_5y"},
+            })

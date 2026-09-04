@@ -87,7 +87,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
                                 "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                                "r_eff = (1 + r_posted/2)^2 − 1. No quote in hand? "
+                                "`hde --print-anchors` → `mortgage_rate.posted_5y`, the Bank of "
+                                "Canada's weekly POSTED 5-year conventional rate: a list price and "
+                                "so a CEILING — contracted rates run lower, and the anchor's "
+                                "rationale carries what borrowers actually paid", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
@@ -188,7 +192,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
                                 "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+                                "r_eff = (1 + r_posted/2)^2 − 1. No quote in hand? "
+                                "`hde --print-anchors` → `mortgage_rate.posted_5y`, the Bank of "
+                                "Canada's weekly POSTED 5-year conventional rate: a list price and "
+                                "so a CEILING — contracted rates run lower, and the anchor's "
+                                "rationale carries what borrowers actually paid", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
