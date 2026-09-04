@@ -20,8 +20,10 @@ what to put in your first message so the first answer is the good one.
 | Can we afford it? | *"We're looking at a townhouse in Barrhaven, Ottawa for $720k. We rent for $2,700 and have $144k saved. Is it worth buying?"* |
 
 A question with a listing, a price or a date gets a full run with the threshold that
-matters to it (the price or rent where the answer flips). A question with none of those
-gets a short answer built around one conditional, and the offer to go deeper.
+matters to it (the price or rent where the answer flips). So does any question that asks
+*at what price* or *what rent*: that is a threshold question even with no listing in view,
+and it gets the full run with its threshold, not the short shape. A question with none of
+those gets a short answer built around one conditional, and the offer to go deeper.
 
 ## How to ask — what to put in the first message
 
@@ -34,8 +36,10 @@ answer the form. Front-loading these saves that round trip:
 - **How you would pay: the cash you have for day one, as a dollar amount**, not a
   percentage. Closing costs, the welcome or land-transfer tax and any mortgage-insurance
   premium tax come out of that same pile; the engine nets them and prints the down payment
-  that is left and the share of the price the mortgage covers. If you have a mortgage quote,
-  give the rate and the amortization ("4.65% five-year fixed, 25 years").
+  that is left and the share of the price the mortgage covers. Say whether that amount
+  already includes the closing costs, or give the two amounts ("$60k all in", or "$52k for
+  the down payment plus $8k for closing"). If you have a mortgage quote, give the rate and
+  the amortization ("4.65% five-year fixed, 25 years").
 - **Province and city**, and whether this is your first home. Québec and Ontario transfer
   taxes (Montréal and Toronto municipal) and the insurance-premium tax are priced from the
   published schedules; the first-time-buyer rebate is applied where one is sourced.
@@ -43,6 +47,9 @@ answer the form. Front-loading these saves that round trip:
 - **Owner costs if you have them**: the property-tax bill, home or unit insurance, condo
   fees. "No idea" is fine: the engine takes a labelled default or a placeholder and the
   answer names it as such, so you can replace it later.
+- **Whether the place carries a monthly fee.** A condo does; a townhouse may or may not
+  (a freehold has none, one under a syndicate or condo corporation does). Say which, or say
+  you don't know and both get run, each with its own verdict.
 - **Your income**, if you want the affordability check (housing cost against income).
 - **What "best" means to you**: lowest expected cost, smallest worst case, or most
   wealth at the end. Different figures answer different questions.
@@ -55,9 +62,12 @@ because it is what lets you check the short answer.
 
 ## What comes back
 
-1. **The verdict with its decisiveness.** "Decisive" means the winning option is cheapest
-   in at least 65% of the simulated futures. Below that it is "too close to call", and the
-   answer says what would tip it: a price, a rent, a horizon, or a view on price growth.
+1. **The verdict with its decisiveness.** With uncertainty inputs on, "decisive" means the
+   winning option is cheapest in at least 65% of the simulated futures; on a single-path run
+   (no uncertainty inputs) it means the winner's margin is at least 5% of the cheaper
+   option's cost. Below either line it is "too close to call", and the answer says which
+   rule it rests on and what would tip it: a price, a rent, a horizon, or a view on price
+   growth.
 2. **A threshold sentence** when your question has one: the price (or rent) where the two
    options tie, with the band around it where the difference is inside the noise.
 3. **Every estimate labelled.** Each number carries who supplied it: you, a published
