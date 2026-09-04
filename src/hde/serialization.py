@@ -23,6 +23,7 @@ from .anchors import (
     Anchor,
     match_reference,
     match_reference_sum,
+    nearest_reference,
     short_cite,
 )
 from .market_scenario import LoadedScenarioPrior
@@ -187,6 +188,15 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
     answer is required to say out loud. `province` is where the option sits
     (stated, or implied by its municipality; `None` when neither is given), so
     an unmatched Ontario tax line can say what an Ontario rate is levied on.
+
+
+    `nearest` (2026-09-04) is set only on such an unmatched line: the published
+    figure of the option's OWN province that the user's figure misses by no
+    more than 2% (`anchors.nearest_reference`), with the signed gap — a hint
+    that a rounded or mistyped copy of a published rate deserves a second
+    look, rendered with "not a match" so it is never read as a citation. None
+    when nothing is that close, or when the option states no province: a hint
+    across provinces is the one thing this must never offer.
     """
     entries: List[Dict[str, Any]] = []
     for option_name in ("condo", "house"):
@@ -206,6 +216,8 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
                 implied = None
                 probe = cost.annual_amount
             cited, citations = _citations(family, probe)
+            near = (nearest_reference(family, probe, province)
+                    if not citations else None)
             entries.append({
                 "option": option_name,
                 "cost_name": cost.name,
@@ -215,6 +227,13 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
                 "province": province,
                 "matches": [anchor_to_dict(a) for a in cited],
                 "citations": citations,
+                "nearest": None if near is None else {
+                    "name": near.name,
+                    "value": near.value,
+                    "delta": probe - near.value,
+                    "short_cite": near.short_cite,
+                    "unit": near.unit,
+                },
             })
     return entries
 
@@ -235,6 +254,19 @@ def _cite_text(citation: Dict[str, Any], by_name: Dict[str, Dict[str, Any]]) -> 
     return f"{names} · {arithmetic} = {citation['total']:.4%} · {units}"
 
 
+def _nearest_text(family: str, near: Dict[str, Any]) -> str:
+    """The near-miss hint: the anchor by name, its figure, the signed gap in
+    the family's own unit, and the words that keep it from reading as a
+    citation."""
+    if family == "property_tax.":
+        gap = f"{near['delta'] * 100:+.4f} pt"
+        figure = f"{near['value']:.4%}"
+    else:
+        gap = f"{'+' if near['delta'] >= 0 else '−'}${abs(near['delta']):,.0f}"
+        figure = f"${near['value']:,.0f}"
+    return f"nearest: {near['name']} {figure} (Δ {gap}) — not a match"
+
+
 def _reference_line(entry: Dict[str, Any]) -> str:
     """One recurring-cost line for the assumption echo."""
     head = f"{entry['cost_name']} ${entry['annual_amount']:,.0f}/yr"
@@ -250,6 +282,8 @@ def _reference_line(entry: Dict[str, Any]) -> str:
         if entry["family"] == "property_tax." and entry.get("province") == "ON":
             tail += ("; a rate on the purchase price overstates an Ontario bill: "
                      "assessments are on a 2016 base")
+        if entry.get("nearest"):
+            tail += "; " + _nearest_text(entry["family"], entry["nearest"])
         return f"{head} [{tail}]"
     by_name = {m["name"]: m for m in entry["matches"]}
     cites = " ; ".join(_cite_text(c, by_name) for c in entry["citations"])

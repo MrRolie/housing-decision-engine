@@ -133,7 +133,8 @@ bar is **equality, not resemblance**: the property-tax window is half a basis
 point, wide enough only to absorb rounding the annual amount to the nearest
 dollar. A looser window once cited Québec City for a 0.750%-of-price line in a
 Montréal scenario — the citation was true and the impression false. A near miss
-reads `no anchor match`, which is the useful answer. Every match is reported —
+reads `no anchor match`, which is the useful answer — and, since 2026-09-04, it
+names the near miss too (below). Every match is reported —
 two municipalities may levy the same rate, and choosing one would be a coin
 flip presented as a fact.
 
@@ -162,6 +163,27 @@ printed rather than a compact joint one, because a unit can carry a caveat its
 neighbour does not: Montréal's says *city-wide lines only — the borough adds
 more*, and dropping it would understate the bill the citation appears to vouch
 for.
+
+**Near misses** (2026-09-04). The figure that misses every anchor by a hair is
+the one most worth a second look — a rounded or mistyped copy of a published
+rate — and until now it read exactly like a figure from nowhere. An unmatched
+property-tax or insurance line now names the nearest published figure **of the
+option's own province** when the user's figure is within 2% of it, with the
+signed gap, and says `not a match` in the same breath:
+
+```
+property tax $3,340/yr = 0.557% of price [no anchor match — hde --print-anchors;
+nearest: property_tax.montreal 0.5556% (Δ +0.0011 pt) — not a match]
+```
+
+`anchors.nearest_reference` joins on the anchors' `province` field against the
+option's `province` (the top-level one by default), so Toronto's rate is never
+offered as the nearest to a Québec figure — and an option that states no
+province gets no hint at all, since an unknown jurisdiction is not a licence to
+search every one. The structured form carries it as `nearest` on the
+`reference_matches` entry (`null` when nothing is that close, or when the line
+matched). It is a hint, not a citation: the match rule is unchanged, and a
+`sources:` declaration on the near-miss figure is still refused.
 
 ## Conventions (every figure below obeys these)
 

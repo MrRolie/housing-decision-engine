@@ -77,6 +77,14 @@ _MATCH_TOLERANCE: Dict[str, float] = {
 # Every other figure is a rate or a fraction, so the rate window governs.
 _DEFAULT_MATCH_TOLERANCE = 5e-6
 
+# How near a user's figure may sit to a published one, MISSING it, before the
+# read-back names the near miss. Relative to the published figure: 2% of
+# Montréal's 0.5556% is 0.0111 pt, 2% of Québec's $813 premium is $16. The
+# hint says "not a match" in the same breath — it exists so a rounded or
+# mistyped copy of a published rate gets a second look, never so that
+# resemblance is dressed as citation (the 2026-09-03 near miss above).
+_NEAR_MISS_RELATIVE = 0.02
+
 
 def match_window(name: str) -> float:
     """The equality window for one anchor's figure — the same bar the read-back
@@ -1742,6 +1750,34 @@ def match_reference_sum(
         if abs(municipal.value + school.value - value) <= tol:
             pairs.append((municipal, school))
     return pairs
+
+
+def nearest_reference(
+    family: str, value: Optional[float], province: Optional[str],
+) -> Optional[Anchor]:
+    """The one published figure in `family`, in the option's own PROVINCE, that
+    `value` misses by no more than `_NEAR_MISS_RELATIVE` of it — or None.
+
+    Consulted only after nothing matched. The join is the anchors' `province`
+    field against the option's: Toronto's rate must never be offered as the
+    nearest to a Québec figure, so an option that states no province gets no
+    hint at all — an unknown jurisdiction is not a licence to search every one.
+    An unsourced entry holds no figure and is never nearest.
+    """
+    if value is None or not province or not province.strip():
+        return None
+    code = province.strip().lower()
+    best: Optional[Anchor] = None
+    for name, anchor in sorted(ANCHORS.items()):
+        if (not name.startswith(family) or anchor.value is None
+                or anchor.province != code):
+            continue
+        gap = abs(anchor.value - value)
+        if gap > _NEAR_MISS_RELATIVE * abs(anchor.value):
+            continue
+        if best is None or gap < abs(best.value - value):
+            best = anchor
+    return best
 
 
 def short_cite(name: str) -> str:

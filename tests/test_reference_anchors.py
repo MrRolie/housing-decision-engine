@@ -692,3 +692,110 @@ class TestMaintenanceReference:
                 "rent": {"monthly_rent": 2_000},
                 "sources": {"house.annual_maintenance_rate": f"anchor:{self.NAME}"},
             })
+
+
+# ---------------------------------------------------------------------------
+# Near misses (2026-09-04)
+#
+# A figure that misses every anchor by a hair is the one most worth a second
+# look — a rounded or mistyped copy of a published rate — and the read-back
+# printed only "no anchor match" for it. It now NAMES the nearest published
+# figure of the option's own province, with the gap, and says "not a match"
+# in the same breath: a hint, never a citation. Never across provinces.
+# ---------------------------------------------------------------------------
+
+from hde.anchors import nearest_reference  # noqa: E402
+
+
+def _spec_in(province, other_costs, initial_value=600_000):
+    house = {"initial_value": initial_value, "all_cash": True,
+             "other_recurring_costs": other_costs}
+    if province is not None:
+        house["province"] = province
+    return load_config_dict({"years": 10, "house": house,
+                             "rent": {"monthly_rent": 2_000}})
+
+
+def _tax_line(rate, initial_value=600_000):
+    return [{"name": "property tax", "annual_amount": round(rate * initial_value, 2)}]
+
+
+class TestNearMiss:
+    def test_a_near_miss_in_the_same_province_is_named_and_not_matched(self):
+        montreal = ANCHORS["property_tax.montreal"]
+        spec = _spec_in("QC", _tax_line(montreal.value * 1.005))
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert entry["matches"] == [] and entry["citations"] == []
+        assert entry["nearest"]["name"] == "property_tax.montreal"
+        assert entry["nearest"]["delta"] == pytest.approx(montreal.value * 0.005, abs=1e-7)
+        text = " ".join(format_assumptions(spec))
+        assert "no anchor match" in text
+        assert "nearest: property_tax.montreal" in text and "not a match" in text
+
+    def test_the_line_reads_as_specified(self):
+        spec = _spec_in("QC", _tax_line(0.005567))
+        text = " ".join(format_assumptions(spec))
+        assert "nearest: property_tax.montreal 0.5556% (Δ +0.0011 pt) — not a match" in text
+
+    def test_an_exact_match_carries_no_nearest(self):
+        laval = ANCHORS["property_tax.laval"]
+        entry = assumptions_to_dict(_spec_in("QC", _tax_line(laval.value)))["reference_matches"][0]
+        assert entry["citations"] and entry["nearest"] is None
+
+    def test_no_province_no_hint(self):
+        montreal = ANCHORS["property_tax.montreal"]
+        entry = assumptions_to_dict(_spec_in(None, _tax_line(montreal.value * 1.005)))["reference_matches"][0]
+        assert entry["nearest"] is None
+        assert "nearest" not in " ".join(format_assumptions(_spec_in(None, _tax_line(montreal.value * 1.005))))
+
+    def test_never_across_provinces(self):
+        """Toronto's rate must not be offered as the nearest to a Québec figure,
+        nor Montréal's to an Ontario one."""
+        toronto = ANCHORS["property_tax.toronto"]
+        montreal = ANCHORS["property_tax.montreal"]
+        assert assumptions_to_dict(_spec_in("QC", _tax_line(toronto.value * 1.001)))["reference_matches"][0]["nearest"] is None
+        assert assumptions_to_dict(_spec_in("ON", _tax_line(montreal.value * 1.001)))["reference_matches"][0]["nearest"] is None
+
+    def test_beyond_two_percent_is_silent(self):
+        montreal = ANCHORS["property_tax.montreal"]
+        assert nearest_reference("property_tax.", montreal.value * 1.019, "qc") is montreal
+        assert nearest_reference("property_tax.", montreal.value * 1.021, "qc") is None
+
+    def test_the_province_code_is_case_insensitive(self):
+        laval = ANCHORS["property_tax.laval"]
+        for code in ("qc", "QC", " Qc "):
+            assert nearest_reference("property_tax.", laval.value * 1.01, code) is laval
+
+    def test_the_closest_of_the_province_is_named(self):
+        laval = ANCHORS["property_tax.laval"]
+        entry = assumptions_to_dict(_spec_in("qc", _tax_line(0.0059)))["reference_matches"][0]
+        assert entry["nearest"]["name"] == laval.name
+
+    def test_an_unsourced_entry_is_never_nearest(self):
+        """Gatineau and Ottawa hold no figure, so nothing can be near them."""
+        for name, anchor in ANCHORS.items():
+            if anchor.kind == "unsourced" and name.startswith("property_tax."):
+                for probe in (0.005, 0.0075, 0.01):
+                    near = nearest_reference("property_tax.", probe, anchor.province)
+                    assert near is None or near.name != name
+
+    def test_an_insurance_near_miss_is_named_in_dollars(self):
+        qc = ANCHORS["home_insurance.qc"]
+        spec = _spec_in("QC", [{"name": "home insurance", "annual_amount": qc.value + 12}])
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert entry["nearest"]["name"] == "home_insurance.qc"
+        assert "nearest: home_insurance.qc $813 (Δ +$12) — not a match" in " ".join(format_assumptions(spec))
+
+    def test_an_insurance_near_miss_never_crosses_provinces(self):
+        on = ANCHORS["home_insurance.on"]
+        entry = assumptions_to_dict(
+            _spec_in("QC", [{"name": "home insurance", "annual_amount": on.value + 5}])
+        )["reference_matches"][0]
+        assert entry["nearest"] is None
+
+    def test_every_searched_family_entry_carries_a_province(self):
+        """The hint joins on `province`; an entry without one could only be
+        offered across provinces, which is the one thing it must never do."""
+        for name, anchor in ANCHORS.items():
+            if name.startswith(("property_tax.", "home_insurance.")) and anchor.value is not None:
+                assert anchor.province.strip(), f"{name}: no province"

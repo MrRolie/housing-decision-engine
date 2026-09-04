@@ -200,3 +200,25 @@ of Owning a Home*, 2019 AHS, Table 2) is the reference sibling of the uncited
 `house.annual_maintenance_rate` default; `maintenance.` is a reference family:
 never applied, cited when a `sources:` line declares it. `--print-anchors`
 carries every record.
+
+## Near-miss hint on an unmatched cost line (2026-09-04)
+
+Each `reference_matches` entry carries one more key, `nearest`: `null` when the
+line matched (`citations` non-empty), when nothing published in the option's
+own province lies within 2% of the user's figure, or when the option states no
+`province` (its own or the top-level one) — a hint is never offered across
+provinces. Otherwise `{name, value, delta, short_cite, unit}`: the registry
+name, its published figure, the signed gap `user − published` in the family's
+own unit (a rate fraction for property tax, dollars for insurance), and the
+anchor's tag and unit. The text line appends it to the `no anchor match`
+clause, the gap in percentage points for a rate:
+
+```
+property tax $3,340/yr = 0.557% of price [no anchor match — hde --print-anchors;
+nearest: property_tax.montreal 0.5556% (Δ +0.0011 pt) — not a match]
+home insurance $825/yr [no anchor match — hde --print-anchors;
+nearest: home_insurance.qc $813 (Δ +$12) — not a match]
+```
+
+It is a hint, not a citation: the match rule is unchanged and a `sources:`
+declaration on the near-miss figure is still refused.
