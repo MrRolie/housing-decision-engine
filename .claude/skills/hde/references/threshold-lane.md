@@ -13,7 +13,11 @@ threshold their current rent or a market rent you label; for a price threshold
 the price their cash supports at 20% down (cash × 5, less purchase costs) —
 and say so in the answer. Everything property-specific they cannot know yet
 (tax, fees, maintenance, purchase costs) is an estimate you label; check
-`--print-anchors` first. State the cash pile as `cash_available` (never a
+`--print-anchors` first. Declare the placeholder itself, and every estimate,
+as `assistant` in the config's `sources:` block — the seed price is not the
+user's number. A renter whose money sits in equities gets a bracketed return
+(3% and 5% real; `references/translation.md`), never the 60/40 anchor
+unnamed: on a price threshold the buy edge can move six figures between them. State the cash pile as `cash_available` (never a
 hand-computed `down_payment`): along a price scan the engine re-nets it at
 every point, so the loan-to-value, the 20% line and the premium tier move
 with the price — quote the `financing:` line at the crossing. Dollar-form

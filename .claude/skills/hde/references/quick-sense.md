@@ -27,9 +27,14 @@ compete only if you would stay 10+ years in a place under roughly $330k — a
 band the engine solved with placeholders for tax, insurance and the insurance
 premium, held fixed while the price moved, so it is generous to buying").
 State plainly that every property-specific figure is a placeholder and offer
-the full pass for a real listing. The dollar band is deferred, and said to be
+the full pass for a real listing. The shape binds the ANSWER, not only the
+intake: an intake that took this shape and an answer that runs a price scan
+and quotes a band three ways has failed the lane. The engine's READ-BACK block
+is pasted after those sentences, outside the 120-word cap. The dollar band is deferred, and said to be
 deferred, never dropped silently. The follow-up round never asks the user to
 choose a method or a dwelling they said they do not care about.
+
+## A listing, a price or a date — the threshold shape
 
 Ask only six things in one message — dwelling, rent, price, how they'd pay,
 horizon, income — plus the labelled defaults you will take ("25-year

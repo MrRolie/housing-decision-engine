@@ -85,6 +85,33 @@ same day, the rest are open.
 - **`--json` stderr echo:** the `[warning]` lines print to stderr and inside the JSON `warnings[]`;
   document the split in `--help` (a `2>&1` redirect corrupts the document).
 
+### Backlog from the 2026-09-04 re-serve of the three weakest shapes (round 8)
+
+Same facts, same smaller model, engine with the round-7 folds: quick-sense 17/25 (from 13), condo 20
+(from 21), reverse pending at writing. Every round-7 engine fold reproduced in the answers (the
+engine-priced premium, the growth band against the prior's drift, the netted down payment); the
+remaining misses were lines the engine printed and the assistant dropped — hence the read-back block.
+
+- **Landing 2026-09-04:** an engine-assembled READ-BACK block (`assumptions.read_back`, `--read-back`)
+  the answer pastes verbatim — every warning, the `assistant-typed:` / `unattributed:` lines, the
+  decisiveness rule, the financing and other-costs lines, affordability, break-even sentences and
+  notes; one-sided uncertainty warned symmetrically (renter-only dispersion too); the growth
+  break-even names where the prior's drift sits against the tie band; `sources:` anchor declarations
+  validated on VALUE, not name alone, plus a summed form for municipal + school tax; the reference
+  matcher cites a municipal + school-tax sum; a Bank of Canada posted 5-year mortgage-rate anchor;
+  land-transfer tax computed in-engine from anchored bracket schedules (QC provincial, Montréal,
+  Ontario, Toronto, first-time-buyer rebates) with `land_transfer_tax: auto`.
+- **Québec City flat tariffs:** the rate anchor excludes about $581/yr of flat water/waste tariffs
+  that a real bill carries; anchor them (Ville de Québec tarification) so the placeholder is not low.
+- **Lender-shaped GDS:** the affordability ratio is housing cost over income; a lender's GDS adds
+  heating and half the condo fee and uses the qualifying rate — a `lender GDS` line, or a note that the
+  insured loan itself may not be approvable above 39%.
+- **Coherence note at the crossing:** the "held fixed in dollars" note sizes its figures at the seed;
+  print them at the crossing too, where the answer quotes them.
+- **Placeholder seed attribution:** a break-even's seed price the assistant invented should be
+  declared `assistant` in `sources:`; the skill now says so, the engine could default it.
+- **Deferred purchase, price-level anchors:** still open from round 7.
+
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
 - **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount and mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.

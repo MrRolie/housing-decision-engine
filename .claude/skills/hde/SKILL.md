@@ -165,57 +165,49 @@ required key with the exact message — show it.
 
 ## The answer — checklist first, then prose
 
-Before writing, read these off the run in this order and carry each into the
-answer; the cap of any lane ranks what stays and never drops an item:
+Before writing, read these off the run and carry each into the answer; the
+cap of any lane ranks what stays and never drops an item:
 
-- [ ] every `[warning]` line — each with its rerun figure or its direction of
-      bias (a dropped warning fails the answer at any length)
-- [ ] `defaults applied:` — with an owned option, the two largest engine-set
-      numbers, `selling_cost_rate` (5%, WOWA) and the discount rate, named
-      with their source; then every value you TYPED on the user's behalf (a 0%
-      rent escalation, the 25-year amortization, a maintenance rate, every
-      vol): declare each config key in a `sources:` block as `user`,
-      `assistant` or `anchor:<name>` and quote the read-back's
-      `assistant-typed:` line — a typed value leaves `defaults applied` and its
-      warning never fires, so that line is the user's only record; never under
-      "Not modelled" (it was modelled, at your number)
-- [ ] `decisiveness:` — the verdict's rule with its threshold (the 5% tie
-      band or the 65% floor), its margin or probability, and `mc_mean_best`
-      when it disagrees; when Monte Carlo decides, every uncertainty input
-      with its source class and what the deterministic line says without them
-      (the engine's warning carries both)
-- [ ] the flip point or threshold — the engine's band-first `sentence` copied
-      verbatim (the `--break-even` entry or the act-6 caption), never a bare
-      crossing; at both ends of any estimate it rests on; every bracket that
-      ran gets its clause (growth, maintenance, escalation, years) — a run you
-      drop is a claim you hide; on an insured branch both thresholds side by
-      side; on a price scan the engine's coherence `note` (dollar inputs held
-      fixed while the price moves) with its direction
+- [ ] the engine's **READ-BACK block** (`uv run hde <config> --read-back`, or
+      the last section of any run) pasted verbatim at the END of the answer,
+      outside every cap — it carries every `[warning]` line, the
+      `assistant-typed:` / `unattributed:` lines (declare each config key in a
+      `sources:` block as `user`, `assistant` or `anchor:<name>`, so a value
+      you typed is on the record), the `decisiveness:` rule with its threshold,
+      each `financing:` and `other costs:` line, `Affordability`, and every
+      break-even `sentence` with its coherence `note`; the prose above may
+      summarize it and never contradicts it
+- [ ] `defaults applied:` — the two largest engine-set numbers,
+      `selling_cost_rate` (5%, WOWA) and the discount rate, named with their
+      source in the prose
+- [ ] `decisiveness:` in the prose — the rule with its threshold (the 5% tie
+      band or the 65% floor), its margin or probability, `mc_mean_best` when
+      it disagrees, and when Monte Carlo decides what the deterministic line
+      says without the typed inputs (the block's warning has it)
+- [ ] the flip point or threshold in the prose — the block's `sentence`
+      restated in the user's units, at both ends of any estimate it rests on;
+      every bracket that ran gets its clause (a run you drop is a claim you
+      hide; a combination you did not run is written "not run"); an insured
+      branch quotes both thresholds; on a price scan the coherence `note`'s
+      direction
 - [ ] `Year-1 cash` — both sides in $/month, principal, unrecoverable, beside
-      the verdict's `≈ $/month equivalent` (PV, not cash); the assumptions
-      line's `financing:` entry (the netting `cash − purchase_costs = down
-      payment`, loan-to-value, the distance to the 20% line) — a clearance smaller than the estimate it
-      rests on is the same cliff as a shortfall: the insured branch was run
-      (Missing information) and its verdict is quoted beside this one
-- [ ] `Affordability` — max ratio and breach years, quoting the affordability
-      `[warning]` line verbatim (it names the 32% guideline, the 39% GDS cap
-      and the 44% TDS cap) — and at the threshold: the break-even's
-      affordability at the crossing and band edges, or the sweep rows'
-      `affordability`; a range you call cheaper is checked against the same
-      lines
+      the verdict's `≈ $/month equivalent` (PV, not cash); a thin 20% clearance
+      means the insured branch was run and its verdict quoted beside this one
+- [ ] `Affordability` — in the prose too when income was given, at the
+      threshold's crossing and band edges as well as the base run; a range you
+      call cheaper is checked against the 32% and 39% lines and never softened
 - [ ] **No source for:** every figure you estimated because neither the user
       nor the anchor registry had it; outside the anchored jurisdictions say so
-      (the registry is Québec-shaped plus Toronto — an Ontario land-transfer
-      tax or an Ottawa rate has no anchor); a placeholder above ~10% of year-1
-      cash (a tax bill, insurance) gets a two-point `--sweep`, both points
-      quoted with the direction
+      (the registry is Québec-shaped plus Toronto); a placeholder above ~10% of
+      year-1 cash gets a two-point `--sweep`, both points quoted with the
+      direction
 - [ ] **Not modelled:** every item with a direction
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 
-Then the prose per `references/answer-template.md`. One cap applies: under
-500 words, or the quick-sense cap and its cut order in
+Then the prose per `references/answer-template.md`. One cap applies to the
+prose: under 500 words, or the quick-sense cap and its cut order in
 `references/quick-sense.md` when the user asked for a quick sense — the
-lane's cap overrides the template's.
+lane's cap overrides the template's; the READ-BACK block is outside both.
 
 ## Verification
 
