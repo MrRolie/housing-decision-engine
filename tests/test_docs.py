@@ -111,3 +111,22 @@ def test_glossary_covers_every_emitted_figure():
     assert {"total_pv", "prob_house_cheapest", "margin_frac", "years_exceeding"} <= required
     missing = required - glossary
     assert not missing, f"figures without a glossary row: {sorted(missing)}"
+
+
+def test_no_tracked_text_file_carries_a_merge_conflict_marker():
+    """2026-09-04: a three-way patch merge left `<<<<<<<` markers in API_CONTRACT.md
+    and the commit went through because nothing read the file. Tracked text is
+    what the public repo serves; a marker in it is a broken document."""
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    files = subprocess.run(["git", "ls-files", "*.md", "*.py", "*.yaml", "*.txt", "*.toml"],
+                           cwd=root, capture_output=True, text=True, check=True).stdout.split()
+    offenders = []
+    for rel in files:
+        path = root / rel
+        if not path.exists():
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if line.startswith(("<<<<<<< ", ">>>>>>> ")):
+                offenders.append(f"{rel}:{n}")
+    assert not offenders, offenders
