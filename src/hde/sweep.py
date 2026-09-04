@@ -8,6 +8,7 @@ and the same verdict rule as the main run.
 from __future__ import annotations
 
 import copy
+import dataclasses
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -15,7 +16,7 @@ import numpy as np
 from .config import ConfigValidationError, load_config_dict
 from .config import single_path_run
 from .deterministic import compute_deterministic
-from .models import ComparisonDeterministicResult, compute_verdict
+from .models import ComparisonDeterministicResult, ComparisonSpec, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .serialization import mc_to_dict
 
@@ -111,6 +112,47 @@ def price_scan_note(raw: Dict[str, Any], key: str) -> Optional[str]:
     )
 
 
+def base_value(raw: Dict[str, Any], key: str) -> Optional[Any]:
+    """The value the raw YAML states for a dotted key (the `simulation.years` /
+    `simulation.discount_rate` aliases read the top level), or None."""
+    parts = key.split(".")
+    if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
+        parts = [parts[1]]
+    node: Any = raw
+    for part in parts:
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def one_sided_sweep_warning(raw: Dict[str, Any], key: str, values: List[Any]) -> Optional[str]:
+    """The warning for a sweep over a key the ASSISTANT typed whose grid lies
+    entirely above or entirely below the placeholder: one direction of the
+    guess is tested and the other is not (2026-09-04 — an Ontario tax
+    placeholder swept upward only was read as a sensitivity test). Quiet for a
+    user-stated or undeclared key, and for a grid that straddles or touches
+    the base value."""
+    sources = raw.get("sources")
+    parts = key.split(".")
+    if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
+        parts = [parts[1]]
+    if not isinstance(sources, dict) or sources.get(".".join(parts)) != "assistant":
+        return None
+    base = base_value(raw, key)
+    if not isinstance(base, (int, float)) or isinstance(base, bool) or not values:
+        return None
+    if all(v > base for v in values):
+        side = "ABOVE"
+    elif all(v < base for v in values):
+        side = "BELOW"
+    else:
+        return None
+    shown = _fmt_value(key, base if key in INT_KEYS else float(base))  # as the grid prints
+    return (f"sweep of {key} covers only values {side} the placeholder "
+            f"{shown}; the other direction is untested")
+
+
 def join_notes(*notes: Optional[str]) -> Optional[str]:
     """The notes a block carries, as one sentence-joined string (or None)."""
     present = [n for n in notes if n]
@@ -137,8 +179,22 @@ def affordability_of(det: ComparisonDeterministicResult) -> Optional[Dict[str, D
     }
 
 
+# The source class of a key a sweep or break-even overrode: the grid point's
+# value is the scan's, not whoever declared the base value's. `with_value`
+# marks the lifted declaration with this and `load_at` relabels the echo —
+# the loader itself never sees the marker.
+SWEEP_SOURCE = "sweep"
+
+
 def with_value(raw: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
-    """A deep copy of the raw YAML mapping with one dotted key set."""
+    """A deep copy of the raw YAML mapping with one dotted key set.
+
+    A `sources:` declaration on that key is marked `sweep`: an `anchor:<name>`
+    declaration is validated against the anchor's figure at load time, and a
+    scan that moves the key would otherwise be refused at every off-anchor
+    point (2026-09-04). The base run still validates it — only the copy a grid
+    point loads is relabelled. Load the copy through `load_at`.
+    """
     doc = copy.deepcopy(raw)
     parts = key.split(".")
     if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
@@ -149,7 +205,31 @@ def with_value(raw: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
         if not isinstance(node, dict):
             raise ValueError(f"cannot sweep {key}: {part} is not a mapping")
     node[parts[-1]] = value
+    sources = doc.get("sources")
+    if isinstance(sources, dict) and ".".join(parts) in sources:
+        sources[".".join(parts)] = SWEEP_SOURCE
     return doc
+
+
+def load_at(raw: Dict[str, Any], key: str, value: Any) -> ComparisonSpec:
+    """The spec at one grid point: `with_value` and the loader, with every
+    declaration a scan lifted echoed as `sweep` rather than re-validated.
+
+    One entry for every scan path (the sweep rows, the threshold solver, its
+    cliff and affordability probes), so no path can load the copy raw and
+    trip over the marker."""
+    doc = with_value(raw, key, value)
+    sources = doc.get("sources")
+    swept = ([k for k, v in sources.items() if v == SWEEP_SOURCE]
+             if isinstance(sources, dict) else [])
+    for k in swept:
+        del sources[k]
+    spec = load_config_dict(doc)
+    if swept and spec.sources is not None:
+        spec.sources = dataclasses.replace(spec.sources, entries=tuple(
+            dataclasses.replace(e, source=SWEEP_SOURCE, anchor=None) if e.key in swept else e
+            for e in spec.sources.entries))
+    return spec
 
 
 def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: bool = True) -> Dict[str, Any]:
@@ -162,7 +242,7 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
     rows: List[Dict[str, Any]] = []
     for v in values:
         try:
-            spec = load_config_dict(with_value(raw, key, v))
+            spec = load_at(raw, key, v)
         except (ConfigValidationError, ValueError) as e:
             rows.append({"value": v, "error": str(e).splitlines()[-1]})
             continue

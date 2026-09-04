@@ -285,3 +285,25 @@ class TestRateKeyBrackets:
     def test_a_key_that_is_neither_money_nor_rate_still_asks_for_one(self):
         with pytest.raises(ValueError, match="lo:hi"):
             solve_break_even(_base(), "condo.mortgage_term_years")
+
+
+class TestDeclaredSourcesAtGridPoints:
+    """The threshold on a key declared `anchor:<name>` must solve: every grid
+    point used to be refused because the copied YAML re-validated the
+    declaration against the anchor's figure (2026-09-04)."""
+
+    def _raw(self):
+        raw = _base(discount_rate=0.03)
+        raw["sources"] = {"discount_rate": "anchor:simulation.discount_rate"}
+        return raw
+
+    def test_the_break_even_solves_instead_of_refusing_every_point(self):
+        out = solve_break_even(self._raw(), "discount_rate", 0.0, 0.08)
+        assert "refused" not in out, out
+        assert out["searched"] == [[0.0, 0.08]]
+
+    def test_the_across_rows_lift_the_swept_keys_declaration_too(self):
+        raw = self._raw()
+        across = solve_break_even_across(raw, "rent.monthly_rent", None, None,
+                                         "discount_rate", [0.02, 0.04])
+        assert all(row["break_evens"] for row in across["rows"]), across

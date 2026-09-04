@@ -20,6 +20,14 @@ from .models import InputError, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .reporting import format_text_report
 
+# A demographic prior enters the Monte Carlo only: a run that skips it shows
+# the deterministic line alone, and says so rather than let the prior's
+# presence in the echo read as its presence in the numbers (2026-09-04).
+PRIOR_WITHOUT_MONTE_CARLO = (
+    "market_scenario prior acts only in Monte Carlo — this run shows the "
+    "deterministic line alone (the prior's drift is not in it)"
+)
+
 
 def main() -> int:
     """
@@ -177,6 +185,8 @@ def main() -> int:
     # never refuse. stderr so --quiet and piped stdout stay clean; the same list
     # rides the --json document. The wall clock is read here, at the edge.
     warnings = all_warnings(spec, prior, current_year=datetime.date.today().year)
+    if args.no_monte_carlo and spec.market_scenario is not None:
+        warnings.append(PRIOR_WITHOUT_MONTE_CARLO)
     for warning in warnings:
         print(f"[warning] {warning}", file=sys.stderr)
 
@@ -221,7 +231,7 @@ def main() -> int:
     sweep_specs = []  # (key, values) pairs; --break-even re-solves at each
     if args.sweep:
         import yaml as _yaml
-        from .sweep import parse_sweep, run_sweep
+        from .sweep import one_sided_sweep_warning, parse_sweep, run_sweep
         raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
         for sweep_arg in args.sweep:
             try:
@@ -233,6 +243,11 @@ def main() -> int:
             # the sweep's own (deduped) grid, so a break-even re-solved "across"
             # it does not repeat itself at a collapsed integer point
             sweep_specs.append((key, sweeps[-1]["values"]))
+            # A placeholder swept in one direction only tests half the guess.
+            one_sided = one_sided_sweep_warning(raw, key, sweeps[-1]["values"])
+            if one_sided is not None:
+                warnings.append(one_sided)
+                print(f"[warning] {one_sided}", file=sys.stderr)
 
     # Break-evens (threshold questions) — same loader, deterministic line.
     break_evens = []

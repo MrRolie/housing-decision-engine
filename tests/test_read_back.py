@@ -327,6 +327,58 @@ class TestOneSidedUncertaintyIsSymmetric:
                     if w.startswith("one-sided uncertainty")]
 
 
+class TestPriorWithoutMonteCarlo:
+    """A config carrying a `market_scenario` prior run with `--no-monte-carlo`
+    shows the deterministic line alone: the prior's drift enters the Monte
+    Carlo only, so the run says so rather than let the prior's presence in the
+    echo read as its presence in the numbers (2026-09-04)."""
+
+    LINE = ("market_scenario prior acts only in Monte Carlo — this run shows the "
+            "deterministic line alone (the prior's drift is not in it)")
+
+    def _raw(self, prior=True):
+        raw = {
+            "years": 10, "discount_rate": 0.03,
+            "house": {"initial_value": 500_000, "value_growth_rate": 0.0, "all_cash": True},
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.0,
+                     "invested_down_payment": 120_000, "investment_return_rate": 0.03},
+            "simulation": {"num_sims": 50, "random_seed": 42},
+        }
+        if prior:
+            raw["market_scenario"] = {"path": PRIOR_PATH, "geography": "MTL_RMR"}
+        return raw
+
+    def test_it_warns_on_stderr_and_reaches_the_read_back(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, self._raw())
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo", "--read-back"])
+        assert cli_main() == 0
+        captured = capsys.readouterr()
+        assert f"[warning] {self.LINE}" in captured.err.splitlines()
+        assert f"[warning] {self.LINE}" in captured.out.splitlines()
+
+    def test_it_rides_json_warnings_beside_a_sweep(self, tmp_path, monkeypatch, capsys):
+        import json
+
+        config = _yaml(tmp_path, self._raw())
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo", "--json",
+                                          "--sweep", "years=5,10"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        assert doc["warnings"].count(self.LINE) == 1
+
+    def test_a_monte_carlo_run_is_quiet(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, self._raw())
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--json"])
+        assert cli_main() == 0
+        assert self.LINE not in capsys.readouterr().err
+
+    def test_without_a_prior_it_is_quiet(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, self._raw(prior=False))
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo"])
+        assert cli_main() == 0
+        assert self.LINE not in capsys.readouterr().err
+
+
 class TestPriorAgainstTheTieBand:
     """`--break-even <owned>.value_growth_rate` on a config with a prior: three
     reviewed answers assembled this comparison by hand."""

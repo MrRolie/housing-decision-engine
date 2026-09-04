@@ -20,12 +20,12 @@ import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .anchors import ANCHORS
-from .config import ConfigValidationError, load_config_dict
+from .config import ConfigValidationError
 from .deterministic import compute_deterministic
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
-from .sweep import (INT_KEYS, _fmt_value, affordability_of, join_notes,
-                    price_scan_note, with_value)
+from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, join_notes,
+                    load_at, price_scan_note, with_value)
 
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
@@ -68,16 +68,7 @@ def parse_break_even(arg: str) -> Tuple[str, Optional[float], Optional[float]]:
     return key, lo, hi
 
 
-def _raw_value(raw: Dict[str, Any], key: str) -> Optional[Any]:
-    parts = key.split(".")
-    if len(parts) == 2 and parts[0] == "simulation" and parts[1] in ("years", "discount_rate"):
-        parts = [parts[1]]
-    node: Any = raw
-    for part in parts:
-        if not isinstance(node, dict) or part not in node:
-            return None
-        node = node[part]
-    return node
+_raw_value = base_value  # one reader of the raw YAML, shared with the sweep
 
 
 def _priced_options(raw: Dict[str, Any]) -> List[str]:
@@ -327,7 +318,7 @@ def solve_break_even(
     def totals_at(v: float) -> Optional[Tuple[float, float]]:
         """The two totals at v, or None when the loader refuses that value."""
         try:
-            det = compute_deterministic(load_config_dict(with_value(raw, key, v)))
+            det = compute_deterministic(load_at(raw, key, v))
         except (ConfigValidationError, ValueError) as e:
             refused.append((v, str(e).strip().splitlines()[-1].strip()))
             return None
@@ -494,7 +485,7 @@ def _financing_regime(
     20% line changes no cash flow, so it is not a cliff to warn about.
     """
     try:
-        spec = load_config_dict(with_value(raw, key, value))
+        spec = load_at(raw, key, value)
     except (ConfigValidationError, ValueError) as e:
         return False, str(e).strip().splitlines()[-1].strip()
     regime = {}
@@ -625,7 +616,7 @@ def _affordability_at(
         if value is None:
             return None
         try:
-            det = compute_deterministic(load_config_dict(with_value(raw, key, value)))
+            det = compute_deterministic(load_at(raw, key, value))
         except (ConfigValidationError, ValueError):
             return None
         if det.income_report is not None:
