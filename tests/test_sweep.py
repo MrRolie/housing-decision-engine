@@ -142,6 +142,74 @@ class TestProbabilityExactlyAtTheFloor:
         assert "at the floor" not in self._table(0.6499)
 
 
+class TestPointSentences:
+    """One line per grid point in the read-back — the verdict, its margin, the
+    Monte Carlo probability, the insured tier and the affordability, each
+    clause only where the run has the data (2026-09-04)."""
+
+    RICH = {
+        "years": 10, "discount_rate": 0.03, "province": "QC",
+        "house": {"initial_value": 500_000, "value_growth_rate": 0.0,
+                  "down_payment": 75_000, "mortgage_rate": 0.04, "mortgage_term_years": 25,
+                  "mortgage_insurance": "auto", "purchase_costs": 6_000},
+        "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.0,
+                 "invested_down_payment": 75_000, "investment_return_rate": 0.03},
+        "income": {"annual_income": 70_000},
+        "simulation": {"num_sims": 100, "random_seed": 42, "investment_return_vol": 0.10},
+    }
+
+    def test_rows_carry_the_sentence_in_the_stated_shape(self):
+        result = run_sweep(self.RICH, "years", [5, 10], monte_carlo=False)
+        row = result["rows"][0]
+        assert row["sentence"].startswith("years=5: best ")
+        assert " by $" in row["sentence"] and " of house PV)" in row["sentence"] or " of rent PV)" in row["sentence"]
+        assert "P(best)" not in row["sentence"]  # no Monte Carlo ran
+        assert "insured house 2.80%" in row["sentence"]
+        assert "affordability house max " in row["sentence"] and "breaches years [" in row["sentence"]
+        assert result["base_value"] == 10
+
+    def test_the_probability_clause_rides_a_monte_carlo_run(self):
+        result = run_sweep(self.RICH, "years", [5], monte_carlo=True)
+        assert ", P(best) " in result["rows"][0]["sentence"]
+
+    def test_at_the_floor_is_marked_in_the_sentence(self):
+        from hde.sweep import point_sentence
+        row = {"value": 5, "best": "house", "margin_pv": 1_000.0, "margin_frac": 0.01,
+               "prob_best": 0.65, "insured": {}, "affordability": None}
+        assert point_sentence("years", row) == (
+            "years=5: best house by $1,000 (1.0% of house PV), P(best) 65% (at the floor)")
+
+    def test_a_refused_point_is_one_line_too(self):
+        from hde.sweep import point_sentence
+        assert point_sentence("years", {"value": 0, "error": "years must be ≥ 1"}) == (
+            "years=0: refused: years must be ≥ 1")
+
+    def test_the_read_back_lines_state_an_invariant_option_once(self):
+        """The renter's ratio does not move with the price: once, in the
+        header, never per point."""
+        from hde.sweep import sweep_lines
+        result = run_sweep(self.RICH, "house.initial_value", [400_000, 450_000], monte_carlo=False)
+        lines = sweep_lines(result)
+        assert lines[0].startswith("sweep house.initial_value (2 points; ")
+        assert "rent max 34.3% breaches years [1, 2, 3, 4, 5, 6, 7] at every point" in lines[0]
+        per_point = [l for l in lines if l.startswith("house.initial_value=")]
+        assert len(per_point) == 2
+        assert not any("rent max" in l for l in per_point)
+        assert all("affordability house max" in l for l in per_point)
+        assert lines[-1].startswith("no flip along house.initial_value")
+
+    def test_the_base_point_is_marked_and_carries_the_verdict_alone(self):
+        """The base config's affordability and financing are in the block
+        already; the row at the base value adds the verdict clauses only."""
+        from hde.sweep import sweep_lines
+        result = run_sweep(self.RICH, "years", [5, 10], monte_carlo=False)
+        base = next(l for l in sweep_lines(result) if l.startswith("years=10"))
+        assert base.startswith("years=10 (= base): best ")
+        assert "affordability" not in base and "insured" not in base
+        other = next(l for l in sweep_lines(result) if l.startswith("years=5"))
+        assert "(= base)" not in other and "affordability" in other
+
+
 class TestIntegerCollapse:
     """A range on an integer key produces duplicate grid points (2026-09-03
     review: `years=7:8:5` ran [7, 7, 8, 8, 8] and printed five rows, three of

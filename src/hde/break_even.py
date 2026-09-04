@@ -24,8 +24,8 @@ from .config import ConfigValidationError
 from .deterministic import compute_deterministic
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
-from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, join_notes,
-                    load_at, price_scan_note, with_value)
+from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
+                    join_notes, load_at, price_scan_note, with_value)
 
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
@@ -231,7 +231,8 @@ def solve_crossings(
             # Band-first, and FIRST in the entry: three dogfood serves copied the
             # crossing-first shape into the user's text ("$2,663: renting below,
             # buying above; too close between…" contradicts itself on the gap).
-            found.append({"sentence": band_sentence(key, entry, band), **entry})
+            # The band rule itself is the block header's, said once.
+            found.append({"sentence": band_sentence(key, entry, band, band_clause=False), **entry})
         return found
 
     xs, ys = scan(lo, hi)
@@ -548,14 +549,14 @@ def _financing_regime(
 
 
 def _regime_state(side: Optional[Dict[str, Any]]) -> str:
-    """One side of a crossing, in words: insured (with its tier and the loan it
-    is priced on), uninsured, or carrying no derived record at all."""
+    """One side of a crossing, in words: insured (with its premium rate),
+    uninsured, or carrying no derived record at all."""
     if side is None:
         return "without a derived insurance record"
     required, _label, rate = side["tier"]
     if not required:
-        return f"uninsured ({side['ltv']:.2%} loan-to-value)"
-    return (f"insured ({side['ltv']:.2%} loan-to-value, {rate:.2%} premium on the loan)")
+        return "uninsured"
+    return f"insured ({rate:.2%} premium on the loan)"
 
 
 def _step_clauses(
@@ -581,19 +582,17 @@ def _step_clauses(
             continue  # the same mortgage on both sides: the costs really do meet
         insured_below = bool(was_tier and was_tier[0])
         insured_above = bool(now_tier and now_tier[0])
+        # One sentence per jump (2026-09-04): the point, what changed across
+        # it, and what that does to the band.
         if insured_below != insured_above:
-            clauses.append(
-                f"{what} at {at} is the mortgage-insurance cliff — {name} is "
-                f"{_regime_state(was)} just below it and {_regime_state(now)} just above, "
-                f"so the 20%-down line falls there and the premium switches on: not a "
-                f"smooth cost crossing, and the tie band around it is the cliff's width, "
-                f"not a range of near-ties")
+            step = (f"is the mortgage-insurance cliff — {name} {_regime_state(was)} just "
+                    f"below it, {_regime_state(now)} just above —")
         else:
-            clauses.append(
-                f"{what} at {at} is a mortgage-insurance tier change for {name} "
-                f"({was_tier[2]:.2%} → {now_tier[2]:.2%} of the loan), not a smooth cost "
-                f"crossing: the tie band around it is the step's width, not a range of "
-                f"near-ties")
+            step = (f"is a mortgage-insurance tier change for {name} "
+                    f"({was_tier[2]:.2%} → {now_tier[2]:.2%} of the loan) —")
+        clauses.append(
+            f"{what} at {at} {step} not a smooth cost crossing: the tie band around it "
+            f"is the step's width, not a range of near-ties")
     return clauses
 
 
@@ -696,7 +695,14 @@ def solve_break_even_across(
             if carried in r:
                 row[carried] = r[carried]
         rows.append(row)
-    return {"key": sweep_key, "rows": rows}
+    # The sweep key's base value, so the row that re-solves the base config
+    # can say "(= base)" instead of repeating the base line.
+    return {"key": sweep_key, "base_value": base_value(raw, sweep_key), "rows": rows}
+
+
+def band_rule(band: float) -> str:
+    """The tie band's definition, in the words every surface uses."""
+    return f"band = {band:.0%} of the cheaper option's PV"
 
 
 def band_sentence(
@@ -704,6 +710,7 @@ def band_sentence(
     *,
     fmt: Optional[Callable[[float], str]] = None,
     label: Optional[Callable[[str], str]] = None,
+    band_clause: bool = True,
 ) -> str:
     """The threshold as the user should read it: band-first, the edges named.
     "rent is cheaper below 2,537; too close to call between 2,537 and 2,797;
@@ -712,10 +719,13 @@ def band_sentence(
     ``fmt`` renders one value and ``label`` one option name; both default to the
     CLI's own rendering. The story's act 6 passes "$2,663/mo" and "buying a
     house" — one grammar, so the drawn crossing and the reported one read the
-    same, in each surface's own units.
+    same, in each surface's own units. ``band_clause`` keeps the band rule in
+    the closing bracket (the story's caption stands alone); the CLI's blocks
+    state the rule once, in their header, and pass False.
     """
     show = fmt or (lambda v: _fmt_value(key, v))
     name = label or (lambda option: option)
+    rule = f"; {band_rule(band)}" if band_clause else ""
     left, right = be["tie_band"]
     if "last_value_below" in be:
         # Integer input (a step function): whole values on each side of the band.
@@ -726,14 +736,14 @@ def band_sentence(
         return (
             f"{name(be['cheaper_below'])} is cheaper up to {up_to}; too close to call {band_txt}; "
             f"{name(be['cheaper_above'])} is cheaper from {from_} "
-            f"({name(be['cheaper_above'])} first cheaper at {key}={be['value']}; band = {band:.0%} of the cheaper option's PV)"
+            f"({name(be['cheaper_above'])} first cheaper at {key}={be['value']}{rule})"
         )
     lo_txt = show(left) if left is not None else "the bracket's low end"
     hi_txt = show(right) if right is not None else "the bracket's high end"
     return (
         f"{name(be['cheaper_below'])} is cheaper below {lo_txt}; too close to call between {lo_txt} and "
         f"{hi_txt}; {name(be['cheaper_above'])} is cheaper above {hi_txt} "
-        f"(crossing {show(be['value'])}; band = {band:.0%} of the cheaper option's PV)"
+        f"(crossing {show(be['value'])}{rule})"
     )
 
 
@@ -755,30 +765,50 @@ def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> L
     return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
-def _affordability_points(
-    key: str, be: Dict[str, Any],
-) -> Tuple[Optional[float], List[str]]:
-    """(threshold, one phrase per priced point): the crossing and both band
-    edges with their highest cost/income ratio and breach count. Empty without
-    an `income` block."""
+def quoted_points(key: str, be: Dict[str, Any]) -> List[Tuple[str, Any, Dict[str, Any]]]:
+    """(label, value, per-option affordability) for every point the sentence
+    quotes and the run priced: the crossing and both band edges."""
     aff = be.get("affordability")
     if not aff:
-        return None, []
+        return []
     lo, hi = be["tie_band"]
     points = [("at the crossing", be["value"], aff["value"]),
               ("at the band's low edge", lo, aff["tie_band"][0]),
               ("at the band's high edge", hi, aff["tie_band"][1])]
-    phrases = []
+    return [(label, value, per) for label, value, per in points
+            if per is not None and value is not None]
+
+
+def _aff_phrase(option: str, entry: Dict[str, Any]) -> str:
+    return f"{option} {entry['max_ratio']:.1%} ({len(entry['years_exceeding'])} yr(s) over)"
+
+
+def _affordability_points(
+    key: str, be: Dict[str, Any], drop: Any = (),
+) -> Tuple[Optional[float], List[str]]:
+    """(threshold, phrases): the crossing and both band edges with their
+    highest cost/income ratio and breach count. An option whose figures are
+    the same at every quoted point — the renter's, on a price scan — is one
+    phrase, `… at every quoted point`, not three; `drop` names the options a
+    block header already stated. Empty without an `income` block."""
+    points = quoted_points(key, be)
+    if not points:
+        return None, []
+    constant = ({o: e for o, e in constant_options(per for _, _, per in points).items()
+                 if o not in drop} if len(points) > 1 else {})
+    phrases: List[str] = []
+    if constant:
+        phrases.append(", ".join(_aff_phrase(o, e) for o, e in constant.items())
+                       + " at every quoted point")
     for label, value, per_option in points:
-        if per_option is None or value is None:
-            continue
         parts = ", ".join(
-            f"{option} {per_option[option]['max_ratio']:.1%}"
-            f" ({len(per_option[option]['years_exceeding'])} yr(s) over)"
-            for option in ("condo", "house", "rent") if option in per_option
+            _aff_phrase(option, per_option[option])
+            for option in ("condo", "house", "rent")
+            if option in per_option and option not in drop and option not in constant
         )
-        phrases.append(f"{label} {_fmt_value(key, value)}: {parts}")
-    return aff.get("threshold"), phrases
+        if parts:
+            phrases.append(f"{label} {_fmt_value(key, value)}: {parts}")
+    return be["affordability"].get("threshold"), phrases
 
 
 def _affordability_head(threshold: Optional[float], where: str = "") -> str:
@@ -800,34 +830,104 @@ def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
     return [head] + [f"  {phrase}" for phrase in phrases]
 
 
-def _affordability_clause(key: str, be: Dict[str, Any]) -> str:
+def _affordability_clause(
+    key: str, be: Dict[str, Any], *, drop: Any = (), head: bool = True,
+) -> str:
     """The same figures on ONE line, for an `across` row (2026-09-04 review: an
     answer called $858k a "safe-buy ceiling" while the across row it came from
-    carried 44.1% of income — above the 39% cap the answer itself cited)."""
-    threshold, phrases = _affordability_points(key, be)
+    carried 44.1% of income — above the 39% cap the answer itself cited).
+    `head=False` drops the sub-header a block header already carries."""
+    threshold, phrases = _affordability_points(key, be, drop)
     if not phrases:
         return ""
-    return "; " + _affordability_head(threshold) + " " + " · ".join(phrases)
+    lead = _affordability_head(threshold) if head else "affordability"
+    return f"; {lead} " + " · ".join(phrases)
+
+
+def _refused_clause(carrier: Dict[str, Any]) -> Optional[str]:
+    refused = carrier.get("refused")
+    if not refused:
+        return None
+    return f"config refuses {refused['count']} point(s) ({refused['reason']})"
 
 
 def across_row_sentence(
     key: str, sweep_key: str, row: Dict[str, Any], band: float,
+    *, refused_clause: bool = True, drop: Any = (), head: bool = True,
 ) -> str:
     """One `across` row in words: the sweep point, the threshold re-solved
     there, what the config refused, and what the crossing costs against income.
 
     One builder for the text block and the read-back line (2026-09-04 review:
     the block carried the base sentence alone, so an answer reduced a whole
-    years bracket to "near $300k").
+    years bracket to "near $300k"). The read-back passes `refused_clause=False`
+    and `head=False` where its header states those once, and `drop` for the
+    options the header states at every point.
     """
     sentences = threshold_sentences(key, row, band)
-    if row.get("refused"):
-        sentences.append(f"config refuses {row['refused']['count']} point(s) "
-                         f"({row['refused']['reason']})")
+    if refused_clause and _refused_clause(row):
+        sentences.append(_refused_clause(row))
     text = f"{sweep_key}={_fmt_value(sweep_key, row['value'])}: " + "; ".join(sentences)
     for be in row["break_evens"]:
-        text += _affordability_clause(key, be)
+        text += _affordability_clause(key, be, drop=drop, head=head)
     return text
+
+
+def read_back_block(result: Dict[str, Any]) -> List[str]:
+    """The read-back lines of one break-even, each fact once (2026-09-04):
+
+    - a header naming the bracket, the band rule, the refused clause when
+      every solve refused the same points, and the affordability an option
+      holds at every quoted point of every solve;
+    - the base threshold with its own affordability clause;
+    - each `across` row, or `(= base)` where it re-solved the base config;
+    - the block's note.
+    """
+    key, band = result["key"], result["tie_band_fraction"]
+    lo, hi = result["bracket"]
+    rows = [row for across in result.get("across", []) for row in across["rows"]]
+    carriers = [result] + rows
+    refused = [_refused_clause(c) for c in carriers]
+    refused_once = all(refused) and len(set(refused)) == 1
+    quoted = [per for c in carriers for be in c["break_evens"]
+              for _, _, per in quoted_points(key, be)]
+    constant = constant_options(quoted) if len(quoted) > 1 else {}
+    thresholds = [be["affordability"]["threshold"] for c in carriers for be in c["break_evens"]
+                  if be.get("affordability") and be["affordability"].get("threshold") is not None]
+    head = [f"bracket {_fmt_value(key, lo)}–{_fmt_value(key, hi)}", band_rule(band)]
+    if refused_once:
+        head.append(refused[0])
+    if quoted:
+        aff = "affordability = highest cost/income ratio"
+        if thresholds:
+            aff += f"; years above the {thresholds[0]:.0%} threshold"
+        if constant:
+            aff += ("; " + ", ".join(_aff_phrase(o, e) for o, e in constant.items())
+                    + " at every quoted point")
+        head.append(aff)
+    lines = [f"break-even {key} (" + "; ".join(head) + ")"]
+    drop = constant.keys()
+    sentences = threshold_sentences(key, result, band)
+    if not refused_once and refused[0]:
+        sentences.append(refused[0])
+    base_text = "; ".join(sentences) + "".join(
+        _affordability_clause(key, be, drop=drop, head=False) for be in result["break_evens"])
+    lines.append(f"break-even {key}: {base_text}")
+    for across in result.get("across", []):
+        skey, base = across["key"], across.get("base_value")
+        for row in across["rows"]:
+            text = across_row_sentence(key, skey, row, band, refused_clause=not refused_once,
+                                       drop=drop, head=False)
+            prefix = f"{skey}={_fmt_value(skey, row['value'])}: "
+            at_base = (isinstance(base, (int, float)) and not isinstance(base, bool)
+                       and float(row["value"]) == float(base))
+            if at_base and text[len(prefix):] == base_text:
+                lines.append(f"break-even {key} at {prefix}(= base)")
+            else:
+                lines.append(f"break-even {key} at {text}")
+    if result.get("note"):
+        lines.append(f"break-even {key} note: {result['note']}")
+    return lines
 
 
 def format_break_even(result: Dict[str, Any]) -> str:
@@ -836,8 +936,8 @@ def format_break_even(result: Dict[str, Any]) -> str:
     lo, hi = result["bracket"]
     band = result["tie_band_fraction"]
     lines = [f"\nBreak-even {key} between {a} and {b} (deterministic line — a market_scenario prior "
-             f"does not move it; bracket {_fmt_value(key, lo)}–{_fmt_value(key, hi)}; every other input "
-             f"held at its base value):"]
+             f"does not move it; bracket {_fmt_value(key, lo)}–{_fmt_value(key, hi)}; {band_rule(band)}; "
+             f"every other input held at its base value):"]
     if result.get("note"):
         lines.append(f"  {result['note']}")
     if result.get("refused"):

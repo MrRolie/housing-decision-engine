@@ -806,33 +806,39 @@ def read_back_lines(
     lines.extend(year1_cash_lines(det, spec.economic))
     lines.extend(_option_lines(echo, "other costs:"))
     if det is not None:
-        lines.extend(affordability_lines(det.income_report))
+        # One fact once (2026-09-04): an option's breach is already a
+        # `[warning]` line above — the section keeps its header (the threshold
+        # and the caps) and the max-ratio line of every option no warning
+        # names. The warning is never the line that goes.
+        warned = {w.split()[1] for w in warnings
+                  if w.startswith("affordability: ") and " housing cost exceeds " in w}
+        lines.extend(line for line in affordability_lines(det.income_report)
+                     if not any(line.startswith(f"{name.capitalize()}: max ratio")
+                                for name in warned))
     break_evens = list(break_evens)
     if break_evens:
-        # Local import for the same reason as `flip_lines` below: break_even
+        # Local import for the same reason as `sweep_lines` below: break_even
         # reaches this module through sweep, so the dependency runs one way at
         # import time.
-        from .break_even import across_row_sentence, threshold_sentences
+        from .break_even import read_back_block
+    notes_said: List[str] = []
     for result in break_evens:
-        key = result["key"]
-        band = result["tie_band_fraction"]
-        for sentence in threshold_sentences(key, result, band):
-            lines.append(f"break-even {key}: {sentence}")
-        # The threshold re-solved at every sweep point: without these the block
-        # carried the base solve alone, and an answer reduced a whole years
-        # bracket to one number.
-        for across in result.get("across", []):
-            skey = across["key"]
-            for row in across["rows"]:
-                lines.append(f"break-even {key} at {across_row_sentence(key, skey, row, band)}")
+        # The header, the base threshold, every `across` re-solution (without
+        # these the block carried the base solve alone, and an answer reduced
+        # a whole years bracket to one number) and the note — each fact once.
+        lines.extend(read_back_block(result))
         if result.get("note"):
-            lines.append(f"break-even {key} note: {result['note']}")
+            notes_said.append(result["note"])
     if sweeps:
         # Local import: sweep.py imports this module for its per-point Monte
         # Carlo serialization, so the dependency runs one way at import time.
-        from .sweep import flip_lines
+        from .sweep import sweep_lines
         for result in sweeps:
-            lines.extend(flip_lines(result))
+            lines.extend(sweep_lines(result))
+            note = result.get("note")
+            if note and note not in notes_said:  # a price scan's note, said once
+                lines.append(f"sweep {result['key']} note: {note}")
+                notes_said.append(note)
     next_step = next_step_line(verdict=verdict, det=det, prior=prior,
                                break_evens=break_evens)
     if next_step is not None:

@@ -156,6 +156,45 @@ class TestFormat:
         assert be["sentence"].startswith(f"rent is cheaper below {lo:,.0f}; too close to call between {lo:,.0f} and {hi:,.0f}; condo is cheaper above {hi:,.0f}")
         assert be["sentence"] in text
 
+    def test_the_band_rule_is_stated_once_in_the_header(self):
+        """The rule `band = 5% of the cheaper option's PV` used to close every
+        sentence; it is one fact, stated in the block's header (2026-09-04)."""
+        out = solve_break_even(_base(), "rent.monthly_rent")
+        be = out["break_evens"][0]
+        assert be["sentence"].endswith(f"(crossing {be['value']:,.0f})")
+        text = format_break_even(out)
+        assert text.count("band = 5% of the cheaper option's PV") == 1
+        assert "band = 5% of the cheaper option's PV" in text.splitlines()[1]
+
+    def test_the_story_keeps_the_band_clause_on_its_own_caption(self):
+        from hde.break_even import band_sentence
+        out = solve_break_even(_base(), "rent.monthly_rent")
+        be = out["break_evens"][0]
+        assert band_sentence("rent.monthly_rent", be, BAND).endswith(
+            "band = 5% of the cheaper option's PV)")
+
+
+class TestCliffNoteIsOneSentence:
+    def _cfg(self):
+        return {
+            "years": 10, "discount_rate": 0.03, "province": "QC",
+            "house": {"initial_value": 600_000, "value_growth_rate": 0.0,
+                      "cash_available": 130_000, "purchase_costs": 5_000,
+                      "mortgage_rate": 0.04, "mortgage_term_years": 25,
+                      "mortgage_insurance": "auto"},
+            "rent": {"monthly_rent": 2_300, "rent_escalation_rate": 0.0,
+                     "invested_down_payment": 125_000, "investment_return_rate": 0.03},
+            "simulation": {"num_sims": 50, "random_seed": 42},
+        }
+
+    def test_the_cliff_clause_is_one_sentence(self):
+        note = solve_break_even(self._cfg(), "house.initial_value")["note"]
+        clause = next(c for c in note.split("; ") if "mortgage-insurance cliff" in c)
+        assert clause == (
+            "the crossing at 625,000 is the mortgage-insurance cliff — house uninsured just "
+            "below it, insured (2.80% premium on the loan) just above — not a smooth cost "
+            "crossing: the tie band around it is the step's width, not a range of near-ties")
+
 
 class TestIntegerInputs:
     def test_years_reports_the_first_year_the_other_side_wins(self):

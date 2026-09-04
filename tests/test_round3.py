@@ -263,7 +263,7 @@ class TestSweepTracksTheMonteCarloMean:
         assert mean_flips == [{"from_value": 5, "from_best": "rent", "to_value": 10, "to_best": "condo"}]
         text = format_sweep({"key": "years", "values": [5, 10], "rows": rows,
                              "flips": det_flips, "mc_mean_flips": mean_flips})
-        assert "no flip" in text and "mean flip: Monte Carlo mean favours rent (years=5) then condo (years=10)" in text
+        assert "no flip along years" in text and "mean flip years: Monte Carlo mean favours rent (years=5) then condo (years=10)" in text
 
     def test_run_sweep_carries_both_flip_lists(self):
         raw = _base()

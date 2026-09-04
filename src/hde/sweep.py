@@ -17,7 +17,7 @@ from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict
 from .config import single_path_run
 from .deterministic import compute_deterministic
-from .models import ComparisonDeterministicResult, ComparisonSpec, compute_verdict
+from .models import ComparisonDeterministicResult, ComparisonSpec, _against, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .serialization import mc_to_dict
 
@@ -252,7 +252,7 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
         mc = run_monte_carlo(spec) if (monte_carlo and not single) else None
         verdict = compute_verdict(det, mc, years=spec.simulation.years,
                                   discount_rate=spec.simulation.discount_rate, single_path=single)
-        rows.append({
+        row: Dict[str, Any] = {
             "value": v,
             "totals": {k: getattr(det, k).total_pv for k in ("condo", "house", "rent")
                        if getattr(det, k) is not None},
@@ -269,19 +269,127 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
             # the most likely winner cheapest?" — never the same question.
             **_mc_majority(mc, det),
             "affordability": affordability_of(det),
+            # The insured tier the loader derived at this point, per owned
+            # option — a price scan walks the loan-to-value across tier edges.
+            "insured": insured_of(spec),
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
                 if mc is not None else None
             ),
-        })
+        }
+        row["sentence"] = point_sentence(key, row)
+        rows.append(row)
     flips, mc_mean_flips = find_flips(rows)
     out: Dict[str, Any] = {"key": key, "values": values, "rows": rows,
+                           "base_value": base_value(raw, key),
                            "flips": flips, "mc_mean_flips": mc_mean_flips,
                            "mc_majority_flips": track_flips(rows, "mc_best")}
     note = join_notes(collapse, price_scan_note(raw, key))
     if note:
         out["note"] = note
     return out
+
+
+def insured_of(spec: ComparisonSpec) -> Dict[str, float]:
+    """`{option: premium rate}` for every owned option whose derived mortgage
+    insurance is required at this point; empty otherwise."""
+    out: Dict[str, float] = {}
+    for name in ("condo", "house"):
+        option = getattr(spec, name, None)
+        record = getattr(option, "mortgage_insurance", None)
+        if record is not None and record.required:
+            out[name] = record.rate
+    return out
+
+
+def _aff_tuple(entry: Dict[str, Any]) -> Tuple[float, Tuple[int, ...]]:
+    return (round(float(entry["max_ratio"]), 6), tuple(entry["years_exceeding"]))
+
+
+def constant_options(point_sets: Any) -> Dict[str, Dict[str, Any]]:
+    """The options whose affordability — highest ratio and breach years — is
+    identical in EVERY per-option mapping given (one per quoted point). A
+    price-invariant ratio (the renter's, on a price scan) is one fact, stated
+    once rather than at every point (2026-09-04)."""
+    sets = [s for s in point_sets if s]
+    if not sets:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for option in ("condo", "house", "rent"):
+        if all(option in s for s in sets):
+            first = _aff_tuple(sets[0][option])
+            if all(_aff_tuple(s[option]) == first for s in sets):
+                out[option] = sets[0][option]
+    return out
+
+
+def _breaches(entry: Dict[str, Any]) -> str:
+    years = entry["years_exceeding"]
+    return f"breaches years {list(years)}" if years else "breaches none"
+
+
+def point_sentence(
+    key: str, row: Dict[str, Any], *, base: bool = False,
+    drop_affordability: Any = (), drop_insured: Any = (),
+) -> str:
+    """One grid point in words: `<key>=<v>: best <opt> by $<margin> (<pct>% of
+    <opt> PV)[, P(best) <p>%][, insured <opt> <tier>%][, affordability <opt>
+    max <r>% breaches years […]]` — only the clauses whose data the run has.
+
+    `base` marks the point equal to the base config and keeps its verdict
+    clauses alone: its affordability and financing are already in the block.
+    `drop_*` name the options a header stated once for every point.
+    """
+    head = f"{key}={_fmt_value(key, row['value'])}" + (" (= base)" if base else "")
+    if "error" in row:
+        return f"{head}: refused: {row['error']}"
+    best = row["best"]
+    parts = [f"best {best} by ${row['margin_pv']:,.0f} ({row['margin_frac']:.1%} of {best} PV)"]
+    prob = row.get("prob_best")
+    if prob is not None:
+        measured, _ = _against(prob, ANCHORS["verdict.prob_floor"].value)
+        parts.append(f"P(best) {measured}" + (" (at the floor)" if at_the_floor(prob) else ""))
+    if not base:
+        for option, rate in (row.get("insured") or {}).items():
+            if option not in drop_insured:
+                parts.append(f"insured {option} {rate:.2%}")
+        aff = row.get("affordability") or {}
+        clauses = [f"{option} max {aff[option]['max_ratio']:.1%} {_breaches(aff[option])}"
+                   for option in ("condo", "house", "rent")
+                   if option in aff and option not in drop_affordability]
+        if clauses:
+            parts.append("affordability " + "; ".join(clauses))
+    return f"{head}: " + ", ".join(parts)
+
+
+def sweep_lines(result: Dict[str, Any]) -> List[str]:
+    """The read-back lines of one sweep: a header naming the sweep and what
+    holds at every point, one line per grid point, then the flip lines."""
+    key, rows = result["key"], result["rows"]
+    ok = [r for r in rows if "error" not in r]
+    clauses: List[str] = []
+    sets = [r.get("affordability") for r in ok]
+    constant = constant_options(sets) if ok and all(sets) and len(ok) > 1 else {}
+    if constant:
+        clauses.append("affordability " + "; ".join(
+            f"{o} max {e['max_ratio']:.1%} {_breaches(e)}" for o, e in constant.items())
+            + " at every point")
+    insured = ok[0].get("insured") if ok else None
+    same_tier = bool(insured) and len(ok) > 1 and all(r.get("insured") == insured for r in ok)
+    if same_tier:
+        clauses.append(", ".join(f"insured {o} {rate:.2%}" for o, rate in insured.items())
+                       + " at every point")
+    head = f"sweep {key} ({len(rows)} points" + ("; " + "; ".join(clauses) if clauses else "") + ")"
+    base = result.get("base_value")
+    lines = [head]
+    for r in rows:
+        is_base = (isinstance(base, (int, float)) and not isinstance(base, bool)
+                   and abs(float(r["value"]) - float(base)) <= 1e-12 * max(1.0, abs(float(base))))
+        lines.append(point_sentence(key, r, base=is_base,
+                                    drop_affordability=constant.keys(),
+                                    drop_insured=(insured or {}).keys() if same_tier else ()))
+    lines.extend(flip_lines(result))
+    return lines
 
 
 def _mc_majority(mc: Optional[Any], det: ComparisonDeterministicResult) -> Dict[str, Any]:

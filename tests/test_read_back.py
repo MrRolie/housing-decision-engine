@@ -115,12 +115,27 @@ class TestReadBackContent:
         assert not any(line.startswith(("assistant-typed:", "unattributed:")) for line in lines)
 
     def test_affordability_line_names_the_ratio_and_the_breach_years(self):
-        lines, _ = _assembled(_rich())
+        """One fact once: an option's breach is stated by its `[warning]`; the
+        section keeps its header (the threshold and the caps) and the
+        max-ratio line of every option NO warning names — never both."""
+        lines, warnings = _assembled(_rich())
         block = [line for line in lines
                  if line.startswith(("Affordability", "House: max", "Rent: max"))]
         assert block and block[0].startswith("Affordability (threshold:")
         assert "CMHC caps GDS at 39%, TDS at 44%" in block[0]
-        assert any("max ratio" in line and "years exceeding" in line for line in block)
+        warned = {w.split()[1] for w in warnings if w.startswith("affordability: ")
+                  and "exceeds" in w}
+        for option, label in (("rent", "Rent: max"), ("house", "House: max")):
+            stated = any(line.startswith(label) for line in block)
+            assert stated != (option in warned), (option, block, warnings)
+
+    def test_an_option_without_a_breach_keeps_its_max_ratio_line(self):
+        cfg = _rich(income={"annual_income": 90_000})
+        lines, warnings = _assembled(cfg)
+        assert not any(w.startswith("affordability: rent") for w in warnings)
+        assert any(line.startswith("Rent: max ratio") for line in lines)
+        # the warning itself is untouched
+        assert any(l.startswith("[warning] affordability: house") for l in lines)
 
     def test_break_even_carries_the_sentence_and_the_note(self):
         cfg = _rich()
@@ -133,6 +148,67 @@ class TestReadBackContent:
     def test_sweep_flip_lines_ride_the_block(self):
         lines, _ = _assembled(_rich(), sweep=("years", [5, 10]))
         assert any(line.startswith(("flip years:", "no flip along years:")) for line in lines)
+
+
+class TestOneFactOnce:
+    """B4 (2026-09-04): a sweep + break-even read-back said the band rule per
+    sentence, the refused clause per row, the renter's price-invariant ratio
+    per quoted point, the base threshold twice, and the cliff in two
+    sentences. Nothing that is a distinct fact, warning or source line is
+    dropped; each is said once."""
+
+    def _lines(self, cfg=None, **kw):
+        lines, _ = _assembled(cfg or _rich(), break_even="house.initial_value",
+                              sweep=("years", [5, 10]), **kw)
+        return lines
+
+    def test_the_band_rule_is_in_the_header_once(self):
+        lines = self._lines()
+        band = [l for l in lines if "band = 5% of the cheaper option's PV" in l]
+        assert len(band) == 1 and band[0].startswith("break-even house.initial_value (")
+
+    def test_the_across_row_at_the_base_says_so_instead_of_repeating(self):
+        lines = self._lines()
+        assert "break-even house.initial_value at years=10: (= base)" in lines
+        base = next(l for l in lines if l.startswith("break-even house.initial_value: "))
+        assert "too close to call" in base and "at the crossing" in base
+
+    def test_the_refused_clause_is_said_once(self):
+        lines = self._lines()
+        refused = [l for l in lines if "config refuses" in l]
+        assert len(refused) == 1, refused
+        assert refused[0].startswith("break-even house.initial_value (")
+
+    def test_the_renters_ratio_is_said_once_per_line(self):
+        """The renter's ratio does not move with the price: within one solve
+        it is the same at the crossing and both edges, so each threshold line
+        says it once, `at every quoted point`; the sub-header moved to the
+        block header."""
+        lines = self._lines()
+        header = next(l for l in lines if l.startswith("break-even house.initial_value ("))
+        assert "affordability = highest cost/income ratio; years above the 32% threshold" in header
+        quoted = [l for l in lines if l.startswith("break-even house.initial_value")
+                  and "affordability rent" in l]
+        assert len(quoted) == 2, lines  # the base line and the years=5 row
+        for line in quoted:
+            assert line.count("rent 34.3%") == 1, line
+            assert "at every quoted point" in line
+            assert "highest cost/income ratio" not in line
+
+    def test_the_sweep_lines_ride_the_block_between_the_thresholds_and_the_flips(self):
+        lines = self._lines()
+        header = next(i for i, l in enumerate(lines) if l.startswith("sweep years (2 points"))
+        points = [i for i, l in enumerate(lines) if l.startswith("years=")]
+        flip = next(i for i, l in enumerate(lines) if l.startswith("no flip along years"))
+        note = next(i for i, l in enumerate(lines) if l.startswith("break-even house.initial_value note:"))
+        assert note < header < points[0] < points[-1] < flip
+
+    def test_no_warning_or_source_line_is_dropped(self):
+        lines, warnings = _assembled(_rich(), break_even="house.initial_value",
+                                     sweep=("years", [5, 10]))
+        assert lines[:len(warnings)] == [f"[warning] {w}" for w in warnings]
+        assert any(l.startswith("assistant-typed:") for l in lines)
+        assert any(l.startswith("unattributed:") for l in lines)
 
 
 class TestTheThreeLinesTheAnswerDropped:
@@ -179,17 +255,21 @@ class TestTheThreeLinesTheAnswerDropped:
         across = [l for l in lines if l.startswith("break-even rent.monthly_rent at years=")]
         assert len(across) == 2, lines
         assert across[0].startswith("break-even rent.monthly_rent at years=5: ")
-        assert across[1].startswith("break-even rent.monthly_rent at years=10: ")
-        assert all("cheaper" in line for line in across)
+        assert "cheaper" in across[0]
+        # the row at the base config says so instead of repeating the base line
+        assert across[1] == "break-even rent.monthly_rent at years=10: (= base)"
 
     def test_an_across_line_carries_the_affordability_it_implies(self):
         """A reviewed answer called a price a "safe-buy ceiling" while the
         across row it came from sat above the 39% GDS cap."""
         lines, _ = _assembled(_rich(), break_even="house.initial_value",
                               sweep=("years", [5, 10]))
-        across = [l for l in lines if l.startswith("break-even house.initial_value at years=")]
+        across = [l for l in lines if l.startswith("break-even house.initial_value at years=")
+                  and not l.endswith("(= base)")]
         assert across
-        assert all("affordability (highest cost/income ratio" in line for line in across), across
+        header = next(l for l in lines if l.startswith("break-even house.initial_value ("))
+        assert "affordability = highest cost/income ratio" in header
+        assert all("; affordability " in line for line in across), across
         assert all("at the crossing" in line and "at the band's high edge" in line
                    for line in across)
         assert all("yr(s) over" in line for line in across)
