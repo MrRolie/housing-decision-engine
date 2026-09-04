@@ -249,7 +249,7 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.corr_inflation_event_cost` | 0.0 | — |
 | `simulation.shock_model` | "lognormal" | — |
 
-The discount-rate default is a REAL return: in `mode: nominal` an omitted `discount_rate` is composed with `inflation_rate` (`(1 + 0.03)(1 + π) − 1`, echoed as such); a typed value is used as entered in either mode.
+The discount-rate default is a REAL return: in `mode: nominal` an omitted `discount_rate` is composed with `inflation_rate` (`(1 + 0.03)(1 + π) − 1`, echoed as such); a typed value is used as entered in either mode — and in nominal mode a typed value more than half a point BELOW that composition draws a coherence warning naming both rates, because a real-looking rate on nominal flows overstates every PV (omit it, or state the nominal rate you mean).
 
 Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
 source, url, rationale, band, retrieved_on, kind); `uv run hde --print-anchors` prints
@@ -371,7 +371,7 @@ to 3%) is NOT in the registry — state an explicit schedule for it.
 The config loader validates:
 
 1. `years >= 1`
-2. `discount_rate >= 0`, with a coherence warning outside `[0, 0.15]` (a decimal/percent typo tripwire; the examples use 0.03–0.05 real)
+2. `discount_rate >= 0`, with a coherence warning outside `[0, 0.15]` (a decimal/percent typo tripwire; the examples use 0.03–0.05 real) and a second one in `mode: nominal` when a typed value sits more than half a point below the composed nominal default (a real rate discounting nominal flows)
 3. `num_sims >= 1`
 4. `condo.monthly_fee >= 0`
 5. `house.initial_value >= 0`

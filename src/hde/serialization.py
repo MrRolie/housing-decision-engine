@@ -33,6 +33,7 @@ from .models import (
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
     ComparisonSpec,
+    EconomicParams,
     MonteCarloSummary,
     Verdict,
 )
@@ -352,6 +353,22 @@ def format_assumptions(
             head = f"down payment ${opt.down_payment:,.0f}"
             parts = "down payment + purchase_costs" + (" + premium tax" if taxed else "")
             year0_clause = f" · year-0 cash ${year0:,.0f} ({parts})"
+        # Where the pile stops covering 20% down (2026-09-04 review: a real
+        # answer hand-solved "your $140,000 covers 20% down up to $642,893").
+        # The netted cash IS the down payment, so the fixed point is
+        # (cash − cash purchase_costs) / 20%; at that price no premium is due,
+        # which is why the premium tax is not a term of it. Stated with what it
+        # holds fixed: a dollar purchase_costs figure — a derived transfer tax
+        # included — does not rescale with the price.
+        cover_clause = ""
+        if opt.cash_available is not None:
+            covered = (opt.cash_available - opt.purchase_costs) / 0.20
+            if covered > 0:
+                cover_clause = (
+                    f" · this cash covers 20% down up to a price of ${covered:,.0f} "
+                    f"(purchase_costs held at ${opt.purchase_costs:,.0f}; above it the "
+                    f"mortgage is insured)"
+                )
         lines.append(
             f"{name} financing: {head} = {down_frac:.2%} of price, "
             f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
@@ -362,6 +379,7 @@ def format_assumptions(
             + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
                if opt.financed_purchase_costs and record is None else "")
             + (f" · {financing_clause(record)}" if record is not None else "")
+            + cover_clause
         )
     matches = reference_matches(spec)
     for option_name in ("condo", "house"):
@@ -610,10 +628,82 @@ def affordability_lines(report: Optional[AffordabilityReport]) -> List[str]:
     return lines
 
 
+def year1_cash_lines(
+    det: Optional[ComparisonDeterministicResult],
+    econ: Optional[EconomicParams] = None,
+) -> List[str]:
+    """Year-1 cash, undiscounted: the header, then one line per option — $/yr
+    and $/mo, the principal repaid (the part of a payment that is not a cost),
+    and the expected appreciation, which is not cash at all.
+
+    Unindented like `affordability_lines`: the text report indents the
+    per-option lines under the same header and the read-back carries them as
+    they are. Round-four dogfood: the PV $/month equivalent was read as
+    out-of-pocket and had the wrong sign for that reading. Round 9: the block
+    an answer carries held no cash line, so the answer quoted no cash figure.
+    """
+    if det is None:
+        return []
+    rows: List[str] = []
+    for name, r in (("Condo", det.condo), ("House", det.house), ("Rent", det.rent)):
+        if r is None or r.cash_year1 is None:
+            continue
+        line = f"{name}: ${r.cash_year1:>10,.0f}/yr (${r.cash_year1 / 12:,.0f}/mo)"
+        if r.principal_year1:
+            line += (f" — of which ${r.principal_year1:,.0f} principal repaid; "
+                     f"the rest is unrecoverable")
+        if r.appreciation_year1:
+            # Round 5b: at 0 real growth in nominal mode this is inflation carry
+            # alone; say what the growth is so it is not read as a market view.
+            how = ("value × nominal growth = real growth composed with inflation; not cash"
+                   if econ is not None and econ.mode == "nominal"
+                   else "value × real growth, not cash")
+            line += f"; expected appreciation ${r.appreciation_year1:,.0f} ({how})"
+        rows.append(line)
+    if not rows:
+        return []
+    return ["Year-1 cash (undiscounted; PV totals above credit equity at sale)"] + rows
+
+
 def _option_lines(echo: Sequence[str], suffix: str) -> List[str]:
     """The per-option assumption lines with one suffix (`financing:`,
     `other costs:`), in the engine's own option order."""
     return [line for name in _OWNED for line in echo if line.startswith(f"{name} {suffix}")]
+
+
+def next_step_line(
+    *,
+    verdict: Optional[Verdict] = None,
+    det: Optional[ComparisonDeterministicResult] = None,
+    prior: Optional[LoadedScenarioPrior] = None,
+    break_evens: Sequence[Dict[str, Any]] = (),
+) -> Optional[str]:
+    """The one run that resolves a coin flip decided under a demographic prior:
+    `--break-even <owned>.value_growth_rate`, whose note places the prior's own
+    reference drift against the tie band.
+
+    2026-09-04: one round ran exactly that and answered the question; the next
+    shipped the coin flip without it. So the block says what to run — naming
+    the cheapest owned option, since that is the growth rate in question.
+
+    Silent unless the prior is loaded, Monte Carlo DECIDED the verdict
+    (`--no-monte-carlo` falls back to the margin band and has nothing to
+    resolve), the verdict is not decisive, and the run is not already that
+    break-even.
+    """
+    if prior is None or det is None or verdict is None:
+        return None
+    if verdict.rule != "mc_floor" or verdict.decisive:
+        return None
+    priced = [(name, getattr(det, name)) for name in _OWNED if getattr(det, name) is not None]
+    if not priced:
+        return None
+    option = min(priced, key=lambda pair: pair[1].total_pv)[0]
+    key = f"{option}.value_growth_rate"
+    if any(result.get("key") == key for result in break_evens):
+        return None
+    return (f"next: not decisive under the prior — run --break-even {key} to see where "
+            f"the prior's drift sits against the tie band")
 
 
 def read_back_lines(
@@ -628,31 +718,53 @@ def read_back_lines(
 ) -> List[str]:
     """Every line an honest answer has to carry, in one order, ready to paste.
 
-    Order: the `[warning]` lines; the source classes the user did not state
-    (or the one line saying no `sources:` block was declared); the decisiveness
-    rule; each option's financing line; each option's other-costs line with its
-    citation or `no anchor match`; the affordability summary; each break-even's
-    sentence and note; each sweep's flip lines.
+    Order: the `[warning]` lines; the source classes the user did not state (or
+    the one line saying no `sources:` block was declared); the `defaults
+    applied:` line, so the numbers the ENGINE chose are named with their
+    citations; the decisiveness rule; each option's financing line and its
+    `purchase costs:` line; the year-1 cash view; each option's other-costs
+    line with its citation or `no anchor match`; the affordability summary;
+    each break-even's sentence, its re-solutions across a sweep, and the
+    block's note; each sweep's flip lines; and, on a coin flip under a prior,
+    the run that would resolve it.
     """
     lines = [f"[warning] {warning}" for warning in warnings]
     echo = format_assumptions(spec, prior)
     lines.extend(line for line in echo if line.startswith(_SOURCE_PREFIXES))
+    # 2026-09-04 review: `selling_cost_rate` 5% and the discount rate — the two
+    # largest numbers the engine set for that run — were named nowhere in the
+    # answer, because the block did not carry the line that states them.
+    lines.extend(line for line in echo if line.startswith("defaults applied:"))
     decisiveness = decisiveness_line(verdict)
     if decisiveness is not None:
         lines.append(decisiveness)
     lines.extend(_option_lines(echo, "financing:"))
+    lines.extend(_option_lines(echo, "purchase costs:"))
+    # Cash beside the PV view: an answer that carries only present values has
+    # no figure for the question every user asks first ("what leaves my account
+    # each month?") and reads the PV $/month equivalent as that figure.
+    lines.extend(year1_cash_lines(det, spec.economic))
     lines.extend(_option_lines(echo, "other costs:"))
     if det is not None:
         lines.extend(affordability_lines(det.income_report))
+    break_evens = list(break_evens)
+    if break_evens:
+        # Local import for the same reason as `flip_lines` below: break_even
+        # reaches this module through sweep, so the dependency runs one way at
+        # import time.
+        from .break_even import across_row_sentence, threshold_sentences
     for result in break_evens:
         key = result["key"]
-        for entry in result.get("break_evens", []):
-            sentence = entry.get("sentence")
-            if sentence:
-                lines.append(f"break-even {key}: {sentence}")
-        if not result.get("break_evens") and result.get("cheaper_throughout"):
-            lines.append(f"break-even {key}: no crossing in the bracket — "
-                         f"{result['cheaper_throughout']} is cheaper throughout")
+        band = result["tie_band_fraction"]
+        for sentence in threshold_sentences(key, result, band):
+            lines.append(f"break-even {key}: {sentence}")
+        # The threshold re-solved at every sweep point: without these the block
+        # carried the base solve alone, and an answer reduced a whole years
+        # bracket to one number.
+        for across in result.get("across", []):
+            skey = across["key"]
+            for row in across["rows"]:
+                lines.append(f"break-even {key} at {across_row_sentence(key, skey, row, band)}")
         if result.get("note"):
             lines.append(f"break-even {key} note: {result['note']}")
     if sweeps:
@@ -661,4 +773,8 @@ def read_back_lines(
         from .sweep import flip_lines
         for result in sweeps:
             lines.extend(flip_lines(result))
+    next_step = next_step_line(verdict=verdict, det=det, prior=prior,
+                               break_evens=break_evens)
+    if next_step is not None:
+        lines.append(next_step)
     return lines

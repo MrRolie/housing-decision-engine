@@ -147,6 +147,22 @@ class TestFinancingLine:
         line = self._line(_condo(financed_purchase_costs=8_000))
         assert "loan-to-value 82.50%" in line
 
+    def test_the_line_says_the_price_at_which_the_cash_stops_covering_20(self):
+        """Round-9 review: the answer hand-solved "your $140,000 covers 20%
+        down up to $642,893" — the engine's own fixed point, (cash − costs) /
+        20%, and the price above which the mortgage is insured."""
+        line = self._line(_condo(cash_available=130_000, purchase_costs=5_000))
+        assert "covers 20% down up to a price of $625,000" in line
+        assert "above it the mortgage is insured" in line
+
+    def test_the_fixed_point_says_what_it_holds_fixed(self):
+        line = self._line(_condo(cash_available=130_000, purchase_costs=5_000))
+        assert "purchase_costs held at $5,000" in line
+
+    def test_a_typed_down_payment_gets_no_fixed_point(self):
+        line = self._line(_condo(cash_available=None, down_payment=80_000))
+        assert "covers 20% down up to" not in line
+
     def test_a_typed_down_payment_keeps_the_plain_head(self):
         line = self._line(_condo(cash_available=None, down_payment=80_000))
         assert line.startswith("condo financing: down payment $80,000")

@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .anchors import ANCHORS, match_window
-from .anchors import ANCHORS
 from .land_transfer_tax import anchor_families
 
 # The three declarable classes. `unattributed` is not declarable — it is what
@@ -287,6 +286,24 @@ def _anchor_problem(key: str, name: str) -> str:
     return message
 
 
+def _sibling_hint(data: Dict[str, Any], joined: str) -> str:
+    """The one case where the registry holds a sibling anchor that DOES publish
+    the figure a refused declaration states: `economic.inflation_rate` is the
+    real-mode inert 0.0, while `economic.inflation_rate.nominal_planning` is the
+    2.1% planning figure a nominal config means (2026-09-04 review — the
+    refusal was correct and left the user to find the sibling by hand).
+    """
+    if joined != "economic.inflation_rate":
+        return ""
+    econ = data.get("economic")
+    mode = econ.get("mode") if isinstance(econ, dict) else None
+    if mode != "nominal":
+        return ""
+    sibling = ANCHORS["economic.inflation_rate.nominal_planning"]
+    return (f". In nominal mode the planning figure is the sibling anchor "
+            f"'{sibling.name}' ({sibling.value:.1%}) — declare that one")
+
+
 def _anchor_declaration(
     data: Dict[str, Any], key: str, declaration: str,
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -344,6 +361,7 @@ def _anchor_declaration(
             f"{published} and the config states {float(stated):g} — a declaration says "
             f"where the number CAME FROM, so the two have to be the same number "
             f"(uv run hde --print-anchors)"
+            + _sibling_hint(data, joined)
         )
     return joined, None
 

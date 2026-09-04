@@ -520,56 +520,88 @@ def _regime_state(side: Optional[Dict[str, Any]]) -> str:
     return (f"insured ({side['ltv']:.2%} loan-to-value, {rate:.2%} premium on the loan)")
 
 
+def _step_clauses(
+    raw: Dict[str, Any], key: str, what: str, value: Any, below_v: Any, above_v: Any,
+) -> List[str]:
+    """What a jump at ONE point of the threshold has to say: `what` names the
+    point ("the crossing", "the tie band's upper edge") so a note that fires on
+    an edge says WHICH edge."""
+    clauses: List[str] = []
+    ok_below, below = _financing_regime(raw, key, below_v)
+    ok_above, above = _financing_regime(raw, key, above_v)
+    at = _fmt_value(key, value)
+    if not ok_below or not ok_above:
+        side, reason = ("below", below) if not ok_below else ("above", above)
+        return [f"{what} at {at} sits on the edge of what the config accepts: "
+                f"values just {side} it are refused ({reason}), so the band around it "
+                f"is bounded by the refusal, not by near-ties"]
+    for name in sorted(set(below) & set(above)):
+        was, now = below[name], above[name]
+        was_tier = None if was is None else was["tier"]
+        now_tier = None if now is None else now["tier"]
+        if was_tier == now_tier:
+            continue  # the same mortgage on both sides: the costs really do meet
+        insured_below = bool(was_tier and was_tier[0])
+        insured_above = bool(now_tier and now_tier[0])
+        if insured_below != insured_above:
+            clauses.append(
+                f"{what} at {at} is the mortgage-insurance cliff — {name} is "
+                f"{_regime_state(was)} just below it and {_regime_state(now)} just above, "
+                f"so the 20%-down line falls there and the premium switches on: not a "
+                f"smooth cost crossing, and the tie band around it is the cliff's width, "
+                f"not a range of near-ties")
+        else:
+            clauses.append(
+                f"{what} at {at} is a mortgage-insurance tier change for {name} "
+                f"({was_tier[2]:.2%} → {now_tier[2]:.2%} of the loan), not a smooth cost "
+                f"crossing: the tie band around it is the step's width, not a range of "
+                f"near-ties")
+    return clauses
+
+
 def cliff_note(
     raw: Dict[str, Any], key: str, entries: List[Dict[str, Any]],
 ) -> Optional[str]:
-    """A crossing that is a STEP, not a meeting: the two sides of it price a
-    different mortgage (the 20%-down line crossed, an insurance tier changed) or
-    one side is refused outright.
+    """A crossing — or a BAND EDGE — that is a STEP, not a meeting: the two
+    sides of it price a different mortgage (the 20%-down line crossed, an
+    insurance tier changed) or one side is refused outright.
 
     2026-09-04 review: a $651,163 "crossing" was exactly cash ÷ 0.215 — the
     house won by $3,076 a hundred dollars below it and lost by $10,902 a hundred
     above, because the premium switched on. Read as a smooth crossing, the tie
     band around it says "these are near-ties"; it is the width of a jump.
+
+    Round 9 found the same defect one step out: the crossing was smooth and the
+    band's UPPER EDGE landed exactly on the 20%-down line (the PV jumped
+    $426,940 → $440,760 across it), so "band = 5% of the cheaper option's PV"
+    was false at that edge and nothing fired. Every point the sentence quotes
+    is probed, and the clause names which one jumped.
     """
     clauses: List[str] = []
     for entry in entries:
-        value = entry["value"]
-        if "last_value_below" in entry:  # integer input: the two whole values
-            below_v, above_v = entry["last_value_below"], value
-        else:
-            step = max(abs(float(value)), 1.0) * 1e-6
-            below_v, above_v = float(value) - step, float(value) + step
-        ok_below, below = _financing_regime(raw, key, below_v)
-        ok_above, above = _financing_regime(raw, key, above_v)
-        at = _fmt_value(key, value)
-        if not ok_below or not ok_above:
-            side, reason = ("below", below) if not ok_below else ("above", above)
-            clauses.append(f"the crossing at {at} sits on the edge of what the config accepts: "
-                           f"values just {side} it are refused ({reason}), so the band around it "
-                           f"is bounded by the refusal, not by near-ties")
-            continue
-        for name in sorted(set(below) & set(above)):
-            was, now = below[name], above[name]
-            was_tier = None if was is None else was["tier"]
-            now_tier = None if now is None else now["tier"]
-            if was_tier == now_tier:
-                continue  # the same mortgage on both sides: the costs really do meet
-            insured_below = bool(was_tier and was_tier[0])
-            insured_above = bool(now_tier and now_tier[0])
-            if insured_below != insured_above:
-                clauses.append(
-                    f"the crossing at {at} is the mortgage-insurance cliff — {name} is "
-                    f"{_regime_state(was)} just below it and {_regime_state(now)} just above, "
-                    f"so the 20%-down line falls there and the premium switches on: not a "
-                    f"smooth cost crossing, and the tie band around it is the cliff's width, "
-                    f"not a range of near-ties")
-            else:
-                clauses.append(
-                    f"the crossing at {at} is a mortgage-insurance tier change for {name} "
-                    f"({was_tier[2]:.2%} → {now_tier[2]:.2%} of the loan), not a smooth cost "
-                    f"crossing: the tie band around it is the step's width, not a range of "
-                    f"near-ties")
+        is_int = "last_value_below" in entry
+        low, high = entry["tie_band"]
+        # The three values the sentence quotes. An integer input is a step
+        # function, so its probe pair is the two whole values across the point;
+        # anything else is probed a hair either side.
+        points = [("the crossing", entry["value"],
+                   (entry["last_value_below"], entry["value"]) if is_int else None),
+                  ("the tie band's lower edge", low,
+                   (None if low is None else (int(low) - 1, int(low))) if is_int else None),
+                  ("the tie band's upper edge", high,
+                   (None if high is None else (int(high), int(high) + 1)) if is_int else None)]
+        seen: List[str] = []
+        for what, value, pair in points:
+            if value is None:
+                continue  # an edge outside the searched bracket: nothing to probe
+            at = _fmt_value(key, value)
+            if at in seen:
+                continue  # the crossing IS this edge — one jump, said once
+            seen.append(at)
+            if pair is None:
+                step = max(abs(float(value)), 1.0) * 1e-6
+                pair = (float(value) - step, float(value) + step)
+            clauses.extend(_step_clauses(raw, key, what, value, *pair))
     return "; ".join(clauses) if clauses else None
 
 
@@ -667,27 +699,29 @@ def band_sentence(
     )
 
 
-def _threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> List[str]:
-    """The threshold in words, one sentence per crossing (or the no-crossing line)."""
+def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> List[str]:
+    """The threshold in words, one sentence per crossing (or the no-crossing
+    line). One builder for the text block, the read-back and every `across`
+    row, so the three cannot phrase the same threshold differently."""
     if not result_like["break_evens"]:
         return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
     return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
-def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
-    """What the threshold and its band edges cost against income — the lines a
-    "cheaper on average" answer needs beside the crossing it quotes."""
+def _affordability_points(
+    key: str, be: Dict[str, Any],
+) -> Tuple[Optional[float], List[str]]:
+    """(threshold, one phrase per priced point): the crossing and both band
+    edges with their highest cost/income ratio and breach count. Empty without
+    an `income` block."""
     aff = be.get("affordability")
     if not aff:
-        return []
-    threshold = aff.get("threshold")
-    head = "affordability at the crossing and the band edges (highest cost/income ratio"
-    head += f"; years above the {threshold:.0%} threshold):" if threshold is not None else "):"
-    lines = [head]
+        return None, []
     lo, hi = be["tie_band"]
     points = [("at the crossing", be["value"], aff["value"]),
               ("at the band's low edge", lo, aff["tie_band"][0]),
               ("at the band's high edge", hi, aff["tie_band"][1])]
+    phrases = []
     for label, value, per_option in points:
         if per_option is None or value is None:
             continue
@@ -696,8 +730,57 @@ def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
             f" ({len(per_option[option]['years_exceeding'])} yr(s) over)"
             for option in ("condo", "house", "rent") if option in per_option
         )
-        lines.append(f"  {label} {_fmt_value(key, value)}: {parts}")
-    return lines
+        phrases.append(f"{label} {_fmt_value(key, value)}: {parts}")
+    return aff.get("threshold"), phrases
+
+
+def _affordability_head(threshold: Optional[float], where: str = "") -> str:
+    """The header over the affordability figures. `where` names the points when
+    they are listed BELOW it; the one-line form drops it, since each phrase
+    names its own point."""
+    head = f"affordability{where} (highest cost/income ratio"
+    return head + (f"; years above the {threshold:.0%} threshold):"
+                   if threshold is not None else "):")
+
+
+def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
+    """What the threshold and its band edges cost against income — the lines a
+    "cheaper on average" answer needs beside the crossing it quotes."""
+    threshold, phrases = _affordability_points(key, be)
+    if not phrases:
+        return []
+    head = _affordability_head(threshold, " at the crossing and the band edges")
+    return [head] + [f"  {phrase}" for phrase in phrases]
+
+
+def _affordability_clause(key: str, be: Dict[str, Any]) -> str:
+    """The same figures on ONE line, for an `across` row (2026-09-04 review: an
+    answer called $858k a "safe-buy ceiling" while the across row it came from
+    carried 44.1% of income — above the 39% cap the answer itself cited)."""
+    threshold, phrases = _affordability_points(key, be)
+    if not phrases:
+        return ""
+    return "; " + _affordability_head(threshold) + " " + " · ".join(phrases)
+
+
+def across_row_sentence(
+    key: str, sweep_key: str, row: Dict[str, Any], band: float,
+) -> str:
+    """One `across` row in words: the sweep point, the threshold re-solved
+    there, what the config refused, and what the crossing costs against income.
+
+    One builder for the text block and the read-back line (2026-09-04 review:
+    the block carried the base sentence alone, so an answer reduced a whole
+    years bracket to "near $300k").
+    """
+    sentences = threshold_sentences(key, row, band)
+    if row.get("refused"):
+        sentences.append(f"config refuses {row['refused']['count']} point(s) "
+                         f"({row['refused']['reason']})")
+    text = f"{sweep_key}={_fmt_value(sweep_key, row['value'])}: " + "; ".join(sentences)
+    for be in row["break_evens"]:
+        text += _affordability_clause(key, be)
+    return text
 
 
 def format_break_even(result: Dict[str, Any]) -> str:
@@ -714,16 +797,14 @@ def format_break_even(result: Dict[str, Any]) -> str:
         r = result["refused"]
         span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
         lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
-    lines.extend(f"  {t}" for t in _threshold_sentences(key, result, band))
+    lines.extend(f"  {t}" for t in threshold_sentences(key, result, band))
     for be in result["break_evens"]:
         lines.extend(f"  {t}" for t in _affordability_lines(key, be))
-    # `across` rows keep their one-line shape; their affordability rides --json.
+    # `across` rows keep their one-line shape — the affordability the row
+    # implies rides that same line.
     for across in result.get("across", []):
         skey = across["key"]
         lines.append(f"  across {skey} (the threshold re-solved at each value):")
         for row in across["rows"]:
-            sentences = _threshold_sentences(key, row, band)
-            if row.get("refused"):
-                sentences.append(f"config refuses {row['refused']['count']} point(s) ({row['refused']['reason']})")
-            lines.append(f"    {skey}={_fmt_value(skey, row['value'])}: " + "; ".join(sentences))
+            lines.append(f"    {across_row_sentence(key, skey, row, band)}")
     return "\n".join(lines)

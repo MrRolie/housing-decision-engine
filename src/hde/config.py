@@ -324,6 +324,27 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"double-check units/decimals"
         )
 
+    # A REAL-looking discount rate typed into nominal mode (2026-09-04 review):
+    # a run typed `discount_rate: 0.03` under `mode: nominal`, so nominal cash
+    # flows were discounted at a real rate — every PV on both sides overstated,
+    # and the 10-year verdict's sign reversed once corrected. The comparator is
+    # the engine's OWN composition (`_discount_rate_for`), which is also the
+    # number the warning names: half a point of tolerance keeps a deliberate
+    # nominal rate near the default quiet. A judgment gate, never a refusal:
+    # the user may mean a lower nominal rate.
+    real_default = ANCHORS["simulation.discount_rate"]
+    if (econ.mode == "nominal" and real_default.value is not None
+            and "simulation.discount_rate" not in spec.defaults_applied):
+        composed = (1 + real_default.value) * (1 + econ.inflation_rate) - 1
+        if sim.discount_rate < composed - 0.005:
+            warns.append(
+                f"discount_rate={sim.discount_rate:.1%} typed in nominal mode is below the "
+                f"{composed:.1%} the engine would have composed ({real_default.value:.1%} real "
+                f"[{real_default.short_cite}] with inflation_rate {econ.inflation_rate:.1%}) — "
+                f"a real-looking discount rate on nominal flows overstates every PV; omit "
+                f"discount_rate or state the nominal rate you mean"
+            )
+
     if spec.rent is not None and spec.rent.monthly_rent > 20_000:
         warns.append(
             f"rent.monthly_rent=${spec.rent.monthly_rent:,.0f}/mo above "

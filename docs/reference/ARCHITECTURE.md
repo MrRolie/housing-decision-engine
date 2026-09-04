@@ -372,7 +372,11 @@ shape the user should read. With an `income` block each entry also carries
 `affordability` at the crossing and at both band edges (per option, the highest
 cost/income ratio and the years above the threshold, printed too): a threshold
 that says "buy up to $X" has to say what $X costs against income, and the band's
-high edge is where it bites hardest. A `market_scenario` prior never moves it
+high edge is where it bites hardest. An `across` row is ONE line
+(`across_row_sentence`, shared with the read-back block): the sweep point, the
+re-solved threshold, whatever the config refused, and those same affordability
+figures — 2026-09-04, an answer called $858k a "safe-buy ceiling" while the
+across row it came from carried 44.1% of income, above the 39% cap it cited. A `market_scenario` prior never moves it
 (`note`). Two more clauses join that `note` when they apply (2026-09-04):
 
 - **The prior against the band.** On `<owned>.value_growth_rate` with a
@@ -390,7 +394,14 @@ high edge is where it bites hardest. A `market_scenario` prior never moves it
   $651,163 "crossing" — exactly cash ÷ 0.215 — as a cost crossing. A crossing
   bordered by values the loader refuses is reported the same way. Only a
   DERIVED insurance record counts: without `mortgage_insurance`, crossing 20%
-  changes no cash flow and there is no cliff to name.
+  changes no cash flow and there is no cliff to name. **Every value the
+  sentence quotes is probed, not just the crossing**: the crossing and BOTH
+  band edges, each clause naming which point jumped ("the tie band's upper edge
+  at 625,000 is the mortgage-insurance cliff …"). 2026-09-04: a smooth crossing
+  carried a band whose upper edge was exactly the 20%-down line — the owned PV
+  jumped $426,940 → $440,760 across it, so "band = 5% of the cheaper option's
+  PV" was false at that edge and nothing fired. A point that IS the crossing is
+  said once.
 
 Rides `--json` as `break_evens`; the story's act 6 calls the same
 solver for the rent threshold, so the crossing it draws, the band it shades and
@@ -425,7 +436,7 @@ clear-win edge that moved $35k). Two things close it:
 ### Assumptions block — `assumptions`
 
 `mode`, `years`, `discount_rate`; `lines` (the text echo, including the
-`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — and drops the year-0 cash clause, which is the pile; with `mortgage_insurance` active the quoted loan-to-value is the one the TIER was chosen on (before the premium) and an `insured:` clause states the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — `insured: 88.46% LTV → 3.10% tier = $14,260 financed; premium tax 9% (QC) = $1,283 cash → loan $474,260 = 91.20% LTV` — reading `mortgage_insurance: auto → none required (…)` when the option clears 80%, and the derived premium is never echoed as a typed `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
+`conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — drops the year-0 cash clause, which is the pile, and closes with the price at which that pile stops covering 20% down: the engine's own fixed point, (cash − `purchase_costs`) ÷ 20%, stated with the `purchase_costs` figure it holds fixed, since a dollar-stated cost (a derived transfer tax included) does not rescale with the price (2026-09-04: a reviewed answer hand-solved "your $140,000 covers 20% down up to $642,893"); with `mortgage_insurance` active the quoted loan-to-value is the one the TIER was chosen on (before the premium) and an `insured:` clause states the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — `insured: 88.46% LTV → 3.10% tier = $14,260 financed; premium tax 9% (QC) = $1,283 cash → loan $474,260 = 91.20% LTV` — reading `mortgage_insurance: auto → none required (…)` when the option clears 80%, and the derived premium is never echoed as a typed `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
 `reference_matches` (each owned-option property-tax or home-insurance line, its
@@ -473,25 +484,48 @@ though the checklist named every one. A checklist that is followed by hand is
 followed unevenly, so the engine assembles the block instead
 (`serialization.read_back_lines`), in one fixed order:
 
-1. every `[warning]` line of the run;
+1. every `[warning]` line of the run — including the nominal-mode discount-rate
+   tripwire: a typed `discount_rate` more than half a point below the
+   composition the engine would have applied (`(1 + 3%)(1 + π) − 1`) names both
+   rates and the direction, because a real-looking rate on nominal flows
+   overstates every PV on both sides (2026-09-04: `discount_rate: 0.03` under
+   `mode: nominal` reversed a 10-year verdict's sign once corrected);
 2. the source classes the user did NOT state — `assistant-typed:` and
    `unattributed:`, or the single `sources: none declared …` line when the
    config declares no `sources:` block. `user-stated:` is deliberately absent:
    the user knows their own numbers;
-3. the `decisiveness:` line (the verdict rule, measured);
-4. each `<option> financing:` line;
-5. each `<option> other costs:` line, with its citation or `no anchor match`;
-6. the affordability summary — the threshold and the caps it is judged against,
+3. the `defaults applied:` line — every key the YAML omitted, with the value
+   the engine chose and its citation tag (2026-09-04: the two largest
+   engine-set numbers of a reviewed run, `selling_cost_rate` 5% and the
+   discount rate, were named nowhere in the answer);
+4. the `decisiveness:` line (the verdict rule, measured);
+5. each `<option> financing:` line and each `<option> purchase costs:` line —
+   the transfer tax, the rebate applied or the fact that none is anchored;
+6. the `Year-1 cash` block: both sides in $/yr and $/mo, the principal repaid,
+   and the expected appreciation that is not cash — the cash view beside the PV
+   view, which a PV-only answer has no figure for;
+7. each `<option> other costs:` line, with its citation or `no anchor match`;
+8. the affordability summary — the threshold and the caps it is judged against,
    then each option's highest ratio and breach years — when an `income` block
    is present;
-7. for `--break-even`, each threshold's `sentence` and the block's `note`;
-8. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines.
+9. for `--break-even`, each threshold's `sentence`; beside `--sweep`, the same
+   threshold re-solved at every sweep point, one line each, prefixed
+   `break-even <key> at <sweep key>=<value>:` and carrying the affordability at
+   the crossing and both band edges where an `income` block is present; then
+   the block's `note`;
+10. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines;
+11. on a coin flip under a demographic prior, the `next:` line — the one run
+    that resolves it (`--break-even <cheapest owned option>.value_growth_rate`,
+    whose note places the prior's drift against the tie band). Silent unless
+    the prior is loaded, Monte Carlo decided the verdict, the verdict is not
+    decisive, and the run is not already that break-even.
 
 Every line is built by the SAME function that prints it elsewhere
-(`format_assumptions`, `affordability_lines`, `decisiveness_line`, a
-break-even's own `sentence`, `sweep.flip_lines`) — a second formatter here
-would be a second thing to drift. The block therefore REPEATS lines the report
-already showed; that repetition is the feature.
+(`format_assumptions`, `affordability_lines`, `decisiveness_line`,
+`year1_cash_lines`, a break-even's own `sentence` and `across_row_sentence`,
+`sweep.flip_lines`) — a second formatter here would be a second thing to drift.
+The block therefore REPEATS lines the report already showed; that repetition is
+the feature.
 
 It rides `--json` as `assumptions.read_back` (a list of strings) and prints
 LAST in the text output under `READ-BACK — carry these lines into any answer,

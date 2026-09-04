@@ -33,6 +33,7 @@ from .serialization import (  # noqa: F401
     decisiveness_line,
     echo_value as _echo_value,
     format_assumptions,
+    year1_cash_lines,
 )
 
 
@@ -83,25 +84,14 @@ def format_text_report(
             lines.append(f"  {k}: ${v:>12,.0f}")
 
     # Year-1 cash, undiscounted — what leaves the account, as opposed to the
-    # PV totals above (round-four dogfood: the $/month PV equivalent was read
-    # as out-of-pocket and had the wrong sign for that reading).
-    cash_lines = []
-    for name, r in (("Condo", det.condo), ("House", det.house), ("Rent", det.rent)):
-        if r is None or r.cash_year1 is None:
-            continue
-        line = f"  {name}: ${r.cash_year1:>10,.0f}/yr (${r.cash_year1 / 12:,.0f}/mo)"
-        if r.principal_year1:
-            line += f" — of which ${r.principal_year1:,.0f} principal repaid; the rest is unrecoverable"
-        if r.appreciation_year1:
-            # Round 5b: at 0 real growth in nominal mode this is inflation carry
-            # alone; say what the growth is so it is not read as a market view.
-            how = ("value × nominal growth = real growth composed with inflation; not cash"
-                   if econ is not None and econ.mode == "nominal" else "value × real growth, not cash")
-            line += f"; expected appreciation ${r.appreciation_year1:,.0f} ({how})"
-        cash_lines.append(line)
-    if cash_lines:
-        lines.append("Year-1 cash (undiscounted; PV totals above credit equity at sale)")
-        lines.extend(cash_lines)
+    # PV totals above. Built by the shared builder (serialization), so this
+    # report and the read-back block cannot say different things about the
+    # same cash.
+    cash = year1_cash_lines(det, econ)
+    if cash:
+        header, *per_option = cash
+        lines.append(header)
+        lines.extend(f"  {line}" for line in per_option)
 
     # Verdict (readiness plan B.4): the SAME computation the story headline
     # and --json use — runner-up margin, decisiveness rule stated in words.

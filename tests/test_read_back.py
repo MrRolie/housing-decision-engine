@@ -10,13 +10,14 @@ import sys
 
 import pytest
 
-from hde.break_even import prior_band_note, solve_break_even
+from hde.break_even import prior_band_note, solve_break_even, solve_break_even_across
 from hde.cli import main as cli_main
 from hde.config import all_warnings, affordability_warnings, coherence_warnings, load_config_dict
 from hde.deterministic import compute_deterministic
 from hde.market_scenario import load_scenario_prior
-from hde.models import compute_verdict
-from hde.serialization import read_back_lines
+from hde.models import Verdict, compute_verdict
+from hde.reporting import format_text_report
+from hde.serialization import READ_BACK_HEADER, format_assumptions, read_back_lines
 from hde.sweep import flip_lines, run_sweep
 
 PRIOR_PATH = "tests/fixtures/scenario_prior_golden.json"
@@ -65,6 +66,12 @@ def _assembled(cfg, *, break_even=None, sweep=None):
                               discount_rate=spec.simulation.discount_rate)
     break_evens = [solve_break_even(cfg, break_even)] if break_even else []
     sweeps = [run_sweep(cfg, *sweep, monte_carlo=False)] if sweep else []
+    # Beside --sweep the CLI re-solves the threshold at every sweep point of a
+    # DIFFERENT key; the read-back has to carry those re-solutions too.
+    if break_evens and sweeps and sweep[0] != break_even:
+        break_evens[0]["across"] = [
+            solve_break_even_across(cfg, break_even, None, None, sweep[0], sweeps[0]["values"])
+        ]
     return read_back_lines(spec, warnings=warnings, verdict=verdict, det=det,
                            break_evens=break_evens, sweeps=sweeps), warnings
 
@@ -82,11 +89,14 @@ class TestReadBackContent:
         order = [
             index_of("assistant-typed:"),
             index_of("unattributed:"),
+            index_of("defaults applied:"),
             index_of("decisiveness:"),
             index_of("house financing:"),
+            index_of("Year-1 cash"),
             index_of("house other costs:"),
             index_of("Affordability (threshold:"),
             index_of("break-even rent.monthly_rent:"),
+            index_of("break-even rent.monthly_rent at years="),
             index_of("flip:", "no flip:"),
         ]
         assert order == sorted(order), lines
@@ -106,7 +116,8 @@ class TestReadBackContent:
 
     def test_affordability_line_names_the_ratio_and_the_breach_years(self):
         lines, _ = _assembled(_rich())
-        block = [line for line in lines if line.startswith(("Affordability", "House:", "Rent:"))]
+        block = [line for line in lines
+                 if line.startswith(("Affordability", "House: max", "Rent: max"))]
         assert block and block[0].startswith("Affordability (threshold:")
         assert "CMHC caps GDS at 39%, TDS at 44%" in block[0]
         assert any("max ratio" in line and "years exceeding" in line for line in block)
@@ -122,6 +133,77 @@ class TestReadBackContent:
     def test_sweep_flip_lines_ride_the_block(self):
         lines, _ = _assembled(_rich(), sweep=("years", [5, 10]))
         assert any(line.startswith(("flip:", "no flip:")) for line in lines)
+
+
+class TestTheThreeLinesTheAnswerDropped:
+    """Round-9 review of a real answer: the block named neither of the two
+    largest engine-set numbers, said nothing about year-1 cash, and carried the
+    base threshold sentence alone beside a sweep — so the answer reduced a
+    years bracket to "near $300k"."""
+
+    def test_the_defaults_line_names_the_engine_set_numbers_with_their_citations(self):
+        cfg = _rich()
+        cfg.pop("discount_rate")  # the engine's own 3% real default applies
+        lines, _ = _assembled(cfg)
+        line = next(l for l in lines if l.startswith("defaults applied:"))
+        # the echo's OWN line, verbatim — one builder, not a second formatter
+        assert line in format_assumptions(load_config_dict(cfg))
+        assert "simulation.discount_rate=3.0%" in line
+        assert "house.selling_cost_rate=5.0% [WOWA 2026]" in line
+
+    def test_year_1_cash_rides_the_block_in_dollars_per_month(self):
+        lines, _ = _assembled(_rich())
+        assert "Year-1 cash (undiscounted; PV totals above credit equity at sale)" in lines
+        house = next(l for l in lines if l.startswith("House: $"))
+        assert "/yr (" in house and "/mo)" in house
+        assert "principal repaid" in house and "unrecoverable" in house
+        assert any(l.startswith("Rent: $") for l in lines)
+
+    def test_the_cash_lines_are_the_reports_own_lines(self):
+        """One builder: the text report prints these lines indented under the
+        same header, so the two surfaces cannot drift."""
+        cfg = _rich()
+        spec = load_config_dict(cfg)
+        det = compute_deterministic(spec)
+        report = format_text_report(det, None, spec.simulation, spec.economic, spec)
+        lines, _ = _assembled(cfg)
+        cash = [l for l in lines if l.startswith(("Year-1 cash", "House: $", "Rent: $"))]
+        assert len(cash) == 3
+        assert cash[0] in report
+        for line in cash[1:]:
+            assert f"  {line}" in report
+
+    def test_the_across_re_solutions_ride_the_block_one_line_each(self):
+        lines, _ = _assembled(_rich(), break_even="rent.monthly_rent",
+                              sweep=("years", [5, 10]))
+        across = [l for l in lines if l.startswith("break-even rent.monthly_rent at years=")]
+        assert len(across) == 2, lines
+        assert across[0].startswith("break-even rent.monthly_rent at years=5: ")
+        assert across[1].startswith("break-even rent.monthly_rent at years=10: ")
+        assert all("cheaper" in line for line in across)
+
+    def test_an_across_line_carries_the_affordability_it_implies(self):
+        """A reviewed answer called a price a "safe-buy ceiling" while the
+        across row it came from sat above the 39% GDS cap."""
+        lines, _ = _assembled(_rich(), break_even="house.initial_value",
+                              sweep=("years", [5, 10]))
+        across = [l for l in lines if l.startswith("break-even house.initial_value at years=")]
+        assert across
+        assert all("affordability (highest cost/income ratio" in line for line in across), across
+        assert all("at the crossing" in line and "at the band's high edge" in line
+                   for line in across)
+        assert all("yr(s) over" in line for line in across)
+
+    def test_the_purchase_costs_line_rides_the_block(self):
+        cfg = _rich()
+        cfg["house"]["land_transfer_tax"] = "auto"
+        lines, _ = _assembled(cfg)
+        line = next(l for l in lines if l.startswith("house purchase costs:"))
+        assert line in format_assumptions(load_config_dict(cfg))
+        assert "transfer tax" in line or "welcome tax" in line
+        # it sits with the financing line it reconciles against
+        assert lines.index(line) > next(
+            i for i, l in enumerate(lines) if l.startswith("house financing:"))
 
 
 class TestReadBackCli:
@@ -148,6 +230,21 @@ class TestReadBackCli:
         assert out.startswith("READ-BACK — carry these lines into any answer, verbatim:")
         assert "Assumptions" not in out and "total PV" not in out
         assert "[warning] " in out
+
+    def test_the_block_is_byte_identical_with_and_without_the_flag(
+            self, tmp_path, monkeypatch, capsys):
+        """`--read-back` is the same block the run already prints — an answer
+        assembled from either surface says the same thing."""
+        config = _yaml(tmp_path, _rich())
+        argv = ["hde", config, "--no-monte-carlo", "--sweep", "years=5,10",
+                "--break-even", "rent.monthly_rent"]
+        monkeypatch.setattr(sys, "argv", argv)
+        assert cli_main() == 0
+        tail = capsys.readouterr().out.split(READ_BACK_HEADER, 1)[1]
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back"])
+        assert cli_main() == 0
+        alone = capsys.readouterr().out.split(READ_BACK_HEADER, 1)[1]
+        assert tail.strip("\n") == alone.strip("\n")
 
     def test_read_back_flag_keeps_the_runs_exit_code(self, tmp_path, monkeypatch, capsys):
         cfg = _rich()
@@ -332,6 +429,24 @@ class TestMortgageInsuranceCliff:
         note = solve_break_even(raw, "house.initial_value").get("note") or ""
         assert "cliff" not in note and "tier change" not in note
 
+    def test_a_band_edge_on_the_cliff_is_named_as_one(self):
+        """Round-9 review: the crossing was smooth but the tie band's UPPER
+        edge landed exactly on the 20%-down line — the house PV jumped across
+        it, so "band = 5% of the cheaper option's PV" was false at that edge
+        and nothing fired. Both edges are probed, and the note says which."""
+        result = solve_break_even(self._cfg(monthly_rent=2_200), "house.initial_value")
+        entry = result["break_evens"][0]
+        assert entry["value"] == pytest.approx(622_820, abs=2_000)
+        assert entry["tie_band"][1] == pytest.approx(625_000, abs=1)
+        note = result["note"]
+        assert "tie band's upper edge at 625,000" in note, note
+        assert "mortgage-insurance cliff" in note
+        assert "not a range of near-ties" in note
+
+    def test_a_band_edge_clear_of_the_line_stays_quiet(self):
+        result = solve_break_even(self._cfg(monthly_rent=2_050), "house.initial_value")
+        assert "cliff" not in (result.get("note") or "")
+
     def test_a_smooth_crossing_carries_no_cliff_note(self):
         raw = {
             "years": 10, "discount_rate": 0.03,
@@ -384,3 +499,116 @@ class TestSweepCarriesTheMonteCarloMajority:
         # identical to the deterministic flips → nothing new to say
         same = dict(result, flips=result["mc_majority_flips"])
         assert not any(line.startswith("majority flip:") for line in flip_lines(same))
+
+
+class TestARealRateTypedIntoNominalMode:
+    """Round-9 review: a config typed `discount_rate: 0.03` under
+    `mode: nominal`, so nominal cash flows were discounted at a real rate.
+    Every PV on both sides was overstated and the 10-year verdict's sign
+    reversed once corrected."""
+
+    def _cfg(self, discount_rate=None, mode="nominal"):
+        cfg = {
+            "years": 10,
+            "economic": {"mode": mode, "inflation_rate": 0.021},
+            "house": {"initial_value": 500_000, "value_growth_rate": 0.01,
+                      "all_cash": True},
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.01,
+                     "invested_down_payment": 500_000, "investment_return_rate": 0.03},
+            "simulation": {"num_sims": 50, "random_seed": 42},
+        }
+        if discount_rate is not None:
+            cfg["discount_rate"] = discount_rate
+        return cfg
+
+    def _fired(self, cfg):
+        return [w for w in coherence_warnings(load_config_dict(cfg))
+                if "in nominal mode is below" in w]
+
+    def test_a_real_looking_rate_names_both_rates_and_the_direction(self):
+        fired = self._fired(self._cfg(0.03))
+        assert len(fired) == 1, fired
+        warning = fired[0]
+        assert "discount_rate=3.0%" in warning          # what was typed
+        assert "5.2%" in warning                        # what the engine composes
+        assert "3.0% real" in warning and "2.1%" in warning
+        assert "overstates every PV" in warning
+        assert "omit discount_rate or state the nominal rate you mean" in warning
+
+    def test_a_nominal_rate_is_quiet(self):
+        assert not self._fired(self._cfg(0.052))
+
+    def test_an_omitted_discount_rate_is_quiet(self):
+        """Omitting it is the skill's default: the engine composes it itself."""
+        assert not self._fired(self._cfg())
+
+    def test_real_mode_is_quiet(self):
+        assert not self._fired(self._cfg(0.03, mode="real"))
+
+    def test_it_reaches_the_read_back_block(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, self._cfg(0.03))
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo", "--read-back"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        assert any(line.startswith("[warning] discount_rate=3.0% typed in nominal mode")
+                   for line in out.splitlines()), out
+
+
+class TestNextStepUnderAPrior:
+    """A coin flip under a demographic prior has one answer that resolves it:
+    `--break-even <owned>.value_growth_rate`, whose note places the prior's
+    drift against the tie band. One round ran it; the next shipped the coin
+    flip without it — so the block says what to run."""
+
+    LINE = ("next: not decisive under the prior — run --break-even "
+            "house.value_growth_rate to see where the prior's drift sits "
+            "against the tie band")
+
+    def _raw(self, prior=True):
+        raw = {
+            "years": 10, "discount_rate": 0.03,
+            "house": {"initial_value": 500_000, "value_growth_rate": 0.0, "all_cash": True},
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.0,
+                     "invested_down_payment": 120_000, "investment_return_rate": 0.03},
+            "simulation": {"num_sims": 50, "random_seed": 42},
+        }
+        if prior:
+            raw["market_scenario"] = {"path": PRIOR_PATH, "geography": "MTL_RMR"}
+        return raw
+
+    def _verdict(self, *, rule="mc_floor", decisive=False):
+        return Verdict(best="rent", runner_up="house", margin_pv=1_000.0,
+                       margin_frac=0.002, monthly_equivalent=8.0, prob_best=0.42,
+                       decisive=decisive, rule=rule,
+                       reason="P(rent cheapest) = 42% < 65% floor [hde verdict rule]")
+
+    def _lines(self, *, prior=True, verdict_kw=None, break_evens=()):
+        raw = self._raw(prior)
+        spec = load_config_dict(raw)
+        det = compute_deterministic(spec)
+        loaded = load_scenario_prior(PRIOR_PATH, "MTL_RMR") if prior else None
+        return read_back_lines(spec, verdict=self._verdict(**(verdict_kw or {})),
+                               det=det, prior=loaded, break_evens=break_evens)
+
+    def test_a_coin_flip_under_the_prior_names_the_run_that_resolves_it(self):
+        lines = self._lines()
+        assert [l for l in lines if l.startswith("next:")] == [self.LINE]
+        assert lines[-1] == self.LINE  # last: it is what to do after reading
+
+    def test_a_decisive_verdict_says_nothing(self):
+        assert not [l for l in self._lines(verdict_kw={"decisive": True})
+                    if l.startswith("next:")]
+
+    def test_without_a_prior_it_says_nothing(self):
+        assert not [l for l in self._lines(prior=False) if l.startswith("next:")]
+
+    def test_the_deterministic_rule_says_nothing(self):
+        """`--no-monte-carlo` falls back to the margin band; there is no Monte
+        Carlo verdict to resolve."""
+        assert not [l for l in self._lines(verdict_kw={"rule": "margin_band"})
+                    if l.startswith("next:")]
+
+    def test_the_run_that_is_that_break_even_says_nothing(self):
+        prior = load_scenario_prior(PRIOR_PATH, "MTL_RMR")
+        solved = solve_break_even(self._raw(), "house.value_growth_rate", prior=prior)
+        assert not [l for l in self._lines(break_evens=[solved]) if l.startswith("next:")]

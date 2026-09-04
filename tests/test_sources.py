@@ -492,6 +492,34 @@ class TestDeclarationsAreValidatedByFigure:
                 "sources": {"house.property_tax_rate": SUM_DECL},
             })
 
+    def test_a_nominal_inflation_declaration_is_pointed_at_the_sibling_anchor(self):
+        """`economic.inflation_rate` publishes 0.0 — the real-mode inert value.
+        A nominal config stating 2.1% and declaring that anchor is refused on
+        the figure; the refusal names the sibling that DOES hold 2.1% rather
+        than leaving the user to find it (round-9 review)."""
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict({
+                "years": 10,
+                "economic": {"mode": "nominal", "inflation_rate": 0.021},
+                "house": {"initial_value": 600_000, "all_cash": True},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"economic.inflation_rate": "anchor:economic.inflation_rate"},
+            })
+        message = str(excinfo.value)
+        assert "economic.inflation_rate.nominal_planning" in message
+        assert "2.1%" in message
+
+    def test_real_mode_gets_no_nominal_sibling_hint(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict({
+                "years": 10,
+                "economic": {"mode": "real", "inflation_rate": 0.021},
+                "house": {"initial_value": 600_000, "all_cash": True},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"economic.inflation_rate": "anchor:economic.inflation_rate"},
+            })
+        assert "nominal_planning" not in str(excinfo.value)
+
     def test_a_non_numeric_value_cannot_be_anchor_sourced(self):
         with pytest.raises(ConfigValidationError, match="condo.all_cash"):
             load_config_dict(cfg({"condo.all_cash": "anchor:rent.investment_return_rate"}))
