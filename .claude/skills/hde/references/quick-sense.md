@@ -5,6 +5,15 @@ This lane fires on the user's own words asking for brevity — "quick sense",
 me an essay", "just tell me" — never because the question looks casual. A user
 who did not ask for brevity gets the full answer and the story.
 
+## Which shape — decide before the intake
+
+Two shapes, one test: **does the user have a listing, a price in mind, or a
+date to buy?** No to all three → the "no listing, no plan" shape below (at most
+three asks, under 120 words). Yes to any → the threshold shape under "The
+cap" (six asks, 200 words, or 250–350 with a mortgage, an income and a
+threshold). Never mix them: the no-listing shape never asks condo-vs-house or
+runs a price scan the user did not ask for.
+
 ## No listing, no plan — the shape
 
 A user with no property in view and no plan to buy within about two years
@@ -29,7 +38,7 @@ real rent escalation — 0% for a Québec continuing lease — and 0.6%
 maintenance, unless you say otherwise"). Decide the sweep yourself from
 whatever they were vague about, and offer the deeper pass at the end.
 
-## The cap
+## The cap (threshold shape — a listing, a price, or a date exists)
 
 Under 200 words. With a mortgage, an income and a threshold question
 together, the answer checklist needs 250–350 words (the higher end when the
