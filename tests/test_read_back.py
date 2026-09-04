@@ -97,7 +97,7 @@ class TestReadBackContent:
             index_of("Affordability (threshold:"),
             index_of("break-even rent.monthly_rent:"),
             index_of("break-even rent.monthly_rent at years="),
-            index_of("flip:", "no flip:"),
+            index_of("flip years:", "no flip along years:"),
         ]
         assert order == sorted(order), lines
         assert order[0] >= len(warnings)
@@ -132,7 +132,7 @@ class TestReadBackContent:
 
     def test_sweep_flip_lines_ride_the_block(self):
         lines, _ = _assembled(_rich(), sweep=("years", [5, 10]))
-        assert any(line.startswith(("flip:", "no flip:")) for line in lines)
+        assert any(line.startswith(("flip years:", "no flip along years:")) for line in lines)
 
 
 class TestTheThreeLinesTheAnswerDropped:
@@ -545,12 +545,12 @@ class TestSweepCarriesTheMonteCarloMajority:
                   "mc_majority_flips": [{"from_value": 5, "from_best": "rent",
                                          "to_value": 10, "to_best": "house"}]}
         lines = flip_lines(result)
-        assert any(line.startswith("no flip:") for line in lines)
-        assert any(line.startswith("mean flip:") for line in lines)
-        assert any(line.startswith("majority flip:") for line in lines)
+        assert any(line.startswith("no flip along years:") for line in lines)
+        assert any(line.startswith("mean flip years:") for line in lines)
+        assert any(line.startswith("majority flip years:") for line in lines)
         # identical to the deterministic flips → nothing new to say
         same = dict(result, flips=result["mc_majority_flips"])
-        assert not any(line.startswith("majority flip:") for line in flip_lines(same))
+        assert not any(line.startswith("majority flip years:") for line in flip_lines(same))
 
 
 class TestARealRateTypedIntoNominalMode:

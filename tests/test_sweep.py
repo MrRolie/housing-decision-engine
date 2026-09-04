@@ -58,7 +58,20 @@ class TestCli:
                                           "--sweep", "rent.monthly_rent=500,6000"])
         assert cli_main() == 0
         out = capsys.readouterr().out
-        assert "Sweep rent.monthly_rent (2 points;" in out and "flip: cheapest changes from rent" in out
+        assert "Sweep rent.monthly_rent (2 points;" in out
+        assert "flip rent.monthly_rent: cheapest changes from rent" in out
+
+    def test_two_sweeps_print_two_named_no_flip_lines(self, tmp_path, monkeypatch, capsys):
+        """Two --sweep flags used to print two unnamed `no flip:` lines; each
+        names its key (2026-09-04)."""
+        monkeypatch.setattr(sys, "argv", ["hde", str(self._cfg(tmp_path)), "--no-monte-carlo",
+                                          "--sweep", "years=5,10", "--sweep", "rent.monthly_rent=1700,1900",
+                                          "--read-back"])
+        assert cli_main() == 0
+        lines = capsys.readouterr().out.splitlines()
+        assert "no flip along years: the same option is cheapest across the whole sweep" in lines
+        assert "no flip along rent.monthly_rent: the same option is cheapest across the whole sweep" in lines
+        assert not any(line.startswith("no flip:") for line in lines)
 
     def test_json_carries_sweeps_only_when_asked(self, tmp_path, monkeypatch, capsys):
         cfg = self._cfg(tmp_path)
@@ -74,6 +87,59 @@ class TestCli:
         monkeypatch.setattr(sys, "argv", ["hde", str(self._cfg(tmp_path)), "--sweep", "years"])
         assert cli_main() == 1
         assert "--sweep expects" in capsys.readouterr().err
+
+
+class TestFlipLinesNameTheirKey:
+    def _result(self, **over):
+        rows = [
+            {"value": 5, "best": "rent", "mc_mean_best": "rent", "mc_best": "rent"},
+            {"value": 10, "best": "house", "mc_mean_best": "house", "mc_best": "house"},
+        ]
+        flip = [{"from_value": 5, "from_best": "rent", "to_value": 10, "to_best": "house"}]
+        # a majority turn that differs from the deterministic one, so it prints
+        majority = [{"from_value": 5, "from_best": "rent", "to_value": 10, "to_best": "condo"}]
+        result = {"key": "years", "rows": rows, "flips": flip,
+                  "mc_mean_flips": flip, "mc_majority_flips": majority}
+        result.update(over)
+        return result
+
+    def test_every_line_names_the_key(self):
+        from hde.sweep import flip_lines
+        lines = flip_lines(self._result())
+        assert lines[0] == "flip years: cheapest changes from rent (years=5) to house (years=10)"
+        assert lines[1] == "mean flip years: Monte Carlo mean favours rent (years=5) then house (years=10)"
+        assert lines[2].startswith("majority flip years: Monte Carlo P(cheapest) majority favours")
+
+    def test_no_flip_names_the_key(self):
+        from hde.sweep import flip_lines
+        lines = flip_lines(self._result(flips=[], mc_mean_flips=[], mc_majority_flips=[]))
+        assert lines == ["no flip along years: the same option is cheapest across the whole sweep"]
+
+
+class TestProbabilityExactlyAtTheFloor:
+    """P(best) equal to the 65% floor is decisive by the rule (≥), and the row
+    says it sits AT the floor rather than print a bare decisive flag
+    (2026-09-04)."""
+
+    def _row(self, prob):
+        return {"value": 10, "totals": {"condo": 100_000.0, "rent": 110_000.0},
+                "best": "condo", "runner_up": "rent", "margin_pv": 10_000.0,
+                "margin_frac": 0.1, "decisive": prob >= 0.65, "rule": "mc_floor",
+                "prob_best": prob, "mc_mean_best": "condo", "mc_best": "condo",
+                "mc_prob_best": prob, "reason": "", "affordability": None, "monte_carlo": None}
+
+    def _table(self, prob):
+        from hde.sweep import format_sweep
+        return format_sweep({"key": "years", "values": [10], "rows": [self._row(prob)],
+                             "flips": [], "mc_mean_flips": [], "mc_majority_flips": []})
+
+    def test_exactly_at_the_floor_is_marked(self):
+        assert "True (mc_floor, at the floor)" in self._table(0.65)
+
+    def test_clear_of_the_floor_is_a_plain_flag(self):
+        assert "True (mc_floor) |" in self._table(0.80)
+        assert "at the floor" not in self._table(0.80)
+        assert "at the floor" not in self._table(0.6499)
 
 
 class TestIntegerCollapse:

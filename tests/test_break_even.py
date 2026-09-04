@@ -87,6 +87,48 @@ class TestSolve:
         out = solve_break_even(_base(), "rent.monthly_rent", lo=100.0, hi=200.0)
         assert out["break_evens"] == [] and out["cheaper_throughout"] == "rent"
 
+
+class TestNoCrossingNamesTheBracketAndTheWidening:
+    """A bracket with no crossing used to print `<opt> is cheaper throughout`
+    and nothing else — not the bounds it held for, nor what to run next. The
+    line names both ends, which option is cheaper at each, and the widened
+    bracket on the side where the gap narrows (2026-09-04)."""
+
+    def test_the_gap_narrowing_upward_widens_the_high_end(self):
+        from hde.break_even import threshold_sentences
+        out = solve_break_even(_base(), "rent.monthly_rent", lo=100.0, hi=200.0)
+        assert out["no_crossing"]["widen"] == [100.0, 300.0]
+        [line] = threshold_sentences("rent.monthly_rent", out, BAND)
+        assert line == ("no crossing between 100 and 200: rent is cheaper at both ends — "
+                        "widen with --break-even rent.monthly_rent=100:300")
+        assert line in format_break_even(out)
+
+    def test_the_gap_narrowing_downward_widens_the_low_end_never_below_half(self):
+        from hde.break_even import threshold_sentences
+        out = solve_break_even(_base(), "rent.monthly_rent", lo=5_000.0, hi=6_000.0)
+        assert out["cheaper_throughout"] == "condo"
+        [line] = threshold_sentences("rent.monthly_rent", out, BAND)
+        assert line.startswith("no crossing between 5,000 and 6,000: condo is cheaper at both ends")
+        assert line.endswith("widen with --break-even rent.monthly_rent=4000:6000")
+
+    def test_an_integer_key_widens_in_whole_values(self):
+        from hde.break_even import threshold_sentences
+        out = solve_break_even(_base(), "years", lo=2, hi=4)
+        if out["break_evens"]:
+            pytest.skip("this config crosses inside 2–4 years")
+        [line] = threshold_sentences("years", out, BAND)
+        assert "--break-even years=" in line
+        lo, hi = line.rsplit("=", 1)[1].split(":")
+        assert int(lo) >= 1 and int(hi) > int(lo)
+
+    def test_an_across_row_carries_the_same_line(self):
+        across = solve_break_even_across(_base(), "rent.monthly_rent", 100.0, 200.0,
+                                         "condo.value_growth_rate", [0.0, 0.02])
+        from hde.break_even import across_row_sentence
+        for row in across["rows"]:
+            text = across_row_sentence("rent.monthly_rent", "condo.value_growth_rate", row, BAND)
+            assert "no crossing between 100 and 200" in text and "widen with" in text
+
     def test_three_options_refused(self):
         raw = _base(house={"initial_value": 500_000, "all_cash": True, "value_growth_rate": 0.0})
         with pytest.raises(ValueError, match="exactly two"):

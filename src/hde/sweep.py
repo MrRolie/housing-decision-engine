@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict
 from .config import single_path_run
 from .deterministic import compute_deterministic
@@ -331,6 +332,15 @@ def _fmt_value(key: str, v: Any) -> str:
     return f"{v:.2%}" if abs(v) < 1 else f"{v:,.0f}"
 
 
+def at_the_floor(prob_best: Optional[float]) -> bool:
+    """True when P(best) EQUALS the verdict's probability floor: decisive by
+    the rule (≥), with nothing to spare — a row says so rather than print a
+    bare decisive flag (2026-09-04)."""
+    if prob_best is None:
+        return False
+    return abs(prob_best - ANCHORS["verdict.prob_floor"].value) < 1e-12
+
+
 def format_sweep(result: Dict[str, Any]) -> str:
     key, rows = result["key"], result["rows"]
     opts = [o for o in ("condo", "house", "rent") if any(o in r.get("totals", {}) for r in rows)]
@@ -350,9 +360,12 @@ def format_sweep(result: Dict[str, Any]) -> str:
         totals = " | ".join(f"${r['totals'][o]:>11,.0f}" for o in opts)
         prob = f"{r['prob_best']:.0%}" if r["prob_best"] is not None else "n/a"
         mean_best = r.get("mc_mean_best") or "n/a"
+        rule = r.get("rule", "?")
+        if at_the_floor(r["prob_best"]):
+            rule += ", at the floor"  # decisive by ≥, on nothing to spare
         lines.append(
             f"  {val:>{max(len(key), 10)}} | {totals} | {r['best']:>8} | "
-            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>5} ({r.get('rule', '?')}) | {prob:>7} | {mean_best:>12}"
+            f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>5} ({rule}) | {prob:>7} | {mean_best:>12}"
         )
     lines.extend(f"  {line}" for line in flip_lines(result))
     return "\n".join(lines)
@@ -373,17 +386,19 @@ def flip_lines(result: Dict[str, Any]) -> List[str]:
         return (f"{f['from_best']} ({key}={_fmt_value(key, f['from_value'])}) "
                 f"{joiner} {f['to_best']} ({key}={_fmt_value(key, f['to_value'])})")
 
+    # Every line names its key: two --sweep flags printed two bare "no flip"
+    # lines and nothing said which sweep each belonged to (2026-09-04).
     lines: List[str] = []
     if result["flips"]:
         for f in result["flips"]:
-            lines.append(f"flip: cheapest changes from {_move(f, 'to')}")
+            lines.append(f"flip {key}: cheapest changes from {_move(f, 'to')}")
     else:
-        lines.append("no flip: the same option is cheapest across the whole sweep")
+        lines.append(f"no flip along {key}: the same option is cheapest across the whole sweep")
     for f in result.get("mc_mean_flips", []):
-        lines.append(f"mean flip: Monte Carlo mean favours {_move(f, 'then')}")
+        lines.append(f"mean flip {key}: Monte Carlo mean favours {_move(f, 'then')}")
     majority = result.get("mc_majority_flips") or []
     if majority != result["flips"]:
         for f in majority:
-            lines.append("majority flip: Monte Carlo P(cheapest) majority favours "
+            lines.append(f"majority flip {key}: Monte Carlo P(cheapest) majority favours "
                          f"{_move(f, 'then')}")
     return lines

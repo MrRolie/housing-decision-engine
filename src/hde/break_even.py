@@ -260,12 +260,16 @@ def solve_crossings(
     break_evens: List[Dict[str, Any]] = []
     searched: List[List[float]] = []
     first_gap: Optional[float] = None
+    last_gap: Optional[float] = None
     for run in runs:
         r_lo, r_hi = run[0], run[-1]
         rxs, rys = (xs, ys) if (r_lo, r_hi) == (lo, hi) else scan(r_lo, r_hi)
         searched.append([r_lo, r_hi])
-        if first_gap is None:
-            first_gap = next((y for y in rys if y is not None), None)
+        accepted = [y for y in rys if y is not None]
+        if first_gap is None and accepted:
+            first_gap = accepted[0]
+        if accepted:
+            last_gap = accepted[-1]
         break_evens.extend(solve_run(rxs, rys))
 
     out: Dict[str, Any] = {
@@ -274,7 +278,49 @@ def solve_crossings(
     }
     if not break_evens:
         out["cheaper_throughout"] = a if (first_gap or 0.0) < 0 else b
+        out["no_crossing"] = no_crossing_record(
+            key, out["cheaper_throughout"], searched, (lo, hi),
+            first_gap or 0.0, last_gap or 0.0, is_int=is_int)
     return out
+
+
+def _arg_value(key: str, v: float) -> str:
+    """One bracket bound as the CLI accepts it (no separators, whole numbers
+    where the input takes them) — the widen hint is meant to be pasted."""
+    if key in INT_KEYS or float(v).is_integer():
+        return str(int(round(v)))
+    return f"{v:.6g}"
+
+
+def no_crossing_record(
+    key: str, cheaper: str, searched: List[List[float]], asked: Tuple[float, float],
+    gap_lo: float, gap_hi: float, *, is_int: bool = False,
+) -> Dict[str, Any]:
+    """What a bracket with no crossing has to say: the bounds it held for,
+    which option is cheaper at each end, and the widened bracket to try —
+    on the side where the gap narrows, one bracket width further out (a money
+    input never below half its low end, an integer input never below 1).
+
+    2026-09-04: `<opt> is cheaper throughout` named neither the bounds it held
+    for nor what to run next. `widen` is None when the gap narrows toward an
+    end the config refuses beyond — no bracket reaches a crossing there.
+    """
+    lo, hi = searched[0][0], searched[-1][1]
+    side = "high" if abs(gap_hi) < abs(gap_lo) else "low"
+    width = hi - lo
+    open_end = (hi == asked[1]) if side == "high" else (lo == asked[0])
+    widen: Optional[List[float]] = None
+    if open_end and width > 0:
+        if side == "high":
+            widen = [lo, hi + width]
+        else:
+            new_lo = lo - width
+            if lo > 0:
+                new_lo = max(new_lo, lo / 2)
+            if is_int:
+                new_lo = max(1.0, float(math.floor(new_lo)))
+            widen = [new_lo, hi]
+    return {"lo": lo, "hi": hi, "cheaper": cheaper, "narrows_toward": side, "widen": widen}
 
 
 def solve_break_even(
@@ -352,8 +398,9 @@ def solve_break_even(
     if refused:
         out["refused"] = {"count": len(refused), "values": [r[0] for r in refused],
                           "reason": refused[0][1]}
-    if "cheaper_throughout" in core:
-        out["cheaper_throughout"] = core["cheaper_throughout"]
+    for carried in ("cheaper_throughout", "no_crossing"):
+        if carried in core:
+            out[carried] = core[carried]
     return out
 
 
@@ -645,7 +692,7 @@ def solve_break_even_across(
     for v in values:
         r = solve_break_even(with_value(raw, sweep_key, v), key, lo, hi, **kw)
         row: Dict[str, Any] = {"value": v, "break_evens": r["break_evens"]}
-        for carried in ("cheaper_throughout", "refused"):
+        for carried in ("cheaper_throughout", "no_crossing", "refused"):
             if carried in r:
                 row[carried] = r[carried]
         rows.append(row)
@@ -695,7 +742,16 @@ def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> L
     line). One builder for the text block, the read-back and every `across`
     row, so the three cannot phrase the same threshold differently."""
     if not result_like["break_evens"]:
-        return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
+        record = result_like.get("no_crossing")
+        if record is None:  # a caller that solved without the record
+            return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
+        head = (f"no crossing between {_fmt_value(key, record['lo'])} and "
+                f"{_fmt_value(key, record['hi'])}: {record['cheaper']} is cheaper at both ends")
+        if record["widen"] is not None:
+            w_lo, w_hi = record["widen"]
+            return [f"{head} — widen with --break-even {key}={_arg_value(key, w_lo)}:{_arg_value(key, w_hi)}"]
+        return [f"{head} — the gap narrows toward the {record['narrows_toward']} end, "
+                f"which the config refuses beyond; no wider bracket reaches a crossing"]
     return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
