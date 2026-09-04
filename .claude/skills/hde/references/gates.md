@@ -104,9 +104,13 @@ them illustrative, and read the p95 and `prob_*_cheapest`.
 owned side and 0 here the renter's capital cannot lose — the engine warns
 (`asymmetric tails`, `one-sided uncertainty`), so set both or neither; with
 every vol at 0 the Monte Carlo is one repeated path and "P(x cheapest): 100%"
-means nothing was modelled. Most wealth at the end → compare `total_pv` (net
-cost including the terminal assets of both sides); `terminal_equity_pv` is a
-component, not the answer.
+means nothing was modelled. A "no nasty surprise" criterion gets ONE clause
+carrying both sides' p95, labelled as resting on the vols you typed ("the
+worst 5% of futures: buying $412k, renting $388k — both on my illustrative
+30% maintenance and 10% return vols, not evidence"); never a p95 for one side
+alone. Most wealth at the end → compare `total_pv` (net cost including the
+terminal assets of both sides); `terminal_equity_pv` is a component, not the
+answer.
 
 ## 7. Cash line — cash is not PV
 
@@ -136,5 +140,8 @@ buying when rates are rising), and so is any default the engine warned on (a
 1% real rent escalation defaulted for a Québec continuing lease biases toward
 buying); "no chance you move early" biases toward buying too (an early exit
 pays the selling cost sooner); the renter's investment return is shown
-pre-tax (biases toward renting) — every item gets a direction, none gets
-none.
+pre-tax (biases toward renting); every dollar input the engine's coherence
+note held fixed along a price scan (a `purchase_costs` figure, a dollar tax or
+insurance line sized for the seed) goes here with the note's direction — it
+favours buying above the seed price and renting below it — every item gets a
+direction, none gets none.

@@ -75,8 +75,12 @@ Four `across` blocks give twelve threshold sentences; the answer does not
 carry them all. The headline sentence is the base threshold plus the growth
 bracket (the input with no evidence). Every other bracket gets one clause
 each ("at 1.2% maintenance the band is $2,768–$3,052; at 0% rent escalation
-$2,588–$2,853; ten years barely moves it"), unless its end flips the verdict
-at the user's rent — then it joins the headline with its conditions.
+$2,588–$2,853"), unless its end flips the verdict at the user's rent — then it
+joins the headline with its conditions. A years bracket is quoted at the
+user's stated floor beside the base, with its figures ("over 8 years, the
+short end of your range, the band is $2,640–$2,910; over 10, $2,715–$2,993"),
+never dismissed as "barely moves": the floor is the year they may actually
+leave, and the shift it produces is the claim.
 
 ## The threshold sentence
 
@@ -93,6 +97,17 @@ the band and the reader cannot tell which clause wins on $2,715–$2,850. Never
 same sentence: "renting is cheaper below $2,715 if Laval prices only track
 inflation, below $1,864 if they grow 2%/yr above it — at 2% your $1,900 is a
 toss-up".
+
+On a price threshold the sentence is the mirror, owned side first:
+
+> the condo is cheaper below $412,000; too close to call between $412,000 and
+> $455,000; renting is cheaper above $455,000.
+
+The **shop-under edge** is the band edge on the buyer's side — the low edge,
+$412,000 here, the highest price at which buying is still the decisive call.
+It is the price the story runs at, the price the `financing:` line and
+`Affordability` are quoted at, and the number the user shops with; the
+crossing and the high edge are the other two clauses, never the headline.
 
 ## The prior and the second band
 
@@ -127,4 +142,8 @@ Never drop the band you ran because the user's rent sits far from it. With only 
 `investment_return_vol` 0) the engine warns `one-sided uncertainty`: the
 probabilities are OVERconfident and the true toss-up zone is wider — never
 "the simulation overstates the uncertainty". Cross-check the sweep's `mean
-flip:` line on the same input.
+flip:` line on the same input. `Affordability` and the `financing:` line are
+quoted at the mean flip and at both probability edges too, not only at the
+deterministic crossing: the sweep's per-point lines carry the max ratio, the
+breach years and the insured tier at each grid point, so an edge that breaches
+32% or crosses into an insured tier is said in the same clause that names it.
