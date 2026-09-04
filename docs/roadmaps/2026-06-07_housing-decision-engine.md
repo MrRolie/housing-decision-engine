@@ -149,6 +149,70 @@ not been re-served since round 7 (19).
   starting `--break-even <option>.initial_value` from that fixed point automatically instead of the
   assistant reading it off a first run.
 
+### Round 10 (2026-09-04, four shapes, openers shaped by PROMPTS.md)
+
+Scores: quick-sense 21 (17), reverse 19 (20), condo 21 (21), Ottawa 16 (19). Intake rounds
+0 / 1 / 1 / 1; in three of the four no fact the opener carried was asked again (the reverse
+serve soft-re-asked house-vs-duplex and where the cash sits). Findings, one line each:
+
+- **One-sided placeholder sweep:** an Ontario tax placeholder was swept on one side of the typed
+  figure only; the downward side, where a bill on a 2016 assessment base sits, was never run.
+- **Affordability unsaid at the prior-side threshold:** the ratio was quoted at the deterministic
+  crossing and not at the mean-flip and probability edges the answer led with.
+- **Posted rate unnamed:** a run at the Bank of Canada posted 5-year anchor was presented as the
+  financing cost without saying it is a list price that contracted rates run under.
+- **Horizon shift dismissed:** the years bracket at the user's stated floor was written off as
+  "barely moves" instead of quoted with its figures.
+- **Block repetition:** about 320 of the answer's 1,048 words were READ-BACK lines restating one
+  fact (the affordability warning, the section and the max-ratio lines).
+- **Sweep block without per-point lines:** the block carried the flip line but no per-point best,
+  margin, probability or affordability, so the prose had nothing engine-voiced to quote per point.
+- **School tax omitted:** a Québec owner's tax line carried the municipal rate alone; the school
+  tax (`school_tax.qc`) was neither in the config nor under "not modelled".
+- **No financed first-time-buyer example:** every shipped example was 20% down or all-cash, so the
+  serves had no template for a stated cash pile, an engine-priced premium and duty, a first-home
+  flag and a `sources:` block together.
+
+Folded (2026-09-04):
+
+- **Loader and sources:** `sources:` declarations on recurring-cost lines by name, validated
+  against the anchor; a province or municipality parsed as a YAML boolean is refused with the
+  quote hint; a Québec owned option with a property-tax line and no school-tax line gets a
+  coherence note naming `school_tax.qc` and its rate; a `mortgage_rate` equal to the posted
+  5-year anchor warns that it is a list price and names the contracted anchors; an Ontario
+  property-tax line with no anchor match carries the 2016-assessment-base note.
+- **Sweep, break-even, read-back:** a key overridden by `--sweep` / `--break-even` is relabelled
+  at the grid points instead of re-validated against its declaration; a prior run with Monte
+  Carlo off warns that the prior acts only in Monte Carlo; a sweep on an assistant-declared key
+  whose points all lie on one side of the base warns and names the untested direction; no
+  crossing in the bracket prints the bounds, which option is cheaper at each end and the widen
+  hint; flip lines name their key; one read-back line per sweep point (best, margin, P(best) with
+  Monte Carlo on, max affordability ratio and breach years, the insured tier under `auto`); one
+  fact once in the block, measured in block words per shape; the financing line's 20%-down price
+  and the cliff detection re-derive purchase costs along a scan; P(best) exactly at the 65% floor
+  is marked.
+- **Anchors:** `maintenance.nahb_routine` (0.6%, NAHB 2019 AHS Table 2) as a reference anchor the
+  engine applies nowhere; `mortgage_rate.contracted_5y_uninsured` and
+  `mortgage_rate.contracted_5y_insured` from the Bank of Canada Valet API with the observation
+  date quoted; a same-jurisdiction near-miss hint in the reference matcher ("nearest:
+  property_tax.montreal 0.5556% — not a match").
+- **Docs, examples, skill, PROMPTS.md:** the examples README prices the welcome tax with
+  `land_transfer_tax: auto` instead of teaching "≈ 1.5% of price"; `examples/first_time_buyer_montreal.yaml`
+  (rent vs condo, `cash_available`, the Montréal duty and the CMHC premium priced in-engine, an
+  income block, every value declared in `sources:`); PROMPTS.md says what "decisive" means on a
+  single-path run, that the cash figure says whether it includes closing costs, that a townhouse
+  question says whether there is a fee, and that "at what price / what rent" gets the full run;
+  the skill's quick-sense lane excludes threshold questions from the no-listing shape and names
+  that shape's one command and seed rule; the threshold lane carries the price-side sentence, the
+  shop-under edge, the years bracket at the user's floor and affordability at the mean-flip and
+  probability edges; the checklist rides brackets on the headline config, solves every placeholder
+  the verdict could turn on with a two-sided break-even (an Ontario tax placeholder downward
+  first), pastes ONE command's block, names the decisiveness threshold and the typed uncertainty
+  input, and tells a second cash tier that ran; translation rows for split cash, quoted province
+  codes, an unknown fee, no mortgage quote (contracted anchor as base, posted as ceiling), the
+  Québec municipal + school tax bill and per-line `sources:` on recurring costs; gate 6 carries the
+  "no nasty surprise" clause and gate 8 the items held fixed along a scan.
+
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
 - **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount and mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.
