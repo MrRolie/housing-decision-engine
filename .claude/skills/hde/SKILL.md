@@ -137,9 +137,9 @@ required key with the exact message — show it.
    + purchase costs). Never call that capital a drag or an advantage — only
    the engine's capital-spread warning says which way it cuts.
 5. **A range is two configs.** Bracket with `--sweep` in the user's units;
-   the flip is the engine's `flip:` line — densify, never interpolate; the tie
+   the flip is the engine's `flip <key>:` line — densify, never interpolate; the tie
    band is the points where `decisive` is false; under "expected cost" with
-   uncertainty on, the flip is the `mean flip:` line, never mixed with the
+   uncertainty on, the flip is the `mean flip <key>:` line, never mixed with the
    deterministic one; an unswept claim is written "not run".
 6. **Match the figure to their criterion.** Expected cost → the margin, and
    with uncertainty on the Monte Carlo MEAN (`verdict.mc_mean_best`; say so

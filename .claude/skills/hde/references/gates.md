@@ -72,14 +72,14 @@ price), bracket it with `--sweep` and lead with whether the verdict survives
 the bracket; never quietly take the midpoint. Author brackets in the USER's
 units and include their stated value, zero in their units (flat sticker
 prices = −2.1% real) and one step below; read the flip point back in their
-units. The flip point is the engine's `flip:` line — the bracket between two
+units. The flip point is the engine's `flip <key>:` line — the bracket between two
 run points; if it is too coarse to act on, densify with the range form
 (`--sweep key=lo:hi:n`) and rerun — never interpolate a flip from two points.
 The tie band is a range too: quote the points where `decisive` is false ("too
 close to call between X and Y"). Every flip point is stated under the user's
 criterion: with uncertainty on and "lowest expected cost" as the criterion,
-the flip is the sweep's `mean flip:` line (`mc_mean_flips` in JSON), not the
-deterministic `flip:` — never mix the two in one answer, and say when the mean
+the flip is the sweep's `mean flip <key>:` line (`mc_mean_flips` in JSON), not the
+deterministic `flip <key>:` — never mix the two in one answer, and say when the mean
 never changes sides. (A break-even's tie band is a deterministic band and the
 verdict's band from a densified sweep is the Monte Carlo one; quoting both,
 labelled, is the threshold lane's rule and does not breach this one.) "It

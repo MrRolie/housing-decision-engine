@@ -142,7 +142,7 @@ Never drop the band you ran because the user's rent sits far from it. With only 
 `investment_return_vol` 0) the engine warns `one-sided uncertainty`: the
 probabilities are OVERconfident and the true toss-up zone is wider — never
 "the simulation overstates the uncertainty". Cross-check the sweep's `mean
-flip:` line on the same input. `Affordability` and the `financing:` line are
+flip <key>:` line on the same input. `Affordability` and the `financing:` line are
 quoted at the mean flip and at both probability edges too, not only at the
 deterministic crossing: the sweep's per-point lines carry the max ratio, the
 breach years and the insured tier at each grid point, so an edge that breaches
