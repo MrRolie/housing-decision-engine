@@ -169,6 +169,85 @@ class TestFinancingLine:
         assert "cash available" not in line
 
 
+class TestTheFixedPointRederivesTheCostsAlongThePrice:
+    """`(cash − purchase_costs) ÷ 20%` holds the SEED price's closing costs
+    fixed. With `purchase_costs_rate` or `land_transfer_tax: auto` the costs
+    move with the price, so the price at which the pile stops covering 20%
+    down is solved through the loader — the same loader every scan point
+    runs (2026-09-04). The spec-only surfaces keep the held-fixed form and
+    say so; the CLI's surfaces are given the raw YAML and re-derive."""
+
+    def _raw(self, **house):
+        cfg = {
+            "years": 10, "province": "QC",
+            "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.0,
+                     "invested_down_payment": 125_000},
+            "house": {"initial_value": 600_000, "value_growth_rate": 0.0,
+                      "mortgage_rate": 0.04, "mortgage_term_years": 25,
+                      "cash_available": 130_000, "mortgage_insurance": "auto"},
+        }
+        cfg["house"].update(house)
+        return cfg
+
+    def _line(self, raw):
+        from hde.serialization import format_assumptions
+        spec = load_config_dict(raw)
+        return next(l for l in format_assumptions(spec, None, raw=raw)
+                    if l.startswith("house financing:"))
+
+    def _down_frac_at(self, raw, price):
+        from hde.sweep import load_at
+        spec = load_at(raw, "house.initial_value", price)
+        return spec.house.down_payment / price
+
+    def test_a_rate_form_solves_the_price_where_costs_scale(self):
+        raw = self._raw(purchase_costs_rate=0.01)
+        from hde.sweep import cover_price
+        price, costs = cover_price(raw, "house")
+        # cash − 1% × P = 20% × P  ⇒  P = 130,000 / 0.21
+        assert price == pytest.approx(130_000 / 0.21, abs=1.0)
+        assert costs == pytest.approx(0.01 * price, abs=1.0)
+        assert self._down_frac_at(raw, price - 5) >= 0.20 > self._down_frac_at(raw, price + 5)
+        line = self._line(raw)
+        assert f"covers 20% down up to a price of ${price:,.0f}" in line
+        assert f"purchase_costs ${costs:,.0f} at that price" in line
+        assert "held at" not in line
+
+    def test_a_transfer_tax_schedule_is_re_derived_at_the_solved_price(self):
+        raw = self._raw(purchase_costs=5_000, land_transfer_tax="auto", municipality="montreal")
+        from hde.sweep import cover_price
+        price, costs = cover_price(raw, "house")
+        seed = (130_000 - load_config_dict(raw).house.purchase_costs) / 0.20
+        assert price != pytest.approx(seed, abs=100)  # the seed's duty is not this price's
+        assert self._down_frac_at(raw, price - 5) >= 0.20 > self._down_frac_at(raw, price + 5)
+        assert f"covers 20% down up to a price of ${price:,.0f}" in self._line(raw)
+
+    def test_dollar_costs_give_the_closed_form_from_either_path(self):
+        raw = self._raw(purchase_costs=5_000)
+        from hde.sweep import cover_price
+        price, costs = cover_price(raw, "house")
+        assert price == pytest.approx(625_000, abs=1.0) and costs == pytest.approx(5_000)
+        from hde.serialization import format_assumptions
+        spec = load_config_dict(raw)
+        spec_only = next(l for l in format_assumptions(spec, None) if l.startswith("house financing:"))
+        assert "covers 20% down up to a price of $625,000 (purchase_costs held at $5,000" in spec_only
+
+    def test_the_cli_surfaces_carry_the_re_derived_line(self, tmp_path, monkeypatch, capsys):
+        import json, sys, yaml
+        from hde.cli import main as cli_main
+        raw = self._raw(purchase_costs_rate=0.01)
+        cfg = tmp_path / "c.yaml"; cfg.write_text(yaml.safe_dump(raw))
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo", "--json"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        expected = f"covers 20% down up to a price of ${130_000 / 0.21:,.0f}"
+        assert any(expected in l for l in doc["assumptions"]["lines"])
+        assert any(expected in l for l in doc["assumptions"]["read_back"])
+        monkeypatch.setattr(sys, "argv", ["hde", str(cfg), "--no-monte-carlo"])
+        assert cli_main() == 0
+        assert expected in capsys.readouterr().out
+
+
 class TestUnderTwentyWarningFiresOnTheComputedFigure:
     """The warning must read the NETTED down payment, not the cash pile."""
 

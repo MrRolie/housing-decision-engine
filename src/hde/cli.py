@@ -168,6 +168,11 @@ def main() -> int:
     except Exception as e:
         print(f"Error loading configuration: {e}", file=sys.stderr)
         return 1
+    # The raw mapping the spec came from: the sweeps and thresholds re-run the
+    # loader on copies of it, and the financing line solves the 20%-down price
+    # through the same loader (2026-09-04).
+    import yaml as _yaml
+    raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     # The demographic prior is loaded ONCE at this edge (the prior-vs-constant
     # mismatch hard-fails inside load_scenario_prior and surfaces as a clean
@@ -230,9 +235,7 @@ def main() -> int:
     sweeps = []
     sweep_specs = []  # (key, values) pairs; --break-even re-solves at each
     if args.sweep:
-        import yaml as _yaml
         from .sweep import one_sided_sweep_warning, parse_sweep, run_sweep
-        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
         for sweep_arg in args.sweep:
             try:
                 key, values = parse_sweep(sweep_arg)
@@ -252,9 +255,7 @@ def main() -> int:
     # Break-evens (threshold questions) — same loader, deterministic line.
     break_evens = []
     if args.break_even:
-        import yaml as _yaml
         from .break_even import parse_break_even, solve_break_even, solve_break_even_across
-        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8"))
         for be_arg in args.break_even:
             try:
                 key, lo, hi = parse_break_even(be_arg)
@@ -277,7 +278,7 @@ def main() -> int:
     from .serialization import read_back_lines
     read_back = read_back_lines(
         spec, warnings=warnings, verdict=verdict, det=det_result, prior=prior,
-        break_evens=break_evens, sweeps=sweeps,
+        break_evens=break_evens, sweeps=sweeps, raw=raw,
     )
 
     # Output results. --read-back keeps stdout to the block alone, so a caller
@@ -288,7 +289,7 @@ def main() -> int:
             assumptions_to_dict, det_to_dict, engine_version, mc_to_dict,
             verdict_to_dict,
         )
-        assumptions = assumptions_to_dict(spec, prior)
+        assumptions = assumptions_to_dict(spec, prior, raw)
         assumptions["read_back"] = read_back
         doc = {
             "engine_version": engine_version(),
@@ -330,14 +331,14 @@ def main() -> int:
         # Print full report — requires deterministic results
         if det_result is not None:
             report = format_text_report(det_result, mc_result, spec.simulation, spec.economic,
-                                        spec=spec, prior=prior)
+                                        spec=spec, prior=prior, raw=raw)
             print(report)
         elif mc_result is not None:
             # MC-only mode: build a minimal det result placeholder to satisfy signature
             from .models import ComparisonDeterministicResult
             empty_det = ComparisonDeterministicResult()
             report = format_text_report(empty_det, mc_result, spec.simulation, spec.economic,
-                                        spec=spec, prior=prior)
+                                        spec=spec, prior=prior, raw=raw)
             print(report)
 
     if args.plots:

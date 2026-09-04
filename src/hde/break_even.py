@@ -639,7 +639,75 @@ def cliff_note(
                 step = max(abs(float(value)), 1.0) * 1e-6
                 pair = (float(value) - step, float(value) + step)
             clauses.extend(_step_clauses(raw, key, what, value, *pair))
+        # A step strictly INSIDE the band — neither the crossing nor an edge —
+        # is a jump the three probes above never see (2026-09-04: a smooth
+        # crossing whose band held the 85%-LTV tier change said nothing).
+        clauses.extend(_band_interior_steps(raw, key, entry, is_int, seen))
     return "; ".join(clauses) if clauses else None
+
+
+def _tier_of(accepted: bool, regime: Any, name: str) -> Any:
+    """The insurance tier one owned option carries in a probed regime, or the
+    refusal marker when the loader refused that point."""
+    if not accepted:
+        return ("refused",)
+    side = regime.get(name)
+    return None if side is None else side["tier"]
+
+
+def _band_interior_steps(
+    raw: Dict[str, Any], key: str, entry: Dict[str, Any], is_int: bool, seen: List[str],
+) -> List[str]:
+    """One clause per mortgage-insurance step that lies strictly inside the
+    tie band: the band is sampled, consecutive samples whose tier differs are
+    bisected to the step (a loader-level step function of the input), and a
+    step already reported at the crossing or an edge is not said again."""
+    low, high = entry["tie_band"]
+    if low is None or high is None:
+        return []
+    if is_int:
+        xs: List[float] = [float(x) for x in range(int(low), int(high) + 1)]
+    else:
+        lo, hi = float(low), float(high)
+        span = hi - lo
+        if span <= 0:
+            return []
+        eps = max(abs(lo), abs(hi), 1.0) * 1e-6
+        xs = [lo + eps] + [lo + span * i / 10 for i in range(1, 10)] + [hi - eps]
+    if len(xs) < 2:
+        return []
+    probes = [_financing_regime(raw, key, x) for x in xs]
+    names = sorted({name for ok, regime in probes if ok for name in regime})
+    clauses: List[str] = []
+    for name in names:
+        tiers = [_tier_of(ok, regime, name) for ok, regime in probes]
+        for i in range(1, len(xs)):
+            was, now = tiers[i - 1], tiers[i]
+            if was == now or was in (None, ("refused",)) or now in (None, ("refused",)):
+                continue  # no step between two priced tiers
+            a, b = xs[i - 1], xs[i]
+            if not is_int:
+                for _ in range(40):
+                    mid = 0.5 * (a + b)
+                    ok_m, regime_m = _financing_regime(raw, key, mid)
+                    if _tier_of(ok_m, regime_m, name) == was:
+                        a = mid
+                    else:
+                        b = mid
+            at = _fmt_value(key, int(b) if is_int else b)
+            if at in seen:
+                continue
+            seen.append(at)
+            insured_was, insured_now = bool(was and was[0]), bool(now and now[0])
+            if insured_was != insured_now:
+                what = (f"the mortgage-insurance cliff for {name} ({'uninsured' if not insured_was else f'insured at {was[2]:.2%}'}"
+                        f" → {'uninsured' if not insured_now else f'insured at {now[2]:.2%} of the loan'})")
+            else:
+                what = (f"a mortgage-insurance tier change for {name} "
+                        f"({was[2]:.2%} → {now[2]:.2%} of the loan)")
+            clauses.append(f"{what} lies inside the tie band, at {at} — the gap steps there; "
+                           f"the band is not one smooth range of near-ties")
+    return clauses
 
 
 def _affordability_at(

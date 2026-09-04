@@ -127,6 +127,64 @@ def base_value(raw: Dict[str, Any], key: str) -> Optional[Any]:
     return node
 
 
+def cover_price(raw: Dict[str, Any], name: str) -> Optional[Tuple[float, float]]:
+    """(price, purchase_costs at it): the price at which a stated
+    `cash_available` stops covering 20% down, solved THROUGH the loader so the
+    closing costs are the ones the engine would derive at that price — a
+    `purchase_costs_rate`, a `land_transfer_tax: auto` schedule with its
+    brackets, the premium tax — rather than the seed price's dollar figure
+    held fixed (2026-09-04). None without `cash_available`, or when no price
+    in reach covers 20% down.
+
+    The netted down payment falls as the price rises (costs scale, and past
+    the line the premium tax comes out of the pile too), so the sign of
+    `down − 20% × price` brackets the fixed point and bisection finds it; a
+    probe the loader refuses is read as beyond the covered range.
+    """
+    block = raw.get(name)
+    if not isinstance(block, dict) or "cash_available" not in block:
+        return None
+    key = f"{name}.initial_value"
+
+    def gap(price: float) -> Optional[float]:
+        try:
+            option = getattr(load_at(raw, key, price), name)
+        except (ConfigValidationError, ValueError):
+            return None
+        if option is None or option.down_payment is None:
+            return None
+        return option.down_payment - 0.20 * price
+
+    try:
+        option = getattr(load_config_dict(raw), name)
+    except (ConfigValidationError, ValueError):
+        return None
+    seed = (option.cash_available - option.purchase_costs) / 0.20
+    if seed <= 0:
+        return None
+    lo, hi = seed / 2, seed * 2
+    g_lo, g_hi = gap(lo), gap(hi)
+    for _ in range(8):
+        if g_lo is not None and g_lo <= 0:
+            lo, g_lo = lo / 2, gap(lo / 2)
+        elif g_hi is not None and g_hi > 0:
+            hi, g_hi = hi * 2, gap(hi * 2)
+        else:
+            break
+    if g_lo is None or g_lo <= 0:
+        return None
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        g = gap(mid)
+        if g is None or g <= 0:
+            hi = mid
+        else:
+            lo = mid
+        if hi - lo < 1e-7 * max(1.0, hi):
+            break
+    return lo, getattr(load_at(raw, key, lo), name).purchase_costs
+
+
 def one_sided_sweep_warning(raw: Dict[str, Any], key: str, values: List[Any]) -> Optional[str]:
     """The warning for a sweep over a key the ASSISTANT typed whose grid lies
     entirely above or entirely below the placeholder: one direction of the

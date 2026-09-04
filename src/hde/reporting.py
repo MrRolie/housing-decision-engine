@@ -47,6 +47,7 @@ def format_text_report(
     econ: EconomicParams,
     spec: Optional[ComparisonSpec] = None,
     prior: Optional["LoadedScenarioPrior"] = None,
+    raw: Optional[Dict] = None,
 ) -> str:
     """
     Generate a formatted text report of the analysis results.
@@ -58,6 +59,8 @@ def format_text_report(
         econ: Economic parameters
         spec: Full ComparisonSpec (optional) — emits the assumption echo
             header (audit U1) when provided
+        raw: the YAML mapping the spec was loaded from (optional) — lets the
+            financing line re-derive closing costs along the price
 
     Returns:
         Formatted string report
@@ -66,7 +69,7 @@ def format_text_report(
 
     if spec is not None:
         lines.append("Assumptions")
-        lines.extend(f"  {line}" for line in format_assumptions(spec, prior))
+        lines.extend(f"  {line}" for line in format_assumptions(spec, prior, raw))
         lines.append("")
 
     # Per-option PV totals

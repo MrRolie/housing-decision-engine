@@ -559,7 +559,10 @@ class TestMortgageInsuranceCliff:
             "simulation": {"num_sims": 50, "random_seed": 42},
         }
         note = solve_break_even(raw, "house.initial_value").get("note") or ""
-        assert "cliff" not in note and "tier change" not in note
+        assert "the crossing at" not in note and "cliff" not in note
+        # …while a REAL tier step inside the band is still named: with $75,000
+        # down the 85% line is exactly $500,000, and the band spans it.
+        assert "tier change for house (2.80% → 3.10% of the loan) lies inside the tie band, at 500,000" in note
 
     def test_a_band_edge_on_the_cliff_is_named_as_one(self):
         """Round-9 review: the crossing was smooth but the tie band's UPPER
@@ -578,6 +581,23 @@ class TestMortgageInsuranceCliff:
     def test_a_band_edge_clear_of_the_line_stays_quiet(self):
         result = solve_break_even(self._cfg(monthly_rent=2_050), "house.initial_value")
         assert "cliff" not in (result.get("note") or "")
+
+    def test_a_tier_change_inside_the_band_is_reported(self):
+        """The crossing and both edges are smooth, but the 85%-LTV tier change
+        (2.80% → 3.10%) lies between them: the gap steps inside the band, and
+        nothing said so (2026-09-04)."""
+        result = solve_break_even(self._cfg(monthly_rent=3_100), "house.initial_value")
+        entry = result["break_evens"][0]
+        lo, hi = entry["tie_band"]
+        assert lo < 821_601 < hi and abs(entry["value"] - 821_601) > 1_000
+        note = result["note"]
+        assert "lies inside the tie band, at 821," in note, note
+        assert "tier change for house (2.80% → 3.10% of the loan)" in note
+        assert "cliff" not in note
+
+    def test_an_interior_step_is_not_reported_twice_when_it_is_the_crossing(self):
+        note = solve_break_even(self._cfg(), "house.initial_value")["note"]
+        assert note.count("625,000") == 1 and "inside the tie band" not in note
 
     def test_a_smooth_crossing_carries_no_cliff_note(self):
         raw = {

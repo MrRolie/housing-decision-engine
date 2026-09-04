@@ -311,6 +311,7 @@ def echo_value(spec: ComparisonSpec, dotted: str) -> str:
 
 def format_assumptions(
     spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
+    raw: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """
     Assumption echo block (audit U1), serialized from the spec — pure presentation.
@@ -326,6 +327,12 @@ def format_assumptions(
     (sources.source_lines): who STATED the values the YAML does carry — or, with
     no `sources:` block, the one line saying the read-back cannot tell the
     user's numbers from the assistant's.
+
+    `raw` is the YAML mapping the spec was loaded from. With it, the financing
+    line's "covers 20% down up to a price of …" is solved through the loader
+    (`sweep.cover_price`), so a `purchase_costs_rate` or a transfer-tax
+    schedule is re-derived along the price; without it (a surface holding the
+    spec alone) the line keeps the seed's dollar figure and says it holds it.
     """
     nominal = spec.economic.mode == "nominal"
     pi = spec.economic.inflation_rate
@@ -422,13 +429,28 @@ def format_assumptions(
         # included — does not rescale with the price.
         cover_clause = ""
         if opt.cash_available is not None:
-            covered = (opt.cash_available - opt.purchase_costs) / 0.20
-            if covered > 0:
+            solved = None
+            if raw is not None:
+                # Local import: sweep.py imports this module for its per-point
+                # Monte Carlo serialization, so the dependency runs one way at
+                # import time.
+                from .sweep import cover_price
+                solved = cover_price(raw, name)
+            if solved is not None:
+                price, costs_at = solved
                 cover_clause = (
-                    f" · this cash covers 20% down up to a price of ${covered:,.0f} "
-                    f"(purchase_costs held at ${opt.purchase_costs:,.0f}; above it the "
+                    f" · this cash covers 20% down up to a price of ${price:,.0f} "
+                    f"(purchase_costs ${costs_at:,.0f} at that price; above it the "
                     f"mortgage is insured)"
                 )
+            else:
+                covered = (opt.cash_available - opt.purchase_costs) / 0.20
+                if covered > 0:
+                    cover_clause = (
+                        f" · this cash covers 20% down up to a price of ${covered:,.0f} "
+                        f"(purchase_costs held at ${opt.purchase_costs:,.0f}; above it the "
+                        f"mortgage is insured)"
+                    )
         lines.append(
             f"{name} financing: {head} = {down_frac:.2%} of price, "
             f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
@@ -486,6 +508,7 @@ def format_assumptions(
 
 def assumptions_to_dict(
     spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
+    raw: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     The structured assumption echo: what the text report's "Assumptions" block
@@ -504,7 +527,7 @@ def assumptions_to_dict(
     pi = spec.economic.inflation_rate
     for key in spec.defaults_applied:
         field = key.rsplit(".", 1)[1]
-        raw = spec_value(spec, key)
+        resolved = spec_value(spec, key)
         anchor = ANCHORS.get(_ECHO_ALIASES.get(key, key))
         if anchor is not None:
             kind = anchor.kind
@@ -520,13 +543,13 @@ def assumptions_to_dict(
         if nominal and anchor is not None:
             if key == "simulation.discount_rate":
                 note = (f"composed at parse: (1 + {anchor.value:.1%} real)(1 + {pi:.1%} "
-                        f"inflation_rate) − 1 = {raw:.2%} nominal")
+                        f"inflation_rate) − 1 = {resolved:.2%} nominal")
             elif field in _COMPOSED_AT_COMPUTE:
                 note = (f"REAL rate; the engine composes inflation_rate on top at compute "
-                        f"time: (1 + {raw:.1%})(1 + {pi:.1%}) − 1 = {(1 + raw) * (1 + pi) - 1:.2%} nominal")
+                        f"time: (1 + {resolved:.1%})(1 + {pi:.1%}) − 1 = {(1 + resolved) * (1 + pi) - 1:.2%} nominal")
         entries.append({
             "key": key,
-            "value": raw,
+            "value": resolved,
             "formatted": echo_value(spec, key),
             "cite": short_cite(key) or None,
             "kind": kind,
@@ -537,7 +560,7 @@ def assumptions_to_dict(
         "mode": spec.economic.mode,
         "years": spec.simulation.years,
         "discount_rate": spec.simulation.discount_rate,
-        "lines": format_assumptions(spec, prior),
+        "lines": format_assumptions(spec, prior, raw),
         "defaults_applied": entries,
         # Jurisdiction figures the USER supplied that a published source agrees
         # with (empty `matches` = the engine knows of no source for that line).
@@ -775,6 +798,7 @@ def read_back_lines(
     prior: Optional[LoadedScenarioPrior] = None,
     break_evens: Iterable[Dict[str, Any]] = (),
     sweeps: Iterable[Dict[str, Any]] = (),
+    raw: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """Every line an honest answer has to carry, in one order, ready to paste.
 
@@ -789,7 +813,7 @@ def read_back_lines(
     the run that would resolve it.
     """
     lines = [f"[warning] {warning}" for warning in warnings]
-    echo = format_assumptions(spec, prior)
+    echo = format_assumptions(spec, prior, raw)
     lines.extend(line for line in echo if line.startswith(_SOURCE_PREFIXES))
     # 2026-09-04 review: `selling_cost_rate` 5% and the discount rate — the two
     # largest numbers the engine set for that run — were named nowhere in the
