@@ -187,3 +187,16 @@ Everything the CLI uses is exported from `hde`
 `all_warnings`.
 (The MCP server that once wrapped these was removed 2026-09-01: the CLI plus
 the repo-local skill is the only surface.)
+
+## Reference entries added 2026-09-04
+
+`mortgage_rate.contracted_5y_uninsured` (4.35%) and
+`mortgage_rate.contracted_5y_insured` (4.01%) — Bank of Canada Valet series
+V122667786 / V122667780, the average rate on funds advanced in the 2026-06
+reference month, each with the effective-annual `restatement` — sit beside
+`mortgage_rate.posted_5y`, whose rationale now points at them by name.
+`maintenance.nahb_routine` (0.6% of home value a year — NAHB, *Operating Costs
+of Owning a Home*, 2019 AHS, Table 2) is the reference sibling of the uncited
+`house.annual_maintenance_rate` default; `maintenance.` is a reference family:
+never applied, cited when a `sources:` line declares it. `--print-anchors`
+carries every record.

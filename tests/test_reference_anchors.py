@@ -572,3 +572,123 @@ class TestOntarioNoMatchSuffix:
         spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}])
         [entry] = reference_matches(spec)
         assert entry["province"] is None
+
+# ---------------------------------------------------------------------------
+# Contracted mortgage rates (2026-09-04)
+#
+# The posted rate is a list price; what borrowers actually paid is its own pair
+# of anchors, so a typed rate has the market's realised figure beside it and
+# the posted rationale points at them by name instead of repeating figures.
+# ---------------------------------------------------------------------------
+
+class TestContractedMortgageRates:
+    UNINSURED = "mortgage_rate.contracted_5y_uninsured"
+    INSURED = "mortgage_rate.contracted_5y_insured"
+
+    @pytest.mark.parametrize("name, series", [(UNINSURED, "V122667786"),
+                                              (INSURED, "V122667780")])
+    def test_registered_fetched_and_quoted(self, name, series):
+        anchor = ANCHORS[name]
+        assert is_reference(name)
+        assert anchor.url.startswith("https://www.bankofcanada.ca/valet/observations/" + series)
+        assert anchor.retrieved_on == "2026-09-04"
+        assert series in anchor.quoted and '"d": "2026-06-01"' in anchor.quoted
+        assert "advanced" in anchor.unit.lower() and "effective" in anchor.unit.lower()
+        assert anchor.band[0] <= anchor.value <= anchor.band[1]
+        assert "applies this to nothing" in anchor.rationale.lower()
+
+    def test_insured_sits_below_uninsured_below_posted(self):
+        insured = ANCHORS[self.INSURED].value
+        uninsured = ANCHORS[self.UNINSURED].value
+        assert insured < uninsured < ANCHORS["mortgage_rate.posted_5y"].value
+
+    @pytest.mark.parametrize("name", [UNINSURED, INSURED])
+    def test_the_restatement_is_the_effective_annual_rate(self, name):
+        anchor = ANCHORS[name]
+        (effective, why), = anchor.restatements
+        assert effective == pytest.approx((1 + anchor.value / 2) ** 2 - 1, abs=1e-12)
+        assert "semi-annually" in why.lower()
+
+    def test_the_posted_rationale_names_them_and_repeats_no_figure(self):
+        rationale = ANCHORS["mortgage_rate.posted_5y"].rationale
+        assert self.UNINSURED in rationale and self.INSURED in rationale
+        assert "4.35" not in rationale and "4.01" not in rationale
+
+    @pytest.mark.parametrize("name", [UNINSURED, INSURED])
+    def test_never_applied_as_an_engine_default(self, name):
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "down_payment": 120_000,
+                      "mortgage_rate": 0.05, "mortgage_term_years": 25},
+            "rent": {"monthly_rent": 2_000},
+        })
+        assert not any("mortgage_rate" in k for k in spec.defaults_applied)
+
+    def test_a_sources_declaration_validates_the_published_or_effective_figure(self):
+        anchor = ANCHORS[self.UNINSURED]
+        for stated in anchor.stated_values():
+            spec = load_config_dict({
+                "years": 10,
+                "house": {"initial_value": 600_000, "down_payment": 120_000,
+                          "mortgage_rate": stated, "mortgage_term_years": 25},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"house.mortgage_rate": f"anchor:{self.UNINSURED}"},
+            })
+            assert spec.sources.anchor_name("house.mortgage_rate") == self.UNINSURED
+
+
+# ---------------------------------------------------------------------------
+# Routine maintenance (2026-09-04)
+#
+# `house.annual_maintenance_rate` is a deliberately uncited 0.0 whose rationale
+# has always pointed at the NAHB figure. The figure is now its own reference
+# entry, so a user who takes it has it cited by name.
+# ---------------------------------------------------------------------------
+
+class TestMaintenanceReference:
+    NAME = "maintenance.nahb_routine"
+
+    def test_registered_as_a_reference_with_the_fetched_table(self):
+        anchor = ANCHORS[self.NAME]
+        assert is_reference(self.NAME)
+        assert anchor.value == 0.006
+        assert anchor.url.startswith("https://www.nahb.org/")
+        assert anchor.retrieved_on == "2026-09-04"
+        assert "Table 2" in anchor.quoted and "All Homes 0.6" in anchor.quoted
+        assert "routine" in anchor.unit.lower() and "excluding" in anchor.unit.lower()
+        assert anchor.band == (0.002, 0.008)
+        assert "applies this to nothing" in anchor.rationale.lower()
+
+    def test_the_engine_default_stays_an_uncited_zero(self):
+        default = ANCHORS["house.annual_maintenance_rate"]
+        assert default.value == 0.0 and default.kind == "neutral"
+        assert "NAHB" in default.rationale
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True},
+            "rent": {"monthly_rent": 2_000},
+        })
+        assert spec.house.annual_maintenance_rate == 0.0
+        assert not any(k.startswith("maintenance.") for k in spec.defaults_applied)
+
+    def test_a_sources_declaration_validates_for_the_published_figure(self):
+        spec = load_config_dict({
+            "years": 10,
+            "house": {"initial_value": 600_000, "all_cash": True,
+                      "annual_maintenance_rate": 0.006},
+            "rent": {"monthly_rent": 2_000},
+            "sources": {"house.annual_maintenance_rate": f"anchor:{self.NAME}"},
+        })
+        assert spec.sources.anchor_name("house.annual_maintenance_rate") == self.NAME
+        assert any(self.NAME in line for line in format_assumptions(spec))
+
+    def test_a_sources_declaration_is_refused_for_another_figure(self):
+        from hde.config import ConfigValidationError
+        with pytest.raises(ConfigValidationError, match=self.NAME):
+            load_config_dict({
+                "years": 10,
+                "house": {"initial_value": 600_000, "all_cash": True,
+                          "annual_maintenance_rate": 0.01},
+                "rent": {"monthly_rent": 2_000},
+                "sources": {"house.annual_maintenance_rate": f"anchor:{self.NAME}"},
+            })

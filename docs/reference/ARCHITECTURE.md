@@ -56,11 +56,12 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
 
 The registry holds **engine defaults** and, since 2026-09-03, **reference
 tables** — jurisdiction tax and insurance figures, and since 2026-09-04 the
-posted mortgage rate. They are opposite in how they reach a run.
+posted and contracted mortgage rates and the NAHB routine-maintenance rate.
+They are opposite in how they reach a run.
 
 | | engine default | jurisdiction reference |
 |---|---|---|
-| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `school_tax.<province>`, `home_insurance.<province>`, `mortgage_rate.posted_5y` |
+| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `school_tax.<province>`, `home_insurance.<province>`, `mortgage_rate.posted_5y`, `mortgage_rate.contracted_5y_uninsured` / `_insured`, `maintenance.nahb_routine` |
 | applied by the engine? | yes, when the YAML omits the key | **never** — the user supplies the figure |
 | cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one; in `anchor-sourced:`, when a `sources:` line declares it |
 | extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on), `province` (property/school tax), `restatements` (the same figure in another convention) |
@@ -100,12 +101,29 @@ V80691335), so a user with no lender quote has something to bracket a guess
 against instead of an unanchored number. It is a POSTED rate — a list price. The
 series makes the point itself: every one of the 52 weekly observations to
 2026-09-02 reads 6.09, last changed 2025-05-14, hence the zero-width band, which
-is the finding and not a gap. What borrowers actually contracted is in the
-anchor's rationale, from the same API and equally cited, so the posted figure
-brackets a guess from ABOVE and is never mistaken for a quote. It is quoted
+is the finding and not a gap. What borrowers actually contracted is its own
+pair of anchors from the same API — **`mortgage_rate.contracted_5y_uninsured`**
+(4.35%) and **`mortgage_rate.contracted_5y_insured`** (4.01%), the average rate
+on funds advanced in the 2026-06 reference month, monthly series that move
+while the posted one does not — so the posted figure brackets a guess from
+ABOVE, the contracted pair says what the market charged, and neither is ever
+mistaken for the borrower's own quote, which always wins. All three are quoted
 semi-annually compounded while `mortgage_rate` takes an effective annual rate;
-the conversion is a `restatement` on the entry, so a config stating either form
-may cite it.
+the conversion is a `restatement` on each entry, so a config stating either
+form may cite it.
+
+**`maintenance.nahb_routine`** (2026-09-04) is the reference sibling of the
+deliberately uncited `house.annual_maintenance_rate` default: NAHB, *Operating
+Costs of Owning a Home* (2019 American Housing Survey), Table 2 — routine
+maintenance 0.6% of home value a year for all homes, 0.8% built before 1960 to
+0.2% built in the 2010s, which is the band. The default stays 0.0 and the
+engine still warns when no maintenance is modelled; the entry exists so a user
+who takes the NAHB figure has it cited by name (`sources:
+house.annual_maintenance_rate: anchor:maintenance.nahb_routine` validates for
+0.006) and so an assistant offers a published figure rather than a remembered
+one. It is a FLOOR: the AHS item is minor routine repairs only, and a rate that
+budgets for replacements sits above it. `maintenance.` is a reference family
+like the others — never applied, only cited.
 
 `serialization.reference_matches` does the matching: owned options only (a
 renter's tenant policy and a mortgage-insurance line are different products and

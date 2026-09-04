@@ -30,12 +30,14 @@ class AnchorError(Exception):
 ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsourced"})
 
 # Dotted-key prefixes of the REFERENCE TABLES (property tax by municipality,
-# school tax and home insurance by province, and the posted mortgage rate a
-# borrower with no quote can bracket against). These are NOT engine defaults: no
-# dataclass falls back to one and the engine never applies one. They are
-# published figures the user — or an assistant writing the YAML — chooses from,
-# and `serialization.reference_matches` cites one by name when the user's own
-# number equals the published number.
+# school tax and home insurance by province, the posted and contracted mortgage
+# rates a borrower with no quote can bracket against, and the published
+# routine-maintenance rate). These are NOT engine defaults: no dataclass falls
+# back to one and the engine never applies one. They are published figures the
+# user — or an assistant writing the YAML — chooses from, cited by name when the
+# user's own number equals the published number: `serialization.reference_matches`
+# for a recurring-cost line, a `sources: <key>: anchor:<name>` declaration for
+# any other key.
 #
 # Entries here carry two fields the rest of the registry does not need:
 # `quoted` (the figure exactly as the source prints it) and `unit` (the base
@@ -44,7 +46,7 @@ ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsour
 # file: a rate on ASSESSED value read as a rate on market value is wrong by
 # however far the assessment roll lags the market.
 REFERENCE_FAMILIES = ("property_tax.", "school_tax.", "home_insurance.",
-                      "mortgage_rate.")
+                      "mortgage_rate.", "maintenance.")
 
 # The families whose entries a single bill can legitimately ADD UP: in Québec an
 # owner's property-tax bill IS the municipal rate plus the province-wide school
@@ -912,6 +914,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(813.0, 813.0),
         short_cite="StatCan SHS 2023 (QC)",
+        province="qc",
         retrieved_on="2026-09-03",
     ),
     "home_insurance.on": Anchor(
@@ -939,6 +942,7 @@ ANCHORS: Dict[str, Anchor] = {
         ),
         band=(1053.0, 1053.0),
         short_cite="StatCan SHS 2023 (ON)",
+        province="on",
         retrieved_on="2026-09-03",
     ),
     # --- Mortgage rate: a POSTED rate, which is a list price -----------------
@@ -969,14 +973,14 @@ ANCHORS: Dict[str, Anchor] = {
             "(6.49 → 6.09). A rate that has not moved in sixteen months is a "
             "posted list price that moves in steps, not a market rate — hence "
             "the zero-width band, which is the finding rather than a gap. What "
-            "borrowers actually contracted, from the same Valet API (group "
-            "A4_RATES_MORTGAGES, « Interest rates charged for new and existing "
-            "lending by chartered banks », funds advanced, fixed rate 5 years "
-            "and over, reference month 2026-06-01, retrieved 2026-09-04): "
-            "V122667786 uninsured 4.35%, V122667780 insured 4.01%. Use the "
-            "posted figure to bracket a guess from ABOVE and the borrower's own "
-            "quote whenever there is one; a rate typed between them is the "
-            "assistant's estimate and must be labelled one."
+            "borrowers actually contracted is its own pair of anchors from the "
+            "same Valet API — `mortgage_rate.contracted_5y_uninsured` and "
+            "`mortgage_rate.contracted_5y_insured` (funds advanced, fixed rate "
+            "5 years and over, monthly). Use the posted figure to bracket a "
+            "guess from ABOVE, the contracted anchors for what the market "
+            "actually charged, and the borrower's own quote whenever there is "
+            "one; a rate typed between them is the assistant's estimate and "
+            "must be labelled one."
         ),
         band=(0.0609, 0.0609),
         short_cite="BoC posted 5-yr 2026-09-02",
@@ -985,6 +989,164 @@ ANCHORS: Dict[str, Anchor] = {
                        "the engine's `mortgage_rate` is an EFFECTIVE annual rate "
                        "and the posted figure is semi-annually compounded: "
                        "(1 + 0.0609/2)^2 − 1 = 0.0618270225"),),
+    ),
+    # --- Contracted rates: what borrowers actually paid (2026-09-04) ---------
+    # Two monthly series from the same Valet API, one per insurance status. The
+    # engine applies neither: they exist so a borrower's own rate — or the
+    # estimate an assistant types for a borrower without a quote — has the
+    # market's realised average beside it, cited by name, instead of only the
+    # posted list price above it.
+    "mortgage_rate.contracted_5y_uninsured": Anchor(
+        name="mortgage_rate.contracted_5y_uninsured",
+        value=0.0435,
+        as_of="2026-06-01",
+        source="Bank of Canada, Valet series V122667786 — seriesDetail label "
+               "« Fixed rate, 5 years and over », description « Mortgages - Funds "
+               "advanced - Residential mortgages, uninsured, Total » (group "
+               "A4_RATES_MORTGAGES, « Interest rates charged for new and existing "
+               "lending by chartered banks »), monthly by reference month",
+        url="https://www.bankofcanada.ca/valet/observations/V122667786/json?recent=3",
+        quoted='{"d": "2026-06-01", "V122667786": {"v": "4.35"}} — the latest of '
+               'the 3 monthly observations returned: 2026-04-01 4.17, 2026-05-01 '
+               '4.30, 2026-06-01 4.35',
+        unit="percent per year on funds ADVANCED in the reference month — the "
+             "average rate chartered banks' borrowers actually contracted on "
+             "UNINSURED fixed-rate mortgages of 5 years and over; a realised "
+             "average across all such borrowers, not a quote, published about "
+             "three months after the fact. Read as semi-annually compounded "
+             "(the Canadian fixed-rate convention, not stated by the series) — "
+             "4.35% = 4.3973% EFFECTIVE annual, which is what `mortgage_rate` "
+             "takes",
+        rationale=(
+            "THE ENGINE APPLIES THIS TO NOTHING: no dataclass falls back to it "
+            "and no run reads it. It exists so that a rate a user types, or an "
+            "assistant estimates for a user with no lender quote, has the "
+            "market's realised figure beside it — `mortgage_rate.posted_5y` "
+            "(6.09%) is a list price nobody pays, and this series is what was "
+            "actually contracted, averaged over the funds advanced in the "
+            "reference month to borrowers whose mortgage carries no default "
+            "insurance. The insured average is its sibling anchor "
+            "`mortgage_rate.contracted_5y_insured`, lower because the "
+            "lender's risk is transferred to the insurer. Three months were "
+            "fetched and the band is their range (4.17% → 4.35%), so a rate "
+            "inside it is 'a recent contracted average'; a rate between this "
+            "and the posted figure, typed with no quote behind it, is the "
+            "assistant's estimate and must be labelled one; the borrower's own "
+            "quote always wins. An average over terms of 5 years AND OVER and "
+            "over every borrower, so a specific quote can legitimately sit "
+            "outside the band. The reference month lags the run by about three "
+            "months — the series moves, unlike the posted rate."
+        ),
+        band=(0.0417, 0.0435),
+        short_cite="BoC contracted 5-yr uninsured 2026-06",
+        retrieved_on="2026-09-04",
+        restatements=((0.0439730625,
+                       "the engine's `mortgage_rate` is an EFFECTIVE annual rate; "
+                       "reading the published 4.35% as semi-annually compounded "
+                       "(the Canadian fixed-rate convention — the series itself "
+                       "does not state one): (1 + 0.0435/2)^2 − 1 = 0.0439730625"),),
+    ),
+    "mortgage_rate.contracted_5y_insured": Anchor(
+        name="mortgage_rate.contracted_5y_insured",
+        value=0.0401,
+        as_of="2026-06-01",
+        source="Bank of Canada, Valet series V122667780 — seriesDetail label "
+               "« Fixed rate, 5 years and over », description « Mortgages - Funds "
+               "advanced - Residential mortgages, insured, Total » (group "
+               "A4_RATES_MORTGAGES, « Interest rates charged for new and existing "
+               "lending by chartered banks »), monthly by reference month",
+        url="https://www.bankofcanada.ca/valet/observations/V122667780/json?recent=3",
+        quoted='{"d": "2026-06-01", "V122667780": {"v": "4.01"}} — the latest of '
+               'the 3 monthly observations returned: 2026-04-01 3.95, 2026-05-01 '
+               '3.96, 2026-06-01 4.01',
+        unit="percent per year on funds ADVANCED in the reference month — the "
+             "average rate chartered banks' borrowers actually contracted on "
+             "INSURED fixed-rate mortgages of 5 years and over; a realised "
+             "average across all such borrowers, not a quote, published about "
+             "three months after the fact. Read as semi-annually compounded "
+             "(the Canadian fixed-rate convention, not stated by the series) — "
+             "4.01% = 4.0502% EFFECTIVE annual, which is what `mortgage_rate` "
+             "takes",
+        rationale=(
+            "THE ENGINE APPLIES THIS TO NOTHING: no dataclass falls back to it "
+            "and no run reads it. It exists so that a rate a user types, or an "
+            "assistant estimates for a user with no lender quote, has the "
+            "market's realised figure beside it. The insured average is the "
+            "one to set beside a run whose `mortgage_insurance` is active — the "
+            "borrower pays the premium and gets the lower rate, which is why "
+            "the two must never be swapped: the insured rate on an uninsured "
+            "loan flatters buying by the whole spread to "
+            "`mortgage_rate.contracted_5y_uninsured`. Three months were "
+            "fetched and the band is their range (3.95% → 4.01%); a rate "
+            "inside it is 'a recent contracted average', the borrower's own "
+            "quote always wins, and a rate typed with no quote behind it is "
+            "the assistant's estimate and must be labelled one. An average "
+            "over terms of 5 years AND OVER and over every insured borrower, "
+            "lagging the run by about three months."
+        ),
+        band=(0.0395, 0.0401),
+        short_cite="BoC contracted 5-yr insured 2026-06",
+        retrieved_on="2026-09-04",
+        restatements=((0.0405020025,
+                       "the engine's `mortgage_rate` is an EFFECTIVE annual rate; "
+                       "reading the published 4.01% as semi-annually compounded "
+                       "(the Canadian fixed-rate convention — the series itself "
+                       "does not state one): (1 + 0.0401/2)^2 − 1 = 0.0405020025"),),
+    ),
+    # --- Routine maintenance: the published figure beside an uncited zero ----
+    # `house.annual_maintenance_rate` stays 0.0 and deliberately uncited (the
+    # engine does not invent a cost the user did not state). This is its
+    # reference sibling: the figure that anchor's rationale has always pointed
+    # at, registered so a user who takes it has it cited by name.
+    "maintenance.nahb_routine": Anchor(
+        name="maintenance.nahb_routine",
+        value=0.006,
+        as_of="2019",
+        source="NAHB (National Association of Home Builders), Economics and Housing "
+               "Policy — « Operating Costs of Owning a Home », Natalia Siniavskaia, "
+               "PhD, January 2021, from the 2019 American Housing Survey (AHS, "
+               "Census Bureau for HUD); Table 2 « Average Annual Operating Costs "
+               "as a Percent of Home Value by Decade the Home was Built », row "
+               "Maintenance. The same PDF is also served at nahb.org/-/media/"
+               "04F57989FBC74C82BEF51C382C654E54.ashx (byte-identical)",
+        url="https://www.nahb.org/-/media/NAHB/news-and-economics/docs/housing-economics-plus/special-studies/2021/special-study-operating-costs-of-owning-a-home-january-2021.pdf",
+        quoted="Table 2, Maintenance (percent of home value per year): All Homes "
+               "0.6 ; Before 1960 0.8 ; 1960s 0.6 ; 1970s 0.7 ; 1980s 0.5 ; 1990s "
+               "0.4 ; 2000s 0.4 ; 2010s 0.2 (Total, All Homes 4.9). Table 1, "
+               "Maintenance, All Homes: 954 $ per year. « The definition of "
+               "maintenance in the AHS is rather narrow. It includes only minor "
+               "routine repairs such as painting, plumbing and roofing. It does "
+               "neither include major repairs nor replacing components. »",
+        unit="percent of HOME VALUE per year — owner-occupied single-family "
+             "DETACHED homes in the UNITED STATES, 2019 AHS average; the AHS's "
+             "narrow 'maintenance' item (minor routine repairs: painting, "
+             "plumbing, roofing), EXCLUDING major repairs and replacements — a "
+             "floor on all-in maintenance, not an estimate of it",
+        rationale=(
+            "THE ENGINE APPLIES THIS TO NOTHING. `house.annual_maintenance_rate` "
+            "stays 0.0, deliberately uncited: the engine does not invent a "
+            "maintenance cost the user did not state, and warns when none is "
+            "modelled. This entry exists so that a user who takes the NAHB "
+            "figure has it cited by name — `sources: house.annual_maintenance_"
+            "rate: anchor:maintenance.nahb_routine` validates for 0.006 — and "
+            "so an assistant has a published figure to offer instead of a "
+            "remembered one. Read it as a FLOOR: the AHS item is routine "
+            "repairs only, so a rate that also budgets for roofs, furnaces and "
+            "other replacements sits above it — the '1% rule' budgeting "
+            "heuristic (uncited) and the shipped examples' 0.9%–1.5% are in "
+            "that territory — and using 0.6% as ALL-IN maintenance understates "
+            "the owner's cost, which biases the verdict toward buying. The band "
+            "is the published decade range, 0.2% (built in the 2010s) to 0.8% "
+            "(built before 1960): the age of the house moves the figure by a "
+            "factor of four. US single-family detached data applied to a "
+            "Canadian house — or to a condo, whose exterior and systems the "
+            "fee already covers — is a transfer the user should know about; "
+            "the AHS truncates extreme values before averaging (the study's "
+            "footnote 1)."
+        ),
+        band=(0.002, 0.008),
+        short_cite="NAHB 2019 AHS Table 2 (routine)",
+        retrieved_on="2026-09-04",
     ),
 }
 
