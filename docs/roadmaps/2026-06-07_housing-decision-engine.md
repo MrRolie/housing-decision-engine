@@ -112,6 +112,23 @@ remaining misses were lines the engine printed and the assistant dropped — hen
   declared `assistant` in `sources:`; the skill now says so, the engine could default it.
 - **Deferred purchase, price-level anchors:** still open from round 7.
 
+### Round 9 (2026-09-04, same three shapes on the read-back tip) — open items
+
+- **Inflation anchor citation:** `anchor:economic.inflation_rate` is refused on a nominal config because
+  that anchor's value is 0.0 (real-mode inert); the nominal twin `economic.inflation_rate.nominal_planning`
+  (0.021) is the one to declare — the skill now names it; the schema note should too.
+- **Borough lines for Montréal:** the anchor holds the city-wide lines only; Le Sud-Ouest (Griffintown)
+  and the other 18 boroughs' service/investment and former-city debt lines are in the same fetched
+  table — register them as `property_tax.montreal.<borough>` sums so a Griffintown bill is not a guess.
+- **Console sweep affordability column:** still text-invisible (JSON rows carry it).
+- **Run at the crossing:** `--break-even` reports the crossing but nothing prints the full run
+  (cash line, financing, affordability) AT that price without editing the config; an `--at KEY=VALUE`
+  override, or the break-even carrying the crossing's financing line, would remove the hand edit.
+- **Seed price under a fixed cash pile:** with the transfer tax and insurance now netted in-engine,
+  the reverse-threshold seed (the price the cash supports at 20% down) is a fixed-point the engine
+  could solve (`--break-even <option>.initial_value` could start from it); the skill's "cash × 5"
+  recipe lands on the insurance cliff.
+
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
 - **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount and mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.

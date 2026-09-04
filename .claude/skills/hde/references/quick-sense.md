@@ -7,30 +7,36 @@ who did not ask for brevity gets the full answer and the story.
 
 ## Which shape — decide before the intake
 
-Two shapes, one test: **does the user have a listing, a price in mind, or a
-date to buy?** No to all three → the "no listing, no plan" shape below (at most
-three asks, under 120 words). Yes to any → the threshold shape under "The
-cap" (six asks, 200 words, or 250–350 with a mortgage, an income and a
-threshold). Never mix them: the no-listing shape never asks condo-vs-house or
-runs a price scan the user did not ask for.
+Two triggers, two jobs. **Brevity words** ("the gist", "just roughly", "no
+essay") set the CAP. **The no-listing test** sets the ASKS: does the user have
+a listing, a price in mind, or a date to buy? Run it on the opening line, not
+after a pushback — "is it dumb to just rent forever?" answers no to all three
+before any number is known. No to all three → the "no listing, no plan" shape
+below (four short asks, about 170 words of prose). Yes to any → the threshold
+shape under its own heading (six asks, 200 words, or 250–350 with a mortgage,
+an income and a threshold). Never mix them: the no-listing shape never asks
+condo-vs-house or runs a price scan the user did not ask for.
 
 ## No listing, no plan — the shape
 
 A user with no property in view and no plan to buy within about two years
 ("is it dumb to just rent forever?") is not asking for a price threshold. Ask
-at most three things in one message (rent, income, savings — and whether a
-listing or a date exists), then answer in under 120 words: two sentences of
-verdict at their numbers ("renting at $1,600 with $35k saved is not throwing
+four short things in one message — rent, income, savings, and whether any
+listing or date exists — then answer in about 170 words of prose: two
+sentences of verdict at their numbers ("renting at $1,600 with $35k saved is not throwing
 money away: over 5 years it is the cheaper choice and over 10 it is too close
 to call") plus ONE conditional naming what would change it ("buying starts to
 compete only if you would stay 10+ years in a place under roughly $330k — a
-band the engine solved with placeholders for tax, insurance and the insurance
-premium, held fixed while the price moved, so it is generous to buying").
-State plainly that every property-specific figure is a placeholder and offer
-the full pass for a real listing. The shape binds the ANSWER, not only the
+band the engine solved with placeholder tax and insurance; the mortgage
+insurance and the transfer tax it computed from its own schedules at every
+price"), one clause for the prior when the area has one (gate 2: what growth
+it encodes and whether the verdict survives it), and one "not modelled" clause
+(renewal risk, the lease-escalation direction, unit insurance). State plainly
+that every property-specific figure is a placeholder and offer the full pass
+for a real listing. The shape binds the ANSWER, not only the
 intake: an intake that took this shape and an answer that runs a price scan
 and quotes a band three ways has failed the lane. The engine's READ-BACK block
-is pasted after those sentences, outside the 120-word cap. The dollar band is deferred, and said to be
+is pasted after those sentences, outside the cap. The dollar band is deferred, and said to be
 deferred, never dropped silently. The follow-up round never asks the user to
 choose a method or a dwelling they said they do not care about.
 

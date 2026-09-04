@@ -10,8 +10,11 @@ would I have to stay?". That is a threshold question, not a verdict question.
 Their known side is the config's number. The unknown side needs a placeholder
 so the engine can run (a `monthly_rent`, an `initial_value`): for a rent
 threshold their current rent or a market rent you label; for a price threshold
-the price their cash supports at 20% down (cash × 5, less purchase costs) —
-and say so in the answer. Everything property-specific they cannot know yet
+a first guess a step BELOW the price their cash supports at 20% down (with the
+transfer tax and purchase costs netted, the engine's `financing:` line prints
+the distance to the 20% line and, with `cash_available`, the price where the
+cash stops covering 20% — take that figure, never cash × 5) — and say so in
+the answer. Everything property-specific they cannot know yet
 (tax, fees, maintenance, purchase costs) is an estimate you label; check
 `--print-anchors` first. Declare the placeholder itself, and every estimate,
 as `assistant` in the config's `sources:` block — the seed price is not the
@@ -28,8 +31,9 @@ both at every point) or read back the engine's coherence `note` with its
 direction (sized for the seed, they favour buying above it and renting
 below). Prefer the rate forms on any price threshold. The break-even also
 prints affordability at the crossing and the band edges when an income is
-given — quote it; a price you call cheaper is not one the income clears until
-that line says so.
+given — quote it, and at every bracket end too: the `across` rows carry
+affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
+income is a breach, not a ceiling.
 
 ## One command, several brackets
 

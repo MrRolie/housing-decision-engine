@@ -11,8 +11,8 @@ Elicit → **Missing information** gate (ONE message) → config in
 `scenarios/<slug>.yaml` → run (+ `--sweep` / `--break-even`) →
 **assumptions read-back** → warnings → verdict with its decisiveness → story →
 the answer, via the checklist below. Everything runs as `uv run hde …` from
-the repo root (the directory with `pyproject.toml`); `scenarios/` is
-git-ignored, so the user's numbers are never committed. Anything expressible
+the repo root; `scenarios/` is git-ignored (the user's numbers are never
+committed). Anything expressible
 as a command is the engine's job, not a reasoning task. The repo's `CLAUDE.md` carries the honesty contract: every
 number names its source class (the user's, an anchor, or a labelled estimate
 with the direction it biases the verdict).
@@ -25,7 +25,7 @@ Reference files live beside this file under `.claude/skills/hde/references/`;
 | When | Read |
 |---|---|
 | The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at my rent, what price is worth buying?", "how long would I have to stay?" | `references/threshold-lane.md`, before authoring the config |
-| The user asks, in their own words, for a quick sense ("not a spreadsheet", "just roughly") — never on anticipation | `references/quick-sense.md`, before the intake message |
+| The user asks for brevity in their own words ("just roughly", "the gist") — OR the question itself names no listing, no price and no date ("is it dumb to rent forever?") | `references/quick-sense.md`, before the intake message: brevity words set the cap, the no-listing test sets the asks |
 | A user phrase you cannot place in the schema (a posted rate, "houses around $650k") | `references/translation.md` |
 | Writing the answer | the checklist below, then `references/answer-template.md` |
 | Why a gate exists, or the worked phrasing that satisfies it | `references/gates.md` |
@@ -34,9 +34,8 @@ Reference files live beside this file under `.claude/skills/hde/references/`;
 
 ## Elicit first (before authoring anything)
 
-The engine answers the question the config asks; get to know the person
-first. Five things decide the shape of the run — ask them in the user's
-language, folded into the ONE intake message, never as a quiz:
+Get to know the person first. Five things decide the shape of the run —
+asked in the user's language, folded into the ONE intake message:
 
 1. **How long do you expect to stay, and how sure are you?** → `years`;
    "not sure" is a range → bracket it (gate 5).
@@ -44,7 +43,8 @@ language, folded into the ONE intake message, never as a quiz:
    does that money sit today if you do not buy?** → all cash, or the cash pile
    + quoted rate + amortization: ask for the AMOUNT, never a percentage — it
    goes in as `cash_available` and the engine nets the purchase costs and
-   prints the loan-to-value; under 20% down means a mortgage-insurance premium:
+   prints the loan-to-value; first home? → `first_time_buyer: true` (the
+   transfer-tax rebate where one is anchored); under 20% down means a mortgage-insurance premium:
    set `mortgage_insurance: auto` and ask which province, never compute it
    yourself (`financed_purchase_costs` only carries one the user was quoted);
    the renter's alternative sets
@@ -134,8 +134,10 @@ required key with the exact message — show it.
    prior as a second config (it is the growth view), leave the base growth at
    0, and quote the drift the assumptions line prints for the horizon's bands
    — in ADDITION to the growth sweep, never instead of it.
-3. **A mortgage means `mode: nominal`** (`inflation_rate: 0.021`,
-   `mortgage_rate` = the quote's effective annual, `discount_rate` omitted);
+3. **A mortgage means `mode: nominal`** (`inflation_rate: 0.021`, declared
+   `anchor:economic.inflation_rate.nominal_planning`; `mortgage_rate` = the
+   quote's effective annual; `discount_rate` NEVER typed — omit it and the
+   engine composes 5.2%; a typed 3% discounts nominal flows at a real rate);
    growth, escalation and return inputs stay REAL and the engine composes
    inflation. `mode: real` for all-cash and rent-only. Quoted growth and
    return rates are sticker figures — convert to real (`references/translation.md`).
@@ -172,23 +174,29 @@ cap of any lane ranks what stays and never drops an item:
 - [ ] the engine's **READ-BACK block** (`uv run hde <config> --read-back`, or
       the last section of any run) pasted verbatim at the END of the answer,
       outside every cap — it carries every `[warning]` line, the
-      `assistant-typed:` / `unattributed:` lines (declare each config key in a
-      `sources:` block as `user`, `assistant` or `anchor:<name>`, so a value
-      you typed is on the record), the `decisiveness:` rule with its threshold,
+      `assistant-typed:` / `unattributed:` lines (every config key declared in
+      `sources:` as `user` / `assistant` / `anchor:<name>`), the
+      `decisiveness:` rule with its threshold,
       each `financing:` and `other costs:` line, `Affordability`, and every
-      break-even `sentence` with its coherence `note`; the prose above may
-      summarize it and never contradicts it
+      break-even `sentence` with its coherence `note` (in `--json` it is
+      `assumptions.read_back`); the block pasted is the config the verdict
+      leads with — the other config's `decisiveness:` line and any warning
+      only it raised are quoted in the prose; the prose never contradicts it
 - [ ] `defaults applied:` — the two largest engine-set numbers,
       `selling_cost_rate` (5%, WOWA) and the discount rate, named with their
       source in the prose
 - [ ] `decisiveness:` in the prose — the rule with its threshold (the 5% tie
       band or the 65% floor), its margin or probability, `mc_mean_best` when
       it disagrees, and when Monte Carlo decides what the deterministic line
-      says without the typed inputs (the block's warning has it)
+      says without the typed inputs (the block's warning has it); every figure
+      names its config (flat-price or prior), never a flat-price line under a
+      prior headline; a prior that leaves
+      the verdict undecided means the growth break-even ran and its note
+      (where the drift sits against the band) is quoted
 - [ ] the flip point or threshold in the prose — the block's `sentence`
       restated in the user's units, at both ends of any estimate it rests on;
       every bracket that ran gets its clause (a run you drop is a claim you
-      hide; a combination you did not run is written "not run"); an insured
+      hide; unrun = "not run"); an insured
       branch quotes both thresholds; on a price scan the coherence `note`'s
       direction
 - [ ] `Year-1 cash` — both sides in $/month, principal, unrecoverable, beside
@@ -222,14 +230,11 @@ lane's cap overrides the template's; the READ-BACK block is outside both.
   signal) only with `market_scenario:`; act 6 ("The market line", break-even
   rent) only with `rent` plus an owned option.
 - `--json`: `engine_version`, `warnings`, `assumptions`, `verdict`,
-  `deterministic`, `monte_carlo` present (`sweeps` / `break_evens` when
-  asked); every `assumptions.defaults_applied` entry carries an `anchor` with
-  a `source`.
+  `deterministic`, `monte_carlo` present; every `assumptions.defaults_applied`
+  entry carries an `anchor` with a `source`.
 
 ## Escalation
 
-Config errors: show the exact message; values are the user's decision. A
-prior or geography refusal lists the valid geographies — choose with the
-user. Trade execution, money movement, market timing: out of scope; the engine
-computes present-value comparisons only. Deeper guidance: `examples/README.md`
+Config errors: show the exact message; values are the user's decision. Trade
+execution, money movement, market timing: out of scope. Deeper guidance: `examples/README.md`
 (every config template); `docs/reference/ARCHITECTURE.md` (the figure glossary).
