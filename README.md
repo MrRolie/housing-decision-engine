@@ -70,7 +70,7 @@ demoflow/            # Self-contained uv project — the upstream demand-model p
 ## Going deeper
 
 - **What to ask, and how** — [PROMPTS.md](PROMPTS.md): example prompts by question shape, what to front-load, what comes back, what is not modelled
-- **Example walkthrough** — [examples/README.md](examples/README.md): the smallest config that runs, then five scenarios in reading order
+- **Example walkthrough** — [examples/README.md](examples/README.md): the smallest config that runs, then six scenarios in reading order
 - **Every figure explained** — [docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md) § Figure glossary; every default's source — `uv run hde --print-anchors`
 - **Library use** — all engines take a single `ComparisonSpec`; see `src/hde/__init__.py` exports
 - **Roadmap** — `docs/roadmaps/2026-06-07_housing-decision-engine.md`

@@ -155,3 +155,22 @@ def test_prompts_doc_is_linked_and_every_command_it_shows_runs(monkeypatch, caps
         assert (root / rel).exists(), rel
     for rel in re.findall(r"\]\(([\w./-]+\.md)\)", text):
         assert (root / rel).exists(), rel
+
+
+def test_every_example_config_runs_and_is_walked_through():
+    """Every shipped example is a template someone will copy: it must load and
+    run, be named in the walkthrough (examples/README.md — a file the README
+    does not name is one nobody is led to), and quote any province code it
+    sets (an unquoted ON is a YAML boolean, which the loader refuses)."""
+    import yaml
+
+    readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+    configs = sorted(EXAMPLES.glob("*.yaml"))
+    assert "first_time_buyer_montreal.yaml" in {c.name for c in configs}
+    for cfg in configs:
+        assert cfg.name in readme, cfg.name
+        data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+        for block in (data, data.get("condo") or {}, data.get("house") or {}):
+            if "province" in block:
+                assert isinstance(block["province"], str), (cfg.name, block["province"])
+        assert compute_deterministic(load_config(cfg)) is not None, cfg.name

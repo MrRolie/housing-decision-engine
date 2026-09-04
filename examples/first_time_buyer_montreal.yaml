@@ -1,0 +1,131 @@
+# First-time buyer in Montréal — rent vs a financed condo, under 20% down
+# The financed first home: the cash pile goes in as cash_available and the
+# engine nets the closing costs out of it, prices the Montréal welcome tax
+# from the published brackets, picks the CMHC premium tier on the loan that
+# remains, and checks the payment against income. Every value this file sets
+# is declared in `sources:` at the bottom, so the read-back can tell the
+# household's own numbers from the file's choices.
+#
+# --- Parameter provenance ---
+# Sources (full table in examples/README.md "Parameter sources"):
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning,
+#                    2026 Projection Assumption Guidelines (fpcanada.ca)
+#   Ville de Montréal DMI 2026, CMHC 2026 premium schedule, Revenu Québec IPT
+#                  = applied by the ENGINE from its registry (uv run hde --print-anchors);
+#                    nothing below is hand-computed from them
+#
+#   years 10 ...................... the household's own horizon
+#   province "QC" ................. QUOTED on purpose: an unquoted ON is a YAML boolean and
+#                                   the engine refuses it rather than guess a province
+#   economic.mode nominal ......... a mortgage is a NOMINAL contract (see mortgage_house_vs_rent.yaml);
+#                                   growth, escalation and return inputs below stay REAL
+#   inflation_rate 0.021 .......... FP Canada 2026 PAG long-term inflation (the registry value)
+#   discount_rate (omitted) ....... engine default 3% real composed with inflation ⇒ 5.2%, echoed
+#   initial_value 450000 .......... the listing
+#   monthly_fee 380 ............... the listing's condo fee
+#   cash_available 60000 .......... the household's WHOLE pile for day one: the engine nets the
+#                                   purchase costs and the premium tax out of it and the remainder
+#                                   is the down payment (11.6% of price here ⇒ an insured mortgage)
+#   mortgage_rate 0.0455 .......... the lender's quote, 4.50% five-year fixed compounded
+#                                   semi-annually ⇒ (1 + 0.045/2)^2 − 1 = 4.55% EFFECTIVE annual
+#   mortgage_term_years 25 ........ the amortization quoted (the 5-year term is the rate's life,
+#                                   not the loan's; renewal risk is not modelled — biases toward buying)
+#   mortgage_insurance auto ....... under 20% down: the CMHC tier on the loan, the premium ADDED to
+#                                   the loan, the 9% Québec tax on the premium paid in cash
+#   land_transfer_tax auto ........ the Montréal droits de mutation from the published brackets,
+#                                   re-derived at every --sweep / --break-even price
+#   municipality montreal ......... Montréal's own table REPLACES the provincial one
+#   first_time_buyer true ......... recorded; no Québec or Montréal rebate is anchored, so the run
+#                                   says "applied nothing" rather than invent a refund
+#   purchase_costs 2000 ........... notary + inspection, the household's quotes; the duty is ADDED
+#   other_recurring_costs ......... the listing's tax bill as two lines, municipal and school (a
+#                                   Québec bill is both; property_tax.montreal and school_tax.qc are
+#                                   the registry's checks, on ASSESSED value), and the insurer's quote
+#   value_growth_rate (omitted) ... engine neutral 0% real — the run warns; the growth sweep and the
+#                                   MTL_ISLAND_RA06 prior are the next step (examples/README.md §6)
+#   monthly_rent 1850 ............. the household's current rent
+#   rent_escalation_rate 0.01 ..... FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real (the registry
+#                                   value); a Québec continuing lease runs nearer 0% real — sweep it
+#   invested_down_payment 60000 ... like-for-like: the renter keeps the same $60,000 invested
+#   investment_return_rate 0.03 ... FP Canada 2026 PAG 60/40 ≈ 3.0% real (the registry value)
+#   annual_income 95000 ........... the household's income
+#   income_growth_rate 0.01 ....... FP Canada 2026 PAG salary growth 3.1% nominal ≈ 1.0% real
+#   affordability_threshold (omitted) engine default 32% (legacy GDS guideline), echoed
+#   num_sims / random_seed ........ structural; no uncertainty input is set, so the Monte Carlo is a
+#                                   single path and the verdict rests on the 5% tie band
+#
+# Convention: a value marked "registry value" equals an anchor and is declared `anchor:<name>`;
+# the household's figures are `user`; a modelling choice the file makes is `assistant`.
+
+years: 10  # the household's horizon
+province: "QC"  # quoted — an unquoted ON is a YAML boolean
+# discount_rate omitted on purpose: the engine composes its 3% real default with inflation (5.2%)
+
+economic:
+  mode: nominal  # a mortgage is a nominal contract
+  inflation_rate: 0.021  # FP Canada 2026 PAG long-term inflation
+
+condo:
+  initial_value: 450000  # the listing
+  monthly_fee: 380  # the listing's condo fee
+  cash_available: 60000  # the whole pile for day one — the engine nets purchase costs and the premium tax out of it
+  mortgage_rate: 0.0455  # 4.50% quoted, semi-annual compounding ⇒ 4.55% effective annual
+  mortgage_term_years: 25  # amortization, as quoted
+  mortgage_insurance: auto  # under 20% down: CMHC tier picked by the engine, premium on the loan, QC tax in cash
+  land_transfer_tax: auto  # Montréal droits de mutation from the published brackets
+  municipality: montreal  # Montréal's table replaces the provincial one
+  first_time_buyer: true  # recorded; no rebate anchored for this schedule — the run says so
+  purchase_costs: 2000  # notary + inspection, the household's quotes; the duty is added by the engine
+  other_recurring_costs:
+    - name: municipal_tax
+      annual_amount: 2610  # the listing's municipal tax bill (check: property_tax.montreal on assessed value)
+      escalation_rate: 0.0  # real; tracks assessed value
+    - name: school_tax
+      annual_amount: 330  # the listing's school tax bill — a separate Québec levy (school_tax.qc)
+      escalation_rate: 0.0
+    - name: unit_insurance
+      annual_amount: 420  # the insurer's quote (check: home_insurance.qc is a household-average floor)
+      escalation_rate: 0.0
+
+rent:
+  monthly_rent: 1850  # the household's current rent
+  rent_escalation_rate: 0.01  # real; FP Canada 2026 shelter — a Québec continuing lease runs nearer 0%: sweep it
+  invested_down_payment: 60000  # like-for-like with cash_available
+  investment_return_rate: 0.03  # real; FP Canada 2026 PAG 60/40
+
+income:
+  annual_income: 95000  # the household's income
+  income_growth_rate: 0.01  # real; FP Canada 2026 PAG salary growth
+
+simulation:
+  num_sims: 5000
+  random_seed: 42
+
+# Who stated each value. `user` = the household's own figure, `assistant` = a
+# modelling choice this file makes on their behalf, `anchor:<name>` = exactly
+# the registry's value (uv run hde --print-anchors). The read-back splits its
+# echo into user-stated / assistant-typed / anchor-sourced lines from this block.
+sources:
+  years: user
+  province: user
+  economic.mode: assistant
+  economic.inflation_rate: anchor:economic.inflation_rate.nominal_planning
+  condo.initial_value: user
+  condo.monthly_fee: user
+  condo.cash_available: user
+  condo.mortgage_rate: user
+  condo.mortgage_term_years: user
+  condo.mortgage_insurance: assistant
+  condo.land_transfer_tax: assistant
+  condo.municipality: user
+  condo.first_time_buyer: user
+  condo.purchase_costs: user
+  condo.other_recurring_costs: user
+  rent.monthly_rent: user
+  rent.rent_escalation_rate: anchor:rent.rent_escalation_rate
+  rent.invested_down_payment: user
+  rent.investment_return_rate: anchor:rent.investment_return_rate
+  income.annual_income: user
+  income.income_growth_rate: anchor:income.income_growth_rate
+  simulation.num_sims: assistant
+  simulation.random_seed: assistant

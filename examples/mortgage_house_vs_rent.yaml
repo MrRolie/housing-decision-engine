@@ -43,7 +43,7 @@ house:
   down_payment: 110000  # 20% — scenario-specific
   mortgage_rate: 0.044  # NOMINAL effective annual; FP Canada 2026 borrowing rate — used as entered in nominal mode
   mortgage_term_years: 25  # scenario-specific
-  purchase_costs: 8200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
+  purchase_costs: 8200  # illustrative — a hand-typed welcome tax + notary; prefer land_transfer_tax: auto with a quoted province so the engine prices the duty (first_time_buyer_montreal.yaml)
   other_recurring_costs:
     - name: property_tax
       annual_amount: 4700  # illustrative — municipal + school tax ≈ 0.85% of value/yr; scenario-specific (use the listing's tax bill)
