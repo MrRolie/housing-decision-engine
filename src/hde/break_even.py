@@ -22,6 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict
 from .deterministic import compute_deterministic
+from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
+                              calendar_year_for_sim_year)
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, join_notes,
                     price_scan_note, with_value)
 
@@ -286,7 +288,7 @@ def solve_crossings(
 
 def solve_break_even(
     raw: Dict[str, Any], key: str, lo: Optional[float] = None, hi: Optional[float] = None,
-    *, iterations: int = 60,
+    *, iterations: int = 60, prior: Optional[LoadedScenarioPrior] = None,
 ) -> Dict[str, Any]:
     """
     The threshold on one YAML input, for the two priced options (A, B in the
@@ -348,7 +350,12 @@ def solve_break_even(
         prior_note = ("deterministic line: the market_scenario prior does not move this threshold "
                       "(its drift enters the Monte Carlo only) — sweep value_growth_rate for the "
                       "threshold's growth sensitivity; read the sweep's decisive flags for the prior's")
-    note = join_notes(prior_note, price_scan_note(raw, key))
+    note = join_notes(
+        prior_note,
+        prior_band_note(key, horizon_drift(raw, key, prior), core["break_evens"]),
+        cliff_note(raw, key, core["break_evens"]),
+        price_scan_note(raw, key),
+    )
     if note:
         out["note"] = note
     if refused:
@@ -357,6 +364,213 @@ def solve_break_even(
     if "cheaper_throughout" in core:
         out["cheaper_throughout"] = core["cheaper_throughout"]
     return out
+
+
+# ---------------------------------------------------------------------------
+# What the threshold's note has to say beside the crossing (2026-09-04 reviews)
+#
+# Two failures, both found in real answers: a demographic prior sitting on the
+# desk while the assistant compared its drift to the tie band by hand, and a
+# "crossing" that was the mortgage-insurance cliff — the premium switching on,
+# not two costs meeting. Both are the engine's to state.
+# ---------------------------------------------------------------------------
+
+
+def horizon_drift(
+    raw: Dict[str, Any], key: str, prior: Optional[LoadedScenarioPrior],
+) -> Dict[int, float]:
+    """The prior's reference REAL drift per horizon band the run touches, for
+    the owned option a `<owned>.value_growth_rate` threshold is solved on.
+
+    Empty for every other key, without a prior, or when the prior carries no
+    reference scenario for this dwelling type — an absent band is reported by
+    saying nothing, never by guessing a rate.
+    """
+    option, _, field = key.rpartition(".")
+    if prior is None or field != "value_growth_rate" or option not in ("condo", "house"):
+        return {}
+    years = _raw_value(raw, "years")
+    if not isinstance(years, (int, float)) or years < 1:
+        return {}
+    encoded = prior.encoded_drift()
+    entry = encoded.get(option) or encoded.get("all")
+    if entry is None:
+        return {}
+    reference: Dict[int, float] = entry["reference_by_band"]  # type: ignore[assignment]
+    touched = sorted({band_horizon_for_calendar_year(calendar_year_for_sim_year(y))
+                      for y in range(1, int(years) + 1)})
+    return {band: reference[band] for band in touched if band in reference}
+
+
+def _group_by_relation(
+    drifts: Dict[int, float], lo: Optional[float], hi: Optional[float],
+) -> List[Tuple[str, List[int]]]:
+    """Horizon bands grouped, in band order, by where their drift sits against
+    the tie band: `below`, `inside`, `above`, or `unbounded` when an edge of the
+    band lies outside the searched bracket and there is nothing to compare to."""
+    groups: List[Tuple[str, List[int]]] = []
+    for band in sorted(drifts):
+        drift = drifts[band]
+        if lo is None or hi is None:
+            relation = "unbounded"
+        elif drift < lo:
+            relation = "below"
+        elif drift > hi:
+            relation = "above"
+        else:
+            relation = "inside"
+        if groups and groups[-1][0] == relation:
+            groups[-1][1].append(band)
+        else:
+            groups.append((relation, [band]))
+    return groups
+
+
+def prior_band_note(
+    key: str, drifts: Dict[int, float], entries: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Where the prior's own drift sits against the tie band this threshold
+    reports — INSIDE (the prior does not settle the question), BELOW or ABOVE
+    (it points at one side).
+
+    Three reviewed answers assembled this comparison by hand from two separate
+    outputs. It is a comparison of the drift READ AS A GROWTH LEVEL: the Monte
+    Carlo adds the drift to `value_growth_rate` rather than replacing it, and
+    the note says so rather than letting the reader assume either.
+    """
+    if not drifts or not entries:
+        return None
+    clauses: List[str] = []
+    for entry in entries:
+        lo, hi = entry["tie_band"]
+        span = (None if lo is None or hi is None
+                else f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}")
+        # Bands landing on the same side of the tie band are one sentence, not
+        # five: a 25-year run touches five horizon bands, and the drift usually
+        # sits the same side of the threshold in every one of them.
+        for relation, bands in _group_by_relation(drifts, lo, hi):
+            values = [drifts[band] for band in bands]
+            if len(bands) == 1:
+                where = f"the prior's drift {values[0]:+.2%}/yr ({bands[0]} band)"
+            else:
+                listed = ", ".join(str(band) for band in bands)
+                where = (f"the prior's drift {min(values):+.2%}…{max(values):+.2%}/yr "
+                         f"({listed} bands)")
+            if relation == "unbounded":
+                edge = "low" if lo is None else "high"
+                clauses.append(f"{where}: the tie band's {edge} edge lies outside the searched "
+                               f"bracket, so the comparison is not available")
+            elif relation == "below":
+                clauses.append(f"{where} sits BELOW the tie band {span}: on the prior's own drift "
+                               f"{entry['cheaper_below']} is the cheaper side")
+            elif relation == "above":
+                clauses.append(f"{where} sits ABOVE the tie band {span}: on the prior's own drift "
+                               f"{entry['cheaper_above']} is the cheaper side")
+            else:
+                clauses.append(f"{where} sits INSIDE the tie band {span}: the prior does not "
+                               f"settle it")
+    if not clauses:
+        return None
+    return ("the prior against this threshold — " + "; ".join(clauses)
+            + " (the drift is added to value_growth_rate in the Monte Carlo, not substituted "
+              "for it; this reads it as a growth level to place it on the same axis)")
+
+
+def _financing_regime(
+    raw: Dict[str, Any], key: str, value: Any,
+) -> Tuple[bool, Any]:
+    """(accepted, regime) at one value: per owned option, what the engine
+    derived for its mortgage insurance — `{"tier": (required, band label, rate),
+    "ltv": …}`, or None where the option carries no insurance record at all.
+    `accepted` is False when the loader refuses the value; the regime is then
+    the refusal reason.
+
+    `tier` is what a comparison across the crossing may read, and it is exactly
+    what changes the cash flows. The loan-to-value rides ALONGSIDE it, never
+    inside it: it moves continuously with the price, so a tuple carrying it
+    would differ at every pair of points and report a step at every crossing.
+
+    Only the DERIVED record counts: without `mortgage_insurance`, crossing the
+    20% line changes no cash flow, so it is not a cliff to warn about.
+    """
+    try:
+        spec = load_config_dict(with_value(raw, key, value))
+    except (ConfigValidationError, ValueError) as e:
+        return False, str(e).strip().splitlines()[-1].strip()
+    regime = {}
+    for name in ("condo", "house"):
+        option = getattr(spec, name, None)
+        if option is None:
+            continue
+        record = option.mortgage_insurance
+        regime[name] = (None if record is None else
+                        {"tier": (record.required, record.band_label, record.rate),
+                         "ltv": record.ltv})
+    return True, regime
+
+
+def _regime_state(side: Optional[Dict[str, Any]]) -> str:
+    """One side of a crossing, in words: insured (with its tier and the loan it
+    is priced on), uninsured, or carrying no derived record at all."""
+    if side is None:
+        return "without a derived insurance record"
+    required, _label, rate = side["tier"]
+    if not required:
+        return f"uninsured ({side['ltv']:.2%} loan-to-value)"
+    return (f"insured ({side['ltv']:.2%} loan-to-value, {rate:.2%} premium on the loan)")
+
+
+def cliff_note(
+    raw: Dict[str, Any], key: str, entries: List[Dict[str, Any]],
+) -> Optional[str]:
+    """A crossing that is a STEP, not a meeting: the two sides of it price a
+    different mortgage (the 20%-down line crossed, an insurance tier changed) or
+    one side is refused outright.
+
+    2026-09-04 review: a $651,163 "crossing" was exactly cash ÷ 0.215 — the
+    house won by $3,076 a hundred dollars below it and lost by $10,902 a hundred
+    above, because the premium switched on. Read as a smooth crossing, the tie
+    band around it says "these are near-ties"; it is the width of a jump.
+    """
+    clauses: List[str] = []
+    for entry in entries:
+        value = entry["value"]
+        if "last_value_below" in entry:  # integer input: the two whole values
+            below_v, above_v = entry["last_value_below"], value
+        else:
+            step = max(abs(float(value)), 1.0) * 1e-6
+            below_v, above_v = float(value) - step, float(value) + step
+        ok_below, below = _financing_regime(raw, key, below_v)
+        ok_above, above = _financing_regime(raw, key, above_v)
+        at = _fmt_value(key, value)
+        if not ok_below or not ok_above:
+            side, reason = ("below", below) if not ok_below else ("above", above)
+            clauses.append(f"the crossing at {at} sits on the edge of what the config accepts: "
+                           f"values just {side} it are refused ({reason}), so the band around it "
+                           f"is bounded by the refusal, not by near-ties")
+            continue
+        for name in sorted(set(below) & set(above)):
+            was, now = below[name], above[name]
+            was_tier = None if was is None else was["tier"]
+            now_tier = None if now is None else now["tier"]
+            if was_tier == now_tier:
+                continue  # the same mortgage on both sides: the costs really do meet
+            insured_below = bool(was_tier and was_tier[0])
+            insured_above = bool(now_tier and now_tier[0])
+            if insured_below != insured_above:
+                clauses.append(
+                    f"the crossing at {at} is the mortgage-insurance cliff — {name} is "
+                    f"{_regime_state(was)} just below it and {_regime_state(now)} just above, "
+                    f"so the 20%-down line falls there and the premium switches on: not a "
+                    f"smooth cost crossing, and the tie band around it is the cliff's width, "
+                    f"not a range of near-ties")
+            else:
+                clauses.append(
+                    f"the crossing at {at} is a mortgage-insurance tier change for {name} "
+                    f"({was_tier[2]:.2%} → {now_tier[2]:.2%} of the loan), not a smooth cost "
+                    f"crossing: the tie band around it is the step's width, not a range of "
+                    f"near-ties")
+    return "; ".join(clauses) if clauses else None
 
 
 def _affordability_at(

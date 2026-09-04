@@ -446,9 +446,14 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
 
     # Asymmetric tails (review F4 + dogfood round 2): an owned option with a
     # price-shock channel against a renter whose capital cannot lose.
+    # `named_one_sided` records that one of the two SPECIFIC one-sided warnings
+    # already fired with its own actionable fix, so the general symmetric check
+    # below does not say the same thing a second time.
+    named_one_sided = False
     if (spec.rent is not None and spec.rent.invested_down_payment > 0
             and spec.simulation.investment_return_vol == 0
             and any(o is not None and o.price_shock is not None for o in (spec.condo, spec.house))):
+        named_one_sided = True
         warns.append(
             "asymmetric tails: an owned option carries a price_shock channel while "
             "simulation.investment_return_vol=0 leaves the renter's capital unable to lose — set "
@@ -462,6 +467,7 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             and spec.simulation.investment_return_vol == 0
             and spec.market_scenario is not None
             and any(o is not None for o in (spec.condo, spec.house))):
+        named_one_sided = True
         warns.append(
             "one-sided uncertainty: the market_scenario prior makes the owned option's value "
             "stochastic while simulation.investment_return_vol=0 leaves the renter's PV a point "
@@ -470,7 +476,90 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             "portfolio) for a like-for-like band, or read the deterministic line"
         )
 
+    # The same defect from either direction (2026-09-04 review). The two checks
+    # above both require investment_return_vol=0, so they only ever caught the
+    # point-mass RENTER; a single-path owned side against a renter carrying
+    # return volatility measured the renter's dispersion alone and said nothing.
+    # Whichever side is alone in carrying dispersion, P(cheapest) is that side's
+    # spread against a fixed number, and it is OVERconfident for that reason.
+    owned_spread, renter_spread, shared_spread = dispersion_sources(spec)
+    if (not named_one_sided and not shared_spread
+            and spec.rent is not None
+            and any(o is not None for o in (spec.condo, spec.house))
+            and bool(owned_spread) != bool(renter_spread)):
+        if renter_spread:
+            carrier, still = "the renter's PV", "the owned option's PV"
+            listed, fix = renter_spread, ("give the owned side its own uncertainty "
+                                          "(price_shock, simulation.house_maintenance_vol / "
+                                          "condo_fee_vol, or a market_scenario prior)")
+        else:
+            carrier, still = "the owned option's PV", "the renter's PV"
+            listed, fix = owned_spread, ("give the renter's side its own uncertainty "
+                                         "(simulation.investment_return_vol, 0.10 ≈ 60/40 "
+                                         "portfolio, or simulation.rent_escalation_vol)")
+        warns.append(
+            f"one-sided uncertainty: {carrier} is the only stochastic side "
+            f"({', '.join(listed)}) while {still} is a single path — P(cheapest) measures that "
+            f"one side's dispersion against a fixed number and is OVERconfident: the "
+            f"too-close-to-call zone is wider than shown; {fix} — or read the deterministic line"
+        )
+
     return warns
+
+
+def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List[str]]:
+    """Which inputs give each side of the comparison a DISTRIBUTION, named:
+    (owned, renter, shared).
+
+    `single_path_run` answers the whole-run version of this question ("is every
+    uncertainty input off?"); this one answers it per side, which is what a
+    probability that compares the two sides needs. An input is listed against
+    the side whose Monte Carlo path actually reads it (monte_carlo.py), so
+    `other_cost_vol` counts only for an option that HAS other recurring costs,
+    and inflation volatility — which every path composes — is shared.
+    """
+    sim = spec.simulation
+    owned: List[str] = []
+    renter: List[str] = []
+    shared: List[str] = []
+    if spec.economic.inflation_vol:
+        shared.append("economic.inflation_vol")
+    if spec.market_scenario is not None:
+        owned.append("market_scenario (demographic drift per path)")
+    for name, option, own_vol in (("condo", spec.condo, "condo_fee_vol"),
+                                  ("house", spec.house, "house_maintenance_vol")):
+        if option is None:
+            continue
+        if getattr(sim, own_vol):
+            owned.append(f"simulation.{own_vol}")
+        shock = option.price_shock
+        if shock is not None and shock.annual_hazard > 0:
+            owned.append(f"{name}.price_shock")
+        if option.other_recurring_costs and sim.other_cost_vol:
+            owned.append("simulation.other_cost_vol")
+        if _stochastic_events(option):
+            owned.append(f"{name}.events")
+    if spec.rent is not None:
+        if sim.rent_escalation_vol:
+            renter.append("simulation.rent_escalation_vol")
+        if sim.investment_return_vol and spec.rent.invested_down_payment > 0:
+            renter.append("simulation.investment_return_vol")
+        if spec.rent.other_recurring_costs and sim.other_cost_vol:
+            renter.append("simulation.other_cost_vol")
+        if _stochastic_events(spec.rent):
+            renter.append("rent.events")
+    return owned, renter, shared
+
+
+def _stochastic_events(option: Any) -> bool:
+    """True when any of an option's events carries timing or cost dispersion."""
+    for event in option.events:
+        if event.timing_std_years != 0 or event.cost_vol != 0:
+            return True
+        if event.timing_model == "hazard" and (event.hazard_base != 0
+                                               or event.hazard_growth != 0):
+            return True
+    return False
 
 
 def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:

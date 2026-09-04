@@ -213,7 +213,10 @@ class TestCoherenceNote:
         ])
         assert cli_main() == 0
         out = capsys.readouterr().out
-        assert out.count(NOTE) == 2  # once on the sweep block, once on the break-even
+        # once on the sweep block, once on the break-even, and once more in the
+        # read-back block — which repeats by design: it is the paste-ready copy
+        # of every line an answer has to carry (2026-09-04).
+        assert out.count(NOTE) == 3
 
     def test_the_prior_note_and_the_coherence_note_coexist(self):
         raw = {**PRICE_RAW, "market_scenario": {

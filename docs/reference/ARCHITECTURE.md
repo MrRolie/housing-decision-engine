@@ -25,7 +25,8 @@ src/hde/
 ├── sources.py          # Source classes: who stated each value (`sources:` block, the
 │                       #   echo lines, the unstated-uncertainty warning's input set)
 ├── input_schema.py     # The input contract as data (--print-schema)
-├── serialization.py    # THE typed core for agent output (--json)
+├── serialization.py    # THE typed core for agent output (--json); the read-back block
+│                       #   every answer carries (assumptions.read_back / --read-back)
 ├── reporting.py        # Text report (+ legacy matplotlib figures)
 ├── story_plots.py      # The six-act decision story (figures + sentences)
 ├── story_page.py       # STORY.md + report.txt package (--story)
@@ -330,6 +331,18 @@ as `error`, not skipped silently. Monte Carlo runs per point unless
 `--no-monte-carlo` or the point is a single-path run. A sweep of an owned
 option's `initial_value` also carries the price-scan coherence note below.
 
+Each row also carries the Monte Carlo majority — `mc_best` (the option called
+cheapest most often) and `mc_prob_best` (how often) — beside `best`,
+`decisive` and `prob_best`. `decisive` keys to the DETERMINISTIC winner by
+design, and `prob_best` is that winner's probability, so a row can read
+`best: rent`, `decisive: false`, `prob_best: 0.34` while the majority and the
+mean both favour the house; the `reason` clause said so in prose, these two
+fields make it machine-visible (2026-09-04 review). `mc_majority_flips` tracks
+the majority the way `flips` tracks the deterministic best, and the block
+prints a `majority flip:` line only where that turn differs from the
+deterministic `flip:` — a majority that turns where the deterministic line
+turns is the same sentence twice.
+
 ### Break-evens — `--break-even KEY` or `KEY=lo:hi`
 
 The threshold on one input (`src/hde/break_even.py`): with exactly two priced
@@ -360,7 +373,26 @@ shape the user should read. With an `income` block each entry also carries
 cost/income ratio and the years above the threshold, printed too): a threshold
 that says "buy up to $X" has to say what $X costs against income, and the band's
 high edge is where it bites hardest. A `market_scenario` prior never moves it
-(`note`). Rides `--json` as `break_evens`; the story's act 6 calls the same
+(`note`). Two more clauses join that `note` when they apply (2026-09-04):
+
+- **The prior against the band.** On `<owned>.value_growth_rate` with a
+  `market_scenario` prior loaded, the note places the prior's own reference
+  REAL drift, per horizon band the run touches, against the tie band — INSIDE
+  ("the prior does not settle it"), BELOW or ABOVE (it points at one side) —
+  and says that the drift is ADDED to `value_growth_rate` in the Monte Carlo
+  rather than substituted for it, since the comparison reads it as a growth
+  level to put both on one axis. Three reviewed answers assembled it by hand.
+- **The mortgage-insurance cliff.** A crossing whose two sides price a
+  different mortgage is a STEP, not a meeting: the note says so, naming the
+  20%-down line crossed (uninsured → insured, with the loan-to-value and the
+  premium rate) or the tier that changed, and that the tie band around it is
+  the cliff's width rather than a range of near-ties. A reviewed answer read a
+  $651,163 "crossing" — exactly cash ÷ 0.215 — as a cost crossing. A crossing
+  bordered by values the loader refuses is reported the same way. Only a
+  DERIVED insurance record counts: without `mortgage_insurance`, crossing 20%
+  changes no cash flow and there is no cliff to name.
+
+Rides `--json` as `break_evens`; the story's act 6 calls the same
 solver for the rent threshold, so the crossing it draws, the band it shades and
 the sentence it prints are the ones described here.
 
@@ -432,3 +464,38 @@ deterministic line alone says and whether that margin clears the tie band.
 `sources.uncertainty_inputs` mirrors `config.single_path_run` — one definition
 of "widens the distribution", pinned by a test — so the warning cannot miss an
 input the engine treats as uncertainty.
+
+### The read-back block — `assumptions.read_back` and `--read-back`
+
+Eight reviewed answers in two days each dropped a line the engine had already
+printed — a `[warning]`, the `assistant-typed:` line, the decisiveness rule —
+though the checklist named every one. A checklist that is followed by hand is
+followed unevenly, so the engine assembles the block instead
+(`serialization.read_back_lines`), in one fixed order:
+
+1. every `[warning]` line of the run;
+2. the source classes the user did NOT state — `assistant-typed:` and
+   `unattributed:`, or the single `sources: none declared …` line when the
+   config declares no `sources:` block. `user-stated:` is deliberately absent:
+   the user knows their own numbers;
+3. the `decisiveness:` line (the verdict rule, measured);
+4. each `<option> financing:` line;
+5. each `<option> other costs:` line, with its citation or `no anchor match`;
+6. the affordability summary — the threshold and the caps it is judged against,
+   then each option's highest ratio and breach years — when an `income` block
+   is present;
+7. for `--break-even`, each threshold's `sentence` and the block's `note`;
+8. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines.
+
+Every line is built by the SAME function that prints it elsewhere
+(`format_assumptions`, `affordability_lines`, `decisiveness_line`, a
+break-even's own `sentence`, `sweep.flip_lines`) — a second formatter here
+would be a second thing to drift. The block therefore REPEATS lines the report
+already showed; that repetition is the feature.
+
+It rides `--json` as `assumptions.read_back` (a list of strings) and prints
+LAST in the text output under `READ-BACK — carry these lines into any answer,
+verbatim:`. `--read-back` prints the block alone on stdout — nothing else, and
+the run's exit code — for a caller that wants only the lines to carry. Under
+`--json` the text block is suppressed (stdout stays one document); `--quiet`
+asked for one line and still gets one unless `--read-back` is passed too.

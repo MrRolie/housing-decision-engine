@@ -50,6 +50,7 @@ from hde.serialization import (
     engine_version,
     format_assumptions,
     mc_to_dict,
+    read_back_lines,
     verdict_to_dict,
 )
 
@@ -74,5 +75,5 @@ __all__ = [
     "LoadedScenarioPrior", "ScenarioPriorError", "load_scenario_prior",
     # Serialization
     "assumptions_to_dict", "det_to_dict", "mc_to_dict", "verdict_to_dict",
-    "format_assumptions", "engine_version", "pv_to_monthly_savings",
+    "format_assumptions", "read_back_lines", "engine_version", "pv_to_monthly_savings",
 ]

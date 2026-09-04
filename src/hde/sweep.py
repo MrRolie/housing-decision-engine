@@ -179,6 +179,14 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
             "decisive": verdict.decisive, "rule": verdict.rule, "prob_best": verdict.prob_best,
             "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
+            # The Monte Carlo majority, beside the deterministic best. `decisive`
+            # keys to the DETERMINISTIC winner by design (ruled 2026-09-01), so a
+            # row can read best=rent / decisive=false / prob_best=34% while the
+            # majority and the mean both favour house; readers of the bare triple
+            # were misled (2026-09-04 review). `prob_best` answers "how often is
+            # the deterministic winner cheapest?", `mc_prob_best` "how often is
+            # the most likely winner cheapest?" — never the same question.
+            **_mc_majority(mc, det),
             "affordability": affordability_of(det),
             "monte_carlo": (
                 {k: v for k, v in mc_to_dict(mc).items() if k in ("condo", "house", "rent") and v is not None}
@@ -187,10 +195,45 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
         })
     flips, mc_mean_flips = find_flips(rows)
     out: Dict[str, Any] = {"key": key, "values": values, "rows": rows,
-                           "flips": flips, "mc_mean_flips": mc_mean_flips}
+                           "flips": flips, "mc_mean_flips": mc_mean_flips,
+                           "mc_majority_flips": track_flips(rows, "mc_best")}
     note = join_notes(collapse, price_scan_note(raw, key))
     if note:
         out["note"] = note
+    return out
+
+
+def _mc_majority(mc: Optional[Any], det: ComparisonDeterministicResult) -> Dict[str, Any]:
+    """`mc_best` / `mc_prob_best`: the option Monte Carlo calls cheapest most
+    often, and how often. Both None without a Monte Carlo run."""
+    if mc is None:
+        return {"mc_best": None, "mc_prob_best": None}
+    probs = {
+        name: getattr(mc, f"prob_{name}_cheapest")
+        for name in ("condo", "house", "rent")
+        if getattr(det, name, None) is not None
+        and getattr(mc, f"prob_{name}_cheapest") is not None
+    }
+    if not probs:
+        return {"mc_best": None, "mc_prob_best": None}
+    best = max(probs, key=lambda name: probs[name])
+    return {"mc_best": best, "mc_prob_best": probs[best]}
+
+
+def track_flips(rows: List[Dict[str, Any]], field: str) -> List[Dict[str, Any]]:
+    """Consecutive points whose value of `field` differs — a refused point (or a
+    point with nothing to compare) ends the run rather than joining two sides
+    that were never adjacent."""
+    out: List[Dict[str, Any]] = []
+    prev = None
+    for row in rows:
+        if "error" in row or row.get(field) is None:
+            prev = None
+            continue
+        if prev is not None and row[field] != prev[field]:
+            out.append({"from_value": prev["value"], "from_best": prev[field],
+                        "to_value": row["value"], "to_best": row[field]})
+        prev = row
     return out
 
 
@@ -199,19 +242,7 @@ def find_flips(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[D
     deterministic `best`, once for `mc_mean_best` (the Monte Carlo mean can
     change sides where the deterministic line does not; round-four dogfood
     2026-09-02 printed 'no flip' on exactly such a sweep)."""
-    def _track(field: str) -> List[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
-        prev = None
-        for row in rows:
-            if "error" in row or row.get(field) is None:
-                prev = None
-                continue
-            if prev is not None and row[field] != prev[field]:
-                out.append({"from_value": prev["value"], "from_best": prev[field],
-                            "to_value": row["value"], "to_best": row[field]})
-            prev = row
-        return out
-    return _track("best"), _track("mc_mean_best")
+    return track_flips(rows, "best"), track_flips(rows, "mc_mean_best")
 
 
 def _fmt_value(key: str, v: Any) -> str:
@@ -243,17 +274,36 @@ def format_sweep(result: Dict[str, Any]) -> str:
             f"  {val:>{max(len(key), 10)}} | {totals} | {r['best']:>8} | "
             f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>5} ({r.get('rule', '?')}) | {prob:>7} | {mean_best:>12}"
         )
+    lines.extend(f"  {line}" for line in flip_lines(result))
+    return "\n".join(lines)
+
+
+def flip_lines(result: Dict[str, Any]) -> List[str]:
+    """Where the sweep changes sides, unindented: the deterministic flip (or the
+    'no flip' line), the Monte Carlo MEAN flip, and the Monte Carlo MAJORITY
+    flip — the last only where it says something the deterministic flip does
+    not, since a majority that turns exactly where the deterministic line turns
+    is the same sentence twice.
+
+    One builder for the sweep block and the read-back block (2026-09-04).
+    """
+    key = result["key"]
+
+    def _move(f: Dict[str, Any], joiner: str) -> str:
+        return (f"{f['from_best']} ({key}={_fmt_value(key, f['from_value'])}) "
+                f"{joiner} {f['to_best']} ({key}={_fmt_value(key, f['to_value'])})")
+
+    lines: List[str] = []
     if result["flips"]:
         for f in result["flips"]:
-            lines.append(
-                f"  flip: cheapest changes from {f['from_best']} ({key}={_fmt_value(key, f['from_value'])}) "
-                f"to {f['to_best']} ({key}={_fmt_value(key, f['to_value'])})"
-            )
+            lines.append(f"flip: cheapest changes from {_move(f, 'to')}")
     else:
-        lines.append("  no flip: the same option is cheapest across the whole sweep")
+        lines.append("no flip: the same option is cheapest across the whole sweep")
     for f in result.get("mc_mean_flips", []):
-        lines.append(
-            f"  mean flip: Monte Carlo mean favours {f['from_best']} ({key}={_fmt_value(key, f['from_value'])}) "
-            f"then {f['to_best']} ({key}={_fmt_value(key, f['to_value'])})"
-        )
-    return "\n".join(lines)
+        lines.append(f"mean flip: Monte Carlo mean favours {_move(f, 'then')}")
+    majority = result.get("mc_majority_flips") or []
+    if majority != result["flips"]:
+        for f in majority:
+            lines.append("majority flip: Monte Carlo P(cheapest) majority favours "
+                         f"{_move(f, 'then')}")
+    return lines

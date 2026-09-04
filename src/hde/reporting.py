@@ -28,7 +28,12 @@ from .models import (
 from .pv import pv_to_monthly_savings
 # The assumption echo lives in the typed serialization core (readiness plan
 # A.1); re-exported here so existing callers keep importing from reporting.
-from .serialization import echo_value as _echo_value, format_assumptions  # noqa: F401
+from .serialization import (  # noqa: F401
+    affordability_lines,
+    decisiveness_line,
+    echo_value as _echo_value,
+    format_assumptions,
+)
 
 
 _LABEL = {"condo": "Condo", "house": "House", "rent": "Rent"}
@@ -118,22 +123,15 @@ def format_text_report(
             )
         if verdict.monthly_equivalent is not None:
             lines.append(f"  ≈ ${verdict.monthly_equivalent:,.0f}/month equivalent")
-        lines.append(f"  decisiveness: {verdict.reason}")
+        lines.append(f"  {decisiveness_line(verdict)}")
 
-    # Affordability
+    # Affordability — the header and per-option lines come from the shared
+    # builder (serialization.affordability_lines), so the read-back block and
+    # this report cannot say different things about the same ratios.
     if det.income_report is not None:
-        rpt = det.income_report
-        lines.append(f"\nAffordability (threshold: {rpt.threshold:.0%} — a GDS-shaped ratio, housing cost incl. "
-                     f"maintenance over income; the 32% figure is the legacy guideline, CMHC caps GDS at 39%, TDS at 44%)")
-        for name, ratios, exceeds in [
-            ("Rent",  rpt.rent_ratios,  rpt.years_rent_exceeds),
-            ("Condo", rpt.condo_ratios, rpt.years_condo_exceeds),
-            ("House", rpt.house_ratios, rpt.years_house_exceeds),
-        ]:
-            if ratios is not None:
-                max_ratio = max(ratios)
-                exceed_str = str(exceeds) if exceeds else "none"
-                lines.append(f"  {name}: max ratio {max_ratio:.1%}  years exceeding: {exceed_str}")
+        header, *per_option = affordability_lines(det.income_report)
+        lines.append(f"\n{header}")
+        lines.extend(f"  {line}" for line in per_option)
 
     # MC summary — a single-path run (every uncertainty input off) is stamped
     # 'not a forecast' and its degenerate 100% probabilities are not printed

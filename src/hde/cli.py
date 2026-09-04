@@ -76,6 +76,15 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--read-back",
+        action="store_true",
+        help="Print ONLY the read-back block — every [warning], the source classes "
+             "the user did not state, the decisiveness rule, the financing and "
+             "other-cost lines, affordability, and any threshold or sweep lines — "
+             "the lines an answer must carry verbatim (exit code as the run)",
+    )
+
+    parser.add_argument(
         "--print-schema",
         action="store_true",
         help="Print the input contract (sections, keys, required, notes) and exit",
@@ -234,7 +243,7 @@ def main() -> int:
         for be_arg in args.break_even:
             try:
                 key, lo, hi = parse_break_even(be_arg)
-                result = solve_break_even(raw, key, lo, hi)
+                result = solve_break_even(raw, key, lo, hi, prior=prior)
                 # Beside --sweep, the threshold is re-solved at every sweep point
                 # ("the rent threshold at 0% and at 2% growth" in one call).
                 across = [solve_break_even_across(raw, key, lo, hi, skey, vals)
@@ -246,17 +255,30 @@ def main() -> int:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
 
-    # Output results
-    if args.json:
+    # The read-back block (2026-09-04): the lines an honest answer must carry,
+    # assembled by the engine in one order rather than gathered by hand from
+    # four surfaces. Built here, after the sweeps and thresholds, so the same
+    # list rides --json and the text block below.
+    from .serialization import read_back_lines
+    read_back = read_back_lines(
+        spec, warnings=warnings, verdict=verdict, det=det_result, prior=prior,
+        break_evens=break_evens, sweeps=sweeps,
+    )
+
+    # Output results. --read-back keeps stdout to the block alone, so a caller
+    # that wants only the lines to carry does not have to parse them out.
+    if args.json and not args.read_back:
         import json as _json
         from .serialization import (
             assumptions_to_dict, det_to_dict, engine_version, mc_to_dict,
             verdict_to_dict,
         )
+        assumptions = assumptions_to_dict(spec, prior)
+        assumptions["read_back"] = read_back
         doc = {
             "engine_version": engine_version(),
             "warnings": warnings,
-            "assumptions": assumptions_to_dict(spec, prior),
+            "assumptions": assumptions,
             "verdict": verdict_to_dict(verdict),
             "deterministic": det_to_dict(det_result) if det_result is not None else None,
             "monte_carlo": mc_to_dict(mc_result) if mc_result is not None else None,
@@ -267,6 +289,8 @@ def main() -> int:
             doc["break_evens"] = break_evens
         print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
+    elif args.read_back:
+        pass  # the block below is the whole of stdout
     elif args.quiet:
         # Print summary line only
         if det_result is not None:
@@ -320,15 +344,15 @@ def main() -> int:
                 return 1
             # Under --json stdout is the document; status lines go to stderr
             # (round-6 dogfood: a saved `--story --json` output did not parse).
-            status_out = sys.stderr if args.json else sys.stdout
+            status_out = sys.stderr if (args.json or args.read_back) else sys.stdout
             for path in saved:
                 print(f"Saved plot: {path}", file=status_out)
 
-    if sweeps and not args.json:
+    if sweeps and not args.json and not args.read_back:
         from .sweep import format_sweep
         for sweep_result in sweeps:
             print(format_sweep(sweep_result))
-    if break_evens and not args.json:
+    if break_evens and not args.json and not args.read_back:
         from .break_even import format_break_even
         for be_result in break_evens:
             print(format_break_even(be_result))
@@ -353,11 +377,20 @@ def main() -> int:
             except Exception as e:
                 print(f"Error rendering story package: {e}", file=sys.stderr)
                 return 1
-            status_out = sys.stderr if args.json else sys.stdout
+            status_out = sys.stderr if (args.json or args.read_back) else sys.stdout
             for path in package["act_images"]:
                 print(f"Saved plot: {path}", file=status_out)
             print(f"Story written: {package['report']}", file=status_out)
             print(f"Story written: {package['story']}", file=status_out)
+
+    # LAST, so the lines to carry are the last thing on the screen. Under --json
+    # stdout stays the document alone and `assumptions.read_back` carries them;
+    # --quiet asked for one line and gets one, unless --read-back overrides.
+    if read_back and (args.read_back or not (args.json or args.quiet)):
+        from .serialization import READ_BACK_HEADER
+        print(READ_BACK_HEADER if args.read_back else f"\n{READ_BACK_HEADER}")
+        for line in read_back:
+            print(line)
 
     return 0
 

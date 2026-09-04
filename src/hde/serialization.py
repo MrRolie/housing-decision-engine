@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 from importlib import metadata
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .anchors import (
     ANCHORS,
@@ -29,6 +29,7 @@ from .market_scenario import LoadedScenarioPrior
 from .land_transfer_tax import purchase_costs_clause
 from .mortgage_insurance import financing_clause
 from .models import (
+    AffordabilityReport,
     ComparisonDeterministicResult,
     ComparisonMonteCarloResult,
     ComparisonSpec,
@@ -550,3 +551,114 @@ def mc_to_dict(mc: ComparisonMonteCarloResult) -> dict:
     if mc.market_scenario is not None:
         result["market_scenario"] = mc.market_scenario
     return result
+
+
+# ---------------------------------------------------------------------------
+# The read-back block (2026-09-04)
+#
+# Eight reviewed answers in two days each dropped a line the engine had printed
+# — a `[warning]`, the `assistant-typed:` line, the decisiveness rule — though a
+# checklist named every one. So the engine assembles them: one ordered block the
+# answer carries verbatim, built from the SAME functions that print each line
+# (`format_assumptions`, `affordability_lines`, a break-even's own `sentence`,
+# `sweep.flip_lines`). A second formatter here would be a second thing to drift.
+#
+# `user-stated:` is deliberately absent: the user knows their own numbers. What
+# has to travel is what the assistant chose, what nothing attributes, and what
+# the engine refuses to let pass silently.
+# ---------------------------------------------------------------------------
+
+READ_BACK_HEADER = "READ-BACK — carry these lines into any answer, verbatim:"
+
+# The source-echo lines the read-back carries (sources.py builds them).
+_SOURCE_PREFIXES = ("sources: none declared", "assistant-typed:", "unattributed:", "anchor-sourced:")
+_OWNED = ("condo", "house")
+
+
+def decisiveness_line(verdict: Optional[Verdict]) -> Optional[str]:
+    """`decisiveness: <the rule, measured>` — the report's own line, built once.
+
+    None when nothing was compared (no verdict, or a single priced option).
+    """
+    if verdict is None or verdict.runner_up is None:
+        return None
+    return f"decisiveness: {verdict.reason}"
+
+
+def affordability_lines(report: Optional[AffordabilityReport]) -> List[str]:
+    """The affordability summary: the header naming the threshold and the caps
+    it is judged against, then one line per option (max ratio, breach years).
+
+    Unindented — the text report indents the per-option lines under its own
+    header; the read-back carries them as they are.
+    """
+    if report is None:
+        return []
+    lines = [
+        f"Affordability (threshold: {report.threshold:.0%} — a GDS-shaped ratio, housing cost incl. "
+        f"maintenance over income; the 32% figure is the legacy guideline, CMHC caps GDS at 39%, "
+        f"TDS at 44%)"
+    ]
+    for name, ratios, exceeds in (
+        ("Rent", report.rent_ratios, report.years_rent_exceeds),
+        ("Condo", report.condo_ratios, report.years_condo_exceeds),
+        ("House", report.house_ratios, report.years_house_exceeds),
+    ):
+        if ratios is not None:
+            exceed_str = str(exceeds) if exceeds else "none"
+            lines.append(f"{name}: max ratio {max(ratios):.1%}  years exceeding: {exceed_str}")
+    return lines
+
+
+def _option_lines(echo: Sequence[str], suffix: str) -> List[str]:
+    """The per-option assumption lines with one suffix (`financing:`,
+    `other costs:`), in the engine's own option order."""
+    return [line for name in _OWNED for line in echo if line.startswith(f"{name} {suffix}")]
+
+
+def read_back_lines(
+    spec: ComparisonSpec,
+    *,
+    warnings: Sequence[str] = (),
+    verdict: Optional[Verdict] = None,
+    det: Optional[ComparisonDeterministicResult] = None,
+    prior: Optional[LoadedScenarioPrior] = None,
+    break_evens: Iterable[Dict[str, Any]] = (),
+    sweeps: Iterable[Dict[str, Any]] = (),
+) -> List[str]:
+    """Every line an honest answer has to carry, in one order, ready to paste.
+
+    Order: the `[warning]` lines; the source classes the user did not state
+    (or the one line saying no `sources:` block was declared); the decisiveness
+    rule; each option's financing line; each option's other-costs line with its
+    citation or `no anchor match`; the affordability summary; each break-even's
+    sentence and note; each sweep's flip lines.
+    """
+    lines = [f"[warning] {warning}" for warning in warnings]
+    echo = format_assumptions(spec, prior)
+    lines.extend(line for line in echo if line.startswith(_SOURCE_PREFIXES))
+    decisiveness = decisiveness_line(verdict)
+    if decisiveness is not None:
+        lines.append(decisiveness)
+    lines.extend(_option_lines(echo, "financing:"))
+    lines.extend(_option_lines(echo, "other costs:"))
+    if det is not None:
+        lines.extend(affordability_lines(det.income_report))
+    for result in break_evens:
+        key = result["key"]
+        for entry in result.get("break_evens", []):
+            sentence = entry.get("sentence")
+            if sentence:
+                lines.append(f"break-even {key}: {sentence}")
+        if not result.get("break_evens") and result.get("cheaper_throughout"):
+            lines.append(f"break-even {key}: no crossing in the bracket — "
+                         f"{result['cheaper_throughout']} is cheaper throughout")
+        if result.get("note"):
+            lines.append(f"break-even {key} note: {result['note']}")
+    if sweeps:
+        # Local import: sweep.py imports this module for its per-point Monte
+        # Carlo serialization, so the dependency runs one way at import time.
+        from .sweep import flip_lines
+        for result in sweeps:
+            lines.extend(flip_lines(result))
+    return lines
