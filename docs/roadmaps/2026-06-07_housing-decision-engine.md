@@ -114,6 +114,22 @@ remaining misses were lines the engine printed and the assistant dropped — hen
 
 ### Round 9 (2026-09-04, same three shapes on the read-back tip) — open items
 
+Decided 2026-09-04 (mechanism, next fold — no ruling needed):
+
+- **One fact once in the READ-BACK block.** The gist-shape block ran 479 words after a 120-word
+  answer; the affordability warning, the Affordability section and the two max-ratio lines state one
+  fact, and the tier-change note runs 74 words. The block keeps every warning and source line (the
+  honesty contract) and drops nothing on a brevity request; it stops repeating itself and the cliff
+  note compresses to a sentence. Measure: block words per shape, before and after.
+- **Anchor validity dates.** `Anchor` gains an optional `valid_until`; `--print-anchors` prints it and
+  a run past that date warns (the Québec insurance-premium tax steps to 9.975% for premiums after
+  2026-12-31; the Toronto rebate page was read 2026-09-03 with no 2026 amendment shown). Unanchored
+  figures stay `source: none` — that line is the contract working, not a gap to fill by hand.
+- **The short-answer prose cap is an engineering number**, tuned by measurement each round, not a
+  figure to ratify.
+- **`PROMPTS.md`** now sits beside the README (what to ask, what to front-load, what comes back, what
+  is not modelled); the next round's opening prompts are shaped by it so the round measures the doc.
+
 Scores: quick-sense 17 (17), reverse 20 (18), condo 21 (20); the pasted READ-BACK block was
 byte-identical to the engine's in all three and every base-run warning reached the user. Ontario has
 not been re-served since round 7 (19).

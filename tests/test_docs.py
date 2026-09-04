@@ -6,6 +6,8 @@ attribute a source to a structural default.
 """
 
 import re
+
+import pytest
 from pathlib import Path
 
 from hde.anchors import ANCHORS, _ECHO_ALIASES, is_reference, short_cite
@@ -130,3 +132,26 @@ def test_no_tracked_text_file_carries_a_merge_conflict_marker():
             if line.startswith(("<<<<<<< ", ">>>>>>> ")):
                 offenders.append(f"{rel}:{n}")
     assert not offenders, offenders
+
+
+def test_prompts_doc_is_linked_and_every_command_it_shows_runs(monkeypatch, capsys):
+    """PROMPTS.md sits beside the README for the person who just cloned the repo: every
+    flag it names must be a real option and every config path it runs must exist."""
+    import re
+    from hde.cli import main
+
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "PROMPTS.md").read_text(encoding="utf-8")
+    assert "PROMPTS.md" in (root / "README.md").read_text(encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["hde", "--help"])
+    with pytest.raises(SystemExit):
+        main()
+    help_out = capsys.readouterr().out
+    flags = set(re.findall(r"(?<![\w-])(--[a-z][a-z-]+)", text))
+    assert flags >= {"--print-schema", "--print-anchors", "--read-back", "--json", "--break-even"}
+    for flag in sorted(flags):
+        assert flag in help_out, flag
+    for rel in re.findall(r"uv run hde (examples/[\w./-]+\.yaml)", text):
+        assert (root / rel).exists(), rel
+    for rel in re.findall(r"\]\(([\w./-]+\.md)\)", text):
+        assert (root / rel).exists(), rel
