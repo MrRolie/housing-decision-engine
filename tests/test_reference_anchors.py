@@ -522,7 +522,7 @@ ONTARIO_SUFFIX = ("[no anchor match — hde --print-anchors; a rate on the purch
                   "overstates an Ontario bill: assessments are on a 2016 base]")
 
 
-def _spec_in(other_costs, **house_extra):
+def _spec_with_costs(other_costs, **house_extra):
     house = {"initial_value": 600_000, "all_cash": True, "other_recurring_costs": other_costs}
     house.update(house_extra)
     return load_config_dict({"years": 10, "house": house, "rent": {"monthly_rent": 2_000}})
@@ -536,40 +536,40 @@ def _other_costs_line(spec):
 
 class TestOntarioNoMatchSuffix:
     def test_an_unmatched_ontario_tax_line_carries_the_assessment_base(self):
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}], province="ON")
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}], province="ON")
         assert ONTARIO_SUFFIX in _other_costs_line(spec)
 
     def test_toronto_as_municipality_places_the_option_in_ontario(self):
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}], municipality="toronto")
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}], municipality="toronto")
         assert ONTARIO_SUFFIX in _other_costs_line(spec)
 
     def test_a_quebec_line_keeps_the_plain_no_match(self):
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}], province="QC")
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}], province="QC")
         line = _other_costs_line(spec)
         assert "[no anchor match — hde --print-anchors]" in line
         assert "2016" not in line
 
     def test_no_province_keeps_the_plain_no_match(self):
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}])
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}])
         assert "2016" not in _other_costs_line(spec)
 
     def test_a_matched_ontario_line_is_cited_not_suffixed(self):
         toronto = ANCHORS["property_tax.toronto"]
-        spec = _spec_in([{"name": "property tax", "annual_amount": round(toronto.value * 600_000, 2)}],
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": round(toronto.value * 600_000, 2)}],
                         province="ON")
         line = _other_costs_line(spec)
         assert toronto.short_cite in line and "no anchor match" not in line
 
     def test_an_unmatched_ontario_insurance_line_is_not_about_assessments(self):
-        spec = _spec_in([{"name": "home insurance", "annual_amount": 1_500}], province="ON")
+        spec = _spec_with_costs([{"name": "home insurance", "annual_amount": 1_500}], province="ON")
         line = _other_costs_line(spec)
         assert "no anchor match" in line and "2016" not in line
 
     def test_the_structured_entry_carries_the_province(self):
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}], municipality="toronto")
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}], municipality="toronto")
         [entry] = reference_matches(spec)
         assert entry["province"] == "ON"
-        spec = _spec_in([{"name": "property tax", "annual_amount": 6_000}])
+        spec = _spec_with_costs([{"name": "property tax", "annual_amount": 6_000}])
         [entry] = reference_matches(spec)
         assert entry["province"] is None
 
