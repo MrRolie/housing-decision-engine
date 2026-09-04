@@ -38,10 +38,11 @@ def test_defaults_table_matches_the_registry():
     # defaults at all — the engine never applies one, so a "Defaults Summary" row
     # for them would claim the opposite of the truth. Their own doc surface is
     # `hde --print-anchors`, pinned in test_reference_anchors. The mortgage-insurance
-    # schedule is a table of bands, not a per-field default, documented under its
-    # own heading in CONFIG_SCHEMAS.md.
+    # premium and the land-transfer-tax schedules are tables of bands, not per-field
+    # defaults, documented under their own headings in CONFIG_SCHEMAS.md.
     expected = {n for n in ANCHORS
-                if not n.startswith(("verdict.", "market_scenario.", "mortgage_insurance."))
+                if not n.startswith(("verdict.", "market_scenario.",
+                                     "mortgage_insurance.", "land_transfer_tax."))
                 and not is_reference(n)
                 and n != "economic.inflation_rate.nominal_planning"}
     assert expected <= seen, sorted(expected - seen)

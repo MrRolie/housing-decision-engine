@@ -1153,6 +1153,295 @@ PREMIUM_TAX_UNANCHORED = ("SK",)
 
 
 # ---------------------------------------------------------------------------
+# Land-transfer tax (round 8, 2026-09-04).
+#
+# In Québec the droits sur les mutations immobilières — the "welcome tax" — are
+# the largest one-time cost of a purchase after the down payment, and they are a
+# PUBLISHED BRACKET SCHEDULE. Eight of eight real answers in the week to
+# 2026-09-04 priced them inside a 1.5%-of-price guess labelled "no source": on a
+# $650,000 Montréal house that guess reads $9,750 against a published $8,349.
+#
+# All four schedules below were FETCHED on 2026-09-04 and every bracket is its
+# own anchor, so `hde --print-anchors` shows the tables the engine applies and
+# src/hde/land_transfer_tax.py builds its schedules FROM this registry. The
+# THRESHOLD lives in the anchor's NAME (`…to_62900`, `…over_315000`) and the
+# RATE is its value, so the registry dump alone carries the whole schedule.
+#
+# Two structures, and they are not interchangeable:
+#   * Montréal REPLACES the provincial schedule (montreal.ca publishes one
+#     complete table, and its own worked example balances only that way);
+#   * Toronto ADDS to Ontario's — toronto.ca: the MLTT "has been applied to
+#     purchases on all properties in the City of Toronto in addition to the
+#     Provincial Land Transfer Tax as of February 1, 2008".
+#
+# The base d'imposition / value of consideration is the GREATER of the price
+# paid and the municipal assessment times the year's comparative factor. The
+# engine applies the PRICE: for a market transaction the price is normally the
+# greater, and the engine has no assessment roll. A purchase well under
+# assessment is under-taxed by this model, which the schema note says.
+# ---------------------------------------------------------------------------
+
+_QC_LTT_URL = ("https://www.quebec.ca/gouvernement/gestion-municipale/"
+               "finances-fiscalite-municipales/fiscalite/droits-mutations-immobilieres")
+_QC_LTT_SOURCE = (
+    "Gouvernement du Québec, « Droits sur les mutations immobilières » (Loi "
+    "concernant les droits sur les mutations immobilières, RLRQ c. D-15.1), "
+    "quoted as published: « Le droit de mutation est ensuite calculé sur ce "
+    "montant en y appliquant, pour l'exercice financier 2026, les taux "
+    "suivants : 0,5 % sur les premiers 62 900 $; 1,0 % sur la tranche de "
+    "62 900,01 $ à 315 000 $; 1,5 % sur la tranche qui excède 315 000 $. » The "
+    "thresholds are indexed annually to Québec's CPI, so this table is a 2026 "
+    "table and must be re-fetched for a 2027 closing. The page adds: « Une "
+    "municipalité peut, par règlement, fixer un taux supérieur sur toute "
+    "tranche supérieure à 500 000 $. Un tel taux ne peut toutefois excéder 3 %, "
+    "sauf dans le cas de la Ville de Montréal qui peut fixer un taux "
+    "supérieur. » — so this provincial table is the floor outside Montréal, and "
+    "a municipality that legislated its own higher band above $500,000 is NOT "
+    "in this registry")
+_QC_LTT_UNIT = ("fraction of the tranche of the base d'imposition (the greater of the "
+                "price paid and the municipal assessment × the year's comparative "
+                "factor); the engine applies the price")
+
+_MTL_LTT_URL = ("https://montreal.ca/articles/"
+                "comment-sont-calcules-les-droits-sur-les-mutations-immobilieres-9279")
+_MTL_LTT_SOURCE = (
+    "Ville de Montréal, « Comment sont calculés les droits sur les mutations "
+    "immobilières », 2026 table quoted as published: « Jusqu'à 62 900 $ 0,5 % · "
+    "62 900 $ à 315 000 $ 1 % · 315 000 $ à 552 300 $ 1,5 % · 552 300 $ à "
+    "1 104 700 $ 2 % · 1 104 700 $ à 2 136 500 $ 2,5 % · 2 136 500 $ à "
+    "3 113 000 $ 3,5 % · À partir de 3 113 000 $ 4 % ». The same page prints a "
+    "2026 worked example on a 700 000 $ base — 62 900 $ x 0,5 % = 314,50 $; "
+    "252 100 $ x 1 % = 2 521,00 $; 237 300 $ x 1,5 % = 3 559,50 $; 147 700 x "
+    "2 % = 2 954,00 $; total 9 349,00 $ — which the engine reproduces exactly "
+    "(tests/test_land_transfer_tax.py). Montréal's table REPLACES the "
+    "provincial one: the province lets Montréal set its own rates above "
+    "500 000 $ with no 3% ceiling")
+
+_ON_LTT_URL = "https://www.ontario.ca/document/land-transfer-tax/calculating-land-transfer-tax"
+_ON_LTT_SOURCE = (
+    "Ontario Ministry of Finance, 'Land Transfer Tax — Calculating land "
+    "transfer tax', rates for agreements entered into after 2016-11-14, quoted "
+    "as published: 'amounts up to and including $55,000: 0.5%; amounts "
+    "exceeding $55,000, up to and including $250,000: 1.0%; amounts exceeding "
+    "$250,000, up to and including $400,000: 1.5%; amounts exceeding $400,000: "
+    "2.0%; amounts exceeding $2,000,000, where the land contains one or two "
+    "single family residences: 2.5%'. The engine models a home purchase, so the "
+    "2.5% band applies above $2,000,000; land that is NOT one or two single "
+    "family residences stays at 2.0% and needs an explicit schedule")
+_ON_LTT_UNIT = "fraction of the tranche of the value of consideration"
+
+_TO_LTT_URL = ("https://www.toronto.ca/services-payments/property-taxes-utilities/"
+               "municipal-land-transfer-tax-mltt/"
+               "municipal-land-transfer-tax-mltt-rates-and-fees/")
+_TO_LTT_SOURCE = (
+    "City of Toronto, 'Municipal Land Transfer Tax (MLTT) & Municipal "
+    "Non-Resident Speculation Tax — Rates & Fees' (Toronto Municipal Code "
+    "Chapter 760), graduated MLTT rates 'for high value residential properties "
+    "containing at least one, and not more than two, single family residences', "
+    "quoted as published: 'Up to and including $55,000.00 0.5% · $55,000.01 to "
+    "$250,000.00 1.0% · $250,000.01 to $400,000.00 1.5% · $400,000.01 to "
+    "$2,000,00.00 2.0% · $2,000,000.01 and up to 3,000,000.00 2.5%' then, "
+    "'Rates as of April 1, 2026': 'Over $3,000,000 and up to $4,000,000 4.40% · "
+    "Over $4,000,000 and up to $5,000,000 5.45% · Over $5,000,000 and up to "
+    "$10,000,000 6.50% · Over $10,000,000 and up to $20,000,000 7.55% · Over "
+    "$20,000,000 8.60%'. The page prints '$2,000,00.00' for the fourth band's "
+    "ceiling — a missing digit, read as $2,000,000.00, which the neighbouring "
+    "'$2,000,000.01 and up to 3,000,000.00' row confirms. The MLTT 'has been "
+    "applied to purchases on all properties in the City of Toronto in addition "
+    "to the Provincial Land Transfer Tax as of February 1, 2008', so the engine "
+    "charges Ontario's schedule AND this one. Non-single-family residences pay "
+    "a flat 2.0% above $400,000 and need an explicit schedule")
+
+# (registry key suffix, upper edge inclusive — None for the uncapped top band,
+#  rate, the band exactly as the source prints it)
+_QC_LTT_BRACKETS = (
+    ("to_62900", 62_900.0, 0.005, "0,5 % sur les premiers 62 900 $"),
+    ("to_315000", 315_000.0, 0.010, "1,0 % sur la tranche de 62 900,01 $ à 315 000 $"),
+    ("over_315000", None, 0.015, "1,5 % sur la tranche qui excède 315 000 $"),
+)
+_MTL_LTT_BRACKETS = (
+    ("to_62900", 62_900.0, 0.005, "Jusqu'à 62 900 $ : 0,5 %"),
+    ("to_315000", 315_000.0, 0.010, "62 900 $ à 315 000 $ : 1 %"),
+    ("to_552300", 552_300.0, 0.015, "315 000 $ à 552 300 $ : 1,5 %"),
+    ("to_1104700", 1_104_700.0, 0.020, "552 300 $ à 1 104 700 $ : 2 %"),
+    ("to_2136500", 2_136_500.0, 0.025, "1 104 700 $ à 2 136 500 $ : 2,5 %"),
+    ("to_3113000", 3_113_000.0, 0.035, "2 136 500 $ à 3 113 000 $ : 3,5 %"),
+    ("over_3113000", None, 0.040, "À partir de 3 113 000 $ : 4 %"),
+)
+_ON_LTT_BRACKETS = (
+    ("to_55000", 55_000.0, 0.005, "amounts up to and including $55,000: 0.5%"),
+    ("to_250000", 250_000.0, 0.010,
+     "amounts exceeding $55,000, up to and including $250,000: 1.0%"),
+    ("to_400000", 400_000.0, 0.015,
+     "amounts exceeding $250,000, up to and including $400,000: 1.5%"),
+    ("to_2000000", 2_000_000.0, 0.020, "amounts exceeding $400,000: 2.0%"),
+    ("over_2000000", None, 0.025,
+     "amounts exceeding $2,000,000, where the land contains one or two single "
+     "family residences: 2.5%"),
+)
+_TO_LTT_BRACKETS = (
+    ("to_55000", 55_000.0, 0.005, "Up to and including $55,000.00 — 0.5%"),
+    ("to_250000", 250_000.0, 0.010, "$55,000.01 to $250,000.00 — 1.0%"),
+    ("to_400000", 400_000.0, 0.015, "$250,000.01 to $400,000.00 — 1.5%"),
+    ("to_2000000", 2_000_000.0, 0.020, "$400,000.01 to $2,000,00.00 [sic] — 2.0%"),
+    ("to_3000000", 3_000_000.0, 0.025, "$2,000,000.01 and up to 3,000,000.00 — 2.5%"),
+    ("to_4000000", 4_000_000.0, 0.0440, "Over $3,000,000 and up to $4,000,000 — 4.40%"),
+    ("to_5000000", 5_000_000.0, 0.0545, "Over $4,000,000 and up to $5,000,000 — 5.45%"),
+    ("to_10000000", 10_000_000.0, 0.0650, "Over $5,000,000 and up to $10,000,000 — 6.50%"),
+    ("to_20000000", 20_000_000.0, 0.0755, "Over $10,000,000 and up to $20,000,000 — 7.55%"),
+    ("over_20000000", None, 0.0860, "Over $20,000,000 — 8.60%"),
+)
+
+# family -> (label, url, source, unit, brackets, short cite)
+TRANSFER_TAX_SCHEDULES = {
+    "land_transfer_tax.qc": (
+        "Québec droits sur les mutations immobilières 2026",
+        _QC_LTT_URL, _QC_LTT_SOURCE, _QC_LTT_UNIT, _QC_LTT_BRACKETS,
+        "Québec DMI 2026"),
+    "land_transfer_tax.montreal": (
+        "Ville de Montréal droits de mutation 2026",
+        _MTL_LTT_URL, _MTL_LTT_SOURCE, _QC_LTT_UNIT, _MTL_LTT_BRACKETS,
+        "Ville de Montréal DMI 2026"),
+    "land_transfer_tax.ontario": (
+        "Ontario land transfer tax",
+        _ON_LTT_URL, _ON_LTT_SOURCE, _ON_LTT_UNIT, _ON_LTT_BRACKETS,
+        "Ontario LTT"),
+    "land_transfer_tax.toronto": (
+        "Toronto municipal land transfer tax",
+        _TO_LTT_URL, _TO_LTT_SOURCE, _ON_LTT_UNIT, _TO_LTT_BRACKETS,
+        "Toronto MLTT"),
+}
+
+for _family, (_label, _url, _source, _unit, _rows, _cite) in TRANSFER_TAX_SCHEDULES.items():
+    for _key, _edge, _rate, _quoted in _rows:
+        _ceiling = ("with no ceiling" if _edge is None
+                    else f"up to and including ${_edge:,.2f}")
+        ANCHORS[f"{_family}.{_key}"] = Anchor(
+            name=f"{_family}.{_key}",
+            value=_rate,
+            as_of="2026",
+            source=_source,
+            url=_url,
+            rationale=(
+                f"{_label}: the marginal rate on the tranche {_ceiling}. A "
+                f"legislated schedule rate, not an estimate — it has no plausible "
+                f"range, so its band is the rate itself. The threshold is in this "
+                f"anchor's NAME, so --print-anchors carries the whole schedule. "
+                f"The tax is a ONE-TIME cash cost at closing, paid on top of "
+                f"notary and inspection fees."
+            ),
+            band=(_rate, _rate),
+            short_cite=_cite,
+            quoted=_quoted,
+            unit=_unit,
+            retrieved_on="2026-09-04",
+        )
+
+ANCHORS["land_transfer_tax.ontario.first_time_buyer_refund_max"] = Anchor(
+    name="land_transfer_tax.ontario.first_time_buyer_refund_max",
+    value=4_000.0,
+    as_of="2026",
+    source=(
+        "Ontario Ministry of Finance, 'Land Transfer Tax Refunds for First-Time "
+        "Homebuyers': 'Beginning January 1, 2017, the maximum amount of the "
+        "refund is $4,000.' The refund applies to conveyances or dispositions "
+        "occurring on or after 2017-01-01 regardless of when the agreement of "
+        "purchase and sale was signed; before that date the maximum was $2,000"
+    ),
+    url=("https://www.ontario.ca/document/land-transfer-tax/"
+         "land-transfer-tax-refunds-first-time-homebuyers"),
+    rationale=(
+        "Applied to the ONTARIO leg only, and capped at that leg's tax: a "
+        "refund never exceeds the duty it refunds. The engine models the "
+        "MAXIMUM, not eligibility — the buyer's age, residency, spouse's "
+        "ownership history and occupancy deadline are conditions the engine "
+        "cannot check, so first_time_buyer: true is the user's assertion that "
+        "they qualify."
+    ),
+    band=(4_000.0, 4_000.0),
+    short_cite="Ontario LTT first-time refund",
+    quoted="the maximum amount of the refund is $4,000",
+    unit="dollars, maximum refund of Ontario land transfer tax",
+    retrieved_on="2026-09-04",
+)
+
+ANCHORS["land_transfer_tax.toronto.first_time_buyer_rebate_max"] = Anchor(
+    name="land_transfer_tax.toronto.first_time_buyer_rebate_max",
+    value=4_475.0,
+    as_of="2026",
+    source=(
+        "City of Toronto, 'Municipal Land Transfer Tax & Municipal "
+        "Non-Resident Speculation Tax Rebate Opportunities': 'For conveyances "
+        "and dispositions of beneficial interest in land of an eligible home "
+        "and a rebate of up to $4,475.00.' The same page states the "
+        "first-time-purchaser conditions (at least 18; occupy as principal "
+        "residence within nine months; never owned a home anywhere in the "
+        "world; spouse conditions)"
+    ),
+    url=("https://www.toronto.ca/services-payments/property-taxes-utilities/"
+         "municipal-land-transfer-tax-mltt/"
+         "municipal-land-transfer-tax-mltt-rebate-opportunities/"),
+    rationale=(
+        "Applied to the TORONTO leg only and capped at that leg's tax; it "
+        "stacks with Ontario's $4,000 refund because the two taxes stack. A "
+        "2026 City Council item was reported to raise this to a full rebate "
+        "for values of consideration from $400,000 to $800,000 effective "
+        "2026-03-01; the rebate page as fetched on 2026-09-04 still prints "
+        "$4,475.00 and no such range, so the engine applies $4,475 and names "
+        "it — re-read this anchor before relying on a Toronto first-time "
+        "figure."
+    ),
+    band=(4_475.0, 4_475.0),
+    short_cite="Toronto MLTT first-time rebate",
+    quoted="a rebate of up to $4,475.00",
+    unit="dollars, maximum rebate of Toronto municipal land transfer tax",
+    retrieved_on="2026-09-04",
+)
+
+# No first-time-buyer rebate of the transfer duty was found for either Québec
+# schedule, so neither holds a figure. An absent rebate is REPORTED — a 0.0
+# would read as "the province has none", which is a claim this registry has no
+# source for.
+ANCHORS["land_transfer_tax.qc.first_time_buyer_rebate"] = Anchor(
+    name="land_transfer_tax.qc.first_time_buyer_rebate",
+    value=None,
+    as_of="2026",
+    source=("no source: the Québec droits-sur-les-mutations-immobilières page "
+            "describes no first-time-buyer rebate or exemption of the duty, and "
+            "no provincial program page stating one was found"),
+    url=("tried: quebec.ca droits-mutations-immobilieres (fetched 2026-09-04, "
+         "no first-time-buyer rebate of the duty described)"),
+    rationale=("first_time_buyer: true against the Québec provincial schedule "
+               "changes nothing, and the read-back says so rather than "
+               "implying a rebate of zero was computed"),
+    band=(0.0, 0.0),
+    short_cite="source: none (no Québec first-time-buyer transfer-duty rebate found)",
+    kind="unsourced",
+)
+
+ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"] = Anchor(
+    name="land_transfer_tax.montreal.first_time_buyer_rebate",
+    value=None,
+    as_of="2026",
+    source=("no source: Montréal runs a « Programme d'appui à l'acquisition "
+            "résidentielle » that can reimburse the mutation duty for some "
+            "first buyers, but it is a subsidy with eligibility conditions "
+            "rather than a rebate of the schedule, and no page stating its "
+            "amount was retrieved"),
+    url=("tried: montreal.ca/en/topics/property-transfer-duties-welcome-tax "
+         "(HTTP 404 on 2026-09-04); the droits-de-mutation article carries the "
+         "brackets but no first-time-buyer rebate"),
+    rationale=("first_time_buyer: true against the Montréal schedule applies "
+               "nothing and the read-back names the gap — a buyer who may "
+               "qualify for the city's acquisition program should check it "
+               "outside the engine"),
+    band=(0.0, 0.0),
+    short_cite="source: none (Montréal acquisition program not retrieved)",
+    kind="unsourced",
+)
+
+
+# ---------------------------------------------------------------------------
 # Demographic-prior provenance (readiness plan E.2, 2026-09-01).
 #
 # A ScenarioPrior file carries source FILE NAMES + sha256 digests under

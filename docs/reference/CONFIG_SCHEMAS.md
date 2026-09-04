@@ -289,6 +289,83 @@ after 2026-12-31 under Bill 99 — re-read the anchor for a 2027 closing),
 Ontario 8% (Ontario RST), `other` 0%. Saskatchewan taxes the premium but its
 rate is not anchored: state an explicit schedule rather than be charged 0%.
 
+### Land-transfer tax schedules
+
+Also a table rather than a per-field default, and registered the same way: one
+anchor per bracket, whose NAME carries the threshold, so `--print-anchors` alone
+shows the whole schedule and `land_transfer_tax.anchored_schedule` builds it
+from the registry.
+
+Key: `land_transfer_tax: none` (default) | `auto` | `{brackets: [{up_to, rate}],
+first_time_buyer_rebate}`, with `municipality: montreal | toronto` and
+`first_time_buyer: true | false` beside it. `auto` needs a `province`, on the
+option or at the top level. Omit `up_to` on an explicit schedule's last bracket
+for the uncapped top band.
+
+The duty is CASH at closing: it is ADDED to `purchase_costs` /
+`purchase_costs_rate` — which go on covering notary, inspection and the rest —
+and so netted out of `cash_available` when one is stated. It is derived on every
+load, so `--sweep` and `--break-even` re-derive it at each price.
+
+| Jurisdiction | Tranche of the base | Rate |
+|---|---|---|
+| Québec provincial | up to $62,900 | 0.5% |
+| | $62,900.01 to $315,000 | 1.0% |
+| | over $315,000 | 1.5% |
+| Ville de Montréal | up to $62,900 | 0.5% |
+| | $62,900 to $315,000 | 1% |
+| | $315,000 to $552,300 | 1.5% |
+| | $552,300 to $1,104,700 | 2% |
+| | $1,104,700 to $2,136,500 | 2.5% |
+| | $2,136,500 to $3,113,000 | 3.5% |
+| | from $3,113,000 | 4% |
+| Ontario | up to and including $55,000 | 0.5% |
+| | $55,000 to $250,000 | 1.0% |
+| | $250,000 to $400,000 | 1.5% |
+| | over $400,000 | 2.0% |
+| | over $2,000,000 (one or two single family residences) | 2.5% |
+| Toronto MLTT | up to and including $55,000 | 0.5% |
+| | $55,000.01 to $250,000 | 1.0% |
+| | $250,000.01 to $400,000 | 1.5% |
+| | $400,000.01 to $2,000,000 | 2.0% |
+| | $2,000,000.01 to $3,000,000 | 2.5% |
+| | over $3,000,000 to $4,000,000 | 4.40% |
+| | over $4,000,000 to $5,000,000 | 5.45% |
+| | over $5,000,000 to $10,000,000 | 6.50% |
+| | over $10,000,000 to $20,000,000 | 7.55% |
+| | over $20,000,000 | 8.60% |
+
+Sources, all retrieved 2026-09-04: Gouvernement du Québec, « Droits sur les
+mutations immobilières » (2026 thresholds, indexed annually to Québec CPI —
+re-read for a 2027 closing); Ville de Montréal, « Comment sont calculés les
+droits sur les mutations immobilières » (2026 table); Ontario Ministry of
+Finance, "Calculating land transfer tax"; City of Toronto, "MLTT Rates & Fees"
+(luxury tiers as of April 1, 2026). The anchor `source` strings carry each
+table exactly as its page prints it.
+
+Two structures, and they are not interchangeable. **Montréal REPLACES** the
+Québec provincial table — the province lets Montréal set its own rates above
+$500,000 with no 3% ceiling, and montreal.ca's own worked example balances only
+against the single table. **Toronto ADDS** to Ontario's: the MLTT "has been
+applied to purchases on all properties in the City of Toronto in addition to the
+Provincial Land Transfer Tax as of February 1, 2008", so a Toronto purchase pays
+both, and both rebates.
+
+First-time buyers: Ontario refunds up to **$4,000**, Toronto up to **$4,475**,
+each capped at its own leg's tax so a rebate never becomes a payment to the
+buyer. Neither Québec schedule has an anchored first-time-buyer rebate of the
+duty — both carry a `source: none` entry naming what was tried, and the
+read-back says so rather than implying a zero was computed. `first_time_buyer`
+is the USER's assertion of eligibility: the engine applies the published
+maximum and cannot check age, occupancy or prior ownership.
+
+The base the engine applies is the **PRICE**. In Québec the duty is really
+levied on the greater of the price paid, the price stated in the deed, and the
+municipal assessment × the year's comparative factor; a purchase well under
+assessment is therefore under-taxed by this model. A municipality other than
+Montréal that legislated its own band above $500,000 (the province permits up
+to 3%) is NOT in the registry — state an explicit schedule for it.
+
 ## Validation Rules
 
 The config loader validates:

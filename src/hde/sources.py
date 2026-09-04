@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .anchors import ANCHORS, match_window
+from .anchors import ANCHORS
+from .land_transfer_tax import anchor_families
 
 # The three declarable classes. `unattributed` is not declarable — it is what
 # the echo calls a config key no `sources:` entry covers.
@@ -346,6 +348,38 @@ def _anchor_declaration(
     return joined, None
 
 
+# ---------------------------------------------------------------------------
+# Derived attributions: a value the ENGINE looked up
+# ---------------------------------------------------------------------------
+#
+# `land_transfer_tax: auto` is not a figure the user or the assistant typed —
+# it is a directive to read the anchored schedule, so the echo attributes it to
+# the registry it was read from. A `sources:` entry the user DID declare still
+# wins: their statement about their own config is never overwritten.
+
+def _derived_anchor_sources(data: Dict[str, Any]) -> Dict[str, Tuple[str, str]]:
+    out: Dict[str, Tuple[str, str]] = {}
+    top_province = data.get("province")
+    for option in ("condo", "house"):
+        block = data.get(option)
+        if not isinstance(block, dict):
+            continue
+        setting = block.get("land_transfer_tax")
+        if not (isinstance(setting, str) and setting.strip().lower() == "auto"):
+            continue
+        province = block.get("province", top_province)
+        if isinstance(province, str):
+            province = province.strip().upper()
+        municipality = block.get("municipality")
+        if isinstance(municipality, str):
+            municipality = municipality.strip().lower()
+        families = anchor_families(province, municipality)
+        if families:
+            out[f"{option}.land_transfer_tax"] = (
+                "anchor", " + ".join(f"{f}.*" for f in families))
+    return out
+
+
 def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
     """Parse `sources:` against the config it describes.
 
@@ -384,9 +418,10 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
                     problems.append(_value_problem(key, value))
 
     details = dict(uncertainty_inputs(data))
+    derived = _derived_anchor_sources(data)
     entries = []
     for key in keys:
-        source, anchor = declared_map.get(key, ("unattributed", None))
+        source, anchor = declared_map.get(key, derived.get(key, ("unattributed", None)))
         value = raw_value(data, key)
         entries.append(SourceEntry(
             key=key,

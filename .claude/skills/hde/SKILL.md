@@ -86,9 +86,10 @@ otherwise").
    Québec City and Toronto (the read-back cites a match), explicit no-source
    entries for Gatineau and Ottawa, household-average insurance floors for QC
    and ON. Purchase costs when they named their cash: "no idea" must NOT
-   become `purchase_costs: 0` — take the illustrative ≈ 1.5% of price
-   (labelled) and let the engine net it from `cash_available`; never type a
-   hand-computed `down_payment`.
+   become `purchase_costs: 0` — set `land_transfer_tax: auto` with `province`
+   (plus `municipality: montreal|toronto`) so the engine prices the welcome
+   tax, then add notary and inspection; never type a hand-computed
+   `down_payment`.
 3. **Modelling parameters — may be proposed, always labelled:** discount rate
    (engine default 3% real, cited), growth and escalation rates, maintenance
    (0.6% NAHB routine or the examples' 1.2% — name which), the uncertainty
@@ -198,9 +199,10 @@ cap of any lane ranks what stays and never drops an item:
       call cheaper is checked against the 32% and 39% lines and never softened
 - [ ] **No source for:** every figure you estimated because neither the user
       nor the anchor registry had it; outside the anchored jurisdictions say so
-      (the registry is Québec-shaped plus Toronto); a placeholder above ~10% of
-      year-1 cash gets a two-point `--sweep`, both points quoted with the
-      direction
+      (the registry is Québec-shaped plus Ontario and Toronto — an
+      Ottawa or Gatineau property-tax rate has no anchor); a placeholder above ~10% of year-1
+      cash (a tax bill, insurance) gets a two-point `--sweep`, both points
+      quoted with the direction
 - [ ] **Not modelled:** every item with a direction
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 

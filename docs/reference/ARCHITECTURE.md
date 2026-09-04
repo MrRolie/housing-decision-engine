@@ -20,6 +20,7 @@ src/hde/
 ├── monte_carlo.py      # Monte Carlo engine (run_monte_carlo)
 ├── market_scenario.py  # ScenarioPrior loader/validation, drift banding, time-anchor guard
 ├── mortgage_insurance.py # Insured-mortgage premium: schedule, tier, financed premium, cash tax
+├── land_transfer_tax.py # Welcome / land-transfer tax: bracket schedules, rebate, cash at closing
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
 ├── sources.py          # Source classes: who stated each value (`sources:` block, the
 │                       #   echo lines, the unstated-uncertainty warning's input set)
@@ -39,11 +40,14 @@ verdict and the same assumption echo; none re-derives a figure.
 
 Provenance chain: `anchors.py` is the single source of truth for every
 bias-critical default (dataclass default == parser default == anchor, pinned
-generatively in `tests/test_anchors.py`) and for the mortgage-insurance premium
+generatively in `tests/test_anchors.py`), for the mortgage-insurance premium
 schedule — each CMHC band, the 95% maximum, the 0.20% amortization surcharge and
 the Québec/Ontario taxes on the premium are registered entries, and
 `mortgage_insurance.anchored_schedule` builds the schedule from them, so a rate
-has exactly one home and `--print-anchors` shows the table the engine applies; `market_scenario.py` guards the
+has exactly one home and `--print-anchors` shows the table the engine applies —
+and for the land-transfer-tax schedules, where every bracket is an entry whose
+NAME carries the threshold (`land_transfer_tax.montreal.to_552300` = 1.5%) so the
+registry dump alone shows the whole table; `market_scenario.py` guards the
 demographic prior (schema, closed enums, `constants_as_of` within a year of
 `START_CALENDAR_YEAR = 2026`) and renders its provenance only from the file.
 
@@ -157,6 +161,20 @@ for.
   mortgage-insurance premium rides in the loan, never in year-0 cash). A Canadian posted rate compounds
   semi-annually with monthly payments — convert first: `r_eff = (1 + r_posted/2)^2 − 1`
   (≈ 1.7% difference on the annual outlay at 5%).
+- **The land-transfer tax is derived in the loader** (`land_transfer_tax.py`,
+  key `land_transfer_tax: auto | none | {brackets, first_time_buyer_rebate}`,
+  with `municipality` and `first_time_buyer`). The duty is CASH at closing, so
+  it is added to `purchase_costs` BEFORE the `cash_available` netting — it
+  leaves the buyer's pile like the notary's bill, and `purchase_costs` /
+  `purchase_costs_rate` go on covering notary, inspection and the rest. Derived
+  per load, so `--sweep` and `--break-even` re-derive it at every price (a
+  Montréal scan crosses the $552,300 knee from 1.5% to 2%). Montréal's schedule
+  REPLACES the Québec provincial one; Toronto's is charged IN ADDITION to
+  Ontario's. A first-time-buyer rebate is capped both at its published maximum
+  and at its own leg's tax, so it never becomes a payment to the buyer. The base
+  is the PRICE: in Québec the duty is levied on the greater of price and
+  municipal assessment × the year's comparative factor, and the engine has no
+  assessment roll.
 - **Mortgage insurance is derived in the loader** (`mortgage_insurance.py`, key
   `mortgage_insurance: auto | none | {bands, premium_tax_rate}`). Above 80%
   loan-to-value the tier is chosen on `L₀ = initial_value − down_payment`, i.e.

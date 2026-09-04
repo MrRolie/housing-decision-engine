@@ -19,6 +19,11 @@ from .mortgage_insurance import (
     MortgageInsuranceError,
     resolve as resolve_mortgage_insurance,
 )
+from .land_transfer_tax import (
+    LandTransferTax,
+    LandTransferTaxError,
+    resolve as resolve_land_transfer_tax,
+)
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .sources import build_source_echo, unstated_uncertainty
@@ -70,6 +75,7 @@ _CONDO_KEYS = frozenset({
     "financed_purchase_costs", "value_growth_rate", "property_tax_rate",
     "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock", "mortgage_insurance", "province",
+    "land_transfer_tax", "municipality", "first_time_buyer",
 })
 _HOUSE_KEYS = frozenset({
     "initial_value", "purchase_costs", "purchase_costs_rate", "financed_purchase_costs",
@@ -77,6 +83,7 @@ _HOUSE_KEYS = frozenset({
     "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
     "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
     "price_shock", "mortgage_insurance", "province",
+    "land_transfer_tax", "municipality", "first_time_buyer",
 })
 _RENT_KEYS = frozenset({
     "monthly_rent", "rent_escalation_rate", "invested_down_payment",
@@ -376,12 +383,20 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         typed_purchase_costs = opt.purchase_costs
         if opt.mortgage_insurance is not None and opt.cash_available is None:
             typed_purchase_costs -= opt.mortgage_insurance.premium_tax
+        # A DERIVED transfer tax is priced, not typed: it must not silence the
+        # ask for the costs nobody has stated (2026-09-04 — the largest closing
+        # cost being computed says nothing about the notary and the inspector).
+        if opt.land_transfer_tax is not None:
+            typed_purchase_costs -= opt.land_transfer_tax.total
         if typed_purchase_costs <= 0.005:
             # A financed premium is modelled (it rides the loan) — do not list it
             # as missing (round-four dogfood 2026-09-02).
             premium = ("" if opt.financed_purchase_costs > 0
                        else ", mortgage-insurance premium")
-            missing.append(f"purchase_costs (land-transfer tax, notary{premium})")
+            transfer = ("notary, inspection — the transfer tax is priced separately"
+                        if opt.land_transfer_tax is not None
+                        else "land-transfer tax, notary")
+            missing.append(f"purchase_costs ({transfer}{premium})")
         if not opt.other_recurring_costs:
             missing.append("other_recurring_costs (property tax, insurance)")
         if missing:
@@ -820,6 +835,32 @@ def _property_tax_cost(
     )
 
 
+def _apply_land_transfer_tax(
+    data: Dict[str, Any], name: str, top_province: Optional[str],
+    initial_value: float, purchase_costs: float,
+) -> Tuple[float, Optional[LandTransferTax]]:
+    """
+    Derive the transfer tax (src/hde/land_transfer_tax.py) and fold it into
+    `purchase_costs` — it is cash at closing, like the notary's bill.
+
+    Called BEFORE `_net_down_payment`, so a stated `cash_available` has the tax
+    taken out of it with the rest of the closing costs; and derived HERE, in the
+    loader, so `--sweep` and `--break-even` re-derive it at every grid point
+    instead of freezing the seed price's brackets (a Montréal price scan crosses
+    the $552,300 knee from 1.5% to 2%).
+    """
+    try:
+        tax, record = resolve_land_transfer_tax(
+            data, name,
+            top_province=top_province,
+            initial_value=initial_value,
+            purchase_costs=purchase_costs,
+        )
+    except LandTransferTaxError as exc:
+        raise ConfigValidationError(str(exc)) from exc
+    return purchase_costs + tax, record
+
+
 def _apply_mortgage_insurance(
     data: Dict[str, Any], name: str, top_province: Optional[str],
     initial_value: float, down_payment: Optional[float], cash_available: Optional[float],
@@ -877,6 +918,9 @@ def _parse_condo(condo_data: Dict[str, Any], years: int,
         other_costs.append(tax)
 
     purchase_costs = _purchase_costs(condo_data, "condo")
+    purchase_costs, transfer_tax = _apply_land_transfer_tax(
+        condo_data, "condo", top_province,
+        float(condo_data.get("initial_value", 0.0)), purchase_costs)
     down_payment, cash_available = _net_down_payment(condo_data, "condo", purchase_costs)
     (down_payment, purchase_costs, financed_purchase_costs,
      insurance) = _apply_mortgage_insurance(
@@ -905,6 +949,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int,
         financed_purchase_costs=financed_purchase_costs,
         province=condo_data.get("province", top_province),
         mortgage_insurance=insurance,
+        land_transfer_tax=transfer_tax,
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -943,6 +988,9 @@ def _parse_house(house_data: Dict[str, Any], years: int,
         other_costs.append(tax)
 
     purchase_costs = _purchase_costs(house_data, "house")
+    purchase_costs, transfer_tax = _apply_land_transfer_tax(
+        house_data, "house", top_province,
+        float(house_data["initial_value"]), purchase_costs)
     down_payment, cash_available = _net_down_payment(house_data, "house", purchase_costs)
     (down_payment, purchase_costs, financed_purchase_costs,
      insurance) = _apply_mortgage_insurance(
@@ -968,6 +1016,7 @@ def _parse_house(house_data: Dict[str, Any], years: int,
         financed_purchase_costs=financed_purchase_costs,
         province=house_data.get("province", top_province),
         mortgage_insurance=insurance,
+        land_transfer_tax=transfer_tax,
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None

@@ -26,6 +26,7 @@ from .anchors import (
     short_cite,
 )
 from .market_scenario import LoadedScenarioPrior
+from .land_transfer_tax import purchase_costs_clause
 from .mortgage_insurance import financing_clause
 from .models import (
     ComparisonDeterministicResult,
@@ -297,6 +298,20 @@ def format_assumptions(
             f"house: value growth {_g(spec.house.value_growth_rate)} · "
             f"maintenance {spec.house.annual_maintenance_rate:.1%} of value/yr · "
             f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
+        )
+    # The transfer tax gets its OWN line rather than a clause on `financing:`:
+    # the financing line is skipped for an all-cash purchase, and an all-cash
+    # buyer pays the welcome tax like everyone else. It sits next to the
+    # financing line so the two `purchase_costs` figures reconcile by eye.
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None or opt.land_transfer_tax is None:
+            continue
+        premium_tax = (opt.mortgage_insurance.premium_tax
+                       if opt.mortgage_insurance is not None and opt.cash_available is None
+                       else 0.0)
+        lines.append(
+            f"{name} purchase costs: "
+            + purchase_costs_clause(opt.land_transfer_tax, opt.purchase_costs, premium_tax)
         )
     for name, opt in (("condo", spec.condo), ("house", spec.house)):
         if opt is None or opt.all_cash or opt.down_payment is None:

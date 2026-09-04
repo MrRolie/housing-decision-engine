@@ -98,6 +98,16 @@ CONSUMED_ELSEWHERE = {
     "mortgage_insurance.premium_tax_rate.on": "mortgage_insurance.anchored_schedule",
 }
 
+# Anchor FAMILIES consumed as a table rather than one entry at a time: a
+# transfer-tax schedule is a list of brackets whose length is the source's
+# choice, and land_transfer_tax.anchored_schedule builds each schedule FROM
+# these entries. Declared by prefix, so adding a bracket (or a municipality)
+# needs no line here — adding a new FAMILY does. The schedules themselves are
+# pinned against the quoted tables in tests/test_land_transfer_tax.py.
+CONSUMED_FAMILIES = {
+    "land_transfer_tax.": "land_transfer_tax.anchored_schedule",
+}
+
 
 def _parser_paths(name: str):
     if name == "condo.house.selling_cost_rate":
@@ -116,7 +126,8 @@ class TestRegistryDiscipline:
         # so adding a municipality does not need a line here — but adding a new
         # FAMILY does. Their own discipline is pinned in test_reference_anchors.
         declared = (set(WIRING) | set(CONSUMED_ELSEWHERE)
-                    | {n for n in ANCHORS if is_reference(n)})
+                    | {n for n in ANCHORS if is_reference(n)}
+                    | {n for n in ANCHORS if n.startswith(tuple(CONSUMED_FAMILIES))})
         assert declared == set(ANCHORS), {
             "unwired anchors": sorted(set(ANCHORS) - declared),
             "stale wiring": sorted(declared - set(ANCHORS)),

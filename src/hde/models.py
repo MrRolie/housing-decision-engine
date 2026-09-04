@@ -12,6 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .anchors import ANCHORS
+from .land_transfer_tax import LandTransferTax
 from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
 from .sources import SourceEcho
@@ -155,6 +156,12 @@ class CondoParams:
     # changes; the assumption echo reads the record to say what was computed.
     province: Optional[str] = None
     mortgage_insurance: Optional[MortgageInsurance] = None
+    # What the loader derived from the transfer-tax schedule. The dollars are
+    # already inside `purchase_costs` (and so already netted out of
+    # `cash_available`), so nothing downstream prices it again; this record is
+    # the read-back's evidence — which schedules charged, and what a
+    # first-time-buyer rebate took off.
+    land_transfer_tax: Optional[LandTransferTax] = None
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -203,6 +210,12 @@ class HouseParams:
     # changes; the assumption echo reads the record to say what was computed.
     province: Optional[str] = None
     mortgage_insurance: Optional[MortgageInsurance] = None
+    # What the loader derived from the transfer-tax schedule. The dollars are
+    # already inside `purchase_costs` (and so already netted out of
+    # `cash_available`), so nothing downstream prices it again; this record is
+    # the read-back's evidence — which schedules charged, and what a
+    # first-time-buyer rebate took off.
+    land_transfer_tax: Optional[LandTransferTax] = None
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
