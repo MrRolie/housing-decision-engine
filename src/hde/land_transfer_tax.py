@@ -73,6 +73,23 @@ _REBATE_ANCHORS: Dict[str, str] = {
 _PROVINCES_WITH_SCHEDULES = ("QC", "ON")
 
 
+def option_province(province: Optional[str], municipality: Optional[str]) -> Optional[str]:
+    """The province an owned option sits in, spelled as the registry spells it
+    (upper case): the stated `province`, else the one its `municipality`
+    belongs to — `municipality: montreal` alone places an option in Québec,
+    `toronto` in Ontario. None when neither is stated. ONE resolver, shared by
+    the loader's coherence checks and the read-back's other-costs line, so the
+    two can never disagree about where an option is."""
+    if isinstance(province, str) and province.strip():
+        return province.strip().upper()
+    if isinstance(municipality, str):
+        wanted = municipality.strip().lower()
+        for prov, city in _JURISDICTIONS:
+            if city == wanted:
+                return prov
+    return None
+
+
 class LandTransferTaxError(ValueError):
     """A config the transfer-tax schedules cannot price (no province, a
     municipality outside its province, a malformed explicit schedule)."""

@@ -13,7 +13,7 @@ import yaml
 
 import datetime
 
-from .anchors import ANCHORS
+from .anchors import ANCHORS, match_window
 from .mortgage_insurance import (
     MortgageInsurance,
     MortgageInsuranceError,
@@ -22,10 +22,12 @@ from .mortgage_insurance import (
 from .land_transfer_tax import (
     LandTransferTax,
     LandTransferTaxError,
+    option_province,
     resolve as resolve_land_transfer_tax,
 )
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
+from .serialization import cost_family, reference_matches, school_tax_line
 from .sources import build_source_echo, unstated_uncertainty
 from .models import (
     ComparisonDeterministicResult,
@@ -214,6 +216,54 @@ _ASSUMPTION_KEYS: Dict[str, tuple] = {
     "rent": ("rent_escalation_rate", "invested_down_payment", "investment_return_rate"),
     "income": ("income_growth_rate", "affordability_threshold"),
 }
+
+
+# The words YAML 1.1 reads as booleans, by the boolean they become.
+_YAML_BOOL_WORDS = {True: "ON", False: "NO or OFF"}
+
+
+def _refuse_boolean_jurisdictions(data: Dict[str, Any]) -> None:
+    """`province: ON` is what a person writes for Ontario, and YAML reads the
+    bare word as the boolean True. Served answers showed the refusal that used
+    to follow — "no anchored schedule for province True" — read as a missing
+    schedule rather than a quoting problem, so the boolean is refused HERE,
+    before any schedule or tax lookup sees it, with the fix spelled out."""
+    def check(prefix: str, key: str, value: Any, noun: str, example: str) -> None:
+        if isinstance(value, bool):
+            raise ConfigValidationError(
+                f"{prefix}{key}: {value} is not a {noun} — YAML reads an unquoted "
+                f"{_YAML_BOOL_WORDS[value]} as a boolean; quote it: {key}: {example}")
+
+    check("", "province", data.get("province"), "province code", '"ON"')
+    for option in ("condo", "house"):
+        block = data.get(option)
+        if not isinstance(block, dict):
+            continue
+        check(f"{option}.", "province", block.get("province"), "province code", '"ON"')
+        check(f"{option}.", "municipality", block.get("municipality"), "municipality",
+              '"montreal" | "toronto"')
+
+
+def _municipality(data: Dict[str, Any]) -> Optional[str]:
+    """The option's stated city, normalised the way the schedules key it."""
+    value = data.get("municipality")
+    return value.strip().lower() if isinstance(value, str) else None
+
+
+def _school_tax_cited(spec: ComparisonSpec, option_name: str) -> bool:
+    """True when the option's property-tax figure already carries the school
+    tax: the read-back cites a municipal + school SUM for one of its lines, or
+    a `sources:` declaration names a school_tax anchor for its rate or line."""
+    for entry in reference_matches(spec):
+        if entry["option"] == option_name and any(
+                m["name"].startswith("school_tax.") for m in entry["matches"]):
+            return True
+    echo = spec.sources
+    if echo is not None:
+        for e in echo.of_class("anchor"):
+            if e.key.startswith(f"{option_name}.") and e.anchor and "school_tax." in e.anchor:
+                return True
+    return False
 
 
 def _defaults_applied(data: Dict[str, Any]) -> List[str]:
@@ -524,6 +574,44 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"one side's dispersion against a fixed number and is OVERconfident: the "
             f"too-close-to-call zone is wider than shown; {fix} — or read the deterministic line"
         )
+
+    # Québec's school tax (2026-09-04): the municipal rate is not the bill. A
+    # Québec owner pays the province-wide school rate on top of it, and served
+    # answers modelled the municipal line alone — an understatement that leans
+    # toward buying. Silent when a line names the school tax, or when the
+    # property-tax figure already carries it (a cited or declared sum).
+    school = ANCHORS["school_tax.qc"]
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None or option_province(opt.province, opt.municipality) != "QC":
+            continue
+        names = [cost.name for cost in opt.other_recurring_costs]
+        if not any(cost_family(n) == "property_tax." for n in names):
+            continue
+        if any(school_tax_line(n) for n in names) or _school_tax_cited(spec, name):
+            continue
+        warns.append(
+            f"{name}: no school-tax line — Québec levies {school.name} "
+            f"({school.value:.5%} of assessed value) on top of the municipal rate; add it "
+            f"or list it as not modelled (toward buying)"
+        )
+
+    # The POSTED rate is a list price (2026-09-04): the registry's own entry
+    # says contracted rates run lower. A mortgage_rate that IS the posted
+    # figure — in either of its stated conventions, within the read-back
+    # matcher's window — is named as such, because the verdict's margin moves
+    # with the rate and nothing else in the run would say the rate is a ceiling.
+    posted = ANCHORS["mortgage_rate.posted_5y"]
+    window = match_window(posted.name)
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None or opt.all_cash or opt.mortgage_rate is None:
+            continue
+        if any(abs(opt.mortgage_rate - stated) <= window for stated in posted.stated_values()):
+            warns.append(
+                f"{name}.mortgage_rate {opt.mortgage_rate:.2%} is the POSTED 5-year rate "
+                f"({posted.name}); its source says contracted rates run lower — see "
+                f"mortgage_rate.contracted_5y_uninsured / mortgage_rate.contracted_5y_insured "
+                f"in --print-anchors; the verdict's margin moves with the rate"
+            )
 
     return warns
 
@@ -1058,6 +1146,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int,
         purchase_costs=purchase_costs,
         financed_purchase_costs=financed_purchase_costs,
         province=condo_data.get("province", top_province),
+        municipality=_municipality(condo_data),
         mortgage_insurance=insurance,
         land_transfer_tax=transfer_tax,
         price_shock=(
@@ -1125,6 +1214,7 @@ def _parse_house(house_data: Dict[str, Any], years: int,
         purchase_costs=purchase_costs,
         financed_purchase_costs=financed_purchase_costs,
         province=house_data.get("province", top_province),
+        municipality=_municipality(house_data),
         mortgage_insurance=insurance,
         land_transfer_tax=transfer_tax,
         price_shock=(
@@ -1458,6 +1548,7 @@ def load_config(path: str) -> ComparisonSpec:
     # Unknown-key diff runs before required-field checks so a typo (e.g.
     # 'yeers') gets a did-you-mean instead of a bare "missing field" refusal.
     _reject_unknown_keys(data)
+    _refuse_boolean_jurisdictions(data)
 
     # Required top-level fields
     if "years" not in data:
@@ -1502,6 +1593,7 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
         ComparisonSpec populated from the dictionary
     """
     _reject_unknown_keys(data)
+    _refuse_boolean_jurisdictions(data)
 
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")

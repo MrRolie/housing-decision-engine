@@ -476,6 +476,22 @@ deterministic line alone says and whether that margin clears the tie band.
 of "widens the distribution", pinned by a test — so the warning cannot miss an
 input the engine treats as uncertainty.
 
+**Lines by name (2026-09-04).** `house.other_recurring_costs` is one
+attributable thing — a list — and an anchor sources a number, so the
+property-tax and insurance lines could carry no anchor at all; served answers
+showed an $813 insurance line that IS the StatCan figure echoed as
+`unattributed`. The named-leaf form
+`<option>.other_recurring_costs.<line name>.annual_amount` (and
+`.escalation_rate`) reaches one line. `sources._split_line_key` reads the name
+as whatever sits between the fixed prefix and the leaf suffix, so a name with
+dots or spaces resolves; the keys are deliberately NOT in `attributable_keys`,
+so an undeclared list stays one entry — naming a line switches that list to a
+per-leaf echo (declared leaves with their class, the rest `unattributed`, the
+bare key only if it too was declared). A rate-on-value anchor
+(`property_tax.*`, `school_tax.*`) against a dollar line is compared as
+amount ÷ `initial_value` — the same probe `reference_matches` uses — so the
+two surfaces cannot disagree about whether a line IS a published rate.
+
 ### The read-back block — `assumptions.read_back` and `--read-back`
 
 Eight reviewed answers in two days each dropped a line the engine had already
@@ -533,3 +549,22 @@ verbatim:`. `--read-back` prints the block alone on stdout — nothing else, and
 the run's exit code — for a caller that wants only the lines to carry. Under
 `--json` the text block is suppressed (stdout stays one document); `--quiet`
 asked for one line and still gets one unless `--read-back` is passed too.
+
+**Jurisdiction coherence (2026-09-04).** Where an owned option sits is decided
+by ONE resolver, `land_transfer_tax.option_province` (the stated `province`,
+else the province its `municipality` belongs to), shared by the loader's
+coherence checks and the read-back's other-costs line so the two never
+disagree. Three checks hang off it. The Québec school-tax note fires in
+`coherence_warnings` for a QC option with a line `serialization.cost_family`
+calls property tax and none `school_tax_line` calls school tax, unless the
+figure already carries the school tax (a `reference_matches` sum citation or a
+`sources:` anchor naming `school_tax.*`); the rate in the text is
+`ANCHORS["school_tax.qc"].value`, never typed. The Ontario suffix is appended
+by `_reference_line` to an unmatched property-tax line of an ON option — the
+substance of the `property_tax.toronto` / `property_tax.ottawa` rationales
+(2026 tax year on January 1, 2016 MPAC values). The posted-rate warning
+compares `mortgage_rate` with `mortgage_rate.posted_5y.stated_values()` inside
+`anchors.match_window`, so 6.09% posted and 6.1827% effective both fire. The
+loader refuses a `province` / `municipality` YAML parsed as a boolean
+(`_refuse_boolean_jurisdictions`) before any schedule or premium lookup can
+name it.

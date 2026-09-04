@@ -77,6 +77,14 @@ other_recurring_costs:
     escalation_rate: <float>    # Optional: Annual growth (default: 0.0)
 ```
 
+A line's source is declared by its name in the top-level `sources:` block —
+`house.other_recurring_costs.<name>.annual_amount: user | assistant |
+anchor:<name>` (also `.escalation_rate`); an anchor declaration must equal the
+published figure (a dollar tax line is compared as amount ÷ `initial_value`).
+The bare `house.other_recurring_costs` key stays `user` | `assistant`. Name
+lines for what they are: a Québec option with a property-tax line and no line
+named for the school tax gets a coherence warning naming `school_tax.qc`.
+
 ## Example: Simple Configuration
 
 ```yaml
@@ -379,5 +387,13 @@ The config loader validates:
 7. Each event has `name`, `base_cost`, `expected_year`
 8. Each event `expected_year >= 1`
 9. Each event `base_cost >= 0`
+10. `province` and `municipality` are strings — quote the code (`province:
+    "ON"`). An unquoted `ON`, `NO`, `YES` or `OFF` is a YAML boolean and is
+    refused with that hint: `province: True is not a province code — YAML reads
+    an unquoted ON as a boolean; quote it: province: "ON"`
+11. A `sources:` entry names a key the config sets — an `other_recurring_costs`
+    line by its name (`<option>.other_recurring_costs.<name>.annual_amount`);
+    an unknown line name is refused naming the lines that exist, and a name two
+    lines share cannot be declared
 
 Validation failures raise `ConfigValidationError` with descriptive messages.

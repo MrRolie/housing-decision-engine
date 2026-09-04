@@ -901,3 +901,210 @@ def test_like_for_like_warning_fires_for_all_cash_purchase():
     })
     warns = "\n".join(coherence_warnings(spec))
     assert "net present value 0" in warns and "$480,000" in warns
+
+
+# ---------------------------------------------------------------------------
+# Jurisdiction strings YAML reads as booleans (2026-09-04)
+#
+# `province: ON` is what a person writes for Ontario, and YAML 1.1 reads the
+# bare word as the boolean True. Served answers showed the refusal that
+# followed — "no anchored schedule for province True" — and the assistant
+# reading it as a missing schedule rather than a quoting problem.
+# ---------------------------------------------------------------------------
+
+class TestJurisdictionBooleans:
+    def _cfg(self, house_extra=None, **top):
+        cfg = {"years": 10, "discount_rate": 0.03,
+               "house": {"initial_value": 500_000, "all_cash": True},
+               "rent": {"monthly_rent": 2_000}}
+        cfg["house"].update(house_extra or {})
+        cfg.update(top)
+        return cfg
+
+    def test_yaml_reads_an_unquoted_on_as_true(self):
+        assert yaml.safe_load("province: ON")["province"] is True
+
+    def test_a_top_level_province_parsed_as_true_is_refused_with_the_quote_hint(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(self._cfg(province=True))
+        assert str(excinfo.value) == (
+            'province: True is not a province code — YAML reads an unquoted ON as a '
+            'boolean; quote it: province: "ON"')
+
+    def test_an_option_level_province_is_refused_with_its_own_prefix(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(self._cfg(house_extra={"province": True}))
+        assert str(excinfo.value).startswith("house.province: True is not a province code")
+        assert 'quote it: province: "ON"' in str(excinfo.value)
+
+    def test_a_false_province_is_refused_naming_the_words_yaml_reads_as_false(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(self._cfg(province=False))
+        message = str(excinfo.value)
+        assert message.startswith("province: False is not a province code")
+        assert "NO or OFF" in message and "quote it" in message
+
+    def test_a_municipality_parsed_as_a_boolean_is_refused(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(self._cfg(house_extra={"municipality": True}))
+        message = str(excinfo.value)
+        assert message.startswith("house.municipality: True is not a municipality")
+        assert "boolean" in message and 'municipality: "montreal"' in message
+
+    def test_the_quote_hint_wins_over_the_transfer_tax_refusal(self):
+        """With `land_transfer_tax: auto` the schedule lookup used to fail first,
+        with "no anchored schedule for province True"."""
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(self._cfg(province=True,
+                                       house_extra={"land_transfer_tax": "auto"}))
+        message = str(excinfo.value)
+        assert "no anchored schedule" not in message
+        assert "YAML reads an unquoted ON as a boolean" in message
+
+    def test_the_quote_hint_wins_over_the_insurance_refusal(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict({
+                "years": 10, "province": True,
+                "house": {"initial_value": 500_000, "down_payment": 50_000,
+                          "mortgage_rate": 0.045, "mortgage_term_years": 25,
+                          "mortgage_insurance": "auto"},
+                "rent": {"monthly_rent": 2_000},
+            })
+        message = str(excinfo.value)
+        assert "must be a string" not in message
+        assert "YAML reads an unquoted ON as a boolean" in message
+
+    def test_a_quoted_code_loads(self):
+        spec = load_config_dict(self._cfg(province="ON"))
+        assert spec.house.province == "ON"
+
+
+# ---------------------------------------------------------------------------
+# Jurisdiction coherence: the Québec school tax and the posted mortgage rate
+# (2026-09-04). Served answers showed a Québec owner's tax modelled as the
+# municipal rate alone, and the Bank of Canada POSTED rate typed as the
+# borrower's rate with nothing saying it is a list price.
+# ---------------------------------------------------------------------------
+
+from hde.anchors import ANCHORS  # noqa: E402
+
+SCHOOL_NOTE = ("house: no school-tax line — Québec levies school_tax.qc (0.07899% of "
+               "assessed value) on top of the municipal rate; add it or list it as not "
+               "modelled (toward buying)")
+
+
+def _owned(lines=None, province="QC", option="house", **option_extra):
+    block = {"initial_value": 600_000, "all_cash": True, "value_growth_rate": 0.01,
+             "purchase_costs": 8_000}
+    if option == "condo":
+        block["monthly_fee"] = 300
+    if lines is not None:
+        block["other_recurring_costs"] = lines
+    block.update(option_extra)
+    cfg = {"years": 10, "discount_rate": 0.03,
+           option: block,
+           "rent": {"monthly_rent": 2_000, "rent_escalation_rate": 0.0,
+                    "invested_down_payment": 600_000}}
+    if province is not None:
+        cfg["province"] = province
+    return cfg
+
+
+TAX_ONLY = [{"name": "property_tax", "annual_amount": 3_300, "escalation_rate": 0.0}]
+
+
+class TestSchoolTaxNote:
+    def test_a_quebec_tax_line_without_a_school_line_gets_the_note(self):
+        warns = coherence_warnings(load_config_dict(_owned(TAX_ONLY)))
+        assert SCHOOL_NOTE in warns
+
+    def test_the_rate_in_the_note_is_the_registry_s(self):
+        school = ANCHORS["school_tax.qc"]
+        assert f"({school.value:.5%} of assessed value)" in SCHOOL_NOTE
+
+    def test_a_school_tax_line_silences_it(self):
+        lines = TAX_ONLY + [{"name": "school tax", "annual_amount": 450}]
+        assert not any("school-tax" in w for w in
+                       coherence_warnings(load_config_dict(_owned(lines))))
+
+    def test_a_french_school_line_counts(self):
+        lines = TAX_ONLY + [{"name": "taxe scolaire", "annual_amount": 450}]
+        assert not any("school-tax" in w for w in
+                       coherence_warnings(load_config_dict(_owned(lines))))
+
+    def test_ontario_is_silent(self):
+        assert not any("school-tax" in w for w in
+                       coherence_warnings(load_config_dict(_owned(TAX_ONLY, province="ON"))))
+
+    def test_no_province_is_silent(self):
+        assert not any("school-tax" in w for w in
+                       coherence_warnings(load_config_dict(_owned(TAX_ONLY, province=None))))
+
+    def test_montreal_as_municipality_places_the_option_in_quebec(self):
+        cfg = _owned(TAX_ONLY, province=None, municipality="montreal")
+        assert SCHOOL_NOTE in coherence_warnings(load_config_dict(cfg))
+
+    def test_no_property_tax_line_no_note(self):
+        lines = [{"name": "home_insurance", "annual_amount": 900}]
+        assert not any("school-tax" in w for w in
+                       coherence_warnings(load_config_dict(_owned(lines))))
+
+    def test_the_rate_form_gets_the_note_too(self):
+        cfg = _owned(None, property_tax_rate=0.0055)
+        assert SCHOOL_NOTE in coherence_warnings(load_config_dict(cfg))
+
+    def test_a_rate_the_read_back_cites_as_municipal_plus_school_is_silent(self):
+        total = ANCHORS["property_tax.laval"].value + ANCHORS["school_tax.qc"].value
+        cfg = _owned(None, property_tax_rate=total)
+        assert not any("school-tax" in w for w in coherence_warnings(load_config_dict(cfg)))
+
+    def test_a_declared_sum_on_a_dollar_line_is_silent(self):
+        total = ANCHORS["property_tax.laval"].value + ANCHORS["school_tax.qc"].value
+        lines = [{"name": "property_tax", "annual_amount": round(total * 600_000, 2)}]
+        cfg = _owned(lines)
+        cfg["sources"] = {"house.other_recurring_costs.property_tax.annual_amount":
+                          "anchor:property_tax.laval+school_tax.qc"}
+        assert not any("school-tax" in w for w in coherence_warnings(load_config_dict(cfg)))
+
+    def test_the_condo_note_names_the_condo(self):
+        warns = coherence_warnings(load_config_dict(_owned(TAX_ONLY, option="condo")))
+        assert any(w.startswith("condo: no school-tax line") for w in warns)
+
+
+POSTED_WARNING = ("house.mortgage_rate 6.09% is the POSTED 5-year rate "
+                  "(mortgage_rate.posted_5y); its source says contracted rates run lower — "
+                  "see mortgage_rate.contracted_5y_uninsured / "
+                  "mortgage_rate.contracted_5y_insured in --print-anchors; the verdict's "
+                  "margin moves with the rate")
+
+
+def _mortgaged(rate):
+    return {"years": 10, "discount_rate": 0.03,
+            "house": {"initial_value": 600_000, "down_payment": 200_000,
+                      "mortgage_rate": rate, "mortgage_term_years": 25},
+            "rent": {"monthly_rent": 2_000, "invested_down_payment": 200_000}}
+
+
+class TestPostedRateWarning:
+    def test_the_posted_figure_fires_the_warning(self):
+        posted = ANCHORS["mortgage_rate.posted_5y"]
+        warns = coherence_warnings(load_config_dict(_mortgaged(posted.value)))
+        assert POSTED_WARNING in warns
+
+    def test_the_effective_restatement_fires_it_too(self):
+        warns = coherence_warnings(load_config_dict(_mortgaged(0.0618270225)))
+        assert any(w.startswith("house.mortgage_rate 6.18% is the POSTED 5-year rate")
+                   for w in warns)
+
+    def test_a_contracted_looking_rate_is_silent(self):
+        assert not any("POSTED" in w for w in
+                       coherence_warnings(load_config_dict(_mortgaged(0.045))))
+
+    def test_just_outside_the_window_is_silent(self):
+        assert not any("POSTED" in w for w in
+                       coherence_warnings(load_config_dict(_mortgaged(0.0609 + 5e-5))))
+
+    def test_it_fires_whether_or_not_sources_declares_it(self):
+        cfg = _mortgaged(0.0609)
+        cfg["sources"] = {"house.mortgage_rate": "anchor:mortgage_rate.posted_5y"}
+        assert POSTED_WARNING in coherence_warnings(load_config_dict(cfg))

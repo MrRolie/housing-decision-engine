@@ -26,7 +26,7 @@ from .anchors import (
     short_cite,
 )
 from .market_scenario import LoadedScenarioPrior
-from .land_transfer_tax import purchase_costs_clause
+from .land_transfer_tax import option_province, purchase_costs_clause
 from .mortgage_insurance import financing_clause
 from .models import (
     AffordabilityReport,
@@ -110,12 +110,14 @@ _NOT_HOME_INSURANCE = ("mortgage", "hypothéc", "hypothec", "tenant", "renter", 
 _NOT_PROPERTY_TAX = ("school", "scolaire", "welcome", "bienvenue", "mutation")
 
 
-def _cost_family(cost_name: str) -> Optional[str]:
+def cost_family(cost_name: str) -> Optional[str]:
     """Which jurisdiction table a recurring-cost line belongs to, or None.
 
     Separators are normalised first: the repo's own examples write
     `property_tax` and `home_insurance`, and a matcher that only saw
     "property tax" would silently skip exactly the configs it ships with.
+    The loader's coherence checks reuse this same test, so "a line named like
+    property tax" means one thing across the engine.
     """
     low = cost_name.lower().replace("_", " ").replace("-", " ")
     if any(word in low for word in _NOT_PROPERTY_TAX):
@@ -127,6 +129,17 @@ def _cost_family(cost_name: str) -> Optional[str]:
     if any(word in low for word in _INSURANCE_WORDS):
         return "home_insurance."
     return None
+
+
+_SCHOOL_WORDS = ("school", "scolaire")
+
+
+def school_tax_line(cost_name: str) -> bool:
+    """True for a line that names the Québec school tax (`school tax`, `taxe
+    scolaire`) — the levy a municipal rate leaves out, which is why the
+    property-tax matcher above refuses these names."""
+    low = cost_name.lower().replace("_", " ").replace("-", " ")
+    return any(word in low for word in _SCHOOL_WORDS)
 
 
 def _citations(family: str, probe: Optional[float]) -> Tuple[
@@ -171,15 +184,18 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
     `citations` says how they combine (`single` or `sum`), which is what the
     text line renders. Both are empty when nothing published agrees — reported,
     not hidden: an unmatched tax line is the honest "no source for this" the
-    answer is required to say out loud.
+    answer is required to say out loud. `province` is where the option sits
+    (stated, or implied by its municipality; `None` when neither is given), so
+    an unmatched Ontario tax line can say what an Ontario rate is levied on.
     """
     entries: List[Dict[str, Any]] = []
     for option_name in ("condo", "house"):
         option = getattr(spec, option_name, None)
         if option is None:
             continue
+        province = option_province(option.province, option.municipality)
         for cost in option.other_recurring_costs:
-            family = _cost_family(cost.name)
+            family = cost_family(cost.name)
             if family is None:
                 continue
             if family == "property_tax.":
@@ -196,6 +212,7 @@ def reference_matches(spec: ComparisonSpec) -> List[Dict[str, Any]]:
                 "annual_amount": cost.annual_amount,
                 "family": family,
                 "implied_rate": implied,
+                "province": province,
                 "matches": [anchor_to_dict(a) for a in cited],
                 "citations": citations,
             })
@@ -224,7 +241,16 @@ def _reference_line(entry: Dict[str, Any]) -> str:
     if entry["implied_rate"] is not None:
         head += f" = {entry['implied_rate']:.3%} of price"
     if not entry["citations"]:
-        return f"{head} [no anchor match — hde --print-anchors]"
+        tail = "no anchor match — hde --print-anchors"
+        # An Ontario rate is levied on the MPAC assessment, which for the 2026
+        # tax year is a January 1, 2016 value (the property_tax.toronto and
+        # property_tax.ottawa rationales in anchors.py). Served answers showed
+        # an Ottawa run applying a rate to the purchase price with nothing
+        # beside `no anchor match` saying that reading overstates the bill.
+        if entry["family"] == "property_tax." and entry.get("province") == "ON":
+            tail += ("; a rate on the purchase price overstates an Ontario bill: "
+                     "assessments are on a 2016 base")
+        return f"{head} [{tail}]"
     by_name = {m["name"]: m for m in entry["matches"]}
     cites = " ; ".join(_cite_text(c, by_name) for c in entry["citations"])
     return f"{head} [{cites}]"

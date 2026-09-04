@@ -155,6 +155,10 @@ class CondoParams:
     # premium is already inside financed_purchase_costs, so nothing downstream
     # changes; the assumption echo reads the record to say what was computed.
     province: Optional[str] = None
+    # The city stated beside it (`montreal` / `toronto`, normalised lower). The
+    # transfer-tax schedule reads it; it also places the option in a province
+    # when no `province` is stated (land_transfer_tax.option_province).
+    municipality: Optional[str] = None
     mortgage_insurance: Optional[MortgageInsurance] = None
     # What the loader derived from the transfer-tax schedule. The dollars are
     # already inside `purchase_costs` (and so already netted out of
@@ -209,6 +213,10 @@ class HouseParams:
     # premium is already inside financed_purchase_costs, so nothing downstream
     # changes; the assumption echo reads the record to say what was computed.
     province: Optional[str] = None
+    # The city stated beside it (`montreal` / `toronto`, normalised lower). The
+    # transfer-tax schedule reads it; it also places the option in a province
+    # when no `province` is stated (land_transfer_tax.option_province).
+    municipality: Optional[str] = None
     mortgage_insurance: Optional[MortgageInsurance] = None
     # What the loader derived from the transfer-tax schedule. The dollars are
     # already inside `purchase_costs` (and so already netted out of

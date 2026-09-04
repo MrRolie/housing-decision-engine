@@ -52,7 +52,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                             "rate rises to 9.975% for premiums paid after 2026-12-31 "
                             "(Bill 99) — the engine applies 9% and names it. SK taxes the "
                             "premium but its rate is not anchored: state an explicit "
-                            "schedule instead of being charged 0%"),
+                            "schedule instead of being charged 0%. QUOTE THE CODE — "
+                            "province: \"ON\" — an unquoted ON (or NO / YES / OFF) is a YAML "
+                            "boolean and is refused with that hint"),
         "sources": (False, "optional block; WHO stated each value — a mapping from a dotted "
                            "config key the config actually sets (e.g. rent.monthly_rent, "
                            "simulation.investment_return_vol, house.events for a whole list) to "
@@ -63,7 +65,14 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                            "engine warn when Monte Carlo decisiveness rests on uncertainty inputs "
                            "the user never stated. Declare a key that the config does not set, a "
                            "value outside those three forms, or an anchor name outside the "
-                           "registry, and the load refuses"),
+                           "registry, and the load refuses. An other_recurring_costs LINE is "
+                           "declared by NAME — <option>.other_recurring_costs.<line name>."
+                           "annual_amount (or .escalation_rate) — so a $813 insurance line "
+                           "may declare anchor:home_insurance.qc and a dollar tax line "
+                           "anchor:property_tax.<municipality> (compared as amount ÷ "
+                           "initial_value, the read-back's own probe); the bare list key stays "
+                           "user | assistant only, and an unknown line name is refused naming "
+                           "the lines that exist"),
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
@@ -142,7 +151,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                              "tax on the mortgage-insurance premium and the land-transfer-tax "
                              "schedule both follow the property's own jurisdiction, so an "
                              "Ottawa-vs-Gatineau comparison prices each side correctly. See the "
-                             "top-level province note for the rates"),
+                             "top-level province note for the rates. Quote it (province: \"ON\"): "
+                             "an unquoted ON is a YAML boolean and is refused"),
         "land_transfer_tax": (False, "'none' (DEFAULT — nothing priced), 'auto' (the anchored "
                                       "schedule for this option's province and municipality — "
                                       "--print-anchors lists every bracket), or an explicit "
@@ -165,7 +175,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                  "applies; read only with land_transfer_tax: auto. Omit for the "
                                  "provincial schedule alone. Montréal publishes one complete table "
                                  "that REPLACES the provincial one; Toronto's municipal tax is "
-                                 "charged IN ADDITION to Ontario's"),
+                                 "charged IN ADDITION to Ontario's. Stated alone, it also places "
+                                 "the option in its province for the coherence notes (montreal → "
+                                 "QC school tax; toronto → the Ontario assessment base)"),
         "first_time_buyer": (False, "true | false (DEFAULT false) — applies the anchored "
                                      "first-time-buyer rebate where the schedule has one (Ontario "
                                      "refund max $4,000, Toronto rebate max $4,475; neither Québec "
@@ -195,7 +207,14 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                          "× purchase price is an approximation. Québec's "
                                          "school tax is a separate provincial levy on top "
                                          "of the municipal rate (school_tax.qc). No source "
-                                         f"registered for: {_UNSOURCED_JURISDICTIONS}"),
+                                         f"registered for: {_UNSOURCED_JURISDICTIONS}. A Québec "
+                                         "option (province QC or municipality montreal) with a "
+                                         "property-tax line and no line named for the school tax "
+                                         "gets a coherence warning naming the rate; an Ontario "
+                                         "tax line no anchor matches carries the 2016 assessment "
+                                         "base in its read-back line. Declare a line's source by "
+                                         "name: sources: <option>.other_recurring_costs.<line "
+                                         "name>.annual_amount"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
         "reserve_contribution_rate": (False, "fraction of each year's fees set aside into the "
                                              "reserve fund; default 0 = reserve not modelled"),
@@ -279,7 +298,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                              "tax on the mortgage-insurance premium and the land-transfer-tax "
                              "schedule both follow the property's own jurisdiction, so an "
                              "Ottawa-vs-Gatineau comparison prices each side correctly. See the "
-                             "top-level province note for the rates"),
+                             "top-level province note for the rates. Quote it (province: \"ON\"): "
+                             "an unquoted ON is a YAML boolean and is refused"),
         "land_transfer_tax": (False, "'none' (DEFAULT — nothing priced), 'auto' (the anchored "
                                       "schedule for this option's province and municipality — "
                                       "--print-anchors lists every bracket), or an explicit "
@@ -302,7 +322,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                  "applies; read only with land_transfer_tax: auto. Omit for the "
                                  "provincial schedule alone. Montréal publishes one complete table "
                                  "that REPLACES the provincial one; Toronto's municipal tax is "
-                                 "charged IN ADDITION to Ontario's"),
+                                 "charged IN ADDITION to Ontario's. Stated alone, it also places "
+                                 "the option in its province for the coherence notes (montreal → "
+                                 "QC school tax; toronto → the Ontario assessment base)"),
         "first_time_buyer": (False, "true | false (DEFAULT false) — applies the anchored "
                                      "first-time-buyer rebate where the schedule has one (Ontario "
                                      "refund max $4,000, Toronto rebate max $4,475; neither Québec "
@@ -332,7 +354,14 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                          "× purchase price is an approximation. Québec's "
                                          "school tax is a separate provincial levy on top "
                                          "of the municipal rate (school_tax.qc). No source "
-                                         f"registered for: {_UNSOURCED_JURISDICTIONS}"),
+                                         f"registered for: {_UNSOURCED_JURISDICTIONS}. A Québec "
+                                         "option (province QC or municipality montreal) with a "
+                                         "property-tax line and no line named for the school tax "
+                                         "gets a coherence warning naming the rate; an Ontario "
+                                         "tax line no anchor matches carries the 2016 assessment "
+                                         "base in its read-back line. Declare a line's source by "
+                                         "name: sources: <option>.other_recurring_costs.<line "
+                                         "name>.annual_amount"),
         "price_shock": (False, "{annual_hazard, severity_mean, severity_vol}"),
     },
     "rent": {

@@ -32,6 +32,20 @@ whose figure is not the number the config states all refuse at load: the value
 must equal the anchor's — or the sum, or a declared `restatement` of it — within
 the same equality window the read-back matcher uses.
 
+An `other_recurring_costs` line is declared by NAME:
+`<option>.other_recurring_costs.<line name>.annual_amount` (and
+`.escalation_rate`) — `house.other_recurring_costs.home_insurance.annual_amount:
+anchor:home_insurance.qc` on an $813 line, or `anchor:property_tax.laval` on a
+dollar tax line, which is compared as amount ÷ `initial_value` (the read-back's
+own probe, so a line the `<option> other costs:` line cites is a line `sources:`
+accepts, and a line it does not cite is refused). The named form echoes under
+the same dotted name; once a line of a list is named, that list is echoed per
+leaf — the declared leaves with their class, the rest `unattributed` — and the
+bare list key only when it too was declared. The bare key
+`house.other_recurring_costs` stays `user` | `assistant` only (the anchor form
+is refused with a pointer to the named form); an unknown line name is refused
+naming the lines that exist, and a name two lines share cannot be declared.
+
 ## Output
 
 ```bash
@@ -78,6 +92,31 @@ In text output the block prints LAST under `READ-BACK — carry these lines into
 any answer, verbatim:`; under `--json` it rides `assumptions.read_back` and the
 text block is suppressed, so stdout stays one document. `--quiet` prints its one
 line unless `--read-back` is passed too.
+
+**Jurisdiction lines (2026-09-04).** Where an owned option sits is read once —
+its `province`, else the province its `municipality` belongs to (`montreal` →
+QC, `toronto` → ON) — and three lines follow from it. A Québec option with a
+line named for property tax (or a `property_tax_rate`) and no line named for
+the school tax gets the `[warning]` `<option>: no school-tax line — Québec levies
+school_tax.qc (0.07899% of assessed value) on top of the municipal rate; add it
+or list it as not modelled (toward buying)`, the rate read from the registry;
+it stays silent when the property-tax figure already carries the school tax (a
+cited or declared municipal + school sum). An Ontario property-tax line no
+anchor matches has its `<option> other costs:` line end `[no anchor match — hde
+--print-anchors; a rate on the purchase price overstates an Ontario bill:
+assessments are on a 2016 base]`, and each `reference_matches` entry carries
+`province` (`"QC"`, `"ON"`, or `null`). Independently of jurisdiction, a
+`mortgage_rate` equal to `mortgage_rate.posted_5y` — in either stated
+convention, within the matcher's window — gets the `[warning]`
+`<option>.mortgage_rate <x>% is the POSTED 5-year rate (mortgage_rate.posted_5y);
+its source says contracted rates run lower — see
+mortgage_rate.contracted_5y_uninsured / mortgage_rate.contracted_5y_insured in
+--print-anchors; the verdict's margin moves with the rate`. At load, a
+`province` or `municipality` YAML parsed as a boolean (an unquoted `ON`, `NO`,
+`YES`, `OFF`) is refused before any schedule lookup: `province: True is not a
+province code — YAML reads an unquoted ON as a boolean; quote it: province:
+"ON"` (an option-level key is prefixed `<option>.`; `municipality` gets the
+same shape with `"montreal" | "toronto"` as the example).
 
 **The price-scan coherence note.** A `--break-even` or `--sweep` that moves an
 owned option's `initial_value` re-derives everything the loader derives from

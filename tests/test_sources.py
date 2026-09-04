@@ -546,3 +546,155 @@ class TestDeclarationsAreValidatedByFigure:
                 "rent": {"monthly_rent": 2_000},
                 "sources": {"house.mortgage_rate": "anchor:mortgage_rate.posted_5y"},
             })
+
+
+# ---------------------------------------------------------------------------
+# Lines declared by NAME (2026-09-04)
+#
+# `house.other_recurring_costs` is one attributable thing — a list — and an
+# anchor sources a number, so the property-tax and insurance lines, the two
+# largest unsourced figures in a typical run, could carry no anchor at all.
+# Served answers showed exactly that: an $813 insurance line that IS the
+# StatCan figure echoed as `unattributed`. The named-leaf form
+# `<option>.other_recurring_costs.<line name>.annual_amount` (and
+# `.escalation_rate`) fixes it; the bare list key stays declarable as user /
+# assistant and keeps refusing the anchor form.
+# ---------------------------------------------------------------------------
+
+from hde.anchors import ANCHORS  # noqa: E402
+from hde.serialization import reference_matches  # noqa: E402
+
+LAVAL_LINE = round(ANCHORS["property_tax.laval"].value * 600_000, 2)
+INS = "house.other_recurring_costs.home_insurance.annual_amount"
+TAX = "house.other_recurring_costs.property_tax.annual_amount"
+
+
+def _lines_cfg(sources, lines=None):
+    if lines is None:
+        lines = [
+            {"name": "property_tax", "annual_amount": LAVAL_LINE, "escalation_rate": 0.0},
+            {"name": "home_insurance", "annual_amount": 813},
+        ]
+    return {
+        "years": 10,
+        "house": {"initial_value": 600_000, "all_cash": True,
+                  "other_recurring_costs": lines},
+        "rent": {"monthly_rent": 2_000},
+        "sources": sources,
+    }
+
+
+class TestLineSourcesByName:
+    def test_a_leaf_is_declarable_by_line_name(self):
+        spec = load_config_dict(_lines_cfg({INS: "user"}))
+        assert spec.sources.classify(INS) == "user"
+        assert f"{INS}=$813" in line_starting(_lines_cfg({INS: "user"}), "user-stated:")
+
+    def test_an_insurance_line_equal_to_the_anchor_may_declare_it(self):
+        spec = load_config_dict(_lines_cfg({INS: "anchor:home_insurance.qc"}))
+        assert spec.sources.anchor_name(INS) == "home_insurance.qc"
+        assert line_starting(_lines_cfg({INS: "anchor:home_insurance.qc"}),
+                             "anchor-sourced:") == f"anchor-sourced: {INS}=$813 [home_insurance.qc]"
+
+    def test_a_dollar_tax_line_the_read_back_cites_may_declare_the_same_anchor(self):
+        """The two surfaces apply one window: a line the other-costs read-back
+        cites as Laval's rate is a line `sources:` accepts as Laval's rate."""
+        spec = load_config_dict(_lines_cfg({TAX: "anchor:property_tax.laval"}))
+        cited = [m["name"] for e in reference_matches(spec) for m in e["matches"]]
+        assert "property_tax.laval" in cited
+        assert spec.sources.anchor_name(TAX) == "property_tax.laval"
+
+    def test_a_dollar_tax_line_the_read_back_does_not_cite_is_refused(self):
+        lines = [{"name": "property_tax", "annual_amount": 9_999}]
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(_lines_cfg({TAX: "anchor:property_tax.laval"}, lines))
+        message = str(excinfo.value)
+        assert "0.005909" in message                 # the anchor's rate
+        assert f"{9_999 / 600_000:g}" in message     # the line as a rate on initial_value
+        assert "$9,999" in message
+
+    def test_a_summed_declaration_on_a_dollar_line_compares_against_the_sum(self):
+        total = ANCHORS["property_tax.laval"].value + ANCHORS["school_tax.qc"].value
+        lines = [{"name": "property_tax", "annual_amount": round(total * 600_000, 2)}]
+        spec = load_config_dict(_lines_cfg({TAX: "anchor:property_tax.laval+school_tax.qc"}, lines))
+        assert spec.sources.anchor_name(TAX) == "property_tax.laval+school_tax.qc"
+
+    def test_an_unknown_line_name_is_refused_naming_the_lines_that_exist(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(_lines_cfg({"house.other_recurring_costs.insurance.annual_amount": "user"}))
+        message = str(excinfo.value)
+        assert "names no line" in message
+        assert "'property_tax', 'home_insurance'" in message
+
+    def test_a_leaf_the_line_does_not_state_is_refused(self):
+        key = "house.other_recurring_costs.home_insurance.escalation_rate"
+        with pytest.raises(ConfigValidationError, match="does not state escalation_rate"):
+            load_config_dict(_lines_cfg({key: "assistant"}))
+
+    def test_the_escalation_rate_leaf_is_declarable(self):
+        key = "house.other_recurring_costs.property_tax.escalation_rate"
+        assert f"{key}=0.0%" in line_starting(_lines_cfg({key: "assistant"}), "assistant-typed:")
+
+    def test_an_option_without_lines_is_refused_plainly(self):
+        cfg = _lines_cfg({"condo.other_recurring_costs.tax.annual_amount": "user"})
+        cfg["condo"] = {"initial_value": 300_000, "monthly_fee": 300, "all_cash": True}
+        with pytest.raises(ConfigValidationError, match="condo has no other_recurring_costs lines"):
+            load_config_dict(cfg)
+
+    def test_the_bare_list_still_refuses_the_anchor_form_and_points_at_the_named_form(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(_lines_cfg({"house.other_recurring_costs": "anchor:home_insurance.qc"}))
+        message = str(excinfo.value)
+        assert "an anchor sources a number, not list" in message
+        assert "house.other_recurring_costs.<line name>.annual_amount" in message
+
+    def test_the_bare_list_is_still_declarable_as_user(self):
+        spec = load_config_dict(_lines_cfg({"house.other_recurring_costs": "user"}))
+        assert spec.sources.classify("house.other_recurring_costs") == "user"
+        assert spec.sources.get(INS) is None
+
+    def test_declaring_one_leaf_echoes_the_rest_of_that_list_per_leaf(self):
+        cfg = _lines_cfg({INS: "anchor:home_insurance.qc"})
+        unattributed = line_starting(cfg, "unattributed:")
+        assert f"{TAX}=$3,545" in unattributed
+        assert "house.other_recurring_costs.property_tax.escalation_rate=0.0%" in unattributed
+        assert "house.other_recurring_costs=2 entries" not in unattributed
+
+    def test_the_bare_key_and_a_leaf_may_both_be_declared(self):
+        cfg = _lines_cfg({"house.other_recurring_costs": "user", INS: "anchor:home_insurance.qc"})
+        assert "house.other_recurring_costs=2 entries" in line_starting(cfg, "user-stated:")
+        assert INS in line_starting(cfg, "anchor-sourced:")
+
+    def test_an_undeclared_list_is_still_one_unattributed_entry(self):
+        cfg = _lines_cfg({"years": "user"})
+        unattributed = line_starting(cfg, "unattributed:")
+        assert "house.other_recurring_costs=2 entries" in unattributed
+        assert INS not in unattributed
+
+    def test_the_json_echo_carries_the_named_key(self):
+        doc = assumptions_to_dict(load_config_dict(_lines_cfg({INS: "anchor:home_insurance.qc"})))
+        assert doc["sources"]["anchor"] == {INS: "home_insurance.qc"}
+
+    def test_duplicate_line_names_are_refused_when_declared(self):
+        lines = [{"name": "tax", "annual_amount": 1_000}, {"name": "tax", "annual_amount": 2_000}]
+        with pytest.raises(ConfigValidationError, match="two house.other_recurring_costs lines are named 'tax'"):
+            load_config_dict(_lines_cfg({"house.other_recurring_costs.tax.annual_amount": "user"}, lines))
+
+    def test_a_line_name_with_a_dot_resolves(self):
+        lines = [{"name": "property tax (0.55% of value)", "annual_amount": 3_300}]
+        key = "house.other_recurring_costs.property tax (0.55% of value).annual_amount"
+        spec = load_config_dict(_lines_cfg({key: "assistant"}, lines))
+        assert spec.sources.classify(key) == "assistant"
+
+    def test_a_rent_line_is_declarable_by_name(self):
+        cfg = _lines_cfg({"rent.other_recurring_costs.tenant insurance.annual_amount": "user"})
+        cfg["rent"]["other_recurring_costs"] = [{"name": "tenant insurance", "annual_amount": 300}]
+        spec = load_config_dict(cfg)
+        assert spec.sources.classify("rent.other_recurring_costs.tenant insurance.annual_amount") == "user"
+
+    def test_a_rate_anchor_on_a_rent_dollar_line_is_refused_without_a_price(self):
+        cfg = _lines_cfg({"rent.other_recurring_costs.property tax.annual_amount":
+                          "anchor:property_tax.laval"})
+        cfg["rent"]["other_recurring_costs"] = [{"name": "property tax", "annual_amount": 3_545.4}]
+        with pytest.raises(ConfigValidationError, match="no initial_value"):
+            load_config_dict(cfg)

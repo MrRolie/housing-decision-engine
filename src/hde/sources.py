@@ -66,8 +66,93 @@ def attributable_keys(data: Dict[str, Any]) -> List[str]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Lines declared by NAME: `<option>.other_recurring_costs.<line name>.<leaf>`
+#
+# The list is one attributable thing, and an anchor sources a number — so the
+# property-tax and insurance lines, the two largest unsourced figures in a
+# typical run, could carry no anchor at all (2026-09-04: an $813 insurance
+# line that IS the StatCan figure echoed as `unattributed`). The named-leaf
+# form reaches one line's `annual_amount` or `escalation_rate`. These keys are
+# NOT in `attributable_keys`: the list stays one entry until a line is named,
+# so an undeclared config does not sprout an entry per leaf.
+# ---------------------------------------------------------------------------
+
+_LINE_LIST = "other_recurring_costs"
+_LINE_LEAVES = ("annual_amount", "escalation_rate")
+# Anchor families stated as a rate on value: a dollar line compares to them as
+# amount ÷ initial_value — the read-back matcher's own probe.
+_RATE_ON_VALUE = ("property_tax.", "school_tax.")
+
+
+def _split_line_key(key: str) -> Optional[Tuple[str, str, str]]:
+    """(option, line name, leaf) for the named-line form, else None. The name
+    is whatever sits between the fixed prefix and the leaf suffix, so a name
+    with dots or spaces in it (`property tax (0.55% of value)`) resolves."""
+    for option in ("condo", "house", "rent"):
+        prefix = f"{option}.{_LINE_LIST}."
+        if not key.startswith(prefix):
+            continue
+        rest = key[len(prefix):]
+        for leaf in _LINE_LEAVES:
+            suffix = f".{leaf}"
+            if rest.endswith(suffix) and len(rest) > len(suffix):
+                return option, rest[:-len(suffix)], leaf
+    return None
+
+
+def _lines_of(data: Dict[str, Any], option: str) -> List[Dict[str, Any]]:
+    block = data.get(option)
+    lines = block.get(_LINE_LIST) if isinstance(block, dict) else None
+    if not isinstance(lines, list):
+        return []
+    return [line for line in lines if isinstance(line, dict)]
+
+
+def line_keys(data: Dict[str, Any], option: str) -> List[str]:
+    """The named-line keys one option's list states, in config order — one
+    per leaf each line actually sets. A name two lines share is not a key at
+    all: it cannot say which line it means, and `_line_problem` says so."""
+    lines = _lines_of(data, option)
+    names = [str(line["name"]) for line in lines if "name" in line]
+    out: List[str] = []
+    for line in lines:
+        if "name" not in line or names.count(str(line["name"])) > 1:
+            continue
+        for leaf in _LINE_LEAVES:
+            if leaf in line:
+                out.append(f"{option}.{_LINE_LIST}.{line['name']}.{leaf}")
+    return out
+
+
+def _line_problem(data: Dict[str, Any], key: str, option: str,
+                  line_name: str, leaf: str) -> str:
+    """Why a named-line key cannot be declared — always naming what exists."""
+    lines = _lines_of(data, option)
+    if not lines:
+        return f"sources: '{key}' — {option} has no other_recurring_costs lines"
+    named = [line for line in lines if str(line.get("name")) == line_name]
+    if not named:
+        existing = ", ".join(repr(str(line.get("name"))) for line in lines)
+        return (f"sources: '{key}' names no line — {option}.{_LINE_LIST} has lines "
+                f"named {existing}")
+    if len(named) > 1:
+        return (f"sources: two {option}.{_LINE_LIST} lines are named {line_name!r} — "
+                f"give each a distinct name to declare one")
+    return (f"sources: '{key}' — the line {line_name!r} does not state {leaf} (the "
+            f"engine's default applies), so it has no source to declare")
+
+
 def raw_value(data: Dict[str, Any], dotted: str) -> Any:
-    """The value a dotted key holds in the raw YAML mapping."""
+    """The value a dotted key holds in the raw YAML mapping — a named line's
+    leaf, or the plain walk."""
+    split = _split_line_key(dotted)
+    if split is not None:
+        option, line_name, leaf = split
+        named = [line for line in _lines_of(data, option)
+                 if str(line.get("name")) == line_name]
+        if len(named) == 1 and leaf in named[0]:
+            return named[0][leaf]
     node: Any = data
     for part in dotted.split("."):
         node = node[part]
@@ -341,10 +426,34 @@ def _anchor_declaration(
 
     stated = raw_value(data, key)
     if isinstance(stated, bool) or not isinstance(stated, (int, float)):
+        hint = ""
+        if isinstance(stated, list) and key.endswith(f".{_LINE_LIST}"):
+            hint = f" — declare the line by name: {key}.<line name>.annual_amount"
         return None, (
             f"sources: '{key}' declared anchor:{joined} but the config states "
-            f"{stated!r} — an anchor sources a number, not {type(stated).__name__}"
+            f"{stated!r} — an anchor sources a number, not {type(stated).__name__}{hint}"
         )
+
+    # The figure the anchors are compared with, in THEIR units. A dollar tax
+    # line against a rate on value compares as amount ÷ initial_value — the
+    # same probe the other-costs read-back uses, so a line it cites is a line
+    # this accepts, and a line it does not cite is refused here too.
+    figure = float(stated)
+    figure_text = f"{figure:g}"
+    split = _split_line_key(key)
+    if (split is not None and split[2] == "annual_amount"
+            and all(a.name.startswith(_RATE_ON_VALUE) for a in anchors)):
+        option = split[0]
+        block = data.get(option)
+        price = block.get("initial_value") if isinstance(block, dict) else None
+        if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
+            return None, (
+                f"sources: '{key}' declared anchor:{joined} — a rate on assessed value "
+                f"is compared with a dollar line as amount ÷ initial_value, and {option} "
+                f"states no initial_value"
+            )
+        figure = float(stated) / float(price)
+        figure_text = f"${float(stated):,.0f} = {figure:g} of initial_value"
 
     window = max(match_window(a.name) for a in anchors)
     # A sum is checked against the sum of the published figures; a single
@@ -352,13 +461,13 @@ def _anchor_declaration(
     # convention the engine's key is stated in).
     candidates = ([sum(a.value for a in anchors)] if len(anchors) > 1
                   else list(anchors[0].stated_values()))
-    if not any(abs(candidate - float(stated)) <= window for candidate in candidates):
+    if not any(abs(candidate - figure) <= window for candidate in candidates):
         published = " + ".join(f"{a.value:g}" for a in anchors)
         if len(anchors) > 1:
             published += f" = {sum(a.value for a in anchors):g}"
         return None, (
             f"sources: '{key}' declared anchor:{joined} but the anchor's figure is "
-            f"{published} and the config states {float(stated):g} — a declaration says "
+            f"{published} and the config states {figure_text} — a declaration says "
             f"where the number CAME FROM, so the two have to be the same number "
             f"(uv run hde --print-anchors)"
             + _sibling_hint(data, joined)
@@ -406,6 +515,8 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
     """
     problems: List[str] = []
     keys = attributable_keys(data)
+    named = {option: line_keys(data, option) for option in ("condo", "house", "rent")}
+    all_named = [key for option_keys in named.values() for key in option_keys]
     declared_map: Dict[str, Tuple[str, Optional[str]]] = {}
     declared = "sources" in data
 
@@ -419,8 +530,11 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
             declared = False
         else:
             for key, value in block.items():
-                if key not in keys:
-                    problems.append(_key_problem(data, str(key), keys))
+                key = str(key)
+                if key not in keys and key not in all_named:
+                    split = _split_line_key(key)
+                    problems.append(_line_problem(data, key, *split) if split is not None
+                                    else _key_problem(data, key, keys + all_named))
                     continue
                 if not isinstance(value, str):
                     problems.append(_value_problem(key, value))
@@ -437,8 +551,9 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
 
     details = dict(uncertainty_inputs(data))
     derived = _derived_anchor_sources(data)
-    entries = []
-    for key in keys:
+    entries: List[SourceEntry] = []
+
+    def add(key: str) -> None:
         source, anchor = declared_map.get(key, derived.get(key, ("unattributed", None)))
         value = raw_value(data, key)
         entries.append(SourceEntry(
@@ -449,6 +564,21 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
             anchor=anchor,
             detail=details.get(key),
         ))
+
+    suffix = f".{_LINE_LIST}"
+    for key in keys:
+        option = key[:-len(suffix)] if key.endswith(suffix) else None
+        if option in named and any(k in declared_map for k in named[option]):
+            # A line was declared by name: the list is echoed per leaf — the
+            # declared ones with their class, the rest `unattributed`, so
+            # silence is still reported figure by figure — and the bare list
+            # key only when it too was declared.
+            if key in declared_map:
+                add(key)
+            for line_key in named[option]:
+                add(line_key)
+        else:
+            add(key)
     return SourceEcho(declared=declared, entries=tuple(entries),
                       uncertainty=tuple(details)), problems
 
