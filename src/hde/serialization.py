@@ -672,7 +672,7 @@ def mc_to_dict(mc: ComparisonMonteCarloResult) -> dict:
 READ_BACK_HEADER = "READ-BACK — carry these lines into any answer, verbatim:"
 
 # The source-echo lines the read-back carries (sources.py builds them).
-_SOURCE_PREFIXES = ("sources: none declared", "assistant-typed:", "unattributed:", "anchor-sourced:")
+_SOURCE_PREFIXES = ("sources: none declared", "assistant-typed:", "unattributed:", "anchor-sourced:", "swept:")
 _OWNED = ("condo", "house")
 
 

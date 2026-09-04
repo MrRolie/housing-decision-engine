@@ -200,7 +200,8 @@ class TestJsonShape:
             "rent.investment_return_rate": "anchor:rent.investment_return_rate",
         }))
         doc = assumptions_to_dict(spec)["sources"]
-        assert set(doc) == {"declared", "user", "assistant", "anchor", "unattributed"}
+        assert set(doc) == {"declared", "user", "assistant", "anchor", "unattributed", "sweep"}
+        assert doc["sweep"] == []  # only a grid point of a scan carries a swept key
         assert doc["declared"] is True
         assert doc["user"] == [{"key": "rent.monthly_rent", "value": 1500,
                                 "formatted": "$1,500/mo"}]

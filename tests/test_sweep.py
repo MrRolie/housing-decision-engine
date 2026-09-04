@@ -279,6 +279,17 @@ class TestDeclaredSourcesAtGridPoints:
         assert spec.sources.classify("rent.monthly_rent") == "unattributed"
         assert spec.sources.classify("discount_rate") == "anchor"
 
+    def test_the_swept_key_is_rendered_and_serialized_not_dropped(self):
+        from hde.sources import source_echo_to_dict, source_lines
+        from hde.sweep import load_at
+        spec = load_at(self._raw(), "discount_rate", 0.04)
+        lines = source_lines(spec.sources)
+        assert any(line.startswith("swept: discount_rate=") for line in lines), lines
+        assert not any("anchor-sourced" in line for line in lines), lines
+        doc = source_echo_to_dict(spec.sources)
+        assert [e["key"] for e in doc["sweep"]] == ["discount_rate"]
+        assert "discount_rate" not in doc["anchor"]
+
 
 class TestOneSidedSweepOfAPlaceholder:
     """A sweep over a key the ASSISTANT typed whose grid lies entirely on one

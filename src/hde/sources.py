@@ -588,7 +588,7 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
 # ---------------------------------------------------------------------------
 
 _LINE_LABELS = (("user", "user-stated"), ("assistant", "assistant-typed"),
-                ("unattributed", "unattributed"))
+                ("unattributed", "unattributed"), ("sweep", "swept"))
 
 NO_BLOCK_LINE = ("sources: none declared — the read-back cannot tell the user's "
                  "numbers from the assistant's")
@@ -625,6 +625,7 @@ def source_echo_to_dict(echo: Optional[SourceEcho]) -> Dict[str, Any]:
         "assistant": _list("assistant"),
         "anchor": {e.key: e.anchor for e in (echo.of_class("anchor") if echo else [])},
         "unattributed": _list("unattributed"),
+        "sweep": _list("sweep"),
     }
 
 
