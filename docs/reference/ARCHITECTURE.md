@@ -383,6 +383,23 @@ prints a `majority flip:` line only where that turn differs from the
 deterministic `flip:` — a majority that turns where the deterministic line
 turns is the same sentence twice.
 
+Three more things a sweep does (2026-09-04). Every row carries its read-back
+line as `sentence` — `<key>=<v>: best <opt> by <margin$> (<pct>% of <opt>
+PV)[, P(best) <p>%[ (at the floor)]][, insured <opt> <tier>%][, affordability
+<opt> max <r>% breaches years […]]`, only the clauses whose data the run has —
+beside `insured`, the premium rate of every owned option whose derived
+mortgage insurance is required at that point; a probability EQUAL to the 65%
+floor is decisive by ≥ with nothing to spare, and says `at the floor` rather
+than print a bare decisive flag. A `sources:` declaration on the swept key is
+lifted at every grid point (`with_value` marks it, `load_at` loads the copy
+and relabels the echo `sweep`): an `anchor:<name>` declaration is validated
+against the anchor's figure on the base run, and re-validating it at every
+off-anchor point refused the whole scan. And a sweep over a key declared
+`assistant` whose grid lies entirely above or below the placeholder warns —
+`sweep of <key> covers only values ABOVE|BELOW the placeholder <base>; the
+other direction is untested` — because one direction of a guess tested is not
+a sensitivity test of the guess.
+
 ### Break-evens — `--break-even KEY` or `KEY=lo:hi`
 
 The threshold on one input (`src/hde/break_even.py`): with exactly two priced
@@ -446,6 +463,25 @@ across row it came from carried 44.1% of income, above the 39% cap it cited. A `
 Rides `--json` as `break_evens`; the story's act 6 calls the same
 solver for the rent threshold, so the crossing it draws, the band it shades and
 the sentence it prints are the ones described here.
+
+Two more things the threshold says (2026-09-04). A bracket with no crossing
+names the bounds it held for, which option is cheaper at both ends and the
+bracket to try next — `no crossing between <lo> and <hi>: <opt> is cheaper at
+both ends — widen with --break-even <key>=<lo'>:<hi'>` — one bracket width
+further out on the side where the gap narrows (a money input never below half
+its low end, an integer input never below 1; an end the config refuses beyond
+gets no hint and says why); the record rides `--json` as `no_crossing` beside
+`cheaper_throughout`, which the story's act 6 still reads. And the cliff note
+samples the INSIDE of the tie band, not only the crossing and its edges: a
+mortgage-insurance step that lies strictly between them — a smooth crossing
+whose band spanned the 85%-LTV tier change said nothing — is bisected to its
+price and named in one clause (`… lies inside the tie band, at <v> — the gap
+steps there; the band is not one smooth range of near-ties`), and a step
+already reported at the crossing or an edge is not said again. The cliff
+clause itself is one sentence: the point, what changed across it, and what
+that does to the band. The band rule `band = 5% of the cheaper option's PV`
+moved from every sentence's closing bracket to the block header, once; the
+story's caption keeps its own.
 
 ### Price-scan coherence — `--break-even` / `--sweep` on `initial_value`
 
@@ -569,7 +605,11 @@ followed unevenly, so the engine assembles the block instead
    `break-even <key> at <sweep key>=<value>:` and carrying the affordability at
    the crossing and both band edges where an `income` block is present; then
    the block's `note`;
-10. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines;
+10. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines — each
+    naming its key (`flip <key>:`, `no flip along <key>:`; two flags used to
+    print two bare "no flip" lines), preceded (2026-09-04) by a `sweep <key>
+    (<n> points…)` header and one line per grid point, the row's own
+    `sentence`;
 11. on a coin flip under a demographic prior, the `next:` line — the one run
     that resolves it (`--break-even <cheapest owned option>.value_growth_rate`,
     whose note places the prior's drift against the tie band). Silent unless
@@ -582,6 +622,26 @@ Every line is built by the SAME function that prints it elsewhere
 `sweep.flip_lines`) — a second formatter here would be a second thing to drift.
 The block therefore REPEATS lines the report already showed; that repetition is
 the feature.
+
+Within the block, though, each derived fact is said once (2026-09-04; measured
+on `--sweep years=5,10,15,20 --break-even house.initial_value --read-back` of
+examples/mortgage_house_vs_rent.yaml with an income block: 723 → 692 words
+while the block gained its five per-point sweep lines). The band rule, a
+refused clause every solve shares, the affordability sub-header and an option
+whose ratio holds at every quoted point of every solve live in the break-even
+header; an option whose ratio holds at the crossing and both edges of one
+solve is one phrase, `… at every quoted point`; the `across` row that
+re-solves the base config prints `(= base)` — the base line now carries its
+own affordability clause, so nothing is lost; the sweep row at the base value
+is marked `(= base)` and keeps its verdict clauses alone; an invariant renter
+ratio or insured tier sits in the sweep header; the cliff clause is one
+sentence; and where an option's breach is already a `[warning]`, the
+Affordability section keeps its header and the max-ratio line of every option
+no warning names. Every `[warning]` and source line stays, verbatim — a
+shorter block that lost one would be a regression. A `--no-monte-carlo` run of
+a config carrying a `market_scenario` prior adds one warning to the block:
+`market_scenario prior acts only in Monte Carlo — this run shows the
+deterministic line alone (the prior's drift is not in it)`.
 
 It rides `--json` as `assumptions.read_back` (a list of strings) and prints
 LAST in the text output under `READ-BACK — carry these lines into any answer,
