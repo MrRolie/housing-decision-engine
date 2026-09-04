@@ -88,7 +88,7 @@ same day, the rest are open.
 ### Backlog from the 2026-09-04 re-serve of the three weakest shapes (round 8)
 
 Same facts, same smaller model, engine with the round-7 folds: quick-sense 17/25 (from 13), condo 20
-(from 21), reverse pending at writing. Every round-7 engine fold reproduced in the answers (the
+(from 21), reverse 18 (from 16). Every round-7 engine fold reproduced in the answers (the
 engine-priced premium, the growth band against the prior's drift, the netted down payment); the
 remaining misses were lines the engine printed and the assistant dropped — hence the read-back block.
 
@@ -114,6 +114,10 @@ remaining misses were lines the engine printed and the assistant dropped — hen
 
 ### Round 9 (2026-09-04, same three shapes on the read-back tip) — open items
 
+Scores: quick-sense 17 (17), reverse 20 (18), condo 21 (20); the pasted READ-BACK block was
+byte-identical to the engine's in all three and every base-run warning reached the user. Ontario has
+not been re-served since round 7 (19).
+
 - **Inflation anchor citation:** `anchor:economic.inflation_rate` is refused on a nominal config because
   that anchor's value is 0.0 (real-mode inert); the nominal twin `economic.inflation_rate.nominal_planning`
   (0.021) is the one to declare — the skill now names it; the schema note should too.
@@ -124,10 +128,10 @@ remaining misses were lines the engine printed and the assistant dropped — hen
 - **Run at the crossing:** `--break-even` reports the crossing but nothing prints the full run
   (cash line, financing, affordability) AT that price without editing the config; an `--at KEY=VALUE`
   override, or the break-even carrying the crossing's financing line, would remove the hand edit.
-- **Seed price under a fixed cash pile:** with the transfer tax and insurance now netted in-engine,
-  the reverse-threshold seed (the price the cash supports at 20% down) is a fixed-point the engine
-  could solve (`--break-even <option>.initial_value` could start from it); the skill's "cash × 5"
-  recipe lands on the insurance cliff.
+- **Seed price under a fixed cash pile:** the financing line now prints the price at which a stated
+  `cash_available` stops covering 20% down (transfer tax and costs netted); what remains open is
+  starting `--break-even <option>.initial_value` from that fixed point automatically instead of the
+  assistant reading it off a first run.
 
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
