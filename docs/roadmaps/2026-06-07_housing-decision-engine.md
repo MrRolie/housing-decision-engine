@@ -45,6 +45,46 @@ A `completed` row MUST carry a real, stat-able artifact path — repo-relative h
 Open the PR for `feat/readiness-polish` (run `bash scripts/test-all.sh` first; regenerate `docs/story/` and confirm `git status` clean on a second render).
 
 
+### Backlog from the 2026-09-03 fresh-shape dogfood (five question shapes; engine gaps the reviews hit)
+
+Scores on the shipped skill, one smaller-model serve each, reviewed on the session model against the
+engine's own reruns: reverse price threshold 16/25, condo comparison 21, numberless quick-sense 13,
+Ottawa buyer 19, Duvernay re-serve 21. The lower scores share engine causes; the first six landed the
+same day, the rest are open.
+
+- **Landed 2026-09-03:** `cash_available` (the engine nets purchase costs into the down payment and
+  prints the loan-to-value, re-derived per grid point); property-tax anchors on ASSESSED value for
+  Laval, Montréal, Québec City, Toronto and the Québec school tax, explicit no-source entries for
+  Gatineau (neighbourhood-unit rates) and Ottawa (rate by-law not fetchable), StatCan household
+  insurance floors for QC/ON, cited by the read-back on an exact match; act 6 calls the break-even
+  solver and carries the band-first sentence; a `sources:` block with `user-stated:` /
+  `assistant-typed:` read-back lines and a warning when Monte Carlo decisiveness rests on inputs the
+  user did not state; price-scan coherence (`property_tax_rate`, `purchase_costs_rate`, a note when
+  dollar inputs are held fixed along a price scan, affordability at the break-even crossing and band
+  edges, integer-sweep dedupe, default brackets for rate keys, one-decimal probabilities at the
+  floor); the mortgage-insurance premium computed in-engine from an anchored schedule with the
+  provincial premium tax (see the commit for which parts of the schedule were fetched).
+- **Mortgage renewal risk:** designed in `docs/specs/2026-09-03-mortgage-renewal-risk.md`; smallest
+  slice is the deterministic re-amortization at each term end. Open question: what a renewal shock
+  means in real mode.
+- **Townhouse shape:** a fee plus a maintenance rate on one option (today condo = fee, house =
+  maintenance); every Ontario townhouse question guesses which block to use.
+- **Deferred purchase:** "I might buy in a couple of years" has no input; the renter keeps investing
+  and the buyer's horizon starts later.
+- **GDS-threshold solve:** the price or rent at which the affordability ratio crosses 32% / 39%,
+  as `--break-even` solves the cost crossing; the console sweep should show the affordability column
+  the JSON already carries.
+- **Price-level anchors:** a user with no listing gets an invented price band; a median-price anchor
+  per shipped geography (StatCan / CREA / APCIQ, fetched) would make the seed a cited figure.
+- **Ontario anchors:** land-transfer tax schedule and first-time-buyer rebate, Ottawa's rate once
+  the by-law is fetchable, the Ontario education rate (e-Laws is a JavaScript shell to a fetch).
+- **A Monte Carlo-floor flip line** separate from the deterministic-keyed `decisive` flag, and a
+  break-even under the verdict's own criterion (where `prob_best` crosses 65%).
+- **Renter capital anchor:** a named all-equity return/vol pair for "it's in an index fund", so the
+  assistant's 3% real default is not applied to an equity investor unlabelled.
+- **`--json` stderr echo:** the `[warning]` lines print to stderr and inside the JSON `warnings[]`;
+  document the split in `--help` (a `2>&1` redirect corrupts the document).
+
 ### Backlog from the 2026-09-02 user-model dogfood (engine gaps the personas hit; operator rulings needed where marked)
 
 - **Nominal-mode semantics (RULING):** today `mode: nominal` keeps growth/escalation inputs REAL and composes `inflation_rate` on top, while discount and mortgage rates are used as entered; every nominal-thinking user typed sticker rates and was inflated twice. Options: make nominal literal (all rates as quoted; `inflation_vol` becomes the surprise around expectation) — changes `advanced_config` outputs and the MC inflation machinery — or keep and echo effective rates. The skill states the current contract (gate 3) meanwhile.

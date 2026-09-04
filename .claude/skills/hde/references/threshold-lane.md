@@ -18,9 +18,14 @@ hand-computed `down_payment`): along a price scan the engine re-nets it at
 every point, so the loan-to-value, the 20% line and the premium tier move
 with the price — quote the `financing:` line at the crossing. Dollar-form
 inputs (a tax bill, `purchase_costs`, a premium) stay fixed along the scan:
-read back the engine's coherence `note` with its direction (sized for the
-seed, they favour buying above it and renting below), or scale them with the
-rate forms when the schema offers them.
+either scale them with the rate forms (`property_tax_rate` as a fraction of
+value, `purchase_costs_rate` as a fraction of price — the engine re-derives
+both at every point) or read back the engine's coherence `note` with its
+direction (sized for the seed, they favour buying above it and renting
+below). Prefer the rate forms on any price threshold. The break-even also
+prints affordability at the crossing and the band edges when an income is
+given — quote it; a price you call cheaper is not one the income clears until
+that line says so.
 
 ## One command, several brackets
 
