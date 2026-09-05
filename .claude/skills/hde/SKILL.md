@@ -128,10 +128,12 @@ required key with the exact message — show it.
    — in ADDITION to the growth sweep, never instead of it.
 3. **A mortgage means `mode: nominal`** (`inflation_rate: 0.021`, declared
    `anchor:economic.inflation_rate.nominal_planning`; `mortgage_rate` = the
-   quote's effective annual; `discount_rate` NEVER typed — omit it and the
-   engine composes 5.2%); growth, escalation and return inputs stay REAL and the engine composes
-   inflation. `mode: real` for all-cash and rent-only. Quoted growth and
-   return rates are sticker figures — convert to real (`references/translation.md`).
+   quote's effective annual, used as typed). Growth, escalation, return and
+   discount rates are REAL; the engine composes inflation: omit
+   `discount_rate` for the anchor or state the user's REAL opportunity cost —
+   the read-back shows both; never a nominal figure. `mode: real` for all-cash
+   and rent-only. Quoted growth and return rates are sticker figures — convert
+   to real (`references/translation.md`).
 4. **Like-for-like renter capital.** `rent.invested_down_payment` = the
    buyer's total year-0 cash (down payment + purchase costs; all cash = price
    + purchase costs). Never call that capital a drag or an advantage — only

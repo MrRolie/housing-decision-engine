@@ -38,12 +38,16 @@ exit.
 
 Defaults are REAL terms. With a mortgage, run `mode: nominal`: `economic:
 {mode: nominal, inflation_rate: 0.021}`, `mortgage_rate` = the quoted rate's
-effective annual (no real conversion), `discount_rate` omitted — the engine
-composes its 3% real default with inflation (5.2%) and echoes it — or typed
-as (1 + real)(1 + 2.1%) − 1. Growth, escalation and return inputs stay REAL
-in nominal mode and the engine composes `inflation_rate` on top (that includes
-`investment_return_rate`); never type a sticker growth rate into nominal mode
-— it is inflated twice. Why nominal: the lender collects the NOMINAL payment;
+effective annual (no real conversion — a quoted contract rate is the one
+input used as typed). `discount_rate` is a REAL opportunity cost like every
+other rate: omit it for the anchor — the engine composes its 3% real default
+with inflation (5.2%) and echoes it — or state the user's own REAL figure and
+the engine composes it the same way; the read-back's `mode:` line shows both
+(`discount_rate 3.5% real → 5.7% nominal (incl. 2.1% inflation)`). Never type
+a nominal discount rate — it is inflated twice. Growth, escalation and return
+inputs stay REAL in nominal mode and the engine composes `inflation_rate` on
+top (that includes `investment_return_rate`); never type a sticker growth
+rate into nominal mode — inflated twice the same way. Why nominal: the lender collects the NOMINAL payment;
 a real-rate level payment understates year-1 cash by about a fifth and hides
 GDS/TDS breaches (the engine warns when a mortgage runs in real mode with an
 income). `mode: real` is for all-cash and rent-only comparisons, where every
