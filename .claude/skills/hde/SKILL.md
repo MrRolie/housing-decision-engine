@@ -94,8 +94,7 @@ otherwise").
    figures — settle real vs nominal (gate 3).
 
 ONE follow-up is right when their answers open a new question (the arithmetic
-does not close, one number contradicts another); a config built on a
-contradiction is worse than a second message — and it never asks the user to
+does not close, one number contradicts another); it never asks the user to
 pick a method or a dwelling they said they do not care about. Exception: cash
 within one premium of the 20% line, either side (the `financing:` line prints
 the distance) → run BOTH tiers and quote both (checklist). Run only once every
@@ -117,9 +116,11 @@ required key with the exact message — show it.
 
 ## Judgment gates (one rule each; the why and the worked phrasing are in `references/gates.md`)
 
-1. **Decisiveness is not the headline.** Read `verdict.decisive` and
-   `verdict.reason`; not decisive = "too close to call", with the probability
-   or the margin and what breaks the tie — at every sweep point too.
+1. **Decisiveness is not the headline.** Read `verdict.state` and `reason`;
+   `tie` = "too close to call", with the probability or the margin and what
+   breaks the tie; `disagreement` = the engine's line quoted (best guess X by
+   $N, most futures Y at p%), softened into neither option; at every sweep
+   point too.
 2. **A default is not the user's input.** Read the `defaults applied:` line
    back before the verdict, each with its source; `[neutral, uncited]` means
    no evidence. No price-growth view in a shipped-prior geography → run the
@@ -180,10 +181,11 @@ cap of any lane ranks what stays and never drops an item:
 - [ ] `defaults applied:` — the two largest engine-set numbers,
       `selling_cost_rate` (5%, WOWA) and the discount rate, named with their
       source in the prose
-- [ ] `decisiveness:` in the prose — the threshold it rests on (the 65% floor
-      with Monte Carlo on, else the 5% tie band), its margin or probability,
-      `mc_mean_best` when it disagrees, and the typed uncertainty input it
-      rests on when the block's warning names one; every figure names its
+- [ ] `decisiveness:` in the prose — the engine's three-state line quoted:
+      threshold (65% floor with Monte Carlo on, else the 5% tie band), margin
+      or probability, both figures on a `disagreement`, `mc_mean_best` when it
+      disagrees, and the typed uncertainty input it rests on when the block's
+      warning names one; every figure names its
       config (flat-price or prior), never a flat-price line under a prior
       headline; a prior that leaves the verdict undecided means the growth
       break-even ran and its note (where the drift sits against the band) is

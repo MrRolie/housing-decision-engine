@@ -2,9 +2,12 @@
 
 After the checklist in SKILL.md, the prose, in this order:
 
-1. **The verdict in words with its decisiveness** — "renting is the better
-   deal at $1,900 unless Laval prices grow about 2%/yr above inflation", or
-   "too close to call: X edges Y by $N (1.4%), cheapest in 57% of futures".
+1. **The verdict in words with its decisiveness** — the engine's three-state
+   line, quoted: "renting is the better deal at $1,900 unless Laval prices
+   grow about 2%/yr above inflation", or "too close to call: X edges Y by $N
+   (1.4%), cheapest in 57% of futures", or on a disagreement both figures
+   with neither option chosen — "best guess says rent by $6,517 (1.9%); most
+   futures say house (60% cheapest) — the two disagree".
 2. **The two or three things it rests on**, from the breakdown and `defaults
    applied`. The owner's driver is always "equity at sale = value after growth
    × (1 − selling cost) − remaining mortgage; purchase and selling costs are

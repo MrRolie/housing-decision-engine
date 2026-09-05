@@ -11,9 +11,15 @@ PV (both anchored in `--print-anchors` under `verdict.*`). When it is not
 decisive, say the options are too close to call, quote the probability or the
 margin fraction, and name what would break the tie. A sweep read-back obeys
 the same rule at every point — "condo wins at every point" is false when a
-point is inside the tie band. Decisiveness keys to the deterministic best;
-when the Monte Carlo favours the other side above the floor, the `reason`
-line says so — carry that clause.
+point is inside the tie band. The verdict has three states (`verdict.state`):
+`option`, `tie`, or `disagreement` — the deterministic central case and the
+Monte Carlo majority favour different options. A disagreement is never
+decisive and is said with both figures, in the engine's own line — "best
+guess says rent by $6,517 (1.9% of rent PV); most futures say house (60%
+cheapest) — the two disagree" — never softened into "rent, not decisive" or
+"house wins in most futures"; name what would move each side (a sweep point
+carries the same line: `best guess rent by …, most futures house (60%) —
+disagree`).
 
 ## 2. A default is not the user's input
 

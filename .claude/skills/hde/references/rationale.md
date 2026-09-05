@@ -46,3 +46,12 @@ when the engine changes.
 - **Cash on hand, not a percentage** (round-4 Montréal renter): a config
   assumed $97.3k of cash against a stated $95k; on the user's own numbers the
   mortgage was insured and the verdict flipped to a tie.
+- **One follow-up on a contradiction.** A config built on a contradiction is
+  worse than a second message: the intake rule allows ONE follow-up when the
+  answers open a new question (the arithmetic does not close, one number
+  contradicts another), and never one that re-asks a choice already waived.
+- **A named disagreement** (2026-09-04): served answers showed a table
+  reading "rent, not decisive" beside a 66% house column — a state with no
+  name gets softened into one side or the other. The verdict now has three
+  states (`verdict.state`: `option`, `tie`, `disagreement`); gate 1 quotes
+  the engine's line with both figures and picks neither option.
