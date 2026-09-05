@@ -472,7 +472,11 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         # the taxed case fires only when the drag moves a dollar.
         if abs(r_inv - dr) > 1e-12 or (taxed and abs(net) >= 0.5):
             side = "charged to" if net > 0 else "credited to"
-            after_tax = (f" (after tax on the taxable share: blended {terminal.blended_rate:.2%})"
+            # The blended rate is what the whole capital earned after every tax
+            # the engine applied — the FHSA rollover haircut included, when
+            # there is one, and the clause says so.
+            rollover = " and the FHSA rollover" if terminal.haircut else ""
+            after_tax = (f" (after tax on the taxable share{rollover}: blended {terminal.blended_rate:.2%})"
                          if taxed else "")
             warns.append(
                 f"rent: invested capital ${terminal.capital:,.0f} earns "

@@ -239,6 +239,11 @@ class TestRenterCapital:
         warning = next(w for w in coherence_warnings(spec) if w.startswith("rent: invested capital"))
         assert "after tax on the taxable share: blended" in warning
         assert "untaxed" not in warning
+        # with an FHSA share the blended figure carries the rollover haircut, and says so
+        split = {"tfsa": 14_000, "rrsp": 20_000, "taxable": 15_000}
+        spec = load_config_dict(cfg({"renter_capital": split, "fhsa": FHSA}))
+        warning = next(w for w in coherence_warnings(spec) if w.startswith("rent: invested capital"))
+        assert "after tax on the taxable share and the FHSA rollover: blended" in warning
 
     def test_real_mode_with_an_inert_deflator_warns(self):
         doc = real_mode(cfg({"renter_capital": SPLIT}))
