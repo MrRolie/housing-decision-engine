@@ -9,6 +9,7 @@ import pytest
 from hde.anchors import ANCHORS
 from hde.config import affordability_warnings, coherence_warnings, load_config_dict
 from hde.deterministic import compute_deterministic
+from hde.rates import deflate
 from hde.monte_carlo import run_monte_carlo
 from hde.serialization import format_assumptions
 from hde.story_plots import _cumulative_cost_curves
@@ -61,7 +62,9 @@ class TestDiscountRateDefault:
 
     def test_explicit_value_is_not_echoed_as_a_default(self):
         spec = load_config_dict({**BASE, "discount_rate": 0.04})
-        assert spec.simulation.discount_rate == 0.04
+        # typed as quoted, deflated by the planning inflation (2026-09-05)
+        planning = ANCHORS["economic.inflation_rate.nominal_planning"].value
+        assert spec.simulation.discount_rate == pytest.approx(deflate(0.04, planning))
         assert "simulation.discount_rate" not in spec.defaults_applied
 
 
@@ -78,10 +81,17 @@ class TestOwnerCostWarnings:
         assert "toward buying" in warns[0]
 
     def test_zero_growth_warns_whether_defaulted_or_explicit(self):
-        explicit = {**BASE, "condo": {**BASE["condo"], "value_growth_rate": 0.0}}
+        """The neutral warning fires on the defaulted zero and on a zero DECLARED
+        real. A typed 0.0 under the as-quoted default (2026-09-05) is flat
+        sticker prices — a real decline the `rates:` line shows, not the
+        neutral zero — so it is a stated view and does not warn."""
+        explicit = {**BASE, "rates": "real", "condo": {**BASE["condo"], "value_growth_rate": 0.0}}
         defaulted = {**BASE, "condo": {k: v for k, v in BASE["condo"].items() if k != "value_growth_rate"}}
         for cfg in (explicit, defaulted):
             assert any("value_growth_rate=0.0%" in w for w in coherence_warnings(load_config_dict(cfg)))
+        quoted_zero = {**BASE, "condo": {**BASE["condo"], "value_growth_rate": 0.0}}
+        assert load_config_dict(quoted_zero).condo.value_growth_rate < 0
+        assert not any("value_growth_rate=0.0%" in w for w in coherence_warnings(load_config_dict(quoted_zero)))
         assert not any("value_growth_rate=0.0%" in w for w in coherence_warnings(load_config_dict(BASE)))
 
 

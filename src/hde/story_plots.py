@@ -68,6 +68,7 @@ from .models import (
     RentParams,
 )
 from .pv import mortgage_payment, pv_single
+from .serialization import growth_label, rate_label
 
 # ---------------------------------------------------------------------------
 # House style — one palette, one formatter, one axes dresser
@@ -684,7 +685,7 @@ def plot_act2_the_race(
     ax.text(
         0.0, 1.01,
         f"running total of what you pay out of pocket, discounted to today · "
-        f"{spec.simulation.discount_rate:.0%} discount rate · dotted drop: "
+        f"{rate_label(spec, 'discount_rate', spec.simulation.discount_rate)} discount rate · dotted drop: "
         f"value you keep at the end",
         transform=ax.transAxes, fontsize=12, color="#555555", va="bottom",
     )
@@ -821,7 +822,7 @@ def plot_act4_home_futures(
         title = "Where could your home's value go?"
         subtitle = (
             f"demographic demand scenarios for {prior.geography}, on top of your "
-            f"{params.value_growth_rate:.1%} growth assumption · shaded: p10–p90"
+            f"{growth_label(spec, dwelling_key)} growth assumption · shaded: p10–p90"
         )
 
         shock = params.price_shock

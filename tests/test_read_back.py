@@ -30,6 +30,7 @@ def _rich(**over):
     cfg = {
         "years": 10,
         "discount_rate": 0.03,
+        "rates": "real",
         "province": "QC",
         "house": {
             "initial_value": 500_000, "value_growth_rate": 0.0,
@@ -579,37 +580,37 @@ class TestPriorAgainstTheTieBand:
                 "cheaper_below": "rent", "cheaper_above": "house"}
 
     def test_inside_the_band_says_the_prior_does_not_settle_it(self):
-        note = prior_band_note("house.value_growth_rate", {2030: 0.0136},
+        note = prior_band_note("house.value_growth_rate", {2030: 0.0136}, None,
                                [self._entry((0.0097, 0.0149))])
         assert "+1.36%/yr (2030 band)" in note
         assert "INSIDE the tie band 0.97%–1.49%" in note
         assert "does not settle it" in note
 
     def test_below_the_band_points_at_the_cheaper_below_option(self):
-        note = prior_band_note("house.value_growth_rate", {2030: 0.0026},
+        note = prior_band_note("house.value_growth_rate", {2030: 0.0026}, None,
                                [self._entry((0.0097, 0.0149))])
         assert "BELOW the tie band" in note and "rent" in note
 
     def test_above_the_band_points_at_the_cheaper_above_option(self):
-        note = prior_band_note("house.value_growth_rate", {2030: 0.02},
+        note = prior_band_note("house.value_growth_rate", {2030: 0.02}, None,
                                [self._entry((0.0097, 0.0149))])
         assert "ABOVE the tie band" in note and "house" in note
 
     def test_bands_on_the_same_side_collapse_to_one_sentence(self):
         note = prior_band_note("house.value_growth_rate",
-                               {2030: 0.0026, 2035: 0.0025, 2040: 0.0009},
+                               {2030: 0.0026, 2035: 0.0025, 2040: 0.0009}, None,
                                [self._entry((0.0097, 0.0149))])
         assert note.count("BELOW the tie band") == 1
         assert "+0.09%…+0.26%/yr (2030, 2035, 2040 bands)" in note
 
     def test_bands_on_different_sides_get_their_own_sentence(self):
-        note = prior_band_note("house.value_growth_rate", {2030: 0.02, 2035: 0.0026},
+        note = prior_band_note("house.value_growth_rate", {2030: 0.02, 2035: 0.0026}, None,
                                [self._entry((0.0097, 0.0149))])
         assert "ABOVE the tie band" in note and "BELOW the tie band" in note
         assert "(2030 band)" in note and "(2035 band)" in note
 
     def test_an_edge_outside_the_bracket_is_said_not_guessed(self):
-        note = prior_band_note("house.value_growth_rate", {2030: 0.02},
+        note = prior_band_note("house.value_growth_rate", {2030: 0.02}, None,
                                [self._entry((0.0097, None))])
         assert "outside the searched bracket" in note
 
@@ -638,7 +639,7 @@ class TestMortgageInsuranceCliff:
 
     def _cfg(self, monthly_rent=2_300):
         return {
-            "years": 10, "discount_rate": 0.03, "province": "QC",
+            "years": 10, "discount_rate": 0.03, "province": "QC", "rates": "real",
             "house": {"initial_value": 600_000, "value_growth_rate": 0.0,
                       "cash_available": 130_000, "purchase_costs": 5_000,
                       "mortgage_rate": 0.04, "mortgage_term_years": 25,
@@ -660,7 +661,7 @@ class TestMortgageInsuranceCliff:
         read it would report a step at every crossing — a false claim of exactly
         the kind this note exists to prevent. Only the TIER counts."""
         raw = {
-            "years": 10, "discount_rate": 0.03, "province": "QC",
+            "years": 10, "discount_rate": 0.03, "province": "QC", "rates": "real",
             "house": {"initial_value": 500_000, "value_growth_rate": 0.0,
                       "down_payment": 75_000, "mortgage_rate": 0.04,
                       "mortgage_term_years": 25, "mortgage_insurance": "auto",
@@ -766,15 +767,18 @@ class TestSweepCarriesTheMonteCarloMajority:
 
 
 class TestTheModeLineRidesTheReadBackInNominalMode:
-    """A typed `discount_rate` is a REAL opportunity cost, composed with
-    inflation_rate in nominal mode like every other rate (2026-09-04). The
-    figure in use is then an engine composition of the user's number, and the
-    block must show both: the `mode:` line names the typed real rate, the
-    composed nominal rate and the inflation between them."""
+    """A `discount_rate` typed under `rates: real` is a REAL opportunity cost,
+    composed with inflation_rate in nominal mode like every other real rate
+    (2026-09-04; the as-quoted default reads a typed rate as the figure quoted
+    and is pinned in test_rates.py, 2026-09-05). The figure in use is then an
+    engine composition of the user's number, and the block must show both: the
+    `mode:` line names the typed real rate, the composed nominal rate and the
+    inflation between them."""
 
     def _cfg(self, discount_rate=None, mode="nominal"):
         cfg = {
             "years": 10,
+            "rates": "real",
             "economic": {"mode": mode, "inflation_rate": 0.021},
             "house": {"initial_value": 500_000, "value_growth_rate": 0.01,
                       "all_cash": True},
@@ -797,9 +801,11 @@ class TestTheModeLineRidesTheReadBackInNominalMode:
             "mode: nominal terms · discount_rate 3.5% real → 5.7% nominal (incl. 2.1% inflation) "
             "(growth, escalation, investment-return and discount-rate inputs are REAL and "
             "composed with inflation_rate; mortgage_rate is used as entered)"]
-        # it follows the engine's own numbers, the `defaults applied:` line
+        # it follows the engine's own numbers — the `defaults applied:` line and
+        # the `rates:` line (the convention the typed rates were read under)
         defaults = next(i for i, l in enumerate(lines) if l.startswith("defaults applied:"))
-        assert lines[defaults + 1] == mode[0]
+        assert lines[defaults + 1].startswith("rates: real (declared)")
+        assert lines[defaults + 2] == mode[0]
 
     def test_the_composed_default_shows_both_too(self):
         lines = self._block(self._cfg())

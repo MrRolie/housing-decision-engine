@@ -74,7 +74,9 @@ class TestAssumptionsToDict:
         assert cited["value"] == ANCHORS["rent.investment_return_rate"].value
 
     def test_reference_anchor_renders_as_ref_tag(self):
-        spec = load_config_dict(MINIMAL_CONFIG)
+        # the inert zero is the default under `rates: real`; under the as-quoted
+        # default the planning figure is applied and cited (test_rates.py)
+        spec = load_config_dict({**MINIMAL_CONFIG, "rates": "real"})
         by_key = {e["key"]: e for e in assumptions_to_dict(spec)["defaults_applied"]}
         infl = by_key["economic.inflation_rate"]
         assert infl["kind"] == "reference"
@@ -112,7 +114,7 @@ class TestNominalEcho:
     def test_nominal_mode_echoes_effective_rates(self):
         from hde.config import load_config_dict
         from hde.serialization import format_assumptions
-        cfg = {"years": 5, "economic": {"mode": "nominal", "inflation_rate": 0.02},
+        cfg = {"years": 5, "rates": "real", "economic": {"mode": "nominal", "inflation_rate": 0.02},
                "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.03}}
         joined = "\n".join(format_assumptions(load_config_dict(cfg)))
         assert "rent: escalation +3.0%/yr real → +5.1%/yr nominal (incl. 2.0% inflation)" in joined
@@ -121,6 +123,6 @@ class TestNominalEcho:
     def test_real_mode_unchanged(self):
         from hde.config import load_config_dict
         from hde.serialization import format_assumptions
-        cfg = {"years": 5, "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.03}}
+        cfg = {"years": 5, "rates": "real", "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.03}}
         joined = "\n".join(format_assumptions(load_config_dict(cfg)))
         assert "rent: escalation +3.0%/yr ·" in joined and "nominal" not in joined.split("\n")[1]

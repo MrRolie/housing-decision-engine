@@ -9,12 +9,15 @@
 #                    2026 Projection Assumption Guidelines (fpcanada.ca)
 #   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
 #
+#   Rates are typed AS QUOTED (the engine's default convention): in nominal mode the
+#   engine uses each quoted figure as typed and the `rates:` line says so; the
+#   anchored defaults stay real and are composed with inflation_rate.
+#
 #   economic.mode nominal ......... a mortgage is a NOMINAL contract: nominal mode keeps the payment
 #                                   the lender actually collects (a real-rate level payment understates
 #                                   year-1 cash and hides affordability breaches — the engine warns).
-#                                   Growth, escalation and return inputs below stay REAL; the engine
-#                                   composes inflation_rate on top of them.
-#   inflation_rate 0.021 .......... FP Canada 2026 PAG long-term inflation assumption
+#   inflation_rate 0.021 .......... FP Canada 2026 PAG long-term inflation assumption — composed onto
+#                                   the anchored real defaults (here the discount rate)
 #   discount_rate (omitted) ....... engine default: 3% real (FP Canada 2026 PAG 60/40) composed with
 #                                   inflation ⇒ 5.2% nominal, echoed under `defaults applied`
 #   mortgage_rate 0.044 ........... FP Canada 2026 borrowing rate 4.4% nominal, used as an EFFECTIVE
@@ -22,11 +25,12 @@
 #                                   semi-annually — convert it first: r_eff = (1 + r_posted/2)^2 − 1.
 #   down_payment 110000 ........... 20% of price — scenario-specific
 #   mortgage_term_years 25 ........ common Canadian amortization — scenario-specific
-#   value_growth_rate 0.01 ........ illustrative market view — see showcase example for demographic drift
+#   value_growth_rate 0.031 ....... illustrative market view, 3.1% quoted ≈ 1.0% real — see the
+#                                   showcase example for demographic drift
 #   annual_maintenance_rate 0.01 .. NAHB 2019 Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
-#   rent_escalation_rate 0.01 ..... FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real
+#   rent_escalation_rate 0.031 .... FP Canada 2026 shelter-cost growth, 3.1% as the PAG quotes it (≈ 1.0% real)
 #   invested_down_payment 110000 .. like-for-like: the renter invests exactly the buyer's down payment
-#   investment_return_rate 0.03 ... FP Canada 2026 PAG 60/40 ≈ 3.0% real
+#   investment_return_rate 0.051 .. FP Canada 2026 PAG 60/40 ≈ 5.1% quoted (≈ 3.0% real)
 #   *_vol ......................... illustrative uncertainty calibration — sensitivity-test via sweep
 #
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
@@ -41,24 +45,24 @@ economic:
 house:
   initial_value: 550000  # scenario-specific market input
   down_payment: 110000  # 20% — scenario-specific
-  mortgage_rate: 0.044  # NOMINAL effective annual; FP Canada 2026 borrowing rate — used as entered in nominal mode
+  mortgage_rate: 0.044  # NOMINAL effective annual; FP Canada 2026 borrowing rate — a contract rate, used as entered in both modes
   mortgage_term_years: 25  # scenario-specific
   purchase_costs: 8200  # illustrative — a hand-typed welcome tax + notary; prefer land_transfer_tax: auto with a quoted province so the engine prices the duty (first_time_buyer_montreal.yaml)
   other_recurring_costs:
     - name: property_tax
       annual_amount: 4700  # illustrative — municipal + school tax ≈ 0.85% of value/yr; scenario-specific (use the listing's tax bill)
-      escalation_rate: 0.0  # real; tax tracks assessed value
+      escalation_rate: 0.021  # as quoted: rises with inflation ⇒ 0% real; tax tracks assessed value
     - name: home_insurance
       annual_amount: 1200  # illustrative — scenario-specific
-      escalation_rate: 0.0
-  value_growth_rate: 0.01  # real (nominal mode composes inflation on top); illustrative market view
+      escalation_rate: 0.021  # as quoted: rises with inflation
+  value_growth_rate: 0.031  # as quoted (used as typed in nominal mode; ≈ 1.0% real); illustrative market view
   annual_maintenance_rate: 0.01  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
 
 rent:
   monthly_rent: 2300  # scenario-specific market input
-  rent_escalation_rate: 0.01  # real; FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real
+  rent_escalation_rate: 0.031  # as quoted; FP Canada 2026 shelter-cost growth 3.1% (≈ 1.0% real)
   invested_down_payment: 110000  # like-for-like with the buyer's down payment
-  investment_return_rate: 0.03  # real; FP Canada 2026 PAG 60/40
+  investment_return_rate: 0.051  # as quoted; FP Canada 2026 PAG 60/40 ≈ 5.1% (≈ 3.0% real)
 
 simulation:
   num_sims: 5000

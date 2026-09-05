@@ -156,7 +156,7 @@ class TestPointSentences:
     clause only where the run has the data (2026-09-04)."""
 
     RICH = {
-        "years": 10, "discount_rate": 0.03, "province": "QC",
+        "years": 10, "discount_rate": 0.03, "province": "QC", "rates": "real",
         "house": {"initial_value": 500_000, "value_growth_rate": 0.0,
                   "down_payment": 75_000, "mortgage_rate": 0.04, "mortgage_term_years": 25,
                   "mortgage_insurance": "auto", "purchase_costs": 6_000},
@@ -207,7 +207,7 @@ class TestPointSentences:
 
     def test_a_real_disagreement_point_is_stated_as_one(self):
         raw = {
-            "years": 20, "economic": {"mode": "nominal", "inflation_rate": 0.021},
+            "years": 20, "rates": "real", "economic": {"mode": "nominal", "inflation_rate": 0.021},
             "house": {"initial_value": 550_000, "down_payment": 110_000, "mortgage_rate": 0.044,
                       "mortgage_term_years": 25, "purchase_costs": 8_200, "value_growth_rate": 0.01,
                       "annual_maintenance_rate": 0.01,
@@ -290,7 +290,7 @@ class TestDeclaredSourcesAtGridPoints:
     the declaration is lifted and the echo says `sweep` (2026-09-04)."""
 
     def _raw(self):
-        return {**RAW, "discount_rate": 0.03,
+        return {**RAW, "discount_rate": 0.03, "rates": "real",
                 "sources": {"discount_rate": "anchor:simulation.discount_rate",
                             "years": "user"}}
 

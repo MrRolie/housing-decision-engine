@@ -286,6 +286,11 @@ ANCHORS: Dict[str, Anchor] = {
         retrieved_on="2026-09-01",
         replaces=(0.07, "uncited default above any PAG-derived real return; "
                         "re-anchored to the 60/40 real figure"),
+        restatements=((0.051,
+                       "the same figure AS QUOTED, before deflation: the PAG components "
+                       "0.6 × 6.4% + 0.4 × 3.2% = 5.12% nominal, quoted as 5.1%; 3.0% real "
+                       "is that figure less the PAG's 2.1% inflation — a config typing the "
+                       "quoted 5.1% under the as-quoted convention cites this anchor"),),
     ),
     "rent.rent_escalation_rate": Anchor(
         name="rent.rent_escalation_rate",
@@ -312,6 +317,11 @@ ANCHORS: Dict[str, Anchor] = {
         retrieved_on="2026-09-01",
         replaces=(0.03, "old default read like a nominal escalation applied in "
                         "real mode; re-anchored to the PAG real shelter-cost figure"),
+        restatements=((0.031,
+                       "the same figure AS QUOTED: the PAG prints shelter-cost growth as "
+                       "3.1% nominal (2.1% inflation + 1%); 1.0% real is that figure less "
+                       "the 2.1% inflation — a config typing the quoted 3.1% under the "
+                       "as-quoted convention cites this anchor"),),
     ),
     "income.income_growth_rate": Anchor(
         name="income.income_growth_rate",
@@ -331,6 +341,11 @@ ANCHORS: Dict[str, Anchor] = {
         retrieved_on="2026-09-01",
         replaces=(0.03, "old default conflated nominal salary growth with real "
                         "terms; re-anchored to the PAG real salary-growth figure"),
+        restatements=((0.031,
+                       "the same figure AS QUOTED: the PAG prints salary growth as 3.1% "
+                       "nominal (2.1% inflation + 1% productivity, merit and advancement); "
+                       "1.0% real is that figure less the 2.1% inflation — a config typing "
+                       "the quoted 3.1% under the as-quoted convention cites this anchor"),),
     ),
     "income.affordability_threshold": Anchor(
         name="income.affordability_threshold",
@@ -510,6 +525,10 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="FP Canada 2026 PAG (60/40 real)",
         retrieved_on="2026-09-01",
         kind="derivation",
+        restatements=((0.051,
+                       "the same figure AS QUOTED, before deflation — rent.investment_return_rate's "
+                       "quoted form: the PAG 60/40 components 0.6 × 6.4% + 0.4 × 3.2% ≈ 5.1% "
+                       "nominal, and 3.0% real is that less the PAG's 2.1% inflation"),),
     ),
     "rent.invested_down_payment": Anchor(
         name="rent.invested_down_payment",

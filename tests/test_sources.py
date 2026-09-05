@@ -32,6 +32,9 @@ from hde.sources import attributable_keys, format_source_value, uncertainty_keys
 BASE = {
     "years": 10,
     "discount_rate": 0.03,
+    # declared real: the anchor declarations below state the anchors' own real
+    # figures (the as-quoted comparison is pinned in test_rates.py, 2026-09-05)
+    "rates": "real",
     "condo": {"initial_value": 300_000, "monthly_fee": 400, "all_cash": True},
     "rent": {"monthly_rent": 1_500, "invested_down_payment": 300_000,
              "investment_return_rate": 0.03},
@@ -39,7 +42,7 @@ BASE = {
 }
 
 ALL_KEYS = [
-    "years", "discount_rate",
+    "years", "discount_rate", "rates",
     "condo.initial_value", "condo.monthly_fee", "condo.all_cash",
     "rent.monthly_rent", "rent.invested_down_payment", "rent.investment_return_rate",
     "simulation.num_sims", "simulation.random_seed", "simulation.investment_return_vol",
@@ -510,7 +513,9 @@ class TestDeclarationsAreValidatedByFigure:
         assert "economic.inflation_rate.nominal_planning" in message
         assert "2.1%" in message
 
-    def test_real_mode_gets_no_nominal_sibling_hint(self):
+    def test_real_mode_gets_the_sibling_hint_too(self):
+        """The planning figure is the deflator of as-quoted rates in real mode
+        (2026-09-05), so the hint is no longer a nominal-mode fact."""
         with pytest.raises(ConfigValidationError) as excinfo:
             load_config_dict({
                 "years": 10,
@@ -519,7 +524,7 @@ class TestDeclarationsAreValidatedByFigure:
                 "rent": {"monthly_rent": 2_000},
                 "sources": {"economic.inflation_rate": "anchor:economic.inflation_rate"},
             })
-        assert "nominal_planning" not in str(excinfo.value)
+        assert "nominal_planning" in str(excinfo.value)
 
     def test_a_non_numeric_value_cannot_be_anchor_sourced(self):
         with pytest.raises(ConfigValidationError, match="condo.all_cash"):

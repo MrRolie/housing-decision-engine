@@ -24,6 +24,7 @@ class TestLoadConfigFromFile:
         config_data = {
             "years": 20,
             "discount_rate": 0.03,
+            "rates": "real",
             "condo": {
                 "monthly_fee": 400,
                 "initial_value": 300_000,
@@ -54,6 +55,7 @@ class TestLoadConfigFromFile:
         config_data = {
             "years": 25,
             "discount_rate": 0.035,
+            "rates": "real",
             "economic": {
                 "mode": "real",
                 "inflation_rate": 0.025,
@@ -231,10 +233,12 @@ class TestValidation:
             load_config_dict(config)
     
     def test_negative_discount_rate(self):
-        """Test that negative discount_rate raises error."""
+        """A discount factor at or below zero is refused. A small negative rate
+        is not: a quoted rate below inflation deflates to one (2026-09-05), and
+        the coherence warning names it instead."""
         config = {
             "years": 20,
-            "discount_rate": -0.01,
+            "discount_rate": -1.5,
             "condo": {"monthly_fee": 400},
             "house": {"initial_value": 400000},
         }
@@ -327,6 +331,7 @@ class TestEventParsing:
         config = {
             "years": 20,
             "discount_rate": 0.03,
+            "rates": "real",
             "condo": {
                 "monthly_fee": 500,
                 "initial_value": 300_000,
@@ -382,6 +387,7 @@ class TestRecurringCostParsing:
         config = {
             "years": 20,
             "discount_rate": 0.03,
+            "rates": "real",
             "condo": {
                 "monthly_fee": 400,
                 "initial_value": 300_000,
@@ -409,6 +415,7 @@ class TestRecurringCostParsing:
         config = {
             "years": 20,
             "discount_rate": 0.03,
+            "rates": "real",
             "condo": {
                 "monthly_fee": 400,
                 "initial_value": 300_000,
@@ -465,7 +472,7 @@ class TestComparisonSpecReturn:
 
     def test_rent_params_parsed_correctly(self):
         config = {
-            "years": 10, "discount_rate": 0.05,
+            "years": 10, "discount_rate": 0.05, "rates": "real",
             "rent": {
                 "monthly_rent": 2500,
                 "rent_escalation_rate": 0.04,
@@ -734,6 +741,9 @@ class TestCoherenceWarnings:
     def _spec(self, **overrides):
         cfg = {
             "years": 20, "discount_rate": 0.03,
+            # declared real: these tests pin the warnings on real figures; the
+            # as-quoted default has its own suite (test_rates.py, 2026-09-05)
+            "rates": "real",
             "economic": {"mode": "real"},
             "house": {"initial_value": 400_000, "all_cash": True,
                       "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01,

@@ -14,11 +14,15 @@
 #                  = applied by the ENGINE from its registry (uv run hde --print-anchors);
 #                    nothing below is hand-computed from them
 #
+#   Rates are typed AS QUOTED (the engine's default convention): in nominal mode the
+#   engine uses each quoted figure as typed and the `rates:` line says so; the anchored
+#   defaults stay real and are composed with inflation_rate. A rate that equals a
+#   registry figure in its QUOTED form is declared `anchor:<name>` below.
+#
 #   years 10 ...................... the household's own horizon
 #   province "QC" ................. QUOTED on purpose: an unquoted ON is a YAML boolean and
 #                                   the engine refuses it rather than guess a province
-#   economic.mode nominal ......... a mortgage is a NOMINAL contract (see mortgage_house_vs_rent.yaml);
-#                                   growth, escalation and return inputs below stay REAL
+#   economic.mode nominal ......... a mortgage is a NOMINAL contract (see mortgage_house_vs_rent.yaml)
 #   inflation_rate 0.021 .......... FP Canada 2026 PAG long-term inflation (the registry value)
 #   discount_rate (omitted) ....... engine default 3% real composed with inflation ⇒ 5.2%, echoed
 #   initial_value 450000 .......... the listing
@@ -40,22 +44,25 @@
 #   purchase_costs 2000 ........... notary + inspection, the household's quotes; the duty is ADDED
 #   other_recurring_costs ......... the listing's tax bill as two lines, municipal and school (a
 #                                   Québec bill is both; property_tax.montreal and school_tax.qc are
-#                                   the registry's checks, on ASSESSED value), and the insurer's quote
+#                                   the registry's checks, on ASSESSED value), and the insurer's quote;
+#                                   each line rises with inflation (2.1% quoted ⇒ 0% real)
 #   value_growth_rate (omitted) ... engine neutral 0% real — the run warns; the growth sweep and the
 #                                   MTL_ISLAND_RA06 prior are the next step (examples/README.md §6)
 #   monthly_rent 1850 ............. the household's current rent
-#   rent_escalation_rate 0.01 ..... FP Canada 2026 shelter 3.1% nominal ≈ 1.0% real (the registry
-#                                   value); a Québec continuing lease runs nearer 0% real — sweep it
+#   rent_escalation_rate 0.031 .... FP Canada 2026 shelter-cost growth, 3.1% as the PAG quotes it
+#                                   (≈ 1.0% real — the registry value's quoted form); a Québec
+#                                   continuing lease runs nearer CPI (0% real) — sweep it
 #   invested_down_payment 60000 ... like-for-like: the renter keeps the same $60,000 invested
-#   investment_return_rate 0.03 ... FP Canada 2026 PAG 60/40 ≈ 3.0% real (the registry value)
+#   investment_return_rate 0.051 .. FP Canada 2026 PAG 60/40 ≈ 5.1% quoted (≈ 3.0% real, the registry value)
 #   annual_income 95000 ........... the household's income
-#   income_growth_rate 0.01 ....... FP Canada 2026 PAG salary growth 3.1% nominal ≈ 1.0% real
+#   income_growth_rate 0.031 ...... FP Canada 2026 PAG salary growth, 3.1% as the PAG quotes it (≈ 1.0% real)
 #   affordability_threshold (omitted) engine default 32% (legacy GDS guideline), echoed
 #   num_sims / random_seed ........ structural; no uncertainty input is set, so the Monte Carlo is a
 #                                   single path and the verdict rests on the 5% tie band
 #
-# Convention: a value marked "registry value" equals an anchor and is declared `anchor:<name>`;
-# the household's figures are `user`; a modelling choice the file makes is `assistant`.
+# Convention: a value marked "registry value" equals an anchor — in its quoted form here — and is
+# declared `anchor:<name>`; the household's figures are `user`; a modelling choice the file makes
+# is `assistant`.
 
 years: 10  # the household's horizon
 province: "QC"  # quoted — an unquoted ON is a YAML boolean
@@ -79,23 +86,23 @@ condo:
   other_recurring_costs:
     - name: municipal_tax
       annual_amount: 2610  # the listing's municipal tax bill (check: property_tax.montreal on assessed value)
-      escalation_rate: 0.0  # real; tracks assessed value
+      escalation_rate: 0.021  # as quoted: rises with inflation ⇒ 0% real; tracks assessed value
     - name: school_tax
       annual_amount: 330  # the listing's school tax bill — a separate Québec levy (school_tax.qc)
-      escalation_rate: 0.0
+      escalation_rate: 0.021  # as quoted: rises with inflation
     - name: unit_insurance
       annual_amount: 420  # the insurer's quote (check: home_insurance.qc is a household-average floor)
-      escalation_rate: 0.0
+      escalation_rate: 0.021  # as quoted: rises with inflation
 
 rent:
   monthly_rent: 1850  # the household's current rent
-  rent_escalation_rate: 0.01  # real; FP Canada 2026 shelter — a Québec continuing lease runs nearer 0%: sweep it
+  rent_escalation_rate: 0.031  # as quoted; FP Canada 2026 shelter-cost growth 3.1% — a Québec continuing lease runs nearer CPI: sweep it
   invested_down_payment: 60000  # like-for-like with cash_available
-  investment_return_rate: 0.03  # real; FP Canada 2026 PAG 60/40
+  investment_return_rate: 0.051  # as quoted; FP Canada 2026 PAG 60/40 ≈ 5.1%
 
 income:
   annual_income: 95000  # the household's income
-  income_growth_rate: 0.01  # real; FP Canada 2026 PAG salary growth
+  income_growth_rate: 0.031  # as quoted; FP Canada 2026 PAG salary growth 3.1%
 
 simulation:
   num_sims: 5000
@@ -103,8 +110,9 @@ simulation:
 
 # Who stated each value. `user` = the household's own figure, `assistant` = a
 # modelling choice this file makes on their behalf, `anchor:<name>` = exactly
-# the registry's value (uv run hde --print-anchors). The read-back splits its
-# echo into user-stated / assistant-typed / anchor-sourced lines from this block.
+# the registry's value, in its quoted form (uv run hde --print-anchors lists
+# both forms under `restatements`). The read-back splits its echo into
+# user-stated / assistant-typed / anchor-sourced lines from this block.
 sources:
   years: user
   province: user

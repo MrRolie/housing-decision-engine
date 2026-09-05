@@ -43,7 +43,7 @@ class TestInvestmentReturnVol:
 
 
 class TestFinancedPurchaseCosts:
-    BASE = {"years": 10, "discount_rate": 0.03,
+    BASE = {"years": 10, "discount_rate": 0.03, "rates": "real",
             "house": {"initial_value": 400_000, "down_payment": 40_000, "mortgage_rate": 0.04,
                       "mortgage_term_years": 25, "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01,
                       "purchase_costs": 6_000,

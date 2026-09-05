@@ -36,7 +36,7 @@ from hde.models import (
     RentParams,
     SimulationParams,
 )
-from hde.serialization import format_assumptions, spec_value
+from hde.serialization import default_anchor, format_assumptions, spec_value
 
 # Every anchored key omitted below, so the parsers fall back to anchors.
 BASE_CONFIG = {
@@ -215,7 +215,12 @@ class TestThreeWayPin:
         spec = load_config_dict(BASE_CONFIG)
         for name in WIRING:
             for path in _parser_paths(name):
-                assert spec_value(spec, path) == ANCHORS[name].value, path
+                # `economic.inflation_rate` is the one key two anchors can supply:
+                # the planning figure deflates as-quoted rates in real mode
+                # (2026-09-05), so the parser default is the anchor the echo cites.
+                assert spec_value(spec, path) == default_anchor(spec, path).value, path
+                if path != "economic.inflation_rate":
+                    assert default_anchor(spec, path) is ANCHORS[name], path
 
 
 class TestProvenanceWarnings:

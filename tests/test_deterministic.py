@@ -522,7 +522,7 @@ def test_nominal_mode_affordability_composes_inflation():
     income too, so the ratio itself does not drift on inflation."""
     from hde.config import load_config_dict
     from hde.deterministic import _annual_costs_for_option, _compute_income_trajectory
-    base = {"years": 6, "discount_rate": 0.03,
+    base = {"years": 6, "discount_rate": 0.03, "rates": "real",
             "condo": {"monthly_fee": 400, "initial_value": 300_000, "all_cash": True,
                       "fee_escalation_rate": 0.01},
             "income": {"annual_income": 80_000, "income_growth_rate": 0.01}}
@@ -545,6 +545,7 @@ class TestNominalRentOtherCosts:
     CFG = {
         "years": 6,
         "discount_rate": 0.03,
+        "rates": "real",
         "economic": {"mode": "nominal", "inflation_rate": 0.02},
         "rent": {
             "monthly_rent": 2000,
@@ -652,7 +653,7 @@ class TestReviewModifications:
         from hde.monte_carlo import run_monte_carlo
         from hde.pv import pv_single
         from hde.story_plots import _cumulative_cost_curves
-        cfg = {"years": 10, "discount_rate": 0.03,
+        cfg = {"years": 10, "discount_rate": 0.03, "rates": "real",
                "rent": {"monthly_rent": 1_000, "rent_escalation_rate": 0.0,
                         "events": [{"name": "move", "base_cost": 10_000, "expected_year": 3, "min_year": 5}]},
                "simulation": {"num_sims": 2, "random_seed": 1}}

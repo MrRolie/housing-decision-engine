@@ -146,7 +146,7 @@ class TestRateAlternatives:
         dollar forms are still sized for the seed. Scaling them moves the
         threshold by tens of thousands — the reviewed answer's ~$50k."""
         fixed = {
-            "years": 25,
+            "years": 25, "rates": "real",
             "house": {
                 "initial_value": 450_000, "value_growth_rate": 0.01,
                 "down_payment": 90_000, "mortgage_rate": 0.04, "mortgage_term_years": 25,

@@ -7,22 +7,27 @@
 #                    2026 Projection Assumption Guidelines (fpcanada.ca)
 #   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
 #
-#   discount_rate 0.035 ............... illustrative — REAL, the household's own time preference, composed with
-#                                      inflation in nominal mode (⇒ 6.1%); sanity band [0.02, 0.06]
+#   Rates are typed AS QUOTED (the engine's default convention): in nominal mode the
+#   engine uses each quoted figure as typed and the `rates:` line says so; anchored
+#   defaults stay real and are composed with inflation_rate. This file's inflation is
+#   2.5%, so "≈ x% real" below means the quoted figure less 2.5%.
+#
+#   discount_rate 0.061 ............... illustrative — the household's own time preference, 6.1% quoted
+#                                      ≈ 3.5% real; sanity band [0.02, 0.06] real
 #   inflation_rate 0.025 .............. FP Canada 2026 long-term inflation planning guideline is 2.1%;
 #                                      this example rounds up to 2.5% — a mildly conservative choice
 #   inflation_vol 0.010 ............... illustrative uncertainty calibration — sensitivity-test via sweep
-#   escalation/growth rates (all real; nominal mode adds inflation on top):
-#     fee_escalation_rate 0.015 ....... FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real is
-#                                      the planning reference — 1.5% real is a deliberate above-reference
-#                                      aging-building view
-#     recurring escalation 0.01–0.03 .. same FP Canada reference; values above ~1% real are deliberate
+#   escalation/growth rates (all as quoted; the read-back shows the real figure beside each):
+#     fee_escalation_rate 0.040 ....... FP Canada 2026 shelter-cost growth 3.1% quoted ≈ 1.0% real is
+#                                      the planning reference — 4.0% quoted ≈ 1.5% real is a deliberate
+#                                      above-reference aging-building view
+#     recurring escalation 0.035–0.056  same FP Canada reference; values above ~3.1% quoted are deliberate
 #                                      local/aging views (e.g. insurance hard market)
-#     value_growth_rate 0.02 / 0.03 ... illustrative market view — no defensible universal long-run real
-#                                      appreciation default; for ISQ-grounded demographic drift see
-#                                      market_scenario (showcase_demographic_prior.yaml)
-#     reserve_growth_rate 0.02 ........ illustrative; nearest planning reference is FP Canada 2026 fixed
-#                                      income 3.2% nominal ≈ 1.1% real — 2% real is optimistic
+#     value_growth_rate 0.046 / 0.056 . illustrative market view (≈ 2% / 3% real) — no defensible universal
+#                                      long-run real appreciation default; for ISQ-grounded demographic
+#                                      drift see market_scenario (showcase_demographic_prior.yaml)
+#     reserve_growth_rate 0.046 ....... illustrative (≈ 2% real); nearest planning reference is FP Canada
+#                                      2026 fixed income 3.2% quoted ≈ 1.1% real — 2% real is optimistic
 #   annual_maintenance_rate 0.009 ..... NAHB 2019 (Table 2): routine ≈ 0.6% of value/yr, narrow definition; 1%-rule budgeting family
 #   maintenance_curve 0.007→0.018 ..... NAHB 2019 anchor; curve shape is an illustrative age-condition profile
 #   event base costs / expected_year / hazard_* . illustrative service lives/costs — calibrate to your
@@ -32,7 +37,7 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 30
-discount_rate: 0.035  # REAL; illustrative — the household's own time preference, composed with inflation_rate in nominal mode (⇒ 6.1%); sanity band [0.02, 0.06]
+discount_rate: 0.061  # as quoted (used as typed in nominal mode; ≈ 3.5% real after 2.5% inflation); illustrative — the household's own time preference, sanity band [0.02, 0.06] real
 
 economic:
   mode: nominal
@@ -41,14 +46,14 @@ economic:
 
 condo:
   monthly_fee: 550  # scenario-specific market input
-  fee_escalation_rate: 0.015  # real growth above inflation  # FP Canada 2026 shelter ≈ 1.0% real reference; above-reference aging-building view
+  fee_escalation_rate: 0.040  # as quoted ≈ 1.5% real; FP Canada 2026 shelter 3.1% quoted ≈ 1.0% real reference; above-reference aging-building view
   initial_value: 420000  # scenario-specific market input
-  value_growth_rate: 0.02  # real; illustrative market view — for demographic drift see showcase example
+  value_growth_rate: 0.046  # as quoted ≈ 2% real; illustrative market view — for demographic drift see showcase example
   all_cash: true
   purchase_costs: 6300  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   reserve_contribution_rate: 0.30  # illustrative governance choice (share of fee flowing to reserves)
   reserve_initial_balance: 15000  # scenario-specific input
-  reserve_growth_rate: 0.02  # real; illustrative — nearest reference FP Canada 2026 fixed income ≈ 1.1% real; optimistic
+  reserve_growth_rate: 0.046  # as quoted ≈ 2% real; illustrative — nearest reference FP Canada 2026 fixed income ≈ 1.1% real; optimistic
   events:
     - name: "special_assessment_exterior"   # Hazard-style special assessment with fat-tailed costs
       base_cost: 8000  # illustrative service cost — calibrate to your reserve study
@@ -69,14 +74,14 @@ condo:
   other_recurring_costs:
     - name: "unit_insurance"
       annual_amount: 600  # scenario-specific market input
-      escalation_rate: 0.02  # real; FP Canada 2026 shelter ≈ 1.0% real reference — above-reference (insurance hard-market) view
+      escalation_rate: 0.046  # as quoted ≈ 2% real; FP Canada 2026 shelter 3.1% quoted ≈ 1.0% real reference — above-reference (insurance hard-market) view
     - name: "parking_fee"
       annual_amount: 1200  # scenario-specific market input
-      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
+      escalation_rate: 0.035  # as quoted ≈ 1% real; at the FP Canada 2026 shelter planning reference
 
 house:
   initial_value: 500000  # scenario-specific market input
-  value_growth_rate: 0.03  # real; illustrative market view — for demographic drift see showcase example
+  value_growth_rate: 0.056  # as quoted ≈ 3% real; illustrative market view — for demographic drift see showcase example
   annual_maintenance_rate: 0.009  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
   purchase_costs: 7500  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
@@ -130,13 +135,13 @@ house:
   other_recurring_costs:
     - name: "home_insurance"
       annual_amount: 1200  # scenario-specific market input
-      escalation_rate: 0.03  # real; well above FP Canada 2026 shelter ≈ 1.0% real reference — deliberate insurance hard-market view
+      escalation_rate: 0.056  # as quoted ≈ 3% real; well above the FP Canada 2026 shelter reference — deliberate insurance hard-market view
     - name: "landscaping"
       annual_amount: 1000  # scenario-specific market input
-      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
+      escalation_rate: 0.035  # as quoted ≈ 1% real; at the FP Canada 2026 shelter planning reference
     - name: "snow_removal"
       annual_amount: 350  # scenario-specific market input
-      escalation_rate: 0.01  # real; at FP Canada 2026 shelter ≈ 1.0% real planning reference
+      escalation_rate: 0.035  # as quoted ≈ 1% real; at the FP Canada 2026 shelter planning reference
 
 simulation:
   num_sims: 15000

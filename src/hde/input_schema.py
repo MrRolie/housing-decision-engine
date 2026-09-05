@@ -27,12 +27,20 @@ _UNSOURCED_JURISDICTIONS = ", ".join(
 _NOTES: Dict[str, Dict[str, Any]] = {
     "top": {
         "years": (True, "analysis horizon in years (>=1)"),
-        "discount_rate": (False, "annual REAL discount rate — the household's opportunity cost, "
-                                  "DECIMAL (0.05 = 5%); DEFAULT 0.03 real = the anchored "
-                                  "investment return (FP Canada 2026 PAG 60/40); in nominal mode "
-                                  "it is composed with inflation_rate ((1+real)(1+π)−1) whether "
-                                  "typed or defaulted, like every other rate — never type a "
-                                  "nominal figure; the echo names both"),
+        "discount_rate": (False, "annual discount rate — the household's opportunity cost, "
+                                  "DECIMAL (0.05 = 5%), AS QUOTED like every typed rate: the "
+                                  "engine deflates it by inflation_rate in real mode and uses it "
+                                  "as typed in nominal mode, and the read-back shows both forms; "
+                                  "DEFAULT 0.03 real = the anchored investment return (FP Canada "
+                                  "2026 PAG 60/40), composed with inflation_rate in nominal mode"),
+        "rates": (False, "'as_quoted' (DEFAULT) or 'real' — the convention of every rate you "
+                         "TYPE (growth, escalation, return and discount rates; never "
+                         "mortgage_rate, a contract rate): as_quoted means the figure as you see "
+                         "it quoted, converted ONCE at load — deflated by inflation_rate in real "
+                         "mode, (1 + r)/(1 + π) − 1, used as typed in nominal mode — and the "
+                         "read-back's `rates:` line shows both forms; 'real' means your figures "
+                         "are already real and are read as before (composed with inflation_rate "
+                         "in nominal mode). Anchored defaults are real either way"),
         # Section blocks: all optional, but at least one option must be present;
         # a key marked required inside a block is required only when the block is.
         "condo": (False, "optional block — at least ONE of condo / house / rent must be "
@@ -76,14 +84,18 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     },
     "condo": {
         "initial_value": (True, "purchase price in DOLLARS (480000, not 480)"),
-        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
-                                       "neutral, no universal long-run real default; set "
-                                       "your view or a market_scenario prior. With a prior, "
-                                       "its drift is ADDED to this base in the Monte Carlo; "
+        "value_growth_rate": (False, "annual price growth, decimal, AS QUOTED — the engine "
+                                       "deflates it by inflation_rate in real mode and uses it as "
+                                       "typed in nominal mode; the read-back shows both forms; "
+                                       "default 0.0 real — neutral, no universal long-run real "
+                                       "default; set your view or a market_scenario prior. With a "
+                                       "prior, its drift is ADDED to this base in the Monte Carlo; "
                                        "the deterministic line uses this base alone"),
         "monthly_fee": (True, "condo fee, $/month — REQUIRED whenever a condo: block is "
                              "present; use 0 for a fee-free unit"),
-        "fee_escalation_rate": (False, "annual fee growth, decimal; default 0.0"),
+        "fee_escalation_rate": (False, "annual fee growth, decimal, AS QUOTED (converted once at "
+                                       "load like value_growth_rate); default 0.0 real — fees "
+                                       "track inflation"),
         "down_payment": (False, "$ paid at purchase; with mortgage_rate + mortgage_term_years "
                                "it is the capital structure", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "cash_available": (False, "$ of cash you bring to the closing table — an ALTERNATIVE to "
@@ -192,8 +204,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                           "costs belong in purchase_costs"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
-                                         "owner pays; escalation_rate is REAL (composed with "
-                                         "inflation in nominal mode). PROPERTY TAX AND HOME "
+                                         "owner pays; escalation_rate is AS QUOTED like every "
+                                         "typed rate (deflated by inflation_rate in real mode, "
+                                         "used as typed in nominal mode; omitted = 0.0 real, the "
+                                         "line tracks inflation). PROPERTY TAX AND HOME "
                                          "INSURANCE ARE YOUR OWN FIGURES — the engine applies "
                                          "no default for either. Published figures to check "
                                          "them against: `hde --print-anchors`, keys "
@@ -219,14 +233,18 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "reserve_contribution_rate": (False, "fraction of each year's fees set aside into the "
                                              "reserve fund; default 0 = reserve not modelled"),
         "reserve_initial_balance": (False, "$ in the reserve fund at year 0; default 0"),
-        "reserve_growth_rate": (False, "annual growth on the reserve balance, decimal; default 0"),
+        "reserve_growth_rate": (False, "annual growth on the reserve balance, decimal, AS QUOTED "
+                                       "(converted once at load like every typed rate); default 0 "
+                                       "real"),
     },
     "house": {
         "initial_value": (True, "purchase price in DOLLARS"),
-        "value_growth_rate": (False, "annual REAL price growth, decimal; default 0.0 — "
-                                       "neutral, no universal long-run real default; set "
-                                       "your view or a market_scenario prior. With a prior, "
-                                       "its drift is ADDED to this base in the Monte Carlo; "
+        "value_growth_rate": (False, "annual price growth, decimal, AS QUOTED — the engine "
+                                       "deflates it by inflation_rate in real mode and uses it as "
+                                       "typed in nominal mode; the read-back shows both forms; "
+                                       "default 0.0 real — neutral, no universal long-run real "
+                                       "default; set your view or a market_scenario prior. With a "
+                                       "prior, its drift is ADDED to this base in the Monte Carlo; "
                                        "the deterministic line uses this base alone"),
         "annual_maintenance_rate": (False, "fraction of value per year; DEFAULT 0.0 = no "
                                             "maintenance modelled (neutral, warns when omitted); "
@@ -339,8 +357,10 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                           "costs belong in purchase_costs"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
-                                         "owner pays; escalation_rate is REAL (composed with "
-                                         "inflation in nominal mode). PROPERTY TAX AND HOME "
+                                         "owner pays; escalation_rate is AS QUOTED like every "
+                                         "typed rate (deflated by inflation_rate in real mode, "
+                                         "used as typed in nominal mode; omitted = 0.0 real, the "
+                                         "line tracks inflation). PROPERTY TAX AND HOME "
                                          "INSURANCE ARE YOUR OWN FIGURES — the engine applies "
                                          "no default for either. Published figures to check "
                                          "them against: `hde --print-anchors`, keys "
@@ -366,15 +386,19 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     },
     "rent": {
         "monthly_rent": (True, "$/month"),
-        "rent_escalation_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 "
-                                          "PAG shelter-cost growth)"),
+        "rent_escalation_rate": (False, "annual, AS QUOTED — the figure as your lease or market "
+                                          "quotes it, converted once at load (deflated by "
+                                          "inflation_rate in real mode, used as typed in nominal "
+                                          "mode; the read-back shows both forms); DEFAULT 0.01 real "
+                                          "(FP Canada 2026 PAG shelter-cost growth, 3.1% quoted)"),
         "invested_down_payment": (False, "capital the renter keeps invested instead of buying: charged at year 0 like "
                                         "the buyer's down payment and credited at its terminal value; like-for-like "
                                         "= the buyer's TOTAL year-0 cash, down_payment + purchase_costs (all cash: "
                                         "price + purchase_costs); DEFAULT 0 = assume it earns exactly the discount rate"),
-        "investment_return_rate": (False, "annual, REAL (composed with inflation in nominal "
-                                            "mode like value growth); DEFAULT 0.03 (FP Canada "
-                                            "2026 PAG 60/40)"),
+        "investment_return_rate": (False, "annual, AS QUOTED — the return as your fund quotes "
+                                            "it, converted once at load like value growth; "
+                                            "DEFAULT 0.03 real (FP Canada 2026 PAG 60/40, ≈ 5.1% "
+                                            "quoted)"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs such as "
                           "moving costs"),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
@@ -384,21 +408,28 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                          "policy: different product, different price"),
     },
     "economic": {
-        "mode": (False, '"real" (DEFAULT — every rate you enter is real) or "nominal": '
-                        'growth, escalation, return and discount-rate inputs (value, fee, rent, '
-                        'other, income, investment_return_rate, discount_rate) stay REAL and the '
-                        'engine composes inflation_rate on top of them, while mortgage_rate — a '
-                        'quoted contract rate — is used as entered; never type a sticker growth '
-                        'rate or a nominal discount rate into nominal mode'),
-        "inflation_rate": (False, "ignored in real mode; DEFAULT 0.0 — nominal-mode "
-                                    f"suggestion {_NOMINAL_PLANNING.value} ({_NOMINAL_PLANNING.short_cite})"),
+        "mode": (False, '"real" (DEFAULT) or "nominal". In both, a typed growth, escalation, '
+                        'return or discount rate is AS QUOTED (top-level rates: as_quoted, the '
+                        'default): deflated by inflation_rate in real mode, used as typed in '
+                        'nominal mode; anchored defaults are real and the engine composes '
+                        'inflation_rate on top of them in nominal mode; mortgage_rate — a quoted '
+                        'contract rate — is used as entered in both. Nominal mode keeps the payment '
+                        'a lender actually collects, which is why a mortgage runs there'),
+        "inflation_rate": (False, "the deflator of every rate typed as quoted in real mode, and "
+                                    "the rate composed onto the real defaults in nominal mode; "
+                                    f"DEFAULT in real mode {_NOMINAL_PLANNING.value} "
+                                    f"({_NOMINAL_PLANNING.short_cite}, echoed under defaults "
+                                    "applied), 0.0 in nominal mode (the engine warns and suggests "
+                                    "the same figure) and under rates: real (inert there)"),
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
     },
     "income": {
         "annual_income": (True, "$/year — REQUIRED whenever an income: block is present; "
                                 "the block itself is optional (omit it to skip affordability)"),
-        "income_growth_rate": (False, "annual; DEFAULT 0.01 real (FP Canada 2026 PAG "
-                                        "salary growth)"),
+        "income_growth_rate": (False, "annual, AS QUOTED (converted once at load like every "
+                                        "typed rate, so income and costs share one convention in "
+                                        "the affordability ratio); DEFAULT 0.01 real (FP Canada "
+                                        "2026 PAG salary growth, 3.1% quoted)"),
         "affordability_threshold": (False, "cost/income ratio; DEFAULT 0.32 (legacy GDS "
                                              "32%, below CMHC's 39% cap)"),
         "pay_drop_events": (False, "list of {year, magnitude, year_jitter_std, magnitude_vol}; "

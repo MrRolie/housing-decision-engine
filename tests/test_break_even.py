@@ -23,7 +23,7 @@ BAND = ANCHORS["verdict.tie_band"].value
 
 def _base(**over):
     cfg = {
-        "years": 10,
+        "years": 10, "rates": "real",
         "rent": {"monthly_rent": 2000, "rent_escalation_rate": 0.0, "invested_down_payment": 85_000},
         "condo": {
             "initial_value": 400_000, "monthly_fee": 300, "value_growth_rate": 0.0,
@@ -177,7 +177,7 @@ class TestFormat:
 class TestCliffNoteIsOneSentence:
     def _cfg(self):
         return {
-            "years": 10, "discount_rate": 0.03, "province": "QC",
+            "years": 10, "discount_rate": 0.03, "province": "QC", "rates": "real", "rates": "real",
             "house": {"initial_value": 600_000, "value_growth_rate": 0.0,
                       "cash_available": 130_000, "purchase_costs": 5_000,
                       "mortgage_rate": 0.04, "mortgage_term_years": 25,

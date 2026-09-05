@@ -28,6 +28,7 @@ from .models import (
     ComparisonSpec,
 )
 from .reporting import format_assumptions, format_text_report
+from .serialization import growth_label
 from .story_plots import (
     OPTION_DISPLAY,
     _cumulative_cost_curves,
@@ -115,7 +116,7 @@ def _act_sentences(
             futures_sentence = (
                 f"Under {prior.geography} demographic demand scenarios, the "
                 f"home's value fans out around your "
-                f"{params.value_growth_rate:.1%} growth assumption."
+                f"{growth_label(spec, dwelling_key)} growth assumption."
             )
         else:
             futures_sentence = (

@@ -15,6 +15,7 @@ from .anchors import ANCHORS
 from .land_transfer_tax import LandTransferTax
 from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
+from .rates import ConvertedRate
 from .sources import SourceEcho
 
 
@@ -338,6 +339,14 @@ class ComparisonSpec:
     # the config loader from the optional `sources:` block; empty when the spec
     # is constructed directly. Pure provenance — engines never read it.
     sources: Optional[SourceEcho] = None
+    # --- Rates as quoted (2026-09-05): the convention the config's typed rates
+    # were read under (`as_quoted`, the default, or a declared `real`) and every
+    # typed rate the loader converted, with the figure as quoted and the figure
+    # in use. The numeric fields above are always REAL; these say how they got
+    # there. Populated by the loader; a spec constructed directly holds real
+    # figures and converted nothing. Pure provenance — engines never read them.
+    rates: str = "as_quoted"
+    converted_rates: List[ConvertedRate] = field(default_factory=list)
 
 
 # ----- Result Dataclasses -----

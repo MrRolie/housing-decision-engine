@@ -69,16 +69,18 @@ class TestNominalDiscountDefault:
         assert "simulation.discount_rate" in spec.defaults_applied
 
     def test_nominal_mode_explicit_is_composed_too(self):
-        """A typed discount_rate is the household's REAL opportunity cost and
-        follows the rule every other rate follows in nominal mode (2026-09-04):
-        composed with inflation_rate, never used as a nominal figure."""
-        spec = load_config_dict(_base(discount_rate=0.045,
+        """Under `rates: real` a typed discount_rate is the household's REAL
+        opportunity cost and follows the rule every other real rate follows in
+        nominal mode (2026-09-04): composed with inflation_rate. (Under the
+        default as-quoted convention a typed rate is used as typed there —
+        test_rates.py, 2026-09-05.)"""
+        spec = load_config_dict(_base(rates="real", discount_rate=0.045,
                                       economic={"mode": "nominal", "inflation_rate": 0.021}))
         assert spec.simulation.discount_rate == pytest.approx(1.045 * 1.021 - 1)
         assert "simulation.discount_rate" not in spec.defaults_applied
 
     def test_real_mode_explicit_is_the_typed_figure(self):
-        spec = load_config_dict(_base(discount_rate=0.045))
+        spec = load_config_dict(_base(rates="real", discount_rate=0.045))
         assert spec.simulation.discount_rate == pytest.approx(0.045)
 
     def test_composed_default_is_named_in_the_echo(self):
@@ -87,7 +89,7 @@ class TestNominalDiscountDefault:
         assert "discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation)" in text
 
     def test_composed_typed_rate_is_named_in_the_echo(self):
-        spec = load_config_dict(_base(discount_rate=0.045,
+        spec = load_config_dict(_base(rates="real", discount_rate=0.045,
                                       economic={"mode": "nominal", "inflation_rate": 0.021}))
         text = "\n".join(format_assumptions(spec))
         assert "discount_rate 4.5% real → 6.7% nominal (incl. 2.1% inflation)" in text
@@ -96,7 +98,7 @@ class TestNominalDiscountDefault:
                 "and composed with inflation_rate; mortgage_rate is used as entered") in text
 
     def test_real_mode_echo_is_unchanged(self):
-        spec = load_config_dict(_base(discount_rate=0.05))
+        spec = load_config_dict(_base(rates="real", discount_rate=0.05))
         assert format_assumptions(spec)[0] == "mode: real terms · discount_rate 5.0%"
 
     def test_no_spurious_capital_spread_warning_in_nominal_mode(self):
@@ -190,7 +192,8 @@ class TestComposedDefaultsAreReconcilableInJson:
         """`sources` keeps the figure as typed (real); `discount_rate` is the
         composed value in use; `discount_rate_note` says how the two relate,
         in the words the composed default already uses."""
-        spec = load_config_dict(_base(discount_rate=0.045, sources={"discount_rate": "user"},
+        spec = load_config_dict(_base(rates="real", discount_rate=0.045,
+                                      sources={"discount_rate": "user"},
                                       economic={"mode": "nominal", "inflation_rate": 0.021}))
         block = assumptions_to_dict(spec)
         assert block["discount_rate"] == pytest.approx(1.045 * 1.021 - 1)
@@ -314,7 +317,8 @@ class TestSweepTracksTheMonteCarloMean:
 
 class TestYearOneAppreciation:
     def test_owner_expected_appreciation_in_nominal_mode(self):
-        spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021},
+        spec = load_config_dict(_base(rates="real",
+                                      economic={"mode": "nominal", "inflation_rate": 0.021},
                                       condo={**_base()["condo"], "value_growth_rate": 0.01}))
         det = compute_deterministic(spec)
         assert det.condo.appreciation_year1 == pytest.approx(400_000 * ((1.01 * 1.021) - 1))

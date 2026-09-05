@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .anchors import ANCHORS
 from .config import ConfigValidationError
 from .deterministic import compute_deterministic
+from .rates import RateConventionError, compose, resolve_convention
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
@@ -43,8 +44,8 @@ _MONEY_KEYS = frozenset({
 # default bracket", and the threshold question users actually ask about growth
 # needed a bracket they had no way to guess. The bracket used is always printed.
 RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
-    "value_growth_rate": (-0.02, 0.05),        # real: a shrinking market to a hot one
-    "rent_escalation_rate": (-0.01, 0.05),     # real shelter-cost growth
+    "value_growth_rate": (-0.02, 0.05),        # on the config's own axis (as quoted by default): a shrinking market to a hot one
+    "rent_escalation_rate": (-0.01, 0.05),     # shelter-cost growth, on the same axis
     "annual_maintenance_rate": (0.0, 0.03),    # nothing modelled to a high-upkeep house
     "mortgage_rate": (0.01, 0.10),             # effective annual, two decades of Canadian rates
     "discount_rate": (0.0, 0.08),              # the loader refuses outside [0, 15%]
@@ -390,7 +391,7 @@ def solve_break_even(
                       "threshold's growth sensitivity; read the sweep's decisive flags for the prior's")
     note = join_notes(
         prior_note,
-        prior_band_note(key, horizon_drift(raw, key, prior), core["break_evens"]),
+        prior_band_note(key, *horizon_drift(raw, key, prior), core["break_evens"]),
         cliff_note(raw, key, core["break_evens"]),
         price_scan_note(raw, key),
     )
@@ -417,9 +418,17 @@ def solve_break_even(
 
 def horizon_drift(
     raw: Dict[str, Any], key: str, prior: Optional[LoadedScenarioPrior],
-) -> Dict[int, float]:
-    """The prior's reference REAL drift per horizon band the run touches, for
-    the owned option a `<owned>.value_growth_rate` threshold is solved on.
+) -> Tuple[Dict[int, float], Optional[float]]:
+    """The prior's reference drift per horizon band the run touches, for the
+    owned option a `<owned>.value_growth_rate` threshold is solved on, ON THE
+    AXIS THE THRESHOLD IS SOLVED ON — and the inflation_rate that put it there.
+
+    The prior encodes a REAL drift; the threshold is solved on the config's own
+    `value_growth_rate`, which is AS QUOTED unless the config declares
+    `rates: real` (2026-09-05). Comparing the two as printed would put a real
+    figure against a quoted band — the double count the convention exists to
+    stop — so under the default the drift is composed with inflation_rate and
+    the second value says so (None when the axis is real).
 
     Empty for every other key, without a prior, or when the prior carries no
     reference scenario for this dwelling type — an absent band is reported by
@@ -427,18 +436,25 @@ def horizon_drift(
     """
     option, _, field = key.rpartition(".")
     if prior is None or field != "value_growth_rate" or option not in ("condo", "house"):
-        return {}
+        return {}, None
     years = _raw_value(raw, "years")
     if not isinstance(years, (int, float)) or years < 1:
-        return {}
+        return {}, None
     encoded = prior.encoded_drift()
     entry = encoded.get(option) or encoded.get("all")
     if entry is None:
-        return {}
+        return {}, None
     reference: Dict[int, float] = entry["reference_by_band"]  # type: ignore[assignment]
     touched = sorted({band_horizon_for_calendar_year(calendar_year_for_sim_year(y))
                       for y in range(1, int(years) + 1)})
-    return {band: reference[band] for band in touched if band in reference}
+    drifts = {band: reference[band] for band in touched if band in reference}
+    try:
+        rates, _, pi = resolve_convention(raw)
+    except RateConventionError:
+        return drifts, None
+    if rates != "as_quoted":
+        return drifts, None
+    return {band: compose(drift, pi) for band, drift in drifts.items()}, pi
 
 
 def _group_by_relation(
@@ -466,7 +482,8 @@ def _group_by_relation(
 
 
 def prior_band_note(
-    key: str, drifts: Dict[int, float], entries: List[Dict[str, Any]],
+    key: str, drifts: Dict[int, float], quoted_with: Optional[float],
+    entries: List[Dict[str, Any]],
 ) -> Optional[str]:
     """Where the prior's own drift sits against the tie band this threshold
     reports — INSIDE (the prior does not settle the question), BELOW or ABOVE
@@ -475,10 +492,14 @@ def prior_band_note(
     Three reviewed answers assembled this comparison by hand from two separate
     outputs. It is a comparison of the drift READ AS A GROWTH LEVEL: the Monte
     Carlo adds the drift to `value_growth_rate` rather than replacing it, and
-    the note says so rather than letting the reader assume either.
+    the note says so rather than letting the reader assume either. `quoted_with`
+    is the inflation_rate the drift was composed with to sit on a typed-as-
+    quoted axis (`horizon_drift`), None when the axis is real; the clause names
+    the convention so the figure is never read in the other one.
     """
     if not drifts or not entries:
         return None
+    axis = "/yr as quoted" if quoted_with is not None else "/yr"
     clauses: List[str] = []
     for entry in entries:
         lo, hi = entry["tie_band"]
@@ -490,10 +511,10 @@ def prior_band_note(
         for relation, bands in _group_by_relation(drifts, lo, hi):
             values = [drifts[band] for band in bands]
             if len(bands) == 1:
-                where = f"the prior's drift {values[0]:+.2%}/yr ({bands[0]} band)"
+                where = f"the prior's drift {values[0]:+.2%}{axis} ({bands[0]} band)"
             else:
                 listed = ", ".join(str(band) for band in bands)
-                where = (f"the prior's drift {min(values):+.2%}…{max(values):+.2%}/yr "
+                where = (f"the prior's drift {min(values):+.2%}…{max(values):+.2%}{axis} "
                          f"({listed} bands)")
             if relation == "unbounded":
                 edge = "low" if lo is None else "high"
@@ -510,9 +531,12 @@ def prior_band_note(
                                f"settle it")
     if not clauses:
         return None
+    convention = ("" if quoted_with is None else
+                  f"; the threshold is on the typed axis, so the prior's real drift is stated "
+                  f"as quoted — composed with {quoted_with:.1%} inflation_rate")
     return ("the prior against this threshold — " + "; ".join(clauses)
             + " (the drift is added to value_growth_rate in the Monte Carlo, not substituted "
-              "for it; this reads it as a growth level to place it on the same axis)")
+              f"for it; this reads it as a growth level to place it on the same axis{convention})")
 
 
 def _financing_regime(

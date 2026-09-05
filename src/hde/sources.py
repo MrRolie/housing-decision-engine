@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .anchors import ANCHORS, match_window
 from .land_transfer_tax import anchor_families
+from .rates import RateConventionError, deflate, is_convertible, resolve_convention
 
 # The three declarable classes. `unattributed` is not declarable — it is what
 # the echo calls a config key no `sources:` entry covers.
@@ -374,18 +375,15 @@ def _anchor_problem(key: str, name: str) -> str:
 def _sibling_hint(data: Dict[str, Any], joined: str) -> str:
     """The one case where the registry holds a sibling anchor that DOES publish
     the figure a refused declaration states: `economic.inflation_rate` is the
-    real-mode inert 0.0, while `economic.inflation_rate.nominal_planning` is the
-    2.1% planning figure a nominal config means (2026-09-04 review — the
-    refusal was correct and left the user to find the sibling by hand).
+    inert 0.0, while `economic.inflation_rate.nominal_planning` is the 2.1%
+    planning figure a config means — in nominal mode, and in real mode where it
+    deflates the rates typed as quoted (2026-09-04 review — the refusal was
+    correct and left the user to find the sibling by hand).
     """
     if joined != "economic.inflation_rate":
         return ""
-    econ = data.get("economic")
-    mode = econ.get("mode") if isinstance(econ, dict) else None
-    if mode != "nominal":
-        return ""
     sibling = ANCHORS["economic.inflation_rate.nominal_planning"]
-    return (f". In nominal mode the planning figure is the sibling anchor "
+    return (f". The planning figure is the sibling anchor "
             f"'{sibling.name}' ({sibling.value:.1%}) — declare that one")
 
 
@@ -461,10 +459,33 @@ def _anchor_declaration(
     # convention the engine's key is stated in).
     candidates = ([sum(a.value for a in anchors)] if len(anchors) > 1
                   else list(anchors[0].stated_values()))
-    if not any(abs(candidate - figure) <= window for candidate in candidates):
-        published = " + ".join(f"{a.value:g}" for a in anchors)
-        if len(anchors) > 1:
-            published += f" = {sum(a.value for a in anchors):g}"
+    matched = any(abs(candidate - figure) <= window for candidate in candidates)
+    published = " + ".join(f"{a.value:g}" for a in anchors)
+    if len(anchors) > 1:
+        published += f" = {sum(a.value for a in anchors):g}"
+    # A typed growth, escalation, return or discount rate is AS QUOTED unless
+    # the config declares `rates: real` (2026-09-05), and the anchor's figure
+    # is real. So the comparison runs in the anchor's convention: the typed
+    # figure DEFLATED by inflation_rate against the anchor's real value, or the
+    # typed figure itself against the anchor's quoted restatements — never the
+    # quoted figure against the real value, which is the double count this
+    # convention exists to stop.
+    if len(anchors) == 1 and is_convertible(key):
+        try:
+            rates, _, pi = resolve_convention(data)
+        except RateConventionError:
+            rates = "real"  # the loader refuses the `rates:` value itself
+        if rates == "as_quoted":
+            anchor = anchors[0]
+            real = deflate(figure, pi)
+            restated = [v for v, _ in anchor.restatements]
+            matched = (abs(anchor.value - real) <= window
+                       or any(abs(v - figure) <= window for v in restated))
+            figure_text = (f"{figure:g} as quoted = {real:.6g} real after {pi:.1%} "
+                           f"inflation_rate")
+            published = f"{anchor.value:g} real" + (
+                f" ({', '.join(f'{v:g}' for v in restated)} as quoted)" if restated else "")
+    if not matched:
         return None, (
             f"sources: '{key}' declared anchor:{joined} but the anchor's figure is "
             f"{published} and the config states {figure_text} — a declaration says "

@@ -38,6 +38,7 @@ from .models import (
     MonteCarloSummary,
     Verdict,
 )
+from .rates import ConvertedRate, converted_for, inflation_anchor_name
 from .sources import source_echo_to_dict, source_lines
 
 
@@ -319,15 +320,91 @@ def real_discount_rate(spec: ComparisonSpec) -> float:
     return (1 + dr) / (1 + spec.economic.inflation_rate) - 1
 
 
+def typed_discount_rate(spec: ComparisonSpec) -> Optional[ConvertedRate]:
+    """The discount rate as the config typed it, when it was typed AS QUOTED
+    (rates as quoted, 2026-09-05); None when defaulted or declared real."""
+    return converted_for(spec.converted_rates, "discount_rate")
+
+
 def discount_rate_note(spec: ComparisonSpec) -> Optional[str]:
     """How `discount_rate` relates to the figure stated (typed or the anchor)
-    when nominal mode composed it at parse; None in real mode, where the rate
-    in use is the figure stated."""
-    if spec.economic.mode != "nominal":
-        return None
-    return (f"composed at parse: (1 + {real_discount_rate(spec):.1%} real)"
-            f"(1 + {spec.economic.inflation_rate:.1%} inflation_rate) − 1 = "
-            f"{spec.simulation.discount_rate:.2%} nominal")
+    when the loader converted it: a quoted figure deflated in real mode, used
+    as typed in nominal mode; a real figure — the anchor, or a typed one under
+    `rates: real` — composed in nominal mode. None when the rate in use is the
+    figure stated."""
+    typed = typed_discount_rate(spec)
+    pi = spec.economic.inflation_rate
+    if spec.economic.mode == "nominal":
+        if typed is not None:
+            return f"as quoted: {typed.quoted:.1%} nominal, used as typed"
+        return (f"composed at parse: (1 + {real_discount_rate(spec):.1%} real)"
+                f"(1 + {pi:.1%} inflation_rate) − 1 = "
+                f"{spec.simulation.discount_rate:.2%} nominal")
+    if typed is not None:
+        return (f"deflated at parse: (1 + {typed.quoted:.1%} as quoted)/(1 + {pi:.1%} "
+                f"inflation_rate) − 1 = {spec.simulation.discount_rate:.2%} real")
+    return None
+
+
+def rates_line(spec: ComparisonSpec) -> str:
+    """The `rates:` line (2026-09-05): the convention the typed rates were read
+    under and, for every one the loader converted, both forms — the figure as
+    quoted and the figure in use. One line, one clause per rate, byte-stable:
+    the read-back carries it so an answer can never show a rate in a
+    convention the user did not type it in.
+    """
+    pi = spec.economic.inflation_rate
+    if spec.rates == "real":
+        tail = (f"composed with {pi:.1%} inflation_rate at compute"
+                if spec.economic.mode == "nominal" else "used as typed")
+        return f"rates: real (declared) · typed rates are real figures, {tail}"
+    if not spec.converted_rates:
+        return "rates: as quoted · no typed rate to convert"
+    if spec.economic.mode == "nominal":
+        clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} nominal, as typed"
+                   for c in spec.converted_rates]
+    else:
+        clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} after {pi:.1%} inflation"
+                   for c in spec.converted_rates]
+    return "rates: as quoted · " + " · ".join(clauses)
+
+
+def rate_label(spec: ComparisonSpec, dotted: str, rate: float) -> str:
+    """A rate for a sentence: the figure the run uses and, when the config
+    typed that rate as quoted and the quoted figure differs, the quoted figure
+    beside it — so "your X%" is never a number the user did not type. When
+    the two coincide (nominal mode, or a zero deflator) the figure stands
+    alone."""
+    typed = converted_for(spec.converted_rates, dotted)
+    if typed is None or abs(typed.quoted - rate) <= 5e-6:
+        return f"{rate:.1%}"
+    return f"{rate:.1%} real ({typed.quoted:.1%} as quoted)"
+
+
+def growth_label(spec: ComparisonSpec, option_name: str) -> str:
+    """An owned option's `value_growth_rate` for a sentence (`rate_label`)."""
+    rate = getattr(spec, option_name).value_growth_rate
+    return rate_label(spec, f"{option_name}.value_growth_rate", rate)
+
+
+def converted_rates_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
+    """`assumptions.converted_rates`: one `{key, quoted, effective}` per typed
+    rate the loader converted — `effective` is the rate the run uses, in the
+    run's terms (deflated in real mode; the quoted figure itself in nominal
+    mode). Empty under `rates: real`."""
+    return [{"key": c.key, "quoted": c.quoted, "effective": c.effective}
+            for c in spec.converted_rates]
+
+
+def default_anchor(spec: ComparisonSpec, key: str) -> Optional[Anchor]:
+    """The registry entry that supplied one defaulted key. `economic.inflation_rate`
+    is the one key two anchors can supply: the FP Canada planning figure when it
+    is the deflator of as-quoted rates in real mode (rates as quoted,
+    2026-09-05), else the real-mode inert zero — so the echo cites the anchor
+    whose value it actually applied."""
+    if key == "economic.inflation_rate":
+        return ANCHORS[inflation_anchor_name(spec.economic.mode, spec.rates)]
+    return ANCHORS.get(_ECHO_ALIASES.get(key, key))
 
 
 def format_assumptions(
@@ -358,39 +435,55 @@ def format_assumptions(
     nominal = spec.economic.mode == "nominal"
     pi = spec.economic.inflation_rate
 
-    def _g(rate: float) -> str:
-        """A growth/escalation input, with its effective composed rate in
-        nominal mode so a sticker rate typed into nominal mode is visible
-        as the double count it is (2026-09-02 dogfood: the echo printed the
-        raw rate and every nominal-thinking user was inflated twice)."""
+    def _g(rate: float, dotted: str) -> str:
+        """A growth/escalation input beside the figure the user typed. The spec
+        holds the REAL rate; a rate typed as quoted (2026-09-05) shows its
+        quoted form beside it, and in nominal mode the effective composed rate
+        leads, so a sticker rate is never shown in a convention the user did
+        not type it in (2026-09-02 dogfood: the echo printed the raw rate and
+        every nominal-thinking user was inflated twice)."""
+        typed = converted_for(spec.converted_rates, dotted)
         if not nominal:
-            return f"{rate:+.1%}/yr"
+            if typed is None:
+                return f"{rate:+.1%}/yr"
+            return f"{rate:+.1%}/yr ({typed.quoted:.1%} as quoted)"
         eff = (1 + rate) * (1 + pi) - 1
-        return f"{rate:+.1%}/yr real → {eff:+.1%}/yr nominal (incl. {pi:.1%} inflation)"
+        if typed is None:
+            return f"{rate:+.1%}/yr real → {eff:+.1%}/yr nominal (incl. {pi:.1%} inflation)"
+        return f"{typed.quoted:+.1%}/yr nominal, as quoted ({rate:.1%} real)"
 
     dr = spec.simulation.discount_rate
-    if nominal:
-        # The discount rate is a REAL opportunity cost — typed or the anchored
-        # default — composed with inflation_rate at parse like every other rate
-        # in nominal mode; name both figures in the words `_g` uses.
+    typed_dr = typed_discount_rate(spec)
+    if nominal and typed_dr is not None:
+        dr_text = f"{typed_dr.quoted:.1%} as quoted, used as typed"
+    elif nominal:
+        # A REAL discount rate — the anchored default, or a figure typed under
+        # `rates: real` — composed with inflation_rate at parse like every other
+        # real rate in nominal mode; name both figures in the words `_g` uses.
         default = " default" if "simulation.discount_rate" in spec.defaults_applied else ""
         dr_text = f"{real_discount_rate(spec):.1%} real{default} → {dr:.1%} nominal (incl. {pi:.1%} inflation)"
+    elif typed_dr is not None:
+        dr_text = f"{typed_dr.quoted:.1%} as quoted → {dr:.1%} real (after {pi:.1%} inflation)"
     else:
         dr_text = f"{dr:.1%}"
-    lines = [
-        f"mode: {spec.economic.mode} terms · discount_rate {dr_text}"
-        + (" (growth, escalation, investment-return and discount-rate inputs are REAL and "
-           "composed with inflation_rate; mortgage_rate is used as entered)" if nominal else "")
-    ]
+    if not nominal:
+        convention = ""
+    elif spec.rates == "real":
+        convention = (" (growth, escalation, investment-return and discount-rate inputs are REAL and "
+                      "composed with inflation_rate; mortgage_rate is used as entered)")
+    else:
+        convention = (" (typed rates are as quoted and used as typed; anchored defaults are real "
+                      "and composed with inflation_rate; mortgage_rate is used as entered)")
+    lines = [f"mode: {spec.economic.mode} terms · discount_rate {dr_text}{convention}"]
     if spec.condo is not None:
         lines.append(
-            f"condo: value growth {_g(spec.condo.value_growth_rate)} · "
-            f"fee escalation {_g(spec.condo.fee_escalation_rate)} · "
+            f"condo: value growth {_g(spec.condo.value_growth_rate, 'condo.value_growth_rate')} · "
+            f"fee escalation {_g(spec.condo.fee_escalation_rate, 'condo.fee_escalation_rate')} · "
             f"selling_cost_rate {spec.condo.selling_cost_rate:.1%}"
         )
     if spec.house is not None:
         lines.append(
-            f"house: value growth {_g(spec.house.value_growth_rate)} · "
+            f"house: value growth {_g(spec.house.value_growth_rate, 'house.value_growth_rate')} · "
             f"maintenance {spec.house.annual_maintenance_rate:.1%} of value/yr · "
             f"selling_cost_rate {spec.house.selling_cost_rate:.1%}"
         )
@@ -499,9 +592,9 @@ def format_assumptions(
             )
     if spec.rent is not None:
         lines.append(
-            f"rent: escalation {_g(spec.rent.rent_escalation_rate)} · "
+            f"rent: escalation {_g(spec.rent.rent_escalation_rate, 'rent.rent_escalation_rate')} · "
             f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
-            f"{_g(spec.rent.investment_return_rate)}"
+            f"{_g(spec.rent.investment_return_rate, 'rent.investment_return_rate')}"
         )
     lines.append(
         "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and "
@@ -520,11 +613,14 @@ def format_assumptions(
         )
     if spec.defaults_applied:
         def _echo_entry(key: str) -> str:
-            cite = short_cite(key)
+            anchor = default_anchor(spec, key)
+            cite = short_cite(anchor.name) if anchor is not None else short_cite(key)
             tag = f" [{cite}]" if cite else ""
             return f"{key}={echo_value(spec, key)}{tag}"
         joined = ", ".join(_echo_entry(key) for key in spec.defaults_applied)
         lines.append(f"defaults applied: {joined}")
+    # The convention the typed rates were read under, each with both forms.
+    lines.append(rates_line(spec))
     # Source classes (2026-09-03): which STATED values are the user's own, which
     # the assistant typed for them, which an anchor supplied — and, with no
     # `sources:` block, the one line saying the echo cannot tell them apart.
@@ -554,7 +650,7 @@ def assumptions_to_dict(
     for key in spec.defaults_applied:
         field = key.rsplit(".", 1)[1]
         resolved = spec_value(spec, key)
-        anchor = ANCHORS.get(_ECHO_ALIASES.get(key, key))
+        anchor = default_anchor(spec, key)
         if anchor is not None:
             kind = anchor.kind
         elif field == "mode":
@@ -576,7 +672,7 @@ def assumptions_to_dict(
             "key": key,
             "value": resolved,
             "formatted": echo_value(spec, key),
-            "cite": short_cite(key) or None,
+            "cite": (short_cite(anchor.name) if anchor is not None else None),
             "kind": kind,
             "note": note,
             "anchor": anchor_to_dict(anchor) if anchor is not None else None,
@@ -585,9 +681,15 @@ def assumptions_to_dict(
         "mode": spec.economic.mode,
         "years": spec.simulation.years,
         "discount_rate": spec.simulation.discount_rate,
-        # A typed discount_rate is composed too (2026-09-04), so the rate in
-        # use and the `sources` figure differ in nominal mode; this says how.
+        # The rate in use may be the engine's conversion of the `sources`
+        # figure — a quoted rate deflated in real mode (2026-09-05), a real
+        # figure composed in nominal mode (2026-09-04); this says which.
         "discount_rate_note": discount_rate_note(spec),
+        # Rates as quoted (2026-09-05): the convention, the deflator, and every
+        # typed rate converted — the figure as quoted and the figure in use.
+        "rates": spec.rates,
+        "inflation_rate": spec.economic.inflation_rate,
+        "converted_rates": converted_rates_to_list(spec),
         "lines": format_assumptions(spec, prior, raw),
         "defaults_applied": entries,
         # Jurisdiction figures the USER supplied that a published source agrees
@@ -851,10 +953,16 @@ def _read_back_sections(
         # in the answer, because the block did not carry the line that states
         # them.
         ("defaults applied", [line for line in echo if line.startswith("defaults applied:")]),
+        # The convention the user's rates were read under, each in both forms
+        # (2026-09-05): the one line that says what the engine did with the
+        # numbers the user typed.
+        ("rates", [line for line in echo if line.startswith("rates:")]),
         # In nominal mode the discount rate in use is the engine's composition
-        # of a REAL figure — the user's own or the default (2026-09-04) — and
-        # the `mode:` line is the one that names both; in real mode the rate is
-        # the user's own or on the `defaults applied:` line, so the block has it.
+        # of a real figure — the default, or one declared `rates: real`
+        # (2026-09-04) — or a quoted figure used as typed, and the `mode:` line
+        # is the one that names both; in real mode the rate is the user's own
+        # (the `rates:` line has its conversion) or on the `defaults applied:`
+        # line, so the block has it.
         ("mode", [line for line in echo if line.startswith("mode:")]
                  if spec.economic.mode == "nominal" else []),
         ("decisiveness", [decisiveness] if decisiveness is not None else []),
@@ -931,8 +1039,11 @@ def read_back_lines(
     Order: the `[warning]` lines; the source classes the user did not state (or
     the one line saying no `sources:` block was declared); the `defaults
     applied:` line, so the numbers the ENGINE chose are named with their
-    citations; in nominal mode the `mode:` line, which names the REAL discount
-    rate stated and the nominal rate composed from it; the decisiveness rule;
+    citations; the `rates:` line — the convention the typed rates were read
+    under and each one in both forms, as quoted and in use; in nominal mode the
+    `mode:` line, which names the discount rate stated and the rate in use
+    (a real figure composed, or a quoted figure used as typed); the
+    decisiveness rule;
     each option's financing line and its
     `purchase costs:` line; the year-1 cash view; each option's other-costs
     line with its citation or `no anchor match`; the affordability summary;

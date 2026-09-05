@@ -27,7 +27,13 @@ from .land_transfer_tax import (
 )
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
-from .serialization import cost_family, reference_matches, school_tax_line
+from .rates import (
+    RateConventionError,
+    RateConverter,
+    convention_of,
+    default_inflation_rate,
+)
+from .serialization import cost_family, rate_label, real_discount_rate, reference_matches, school_tax_line
 from .sources import build_source_echo, unstated_uncertainty
 from .models import (
     ComparisonDeterministicResult,
@@ -63,7 +69,7 @@ class ConfigValidationError(Exception):
 
 _TOP_LEVEL_KEYS = frozenset({
     "years", "discount_rate", "condo", "house", "rent", "income",
-    "simulation", "economic", "market_scenario", "province", "sources",
+    "simulation", "economic", "market_scenario", "province", "sources", "rates",
 })
 # Legacy/alias top-level names → the section that replaced them. There is no
 # top-level monte_carlo section (and never was in this engine); a config that
@@ -301,10 +307,25 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
     econ = spec.economic
     sim = spec.simulation
 
-    if econ.mode == "real" and econ.inflation_rate > 0:
+    # Under the default convention inflation_rate is the DEFLATOR of every
+    # typed rate in real mode (rates as quoted, 2026-09-05); only a config that
+    # declares its rates real leaves it with nothing to do there.
+    if econ.mode == "real" and econ.inflation_rate > 0 and spec.rates == "real":
         warns.append(
             f"economic.inflation_rate={econ.inflation_rate:.1%} is set but "
-            f"ignored in real mode (mode='real')"
+            f"ignored in real mode (mode='real', rates: real)"
+        )
+
+    # A quoted rate below inflation is a negative real rate — legitimate for a
+    # flat sticker rent, alarming for the rate the whole comparison discounts
+    # at: the future would be worth more than the present.
+    typed_dr = next((c for c in spec.converted_rates if c.key == "discount_rate"), None)
+    if typed_dr is not None and real_discount_rate(spec) < 0:
+        warns.append(
+            f"discount_rate {typed_dr.quoted:.1%} as quoted is below {econ.inflation_rate:.1%} "
+            f"inflation_rate: {real_discount_rate(spec):.1%} real — the future is valued above "
+            f"the present; a real discount rate is usually positive (the anchored default is "
+            f"{ANCHORS['simulation.discount_rate'].value:.1%} real)"
         )
 
     # Real mode prices the mortgage as a level payment at the REAL rate; the
@@ -354,8 +375,10 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             continue
         # 4% REAL appreciation is above every long-run Canadian metro average
         # and right where a NOMINAL market quote (~3–5%) lands — a units
-        # tripwire, not a plausibility band (the anchor band is -1%..2%).
-        if econ.mode == "real" and opt.value_growth_rate >= 0.04:
+        # tripwire, not a plausibility band (the anchor band is -1%..2%). It
+        # can only fire on a figure the config DECLARED real: under the default
+        # convention a typed 4% is a quote, and the loader has deflated it.
+        if econ.mode == "real" and spec.rates == "real" and opt.value_growth_rate >= 0.04:
             warns.append(
                 f"{name}.value_growth_rate={opt.value_growth_rate:.1%} in real "
                 f"mode looks like a nominal quote"
@@ -368,9 +391,11 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
 
     # 15% is an order of magnitude above any real personal discount rate —
     # a decimal/percent typo tripwire (0.05 vs 5), not a plausibility band.
-    if not 0 <= sim.discount_rate <= 0.15:
+    # Magnitude only: a quoted rate below inflation deflates to a small
+    # negative real rate, which the warning above names.
+    if abs(sim.discount_rate) > 0.15:
         warns.append(
-            f"discount_rate={sim.discount_rate:.1%} outside [0, 15%] — "
+            f"discount_rate={sim.discount_rate:.1%} outside [-15%, 15%] — "
             f"double-check units/decimals"
         )
 
@@ -415,7 +440,9 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             net = capital * (1 - ((1 + r_inv) / (1 + dr)) ** n_years)
             side = "charged to" if net > 0 else "credited to"
             warns.append(
-                f"rent: invested capital ${capital:,.0f} earns {r_inv:.1%} vs discount_rate {dr:.1%} — "
+                f"rent: invested capital ${capital:,.0f} earns "
+                f"{rate_label(spec, 'rent.investment_return_rate', r_inv)} vs discount_rate "
+                f"{rate_label(spec, 'discount_rate', dr)} — "
                 f"net capital term ${abs(net):,.0f} {side} the renter over {n_years} years; set "
                 f"investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately"
             )
@@ -802,14 +829,14 @@ def _parse_bool(value: Any, field_name: str) -> bool:
 def _parse_event(event_data: Dict[str, Any], years: int) -> EventConfig:
     """
     Parse an event configuration from YAML data.
-    
+
     Args:
         event_data: Dictionary with event fields
         years: Analysis horizon (for validation)
-    
+
     Returns:
         EventConfig instance
-    
+
     Raises:
         ConfigValidationError: If required fields are missing or invalid
     """
@@ -817,23 +844,23 @@ def _parse_event(event_data: Dict[str, Any], years: int) -> EventConfig:
     for field in required:
         if field not in event_data:
             raise ConfigValidationError(f"Event missing required field: {field}")
-    
+
     expected_year = event_data["expected_year"]
     if expected_year < 1:
         raise ConfigValidationError(
             f"Event '{event_data['name']}' has expected_year < 1: {expected_year}"
         )
-    
+
     timing_model = str(event_data.get("timing_model", "jitter")).lower()
     if timing_model not in ("jitter", "hazard"):
         raise ConfigValidationError(f"Invalid timing_model for event '{event_data['name']}': {timing_model}")
-    
+
     cost_distribution = str(event_data.get("cost_distribution", "lognormal")).lower()
     if cost_distribution not in ("normal", "lognormal"):
         raise ConfigValidationError(
             f"Invalid cost_distribution for event '{event_data['name']}': {cost_distribution}"
         )
-    
+
     return EventConfig(
         name=str(event_data["name"]),
         base_cost=float(event_data["base_cost"]),
@@ -850,16 +877,19 @@ def _parse_event(event_data: Dict[str, Any], years: int) -> EventConfig:
     )
 
 
-def _parse_recurring_cost(cost_data: Dict[str, Any]) -> RecurringOtherCost:
+def _parse_recurring_cost(
+    cost_data: Dict[str, Any], conv: RateConverter, option: str,
+) -> RecurringOtherCost:
     """
     Parse a recurring other cost from YAML data.
-    
-    Args:
-        cost_data: Dictionary with cost fields
-    
-    Returns:
-        RecurringOtherCost instance
-    
+
+    `escalation_rate` is a typed rate like any other: as quoted under the
+    default convention (deflated by inflation_rate; a line that does not rise
+    in sticker terms falls in real terms), recorded under the named-line key
+    `<option>.other_recurring_costs.<name>.escalation_rate` — the same key a
+    `sources:` declaration uses for it. Omitted, it is 0.0 REAL (the line
+    tracks inflation), like every other default.
+
     Raises:
         ConfigValidationError: If required fields are missing
     """
@@ -867,11 +897,14 @@ def _parse_recurring_cost(cost_data: Dict[str, Any]) -> RecurringOtherCost:
     for field in required:
         if field not in cost_data:
             raise ConfigValidationError(f"Recurring cost missing required field: {field}")
-    
+
+    name = str(cost_data["name"])
     return RecurringOtherCost(
-        name=str(cost_data["name"]),
+        name=name,
         annual_amount=float(cost_data["annual_amount"]),
-        escalation_rate=float(cost_data.get("escalation_rate", 0.0)),
+        escalation_rate=conv.real(
+            cost_data, "escalation_rate",
+            f"{option}.other_recurring_costs.{name}.escalation_rate", 0.0),
     )
 
 
@@ -980,15 +1013,18 @@ def _tax_lines(other_costs: List[RecurringOtherCost]) -> List[RecurringOtherCost
 
 def _property_tax_cost(
     data: Dict[str, Any], name: str, other_costs: List[RecurringOtherCost],
+    value_growth_rate: float,
 ) -> Optional[RecurringOtherCost]:
     """The property-tax line derived from `property_tax_rate`, or None.
 
     "Fraction of value per year": the year-1 bill is `rate × initial_value` and
-    it escalates at the option's own `value_growth_rate`, so it stays that
-    fraction of the home's value the way `annual_maintenance_rate` does. (The
-    two ride different escalation conventions — other costs compound from year 1,
-    the value from year 2; the one-year offset is the documented divergence in
-    ARCHITECTURE.md § Conventions, not a second modelling choice made here.)
+    it escalates at the option's own `value_growth_rate` — the RESOLVED real
+    figure, so a growth rate typed as quoted is converted once, here too — so it
+    stays that fraction of the home's value the way `annual_maintenance_rate`
+    does. (The two ride different escalation conventions — other costs compound
+    from year 1, the value from year 2; the one-year offset is the documented
+    divergence in ARCHITECTURE.md § Conventions, not a second modelling choice
+    made here.)
     """
     if "property_tax_rate" not in data:
         return None
@@ -1004,11 +1040,10 @@ def _property_tax_cost(
         raise ConfigValidationError(
             f"{name}.property_tax_rate={rate} is negative — it is a fraction of value "
             f"per year (0.0085 = 0.85%)")
-    growth_anchor = ANCHORS[f"{name}.value_growth_rate"].value
     return RecurringOtherCost(
         name=f"property tax ({rate:.2%} of value)",
         annual_amount=rate * float(data.get("initial_value", 0.0)),
-        escalation_rate=float(data.get("value_growth_rate", growth_anchor)),
+        escalation_rate=value_growth_rate,
     )
 
 
@@ -1072,25 +1107,27 @@ def _apply_mortgage_insurance(
         raise ConfigValidationError(str(exc)) from exc
 
 
-def _parse_condo(condo_data: Dict[str, Any], years: int,
+def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
                  top_province: Optional[str] = None) -> CondoParams:
     """
     Parse condo parameters from YAML data.
     """
     if "monthly_fee" not in condo_data:
         raise ConfigValidationError("Condo section missing required field: monthly_fee")
-    
+
     events = [
-        _parse_event(e, years) 
+        _parse_event(e, years)
         for e in condo_data.get("events", [])
     ]
-    
+
     other_costs = [
-        _parse_recurring_cost(c) 
+        _parse_recurring_cost(c, conv, "condo")
         for c in condo_data.get("other_recurring_costs", [])
     ]
-    
-    tax = _property_tax_cost(condo_data, "condo", other_costs)
+
+    value_growth_rate = conv.real(condo_data, "value_growth_rate", "condo.value_growth_rate",
+                                  ANCHORS["condo.value_growth_rate"].value)
+    tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
     if tax is not None:
         other_costs.append(tax)
 
@@ -1107,14 +1144,15 @@ def _parse_condo(condo_data: Dict[str, Any], years: int,
 
     return CondoParams(
         monthly_fee=float(condo_data["monthly_fee"]),
-        fee_escalation_rate=float(condo_data.get("fee_escalation_rate", ANCHORS["condo.fee_escalation_rate"].value)),
+        fee_escalation_rate=conv.real(condo_data, "fee_escalation_rate", "condo.fee_escalation_rate",
+                                      ANCHORS["condo.fee_escalation_rate"].value),
         events=events,
         other_recurring_costs=other_costs,
         reserve_contribution_rate=float(condo_data.get("reserve_contribution_rate", 0.0)),
         reserve_initial_balance=float(condo_data.get("reserve_initial_balance", 0.0)),
-        reserve_growth_rate=float(condo_data.get("reserve_growth_rate", 0.0)),
+        reserve_growth_rate=conv.real(condo_data, "reserve_growth_rate", "condo.reserve_growth_rate", 0.0),
         initial_value=float(condo_data.get("initial_value", 0.0)),
-        value_growth_rate=float(condo_data.get("value_growth_rate", ANCHORS["condo.value_growth_rate"].value)),
+        value_growth_rate=value_growth_rate,
         down_payment=down_payment,
         cash_available=cash_available,
         mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
@@ -1135,24 +1173,24 @@ def _parse_condo(condo_data: Dict[str, Any], years: int,
     )
 
 
-def _parse_house(house_data: Dict[str, Any], years: int,
+def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
                  top_province: Optional[str] = None) -> HouseParams:
     """
     Parse house parameters from YAML data.
     """
     if "initial_value" not in house_data:
         raise ConfigValidationError("House section missing required field: initial_value")
-    
+
     events = [
-        _parse_event(e, years) 
+        _parse_event(e, years)
         for e in house_data.get("events", [])
     ]
-    
+
     other_costs = [
-        _parse_recurring_cost(c) 
+        _parse_recurring_cost(c, conv, "house")
         for c in house_data.get("other_recurring_costs", [])
     ]
-    
+
     maintenance_curve_raw = house_data.get("maintenance_curve", [])
     maintenance_curve = []
     for point in maintenance_curve_raw:
@@ -1160,8 +1198,10 @@ def _parse_house(house_data: Dict[str, Any], years: int,
             raise ConfigValidationError("maintenance_curve entries must have 'year' and 'rate'")
         maintenance_curve.append((int(point["year"]), float(point["rate"])))
     maintenance_curve.sort(key=lambda x: x[0])
-    
-    tax = _property_tax_cost(house_data, "house", other_costs)
+
+    value_growth_rate = conv.real(house_data, "value_growth_rate", "house.value_growth_rate",
+                                  ANCHORS["house.value_growth_rate"].value)
+    tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
     if tax is not None:
         other_costs.append(tax)
 
@@ -1178,7 +1218,7 @@ def _parse_house(house_data: Dict[str, Any], years: int,
 
     return HouseParams(
         initial_value=float(house_data["initial_value"]),
-        value_growth_rate=float(house_data.get("value_growth_rate", ANCHORS["house.value_growth_rate"].value)),
+        value_growth_rate=value_growth_rate,
         annual_maintenance_rate=float(house_data.get("annual_maintenance_rate", ANCHORS["house.annual_maintenance_rate"].value)),
         events=events,
         other_recurring_costs=other_costs,
@@ -1203,25 +1243,27 @@ def _parse_house(house_data: Dict[str, Any], years: int,
     )
 
 
-def _parse_rent(data: Dict[str, Any], years: int) -> RentParams:
+def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter) -> RentParams:
     """Parse RentParams from YAML data."""
     if "monthly_rent" not in data:
         raise ConfigValidationError("rent section missing required field: monthly_rent")
     events = [_parse_event(e, years) for e in data.get("events", [])]
-    other = [_parse_recurring_cost(c) for c in data.get("other_recurring_costs", [])]
+    other = [_parse_recurring_cost(c, conv, "rent") for c in data.get("other_recurring_costs", [])]
     return RentParams(
         monthly_rent=float(data["monthly_rent"]),
         # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% = 1.0% real
-        rent_escalation_rate=float(data.get("rent_escalation_rate", ANCHORS["rent.rent_escalation_rate"].value)),
+        rent_escalation_rate=conv.real(data, "rent_escalation_rate", "rent.rent_escalation_rate",
+                                       ANCHORS["rent.rent_escalation_rate"].value),
         invested_down_payment=float(data.get("invested_down_payment", 0.0)),
         # FP Canada 2026 PAG 60/40 ≈ 3.0% real
-        investment_return_rate=float(data.get("investment_return_rate", ANCHORS["rent.investment_return_rate"].value)),
+        investment_return_rate=conv.real(data, "investment_return_rate", "rent.investment_return_rate",
+                                         ANCHORS["rent.investment_return_rate"].value),
         events=events,
         other_recurring_costs=other,
     )
 
 
-def _parse_income(data: Dict[str, Any]) -> IncomeParams:
+def _parse_income(data: Dict[str, Any], conv: RateConverter) -> IncomeParams:
     """Parse IncomeParams from YAML data."""
     if "annual_income" not in data:
         raise ConfigValidationError("income section missing required field: annual_income")
@@ -1229,7 +1271,8 @@ def _parse_income(data: Dict[str, Any]) -> IncomeParams:
     return IncomeParams(
         annual_income=float(data["annual_income"]),
         # FP Canada 2026 PAG salary growth 3.1% − 2.1% = 1.0% real
-        income_growth_rate=float(data.get("income_growth_rate", ANCHORS["income.income_growth_rate"].value)),
+        income_growth_rate=conv.real(data, "income_growth_rate", "income.income_growth_rate",
+                                     ANCHORS["income.income_growth_rate"].value),
         # Legacy GDS 32% guideline (below CMHC's 39% cap; broader-than-PITH numerator)
         affordability_threshold=float(data.get("affordability_threshold", ANCHORS["income.affordability_threshold"].value)),
         pay_drop_events=events,
@@ -1239,13 +1282,13 @@ def _parse_income(data: Dict[str, Any]) -> IncomeParams:
 def _parse_simulation(sim_data: Optional[Dict[str, Any]], years: int, discount_rate: float) -> SimulationParams:
     """
     Parse simulation parameters from YAML data.
-    
+
     Uses top-level years and discount_rate, with optional overrides from simulation section.
     """
     if sim_data is None:
         sim_data = {}
     shock_model = str(sim_data.get("shock_model", "lognormal")).lower()
-    
+
     return SimulationParams(
         years=years,
         discount_rate=discount_rate,
@@ -1264,20 +1307,24 @@ def _parse_simulation(sim_data: Optional[Dict[str, Any]], years: int, discount_r
     )
 
 
-def _parse_economic(econ_data: Optional[Dict[str, Any]]) -> EconomicParams:
+def _parse_economic(econ_data: Optional[Dict[str, Any]], rates: str) -> EconomicParams:
     """
     Parse economic parameters from YAML data.
+
+    An omitted `inflation_rate` is the FP Canada planning figure when it is the
+    deflator of as-quoted rates in real mode (`rates.default_inflation_rate`),
+    else the real-mode inert zero — echoed under `defaults applied` either way.
     """
     if econ_data is None:
-        return EconomicParams()
-    
+        econ_data = {}
+
     mode = econ_data.get("mode", "real")
     if mode not in ("nominal", "real"):
         raise ConfigValidationError(f"Invalid economic mode: {mode}. Must be 'nominal' or 'real'.")
-    
+
     return EconomicParams(
         mode=mode,  # type: ignore
-        inflation_rate=float(econ_data.get("inflation_rate", ANCHORS["economic.inflation_rate"].value)),
+        inflation_rate=float(econ_data.get("inflation_rate", default_inflation_rate(mode, rates))),
         inflation_vol=float(econ_data.get("inflation_vol", 0.0)),
     )
 
@@ -1317,8 +1364,10 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     if sim.years < 1:
         warnings.append(f"years must be >= 1, got {sim.years}")
 
-    if sim.discount_rate < 0:
-        warnings.append(f"discount_rate should be >= 0, got {sim.discount_rate}")
+    # A quoted rate below inflation deflates to a negative real rate, which the
+    # coherence warning names; only a factor (1 + dr) at or below zero is refused.
+    if sim.discount_rate <= -1:
+        warnings.append(f"discount_rate must be > -1 (> -100%), got {sim.discount_rate}")
 
     if sim.num_sims < 1:
         warnings.append(f"num_sims must be >= 1, got {sim.num_sims}")
@@ -1404,14 +1453,16 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
         if rent.monthly_rent <= 0:
             warnings.append(f"rent.monthly_rent must be positive, got {rent.monthly_rent}")
         # Hard units tripwire (20%/yr rent escalation reads as a percent typed
-        # as a decimal); the plausibility band is the anchor's (0–2% real).
-        if not (0 <= rent.rent_escalation_rate < 0.20):
-            warnings.append(f"rent.rent_escalation_rate must be >= 0 and < 0.20, got {rent.rent_escalation_rate}")
+        # as a decimal); the plausibility band is the anchor's (0–2% real). The
+        # spec holds REAL figures, and a sticker rate below inflation is a small
+        # negative one, so the tripwire is on magnitude.
+        if not (abs(rent.rent_escalation_rate) < 0.20):
+            warnings.append(f"rent.rent_escalation_rate must be between -0.20 and 0.20, got {rent.rent_escalation_rate}")
         if rent.invested_down_payment < 0:
             warnings.append(f"rent.invested_down_payment must be non-negative, got {rent.invested_down_payment}")
         # Hard units tripwire; the plausibility band is the anchor's (2–5% real).
-        if not (0 <= rent.investment_return_rate < 0.25):
-            warnings.append(f"rent.investment_return_rate must be >= 0 and < 0.25, got {rent.investment_return_rate}")
+        if not (abs(rent.investment_return_rate) < 0.25):
+            warnings.append(f"rent.investment_return_rate must be between -0.25 and 0.25, got {rent.investment_return_rate}")
 
     if spec.income is not None:
         income = spec.income
@@ -1481,21 +1532,69 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     return warnings
 
 
-def _discount_rate_for(data: Dict[str, Any], econ: EconomicParams) -> float:
-    """The discount rate in the run's terms: the typed figure, else the
-    anchored return (simulation.discount_rate, echoed under `defaults applied`)
-    — both REAL, the household's opportunity cost, and both composed with
-    inflation_rate in nominal mode like every other rate there; only a quoted
-    contract rate (mortgage_rate) is used as typed. Round-three dogfood
-    2026-09-02: the real anchor used as a nominal rate priced the future at
-    ~0.9% real and mis-fired the capital-spread warning against the composed
-    investment return; 2026-09-04: served answers typed a real rate and
-    discounted nominal flows with it — every PV overstated, one verdict's sign
-    reversed — so the typed figure now follows the same rule."""
-    real = float(data["discount_rate"]) if "discount_rate" in data else ANCHORS["simulation.discount_rate"].value
-    if econ.mode == "nominal":
-        return (1 + real) * (1 + econ.inflation_rate) - 1
-    return real
+def _rates_of(data: Dict[str, Any]) -> str:
+    try:
+        return convention_of(data)
+    except RateConventionError as exc:
+        raise ConfigValidationError(str(exc)) from exc
+
+
+def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
+    """The one loader both entry points share: keys, jurisdictions, the rate
+    convention, the sections, provenance, validation.
+
+    Rates as quoted (2026-09-05): every typed growth, escalation, return and
+    discount rate is converted ONCE here — deflated by inflation_rate in real
+    mode, used as typed in nominal mode (the spec stores the real figure and the
+    engines compose it back) — under the default `rates: as_quoted`; a config
+    that states real figures says `rates: real` and is read as before. The
+    discount rate anchor and every other anchored default stay real and compose
+    in nominal mode exactly as they did (round-three dogfood 2026-09-02: the
+    real anchor used as a nominal rate priced the future at ~0.9% real). Why the
+    typed figure changed convention: served answers converted sticker numbers
+    to real by hand and the engine composed inflation back on — one figure,
+    inflated twice; and 2026-09-04's rule that a typed discount rate is real
+    had assistants typing the real figure of a rate nobody quotes that way.
+    """
+    # Unknown-key diff runs before required-field checks so a typo (e.g.
+    # 'yeers') gets a did-you-mean instead of a bare "missing field" refusal.
+    _reject_unknown_keys(data)
+    _refuse_boolean_jurisdictions(data)
+
+    # Required top-level fields
+    if "years" not in data:
+        raise ConfigValidationError("Missing required field: years")
+    years = int(data["years"])
+    rates = _rates_of(data)
+    econ = _parse_economic(data.get("economic"), rates)
+    conv = RateConverter(rates, econ.mode, econ.inflation_rate)
+    discount_rate = conv.discount_rate(data, ANCHORS["simulation.discount_rate"].value)
+
+    condo = _parse_condo(data["condo"], years, conv, data.get("province")) if "condo" in data else None
+    house = _parse_house(data["house"], years, conv, data.get("province")) if "house" in data else None
+    rent = _parse_rent(data["rent"], years, conv) if "rent" in data else None
+    income = _parse_income(data["income"], conv) if "income" in data else None
+    sim = _parse_simulation(data.get("simulation"), years, discount_rate)
+    market_scenario = (
+        _parse_market_scenario(data["market_scenario"]) if "market_scenario" in data else None
+    )
+
+    spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
+                          market_scenario=market_scenario)
+    spec.defaults_applied = _defaults_applied(data)
+    spec.rates = rates
+    spec.converted_rates = conv.converted
+    # Source classes: who stated each value (2026-09-03). Parsed against the
+    # config it describes, so a key the config does not set is refused here
+    # rather than echoed as an attribution of nothing.
+    spec.sources, source_problems = build_source_echo(data)
+    if source_problems:
+        raise ConfigValidationError("\n".join(source_problems))
+    warnings = validate_config(spec)
+    if warnings:
+        raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))
+
+    return spec
 
 
 def load_config(path: str) -> ComparisonSpec:
@@ -1526,41 +1625,7 @@ def load_config(path: str) -> ComparisonSpec:
     if data is None:
         raise ConfigValidationError("Empty configuration file")
 
-    # Unknown-key diff runs before required-field checks so a typo (e.g.
-    # 'yeers') gets a did-you-mean instead of a bare "missing field" refusal.
-    _reject_unknown_keys(data)
-    _refuse_boolean_jurisdictions(data)
-
-    # Required top-level fields
-    if "years" not in data:
-        raise ConfigValidationError("Missing required field: years")
-    years = int(data["years"])
-    econ = _parse_economic(data.get("economic"))
-    discount_rate = _discount_rate_for(data, econ)
-
-    condo = _parse_condo(data["condo"], years, data.get("province")) if "condo" in data else None
-    house = _parse_house(data["house"], years, data.get("province")) if "house" in data else None
-    rent = _parse_rent(data["rent"], years) if "rent" in data else None
-    income = _parse_income(data["income"]) if "income" in data else None
-    sim = _parse_simulation(data.get("simulation"), years, discount_rate)
-    market_scenario = (
-        _parse_market_scenario(data["market_scenario"]) if "market_scenario" in data else None
-    )
-
-    spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
-                          market_scenario=market_scenario)
-    spec.defaults_applied = _defaults_applied(data)
-    # Source classes: who stated each value (2026-09-03). Parsed against the
-    # config it describes, so a key the config does not set is refused here
-    # rather than echoed as an attribution of nothing.
-    spec.sources, source_problems = build_source_echo(data)
-    if source_problems:
-        raise ConfigValidationError("\n".join(source_problems))
-    warnings = validate_config(spec)
-    if warnings:
-        raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))
-
-    return spec
+    return _build_spec(data)
 
 
 def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
@@ -1573,35 +1638,4 @@ def load_config_dict(data: Dict[str, Any]) -> ComparisonSpec:
     Returns:
         ComparisonSpec populated from the dictionary
     """
-    _reject_unknown_keys(data)
-    _refuse_boolean_jurisdictions(data)
-
-    if "years" not in data:
-        raise ConfigValidationError("Missing required field: years")
-    years = int(data["years"])
-    econ = _parse_economic(data.get("economic"))
-    discount_rate = _discount_rate_for(data, econ)
-
-    condo = _parse_condo(data["condo"], years, data.get("province")) if "condo" in data else None
-    house = _parse_house(data["house"], years, data.get("province")) if "house" in data else None
-    rent = _parse_rent(data["rent"], years) if "rent" in data else None
-    income = _parse_income(data["income"]) if "income" in data else None
-    sim = _parse_simulation(data.get("simulation"), years, discount_rate)
-    market_scenario = (
-        _parse_market_scenario(data["market_scenario"]) if "market_scenario" in data else None
-    )
-
-    spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
-                          market_scenario=market_scenario)
-    spec.defaults_applied = _defaults_applied(data)
-    # Source classes: who stated each value (2026-09-03). Parsed against the
-    # config it describes, so a key the config does not set is refused here
-    # rather than echoed as an attribution of nothing.
-    spec.sources, source_problems = build_source_echo(data)
-    if source_problems:
-        raise ConfigValidationError("\n".join(source_problems))
-    warnings = validate_config(spec)
-    if warnings:
-        raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))
-
-    return spec
+    return _build_spec(data)

@@ -9,9 +9,15 @@
 #   NBER/TAL       = NBER digest Oct 2025: continuing-tenant rents pass through ~21% of
 #                    market-rent moves; QC TAL guideline ≈ CPI for existing leases
 #
+#   Rates are typed AS QUOTED (the engine's default convention) and converted once at
+#   load; this file sets inflation_rate 0.0, so every quoted figure below IS its real
+#   figure and the read-back's `rates:` line shows the two forms equal.
+#
 #   discount_rate 0.05 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
-#   inflation_rate 0.0 ............... inert in real mode (kept explicit: 0 signals "real inputs only")
-#   fee_escalation_rate 0.03 ......... real; FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real
+#   inflation_rate 0.0 ............... the deflator of the quoted rates: 0 here means the figures
+#                                      below are real figures already (kept explicit: 0 signals
+#                                      "real inputs")
+#   fee_escalation_rate 0.03 ......... FP Canada 2026 shelter-cost growth 3.1% quoted ≈ 1.0% real
 #                                      is the planning reference — 3% real is a deliberate aggressive
 #                                      aging-building view
 #   value_growth_rate 0.02 / 0.03 .... illustrative market view — no defensible universal long-run
@@ -30,19 +36,19 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 15
-discount_rate: 0.05  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
+discount_rate: 0.05  # as quoted (= real at 0% inflation); illustrative — personal time-preference, sanity band [0.02, 0.06]
 
 condo:
   monthly_fee: 800  # scenario-specific market input
-  fee_escalation_rate: 0.03  # real; FP Canada 2026 shelter ≈ 1.0% real reference — aggressive aging-building view
+  fee_escalation_rate: 0.03  # as quoted (= real here); FP Canada 2026 shelter 3.1% quoted ≈ 1.0% real reference — aggressive aging-building view
   initial_value: 480000  # scenario-specific market input
-  value_growth_rate: 0.02  # real; illustrative market view — for demographic drift see showcase example
+  value_growth_rate: 0.02  # as quoted (= real here); illustrative market view — for demographic drift see showcase example
   all_cash: true
   purchase_costs: 7200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   other_recurring_costs:
     - name: property_tax
       annual_amount: 3600  # illustrative — municipal + school tax ≈ 0.75% of value/yr; scenario-specific (use the listing's tax bill)
-      escalation_rate: 0.0  # real; tax tracks assessed value
+      escalation_rate: 0.0  # as quoted (= real here); tax tracks assessed value
   events:
     - name: "special_assessment"
       base_cost: 15000  # illustrative service cost — calibrate to your reserve study
@@ -51,14 +57,14 @@ condo:
 
 house:
   initial_value: 550000  # scenario-specific market input
-  value_growth_rate: 0.03  # real; illustrative market view — for demographic drift see showcase example
+  value_growth_rate: 0.03  # as quoted (= real here); illustrative market view — for demographic drift see showcase example
   annual_maintenance_rate: 0.012  # NAHB 2019 AHS Table 2 routine ≈ 0.6%/yr (narrow) + 1%-rule budgeting family
   all_cash: true
   purchase_costs: 8200  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   other_recurring_costs:
     - name: property_tax
       annual_amount: 4700  # illustrative — municipal + school tax ≈ 0.85% of value/yr; scenario-specific (use the listing's tax bill)
-      escalation_rate: 0.0  # real; tax tracks assessed value
+      escalation_rate: 0.0  # as quoted (= real here); tax tracks assessed value
     - name: home_insurance
       annual_amount: 1200  # illustrative — scenario-specific
       escalation_rate: 0.0
@@ -70,13 +76,13 @@ house:
 
 rent:
   monthly_rent: 2800  # scenario-specific market input
-  rent_escalation_rate: 0.04  # real; FP Canada 2026 shelter ≈ 1.0% real + NBER/TAL ≈ 0.0% real for continuing tenants — aggressive market view (≥2%/yr real), justify for your market
+  rent_escalation_rate: 0.04  # as quoted (= real here); FP Canada 2026 shelter ≈ 1.0% real + NBER/TAL ≈ 0.0% real for continuing tenants — aggressive market view (≥2%/yr real), justify for your market
   # Equalized with the condo's all-cash purchase capital (480k): a renter who
   # skips buying invests that capital instead. A single scalar can't match both
   # owned options (condo 480k, house 550k); matched to the condo, so against the
   # 550k house the renter is still ~70k under-credited.
   invested_down_payment: 480000
-  investment_return_rate: 0.03  # real; FP Canada 2026 balanced ≈ 3.0% real (was 0.07 — exceeded even the ≈5.2% real equity upper bound); engine default — see src/hde/anchors.py
+  investment_return_rate: 0.03  # as quoted (= real here); FP Canada 2026 balanced ≈ 3.0% real (was 0.07 — exceeded even the ≈5.2% real equity upper bound); engine default — see src/hde/anchors.py
   events:
     - name: "moving_costs"
       base_cost: 4000  # illustrative cost — calibrate to your mover quotes
@@ -90,7 +96,7 @@ simulation:
 
 economic:
   mode: real
-  inflation_rate: 0.0  # ignored in real mode — all rates above are real; setting >0 here triggers the coherence warning. Switch mode to nominal and set ≈0.021 (FP Canada 2026) to model inflation.
+  inflation_rate: 0.0  # the deflator of every rate typed above: 0 leaves the quoted figures as real figures. To type sticker rates from a market with inflation, set ≈0.021 (FP Canada 2026) here — or omit it and the engine applies that planning figure.
 
 # WHO stated each value (2026-09-03) — see the block in
 # examples/showcase_demographic_prior.yaml for the full convention. Affects no

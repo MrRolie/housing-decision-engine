@@ -11,17 +11,25 @@
 #   NBER/TAL       = NBER digest Oct 2025: continuing-tenant rents pass through ~21% of
 #                    market-rent moves; QC TAL guideline ≈ CPI for existing leases
 #
-#   discount_rate 0.05 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
-#   fee_escalation_rate 0.03 ......... real; FP Canada 2026 shelter-cost growth 3.1% nominal ≈ 1.0% real
-#                                      is the planning reference — 3% real is a deliberate aggressive
-#                                      aging-building view
-#   rent_escalation_rate 0.04 ........ FP Canada 2026 shelter ≈ 1.0% real planning reference; NBER/TAL
-#                                      implies ≈ 0.0% real for continuing tenants — 4% real is an
-#                                      aggressive market view, justify it explicitly for your market
-#   investment_return_rate 0.03 ...... FP Canada 2026 balanced ≈ 3.0% real (equities ≈ 4.2% real,
-#                                      upper bound ≈ 5.2%); matches the engine default — see src/hde/anchors.py
-#   income_growth_rate 0.03 .......... FP Canada 2026 salary growth 3.1% nominal ≈ 1.0% real is the
-#                                      planning reference — 3% real is an optimistic career view
+#   Rates are typed AS QUOTED (the engine's default convention). inflation_rate is
+#   omitted, so the FP Canada 2.1% planning figure deflates them — the run echoes it
+#   under `defaults applied` and the `rates:` line shows each figure in both forms.
+#
+#   discount_rate 0.072 .............. illustrative — personal time-preference, 7.2% quoted
+#                                      ≈ 5.0% real; sanity band [0.02, 0.06] real
+#   fee_escalation_rate 0.052 ........ FP Canada 2026 shelter-cost growth 3.1% quoted ≈ 1.0% real
+#                                      is the planning reference — 5.2% quoted ≈ 3% real is a
+#                                      deliberate aggressive aging-building view
+#   rent_escalation_rate 0.062 ....... FP Canada 2026 shelter 3.1% quoted ≈ 1.0% real planning
+#                                      reference; NBER/TAL implies ≈ CPI (0.0% real) for continuing
+#                                      tenants — 6.2% quoted ≈ 4% real is an aggressive market view,
+#                                      justify it explicitly for your market
+#   investment_return_rate 0.051 ..... FP Canada 2026 balanced 60/40 ≈ 5.1% quoted ≈ 3.0% real
+#                                      (equities ≈ 4.2% real, upper bound ≈ 5.2%); the registry's
+#                                      quoted form of the engine default — see src/hde/anchors.py
+#   income_growth_rate 0.052 ......... FP Canada 2026 salary growth 3.1% quoted ≈ 1.0% real is the
+#                                      planning reference — 5.2% quoted ≈ 3% real is an optimistic
+#                                      career view
 #   affordability_threshold 0.35 ..... CMHC GDS/TDS: 39% GDS cap / 44% TDS, legacy 32% guideline —
 #                                      0.35 sits between legacy and GDS cap
 #   pay_drop year 3 / magnitude 0.80 . illustrative scenario premise (the shock under study)
@@ -30,30 +38,30 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 15
-discount_rate: 0.05  # real; illustrative — personal time-preference, sanity band [0.02, 0.06]
+discount_rate: 0.072  # as quoted ≈ 5.0% real after 2.1% inflation; illustrative — personal time-preference, sanity band [0.02, 0.06] real
 
 condo:
   monthly_fee: 700  # scenario-specific market input
-  fee_escalation_rate: 0.03  # real; FP Canada 2026 shelter ≈ 1.0% real reference — aggressive aging-building view
+  fee_escalation_rate: 0.052  # as quoted ≈ 3% real; FP Canada 2026 shelter 3.1% quoted ≈ 1.0% real reference — aggressive aging-building view
   initial_value: 500000  # scenario-specific market input
   all_cash: true
   purchase_costs: 7500  # illustrative — Québec welcome tax (droits de mutation) + notary ≈ 1.5% of price; scenario-specific
   other_recurring_costs:
     - name: property_tax
       annual_amount: 3800  # illustrative — municipal + school tax ≈ 0.75% of value/yr; scenario-specific (use the listing's tax bill)
-      escalation_rate: 0.0  # real; tax tracks assessed value
+      escalation_rate: 0.021  # as quoted: rises with inflation ⇒ 0% real; tax tracks assessed value
 
 rent:
   monthly_rent: 2500  # scenario-specific market input
-  rent_escalation_rate: 0.04  # real; FP Canada 2026 shelter ≈ 1.0% real + NBER/TAL ≈ 0.0% real for continuing tenants — aggressive market view (≥2%/yr real), justify for your market
+  rent_escalation_rate: 0.062  # as quoted ≈ 4% real; FP Canada 2026 shelter 3.1% quoted + NBER/TAL ≈ CPI for continuing tenants — aggressive market view, justify for your market
   # Equalized with the condo's all-cash purchase capital (500k): a renter who
   # skips buying invests that same capital, so the opportunity cost is like-for-like.
   invested_down_payment: 500000
-  investment_return_rate: 0.03  # real; FP Canada 2026 balanced ≈ 3.0% real (was 0.07 — exceeded even the ≈5.2% real equity upper bound); engine default — see src/hde/anchors.py
+  investment_return_rate: 0.051  # as quoted ≈ 3.0% real; FP Canada 2026 balanced 60/40 (was 0.07 real — exceeded even the ≈5.2% real equity upper bound); the engine default's quoted form — see src/hde/anchors.py
 
 income:
   annual_income: 120000  # scenario-specific input
-  income_growth_rate: 0.03  # real; FP Canada 2026 salary growth 3.1% nominal ≈ 1.0% real reference — optimistic career view
+  income_growth_rate: 0.052  # as quoted ≈ 3% real; FP Canada 2026 salary growth 3.1% quoted ≈ 1.0% real reference — optimistic career view
   affordability_threshold: 0.35  # CMHC GDS/TDS: between legacy 32% guideline and 39% GDS cap
   pay_drop_events:
     - year: 3  # illustrative scenario timing
@@ -66,3 +74,5 @@ simulation:
 
 economic:
   mode: real
+  # inflation_rate omitted on purpose: the FP Canada 2.1% planning figure deflates the
+  # quoted rates above and is echoed under `defaults applied`

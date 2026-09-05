@@ -76,12 +76,15 @@ def test_prog_is_hde(monkeypatch, capsys):
 
 class TestCoherenceWarnings:
     def test_warnings_printed_to_stderr(self, tmp_path, monkeypatch, capsys):
-        """U2: experiment A config — real mode + 5% growth + mortgage 6%."""
+        """U2: experiment A config — real mode + 5% growth DECLARED real + mortgage 6%
+        (under the default as-quoted convention a typed 5% is a quote and is deflated,
+        so the tripwire has nothing to catch there — 2026-09-05)."""
         cfg = tmp_path / "exp_a.yaml"
         cfg.write_text(
             """
 years: 25
 discount_rate: 0.05
+rates: real
 economic:
   mode: real
 house:
