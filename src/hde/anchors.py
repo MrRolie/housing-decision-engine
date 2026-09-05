@@ -32,8 +32,11 @@ ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsour
 # Dotted-key prefixes of the REFERENCE TABLES (property tax by municipality,
 # school tax and home insurance by province, the posted and contracted mortgage
 # rates a borrower with no quote can bracket against, and the published
-# routine-maintenance rate). These are NOT engine defaults: no dataclass falls
-# back to one and the engine never applies one. They are published figures the
+# routine-maintenance rate — and, since 2026-09-05, the income-tax brackets,
+# basic personal amounts, Québec abatement, Ontario surtax, capital-gains
+# inclusion and FHSA / HBP / TFSA limits a tax block will read). These are NOT
+# engine defaults: no dataclass falls back to one and the engine never applies
+# one. They are published figures the
 # user — or an assistant writing the YAML — chooses from, cited by name when the
 # user's own number equals the published number: `serialization.reference_matches`
 # for a recurring-cost line, a `sources: <key>: anchor:<name>` declaration for
@@ -46,7 +49,8 @@ ANCHOR_KINDS = frozenset({"cited", "reference", "neutral", "derivation", "unsour
 # file: a rate on ASSESSED value read as a rate on market value is wrong by
 # however far the assessment roll lags the market.
 REFERENCE_FAMILIES = ("property_tax.", "school_tax.", "home_insurance.",
-                      "mortgage_rate.", "maintenance.")
+                      "mortgage_rate.", "maintenance.",
+                      "tax.", "fhsa.", "hbp.", "tfsa.")
 
 # The families whose entries a single bill can legitimately ADD UP: in Québec an
 # owner's property-tax bill IS the municipal rate plus the province-wide school
@@ -1628,6 +1632,627 @@ ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"] = Anchor(
     short_cite="source: none (Montréal acquisition program not retrieved)",
     kind="unsourced",
 )
+
+
+# ---------------------------------------------------------------------------
+# Income-tax, FHSA, HBP and TFSA reference figures (2026-09-05).
+#
+# The tax side of a housing decision is a set of PUBLISHED, indexed figures:
+# the marginal rate that prices the return a renter's invested down payment is
+# taxed on, the capital-gains inclusion that portfolio pays and a principal
+# residence does not, and the FHSA / HBP / TFSA room that decides where a down
+# payment sits before closing. Until now the engine held none of them, so an
+# answer touching tax carried an estimate labelled "no source".
+#
+# Every figure below was fetched on 2026-09-05 from its primary source — the
+# Canada Revenue Agency, the Department of Finance, Revenu Québec, the
+# Ministère des Finances du Québec, the Income Tax Act — and is a REFERENCE
+# entry: the engine applies NONE of them today. They become live only when a
+# config opts into a tax block, and src/hde/tax_rates.py reads the schedules
+# FROM this registry when it does, so a rate has one home.
+#
+# Bracket schedules follow the land-transfer-tax pattern, one anchor per
+# bracket, except that the threshold is its own anchor here:
+# `tax.<jur>.bracket_<k>_ceiling` is the bracket's upper edge, INCLUSIVE as
+# every page prints it ("$0 to $58,523", then "$58,523.01 to …"), beside
+# `tax.<jur>.bracket_<k>_rate`. The top bracket has no ceiling and therefore
+# no ceiling anchor — an Anchor holds a figure or is `source: none`, and "no
+# ceiling" is neither; TAX_BRACKET_SCHEDULES carries it as None.
+#
+# Every threshold is a 2026 figure (federal indexation 2.0%, Québec 2.05%) and
+# must be re-fetched for a 2027 tax year.
+# ---------------------------------------------------------------------------
+
+_TAX_RETRIEVED = "2026-09-05"
+_TAX_OPT_IN = (
+    "Applied to nothing by default: the engine charges no income tax and "
+    "credits no room until a config opts into a tax block, and "
+    "tax_rates.marginal_rate reads this figure from the registry when it does."
+)
+
+_FED_RATES_URL = ("https://www.canada.ca/en/revenue-agency/services/tax/individuals/"
+                  "tax-rates-brackets/current-year.html")
+_FED_RATES_SOURCE = (
+    "Canada Revenue Agency, 'Current year tax rates and income brackets (2026)', "
+    "'For income earned in: 2026', federal table quoted as published: '$0 to "
+    "$58,523 — 14%; $58,523.01 to $117,045 — 20.5%; $117,045.01 to $181,440 — "
+    "26%; $181,440.01 to $258,482 — 29%; $258,482.01 and up — 33%'. The CRA "
+    "indexation page ('Indexation adjustment for personal income tax and benefit "
+    "amounts', fetched the same day) prints the same 2026 thresholds — 'Taxable "
+    "income above which the 20.5% bracket begins $58,523' … '33% bracket begins "
+    "$258,482' — under 'Indexation increase 2.0 %'")
+_CRA_INDEXATION_URL = (
+    "https://www.canada.ca/en/revenue-agency/services/tax/individuals/"
+    "frequently-asked-questions-individuals/adjustment-personal-income-tax-benefit-amounts.html")
+
+_QC_RATES_URL = "https://www.revenuquebec.ca/documents/en/formulaires/tp/TP-1015.F-V(2026-01).pdf"
+_QC_RATES_SOURCE = (
+    "Revenu Québec, TP-1015.F-V (2026-01), 'Formulas to Calculate Source "
+    "Deductions and Contributions — 2026', table 'Taxable income thresholds, "
+    "income tax rates and constants for 2026', quoted as published: 'Not more "
+    "than $54,345 — 14% — $0; More than $54,345, but not more than $108,680 — "
+    "19% — $2,717; More than $108,680, but not more than $132,245 — 24% — "
+    "$8,151; More than $132,245 — 25.75% — $10,465', with 'For 2026, the taxable "
+    "income thresholds and constants for adjusting the income tax rates have been "
+    "indexed, whereas the income tax rates remain unchanged' and 'Basic personal "
+    "amount $18,952'. Corroborated by Ministère des Finances du Québec, "
+    "'Parameters of the Personal Income Tax System for 2026' (November 2025, "
+    "cdn-contenu.quebec.ca/cdn-contenu/adm/min/finances/publications-adm/"
+    "parametres/AUTEN_IncomeTax2026.pdf), Table 3, 2026 column: 'Maximum "
+    "threshold of first taxable income bracket 54 345; second 108 680; third "
+    "132 245; Basic personal amount 18 952', indexed 'at a rate of 2.05%'. "
+    "Retrieval note: revenuquebec.ca refused the income-tax-rates web page "
+    "(HTTP 403 to every fetch) but served this PDF to a direct download; the "
+    "figures were read from the PDF's text")
+
+_ON_RATES_SOURCE = (
+    "Canada Revenue Agency, 'Current year tax rates and income brackets (2026)', "
+    "'For income earned in: 2026', Ontario row quoted as published: '$0 to "
+    "$53,891 — 5.05%; $53,891.01 to $107,785 — 9.15%; $107,785.01 to $150,000 — "
+    "11.16%; $150,000.01 to $220,000 — 12.16%; $220,000.01 and up — 13.16%'. CRA "
+    "T4032-ON(E) Rev. 26, 'Payroll Deductions Tables — Ontario', 'Effective "
+    "January 1, 2026', prints the same thresholds and rates with the constants "
+    "0 / 2,210 / 4,376 / 5,876 / 8,076")
+_T4032_ON_URL = ("https://www.canada.ca/en/revenue-agency/services/forms-publications/"
+                 "payroll/t4032-payroll-deductions-tables/t4032on-jan/"
+                 "t4032on-january-general-information.html")
+_ON_SURTAX_SOURCE = (
+    "Canada Revenue Agency, T4032-ON(E) Rev. 26, 'Payroll Deductions Tables — "
+    "CPP, EI, and income tax deductions — Ontario', 'Effective January 1, 2026', "
+    "quoted as published: 'where the basic provincial tax payable is greater "
+    "than $5,818 and less than or equal to $7,446, the surtax is 20% of the basic "
+    "provincial tax payable over $5,818'; 'where the basic provincial tax payable "
+    "is greater than $7,446, the surtax is 20% of the basic provincial tax payable "
+    "over $5,818, plus 36% of the basic provincial tax payable over $7,446'. The "
+    "Ontario Ministry of Finance personal-income-tax page was not reachable "
+    "(HTTP 404 on both known paths) and the province's open-data rates file "
+    "carried 2025 only; the CRA table is the federal administrator's statement "
+    "of the 2026 Ontario parameters")
+
+_CEILING_UNIT = ("dollars of taxable income: the bracket's upper edge, INCLUSIVE — "
+                 "the next rate starts one cent above it")
+_RATE_UNIT = "fraction of each dollar of taxable income inside the bracket (the marginal rate)"
+
+# (upper edge inclusive — None for the top bracket, rate, the row as printed)
+_FED_BRACKETS = (
+    (58_523.0, 0.14, "$0 to $58,523 — 14%"),
+    (117_045.0, 0.205, "$58,523.01 to $117,045 — 20.5%"),
+    (181_440.0, 0.26, "$117,045.01 to $181,440 — 26%"),
+    (258_482.0, 0.29, "$181,440.01 to $258,482 — 29%"),
+    (None, 0.33, "$258,482.01 and up — 33%"),
+)
+_QC_BRACKETS = (
+    (54_345.0, 0.14, "Not more than $54,345 — 14%"),
+    (108_680.0, 0.19, "More than $54,345, but not more than $108,680 — 19%"),
+    (132_245.0, 0.24, "More than $108,680, but not more than $132,245 — 24%"),
+    (None, 0.2575, "More than $132,245 — 25.75%"),
+)
+_ON_BRACKETS = (
+    (53_891.0, 0.0505, "$0 to $53,891 — 5.05%"),
+    (107_785.0, 0.0915, "$53,891.01 to $107,785 — 9.15%"),
+    (150_000.0, 0.1116, "$107,785.01 to $150,000 — 11.16%"),
+    (220_000.0, 0.1216, "$150,000.01 to $220,000 — 12.16%"),
+    (None, 0.1316, "$220,000.01 and up — 13.16%"),
+)
+
+# jurisdiction family -> (label, url, source, unit of the ceilings, brackets,
+# short cite); brackets are (upper edge inclusive — None for the top bracket,
+# rate, the row as the source prints it). tax_rates.bracket_schedule reads
+# the registered anchors, not this tuple, so the dump alone is the schedule.
+TAX_BRACKET_SCHEDULES = {
+    "tax.federal": ("Federal income tax 2026", _FED_RATES_URL, _FED_RATES_SOURCE,
+                    _CEILING_UNIT, _FED_BRACKETS, "CRA 2026 federal rates"),
+    "tax.qc": ("Québec income tax 2026", _QC_RATES_URL, _QC_RATES_SOURCE,
+               _CEILING_UNIT, _QC_BRACKETS, "Revenu Québec 2026 rates"),
+    "tax.on": ("Ontario income tax 2026", _FED_RATES_URL, _ON_RATES_SOURCE,
+               _CEILING_UNIT, _ON_BRACKETS, "CRA 2026 Ontario rates"),
+}
+_TAX_PROVINCE = {"tax.federal": "", "tax.qc": "qc", "tax.on": "on"}
+
+for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.items():
+    for _k, (_ceiling, _rate, _quoted) in enumerate(_rows, start=1):
+        if _ceiling is not None:
+            ANCHORS[f"{_jur}.bracket_{_k}_ceiling"] = Anchor(
+                name=f"{_jur}.bracket_{_k}_ceiling",
+                value=_ceiling,
+                as_of="2026",
+                source=_source,
+                url=_url,
+                rationale=(
+                    f"{_label}: the upper edge of bracket {_k}, inclusive — the "
+                    f"taxable income above which bracket {_k + 1}'s rate applies. "
+                    f"A legislated, indexed 2026 threshold, not an estimate, so "
+                    f"its band is itself. Engine use: locating the marginal rate "
+                    f"at a taxable income, which prices what a renter's invested "
+                    f"capital earns after tax. {_TAX_OPT_IN}"
+                ),
+                band=(_ceiling, _ceiling),
+                short_cite=_cite,
+                quoted=_quoted,
+                unit=_unit,
+                province=_TAX_PROVINCE[_jur],
+                retrieved_on=_TAX_RETRIEVED,
+            )
+        _span = ("with no ceiling" if _ceiling is None
+                 else f"up to and including ${_ceiling:,.0f}")
+        ANCHORS[f"{_jur}.bracket_{_k}_rate"] = Anchor(
+            name=f"{_jur}.bracket_{_k}_rate",
+            value=_rate,
+            as_of="2026",
+            source=_source,
+            url=_url,
+            rationale=(
+                f"{_label}: the marginal rate on taxable income inside bracket "
+                f"{_k} ({_span}). A legislated schedule rate, not an estimate, so "
+                f"its band is itself. Engine use: the statutory component of the "
+                f"combined marginal rate (tax_rates.marginal_rate), before the "
+                f"Québec abatement or the Ontario surtax. {_TAX_OPT_IN}"
+            ),
+            band=(_rate, _rate),
+            short_cite=_cite,
+            quoted=_quoted,
+            unit=_RATE_UNIT,
+            province=_TAX_PROVINCE[_jur],
+            retrieved_on=_TAX_RETRIEVED,
+        )
+
+# (threshold of basic Ontario tax, fraction of the excess added as surtax)
+ONTARIO_SURTAX_TIERS = ((5_818.0, 0.20), (7_446.0, 0.36))
+_SURTAX_QUOTED = (
+    "the surtax is 20% of the basic provincial tax payable over $5,818",
+    "plus 36% of the basic provincial tax payable over $7,446",
+)
+for _k, ((_threshold, _fraction), _quoted) in enumerate(
+        zip(ONTARIO_SURTAX_TIERS, _SURTAX_QUOTED), start=1):
+    ANCHORS[f"tax.on.surtax_{_k}_threshold"] = Anchor(
+        name=f"tax.on.surtax_{_k}_threshold",
+        value=_threshold,
+        as_of="2026",
+        source=_ON_SURTAX_SOURCE,
+        url=_T4032_ON_URL,
+        rationale=(
+            f"Ontario surtax tier {_k}: the basic Ontario tax payable above which "
+            f"{_fraction:.0%} of the excess is added. Basic Ontario tax is Ontario "
+            f"tax on taxable income LESS non-refundable credits; the registry "
+            f"knows one credit (5.05% × the basic personal amount), so "
+            f"tax_rates.ontario_basic_tax nets that and nothing else — every "
+            f"other credit moves the crossover income higher. Engine use: "
+            f"deciding which surtax tier a taxable income sits in. {_TAX_OPT_IN}"
+        ),
+        band=(_threshold, _threshold),
+        short_cite="CRA T4032-ON 2026",
+        quoted=_quoted,
+        unit=("dollars of basic Ontario tax payable (Ontario tax on taxable income "
+              "less non-refundable credits) above which the tier applies"),
+        province="on",
+        retrieved_on=_TAX_RETRIEVED,
+    )
+    ANCHORS[f"tax.on.surtax_{_k}_rate"] = Anchor(
+        name=f"tax.on.surtax_{_k}_rate",
+        value=_fraction,
+        as_of="2026",
+        source=_ON_SURTAX_SOURCE,
+        url=_T4032_ON_URL,
+        rationale=(
+            f"Ontario surtax tier {_k}: the fraction of basic Ontario tax above "
+            f"${_threshold:,.0f} added on top of it. The tiers STACK: above "
+            f"$7,446 both apply, so the marginal Ontario rate there is the bracket "
+            f"rate × (1 + 0.20 + 0.36). Engine use: the surtax multiplier on the "
+            f"provincial component of the combined marginal rate. {_TAX_OPT_IN}"
+        ),
+        band=(_fraction, _fraction),
+        short_cite="CRA T4032-ON 2026",
+        quoted=_quoted,
+        unit="fraction of basic Ontario tax above the tier's threshold, added to it",
+        province="on",
+        retrieved_on=_TAX_RETRIEVED,
+    )
+
+ANCHORS.update({
+    "tax.federal.basic_personal_amount": Anchor(
+        name="tax.federal.basic_personal_amount",
+        value=16_452.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Indexation adjustment for personal income tax "
+            "and benefit amounts', 2026 column quoted as published: basic personal "
+            "amount 'Maximum for lower-income individuals $16,452', 'Base amount "
+            "for higher-income individuals $14,829'; 'Indexation increase 2.0 %'. "
+            "The maximum phases down to the base between the net income at which "
+            "the 29% bracket begins ($181,440) and the one at which the 33% "
+            "bracket begins ($258,482)"),
+        url=_CRA_INDEXATION_URL,
+        rationale=(
+            "The income the lowest federal rate leaves untaxed: the credit is 14% "
+            "of this amount. Engine use: tax on income (not the marginal rate) "
+            "when a tax block computes the average rate; the phase-out adds an "
+            "implicit ~0.3-point marginal between $181,440 and $258,482 — 14% × "
+            "($16,452 − $14,829) / ($258,482 − $181,440) — which "
+            "tax_rates.marginal_rate leaves out, as the CRA table does. The band "
+            "is the base-to-maximum range the page prints. " + _TAX_OPT_IN),
+        band=(14_829.0, 16_452.0),
+        short_cite="CRA 2026 indexation",
+        quoted="$16,452 (maximum for lower-income individuals); $14,829 (base amount for higher-income individuals)",
+        unit="dollars of the federal non-refundable credit base; the credit is 14% of it",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tax.qc.basic_personal_amount": Anchor(
+        name="tax.qc.basic_personal_amount",
+        value=18_952.0,
+        as_of="2026",
+        source=_QC_RATES_SOURCE,
+        url=_QC_RATES_URL,
+        rationale=(
+            "The income Québec's lowest rate leaves untaxed: the credit is 14% of "
+            "this amount, indexed 2.05% from $18,571 in 2025. Engine use: tax on "
+            "income when a tax block computes the average Québec rate; it does "
+            "not move the marginal rate. " + _TAX_OPT_IN),
+        band=(18_952.0, 18_952.0),
+        short_cite="Revenu Québec 2026 rates",
+        quoted="Basic personal amount $18,952",
+        unit="dollars of the Québec non-refundable credit base; the credit is 14% of it",
+        province="qc",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tax.on.basic_personal_amount": Anchor(
+        name="tax.on.basic_personal_amount",
+        value=12_989.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, T4032-ON(E) Rev. 26, 'Payroll Deductions Tables "
+            "— Ontario', 'Effective January 1, 2026', quoted as published: 'For "
+            "2026, the Ontario non‑refundable basic personal tax credit is "
+            "$12,989.' — CRA's wording for the credit BASE; the credit itself is "
+            "5.05% of it ($655.94)"),
+        url=_T4032_ON_URL,
+        rationale=(
+            "The income Ontario's lowest rate leaves untaxed. Engine use: the one "
+            "credit tax_rates.ontario_basic_tax nets before the surtax tiers are "
+            "tested, and tax on income when a tax block computes the average "
+            "Ontario rate. " + _TAX_OPT_IN),
+        band=(12_989.0, 12_989.0),
+        short_cite="CRA T4032-ON 2026",
+        quoted="For 2026, the Ontario non‑refundable basic personal tax credit is $12,989.",
+        unit="dollars of the Ontario non-refundable credit base; the credit is 5.05% of it",
+        province="on",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tax.federal.quebec_abatement": Anchor(
+        name="tax.federal.quebec_abatement",
+        value=0.165,
+        as_of="2026",
+        source=(
+            "Department of Finance Canada, 'Quebec Abatement' (federal transfers), "
+            "quoted as published: 'The Quebec Abatement consists of a reduction of "
+            "16.5 percentage points of federal personal income tax for all tax "
+            "filers in Quebec.' 'The 16.5 percentage points are the sum of the "
+            "13.5 percentage points of federal income tax abated under the "
+            "Alternative Payments for Standing Programs plus an additional 3 "
+            "percentage points abated for the discontinued Youth Allowances "
+            "Program.' The CRA page for T1 line 44000, 'Refundable Quebec "
+            "abatement' (fetched the same day), names the line and Form T2203 "
+            "but prints no percentage"),
+        url="https://www.canada.ca/en/department-finance/programs/federal-transfers/quebec-abatement.html",
+        rationale=(
+            "A Québec resident's federal tax is reduced by 16.5% of basic federal "
+            "tax, so the federal component of a Québec marginal rate is the "
+            "bracket rate × (1 − 0.165). Engine use: tax_rates.marginal_rate for "
+            "province qc. " + _TAX_OPT_IN),
+        band=(0.165, 0.165),
+        short_cite="Finance Canada Quebec abatement",
+        quoted="a reduction of 16.5 percentage points of federal personal income tax for all tax filers in Quebec",
+        unit="fraction of basic federal tax refunded to a Québec resident (T1 line 44000)",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tax.capital_gains_inclusion_rate": Anchor(
+        name="tax.capital_gains_inclusion_rate",
+        value=0.5,
+        as_of="2026",
+        source=(
+            "Income Tax Act, R.S.C. 1985, c. 1 (5th Supp.), s. 38(a), Justice Laws "
+            "consolidation 'Current to 2026-06-21', 'Last amended 2026-06-18', "
+            "quoted as published: 'a taxpayer's taxable capital gain for a "
+            "taxation year from the disposition of any property is ½ of the "
+            "taxpayer's capital gain for the year'. Budget 2024 proposed "
+            "two-thirds on an individual's gains above $250,000 from 2024-06-25; "
+            "the start was deferred to 2026-01-01 on 2025-01-31; the increase was "
+            "then CANCELLED — Prime Minister of Canada news release, 2025-03-21, "
+            "'Prime Minister Carney cancels proposed capital gains tax increase': "
+            "'Today, Prime Minister Carney announced that the Government of Canada "
+            "will cancel the proposed hike in the capital gains inclusion rate.' "
+            "CRA guide T4037 (2025): 'Generally, the IR for 2024 is 1/2.' "
+            "One-half is the rate in force for 2026"),
+        url="https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-38.html",
+        rationale=(
+            "The fraction of a realized gain that enters taxable income: the "
+            "renter's invested down payment pays tax on half of its gains at the "
+            "marginal rate, the principal residence pays none. Engine use: the "
+            "after-tax return on the renter's capital and any taxable sale. "
+            + _TAX_OPT_IN),
+        band=(0.5, 0.5),
+        short_cite="ITA s. 38(a)",
+        quoted="a taxpayer's taxable capital gain for a taxation year from the disposition of any property is ½ of the taxpayer's capital gain for the year",
+        unit="fraction of a realized capital gain included in taxable income",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tax.principal_residence_exempt_fraction": Anchor(
+        name="tax.principal_residence_exempt_fraction",
+        value=1.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Principal residence and other real estate' "
+            "(line 12700), quoted as published: 'If the property was solely your "
+            "principal residence for every year you owned it, you do not have to "
+            "pay tax on the gain.' and 'Effective 2016 and later tax years, the "
+            "CRA will only allow the principal residence exemption if you report "
+            "the disposition and designation of your principal residence on your "
+            "income tax and benefit return.'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "about-your-tax-return/tax-return/completing-a-tax-return/personal-income/"
+             "line-12700-capital-gains/principal-residence-other-real-estate.html"),
+        rationale=(
+            "The whole gain on a home that was the principal residence for every "
+            "year owned is exempt — the asymmetry that makes the buyer's terminal "
+            "equity tax-free while the renter's portfolio gain is not. A home "
+            "that was not the principal residence every year (a rented-out spell) "
+            "is exempt only pro rata by years designated, which the registry does "
+            "not model: a tax block that meets one must say so. Engine use: the "
+            "tax on the owned option's terminal sale. " + _TAX_OPT_IN),
+        band=(1.0, 1.0),
+        short_cite="CRA principal residence",
+        quoted="If the property was solely your principal residence for every year you owned it, you do not have to pay tax on the gain.",
+        unit="fraction of the gain on a principal residence exempt from the capital-gains inclusion",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "fhsa.annual_limit": Anchor(
+        name="fhsa.annual_limit",
+        value=8_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Participating in your FHSAs', quoted as "
+            "published: 'Your FHSA participation room in the year you open your "
+            "first FHSA is $8,000.' and, for later years, 'the lesser of: a) "
+            "$8,000 plus your FHSA participation room carryforward minus your "
+            "excess FHSA amount at the end of the prior year, or b) $40,000 minus "
+            "all of your contributions …'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "first-home-savings-account/contributing-your-fhsa.html"),
+        rationale=(
+            "New FHSA participation room per calendar year, deductible like an "
+            "RRSP contribution and withdrawn tax-free for a qualifying home. "
+            "Engine use: how much of a down payment can be saved pre-tax per "
+            "year before closing, and the deduction at the marginal rate. "
+            + _TAX_OPT_IN),
+        band=(8_000.0, 8_000.0),
+        short_cite="CRA FHSA",
+        quoted="Your FHSA participation room in the year you open your first FHSA is $8,000.",
+        unit="dollars of FHSA participation room per calendar year",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "fhsa.lifetime_limit": Anchor(
+        name="fhsa.lifetime_limit",
+        value=40_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Definitions for FHSAs', quoted as published: "
+            "'The lifetime FHSA limit = $40,000'; the participation-room formula "
+            "on 'Participating in your FHSAs' caps room at '$40,000 minus all of "
+            "your contributions to your FHSAs and transfers from your RRSPs to "
+            "your FHSAs for all prior years'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "first-home-savings-account/definitions.html"),
+        rationale=(
+            "The ceiling on everything ever contributed or transferred into "
+            "FHSAs. Engine use: capping the pre-tax down-payment saving a plan "
+            "can assume, whatever the horizon. " + _TAX_OPT_IN),
+        band=(40_000.0, 40_000.0),
+        short_cite="CRA FHSA",
+        quoted="The lifetime FHSA limit = $40,000",
+        unit="dollars, lifetime, contributions plus RRSP transfers into FHSAs",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "fhsa.carry_forward_max": Anchor(
+        name="fhsa.carry_forward_max",
+        value=8_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Participating in your FHSAs', quoted as "
+            "published: 'Your FHSA participation room carryforward is the lesser "
+            "of: a) $8,000 b) The amount calculated as follows: $8,000 plus your "
+            "FHSA participation room carryforward for the prior year minus …'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "first-home-savings-account/contributing-your-fhsa.html"),
+        rationale=(
+            "Unused room carries forward, but never more than one year's worth: "
+            "a holder who opened in year 1 and skipped it can put in $16,000 in "
+            "year 2, not more. Engine use: the most a late saver can catch up in "
+            "one year. " + _TAX_OPT_IN),
+        band=(8_000.0, 8_000.0),
+        short_cite="CRA FHSA",
+        quoted="Your FHSA participation room carryforward is the lesser of: a) $8,000 b) …",
+        unit="dollars of unused participation room carried into the next year, at most",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "fhsa.max_years_open": Anchor(
+        name="fhsa.max_years_open",
+        value=15.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Closing your FHSAs', quoted as published: "
+            "'Your maximum participation period begins when you open your first "
+            "FHSA and ends on December 31 of the year in which the earliest of "
+            "the following events occur: the 15th anniversary of opening your "
+            "first FHSA; you turn 71 years of age; the year following your first "
+            "qualifying withdrawal from your FHSA'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "first-home-savings-account/closing-your-fhsa.html"),
+        rationale=(
+            "The longest an FHSA can stay open: 15 years from the first opening, "
+            "cut shorter at 71 or the year after a qualifying withdrawal. Engine "
+            "use: the horizon over which pre-tax down-payment saving can run "
+            "before the plan must close or roll to an RRSP. " + _TAX_OPT_IN),
+        band=(15.0, 15.0),
+        short_cite="CRA FHSA",
+        quoted="the 15th anniversary of opening your first FHSA",
+        unit=("years from opening the first FHSA to the end of the maximum participation "
+              "period, at most — earlier at age 71 or the year after the first "
+              "qualifying withdrawal"),
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "hbp.withdrawal_limit": Anchor(
+        name="hbp.withdrawal_limit",
+        value=60_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'What is the Home Buyers' Plan (HBP)?', quoted "
+            "as published: 'Currently, the HBP withdrawal limit is $60,000.'; "
+            "'How to participate in the Home Buyers' Plan' (same day): 'Currently, "
+            "the maximum you can withdraw is $60,000.'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "rrsps-related-plans/what-home-buyers-plan.html"),
+        rationale=(
+            "The most one person can pull from RRSPs tax-free toward a first "
+            "home, to be repaid over the repayment period. Engine use: the "
+            "RRSP-sourced share of a down payment and the repayment stream that "
+            "follows it. " + _TAX_OPT_IN),
+        band=(60_000.0, 60_000.0),
+        short_cite="CRA HBP",
+        quoted="Currently, the HBP withdrawal limit is $60,000.",
+        unit="dollars per person withdrawable from RRSPs under the HBP",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "hbp.repayment_years": Anchor(
+        name="hbp.repayment_years",
+        value=15.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'How to repay the funds withdrawn from RRSP(s) "
+            "under the Home Buyers' Plan (HBP)', quoted as published: 'You have up "
+            "to 15 years to repay to your registered retirement savings plan "
+            "(RRSP), pooled registered pension plan (PRPP) or specified pension "
+            "plan (SPP) the amounts you withdrew from your RRSP under the Home "
+            "Buyers' Plan (HBP).'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "rrsps-related-plans/what-home-buyers-plan/"
+             "repay-funds-withdrawn-rrsp-s-under-home-buyers-plan.html"),
+        rationale=(
+            "The repayment period: one fifteenth of the withdrawal a year, a "
+            "missed instalment becoming income. Engine use: the annual cash "
+            "outflow (or forgone RRSP room) the HBP withdrawal creates after the "
+            "grace years. " + _TAX_OPT_IN),
+        band=(15.0, 15.0),
+        short_cite="CRA HBP",
+        quoted="You have up to 15 years to repay",
+        unit="years of the HBP repayment period",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "hbp.repayment_grace_years": Anchor(
+        name="hbp.repayment_grace_years",
+        value=5.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'What is the Home Buyers' Plan (HBP)?', quoted "
+            "as published: 'the temporary repayment relief to defer the start of "
+            "the 15-year repayment period by an additional three years was "
+            "extended for participants making a first withdrawal between January "
+            "1, 2026, and December 31, 2028.'; 'the 15-year repayment period would "
+            "start the fifth year following the year in which a first withdrawal "
+            "was made.'; 'if you made your first withdrawal in 2026, your first "
+            "year of repayment will be 2031.' The standard rule, on 'How to repay "
+            "the funds withdrawn …': 'Your repayment period started the second "
+            "year after the year you made your first withdrawal from your RRSPs "
+            "under the HBP.'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "rrsps-related-plans/what-home-buyers-plan.html"),
+        rationale=(
+            "First repayment year minus withdrawal year. For a first withdrawal "
+            "in the CURRENT window (2026-01-01 to 2028-12-31) it is 5: 2026 → "
+            "2031. The standard rule is 2 (the second year after the withdrawal "
+            "year) and resumes for a first withdrawal after 2028-12-31 unless the "
+            "relief is extended again; the band spans the two. Engine use: the "
+            "year the HBP repayment stream starts. " + _TAX_OPT_IN),
+        band=(2.0, 5.0),
+        short_cite="CRA HBP",
+        quoted="if you made your first withdrawal in 2026, your first year of repayment will be 2031",
+        unit="years from the withdrawal year to the first repayment year (first repayment year − withdrawal year)",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tfsa.annual_limit": Anchor(
+        name="tfsa.annual_limit",
+        value=7_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, 'Calculate your contribution room' (TFSA), "
+            "quoted as published: 'The TFSA dollar limit for 2026 is $7,000'. The "
+            "CRA indexation page (same day) prints $7,000 in the 2026 column, "
+            "unchanged from 2025; guide RC4466: 'The TFSA annual room limit will "
+            "be indexed to inflation and rounded to the nearest $500.'"),
+        url=("https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/"
+             "tax-free-savings-account/contributing/calculate-room.html"),
+        rationale=(
+            "New tax-free room per calendar year. Engine use: how much of the "
+            "renter's invested down payment can grow untaxed each year, which "
+            "bounds the tax the after-tax return comparison charges. "
+            + _TAX_OPT_IN),
+        band=(7_000.0, 7_000.0),
+        short_cite="CRA TFSA",
+        quoted="The TFSA dollar limit for 2026 is $7,000",
+        unit="dollars of new TFSA contribution room per calendar year",
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+    "tfsa.cumulative_room_since_2009": Anchor(
+        name="tfsa.cumulative_room_since_2009",
+        value=109_000.0,
+        as_of="2026",
+        source=(
+            "Canada Revenue Agency, guide RC4466 'Tax-Free Savings Account (TFSA), "
+            "Guide for Individuals', table 'Annual TFSA dollar limit' quoted as "
+            "published: '2009 to 2012: $5,000; 2013 and 2014: $5,500; 2015: "
+            "$10,000; 2016 to 2018: $5,500; 2019 to 2022: $6,000; 2023: $6,500; "
+            "2024 and 2025: $7,000'; plus 'The TFSA dollar limit for 2026 is "
+            "$7,000' ('Calculate your contribution room', canada.ca/…/tax-free-"
+            "savings-account/contributing/calculate-room.html). No fetched page "
+            "prints the total; this figure is the SUM of the quoted table"),
+        url=("https://www.canada.ca/en/revenue-agency/services/forms-publications/"
+             "publications/rc4466/tax-free-savings-account-tfsa-guide-individuals.html"),
+        rationale=(
+            "The sum of every annual limit 2009–2026: 4 × 5,000 + 2 × 5,500 + "
+            "10,000 + 3 × 5,500 + 4 × 6,000 + 6,500 + 2 × 7,000 + 7,000 = "
+            "109,000 — the room of someone 18 or older and resident every year "
+            "since 2009 who never contributed. A younger or newer resident has "
+            "less; withdrawals add back the next year. Engine use: the ceiling "
+            "on how much of a renter's capital can sit tax-free at all. "
+            + _TAX_OPT_IN),
+        band=(109_000.0, 109_000.0),
+        short_cite="CRA TFSA",
+        quoted=("2009 to 2012: $5,000; 2013 and 2014: $5,500; 2015: $10,000; 2016 to "
+                "2018: $5,500; 2019 to 2022: $6,000; 2023: $6,500; 2024 and 2025: "
+                "$7,000; 2026: $7,000"),
+        unit=("dollars of total TFSA room through 2026 for a person eligible every year "
+              "since 2009 who never contributed"),
+        retrieved_on=_TAX_RETRIEVED,
+    ),
+})
 
 
 # ---------------------------------------------------------------------------
