@@ -46,6 +46,11 @@ answer the form. Front-loading these saves that round trip:
 - **Province and city**, and whether this is your first home. Québec and Ontario transfer
   taxes (Montréal and Toronto municipal) and the insurance-premium tax are priced from the
   published schedules; the first-time-buyer rebate is applied where one is sourced.
+- **Where your savings sit** — TFSA, RRSP, FHSA or a taxable account, in dollars — so the
+  renter's return is taxed the way yours would be; and for a first home, your FHSA balance and
+  contributions and any RRSP you would draw on under the Home Buyers' Plan. With your income
+  and province (Québec or Ontario) the engine works out your marginal rate from the published
+  brackets and names it; elsewhere, give the rate.
 - **Your rent today** and roughly how it has been rising.
 - **Rates the way you see them quoted** — rent rising 3% a year, prices up 4%, a fund
   returning 6%: give the sticker figure; the engine converts it once and the read-back shows
@@ -126,6 +131,15 @@ uv run hde examples/basic_config.yaml --json          # the full result document
 - **Transfer tax and insurance-premium tax outside Québec and Ontario.** Elsewhere you
   supply the closing-cost number.
 - **Rental income.** A duplex you partly rent out is priced as a home you occupy entirely.
+- **Tax beyond the basics.** With your savings' location the renter's taxable share is taxed
+  at your marginal rate (Québec and Ontario brackets; elsewhere you give the rate), the
+  owner's principal-residence exemption is named, and a first home's FHSA refunds and Home
+  Buyers' Plan are priced; without it the answer carries the engine's warning that the
+  renter's return is untaxed. Not modelled: the RRSP's pre-tax nature, the dividend tax
+  credit, other provinces' schedules, the FHSA rollover's effect on RRSP room, FHSA growth
+  during the saving years, deferral of capital gains (annual realisation is assumed, which
+  leans toward buying), a marginal rate that moves with your income, a missed HBP repayment,
+  US or non-resident cases, the alternative minimum tax.
 - **Tax, legal or mortgage advice.** The engine compares present-value costs under stated
   assumptions. Every published figure it uses carries its source and date
   (`uv run hde --print-anchors`); where a source has a scheduled change (Québec's

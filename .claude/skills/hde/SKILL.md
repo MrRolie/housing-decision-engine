@@ -24,7 +24,7 @@ Reference files live under `.claude/skills/hde/references/`;
 
 | When | Read |
 |---|---|
-| The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at what price is buying worth it?", "how long would I have to stay?" — always the full run with a threshold, never the short shape | `references/threshold-lane.md`, before authoring the config |
+| The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at what price is buying worth it?" — always the full run with a threshold, never the short shape | `references/threshold-lane.md`, before authoring the config |
 | The user asks for brevity in their own words ("just roughly", "the gist") — OR the question names no listing, no price, no date and asks for no threshold ("is it dumb to rent forever?") | `references/quick-sense.md`, before the intake message: brevity words set the cap, the no-listing test sets the asks |
 | A user phrase you cannot place in the schema (a posted rate, "houses around $650k", "$X down plus $Y for closing") | `references/translation.md` |
 | Writing the answer | the checklist below, then `references/answer-template.md` |
@@ -46,29 +46,29 @@ folded into the ONE intake message:
    first home → `first_time_buyer: true`; under 20% down →
    `mortgage_insurance: auto` with the province, never a hand-computed premium
    (`financed_purchase_costs` only carries one the user was quoted); the
-   renter's alternative sets `rent.investment_return_rate`.
+   renter's alternative sets `rent.investment_return_rate`; **and where does it
+   sit — TFSA, RRSP, FHSA, or a taxable account?** → `tax.renter_capital` in
+   dollars (income + a quoted `province: "QC"|"ON"` resolve the marginal rate);
+   a first home → the FHSA balance and contributions, any RRSP drawn through
+   the HBP → `tax.fhsa`, `tax.hbp_withdrawal` (`references/translation.md`).
 3. **What does "best" mean to you — lowest expected cost, smallest worst case,
    or most wealth at the end?** → which figure is the answer (gate 6).
 4. **What is your income, and how stable is it?** → an `income` block turns on
    affordability ratios; a feared pay cut is a `pay_drop_events` entry.
 5. **Which of your numbers are you least sure of?** → those get a `--sweep`.
 
-Then the schema: `uv run hde --print-schema` for the exact keys, the
-`required` flags and `required_if` (an owned option declares `all_cash: true`
-OR the full mortgage block). Describe the schema only from that output, never
-from memory. Invent no values: every number you do not ask for becomes a
-default the engine echoes back with its source.
+Then `uv run hde --print-schema` for the exact keys and their `required` /
+`required_if` flags — never describe the schema from memory. Invent no values:
+every number you do not ask for becomes a default the engine echoes back with
+its source.
 
 ## Missing information (ask before you run)
 
 Work out everything the config needs and ask for ALL of it in ONE message,
-grouped as a short form the user answers in one reply — (1) how long, how
-they'd pay, the cash for day one; (2) fees, tax, insurance, closing costs;
-(3) income; (4) what "best" means and any view on prices — with every
-modelling default you will take stated in the same message as a labelled
-default they can overrule ("25-year amortization, the engine's 3% real
-return, 1% real rent escalation, 0.6% maintenance — unless you say
-otherwise").
+grouped as a short form the user answers in one reply, with every modelling
+default you will take stated in the same message as a labelled default they
+can overrule ("25-year amortization, the engine's 3% real return, 1% real
+rent escalation, 0.6% maintenance — unless you say otherwise").
 
 1. **Which options the question implies** → which sections: "keep renting or
    buy a condo" = `rent` + `condo`; "house or condo" = `condo` + `house`; no
@@ -155,9 +155,10 @@ required key with the exact message — show it.
    growth it is inflation, not real gain).
 8. **"Not modelled" is mandatory,** every item with its direction of bias:
    renewal risk with any mortgage (toward buying), early exit (toward buying),
-   taxes on the renter's return (toward renting), every default the engine
-   warned on (with its rerun figure or its bias), every dollar input a
-   coherence note held fixed along a scan (with the note's direction).
+   tax as the engine states it — its `no tax: block` warning quoted when the
+   savings' location went unanswered — every default the engine warned on
+   (with its rerun figure or its bias), every dollar input a coherence note
+   held fixed along a scan (with the note's direction).
 
 ## The answer — checklist first, then prose
 
@@ -167,12 +168,10 @@ cap of any lane ranks what stays and never drops an item:
 - [ ] the engine's **READ-BACK block** (`--read-back`, or the last section
       of any run) pasted verbatim at the END of the answer, outside every
       cap — every `[warning]` line, the `assistant-typed:` / `unattributed:`
-      lines (every config key declared in `sources:` as `user` / `assistant`
-      / `anchor:<name>`), the `decisiveness:` rule, each `financing:` and
+      lines, the `decisiveness:` rule, each `financing:`, `tax:` and
       `other costs:` line, `Affordability`, every sweep point's line and
-      every break-even `sentence` with its `note` (in `--json`:
-      `assumptions.read_back`): the full block; the gist shape pastes the
-      short block (`references/quick-sense.md`). ONE command's output: run
+      every break-even `sentence` with its `note`: the full block; the gist
+      shape pastes the short block (`references/quick-sense.md`). ONE command's output: run
       the sweeps and break-evens together; never merge two blocks or write
       a line in the engine's voice. It is the config the verdict leads with
       — the other config's `decisiveness:` line and any warning only it
@@ -236,5 +235,5 @@ lane's cap overrides the template's; the READ-BACK block is outside both.
 ## Escalation
 
 Config errors: show the exact message; values are the user's decision. Trade
-execution, money movement, market timing: out of scope. Deeper guidance: `examples/README.md`
-(every config template); `docs/reference/ARCHITECTURE.md` (the figure glossary).
+execution, money movement, market timing: out of scope. Deeper guidance:
+`examples/README.md`; `docs/reference/ARCHITECTURE.md` (the figure glossary).
