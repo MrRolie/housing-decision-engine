@@ -375,6 +375,56 @@ assessment is therefore under-taxed by this model. A municipality other than
 Montréal that legislated its own band above $500,000 (the province permits up
 to 3%) is NOT in the registry — state an explicit schedule for it.
 
+### Income-tax, FHSA, HBP and TFSA reference figures
+
+Reference entries, not defaults: the engine applies **none** of these until a
+config opts into a tax block, and there is no tax key today. They are
+registered so an answer that touches tax cites the published figure instead
+of an estimate, and so the block, when it lands, reads the schedule the
+registry already holds (`tax_rates.marginal_rate`). One anchor per bracket —
+`tax.<jur>.bracket_<k>_ceiling` (the upper edge, inclusive) and `_rate`; the
+top bracket has no ceiling anchor. All fetched 2026-09-05; every threshold is
+a 2026 figure and must be re-fetched for 2027.
+
+| Jurisdiction | Taxable income (2026) | Rate |
+|---|---|---|
+| Federal (CRA) | $0 to $58,523 | 14% |
+| | $58,523.01 to $117,045 | 20.5% |
+| | $117,045.01 to $181,440 | 26% |
+| | $181,440.01 to $258,482 | 29% |
+| | $258,482.01 and up | 33% |
+| Québec (Revenu Québec TP-1015.F-V 2026) | not more than $54,345 | 14% |
+| | more than $54,345, not more than $108,680 | 19% |
+| | more than $108,680, not more than $132,245 | 24% |
+| | more than $132,245 | 25.75% |
+| Ontario (CRA) | $0 to $53,891 | 5.05% |
+| | $53,891.01 to $107,785 | 9.15% |
+| | $107,785.01 to $150,000 | 11.16% |
+| | $150,000.01 to $220,000 | 12.16% |
+| | $220,000.01 and up | 13.16% |
+
+| Figure | 2026 value | Source |
+|---|---|---|
+| Federal basic personal amount (`tax.federal.basic_personal_amount`) | $16,452, phasing down to $14,829 between $181,440 and $258,482 of net income | CRA 2026 indexation |
+| Québec basic personal amount (`tax.qc.basic_personal_amount`) | $18,952 | Revenu Québec 2026 rates |
+| Ontario basic personal amount (`tax.on.basic_personal_amount`) | $12,989 | CRA T4032-ON 2026 |
+| Québec abatement (`tax.federal.quebec_abatement`) | 16.5% of basic federal tax | Finance Canada Quebec abatement |
+| Ontario surtax (`tax.on.surtax_1_threshold` / `_rate`, `surtax_2_…`) | 20% of basic Ontario tax over $5,818, plus 36% over $7,446 | CRA T4032-ON 2026 |
+| Capital-gains inclusion rate (`tax.capital_gains_inclusion_rate`) | ½ — the proposed two-thirds was cancelled 2025-03-21 | ITA s. 38(a) |
+| Principal-residence exemption (`tax.principal_residence_exempt_fraction`) | 1.0 of the gain on a home that was the principal residence every year owned | CRA principal residence |
+| FHSA (`fhsa.annual_limit`, `fhsa.lifetime_limit`, `fhsa.carry_forward_max`, `fhsa.max_years_open`) | $8,000 a year; $40,000 lifetime; at most $8,000 carried forward; open at most 15 years | CRA FHSA |
+| HBP (`hbp.withdrawal_limit`, `hbp.repayment_years`, `hbp.repayment_grace_years`) | $60,000; 15 years; first repayment year − withdrawal year = 5 for a first withdrawal in 2026–2028 (2026 → 2031), 2 under the standard rule | CRA HBP |
+| TFSA (`tfsa.annual_limit`, `tfsa.cumulative_room_since_2009`) | $7,000; $109,000 through 2026 for someone eligible every year since 2009 — the sum of the quoted table, no page prints the total | CRA TFSA |
+
+The marginal rate `tax_rates.marginal_rate(taxable_income, province)` reports
+is the statutory bracket rate: in Québec the federal component is × (1 − 0.165);
+in Ontario the provincial component is × 1.20 inside the first surtax tier and
+× 1.56 above the second, with basic Ontario tax netting the basic personal
+credit and no other. At $100,000: Québec 36.1% (20.5% × 0.835 + 19%), Ontario
+31.5% (20.5% + 9.15% × 1.2). Revenu Québec's web pages refused automated
+retrieval; the Québec figures are read from its TP-1015.F-V (2026-01) PDF and
+corroborated by the Finances Québec 2026 parameters document.
+
 ## Validation Rules
 
 The config loader validates:

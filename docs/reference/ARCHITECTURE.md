@@ -21,6 +21,7 @@ src/hde/
 ├── market_scenario.py  # ScenarioPrior loader/validation, drift banding, time-anchor guard
 ├── mortgage_insurance.py # Insured-mortgage premium: schedule, tier, financed premium, cash tax
 ├── land_transfer_tax.py # Welcome / land-transfer tax: bracket schedules, rebate, cash at closing
+├── tax_rates.py        # Combined marginal income-tax rate from the registry's 2026 brackets (opt-in)
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
 ├── sources.py          # Source classes: who stated each value (`sources:` block, the
 │                       #   echo lines, the unstated-uncertainty warning's input set)
@@ -56,13 +57,16 @@ demographic prior (schema, closed enums, `constants_as_of` within a year of
 ### Anchors: two kinds of entry
 
 The registry holds **engine defaults** and, since 2026-09-03, **reference
-tables** — jurisdiction tax and insurance figures, and since 2026-09-04 the
-posted and contracted mortgage rates and the NAHB routine-maintenance rate.
+tables** — jurisdiction tax and insurance figures, since 2026-09-04 the
+posted and contracted mortgage rates and the NAHB routine-maintenance rate,
+and since 2026-09-05 the 2026 income-tax brackets, basic personal amounts,
+Québec abatement, Ontario surtax, capital-gains inclusion rate and the FHSA,
+HBP and TFSA limits.
 They are opposite in how they reach a run.
 
 | | engine default | jurisdiction reference |
 |---|---|---|
-| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `school_tax.<province>`, `home_insurance.<province>`, `mortgage_rate.posted_5y`, `mortgage_rate.contracted_5y_uninsured` / `_insured`, `maintenance.nahb_routine` |
+| keys | `rent.investment_return_rate`, `condo.house.selling_cost_rate`, … | `property_tax.<municipality>`, `school_tax.<province>`, `home_insurance.<province>`, `mortgage_rate.posted_5y`, `mortgage_rate.contracted_5y_uninsured` / `_insured`, `maintenance.nahb_routine`; since 2026-09-05 `tax.<federal\|qc\|on>.bracket_<k>_ceiling` / `_rate`, `tax.<jur>.basic_personal_amount`, `tax.federal.quebec_abatement`, `tax.on.surtax_<k>_threshold` / `_rate`, `tax.capital_gains_inclusion_rate`, `tax.principal_residence_exempt_fraction`, `fhsa.*`, `hbp.*`, `tfsa.*` |
 | applied by the engine? | yes, when the YAML omits the key | **never** — the user supplies the figure |
 | cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one; in `anchor-sourced:`, when a `sources:` line declares it |
 | extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on), `province` (property/school tax), `restatements` (the same figure in another convention) |
@@ -185,6 +189,35 @@ search every one. The structured form carries it as `nearest` on the
 `reference_matches` entry (`null` when nothing is that close, or when the line
 matched). It is a hint, not a citation: the match rule is unchanged, and a
 `sources:` declaration on the near-miss figure is still refused.
+
+**Income tax, FHSA, HBP and TFSA (2026-09-05).** The tax side of the decision
+is a set of published, indexed figures, and the registry holds the 2026 ones
+as reference entries — the engine applies **none** of them until a config opts
+into a tax block. Three bracket schedules, one anchor per bracket:
+`tax.<jur>.bracket_<k>_ceiling` (the upper edge, inclusive as every page prints
+it — "$0 to $58,523", then "$58,523.01 to …") beside `tax.<jur>.bracket_<k>_rate`,
+for `federal` (CRA, "for income earned in 2026"), `qc` (Revenu Québec
+TP-1015.F-V 2026, corroborated by the Finances Québec parameters document) and
+`on` (the CRA table and T4032-ON). The top bracket has no ceiling and so no
+ceiling anchor — an entry holds a figure or is `source: none`, and "no ceiling"
+is neither; `TAX_BRACKET_SCHEDULES` carries it as `None`. Beside the schedules:
+the three basic personal amounts; the Québec abatement
+(`tax.federal.quebec_abatement`, 16.5% of basic federal tax — Department of
+Finance); the Ontario surtax tiers (`tax.on.surtax_<k>_threshold` / `_rate`,
+20% over $5,818 and 36% over $7,446 of basic Ontario tax — CRA T4032-ON); the
+capital-gains inclusion rate (`tax.capital_gains_inclusion_rate`, ½ — Income
+Tax Act s. 38(a), the proposed two-thirds cancelled 2025-03-21); the
+principal-residence exemption (`tax.principal_residence_exempt_fraction`, 1.0
+— CRA); and the FHSA, HBP and TFSA limits (`fhsa.*`, `hbp.*`, `tfsa.*` — CRA).
+`tax_rates.py` reads the schedules back from the registry, never from a
+literal: `marginal_rate(taxable_income, province)` is the combined statutory
+rate with the abatement (Québec) or the surtax (Ontario) applied, and
+`marginal_rate_breakdown` returns its components. Two definitions are the
+module's, not the pages': the Ontario surtax base nets the basic personal
+credit and no other (every other credit moves the crossover higher), and the
+federal basic personal amount's phase-out between $181,440 and $258,482 is not
+in the marginal rate, as it is not in the CRA table. Every threshold is a 2026
+figure and is re-fetched, not indexed, for 2027.
 
 ## Conventions (every figure below obeys these)
 
