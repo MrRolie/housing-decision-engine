@@ -11,7 +11,7 @@
 #   load; this file sets inflation_rate 0.0, so every quoted figure below IS its real
 #   figure and the read-back's `rates:` line shows the two forms equal.
 #
-#   discount_rate 0.03 ............ illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   discount_rate 0.03 ............ illustrative — the household's own time preference; sanity band [0.02, 0.06]
 #   inflation_rate 0.0 ............ the deflator of the quoted rates: 0 here means the figures
 #                                   below are real figures already (kept explicit for pedagogy)
 #   fee_escalation_rate 0.02 ...... FP Canada 2026 shelter-cost growth 3.1% quoted ≈ 1.0% real
@@ -29,7 +29,7 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 20
-discount_rate: 0.03  # as quoted (= real at 0% inflation); illustrative — personal time-preference, sanity band [0.02, 0.06]
+discount_rate: 0.03  # as quoted (= real at 0% inflation); illustrative — the household's own time preference, sanity band [0.02, 0.06]
 
 economic:
   mode: real

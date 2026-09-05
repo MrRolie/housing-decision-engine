@@ -21,7 +21,7 @@
 #
 #   market_scenario.path ............. demoflow-audited artifact (its own provenance chain);
 #                                      supplies the ISQ-grounded demographic drift, not a hand-picked rate
-#   discount_rate 0.072 .............. illustrative — personal time-preference, 7.2% quoted
+#   discount_rate 0.072 .............. illustrative — the household's own time preference, 7.2% quoted
 #                                      ≈ 5.0% real; sanity band [0.02, 0.06] real
 #   fee_escalation_rate 0.052 ........ FP Canada 2026 shelter-cost growth 3.1% quoted ≈ 1.0% real
 #                                      is the planning reference — 5.2% quoted ≈ 3% real is a
@@ -51,7 +51,7 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 25
-discount_rate: 0.072  # as quoted ≈ 5.0% real after 2.1% inflation; illustrative — personal time-preference, sanity band [0.02, 0.06] real
+discount_rate: 0.072  # as quoted ≈ 5.0% real after 2.1% inflation; illustrative — the household's own time preference, sanity band [0.02, 0.06] real
 
 market_scenario:
   path: tests/fixtures/scenario_prior_golden.json  # demoflow's audited prior — its provenance is that repo's
