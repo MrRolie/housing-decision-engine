@@ -56,9 +56,12 @@ cost component must obey them:
 - Nominal mode composes inflation into every escalation:
   `(1 + g)(1 + π) − 1` (`_effective_growth_rate`), in the PV engine AND in
   the affordability numerator.
-  The discount rate — typed or defaulted, a REAL opportunity cost — composes
-  the same way (`config._discount_rate_for`); only a typed `mortgage_rate`, a
-  quoted contract rate, is used as entered. A mortgage
+  The anchored discount-rate default — a REAL opportunity cost — composes
+  the same way; a TYPED rate is as quoted like every typed growth, escalation
+  and return rate (`rates.RateConverter`, 2026-09-05: deflated once at load in
+  real mode, used as typed in nominal mode; `rates: real` declares real
+  figures); only `mortgage_rate`, a quoted contract rate, is used as entered
+  in both modes. A mortgage
   in real mode prices a level real-rate payment — lower than the lender's
   nominal payment — so `coherence_warnings` flags it when an income block is
   present (round-three dogfood 2026-09-02).

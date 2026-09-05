@@ -47,6 +47,10 @@ answer the form. Front-loading these saves that round trip:
   taxes (Montréal and Toronto municipal) and the insurance-premium tax are priced from the
   published schedules; the first-time-buyer rebate is applied where one is sourced.
 - **Your rent today** and roughly how it has been rising.
+- **Rates the way you see them quoted** — rent rising 3% a year, prices up 4%, a fund
+  returning 6%: give the sticker figure; the engine converts it once and the read-back shows
+  both forms (`3.0% as quoted = 0.9% after 2.1% inflation`), so never adjust for inflation
+  yourself.
 - **Owner costs if you have them**: the property-tax bill, home or unit insurance, condo
   fees. "No idea" is fine: the engine takes a labelled default or a placeholder and the
   answer names it as such, so you can replace it later.

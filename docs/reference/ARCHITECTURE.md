@@ -191,10 +191,20 @@ matched). It is a hint, not a citation: the match rule is unchanged, and a
 - **Years are 1-indexed; cash flows fall at the END of year t and discount at
   `(1 + dr)^-t`** (`pv_single`). Year-0 outlays (the buyer's down payment and purchase costs, the renter's invested capital) are undiscounted.
   `dr` = `discount_rate`, in the same terms (real or nominal) as every rate.
-  `discount_rate` is a REAL opportunity cost — the typed figure, else the anchored
-  3% real return — composed with `inflation_rate` in nominal mode
-  (`(1 + real)(1 + π) − 1`) like every other rate and echoed as both figures; only
-  `mortgage_rate`, a quoted contract rate, is used as typed.
+  `discount_rate` is the household's opportunity cost — the anchored 3% real return
+  when omitted, composed with `inflation_rate` in nominal mode (`(1 + real)(1 + π) − 1`);
+  typed, it is AS QUOTED like every typed rate (below) and echoed as both figures.
+- **Rates as quoted (2026-09-05).** The spec holds REAL rates. A typed growth,
+  escalation, return or discount rate (`value_growth_rate`, `fee_escalation_rate`,
+  `reserve_growth_rate`, `rent_escalation_rate`, `investment_return_rate`,
+  `income_growth_rate`, every `other_recurring_costs[].escalation_rate`,
+  `discount_rate`) is the figure as the user sees it quoted and the loader converts
+  it ONCE: in real mode `r_real = (1 + r_quoted)/(1 + π) − 1`; in nominal mode the
+  stored real figure composes back to the quoted one, so it is used as typed. The
+  anchored defaults are real and untouched. A config that states real figures says
+  `rates: real` (top level) and is read as before. `inflation_rate` is therefore the
+  deflator in real mode too — the FP Canada 2.1% planning figure when omitted there.
+  Only `mortgage_rate`, a quoted contract rate, is never converted.
 - **Nominal mode composes inflation into every escalation:** `g_eff = (1 + g)(1 + π) − 1`
   (`_effective_growth_rate`); in real mode `g_eff = g`. Defaults are REAL terms.
 - **Two escalation-start conventions coexist by design.** Condo fees, rent and
@@ -273,7 +283,7 @@ Monte Carlo (below). A price-shock block likewise affects only the Monte Carlo.
 | `events_pv` | one-time events (e.g. moving) | `base_cost · (1 + dr)^-year` at `expected_year` clamped to `[1, N]` |
 | `other_pv` | other recurring costs | as for owned options |
 | `invested_capital_pv` | the renter's capital charged at year 0 — the mirror of `downpayment_pv` | `D = invested_down_payment`, undiscounted |
-| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` (REAL; composed with inflation in nominal mode like `value_growth_rate`). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
+| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` (the spec's REAL figure — a typed rate is as quoted and deflated at load in real mode, composed back in nominal mode — composed with inflation in nominal mode like `value_growth_rate`). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
 | `total_pv` | net cost of renting | sum of the five |
 
 ### The verdict — `verdict`
@@ -346,7 +356,7 @@ Present only with an `income` block.
 
 | Key | What it is | As computed |
 |---|---|---|
-| `annual_incomes` | income by year | `income_1 = annual_income`; each later year `× (1 + g_eff)` with `income_growth_rate` a REAL input (inflation-composed in nominal mode, like the cost numerator); a `pay_drop_events` entry multiplies income by `magnitude` in its year and the cut persists |
+| `annual_incomes` | income by year | `income_1 = annual_income`; each later year `× (1 + g_eff)` with `income_growth_rate` the spec's REAL figure (a typed rate is as quoted and converted at load like every cost rate, so income and costs share one convention; inflation-composed in nominal mode, like the cost numerator); a `pay_drop_events` entry multiplies income by `magnitude` in its year and the cut persists |
 | `threshold` | the ratio that counts as a breach | `affordability_threshold` (default anchored, 0.32) |
 | `ratios` | year-t housing cost ÷ year-t income | numerator = UNDISCOUNTED year-t outlay: fees `12·fee(1 + e_eff)^(t−1)` or maintenance `rate(t)·V0(1 + g_eff)^(t−1)` or rent `12·rent(1 + e_eff)^(t−1)`, plus the mortgage payment while `t ≤ term`, events in their year, other costs `(1 + e_eff)^(t−1)`. Note the exponent: the affordability numerator escalates from year 2, one year later than the PV engine's fee/rent convention — a documented divergence, not a rounding difference |
 | `years_exceeding` | years whose ratio exceeds the threshold | `[t : ratio_t > threshold]` |
@@ -519,7 +529,7 @@ clear-win edge that moved $35k). Two things close it:
 
 ### Assumptions block — `assumptions`
 
-`mode`, `years`, `discount_rate` (the rate in use — in nominal mode the REAL figure stated, typed or the anchored default, composed with `inflation_rate`; `discount_rate_note` says so in one line, `null` in real mode); `lines` (the text echo, including the `mode:` line — in nominal mode `discount_rate 3.5% real → 6.1% nominal (incl. 2.5% inflation)`, both figures — the
+`mode`, `years`, `discount_rate` (the rate in use — the anchored real default composed with `inflation_rate` in nominal mode, or a typed figure read as quoted: deflated in real mode, used as typed in nominal mode; `discount_rate_note` says which in one line, `null` when the rate in use is the figure stated), `rates`, `inflation_rate` and `converted_rates` (the glossary rows below); `lines` (the text echo, including the `mode:` line — `discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation)` for the composed default, `discount_rate 5.0% as quoted → 2.8% real (after 2.1% inflation)` for a typed rate in real mode — and the `rates:` line, one clause per converted rate in both forms — the
 `conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — drops the year-0 cash clause, which is the pile, and closes with the price at which that pile stops covering 20% down: the engine's own fixed point, (cash − `purchase_costs`) ÷ 20%, stated with the `purchase_costs` figure it holds fixed, since a dollar-stated cost (a derived transfer tax included) does not rescale with the price (2026-09-04: a reviewed answer hand-solved "your $140,000 covers 20% down up to $642,893"); with `mortgage_insurance` active the quoted loan-to-value is the one the TIER was chosen on (before the premium) and an `insured:` clause states the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — `insured: 88.46% LTV → 3.10% tier = $14,260 financed; premium tax 9% (QC) = $1,283 cash → loan $474,260 = 91.20% LTV` — reading `mortgage_insurance: auto → none required (…)` when the option clears 80%, and the derived premium is never echoed as a typed `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
@@ -528,6 +538,14 @@ implied rate, and every jurisdiction anchor whose published figure equals it —
 empty `matches` says plainly that no source agrees);
 `demographic_prior` (the loaded file's provenance and cited sources, or `null`);
 and `sources` — the source-class echo.
+
+| Key | What it is | As computed |
+|---|---|---|
+| `rates` | the convention the config's typed rates were read under (2026-09-05) | `as_quoted` (the default) or `real` (declared with a top-level `rates: real`); anchored defaults are real either way |
+| `inflation_rate` | the deflator of the typed rates in real mode; the rate composed onto the real defaults in nominal mode | `economic.inflation_rate` as typed, else the FP Canada planning figure (2.1%) in real mode under `as_quoted` — echoed under `defaults_applied` against the `economic.inflation_rate.nominal_planning` anchor — else 0.0 |
+| `converted_rates` | every typed rate the loader converted, in read-back order (the discount rate; then per option its own rates, then its cost lines; then income) | one `{key, quoted, effective}` per rate; empty under `rates: real` |
+| `quoted` | the figure exactly as the config typed it | — |
+| `effective` | the rate the run uses, in the run's own terms | real mode: `(1 + quoted)/(1 + inflation_rate) − 1`, the spec's stored figure; nominal mode: the quoted figure itself — the spec stores its deflated real form and `_effective_growth_rate` composes it back, `(1 + r_real)(1 + π) − 1 = quoted` |
 
 **Source classes (`sources`).** `defaults_applied` answers "what did the engine
 fill in?"; the source echo answers the other half, "who stated the rest?". The
@@ -592,11 +610,14 @@ followed unevenly, so the engine assembles the block instead
 3. the `defaults applied:` line — every key the YAML omitted, with the value
    the engine chose and its citation tag (2026-09-04: the two largest
    engine-set numbers of a reviewed run, `selling_cost_rate` 5% and the
-   discount rate, were named nowhere in the answer); then, in nominal mode,
-   the `mode:` line — the REAL discount rate stated (typed or the default) and
-   the nominal rate composed from it (2026-09-04: a typed `discount_rate` is a
-   real opportunity cost and composes like every other rate, so the rate in
-   use is the engine's number and the answer shows both);
+   discount rate, were named nowhere in the answer); then the `rates:` line —
+   the convention the typed rates were read under and each converted rate in
+   both forms, as quoted and in use (2026-09-05: served answers converted
+   sticker numbers by hand and the engine inflated them a second time; the
+   line is where the engine says what it did with the user's figures); then,
+   in nominal mode, the `mode:` line — the discount rate stated and the rate
+   in use, a real figure (the default, or one typed under `rates: real`)
+   composed with `inflation_rate`, or a quoted figure used as typed;
 4. the `decisiveness:` line (the verdict rule, measured);
 5. each `<option> financing:` line and each `<option> purchase costs:` line —
    the transfer tax, the rebate applied or the fact that none is anchored;

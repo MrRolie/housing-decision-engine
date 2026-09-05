@@ -13,11 +13,12 @@ This document describes the YAML configuration format for the `cvh_cost` package
 
 ```yaml
 years: <integer>           # Required: Analysis horizon in years
-discount_rate: <float>     # Optional: annual REAL discount rate, your opportunity cost (e.g., 0.03 for 3%); default = the anchored 3% real; typed or defaulted, composed with inflation_rate in nominal mode
+discount_rate: <float>     # Optional: annual discount rate, your opportunity cost (e.g., 0.05 for 5%), AS QUOTED like every typed rate — deflated by inflation_rate in real mode, used as typed in nominal mode; default = the anchored 3% real, composed with inflation_rate in nominal mode
+rates: <string>            # Optional: "as_quoted" (default) — every typed growth, escalation, return and discount rate is the figure as quoted, converted once at load — or "real" — your figures are already real and are read as before
 
 economic:                  # Optional: Economic assumptions
   mode: <string>           # "real" or "nominal" (default: "real")
-  inflation_rate: <float>  # Expected inflation (default: 0.0)
+  inflation_rate: <float>  # The deflator of the quoted rates in real mode and the rate composed onto the real defaults in nominal mode (default: 0.021, the FP Canada planning figure, in real mode under rates: as_quoted; 0.0 otherwise)
   inflation_vol: <float>   # Volatility of annual inflation shock (default: 0.0)
 
 condo:                     # Required: Condo parameters
@@ -257,7 +258,7 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.corr_inflation_event_cost` | 0.0 | — |
 | `simulation.shock_model` | "lognormal" | — |
 
-The discount rate is a REAL opportunity cost, typed or defaulted (the anchored 3% real return): in `mode: nominal` it is composed with `inflation_rate` (`(1 + real)(1 + π) − 1`) like every other rate and echoed as both figures — `discount_rate 3.5% real → 6.1% nominal (incl. 2.5% inflation)`, `default` inserted when the anchor was used — while a quoted `mortgage_rate` is used as typed; never type a nominal discount rate.
+**Rates as quoted (2026-09-05).** Every rate you TYPE — `discount_rate`, `value_growth_rate`, `fee_escalation_rate`, `reserve_growth_rate`, `rent_escalation_rate`, `investment_return_rate`, `income_growth_rate`, every `other_recurring_costs[].escalation_rate` — is the figure as you see it quoted, and the engine converts it once at load: deflated by `inflation_rate` in real mode (`(1 + r)/(1 + π) − 1`), used as typed in nominal mode. The read-back's `rates:` line shows each converted rate in both forms (`rent.rent_escalation_rate 3.0% as quoted = 0.9% after 2.1% inflation`). The defaults in the table above are REAL and untouched: in `mode: nominal` the engine composes `inflation_rate` onto them (`(1 + real)(1 + π) − 1`) and the echo names both figures — `discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation)`. A config that states real figures says `rates: real` at the top level and is read as before. `economic.inflation_rate`'s table row is the registry's inert zero; under the default convention an omitted `inflation_rate` in real mode is the FP Canada 2.1% planning figure (`economic.inflation_rate.nominal_planning`), because it is the deflator there — the run echoes it under `defaults applied`. A quoted `mortgage_rate` is a contract rate and is used as typed in both modes.
 
 Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
 source, url, rationale, band, retrieved_on, kind); `uv run hde --print-anchors` prints
@@ -379,7 +380,7 @@ to 3%) is NOT in the registry — state an explicit schedule for it.
 The config loader validates:
 
 1. `years >= 1`
-2. `discount_rate >= 0`, with a coherence warning outside `[0, 0.15]` (a decimal/percent typo tripwire; the examples use 0.03–0.05 real)
+2. `discount_rate > -1` (a quoted rate below inflation deflates to a small negative real rate, which a coherence warning names), with a coherence warning outside `[-0.15, 0.15]` (a decimal/percent typo tripwire; the examples' real figures sit in 0.03–0.05)
 3. `num_sims >= 1`
 4. `condo.monthly_fee >= 0`
 5. `house.initial_value >= 0`

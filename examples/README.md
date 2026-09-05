@@ -15,7 +15,11 @@ rent:
 ```
 
 Every other key is optional; each one you omit shows up in the run's `defaults applied:`
-line with its source (`uv run hde --print-anchors` for the full record). `uv run hde
+line with its source (`uv run hde --print-anchors` for the full record). Every rate you
+type — growth, escalation, return, the discount rate — is the figure as you see it quoted;
+the engine converts it once at load (deflated by `inflation_rate` in real mode, used as typed
+in nominal mode) and the run's `rates:` line shows both forms. The engine's own defaults are
+real figures. A config that states real figures says `rates: real`; the examples do not. `uv run hde
 --print-schema` is the living contract — `required` flags, `required_if` for the
 capital-structure rule, and a note per key.
 
@@ -78,13 +82,14 @@ This is the repo's living showcase: [docs/story/STORY.md](../docs/story/STORY.md
 **Question:** a financed house (20% down, 25-year amortization at the FP Canada nominal borrowing
 rate) against renting with that same down payment invested — does leverage change the answer?
 This is the reference for any financed purchase: a mortgage is a nominal contract, so the example runs
-`economic.mode: nominal` with the 2.1% planning inflation, keeps every growth/escalation/return
-input REAL (the engine composes inflation on top), and omits `discount_rate` so the engine's 3%
-real default is composed to 5.2% and echoed. A typed `discount_rate` is the household's REAL
-opportunity cost and is composed the same way (`advanced_config.yaml` types 3.5% real and runs at
-6.1%; the echo names both) — only the quoted `mortgage_rate` is used as entered. Running a mortgage in real mode prices a level
-real-rate payment that understates the lender's cash payment — the engine warns when an income
-block is present.
+`economic.mode: nominal` with the 2.1% planning inflation, types every growth/escalation/return
+input AS QUOTED (3.1% shelter-cost growth, 5.1% on the 60/40 portfolio — the figures the PAG
+prints; nominal mode uses them as typed and the `rates:` line says so), and omits `discount_rate`
+so the engine's 3% real default is composed to 5.2% and echoed. A typed `discount_rate` is as
+quoted too (`advanced_config.yaml` types 6.1% and runs at 6.1%; in real mode it would be deflated
+and the echo would name both) — and the quoted `mortgage_rate` is a contract rate, used as entered
+in both modes. Running a mortgage in real mode prices a level real-rate payment that understates
+the lender's cash payment — the engine warns when an income block is present.
 
 ```bash
 uv run hde examples/mortgage_house_vs_rent.yaml
@@ -123,9 +128,10 @@ price), an insured mortgage at the 3.10% CMHC tier, and the price up to which th
 would still cover 20% down. The verdict is "too close to call" — a single-path run, so the
 rule is the 5% tie band — and the affordability line shows the condo above the 32%
 guideline (under the 39% GDS cap) for the first seven years. The two things the run warns
-on are the next step: the 0% real growth default (`--sweep condo.value_growth_rate=0:0.02:3`,
-or the `MTL_ISLAND_RA06` prior copied from the showcase) and the 1% real rent escalation for
-a continuing Québec lease (`--sweep rent.rent_escalation_rate=0,0.01`).
+on are the next step: the 0% real growth default (`--sweep condo.value_growth_rate=0.021:0.041:3`
+in quoted terms, or the `MTL_ISLAND_RA06` prior copied from the showcase) and the 3.1% quoted
+(1% real) rent escalation for a continuing Québec lease, which runs nearer CPI
+(`--sweep rent.rent_escalation_rate=0.021,0.031`).
 
 ## Parameter sources
 
@@ -151,17 +157,17 @@ sensitivity-test them (edit the value and re-run; act 6 sweeps rent and purchase
 
 | Assumption category | Source | Where used |
 |---|---|---|
-| Inflation (nominal mode) | FP Canada Standards Council, 2026 Projection Assumption Guidelines (fpcanada.ca): 2.1% long-term inflation | `advanced_config.yaml` `economic.inflation_rate` |
-| Shelter-cost / fee / recurring-cost escalation | FP Canada 2026: shelter cost growth 3.1% nominal ⇒ ~1.0% real planning reference | `fee_escalation_rate`, `other_recurring_costs.escalation_rate` in all examples; engine default `rent.rent_escalation_rate` 0.01 real (`src/hde/anchors.py`) |
-| Rent escalation | FP Canada 2026 shelter ≈ 1.0% real + NBER digest Oct 2025 (continuing-tenant pass-through ~21%; QC TAL guideline ≈ CPI for existing leases ⇒ ≈ 0.0% real) | `rent_escalation_rate` in `rent_vs_condo_vs_house.yaml`, `income_shock.yaml`, `showcase_demographic_prior.yaml` |
-| Investment return (invested down payment / reserves) | FP Canada 2026: balanced 60/40 ≈ 3.0% real; U.S. equities 6.4% nominal ≈ 4.2% real, ceiling EM 7.5% nominal ≈ 5.3% real | `investment_return_rate` 0.03 in `rent_vs_condo_vs_house.yaml` / `income_shock.yaml`, 0.05 (equity-tilted) in `showcase_demographic_prior.yaml`; engine default 0.03 real (`src/hde/anchors.py`) |
-| Salary / income growth | FP Canada 2026: 3.1% nominal ⇒ ~1.0% real planning reference | `income_shock.yaml` `income.income_growth_rate` |
+| Inflation — the deflator of every rate typed as quoted in real mode, the rate composed onto the real defaults in nominal mode | FP Canada Standards Council, 2026 Projection Assumption Guidelines (fpcanada.ca): 2.1% long-term inflation; the engine applies it when a real-mode config omits `inflation_rate` and echoes it | `advanced_config.yaml` (2.5%, typed), `mortgage_house_vs_rent.yaml` and `first_time_buyer_montreal.yaml` (2.1%, typed); `income_shock.yaml` and `showcase_demographic_prior.yaml` (omitted ⇒ 2.1% applied); `basic_config.yaml` and `rent_vs_condo_vs_house.yaml` (0 ⇒ the quoted figures are real) |
+| Shelter-cost / fee / recurring-cost escalation (typed as quoted) | FP Canada 2026: shelter cost growth 3.1% as quoted ⇒ ~1.0% real planning reference; a cost that tracks inflation is 2.1% as quoted (0% real) | `fee_escalation_rate`, `other_recurring_costs.escalation_rate` in all examples; engine default `rent.rent_escalation_rate` 0.01 real (`src/hde/anchors.py`) |
+| Rent escalation (typed as quoted) | FP Canada 2026 shelter 3.1% as quoted ≈ 1.0% real + NBER digest Oct 2025 (continuing-tenant pass-through ~21%; QC TAL guideline ≈ CPI for existing leases ⇒ ≈ 2.1% as quoted, 0.0% real) | `rent_escalation_rate` in `rent_vs_condo_vs_house.yaml`, `income_shock.yaml`, `showcase_demographic_prior.yaml` |
+| Investment return (invested down payment / reserves; typed as quoted) | FP Canada 2026: balanced 60/40 ≈ 5.1% as quoted ≈ 3.0% real; U.S. equities 6.4% nominal ≈ 4.2% real, ceiling EM 7.5% nominal ≈ 5.3% real | `investment_return_rate` 0.03 in `rent_vs_condo_vs_house.yaml` / `income_shock.yaml`, 0.05 (equity-tilted) in `showcase_demographic_prior.yaml`; engine default 0.03 real (`src/hde/anchors.py`) |
+| Salary / income growth (typed as quoted) | FP Canada 2026: 3.1% as quoted ⇒ ~1.0% real planning reference | `income_shock.yaml` `income.income_growth_rate` |
 | Affordability threshold | CMHC "Calculating GDS/TDS" (cmhc-schl.gc.ca): GDS cap 39%, TDS 44%; legacy guideline 32% | `income_shock.yaml` `affordability_threshold` (0.35); engine default 0.32 (`src/hde/anchors.py`) |
 | Selling costs | WOWA.ca "Cost of Selling a House in Canada 2026" (wowa.ca): seller commissions ≈ 4–5% + notary/discharge ⇒ ~5% all-in | engine default `selling_cost_rate` 0.05 (`src/hde/anchors.py`) |
 | Maintenance rates | NAHB "Operating Costs of Owning a Home" (Siniavskaia, Jan 2021; 2019 AHS) Table 2: routine maintenance ≈ 0.6% of value/yr for all homes (0.8% pre-1960 → 0.2% 2010s; narrow definition excluding major repairs); "1% rule" budgeting heuristic (uncited) | `annual_maintenance_rate`, `maintenance_curve` in all owned-option examples |
 | Crash severity | TREB 1989–96 via Better Dwelling: −27.6% nominal peak-trough (≈ −39% real) — Canada's largest observed metro correction | `price_shock.severity_mean` (≈ 0.25 anchor) in `showcase_demographic_prior.yaml`; engine default `severity_mean` 0.25 (`src/hde/anchors.py`) |
 | Demographic price drift | demoflow ScenarioPrior: ISQ population scenarios (2021 Census base) → cohort roll-forward → excess demand → β-mapped real price drift; every source pinned by sha256 and cited in the run's `assumptions.demographic_prior` (`src/hde/anchors.py` `SOURCE_KEY_CITATIONS`) | `market_scenario` in `showcase_demographic_prior.yaml` |
-| Discount rate (0.03–0.05 real) | DEFAULT 0.03 real = the anchored investment return (FP Canada 2026 PAG 60/40), the household's opportunity cost; the examples state their own view; typed or defaulted it is REAL and composed with inflation in nominal mode like every other rate (`advanced_config.yaml`: 3.5% real → 6.1%); sanity band [0.02, 0.06]; the engine warns outside [0, 0.15] (units tripwire) | `discount_rate` in all examples |
+| Discount rate (typed as quoted; 0.03–0.05 real) | DEFAULT 0.03 real = the anchored investment return (FP Canada 2026 PAG 60/40), the household's opportunity cost, composed with inflation in nominal mode (`mortgage_house_vs_rent.yaml`: 3% real → 5.2%); the examples that state their own view type it as quoted — `income_shock.yaml` and `showcase_demographic_prior.yaml` 7.2% (≈ 5.0% real after the 2.1% planning inflation), `advanced_config.yaml` 6.1% used as typed in nominal mode — and the echo names both figures; sanity band [0.02, 0.06] real; the engine warns outside ±15% (units tripwire) and when a quoted rate sits below inflation | `discount_rate` in all examples |
 | Property tax, insurance (`other_recurring_costs`) | the listing's tax bill and an insurance quote — the engine applies no default for either. Registry checks (`uv run hde --print-anchors`): `property_tax.laval` / `.montreal` / `.quebec_city` / `.toronto` are rates on ASSESSED value, not market value; `school_tax.qc` is the separate Québec school levy a Québec bill also carries; `home_insurance.qc` / `.on` are household-average floors, not premiums. The read-back cites a match by name and says "no anchor match" otherwise; Gatineau and Ottawa have no registered source | every owned option; `first_time_buyer_montreal.yaml` enters the municipal and school lines separately |
 | Purchase costs (`purchase_costs`, `land_transfer_tax`) | the welcome / land-transfer tax is priced by the ENGINE from the anchored bracket schedules — Québec and Ontario provincial, Montréal (which replaces Québec's table) and Toronto (which adds to Ontario's), first-time-buyer rebates where one is sourced — with `land_transfer_tax: auto` + a quoted `province: "QC"` / `"ON"` (+ `municipality`), re-derived at every `--sweep` / `--break-even` price; notary and inspection are the household's own quotes in `purchase_costs`. A mortgage-insurance premium is priced by `mortgage_insurance: auto` (the anchored CMHC schedule, the provincial tax on the premium in cash); `financed_purchase_costs` only carries a premium the lender quoted | `first_time_buyer_montreal.yaml`; `mortgage_house_vs_rent.yaml` types a hand-figured `purchase_costs` because it sets no province |
 | Mortgage / financing | FP Canada 2026 borrowing rate 4.4% nominal, run in nominal mode as entered; a lender's quote is the household's own figure (`first_time_buyer_montreal.yaml`); with no quote the registry's Bank of Canada contracted 5-year rates (`mortgage_rate.contracted_5y_uninsured` / `mortgage_rate.contracted_5y_insured`) are the base and the posted 5-year rate (`mortgage_rate.posted_5y`) the ceiling; engine convention: level ANNUAL payment at an EFFECTIVE ANNUAL rate (posted Canadian rates compound semi-annually — convert) | `mortgage_house_vs_rent.yaml`, `first_time_buyer_montreal.yaml` |
