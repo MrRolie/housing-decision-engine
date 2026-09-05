@@ -351,6 +351,117 @@ class TestReadBackCli:
         assert any("too close to call between" in line for line in read_back)
 
 
+class TestShortReadBack:
+    """The gist shape (2026-09-05): a user who asked for the gist gets the
+    header, every `[warning]`, the source lines and the `decisiveness:` line,
+    closed by ONE engine line counting what the full block adds. Every other
+    shape keeps the full block, byte for byte."""
+
+    def _both(self):
+        spec = load_config_dict(_rich())
+        det = compute_deterministic(spec)
+        warnings = all_warnings(spec) + affordability_warnings(det)
+        verdict = compute_verdict(det, None, years=spec.simulation.years,
+                                  discount_rate=spec.simulation.discount_rate)
+        cfg = _rich()
+        break_evens = [solve_break_even(cfg, "rent.monthly_rent")]
+        sweeps = [run_sweep(cfg, "years", [5, 10], monte_carlo=False)]
+        kw = dict(warnings=warnings, verdict=verdict, det=det,
+                  break_evens=break_evens, sweeps=sweeps)
+        return read_back_lines(spec, **kw), read_back_lines(spec, short=True, **kw)
+
+    @staticmethod
+    def _is_ordered_subsequence(part, whole):
+        it = iter(whole)
+        return all(any(line == candidate for candidate in it) for line in part)
+
+    def test_short_block_is_a_strict_subsequence_of_the_full_block_plus_its_closing_line(self):
+        full, short = self._both()
+        closing = short[-1]
+        body = short[:-1]
+        assert closing.startswith("full read-back: ")
+        assert closing.endswith("— rerun with --read-back full")
+        assert self._is_ordered_subsequence(body, full)
+        assert len(body) < len(full)
+        # the count is the real number of omitted lines, and the sections named
+        # are the ones this run actually holds beyond the short lines
+        omitted = len(full) - len(body)
+        assert closing.startswith(f"full read-back: {omitted} more lines (")
+        named = closing.split("(", 1)[1].split(")", 1)[0]
+        for section in ("defaults applied", "financing", "affordability", "thresholds", "sweeps"):
+            assert section in named, section
+        assert "mode" not in named.split(", ")  # a real-mode run has no mode: line
+
+    def test_every_warning_source_and_decisiveness_line_of_the_full_block_is_in_the_short_one(self):
+        full, short = self._both()
+        kept = [line for line in full
+                if line.startswith(("[warning] ", "assistant-typed:", "unattributed:",
+                                    "anchor-sourced:", "swept:", "sources: none declared",
+                                    "decisiveness:"))]
+        assert kept, "the rich config carries every class"
+        assert short[:-1] == kept
+        assert any(line.startswith("[warning] ") for line in short)
+        assert any(line.startswith("decisiveness:") for line in short)
+        # and nothing from the omitted sections leaked in
+        assert not any(line.startswith(("defaults applied:", "house financing:",
+                                        "Affordability", "break-even", "sweep "))
+                       for line in short)
+
+    def test_read_back_full_is_byte_identical_to_the_bare_flag(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, _rich())
+        argv = ["hde", config, "--no-monte-carlo", "--sweep", "years=5,10",
+                "--break-even", "rent.monthly_rent"]
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back"])
+        assert cli_main() == 0
+        bare = capsys.readouterr().out
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "full"])
+        assert cli_main() == 0
+        assert capsys.readouterr().out == bare
+        # the bare flag still prints the whole block, nothing shorter
+        assert "full read-back:" not in bare and "break-even rent.monthly_rent" in bare
+
+    def test_read_back_short_prints_only_the_short_block(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, _rich())
+        argv = ["hde", config, "--no-monte-carlo", "--sweep", "years=5,10",
+                "--break-even", "rent.monthly_rent"]
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "full"])
+        assert cli_main() == 0
+        full = capsys.readouterr().out.rstrip("\n").splitlines()
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "short"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        short = out.rstrip("\n").splitlines()
+        assert short[0] == READ_BACK_HEADER == full[0]
+        assert "Assumptions" not in out and "total PV" not in out
+        assert short[-1].startswith(f"full read-back: {len(full) - len(short) + 1} more lines (")
+        assert self._is_ordered_subsequence(short[:-1], full)
+        assert [l for l in full if l.startswith("[warning] ")] == \
+            [l for l in short if l.startswith("[warning] ")]
+
+    def test_json_carries_read_back_short_beside_read_back(self, tmp_path, monkeypatch, capsys):
+        import json
+
+        config = _yaml(tmp_path, _rich())
+        argv = ["hde", config, "--no-monte-carlo", "--break-even", "rent.monthly_rent"]
+        monkeypatch.setattr(sys, "argv", argv + ["--json"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        assert "read_back" in doc["assumptions"] and "read_back_short" in doc["assumptions"]
+        short = doc["assumptions"]["read_back_short"]
+        assert short[-1].startswith("full read-back: ")
+        assert self._is_ordered_subsequence(short[:-1], doc["assumptions"]["read_back"])
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "short"])
+        assert cli_main() == 0
+        assert capsys.readouterr().out.rstrip("\n").splitlines()[1:] == short
+
+    def test_the_bare_run_still_prints_the_full_block_last(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, _rich())
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo"])
+        assert cli_main() == 0
+        tail = capsys.readouterr().out.split(READ_BACK_HEADER, 1)[1]
+        assert "house financing:" in tail and "full read-back:" not in tail
+
+
 class TestOneSidedUncertaintyIsSymmetric:
     """Round-8 review: the one-sided warnings fired only when the RENTER was the
     point mass. A single-path owned side against a stochastic renter measured

@@ -817,6 +817,103 @@ def next_step_line(
             f"the prior's drift sits against the tie band")
 
 
+# The short block (2026-09-05): a user who asked for the gist gets these
+# sections alone — the warnings, the source lines, the decisiveness rule —
+# closed by ONE engine line counting what the full block adds. Every other
+# shape keeps the full block, byte for byte.
+_SHORT_SECTIONS = ("warnings", "sources", "decisiveness")
+
+
+def _read_back_sections(
+    spec: ComparisonSpec,
+    *,
+    warnings: Sequence[str],
+    verdict: Optional[Verdict],
+    det: Optional[ComparisonDeterministicResult],
+    prior: Optional[LoadedScenarioPrior],
+    break_evens: Iterable[Dict[str, Any]],
+    sweeps: Iterable[Dict[str, Any]],
+    raw: Optional[Dict[str, Any]],
+) -> List[Tuple[str, List[str]]]:
+    """The block as labelled sections, in the block's order — the ONE assembly
+    both views are cut from. The short block is a subsequence of the full one
+    by construction, and its closing line names the labels of what it left
+    out, never a second reading of finished lines (a classifier over prefixes
+    would be the second formatter the header of this section warns against).
+    """
+    echo = format_assumptions(spec, prior, raw)
+    decisiveness = decisiveness_line(verdict)
+    sections: List[Tuple[str, List[str]]] = [
+        ("warnings", [f"[warning] {warning}" for warning in warnings]),
+        ("sources", [line for line in echo if line.startswith(_SOURCE_PREFIXES)]),
+        # 2026-09-04 review: `selling_cost_rate` 5% and the discount rate — the
+        # two largest numbers the engine set for that run — were named nowhere
+        # in the answer, because the block did not carry the line that states
+        # them.
+        ("defaults applied", [line for line in echo if line.startswith("defaults applied:")]),
+        # In nominal mode the discount rate in use is the engine's composition
+        # of a REAL figure — the user's own or the default (2026-09-04) — and
+        # the `mode:` line is the one that names both; in real mode the rate is
+        # the user's own or on the `defaults applied:` line, so the block has it.
+        ("mode", [line for line in echo if line.startswith("mode:")]
+                 if spec.economic.mode == "nominal" else []),
+        ("decisiveness", [decisiveness] if decisiveness is not None else []),
+        ("financing", _option_lines(echo, "financing:")),
+        ("purchase costs", _option_lines(echo, "purchase costs:")),
+        # Cash beside the PV view: an answer that carries only present values
+        # has no figure for the question every user asks first ("what leaves
+        # my account each month?") and reads the PV $/month equivalent as that
+        # figure.
+        ("year-1 cash", year1_cash_lines(det, spec.economic)),
+        ("other costs", _option_lines(echo, "other costs:")),
+    ]
+    affordability: List[str] = []
+    if det is not None:
+        # One fact once (2026-09-04): an option's breach is already a
+        # `[warning]` line above — the section keeps its header (the threshold
+        # and the caps) and the max-ratio line of every option no warning
+        # names. The warning is never the line that goes.
+        warned = {w.split()[1] for w in warnings
+                  if w.startswith("affordability: ") and " housing cost exceeds " in w}
+        affordability = [line for line in affordability_lines(det.income_report)
+                         if not any(line.startswith(f"{name.capitalize()}: max ratio")
+                                    for name in warned)]
+    sections.append(("affordability", affordability))
+    break_evens = list(break_evens)
+    thresholds: List[str] = []
+    if break_evens:
+        # Local import for the same reason as `sweep_lines` below: break_even
+        # reaches this module through sweep, so the dependency runs one way at
+        # import time.
+        from .break_even import read_back_block
+    notes_said: List[str] = []
+    for result in break_evens:
+        # The header, the base threshold, every `across` re-solution (without
+        # these the block carried the base solve alone, and an answer reduced
+        # a whole years bracket to one number) and the note — each fact once.
+        thresholds.extend(read_back_block(result))
+        if result.get("note"):
+            notes_said.append(result["note"])
+    sections.append(("thresholds", thresholds))
+    sweeps = list(sweeps)
+    sweep_block: List[str] = []
+    if sweeps:
+        # Local import: sweep.py imports this module for its per-point Monte
+        # Carlo serialization, so the dependency runs one way at import time.
+        from .sweep import sweep_lines
+        for result in sweeps:
+            sweep_block.extend(sweep_lines(result))
+            note = result.get("note")
+            if note and note not in notes_said:  # a price scan's note, said once
+                sweep_block.append(f"sweep {result['key']} note: {note}")
+                notes_said.append(note)
+    sections.append(("sweeps", sweep_block))
+    next_step = next_step_line(verdict=verdict, det=det, prior=prior,
+                               break_evens=break_evens)
+    sections.append(("next step", [next_step] if next_step is not None else []))
+    return sections
+
+
 def read_back_lines(
     spec: ComparisonSpec,
     *,
@@ -827,6 +924,7 @@ def read_back_lines(
     break_evens: Iterable[Dict[str, Any]] = (),
     sweeps: Iterable[Dict[str, Any]] = (),
     raw: Optional[Dict[str, Any]] = None,
+    short: bool = False,
 ) -> List[str]:
     """Every line an honest answer has to carry, in one order, ready to paste.
 
@@ -841,66 +939,25 @@ def read_back_lines(
     each break-even's sentence, its re-solutions across a sweep, and the
     block's note; each sweep's flip lines; and, on a coin flip under a prior,
     the run that would resolve it.
+
+    `short=True` (2026-09-05, the gist shape): the `[warning]` lines, the
+    source lines and the `decisiveness:` line alone — a strict subsequence of
+    the full block — closed by one line counting the lines the full block adds
+    and naming their sections (`full read-back: <n> more lines (defaults
+    applied, financing, …) — rerun with --read-back full`); no closing line
+    when nothing was left out. Every warning reaches the user either way.
     """
-    lines = [f"[warning] {warning}" for warning in warnings]
-    echo = format_assumptions(spec, prior, raw)
-    lines.extend(line for line in echo if line.startswith(_SOURCE_PREFIXES))
-    # 2026-09-04 review: `selling_cost_rate` 5% and the discount rate — the two
-    # largest numbers the engine set for that run — were named nowhere in the
-    # answer, because the block did not carry the line that states them.
-    lines.extend(line for line in echo if line.startswith("defaults applied:"))
-    # In nominal mode the discount rate in use is the engine's composition of
-    # a REAL figure — the user's own or the default (2026-09-04) — and the
-    # `mode:` line is the one that names both; in real mode the rate is the
-    # user's own or on the `defaults applied:` line, so the block has it.
-    if spec.economic.mode == "nominal":
-        lines.extend(line for line in echo if line.startswith("mode:"))
-    decisiveness = decisiveness_line(verdict)
-    if decisiveness is not None:
-        lines.append(decisiveness)
-    lines.extend(_option_lines(echo, "financing:"))
-    lines.extend(_option_lines(echo, "purchase costs:"))
-    # Cash beside the PV view: an answer that carries only present values has
-    # no figure for the question every user asks first ("what leaves my account
-    # each month?") and reads the PV $/month equivalent as that figure.
-    lines.extend(year1_cash_lines(det, spec.economic))
-    lines.extend(_option_lines(echo, "other costs:"))
-    if det is not None:
-        # One fact once (2026-09-04): an option's breach is already a
-        # `[warning]` line above — the section keeps its header (the threshold
-        # and the caps) and the max-ratio line of every option no warning
-        # names. The warning is never the line that goes.
-        warned = {w.split()[1] for w in warnings
-                  if w.startswith("affordability: ") and " housing cost exceeds " in w}
-        lines.extend(line for line in affordability_lines(det.income_report)
-                     if not any(line.startswith(f"{name.capitalize()}: max ratio")
-                                for name in warned))
-    break_evens = list(break_evens)
-    if break_evens:
-        # Local import for the same reason as `sweep_lines` below: break_even
-        # reaches this module through sweep, so the dependency runs one way at
-        # import time.
-        from .break_even import read_back_block
-    notes_said: List[str] = []
-    for result in break_evens:
-        # The header, the base threshold, every `across` re-solution (without
-        # these the block carried the base solve alone, and an answer reduced
-        # a whole years bracket to one number) and the note — each fact once.
-        lines.extend(read_back_block(result))
-        if result.get("note"):
-            notes_said.append(result["note"])
-    if sweeps:
-        # Local import: sweep.py imports this module for its per-point Monte
-        # Carlo serialization, so the dependency runs one way at import time.
-        from .sweep import sweep_lines
-        for result in sweeps:
-            lines.extend(sweep_lines(result))
-            note = result.get("note")
-            if note and note not in notes_said:  # a price scan's note, said once
-                lines.append(f"sweep {result['key']} note: {note}")
-                notes_said.append(note)
-    next_step = next_step_line(verdict=verdict, det=det, prior=prior,
-                               break_evens=break_evens)
-    if next_step is not None:
-        lines.append(next_step)
-    return lines
+    sections = _read_back_sections(
+        spec, warnings=warnings, verdict=verdict, det=det, prior=prior,
+        break_evens=break_evens, sweeps=sweeps, raw=raw,
+    )
+    if not short:
+        return [line for _, lines in sections for line in lines]
+    kept = [line for label, lines in sections if label in _SHORT_SECTIONS for line in lines]
+    omitted = [(label, len(lines)) for label, lines in sections
+               if label not in _SHORT_SECTIONS and lines]
+    count = sum(n for _, n in omitted)
+    if count:
+        kept.append(f"full read-back: {count} more line{'s' if count != 1 else ''} "
+                    f"({', '.join(label for label, _ in omitted)}) — rerun with --read-back full")
+    return kept

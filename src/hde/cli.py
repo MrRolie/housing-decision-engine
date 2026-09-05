@@ -85,11 +85,19 @@ def main() -> int:
 
     parser.add_argument(
         "--read-back",
-        action="store_true",
-        help="Print ONLY the read-back block — every [warning], the source classes "
-             "the user did not state, the decisiveness rule, the financing and "
-             "other-cost lines, affordability, and any threshold or sweep lines — "
-             "the lines an answer must carry verbatim (exit code as the run)",
+        nargs="?",
+        const="full",
+        default=None,
+        choices=("full", "short"),
+        metavar="{full,short}",
+        help="Print ONLY the read-back block — the lines an answer must carry "
+             "verbatim (exit code as the run). Bare or 'full': every [warning], "
+             "the source classes the user did not state, the defaults applied, "
+             "the decisiveness rule, the financing, purchase-cost, year-1 cash and "
+             "other-cost lines, affordability, and any threshold or sweep lines. "
+             "'short' (the gist): the [warning] lines, the source lines and the "
+             "decisiveness rule alone, closed by one line counting what the full "
+             "block adds. Give the config before this flag",
     )
 
     parser.add_argument(
@@ -276,10 +284,13 @@ def main() -> int:
     # four surfaces. Built here, after the sweeps and thresholds, so the same
     # list rides --json and the text block below.
     from .serialization import read_back_lines
-    read_back = read_back_lines(
-        spec, warnings=warnings, verdict=verdict, det=det_result, prior=prior,
-        break_evens=break_evens, sweeps=sweeps, raw=raw,
-    )
+    read_back_kw = dict(warnings=warnings, verdict=verdict, det=det_result, prior=prior,
+                        break_evens=break_evens, sweeps=sweeps, raw=raw)
+    read_back = read_back_lines(spec, **read_back_kw)
+    # The short block (2026-09-05): the gist shape's paste — warnings, source
+    # lines, decisiveness, and one closing line counting what the full block
+    # adds. Both ride --json; --read-back short prints this one alone.
+    read_back_short = read_back_lines(spec, short=True, **read_back_kw)
 
     # Output results. --read-back keeps stdout to the block alone, so a caller
     # that wants only the lines to carry does not have to parse them out.
@@ -291,6 +302,7 @@ def main() -> int:
         )
         assumptions = assumptions_to_dict(spec, prior, raw)
         assumptions["read_back"] = read_back
+        assumptions["read_back_short"] = read_back_short
         doc = {
             "engine_version": engine_version(),
             "warnings": warnings,
@@ -407,7 +419,7 @@ def main() -> int:
     if read_back and (args.read_back or not (args.json or args.quiet)):
         from .serialization import READ_BACK_HEADER
         print(READ_BACK_HEADER if args.read_back else f"\n{READ_BACK_HEADER}")
-        for line in read_back:
+        for line in (read_back_short if args.read_back == "short" else read_back):
             print(line)
 
     return 0

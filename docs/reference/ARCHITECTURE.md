@@ -26,7 +26,8 @@ src/hde/
 │                       #   echo lines, the unstated-uncertainty warning's input set)
 ├── input_schema.py     # The input contract as data (--print-schema)
 ├── serialization.py    # THE typed core for agent output (--json); the read-back block
-│                       #   every answer carries (assumptions.read_back / --read-back)
+│                       #   every answer carries (assumptions.read_back / --read-back) and
+│                       #   its short cut for the gist shape (read_back_short / --read-back short)
 ├── reporting.py        # Text report (+ legacy matplotlib figures)
 ├── story_plots.py      # The six-act decision story (figures + sentences)
 ├── story_page.py       # STORY.md + report.txt package (--story)
@@ -655,6 +656,25 @@ verbatim:`. `--read-back` prints the block alone on stdout — nothing else, and
 the run's exit code — for a caller that wants only the lines to carry. Under
 `--json` the text block is suppressed (stdout stays one document); `--quiet`
 asked for one line and still gets one unless `--read-back` is passed too.
+
+**The short block (2026-09-05).** A user who asked for the gist gets a short
+read-back — the header, every `[warning]` line, the source lines and the
+`decisiveness:` line — and ONE closing line offering the full block; every
+other shape keeps the full block. The flag takes an optional value:
+`--read-back` and `--read-back full` print today's block unchanged,
+`--read-back short` prints the short one, and `--json` carries
+`assumptions.read_back_short` beside `read_back`. Both views are cut from ONE
+assembly (`_read_back_sections`, the block as labelled sections in its own
+order): the short block is a strict subsequence of the full one by
+construction, and the closing line — `full read-back: <n> more lines
+(defaults applied, financing, year-1 cash, …) — rerun with --read-back
+full` — carries the real count of omitted lines and names only the sections
+this run actually holds beyond the short ones (a run with no income block
+never promises affordability); it is omitted when nothing was left out. No
+classifier reads finished lines back by prefix — that would be the second
+formatter this section warns against. Every warning reaches the user either
+way: a shorter block that lost one would be a regression, and the skill's
+gist shape turns the closing line into a one-line offer of the full block.
 
 **Jurisdiction coherence (2026-09-04).** Where an owned option sits is decided
 by ONE resolver, `land_transfer_tax.option_province` (the stated `province`,
