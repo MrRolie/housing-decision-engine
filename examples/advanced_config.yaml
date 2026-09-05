@@ -7,7 +7,8 @@
 #                    2026 Projection Assumption Guidelines (fpcanada.ca)
 #   NAHB 2019      = "Operating Costs of Owning a Home" (2019 American Housing Survey)
 #
-#   discount_rate 0.035 ............... illustrative — personal time-preference; sanity band [0.02, 0.06]
+#   discount_rate 0.035 ............... illustrative — REAL personal time-preference, composed with
+#                                      inflation in nominal mode (⇒ 6.1%); sanity band [0.02, 0.06]
 #   inflation_rate 0.025 .............. FP Canada 2026 long-term inflation planning guideline is 2.1%;
 #                                      this example rounds up to 2.5% — a mildly conservative choice
 #   inflation_vol 0.010 ............... illustrative uncertainty calibration — sensitivity-test via sweep
@@ -31,7 +32,7 @@
 # Convention: "illustrative" = a calibration choice, not evidence — sensitivity-test it.
 
 years: 30
-discount_rate: 0.035  # illustrative — personal time-preference, sanity band [0.02, 0.06]
+discount_rate: 0.035  # REAL; illustrative — personal time-preference, composed with inflation_rate in nominal mode (⇒ 6.1%); sanity band [0.02, 0.06]
 
 economic:
   mode: nominal

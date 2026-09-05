@@ -190,8 +190,10 @@ matched). It is a hint, not a citation: the match rule is unchanged, and a
 - **Years are 1-indexed; cash flows fall at the END of year t and discount at
   `(1 + dr)^-t`** (`pv_single`). Year-0 outlays (the buyer's down payment and purchase costs, the renter's invested capital) are undiscounted.
   `dr` = `discount_rate`, in the same terms (real or nominal) as every rate.
-  An omitted `discount_rate` is the anchored 3% real return, composed with
-  `inflation_rate` in nominal mode (`(1 + 0.03)(1 + π) − 1`) and echoed as such.
+  `discount_rate` is a REAL opportunity cost — the typed figure, else the anchored
+  3% real return — composed with `inflation_rate` in nominal mode
+  (`(1 + real)(1 + π) − 1`) like every other rate and echoed as both figures; only
+  `mortgage_rate`, a quoted contract rate, is used as typed.
 - **Nominal mode composes inflation into every escalation:** `g_eff = (1 + g)(1 + π) − 1`
   (`_effective_growth_rate`); in real mode `g_eff = g`. Defaults are REAL terms.
 - **Two escalation-start conventions coexist by design.** Condo fees, rent and
@@ -511,7 +513,7 @@ clear-win edge that moved $35k). Two things close it:
 
 ### Assumptions block — `assumptions`
 
-`mode`, `years`, `discount_rate`; `lines` (the text echo, including the
+`mode`, `years`, `discount_rate` (the rate in use — in nominal mode the REAL figure stated, typed or the anchored default, composed with `inflation_rate`; `discount_rate_note` says so in one line, `null` in real mode); `lines` (the text echo, including the `mode:` line — in nominal mode `discount_rate 3.5% real → 6.1% nominal (incl. 2.5% inflation)`, both figures — the
 `conventions:` line, a `<option> financing:` line for each mortgaged option — down payment as a share of price, the dollar distance above or below the 20% mortgage-insurance line, the loan-to-value (the loan the engine finances, `financed_purchase_costs` included), the year-0 cash the config commits, and any `financed_purchase_costs`; where the option states `cash_available` the same line leads with the netting itself — pile − `purchase_costs` = down payment — drops the year-0 cash clause, which is the pile, and closes with the price at which that pile stops covering 20% down: the engine's own fixed point, (cash − `purchase_costs`) ÷ 20%, stated with the `purchase_costs` figure it holds fixed, since a dollar-stated cost (a derived transfer tax included) does not rescale with the price (2026-09-04: a reviewed answer hand-solved "your $140,000 covers 20% down up to $642,893"); with `mortgage_insurance` active the quoted loan-to-value is the one the TIER was chosen on (before the premium) and an `insured:` clause states the tier, the financed premium, the provincial tax paid in cash and the resulting loan and loan-to-value — `insured: 88.46% LTV → 3.10% tier = $14,260 financed; premium tax 9% (QC) = $1,283 cash → loan $474,260 = 91.20% LTV` — reading `mortgage_insurance: auto → none required (…)` when the option clears 80%, and the derived premium is never echoed as a typed `financed_purchase_costs` — and the `demographic prior:` line, which quotes the prior's reference REAL drift for the bands the horizon touches); `defaults_applied`
 (every key the YAML omitted, with its value, citation tag, `kind`, and the full
 anchor record — `uv run hde --print-anchors` lists the same records);
@@ -576,12 +578,7 @@ though the checklist named every one. A checklist that is followed by hand is
 followed unevenly, so the engine assembles the block instead
 (`serialization.read_back_lines`), in one fixed order:
 
-1. every `[warning]` line of the run — including the nominal-mode discount-rate
-   tripwire: a typed `discount_rate` more than half a point below the
-   composition the engine would have applied (`(1 + 3%)(1 + π) − 1`) names both
-   rates and the direction, because a real-looking rate on nominal flows
-   overstates every PV on both sides (2026-09-04: `discount_rate: 0.03` under
-   `mode: nominal` reversed a 10-year verdict's sign once corrected);
+1. every `[warning]` line of the run;
 2. the source classes the user did NOT state — `assistant-typed:` and
    `unattributed:`, or the single `sources: none declared …` line when the
    config declares no `sources:` block. `user-stated:` is deliberately absent:
@@ -589,7 +586,11 @@ followed unevenly, so the engine assembles the block instead
 3. the `defaults applied:` line — every key the YAML omitted, with the value
    the engine chose and its citation tag (2026-09-04: the two largest
    engine-set numbers of a reviewed run, `selling_cost_rate` 5% and the
-   discount rate, were named nowhere in the answer);
+   discount rate, were named nowhere in the answer); then, in nominal mode,
+   the `mode:` line — the REAL discount rate stated (typed or the default) and
+   the nominal rate composed from it (2026-09-04: a typed `discount_rate` is a
+   real opportunity cost and composes like every other rate, so the rate in
+   use is the engine's number and the answer shows both);
 4. the `decisiveness:` line (the verdict rule, measured);
 5. each `<option> financing:` line and each `<option> purchase costs:` line —
    the transfer tax, the rebate applied or the fact that none is anchored;

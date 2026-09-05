@@ -27,12 +27,12 @@ _UNSOURCED_JURISDICTIONS = ", ".join(
 _NOTES: Dict[str, Dict[str, Any]] = {
     "top": {
         "years": (True, "analysis horizon in years (>=1)"),
-        "discount_rate": (False, "annual discount rate, DECIMAL (0.05 = 5%); DEFAULT 0.03 "
-                                  "real = the anchored investment return (FP Canada 2026 PAG "
-                                  "60/40), the household's opportunity cost; "
-                                "real terms if economic.mode=real (default); in nominal mode the "
-                                 "DEFAULT composes with inflation_rate ((1+0.03)(1+π)−1) while a "
-                                 "typed value is used as entered"),
+        "discount_rate": (False, "annual REAL discount rate — the household's opportunity cost, "
+                                  "DECIMAL (0.05 = 5%); DEFAULT 0.03 real = the anchored "
+                                  "investment return (FP Canada 2026 PAG 60/40); in nominal mode "
+                                  "it is composed with inflation_rate ((1+real)(1+π)−1) whether "
+                                  "typed or defaulted, like every other rate — never type a "
+                                  "nominal figure; the echo names both"),
         # Section blocks: all optional, but at least one option must be present;
         # a key marked required inside a block is required only when the block is.
         "condo": (False, "optional block — at least ONE of condo / house / rent must be "
@@ -385,10 +385,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
     },
     "economic": {
         "mode": (False, '"real" (DEFAULT — every rate you enter is real) or "nominal": '
-                        'growth, escalation and return inputs (value, fee, rent, other, income, '
-                        'investment_return_rate) stay REAL and the engine composes '
-                        'inflation_rate on top of them, while discount_rate and mortgage_rate '
-                        'are used as entered — never type a sticker growth rate into nominal mode'),
+                        'growth, escalation, return and discount-rate inputs (value, fee, rent, '
+                        'other, income, investment_return_rate, discount_rate) stay REAL and the '
+                        'engine composes inflation_rate on top of them, while mortgage_rate — a '
+                        'quoted contract rate — is used as entered; never type a sticker growth '
+                        'rate or a nominal discount rate into nominal mode'),
         "inflation_rate": (False, "ignored in real mode; DEFAULT 0.0 — nominal-mode "
                                     f"suggestion {_NOMINAL_PLANNING.value} ({_NOMINAL_PLANNING.short_cite})"),
         "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
