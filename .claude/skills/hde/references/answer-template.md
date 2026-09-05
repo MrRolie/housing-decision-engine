@@ -45,10 +45,13 @@ After the checklist in SKILL.md, the prose, in this order:
    the one next step (usually: a real listing's tax bill and closing costs
    replace the estimates).
 
-10. **The engine's READ-BACK block**, pasted verbatim, last — every warning,
-    the typed values, the decisiveness rule, financing, other costs,
-    affordability, the break-even sentences. It is the engine speaking; the
-    prose above never contradicts it.
+10. **The engine's READ-BACK block**, pasted verbatim, last — the full block:
+    every warning, the typed values, the decisiveness rule, financing, other
+    costs, affordability, the break-even sentences. The gist shape pastes the
+    short block (`--read-back short`: every warning, the source lines, the
+    decisiveness rule) and turns its closing line into a one-line offer of
+    the full block (`references/quick-sense.md`). It is the engine speaking;
+    the prose above never contradicts it.
 
 Under 500 words of prose (the block is outside the cap); the quick-sense
 lane's cap and cut order are in `references/quick-sense.md`. The report is on

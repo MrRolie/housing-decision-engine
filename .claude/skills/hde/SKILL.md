@@ -19,7 +19,7 @@ with the direction it biases the verdict).
 
 ## Which reference to open (read it before the step it names)
 
-Reference files live beside this file under `.claude/skills/hde/references/`;
+Reference files live under `.claude/skills/hde/references/`;
 `examples/`, `docs/` and `tests/fixtures/` paths are repo-root paths.
 
 | When | Read |
@@ -165,18 +165,18 @@ Before writing, read these off the run and carry each into the answer; the
 cap of any lane ranks what stays and never drops an item:
 
 - [ ] the engine's **READ-BACK block** (`--read-back`, or the last section
-      of any run) pasted verbatim at the END of the answer,
-      outside every cap — every `[warning]` line, the `assistant-typed:` /
-      `unattributed:` lines (every config key declared in `sources:` as `user`
-      / `assistant` / `anchor:<name>`), the `decisiveness:` rule with its
-      threshold, each `financing:` and `other costs:` line, `Affordability`,
-      every sweep point's line and every break-even `sentence` with its
-      coherence `note` (in `--json`: `assumptions.read_back`). The block is
-      ONE command's output: run the sweeps and break-evens together with
-      `--read-back`; never merge two blocks or write a line in the engine's
-      voice. It is the config the verdict leads with — the other config's
-      `decisiveness:` line and any warning only it raised are quoted in the
-      prose; the prose never contradicts it
+      of any run) pasted verbatim at the END of the answer, outside every
+      cap — every `[warning]` line, the `assistant-typed:` / `unattributed:`
+      lines (every config key declared in `sources:` as `user` / `assistant`
+      / `anchor:<name>`), the `decisiveness:` rule, each `financing:` and
+      `other costs:` line, `Affordability`, every sweep point's line and
+      every break-even `sentence` with its `note` (in `--json`:
+      `assumptions.read_back`): the full block; the gist shape pastes the
+      short block (`references/quick-sense.md`). ONE command's output: run
+      the sweeps and break-evens together; never merge two blocks or write
+      a line in the engine's voice. It is the config the verdict leads with
+      — the other config's `decisiveness:` line and any warning only it
+      raised are quoted in the prose; the prose never contradicts it
 - [ ] `defaults applied:` — the two largest engine-set numbers,
       `selling_cost_rate` (5%, WOWA) and the discount rate, named with their
       source in the prose
@@ -216,7 +216,7 @@ cap of any lane ranks what stays and never drops an item:
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 
 Then the prose per `references/answer-template.md`. One cap applies to the
-prose: under 500 words, or the quick-sense cap and its cut order in
+prose: under 500 words, or the quick-sense cap in
 `references/quick-sense.md` when the user asked for a quick sense — the
 lane's cap overrides the template's; the READ-BACK block is outside both.
 

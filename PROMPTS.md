@@ -57,8 +57,8 @@ answer the form. Front-loading these saves that round trip:
   they change the verdict.
 
 Two phrases do specific things. *"No idea"* on any item makes it a labelled default you
-can overrule. *"Just the gist"* shortens the prose; the read-back block below still comes,
-because it is what lets you check the short answer.
+can overrule. *"Just the gist"* shortens the prose and the read-back block to its short
+form; the block still comes, because it is what lets you check the short answer.
 
 ## What comes back
 
@@ -77,7 +77,9 @@ because it is what lets you check the short answer.
 4. **The READ-BACK block, pasted verbatim at the end.** The engine assembles it: every
    warning, which inputs you stated and which were typed for you, the defaults applied,
    the financing line, affordability, and any threshold or sweep lines. It is there so you
-   can check the answer against the run instead of trusting the prose.
+   can check the answer against the run instead of trusting the prose. A gist answer ends
+   with the short block — every warning, which inputs were typed for you, the decisiveness
+   rule — and one line offering the full one (ask, or run `--read-back full` yourself).
 
 ## Follow-ups you can ask
 
@@ -100,6 +102,7 @@ uv run hde --print-schema                             # every input, what is req
 uv run hde --print-anchors                            # where every default comes from, with dates
 uv run hde examples/mortgage_house_vs_rent.yaml --break-even rent.monthly_rent
 uv run hde examples/basic_config.yaml --read-back     # only the lines an honest answer must carry
+uv run hde examples/basic_config.yaml --read-back short   # the gist: warnings, sources, decisiveness
 uv run hde examples/basic_config.yaml --json          # the full result document
 ```
 

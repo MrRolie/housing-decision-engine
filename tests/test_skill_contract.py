@@ -150,3 +150,8 @@ def test_answer_checklist_reads_the_engine_lines_back():
                  "`Year-1 cash`", "`Affordability`", "No source for", "Not modelled"):
         assert item in TEXT, item
     assert TEXT.index("checklist first") < TEXT.index("## Verification")
+    # The gist shape (2026-09-05): the checklist keeps the full block as the
+    # rule, names the short block for the gist, and the reference that
+    # pastes it names the flag that prints it.
+    assert "the gist shape pastes the short block" in " ".join(TEXT.split())
+    assert "--read-back short" in ALL_TEXT

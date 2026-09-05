@@ -34,8 +34,13 @@ you labelled in the intake — never a `--sweep years`), and one break-even on
 the price:
 
 ```
-uv run hde scenarios/<slug>.yaml --break-even <option>.initial_value=<lo>:<hi> --read-back
+uv run hde scenarios/<slug>.yaml --break-even <option>.initial_value=<lo>:<hi>
 ```
+
+Read the threshold `sentence` and the `financing:` line from that run's
+output; the same command with `--read-back short` appended is the paste —
+the engine re-cuts its own block from the same seeded run, so the two agree
+line for line. Never hand-shorten the full block.
 
 Seed the config's price a step BELOW the 20%-down price the `financing:` line
 prints for their cash (run once to read it; declare the seed `assistant` in
@@ -62,9 +67,15 @@ renting"). State plainly that every property-specific figure is a placeholder
 and offer the full pass for a real listing. The shape binds the ANSWER, not
 only the intake: an intake that took this shape and an answer that runs a
 price scan across several horizons and quotes a band three ways has failed the
-lane. The engine's READ-BACK block is pasted after those sentences, outside
-the cap. The dollar band is deferred, and said to be deferred, never dropped
-silently. The follow-up round never asks the user to choose a method or a
+lane. The engine's SHORT read-back block (`--read-back short`: the header,
+every `[warning]` line, the source lines, the `decisiveness:` line) is pasted
+after those sentences, outside the cap; its closing line — the engine's count
+of what the full block adds — becomes the answer's one-line offer of the full
+block ("the full read-back is 14 more lines — defaults applied, financing,
+year-1 cash, other costs, the threshold — say the word"). Every warning still
+reaches the user; the threshold `sentence` and the 20%-down ceiling live in
+the prose above, not in the short block. The dollar band is deferred, and
+said to be deferred, never dropped silently. The follow-up round never asks the user to choose a method or a
 dwelling they said they do not care about.
 
 ## A listing, a price or a date — the threshold shape
