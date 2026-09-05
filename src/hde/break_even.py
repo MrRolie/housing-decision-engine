@@ -35,6 +35,8 @@ MONEY_BRACKET = (0.25, 4.0)
 _MONEY_KEYS = frozenset({
     "monthly_rent", "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "monthly_fee", "invested_down_payment", "annual_income",
+    # the tax block's dollar leaves (2026-09-05)
+    "hbp_withdrawal", "tfsa", "rrsp", "fhsa", "taxable", "balance", "annual_contribution",
 })
 
 # A rate has no natural multiple of itself (0% growth × 4 is still 0%), so its

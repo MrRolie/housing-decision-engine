@@ -40,6 +40,8 @@ from .models import (
 )
 from .rates import ConvertedRate, converted_for, inflation_anchor_name
 from .sources import source_echo_to_dict, source_lines
+from .tax_treatment import fhsa_clause, financing_additions, hbp_line, tax_line, tax_to_dict
+from .deterministic import hbp_leg_for, renter_terminal_for
 
 
 # ---------------------------------------------------------------------------
@@ -528,15 +530,20 @@ def format_assumptions(
         # part of the year-0 cash a stated down payment commits. An equation
         # that silently omits it does not balance (round 7).
         taxed = record is not None and record.premium_tax
+        # A first-time buyer's FHSA refunds and HBP withdrawal join the pile
+        # (2026-09-05): the head shows the addition so the equation balances.
+        adds = financing_additions(spec.tax, opt.first_time_buyer)
+        additions = spec.tax.day_one_additions if (spec.tax is not None and opt.first_time_buyer) else 0.0
         if opt.cash_available is not None:
             tax_term = f" − premium tax ${record.premium_tax:,.0f}" if taxed else ""
-            head = (f"cash available ${opt.cash_available:,.0f} − purchase_costs "
+            head = (f"cash available ${opt.cash_available:,.0f}{adds} − purchase_costs "
                     f"${opt.purchase_costs:,.0f}{tax_term} = down payment "
                     f"${opt.down_payment:,.0f}")
             # year-0 cash IS the pile in this form; naming it twice is noise.
             year0_clause = ""
         else:
-            head = f"down payment ${opt.down_payment:,.0f}"
+            head = (f"down payment ${opt.down_payment - additions:,.0f}{adds} = ${opt.down_payment:,.0f}"
+                    if adds else f"down payment ${opt.down_payment:,.0f}")
             parts = "down payment + purchase_costs" + (" + premium tax" if taxed else "")
             year0_clause = f" · year-0 cash ${year0:,.0f} ({parts})"
         # Where the pile stops covering 20% down (2026-09-04 review: a real
@@ -563,7 +570,7 @@ def format_assumptions(
                     f"mortgage is insured)"
                 )
             else:
-                covered = (opt.cash_available - opt.purchase_costs) / 0.20
+                covered = (opt.cash_available + additions - opt.purchase_costs) / 0.20
                 if covered > 0:
                     cover_clause = (
                         f" · this cash covers 20% down up to a price of ${covered:,.0f} "
@@ -581,7 +588,15 @@ def format_assumptions(
                if opt.financed_purchase_costs and record is None else "")
             + (f" · {financing_clause(record)}" if record is not None else "")
             + cover_clause
+            + (f" · {fhsa_clause(spec.tax)}"
+               if spec.tax is not None and spec.tax.fhsa is not None and opt.first_time_buyer else "")
         )
+    # The Home Buyers' Plan repayment leg, one line per first-time purchase
+    # (2026-09-05): the withdrawal, the schedule, the RRSP it rebuilds, the net.
+    for name in _OWNED:
+        leg = hbp_leg_for(spec, name)
+        if leg is not None:
+            lines.append(hbp_line(name, spec.tax, leg, spec.simulation.years, spec.economic.mode))
     matches = reference_matches(spec)
     for option_name in ("condo", "house"):
         own = [e for e in matches if e["option"] == option_name]
@@ -596,6 +611,21 @@ def format_assumptions(
             f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
             f"{_g(spec.rent.investment_return_rate, 'rent.investment_return_rate')}"
         )
+    # The tax treatment of the two sides' money (2026-09-05): the rate and its
+    # source, the sheltered/taxable split, the drag applied, the FHSA rollover
+    # haircut, the owner's exemption — one line, from the one computation the
+    # engine used (`renter_terminal_for`).
+    if spec.tax is not None:
+        terminal = renter_terminal_for(spec)
+        r_inv = None
+        if spec.rent is not None:
+            r_inv = spec.rent.investment_return_rate
+            if nominal:
+                r_inv = (1 + r_inv) * (1 + pi) - 1
+        lines.append(tax_line(
+            spec.tax, terminal, r_inv, spec.simulation.years, spec.simulation.discount_rate,
+            spec.economic.mode, pi, owned=any(o is not None for o in (spec.condo, spec.house)),
+        ))
     lines.append(
         "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and "
         "other costs escalate before year 1, maintenance from year 1 · mortgage = level "
@@ -696,6 +726,14 @@ def assumptions_to_dict(
         # with (empty `matches` = the engine knows of no source for that line).
         "reference_matches": reference_matches(spec),
         "sources": source_echo_to_dict(spec.sources),
+        # The tax treatment of the two sides' money (2026-09-05), structured;
+        # None without a `tax:` block.
+        "tax": (
+            tax_to_dict(spec.tax, renter_terminal_for(spec), spec.simulation.years,
+                        spec.simulation.discount_rate,
+                        {name: leg for name in _OWNED if (leg := hbp_leg_for(spec, name)) is not None})
+            if spec.tax is not None else None
+        ),
         "demographic_prior": (
             {**prior.provenance_block(), "description": prior.describe(),
              "sources": prior.sources()}
@@ -968,6 +1006,10 @@ def _read_back_sections(
         ("decisiveness", [decisiveness] if decisiveness is not None else []),
         ("financing", _option_lines(echo, "financing:")),
         ("purchase costs", _option_lines(echo, "purchase costs:")),
+        # The tax treatment of the two sides' money (2026-09-05): the `tax:`
+        # line and each first-time purchase's `hbp:` line — the rate the run
+        # used and where the renter's money sits are facts an answer must carry.
+        ("tax", [line for line in echo if line.startswith("tax:")] + _option_lines(echo, "hbp:")),
         # Cash beside the PV view: an answer that carries only present values
         # has no figure for the question every user asks first ("what leaves
         # my account each month?") and reads the PV $/month equivalent as that

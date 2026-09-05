@@ -302,6 +302,7 @@ the exact breakdown / JSON keys.
 | `downpayment_pv` | capital paid at year 0 | `initial_value` when `all_cash`, else `down_payment`; undiscounted |
 | `mortgage_pv` | PV of the level annual payments | `M · [1 − (1 + dr)^−n] / dr`, `n = min(N, mortgage_term_years)`; 0 when `all_cash` |
 | `terminal_equity_pv` | the end-of-horizon equity credit (NEGATIVE = reduces cost) | `−[V_N (1 − selling_cost_rate) − B_N] · (1 + dr)^-N`, `V_N = V0 (1 + g_eff)^N`, `B_N = L(1 + r)^N − M[(1 + r)^N − 1]/r` (0 once `N ≥ T`) |
+| `hbp_repayment_pv` | the Home Buyers' Plan repayment leg of a first-time purchase under a `tax:` block (0 without one; the text report prints it only when non-zero) | tranches `H/Y` due at `t_j = g + j − 1` (`g` = `hbp.repayment_grace_years`, `Y` = `hbp.repayment_years`), `τ_j = min(t_j, N)`; fixed nominal dollars, deflated in real mode: `Σ_j out_j (1 + dr)^-τ_j − [Σ_j out_j (1 + r_inv)^(N − τ_j)] (1 + dr)^-N` — outlays against the RRSP they rebuild, credited at N at the renter's return, sheltered; 0 when `r_inv = dr`. The withdrawal itself is in `downpayment_pv` (docs/specs/2026-09-05-tax-treatment.md) |
 | `total_pv` | net cost of the option | sum of that option's breakdown |
 
 The deterministic engine ignores the demographic prior: `g_eff` is the user's
@@ -316,7 +317,7 @@ Monte Carlo (below). A price-shock block likewise affects only the Monte Carlo.
 | `events_pv` | one-time events (e.g. moving) | `base_cost · (1 + dr)^-year` at `expected_year` clamped to `[1, N]` |
 | `other_pv` | other recurring costs | as for owned options |
 | `invested_capital_pv` | the renter's capital charged at year 0 — the mirror of `downpayment_pv` | `D = invested_down_payment`, undiscounted |
-| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` (the spec's REAL figure — a typed rate is as quoted and deflated at load in real mode, composed back in nominal mode — composed with inflation in nominal mode like `value_growth_rate`). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`) |
+| `invested_dp_benefit_pv` | that capital's terminal value, as a NEGATIVE offset | `−D (1 + r_inv)^N / (1 + dr)^N`, `r_inv = investment_return_rate` (the spec's REAL figure — a typed rate is as quoted and deflated at load in real mode, composed back in nominal mode — composed with inflation in nominal mode like `value_growth_rate`). Net capital term `D − D(1 + r_inv)^N/(1 + dr)^N` is 0 when `r_inv = dr`, so omitting `D` assumes the renter earns exactly the discount rate. (Until 2026-09-02 the year-0 charge was missing — every verdict leaned toward renting by exactly `D`.) Under a `tax:` block (2026-09-05) the terminal value is `V_N = (S − F)(1 + r_inv)^N + F (1 + r_inv)^N (1 − t_ret) + (T + R) A^N` — sheltered shares `S` at the gross factor, the FHSA share `F` haircut at `retirement_marginal_rate`, the taxable share `T` plus the FHSA refunds `R` at the after-tax factor `A` (`marginal_rate × inclusion` on the NOMINAL gain, deflated in real mode) — and `invested_capital_pv = D + R` |
 | `total_pv` | net cost of renting | sum of the five |
 
 ### The verdict — `verdict`

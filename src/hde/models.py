@@ -17,6 +17,7 @@ from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
 from .rates import ConvertedRate
 from .sources import SourceEcho
+from .tax_treatment import TaxParams
 
 
 @dataclass
@@ -167,6 +168,10 @@ class CondoParams:
     # the read-back's evidence — which schedules charged, and what a
     # first-time-buyer rebate took off.
     land_transfer_tax: Optional[LandTransferTax] = None
+    # The user's assertion that they qualify as a first-time buyer (2026-09-05):
+    # the transfer-tax rebate reads the raw flag itself; this copy is what the
+    # `tax:` block's FHSA refunds and Home Buyers' Plan withdrawal attach to.
+    first_time_buyer: bool = False
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -225,6 +230,10 @@ class HouseParams:
     # the read-back's evidence — which schedules charged, and what a
     # first-time-buyer rebate took off.
     land_transfer_tax: Optional[LandTransferTax] = None
+    # The user's assertion that they qualify as a first-time buyer (2026-09-05):
+    # the transfer-tax rebate reads the raw flag itself; this copy is what the
+    # `tax:` block's FHSA refunds and Home Buyers' Plan withdrawal attach to.
+    first_time_buyer: bool = False
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
 
@@ -347,6 +356,12 @@ class ComparisonSpec:
     # figures and converted nothing. Pure provenance — engines never read them.
     rates: str = "as_quoted"
     converted_rates: List[ConvertedRate] = field(default_factory=list)
+    # --- The tax treatment of the two sides' money (2026-09-05): the opt-in
+    # `tax:` block, resolved by the loader (docs/specs/2026-09-05-tax-treatment.md).
+    # None = neither side taxed, every figure as before. Read by both engines
+    # (the renter's after-tax growth, the owner's HBP repayment leg) and by the
+    # read-back; a spec constructed directly leaves it None.
+    tax: Optional[TaxParams] = None
 
 
 # ----- Result Dataclasses -----
@@ -375,11 +390,11 @@ class MonteCarloSummary:
 # Breakdown key constants — drift protection when fields are renamed
 CONDO_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
     {"purchase_costs_pv", "fee_pv", "events_pv", "other_pv", "reserve_pv",
-     "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
+     "downpayment_pv", "mortgage_pv", "terminal_equity_pv", "hbp_repayment_pv"}
 )
 HOUSE_BREAKDOWN_KEYS: FrozenSet[str] = frozenset(
     {"purchase_costs_pv", "maintenance_pv", "events_pv", "other_pv",
-     "downpayment_pv", "mortgage_pv", "terminal_equity_pv"}
+     "downpayment_pv", "mortgage_pv", "terminal_equity_pv", "hbp_repayment_pv"}
 )
 RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"invested_capital_pv", "rent_pv", "events_pv", "other_pv", "invested_dp_benefit_pv"})
 

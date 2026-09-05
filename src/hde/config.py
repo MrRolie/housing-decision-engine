@@ -35,6 +35,13 @@ from .rates import (
 )
 from .serialization import cost_family, rate_label, real_discount_rate, reference_matches, school_tax_line
 from .sources import build_source_echo, unstated_uncertainty
+from .tax_treatment import (
+    TaxParams,
+    TaxTreatmentError,
+    resolve as resolve_tax,
+    tfsa_room_warning,
+)
+from .deterministic import renter_terminal_for
 from .models import (
     ComparisonDeterministicResult,
     compute_verdict,
@@ -69,7 +76,7 @@ class ConfigValidationError(Exception):
 
 _TOP_LEVEL_KEYS = frozenset({
     "years", "discount_rate", "condo", "house", "rent", "income",
-    "simulation", "economic", "market_scenario", "province", "sources", "rates",
+    "simulation", "economic", "market_scenario", "province", "sources", "rates", "tax",
 })
 # Legacy/alias top-level names → the section that replaced them. There is no
 # top-level monte_carlo section (and never was in this engine); a config that
@@ -110,6 +117,13 @@ _SIMULATION_KEYS = frozenset({
 })
 _MARKET_SCENARIO_KEYS = frozenset({"path", "geography"})
 _PRICE_SHOCK_KEYS = frozenset({"annual_hazard", "severity_mean", "severity_vol"})
+# The tax treatment of the two sides' money (2026-09-05; tax_treatment.py).
+_TAX_KEYS = frozenset({
+    "marginal_rate", "renter_capital", "taxable_return_treatment",
+    "retirement_marginal_rate", "fhsa", "hbp_withdrawal",
+})
+_RENTER_CAPITAL_KEYS = frozenset({"tfsa", "rrsp", "fhsa", "taxable"})
+_FHSA_KEYS = frozenset({"balance", "annual_contribution", "years_until_purchase"})
 _EVENT_KEYS = frozenset({
     "name", "base_cost", "expected_year", "timing_std_years", "min_year",
     "max_year", "cost_vol", "timing_model", "hazard_base", "hazard_growth",
@@ -129,6 +143,7 @@ _SECTION_KEYS: Dict[str, frozenset] = {
     "income": _INCOME_KEYS,
     "simulation": _SIMULATION_KEYS,
     "market_scenario": _MARKET_SCENARIO_KEYS,
+    "tax": _TAX_KEYS,
 }
 
 
@@ -176,6 +191,17 @@ def _reject_unknown_keys(data: Dict[str, Any]) -> None:
                     problems.append(
                         _unknown_key_message(f"{section}.price_shock.{key}", key, _PRICE_SHOCK_KEYS)
                     )
+
+        # Nested tax blocks: renter_capital and fhsa (the same pattern).
+        if section == "tax":
+            for sub, known_sub in (("renter_capital", _RENTER_CAPITAL_KEYS), ("fhsa", _FHSA_KEYS)):
+                nested = block.get(sub)
+                if isinstance(nested, dict):
+                    for key in nested:
+                        if key not in known_sub:
+                            problems.append(
+                                _unknown_key_message(f"tax.{sub}.{key}", key, known_sub)
+                            )
 
         # List-entry sections: events / other_recurring_costs (condo, house, rent),
         # house.maintenance_curve, income.pay_drop_events.
@@ -431,21 +457,56 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
     # The other half of that sentence (review F1, 2026-09-02): with capital
     # stated, the verdict-moving residual is D·[1 − ((1+r_inv)/(1+dr))^N] —
     # zero only when the renter earns exactly the discount rate. Say it in dollars.
+    # Under a `tax:` block (2026-09-05) the terminal value is the after-tax one
+    # the engine credits (`renter_terminal_for`, the one computation every
+    # surface reads), and the sentence names the blended rate it implies.
     if spec.rent is not None and spec.rent.invested_down_payment > 0:
         r_inv = spec.rent.investment_return_rate
         if spec.economic.mode == "nominal":
             r_inv = (1 + r_inv) * (1 + spec.economic.inflation_rate) - 1
         dr, n_years, capital = spec.simulation.discount_rate, spec.simulation.years, spec.rent.invested_down_payment
-        if abs(r_inv - dr) > 1e-12:
-            net = capital * (1 - ((1 + r_inv) / (1 + dr)) ** n_years)
+        terminal = renter_terminal_for(spec)
+        taxed = spec.tax is not None and spec.tax.renter_capital is not None
+        if abs(r_inv - dr) > 1e-12 or taxed:
+            net = terminal.capital - terminal.value / (1 + dr) ** n_years
             side = "charged to" if net > 0 else "credited to"
+            after_tax = (f" (after tax on the taxable share: blended {terminal.blended_rate:.2%})"
+                         if taxed else "")
             warns.append(
-                f"rent: invested capital ${capital:,.0f} earns "
-                f"{rate_label(spec, 'rent.investment_return_rate', r_inv)} vs discount_rate "
+                f"rent: invested capital ${terminal.capital:,.0f} earns "
+                f"{rate_label(spec, 'rent.investment_return_rate', r_inv)}{after_tax} vs discount_rate "
                 f"{rate_label(spec, 'discount_rate', dr)} — "
                 f"net capital term ${abs(net):,.0f} {side} the renter over {n_years} years; set "
                 f"investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately"
             )
+        # The tax side of the same money (2026-09-05). Gains are taxed in
+        # nominal terms: a real-mode config that declares its rates real leaves
+        # inflation_rate at the inert zero, and the drag then falls on the real
+        # return alone.
+        if (taxed and spec.tax.renter_capital.taxable > 0
+                and spec.economic.mode == "real" and spec.economic.inflation_rate == 0):
+            warns.append(
+                "tax: real mode with inflation_rate=0 — the drag is applied to the real return, "
+                "but gains are taxed in nominal terms; set economic.inflation_rate for the full "
+                "drag (understated: toward renting)"
+            )
+        room = tfsa_room_warning(spec.tax)
+        if room is not None:
+            warns.append(room)
+        # Like-for-like under the block: the buyer's pile plus the HBP withdrawal
+        # IS the renter's capital, or the two sides do not hold the same money.
+        if spec.tax is not None and spec.tax.hbp is not None:
+            for name, opt in (("condo", spec.condo), ("house", spec.house)):
+                if opt is None or opt.cash_available is None or not opt.first_time_buyer:
+                    continue
+                pile = opt.cash_available + spec.tax.hbp.withdrawal
+                if abs(pile - capital) > 1.0:
+                    warns.append(
+                        f"tax: like-for-like — {name} cash_available ${opt.cash_available:,.0f} + HBP "
+                        f"${spec.tax.hbp.withdrawal:,.0f} = ${pile:,.0f} while rent.invested_down_payment "
+                        f"is ${capital:,.0f}; the two sides do not hold the same money — like-for-like "
+                        f"is cash_available + hbp_withdrawal = rent.invested_down_payment"
+                    )
 
     # Owner carrying and purchase costs left at zero understate the buy side;
     # say so by name (2026-09-02 user-model dogfood: every persona's property
@@ -1107,8 +1168,17 @@ def _apply_mortgage_insurance(
         raise ConfigValidationError(str(exc)) from exc
 
 
+def _day_one_additions(data: Dict[str, Any], name: str, tax: Optional[TaxParams]) -> Tuple[bool, float]:
+    """(first_time_buyer, what the `tax:` block adds to this option's day-one
+    cash — the FHSA refunds and the HBP withdrawal, for a first-time buyer)."""
+    first_time = _parse_bool(data.get("first_time_buyer", False), f"{name}.first_time_buyer")
+    additions = tax.day_one_additions if (tax is not None and first_time) else 0.0
+    return first_time, additions
+
+
 def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
-                 top_province: Optional[str] = None) -> CondoParams:
+                 top_province: Optional[str] = None,
+                 tax: Optional[TaxParams] = None) -> CondoParams:
     """
     Parse condo parameters from YAML data.
     """
@@ -1127,19 +1197,26 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
 
     value_growth_rate = conv.real(condo_data, "value_growth_rate", "condo.value_growth_rate",
                                   ANCHORS["condo.value_growth_rate"].value)
-    tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
-    if tax is not None:
-        other_costs.append(tax)
+    property_tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
+    if property_tax is not None:
+        other_costs.append(property_tax)
 
     purchase_costs = _purchase_costs(condo_data, "condo")
     purchase_costs, transfer_tax = _apply_land_transfer_tax(
         condo_data, "condo", top_province,
         float(condo_data.get("initial_value", 0.0)), purchase_costs)
     down_payment, cash_available = _net_down_payment(condo_data, "condo", purchase_costs)
+    # A first-time buyer's FHSA refunds and HBP withdrawal join the pile HERE —
+    # after the netting, before the insurance tier is chosen on the loan that
+    # remains (2026-09-05). `cash_available` stays as typed; the financing line
+    # shows the addition.
+    first_time_buyer, additions = _day_one_additions(condo_data, "condo", tax)
     (down_payment, purchase_costs, financed_purchase_costs,
      insurance) = _apply_mortgage_insurance(
         condo_data, "condo", top_province,
-        float(condo_data.get("initial_value", 0.0)), down_payment, cash_available,
+        float(condo_data.get("initial_value", 0.0)),
+        None if down_payment is None else down_payment + additions,
+        None if cash_available is None else cash_available + additions,
         purchase_costs)
 
     return CondoParams(
@@ -1166,6 +1243,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
         municipality=_municipality(condo_data),
         mortgage_insurance=insurance,
         land_transfer_tax=transfer_tax,
+        first_time_buyer=first_time_buyer,
         price_shock=(
             _parse_price_shock(condo_data["price_shock"], "condo")
             if "price_shock" in condo_data else None
@@ -1174,7 +1252,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
 
 
 def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
-                 top_province: Optional[str] = None) -> HouseParams:
+                 top_province: Optional[str] = None,
+                 tax: Optional[TaxParams] = None) -> HouseParams:
     """
     Parse house parameters from YAML data.
     """
@@ -1201,19 +1280,22 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
 
     value_growth_rate = conv.real(house_data, "value_growth_rate", "house.value_growth_rate",
                                   ANCHORS["house.value_growth_rate"].value)
-    tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
-    if tax is not None:
-        other_costs.append(tax)
+    property_tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
+    if property_tax is not None:
+        other_costs.append(property_tax)
 
     purchase_costs = _purchase_costs(house_data, "house")
     purchase_costs, transfer_tax = _apply_land_transfer_tax(
         house_data, "house", top_province,
         float(house_data["initial_value"]), purchase_costs)
     down_payment, cash_available = _net_down_payment(house_data, "house", purchase_costs)
+    first_time_buyer, additions = _day_one_additions(house_data, "house", tax)
     (down_payment, purchase_costs, financed_purchase_costs,
      insurance) = _apply_mortgage_insurance(
         house_data, "house", top_province,
-        float(house_data["initial_value"]), down_payment, cash_available,
+        float(house_data["initial_value"]),
+        None if down_payment is None else down_payment + additions,
+        None if cash_available is None else cash_available + additions,
         purchase_costs)
 
     return HouseParams(
@@ -1236,11 +1318,28 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
         municipality=_municipality(house_data),
         mortgage_insurance=insurance,
         land_transfer_tax=transfer_tax,
+        first_time_buyer=first_time_buyer,
         price_shock=(
             _parse_price_shock(house_data["price_shock"], "house")
             if "price_shock" in house_data else None
         ),
     )
+
+
+def _parse_tax(data: Dict[str, Any]) -> Optional[TaxParams]:
+    """The `tax:` block (tax_treatment.resolve), parsed from the raw mapping
+    BEFORE the options — its refunds and HBP withdrawal join a first-time
+    buyer's day-one cash inside the option parsers. None when absent."""
+    try:
+        return resolve_tax(
+            data,
+            rent=data["rent"] if isinstance(data.get("rent"), dict) else None,
+            income=data["income"] if isinstance(data.get("income"), dict) else None,
+            province=data.get("province"),
+            owned={name: data[name] for name in ("condo", "house") if isinstance(data.get(name), dict)},
+        )
+    except TaxTreatmentError as exc:
+        raise ConfigValidationError(str(exc)) from exc
 
 
 def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter) -> RentParams:
@@ -1570,8 +1669,12 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     conv = RateConverter(rates, econ.mode, econ.inflation_rate)
     discount_rate = conv.discount_rate(data, ANCHORS["simulation.discount_rate"].value)
 
-    condo = _parse_condo(data["condo"], years, conv, data.get("province")) if "condo" in data else None
-    house = _parse_house(data["house"], years, conv, data.get("province")) if "house" in data else None
+    # The tax treatment of the two sides' money (2026-09-05): resolved first,
+    # because a first-time buyer's refunds and HBP withdrawal enter the option
+    # parsers' day-one cash.
+    tax = _parse_tax(data)
+    condo = _parse_condo(data["condo"], years, conv, data.get("province"), tax) if "condo" in data else None
+    house = _parse_house(data["house"], years, conv, data.get("province"), tax) if "house" in data else None
     rent = _parse_rent(data["rent"], years, conv) if "rent" in data else None
     income = _parse_income(data["income"], conv) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)
@@ -1580,7 +1683,7 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     )
 
     spec = ComparisonSpec(simulation=sim, economic=econ, condo=condo, house=house, rent=rent, income=income,
-                          market_scenario=market_scenario)
+                          market_scenario=market_scenario, tax=tax)
     spec.defaults_applied = _defaults_applied(data)
     spec.rates = rates
     spec.converted_rates = conv.converted

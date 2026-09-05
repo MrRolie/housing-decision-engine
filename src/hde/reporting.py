@@ -99,14 +99,22 @@ def format_text_report(
         lines.append("")
 
     # Per-option PV totals
+    # `hbp_repayment_pv` exists only under an opt-in `tax:` block with a Home
+    # Buyers' Plan; at zero it is not printed, so every run without one reads
+    # exactly as before (the --json breakdown always carries it).
+    def _shown(key: str, value: float) -> bool:
+        return not (key == "hbp_repayment_pv" and value == 0.0)
+
     if det.condo is not None:
         lines.append(f"Condo  total PV:  ${det.condo.total_pv:>12,.0f}")
         for k, v in det.condo.breakdown.items():
-            lines.append(f"  {k}: ${v:>12,.0f}")
+            if _shown(k, v):
+                lines.append(f"  {k}: ${v:>12,.0f}")
     if det.house is not None:
         lines.append(f"House  total PV:  ${det.house.total_pv:>12,.0f}")
         for k, v in det.house.breakdown.items():
-            lines.append(f"  {k}: ${v:>12,.0f}")
+            if _shown(k, v):
+                lines.append(f"  {k}: ${v:>12,.0f}")
     if det.rent is not None:
         lines.append(f"Rent   total PV:  ${det.rent.total_pv:>12,.0f}")
         for k, v in det.rent.breakdown.items():

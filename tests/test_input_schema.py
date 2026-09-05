@@ -49,6 +49,8 @@ class TestCompleteness:
 # truly optional; dropping any required key must then refuse.
 KNOWN_GOOD = {
     "years": 10, "discount_rate": 0.03,
+    # a province so the empty tax: block can resolve its marginal rate from income
+    "province": "QC",
     "condo": {"initial_value": 300_000, "monthly_fee": 350, "all_cash": True},
     "house": {"initial_value": 400_000, "all_cash": True},
     "rent": {"monthly_rent": 1_500},
@@ -56,6 +58,7 @@ KNOWN_GOOD = {
     "economic": {},
     "simulation": {},
     "market_scenario": {"path": GOLDEN, "geography": "MTL_RMR"},
+    "tax": {},
 }
 REQUIRED = [
     (section, key)
@@ -92,11 +95,16 @@ class TestRequiredFlagsAreTrue:
         # cash_available is the second way to satisfy the mortgage block (it
         # nets purchase_costs into the down payment), so it carries the same
         # conditional sentence rather than a bare note.
-        assert {k for _, k in CONDITIONAL} == {"all_cash", "down_payment", "cash_available",
-                                               "mortgage_rate", "mortgage_term_years"}
+        capital = {"all_cash", "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years"}
+        # tax.marginal_rate is the other conditional: typed, or resolved from
+        # income + a QC/ON province — its sentence is its own (2026-09-05).
+        assert {k for _, k in CONDITIONAL} == capital | {"marginal_rate"}
         for section, key in CONDITIONAL:
             assert not SCHEMA[section][key]["required"], (section, key)
-            assert "declare all_cash: true OR" in SCHEMA[section][key]["required_if"]
+            if key in capital:
+                assert "declare all_cash: true OR" in SCHEMA[section][key]["required_if"]
+            else:
+                assert "income.annual_income" in SCHEMA[section][key]["required_if"]
 
     def test_dropping_the_capital_structure_refuses_with_the_quoted_sentence(self):
         cfg = copy.deepcopy(KNOWN_GOOD)
@@ -111,5 +119,5 @@ class TestRequiredFlagsAreTrue:
         load_config_dict(cfg)
 
     def test_omitting_an_optional_block_is_fine(self):
-        cfg = {k: v for k, v in KNOWN_GOOD.items() if k not in ("condo", "income", "market_scenario")}
+        cfg = {k: v for k, v in KNOWN_GOOD.items() if k not in ("condo", "income", "market_scenario", "tax")}
         load_config_dict(cfg)

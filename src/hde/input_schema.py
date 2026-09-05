@@ -51,6 +51,14 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "simulation": (False, "optional block; Monte Carlo + uncertainty knobs"),
         "economic": (False, "optional block; real (default) vs nominal mode"),
         "market_scenario": (False, "optional block; demographic prior (path + geography)"),
+        "tax": (False, "optional block — the tax treatment of the two sides' money "
+                       "(docs/specs/2026-09-05-tax-treatment.md): the renter's TAXABLE share earns "
+                       "the after-tax return (sheltered TFSA / RRSP / FHSA shares untouched), the "
+                       "owner's principal-residence exemption is named, and for a first_time_buyer "
+                       "the FHSA refunds and a Home Buyers' Plan withdrawal join the day-one cash. "
+                       "Absent = neither side taxed (the engine warns when the renter holds "
+                       "capital). Keys: marginal_rate, renter_capital, taxable_return_treatment, "
+                       "retirement_marginal_rate, fhsa, hbp_withdrawal"),
         "province": (False, "QC | ON | other — the jurisdiction whose tax on insurance "
                             "premiums applies to a mortgage-insurance premium (CMHC: the "
                             "tax 'can't be added to the loan amount', so it is cash at "
@@ -458,6 +466,66 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "corr_inflation_other": (False, "correlation of other-cost shocks with inflation, [-1, 1]; default 0"),
         "corr_inflation_event_cost": (False, "correlation of event-cost shocks with inflation, [-1, 1]; default 0"),
         "shock_model": (False, '"lognormal" (default) or "normal"'),
+    },
+    "tax": {
+        "marginal_rate": (False, "the household's combined marginal income-tax rate as a FRACTION "
+                                 "in [0, 1) (0.3612 = 36.12%) — never a percentage, never "
+                                 "converted by the rates convention. Omit it to have the engine "
+                                 "resolve it from income.annual_income and the top-level province "
+                                 "(QC or ON) through the registry's 2026 brackets "
+                                 "(tax_rates.marginal_rate: the Québec abatement or the Ontario "
+                                 "surtax applied); the read-back names the derivation. Held flat "
+                                 "for the run",
+                          "tax: type marginal_rate, or state income.annual_income with a top-level province of QC or ON — refused when neither is available"),
+        "renter_capital": (False, "{tfsa, rrsp, fhsa, taxable} in DOLLARS — where the renter's "
+                                  "invested capital sits at year 0; REQUIRED when "
+                                  "rent.invested_down_payment > 0 and refused without a rent: "
+                                  "block; the shares must sum to rent.invested_down_payment (an "
+                                  "omitted share is 0). The taxable share earns the after-tax "
+                                  "return; the sheltered shares are untouched (the RRSP's pre-tax "
+                                  "nature is not modelled — symmetric across the two sides). With "
+                                  "a tax.fhsa block the fhsa share is DERIVED (balance + "
+                                  "contributions) and must not be stated. A TFSA share above the "
+                                  "cumulative room since 2009 draws a warning"),
+        "taxable_return_treatment": (False, "'capital_gains' (DEFAULT: the drag on the taxable "
+                                            "share is marginal_rate × the one-half inclusion rate "
+                                            "[tax.capital_gains_inclusion_rate]) or 'interest' "
+                                            "(marginal_rate × 1). Gains are taxed in nominal terms: "
+                                            "the engine composes the return to nominal, taxes it and "
+                                            "deflates back in real mode. Annual realisation is "
+                                            "assumed (deferral not modelled — toward buying)"),
+        "retirement_marginal_rate": (False, "fraction in [0, 1): the rate the renter pays when the "
+                                            "FHSA share, rolled into an RRSP, is eventually "
+                                            "withdrawn — the haircut on that share at the horizon "
+                                            "end. DEFAULT = the current marginal rate, printed "
+                                            "'(= current, default)'"),
+        "fhsa": (False, "{balance, annual_contribution, years_until_purchase} for a first-time "
+                        "buyer (an owned option with first_time_buyer: true, financed — never "
+                        "all_cash; needs a rent: block): today's FHSA balance; the contribution "
+                        "in each saving year before year 0 (one figure, or a list per year); "
+                        "the number of saving years (DEFAULT 0 = the decision is now, no "
+                        "refunds to add). Each year's deductible contribution is capped by the "
+                        "room — $8,000 + carry-forward (≤ $8,000, none assumed on entry), "
+                        "within the $40,000 lifetime limit (today's balance stands in for "
+                        "contributions to date). Refunds = Σ contributions × marginal_rate and "
+                        "accrue to BOTH sides (the deduction does not depend on buying): they "
+                        "join the buyer's down payment and the renter's taxable share. The "
+                        "renter's FHSA share (balance + contributions) rolls to an RRSP and is "
+                        "haircut at retirement_marginal_rate at the horizon; the buyer's leaves "
+                        "tax-free. No growth inside the saving years"),
+        "hbp_withdrawal": (False, "$ withdrawn from an RRSP under the Home Buyers' Plan for a "
+                                  "first-time buyer (first_time_buyer: true, financed; needs a "
+                                  "rent: block): ≤ $60,000 [hbp.withdrawal_limit] and ≤ "
+                                  "tax.renter_capital.rrsp. It JOINS the down payment (state "
+                                  "cash_available WITHOUT it; like-for-like is cash_available + "
+                                  "hbp_withdrawal = rent.invested_down_payment — the engine warns "
+                                  "otherwise). Its cost is the repayment schedule alone: fixed "
+                                  "nominal outlays of 1/15 a year from year 5 (2026–2028 "
+                                  "withdrawals) [hbp.repayment_years, hbp.repayment_grace_years] "
+                                  "against the RRSP they rebuild, credited at the horizon at the "
+                                  "renter's return — hbp_repayment_pv, zero when that return "
+                                  "equals the discount rate. Outside the affordability ratio and "
+                                  "the year-1 cash line (a transfer into the household's own RRSP)"),
     },
     "market_scenario": {
         "path": (True, "ScenarioPrior JSON (see examples/showcase_demographic_prior.yaml)"),

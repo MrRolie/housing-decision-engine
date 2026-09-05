@@ -34,6 +34,7 @@ from .pv import (
     mortgage_payment,
     outstanding_balance,
 )
+from .tax_treatment import HbpLeg, RenterTerminal, TaxParams, hbp_repayment_leg, renter_terminal
 
 
 def _effective_growth_rate(base_rate: float, econ: EconomicParams) -> float:
@@ -43,6 +44,39 @@ def _effective_growth_rate(base_rate: float, econ: EconomicParams) -> float:
     if econ.mode == "nominal":
         return (1 + base_rate) * (1 + econ.inflation_rate) - 1
     return base_rate
+
+
+def renter_terminal_for(spec: ComparisonSpec) -> Optional[RenterTerminal]:
+    """The renter's capital at the horizon under the spec's `tax:` block (or
+    untaxed without one) — the ONE computation the deterministic engine, the
+    capital-spread warning and the `tax:` read-back line all read, so no surface
+    can quote a return the engine did not use (2026-09-05). None without a rent
+    option."""
+    if spec.rent is None:
+        return None
+    r_inv = _effective_growth_rate(spec.rent.investment_return_rate, spec.economic)
+    return renter_terminal(spec.rent.invested_down_payment, r_inv, spec.simulation.years,
+                           spec.economic.mode, spec.economic.inflation_rate, spec.tax)
+
+
+def hbp_leg_for(spec: ComparisonSpec, option_name: str) -> Optional[HbpLeg]:
+    """The Home Buyers' Plan repayment leg for one owned option — priced at the
+    renter's return, so the RRSP it rebuilds earns what the renter's does. None
+    unless the block has an HBP and the option is a financed first-time purchase."""
+    option = getattr(spec, option_name)
+    tax = spec.tax
+    if (tax is None or tax.hbp is None or option is None or not option.first_time_buyer
+            or option.all_cash or spec.rent is None):
+        return None
+    r_inv = _effective_growth_rate(spec.rent.investment_return_rate, spec.economic)
+    return hbp_repayment_leg(tax.hbp, r_inv, spec.simulation.discount_rate, spec.simulation.years,
+                             spec.economic.mode, spec.economic.inflation_rate)
+
+
+def hbp_repayment_pv_for(spec: ComparisonSpec, option_name: str) -> float:
+    """`hbp_repayment_pv` for one owned option: the leg's net, 0.0 without one."""
+    leg = hbp_leg_for(spec, option_name)
+    return leg.net_pv if leg is not None else 0.0
 
 
 def _require_valued_growth(effective_growth: float, label: str) -> None:
@@ -198,6 +232,7 @@ def _compute_condo_option(
     condo: CondoParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    hbp_repayment_pv: float = 0.0,
 ) -> OptionResult:
     """
     Compute the deterministic OptionResult for a condo.
@@ -210,6 +245,8 @@ def _compute_condo_option(
       - events_pv:  PV of one-time events (GROSS of reserve coverage)
       - other_pv:   PV of other recurring costs
       - reserve_pv: NEGATIVE PV of reserve coverage applied to events (offset)
+      - hbp_repayment_pv: the Home Buyers' Plan repayment leg (tax_treatment;
+                    0.0 without one) — the caller prices it (`hbp_repayment_pv_for`)
 
     total_pv = fee_pv + events_pv + other_pv + reserve_pv, which (because
     pv_single is linear) reproduces the original net-of-reserve total exactly.
@@ -267,7 +304,7 @@ def _compute_condo_option(
     )
     total_pv = (fee_pv + events_pv + other_pv + reserve_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
-                + condo.purchase_costs)
+                + condo.purchase_costs + hbp_repayment_pv)
     breakdown = {
         "purchase_costs_pv": condo.purchase_costs,
         "fee_pv": fee_pv,
@@ -277,6 +314,7 @@ def _compute_condo_option(
         "downpayment_pv": downpayment_pv,
         "mortgage_pv": mortgage_pv,
         "terminal_equity_pv": terminal_equity_pv,
+        "hbp_repayment_pv": hbp_repayment_pv,
     }
     assert set(breakdown.keys()) == CONDO_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
@@ -286,6 +324,7 @@ def _compute_house_option(
     house: HouseParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    hbp_repayment_pv: float = 0.0,
 ) -> OptionResult:
     """
     Compute the deterministic OptionResult for a house.
@@ -343,7 +382,7 @@ def _compute_house_option(
     )
     total_pv = (maintenance_pv + events_pv + other_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
-                + house.purchase_costs)
+                + house.purchase_costs + hbp_repayment_pv)
     breakdown = {
         "purchase_costs_pv": house.purchase_costs,
         "maintenance_pv": maintenance_pv,
@@ -352,6 +391,7 @@ def _compute_house_option(
         "downpayment_pv": downpayment_pv,
         "mortgage_pv": mortgage_pv,
         "terminal_equity_pv": terminal_equity_pv,
+        "hbp_repayment_pv": hbp_repayment_pv,
     }
     assert set(breakdown.keys()) == HOUSE_BREAKDOWN_KEYS
     return OptionResult(total_pv=total_pv, breakdown=breakdown)
@@ -361,6 +401,7 @@ def _compute_rent_option(
     rent: RentParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    tax: Optional[TaxParams] = None,
 ) -> OptionResult:
     """
     Compute the deterministic OptionResult for the rent option.
@@ -387,21 +428,24 @@ def _compute_rent_option(
     events_pv = _compute_events_pv(rent.events, dr, sim.years)
     other_pv = _compute_other_recurring_pv(rent.other_recurring_costs, dr, sim.years, econ)
 
-    if rent.invested_down_payment > 0:
+    refunds = tax.refunds if tax is not None else 0.0
+    if rent.invested_down_payment > 0 or refunds > 0:
         # The renter's return is a REAL input like value_growth_rate: composed
         # with inflation in nominal mode (review F2, 2026-09-02 — it was used as
         # entered, handing the buyer a 2.1% spread in nominal mode).
         r_inv = _effective_growth_rate(rent.investment_return_rate, econ)
-        # Future value of the invested down payment, discounted back to today.
-        benefit = (
-            rent.invested_down_payment
-            * ((1 + r_inv) ** sim.years)
-            / ((1 + dr) ** sim.years)
-        )
+        # The capital's terminal value, discounted back to today. Under a `tax:`
+        # block (2026-09-05) the taxable share compounds after tax, the FHSA
+        # share is haircut for the renter's rollover, and the FHSA refunds join
+        # the capital; without one this is D(1 + r_inv)^N exactly as before.
+        terminal = renter_terminal(rent.invested_down_payment, r_inv, sim.years,
+                                   econ.mode, econ.inflation_rate, tax)
+        benefit = terminal.value / ((1 + dr) ** sim.years)
+        invested_capital_pv = terminal.capital  # year-0 outlay, undiscounted (D + refunds)
     else:
         benefit = 0.0
+        invested_capital_pv = rent.invested_down_payment
     invested_dp_benefit_pv = -benefit  # negative = reduces cost
-    invested_capital_pv = rent.invested_down_payment  # year-0 outlay, undiscounted
 
     total_pv = rent_pv + events_pv + other_pv + invested_capital_pv + invested_dp_benefit_pv
     breakdown = {
@@ -554,17 +598,19 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
         Use reporting helpers to generate human-readable output.
     """
     condo_result = (
-        _compute_condo_option(spec.condo, spec.simulation, spec.economic)
+        _compute_condo_option(spec.condo, spec.simulation, spec.economic,
+                              hbp_repayment_pv_for(spec, "condo"))
         if spec.condo is not None
         else None
     )
     house_result = (
-        _compute_house_option(spec.house, spec.simulation, spec.economic)
+        _compute_house_option(spec.house, spec.simulation, spec.economic,
+                              hbp_repayment_pv_for(spec, "house"))
         if spec.house is not None
         else None
     )
     rent_result = (
-        _compute_rent_option(spec.rent, spec.simulation, spec.economic)
+        _compute_rent_option(spec.rent, spec.simulation, spec.economic, spec.tax)
         if spec.rent is not None
         else None
     )

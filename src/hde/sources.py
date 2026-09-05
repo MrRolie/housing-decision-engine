@@ -169,6 +169,8 @@ _MONEY = frozenset({
     "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "invested_down_payment", "annual_income",
     "reserve_initial_balance", "annual_amount", "base_cost",
+    # the tax block's dollar leaves (2026-09-05)
+    "tfsa", "rrsp", "fhsa", "taxable", "balance", "annual_contribution", "hbp_withdrawal",
 })
 _COUNTS = frozenset({"years", "num_sims", "random_seed"})
 _FRACTIONS = frozenset({"severity_mean", "magnitude"})

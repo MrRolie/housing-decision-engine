@@ -40,6 +40,7 @@ from .market_scenario import (
     load_scenario_prior,
 )
 from .pv import pv_single, pv_recurring_with_escalation
+from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 
 
 def _effective_growth_rate(base_rate: float, inflation_factor: float, econ: EconomicParams) -> float:
@@ -280,6 +281,7 @@ def _simulate_condo_pv_once(
     rng: np.random.Generator,
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
+    hbp_repayment_pv: float = 0.0,
 ) -> float:
     """
     Run one simulation of condo PV with randomness.
@@ -359,7 +361,9 @@ def _simulate_condo_pv_once(
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
         terminal_value, r, sim.years, condo.financed_purchase_costs,
     )
-    pv += dp_pv + mort_pv + term_eq_pv + condo.purchase_costs
+    # The HBP repayment leg is a constant (priced at the renter's unshocked
+    # return), added on every path exactly as the deterministic engine adds it.
+    pv += dp_pv + mort_pv + term_eq_pv + condo.purchase_costs + hbp_repayment_pv
     return pv
 
 
@@ -370,6 +374,7 @@ def _simulate_house_pv_once(
     rng: np.random.Generator,
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
+    hbp_repayment_pv: float = 0.0,
 ) -> float:
     """
     Run one simulation of house PV with randomness.
@@ -439,7 +444,7 @@ def _simulate_house_pv_once(
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
         terminal_value, r, sim.years, house.financed_purchase_costs,
     )
-    pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs
+    pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs + hbp_repayment_pv
     return pv
 
 
@@ -448,6 +453,7 @@ def _simulate_rent_pv_once(
     sim: SimulationParams,
     econ: EconomicParams,
     rng: np.random.Generator,
+    tax: Optional[TaxParams] = None,
 ) -> float:
     """
     Run one simulation of rent PV with randomness.
@@ -509,7 +515,9 @@ def _simulate_rent_pv_once(
 
     # Capital leg, mirroring the owned side (downpayment_pv + terminal equity):
     # the renter's capital is charged at year 0 and its terminal value credited.
-    if rent.invested_down_payment > 0:
+    refunds = tax.refunds if tax is not None else 0.0
+    capital = rent.invested_down_payment + refunds
+    if capital > 0:
         base_r = rent.investment_return_rate
         if econ.mode == "nominal":  # a REAL input, composed like value growth
             base_r = (1 + base_r) * (1 + econ.inflation_rate) - 1
@@ -519,18 +527,29 @@ def _simulate_rent_pv_once(
         # the owned side can be hit by a price shock. (Before 2026-09-02 the
         # knob scaled the RATE once per path — the renter could never lose and
         # 0.10 moved a 3% return by ±0.3pp; the dogfood found both.)
+        # Under a `tax:` block (2026-09-05) the taxable share compounds the
+        # after-tax factor of the SAME shocked gross factor each year, so a
+        # zero-vol path reproduces the deterministic engine exactly.
         growth = 1.0
+        taxed = 1.0
         if sim.investment_return_vol > 0:
             for _ in range(sim.years):
                 z_inv = float(rng.normal())
-                growth *= (1 + base_r) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
+                gross = (1 + base_r) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
+                growth *= gross
+                if tax is not None:
+                    taxed *= after_tax_factor(gross, econ.mode, econ.inflation_rate,
+                                              tax.marginal_rate, tax.inclusion)
         else:
             growth = (1 + base_r) ** sim.years
-        benefit = rent.invested_down_payment * growth / ((1 + dr) ** sim.years)
+            if tax is not None:
+                taxed = after_tax_factor(1 + base_r, econ.mode, econ.inflation_rate,
+                                         tax.marginal_rate, tax.inclusion) ** sim.years
+        benefit = terminal_from_growth(tax, capital, growth, taxed) / ((1 + dr) ** sim.years)
     else:
         benefit = 0.0
 
-    return rent_pv + events_pv + other_pv + rent.invested_down_payment - benefit
+    return rent_pv + events_pv + other_pv + capital - benefit
 
 
 def _compute_income_affordability_once(
@@ -650,6 +669,11 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
 
     rng = np.random.default_rng(sim.random_seed)
 
+    # The HBP repayment leg per owned option — a constant on every path.
+    from .deterministic import hbp_repayment_pv_for
+    condo_hbp = hbp_repayment_pv_for(spec, "condo") if spec.condo is not None else 0.0
+    house_hbp = hbp_repayment_pv_for(spec, "house") if spec.house is not None else 0.0
+
     n = sim.num_sims
     condo_pvs = np.empty(n, dtype=np.float64) if spec.condo is not None else None
     house_pvs = np.empty(n, dtype=np.float64) if spec.house is not None else None
@@ -684,15 +708,17 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
                 spec.condo, sim, econ, rng,
                 prior_rows=condo_prior_rows,
                 shock=spec.condo.price_shock,
+                hbp_repayment_pv=condo_hbp,
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
                 spec.house, sim, econ, rng,
                 prior_rows=house_prior_rows,
                 shock=spec.house.price_shock,
+                hbp_repayment_pv=house_hbp,
             )
         if spec.rent is not None:
-            rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, rng)
+            rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, rng, spec.tax)
         if spec.income is not None:
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,

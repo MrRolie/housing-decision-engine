@@ -25,6 +25,7 @@ from .serialization import mc_to_dict
 INT_KEYS = frozenset({
     "years", "simulation.years", "simulation.num_sims", "simulation.random_seed",
     "condo.mortgage_term_years", "house.mortgage_term_years",
+    "tax.fhsa.years_until_purchase",
 })
 # Keys that live at the YAML top level even when addressed through simulation.*
 _TOP_LEVEL = {"years", "discount_rate"}

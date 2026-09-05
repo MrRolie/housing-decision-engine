@@ -106,6 +106,15 @@ CONSUMED_ELSEWHERE = {
 # pinned against the quoted tables in tests/test_land_transfer_tax.py.
 CONSUMED_FAMILIES = {
     "land_transfer_tax.": "land_transfer_tax.anchored_schedule",
+    # The income-tax brackets, abatement and surtax (tax_rates.marginal_rate),
+    # the inclusion rate and the principal-residence exemption, and the FHSA,
+    # HBP and TFSA limits (2026-09-05). Registered as REFERENCE families — the
+    # engine applies none until a config states a `tax:` block — and consumed
+    # by tax_treatment.py when it does (tests/test_tax_treatment.py).
+    "tax.": "tax_rates.marginal_rate + tax_treatment (opt-in tax: block)",
+    "fhsa.": "tax_treatment.fhsa_plan",
+    "hbp.": "tax_treatment.hbp_repayment_leg",
+    "tfsa.": "tax_treatment.tfsa_room_warning + the schema note",
 }
 
 
