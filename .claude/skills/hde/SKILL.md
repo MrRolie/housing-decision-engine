@@ -118,9 +118,8 @@ required key with the exact message — show it.
 
 1. **Decisiveness is not the headline.** Read `verdict.state` and `reason`;
    `tie` = "too close to call", with the probability or the margin and what
-   breaks the tie; `disagreement` = the engine's line quoted (best guess X by
-   $N, most futures Y at p%), softened into neither option; at every sweep
-   point too.
+   breaks the tie; `disagreement` = the engine's line quoted, softened into
+   neither option; at every sweep point too.
 2. **A default is not the user's input.** Read the `defaults applied:` line
    back before the verdict, each with its source; `[neutral, uncited]` means
    no evidence. No price-growth view in a shipped-prior geography → run the
