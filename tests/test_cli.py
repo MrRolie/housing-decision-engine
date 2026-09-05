@@ -185,3 +185,26 @@ def test_story_status_lines_never_pollute_json_stdout(tmp_path, monkeypatch, cap
     assert "engine_version" in doc
     assert "Story written:" in captured.err and "Saved plot:" in captured.err
     assert (out_dir / "STORY.md").exists()
+
+
+class TestQuietLine:
+    """-q prints one line: the totals, then the same three-state verdict
+    sentence the report prints (2026-09-04) — a summary that names the
+    totals but not which one wins, or whether the futures agree, is not a
+    summary of the verdict."""
+
+    def test_the_summary_line_carries_the_verdict_sentence(self, tmp_path, monkeypatch, capsys):
+        cfg = _write_config(tmp_path, extra="rent:\n  monthly_rent: 1500\n")
+        monkeypatch.setattr(sys, "argv", ["hde", cfg, "-q"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out.strip()
+        assert "\n" not in out
+        totals, verdict = out.split(" | ")
+        assert totals.startswith("House: $") and "Rent: $" in totals
+        assert verdict.startswith(("Cheapest:", "Too close to call:", "Best guess says"))
+
+    def test_one_option_keeps_the_bare_totals(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["hde", _write_config(tmp_path), "-q"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out.strip()
+        assert out.startswith("House: $") and " | " not in out

@@ -24,6 +24,7 @@ from .models import (
     OptionResult,
     SimulationParams,
     EconomicParams,
+    Verdict,
 )
 from .pv import pv_to_monthly_savings
 # The assumption echo lives in the typed serialization core (readiness plan
@@ -38,6 +39,31 @@ from .serialization import (  # noqa: F401
 
 
 _LABEL = {"condo": "Condo", "house": "House", "rent": "Rent"}
+
+
+def verdict_line(verdict: Optional[Verdict]) -> Optional[str]:
+    """The console's one verdict sentence, in the verdict's three states
+    (ruled 2026-09-04): `Cheapest: …` on an option, `Too close to call: …` on
+    a tie, and on a disagreement both figures — the central case's margin and
+    the majority's probability — since served answers showed a table reading
+    "rent, not decisive" beside a 66% house column. Built once here for the
+    text report and the -q summary line; None when nothing was compared.
+    """
+    if verdict is None or verdict.runner_up is None:
+        return None
+    best, runner = _LABEL[verdict.best], _LABEL[verdict.runner_up]
+    if verdict.state == "disagreement":
+        return (
+            f"Best guess says {best} by ${verdict.margin_pv:,.0f} ({verdict.margin_frac:.1%}) "
+            f"vs {runner}; most futures say {_LABEL[verdict.mc_best]} "
+            f"({verdict.mc_prob_best:.0%} cheapest) — the two disagree, not decisive"
+        )
+    if verdict.decisive:
+        return f"Cheapest: {best} saves ${verdict.margin_pv:,.0f} vs {runner} (runner-up)"
+    return (
+        f"Too close to call: {best} edges {runner} by "
+        f"${verdict.margin_pv:,.0f} ({verdict.margin_frac:.1%})"
+    )
 
 
 def format_text_report(
@@ -103,17 +129,9 @@ def format_text_report(
         det, mc, years=sim.years, discount_rate=sim.discount_rate,
         single_path=single_path,
     )
-    if verdict is not None and verdict.runner_up is not None:
-        best, runner = _LABEL[verdict.best], _LABEL[verdict.runner_up]
-        if verdict.decisive:
-            lines.append(
-                f"\nCheapest: {best} saves ${verdict.margin_pv:,.0f} vs {runner} (runner-up)"
-            )
-        else:
-            lines.append(
-                f"\nToo close to call: {best} edges {runner} by "
-                f"${verdict.margin_pv:,.0f} ({verdict.margin_frac:.1%})"
-            )
+    sentence = verdict_line(verdict)
+    if sentence is not None:
+        lines.append(f"\n{sentence}")
         if verdict.monthly_equivalent is not None:
             lines.append(f"  ≈ ${verdict.monthly_equivalent:,.0f}/month equivalent")
         lines.append(f"  {decisiveness_line(verdict)}")

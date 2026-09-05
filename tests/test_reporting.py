@@ -2,13 +2,19 @@
 Reporting tests (src/hde/reporting.py): the assumption echo block (audit U1).
 """
 
+import numpy as np
+
 from hde.config import load_config_dict
 from hde.models import (
     ComparisonDeterministicResult,
+    ComparisonMonteCarloResult,
     EconomicParams,
+    MonteCarloOptionResult,
+    MonteCarloSummary,
     SimulationParams,
+    Verdict,
 )
-from hde.reporting import format_assumptions, format_text_report
+from hde.reporting import format_assumptions, format_text_report, verdict_line
 
 
 FULL_CONFIG = {
@@ -101,3 +107,57 @@ class TestTextReportEchoHeader:
                                     SimulationParams(years=10, discount_rate=0.03),
                                     EconomicParams())
         assert not report.startswith("Assumptions")
+
+
+class TestThreeStateVerdictLine:
+    """2026-09-04: served answers showed a table reading "rent, not decisive"
+    beside a 66% house column. The console verdict line has the verdict's
+    three states, and a disagreement names both figures — the central-case
+    margin and the majority's probability. One builder (`verdict_line`) feeds
+    the report and the -q summary line."""
+
+    def _verdict(self, **kw):
+        base = dict(best="rent", runner_up="house", margin_pv=4_551.0, margin_frac=0.011,
+                    monthly_equivalent=30.0, prob_best=0.39, decisive=False, state="tie",
+                    rule="mc_floor", reason="", mc_mean_best=None, mc_best="rent",
+                    mc_prob_best=0.39)
+        base.update(kw)
+        return Verdict(**base)
+
+    def test_option(self):
+        v = self._verdict(decisive=True, state="option", prob_best=0.8, mc_prob_best=0.8)
+        assert verdict_line(v) == "Cheapest: Rent saves $4,551 vs House (runner-up)"
+
+    def test_tie(self):
+        assert verdict_line(self._verdict()) == "Too close to call: Rent edges House by $4,551 (1.1%)"
+
+    def test_disagreement_names_both_figures(self):
+        v = self._verdict(state="disagreement", mc_best="house", mc_prob_best=0.61)
+        assert verdict_line(v) == (
+            "Best guess says Rent by $4,551 (1.1%) vs House; most futures say House "
+            "(61% cheapest) — the two disagree, not decisive")
+
+    def test_nothing_to_compare_has_no_line(self):
+        v = self._verdict(runner_up=None, state="option", decisive=True, rule="single_option")
+        assert verdict_line(v) is None and verdict_line(None) is None
+
+    def test_the_report_carries_the_disagreement_line_and_its_reason(self):
+        from hde.deterministic import compute_deterministic
+        spec = load_config_dict({**FULL_CONFIG, "simulation": {"num_sims": 30, "investment_return_vol": 0.1}})
+        det = compute_deterministic(spec)
+        ranked = sorted(("condo", "house", "rent"), key=lambda k: getattr(det, k).total_pv)
+        probs = {ranked[0]: 0.34, ranked[1]: 0.60, ranked[2]: 0.06}
+
+        def opt(k):
+            pv = getattr(det, k).total_pv
+            return MonteCarloOptionResult(np.full(30, pv), MonteCarloSummary(pv, 0.0, pv, pv, pv))
+
+        mc = ComparisonMonteCarloResult(
+            condo=opt("condo"), house=opt("house"), rent=opt("rent"),
+            prob_condo_cheapest=probs["condo"], prob_house_cheapest=probs["house"],
+            prob_rent_cheapest=probs["rent"])
+        report = format_text_report(det, mc, spec.simulation, spec.economic, spec=spec)
+        assert f"\nBest guess says {ranked[0].capitalize()} by $" in report
+        assert f"most futures say {ranked[1].capitalize()} (60% cheapest) — the two disagree, not decisive" in report
+        assert f"decisiveness: best guess says {ranked[0]} by $" in report
+        assert "Cheapest:" not in report and "Too close to call:" not in report

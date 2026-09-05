@@ -18,7 +18,7 @@ from .deterministic import compute_deterministic
 from .market_scenario import ScenarioPriorError
 from .models import InputError, compute_verdict
 from .monte_carlo import run_monte_carlo
-from .reporting import format_text_report
+from .reporting import format_text_report, verdict_line
 
 # A demographic prior enters the Monte Carlo only: a run that skips it shows
 # the deterministic line alone, and says so rather than let the prior's
@@ -308,7 +308,8 @@ def main() -> int:
     elif args.read_back:
         pass  # the block below is the whole of stdout
     elif args.quiet:
-        # Print summary line only
+        # Print summary line only: the totals, then the report's own verdict
+        # sentence (three states; a disagreement names both figures).
         if det_result is not None:
             parts = []
             if det_result.condo is not None:
@@ -317,7 +318,8 @@ def main() -> int:
                 parts.append(f"House: ${det_result.house.total_pv:,.0f}")
             if det_result.rent is not None:
                 parts.append(f"Rent: ${det_result.rent.total_pv:,.0f}")
-            print("  ".join(parts))
+            sentence = verdict_line(verdict)
+            print("  ".join(parts) + (f" | {sentence}" if sentence else ""))
         elif mc_result is not None:
             parts = []
             if mc_result.condo is not None:
