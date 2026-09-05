@@ -22,6 +22,7 @@ src/hde/
 ├── mortgage_insurance.py # Insured-mortgage premium: schedule, tier, financed premium, cash tax
 ├── land_transfer_tax.py # Welcome / land-transfer tax: bracket schedules, rebate, cash at closing
 ├── tax_rates.py        # Combined marginal income-tax rate from the registry's 2026 brackets (opt-in)
+├── tax_treatment.py    # The opt-in tax: block — the renter's after-tax growth, the FHSA and HBP legs, the read-back lines
 ├── config.py           # YAML → ComparisonSpec; coherence + time-anchor warnings
 ├── sources.py          # Source classes: who stated each value (`sources:` block, the
 │                       #   echo lines, the unstated-uncertainty warning's input set)
@@ -279,6 +280,20 @@ figure and is re-fetched, not indexed, for 2027.
   and `--break-even` re-derive the tier at every grid point. A loan-to-value
   above the schedule maximum (95%) is refused with both figures, so a scan
   records the point under `refused` and shrinks its search.
+- **The tax treatment of the two sides' money is opt-in and derived in the
+  loader** (`tax_treatment.py`, top-level `tax:` block, 2026-09-05,
+  `docs/specs/2026-09-05-tax-treatment.md`). The renter's TAXABLE share compounds
+  one after-tax factor per year — the gross factor composed to nominal, the gain
+  taxed at `marginal_rate × inclusion`, deflated back in real mode — read by the
+  deterministic engine and applied to the Monte Carlo's shocked factor, so a
+  zero-vol path reproduces the deterministic one; sheltered shares are untouched
+  and the FHSA share is haircut at `retirement_marginal_rate` at the horizon.
+  `renter_terminal_for` is the ONE computation the engine, the capital-spread
+  warning and the `tax:` line read. A first-time buyer's FHSA refunds and HBP
+  withdrawal join the down payment between the netting and the insurance tier;
+  the HBP's own cost is its repayment schedule (`hbp_repayment_pv`, zero at
+  `r_inv = dr`), a constant on every Monte Carlo path. Without the block every
+  figure is unchanged and the engine warns that the renter's return is untaxed.
 - **Monthly equivalent** annuitizes a PV over `12N` months at `m = (1 + dr)^(1/12) − 1`,
   so it decomposes the same PV the annual figures discount.
 - **A cost is positive; a credit is negative.** Every option's `total_pv` is a net

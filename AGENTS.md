@@ -26,6 +26,10 @@ src/hde/            # Core engine (Python package)
   deterministic.py  # Deterministic PV engine (compute_deterministic(spec: ComparisonSpec))
   monte_carlo.py    # Monte Carlo simulation engine (run_monte_carlo(spec: ComparisonSpec))
   market_scenario.py# ScenarioPrior loader + validation, time-anchor guard, prior.describe()
+  mortgage_insurance.py # Insured-mortgage premium: the anchored tier, the financed premium, the cash tax
+  land_transfer_tax.py  # Welcome / land-transfer tax from the anchored brackets, cash at closing
+  tax_rates.py      # Combined marginal income-tax rate from the registry's 2026 QC / ON brackets
+  tax_treatment.py  # The opt-in tax: block — the renter's after-tax growth, the FHSA and HBP legs
   config.py         # YAML config loader (load_config_dict → ComparisonSpec), warnings
   input_schema.py   # The input contract as data (--print-schema)
   serialization.py  # THE typed core for agent output: results, assumptions, verdict, anchors
@@ -115,6 +119,10 @@ Sessions:
 
 ## Do not
 
-- Add geographic tax rules (explicitly out of scope — see roadmap)
+- Add geographic tax rules beyond what the registry cites. Property tax stays a
+  reference table the user's own bill is checked against, never applied; income tax
+  is the anchored 2026 Québec and Ontario brackets, applied ONLY through the opt-in
+  top-level `tax:` block (2026-09-05, `docs/specs/2026-09-05-tax-treatment.md`) —
+  no other province's schedule is guessed (the user types `tax.marginal_rate`)
 - Add mortgage *optimization* / refinancing / variable-rate modeling (out of scope). NOTE: mortgage amortization + terminal equity ARE modeled as of S4a (2026-06-08); the rent-vs-buy DCF is leveraged.
 - Add dependencies on private or unpublished repos — this is standalone personal tooling

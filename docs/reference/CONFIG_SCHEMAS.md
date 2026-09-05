@@ -16,6 +16,18 @@ years: <integer>           # Required: Analysis horizon in years
 discount_rate: <float>     # Optional: annual discount rate, your opportunity cost (e.g., 0.05 for 5%), AS QUOTED like every typed rate — deflated by inflation_rate in real mode, used as typed in nominal mode; default = the anchored 3% real, composed with inflation_rate in nominal mode
 rates: <string>            # Optional: "as_quoted" (default) — every typed growth, escalation, return and discount rate is the figure as quoted, converted once at load — or "real" — your figures are already real and are read as before
 
+tax:                       # Optional: the tax treatment of the two sides' money (2026-09-05; opt-in — absent = neither side taxed, and the engine warns when the renter holds capital)
+  marginal_rate: <float>   # Optional: a FRACTION in [0, 1); omitted = resolved from income.annual_income and the top-level province (QC | ON) through the registry's 2026 brackets
+  renter_capital:          # Required when rent.invested_down_payment > 0: where the renter's capital sits, in dollars, summing to it
+    tfsa: <float>
+    rrsp: <float>
+    fhsa: <float>          # derived (balance + contributions) when a tax.fhsa block is present — never stated beside it
+    taxable: <float>       # the share that earns the after-tax return
+  taxable_return_treatment: <string>  # "capital_gains" (default: marginal × the one-half inclusion) or "interest" (marginal × 1)
+  retirement_marginal_rate: <float>   # Optional: the rate on the renter's FHSA→RRSP rollover at the horizon (default: the current marginal rate)
+  fhsa:                    # Optional, first-time buyer only: {balance, annual_contribution, years_until_purchase}
+  hbp_withdrawal: <float>  # Optional, first-time buyer only: ≤ $60,000 and ≤ renter_capital.rrsp; joins the down payment
+
 economic:                  # Optional: Economic assumptions
   mode: <string>           # "real" or "nominal" (default: "real")
   inflation_rate: <float>  # The deflator of the quoted rates in real mode and the rate composed onto the real defaults in nominal mode (default: 0.021, the FP Canada planning figure, in real mode under rates: as_quoted; 0.0 otherwise)
@@ -378,10 +390,10 @@ to 3%) is NOT in the registry — state an explicit schedule for it.
 ### Income-tax, FHSA, HBP and TFSA reference figures
 
 Reference entries, not defaults: the engine applies **none** of these until a
-config opts into a tax block, and there is no tax key today. They are
-registered so an answer that touches tax cites the published figure instead
-of an estimate, and so the block, when it lands, reads the schedule the
-registry already holds (`tax_rates.marginal_rate`). One anchor per bracket —
+config opts into the `tax:` block (the next section). They are registered so
+an answer that touches tax cites the published figure instead of an estimate,
+and so the block reads the schedule the registry already holds
+(`tax_rates.marginal_rate`). One anchor per bracket —
 `tax.<jur>.bracket_<k>_ceiling` (the upper edge, inclusive) and `_rate`; the
 top bracket has no ceiling anchor. All fetched 2026-09-05; every threshold is
 a 2026 figure and must be re-fetched for 2027.
@@ -424,6 +436,78 @@ credit and no other. At $100,000: Québec 36.1% (20.5% × 0.835 + 19%), Ontario
 31.5% (20.5% + 9.15% × 1.2). Revenu Québec's web pages refused automated
 retrieval; the Québec figures are read from its TP-1015.F-V (2026-01) PDF and
 corroborated by the Finances Québec 2026 parameters document.
+
+### The `tax:` block — the tax treatment of the two sides' money (2026-09-05)
+
+Design: `docs/specs/2026-09-05-tax-treatment.md`; arithmetic and sentences:
+`src/hde/tax_treatment.py`. Opt-in: without the block neither side is taxed and
+every figure is as before — the engine then warns, when the renter holds
+capital, `rent: invested capital $D earns r untaxed — no tax: block, so tax on the
+taxable share is not modelled (toward renting); state where the savings sit
+(tax.renter_capital)`. With it:
+
+- **The marginal rate** is a fraction, typed as is (never converted by the
+  rates convention), or resolved from `income.annual_income` and the top-level
+  `province` (QC or ON) through the brackets above — refused when neither is
+  available. Held flat for the run; the read-back names the derivation.
+- **The renter's drag** falls on the `taxable` share only: gains are taxed in
+  nominal terms, so the gross factor is composed to nominal, taxed at
+  `marginal_rate × inclusion` (½ for capital gains, 1 for `interest`), and
+  deflated back in real mode — the same factor per year in the deterministic
+  engine and on the Monte Carlo's shocked factor. TFSA, RRSP and FHSA shares
+  are untouched (the RRSP's pre-tax nature is symmetric across the two sides
+  and not modelled). A real-mode config under `rates: real` with
+  `inflation_rate` at zero draws a warning: the drag then falls on the real
+  return alone.
+- **The owner** changes nowhere: the `tax:` line names the principal-residence
+  exemption (`tax.principal_residence_exempt_fraction`).
+- **The FHSA** (`fhsa: {balance, annual_contribution, years_until_purchase}`,
+  a financed `first_time_buyer: true` option and a `rent:` block required): each
+  saving year's deductible contribution is capped by the room — $8,000 plus the
+  carry-forward (≤ $8,000, none assumed on entry) within the $40,000 lifetime
+  limit, today's balance standing in for contributions to date; the refunds
+  (Σ contributions × marginal rate) accrue to BOTH sides — the buyer's down
+  payment and the renter's taxable share — because the deduction does not depend
+  on buying. The renter's FHSA share (balance + contributions, derived — never
+  stated beside the block) rolls to an RRSP and is haircut at
+  `retirement_marginal_rate` at the horizon; the buyer's leaves tax-free.
+- **The Home Buyers' Plan** (`hbp_withdrawal`, ≤ $60,000 and ≤
+  `renter_capital.rrsp`) joins the down payment before the insurance tier is
+  chosen — state `cash_available` without it; like-for-like is `cash_available
+  + hbp_withdrawal = rent.invested_down_payment` and the engine warns otherwise.
+  The withdrawn amount is already priced by the capital legs (the renter earns
+  the return on it, the buyer's down payment carries it); the plan's own cost
+  is the repayment schedule, `hbp_repayment_pv`: fixed nominal outlays of 1/15 a
+  year from year 5 (2026–2028 withdrawals; deflated in real mode) against the
+  RRSP they rebuild, credited at the horizon at the renter's return — zero when
+  that return equals the discount rate. Outside the affordability ratio and the
+  year-1 cash line.
+
+Read-back lines (one `tax:` section after `purchase costs`; figures illustrative):
+
+```
+tax: marginal rate 36.12% resolved from income $100,000 in QC — federal 20.5% × (1 − 16.5% Québec abatement) + QC 19% [tax.federal.*, tax.qc.* 2026] · renter capital $60,000 = sheltered $45,000 (TFSA $25,000 + RRSP $20,000 + FHSA $0) + taxable $15,000 (+ FHSA refunds $0) · taxable share: 5.10% × (1 − 36.12% × 50% inclusion, capital gains — default) = 4.18% after tax [tax.capital_gains_inclusion_rate]; blended 4.88%; drag $2,078 at year 10 (PV $1,256) charged to rent · owner: principal-residence exemption — no tax on the equity gain at sale [tax.principal_residence_exempt_fraction]
+condo financing: cash available $60,000 + FHSA refunds $5,779 + HBP $20,000 − purchase_costs $6,000 = down payment $79,779 … · fhsa: balance $15,000 + $16,000 contributed over 2 saving years (room $8,000/yr + carry-forward ≤ $8,000, lifetime $40,000, $9,000 remaining [fhsa.annual_limit, fhsa.carry_forward_max, fhsa.lifetime_limit]) → refunds $5,779 at 36.12%, added to both sides' capital
+condo hbp: $20,000 withdrawn from the RRSP into the down payment (≤ $60,000 [hbp.withdrawal_limit]) · repaid $1,333/yr over 15 years from year 5 [hbp.repayment_years, hbp.repayment_grace_years]; 10 tranches fall at or past year 10 and return at the horizon · the RRSP is rebuilt to $21,092 by year 10 (repayments PV $12,758 against the rebuilt RRSP's PV $12,749) — net PV $9 charged to condo (hbp_repayment_pv)
+```
+
+With an FHSA share the `tax:` line closes with the rollover: `FHSA share $31,000
+rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open])
+— haircut 36.12% retirement marginal rate (= current, default) on $50,979 at
+year 10 = $18,412 (PV $11,130) charged to rent [tax.retirement_marginal_rate]`.
+The capital-spread warning reads the same terminal value and adds `(after tax on
+the taxable share: blended 4.88%)`. Refusals, each naming the fix: no rate typed
+and none resolvable; `marginal_rate` outside [0, 1); shares not summing to the
+renter's capital (both figures printed); `renter_capital.fhsa` beside `tax.fhsa`;
+`renter_capital`, `fhsa` or `hbp_withdrawal` without a `rent:` block; `fhsa` /
+`hbp_withdrawal` without a financed `first_time_buyer: true` option;
+`hbp_withdrawal` above the limit or the RRSP share; an unknown
+`taxable_return_treatment`. Not modelled: the RRSP's pre-tax nature, the dividend
+tax credit and foreign withholding, provinces beyond QC and ON (type
+`marginal_rate`), the rollover's effect on RRSP room, FHSA growth during the
+saving years, deferral of capital-gains realisation (annual realisation is
+assumed — toward buying), a marginal rate that moves with income, a missed HBP
+repayment, US or non-resident cases, the AMT.
 
 ## Validation Rules
 

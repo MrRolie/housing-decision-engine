@@ -11,9 +11,11 @@ uv run hde --print-schema
 ```
 
 One block per YAML section. Every key carries `required` (required when the
-block is present), `note` (units, default, source), and — for the four
-capital-structure keys — `required_if`, quoting the validator's own sentence:
-an owned option declares `all_cash: true` OR the full mortgage block. The
+block is present), `note` (units, default, source), and — for the capital-structure
+keys and `tax.marginal_rate` — `required_if`, quoting the validator's own sentence:
+an owned option declares `all_cash: true` OR the full mortgage block; a `tax:`
+block types its marginal rate or states `income.annual_income` with a QC/ON
+`province`. The
 `top_level` block lists every accepted top-level key and the rule that at
 least one of `condo` / `house` / `rent` must be present. A key the parser does
 not know is refused with a did-you-mean.
@@ -222,6 +224,46 @@ Everything the CLI uses is exported from `hde`
 `all_warnings`.
 (The MCP server that once wrapped these was removed 2026-09-01: the CLI plus
 the repo-local skill is the only surface.)
+
+## The `tax:` block (2026-09-05)
+
+The tax treatment of the two sides' money (`docs/specs/2026-09-05-tax-treatment.md`,
+`docs/reference/CONFIG_SCHEMAS.md` § The `tax:` block) reaches every surface:
+
+- `warnings`: without the block, when the renter holds capital — `rent: invested
+  capital $D earns r untaxed — no tax: block, so tax on the taxable share is not
+  modelled (toward renting); state where the savings sit (tax.renter_capital)`;
+  with it, the capital-spread warning quotes the blended after-tax rate, and
+  three more can fire: the real-mode inert deflator (`tax: real mode with
+  inflation_rate=0 …`), a TFSA share above the cumulative room
+  (`tfsa.cumulative_room_since_2009`), and like-for-like (`tax: like-for-like —
+  <option> cash_available $X + HBP $H = $Z while rent.invested_down_payment is
+  $D …`).
+- `assumptions.tax`: `null` without the block; otherwise `marginal_rate`,
+  `marginal_rate_source` (`typed` | `resolved`), `marginal_rate_detail` (the
+  bracket derivation), `province`, `income`, `taxable_return_treatment`,
+  `inclusion_rate`, `inclusion_applied`, `retirement_marginal_rate`,
+  `retirement_rate_source`, `renter_capital` (`tfsa`, `rrsp`, `fhsa`,
+  `fhsa_derived`, `taxable`, `total`, `refunds_added`), `after_tax_factor`,
+  `blended_rate`, `drag_at_horizon` / `drag_pv`, `haircut_at_horizon` /
+  `haircut_pv`, `fhsa` (`balance`, `years_until_purchase`, `contributions`,
+  `refunds`, `share_at_year0`, `lifetime_remaining`) or `null`, `hbp`
+  (`withdrawal`, `limit`, `tranche`, `repayment_years`, `first_repayment_year`,
+  `legs` per owned option: `outlays_pv`, `rebuilt_at_horizon`, `rebuilt_pv`,
+  `hbp_repayment_pv`) or `null`, and `principal_residence_exempt_fraction`.
+- `assumptions.lines` and the read-back gain a `tax` section after `purchase
+  costs`: the `tax:` line (the rate and its source, the sheltered/taxable split,
+  the drag applied, the FHSA rollover haircut, the owner's exemption) and one
+  `<option> hbp:` line per financed first-time purchase; the `<option>
+  financing:` head shows `+ FHSA refunds $R + HBP $H` and closes with an `fhsa:`
+  clause. Exact shapes in CONFIG_SCHEMAS.md.
+- `deterministic.<owned>.breakdown.hbp_repayment_pv`: always present (0.0
+  without an HBP); the text report prints it only when non-zero. The rent
+  breakdown's `invested_capital_pv` is `D + refunds` and
+  `invested_dp_benefit_pv` the after-tax terminal value (glossary).
+- Library: `tax_treatment.resolve`, `after_tax_factor`, `renter_terminal`,
+  `fhsa_plan`, `hbp_repayment_leg`; `deterministic.renter_terminal_for`,
+  `hbp_leg_for`, `hbp_repayment_pv_for`.
 
 ## Reference entries added 2026-09-04
 
