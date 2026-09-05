@@ -355,7 +355,7 @@ Present only with an `income` block.
 
 | Act | Figure | As computed |
 |---|---|---|
-| 1 The answer | the headline sentence and the bar per option | `verdict` above; bars are `total_pv` |
+| 1 The answer | the headline sentence and the bar per option | `verdict` above; bars are `total_pv`. On a `disagreement` the headline names both sides — `Best guess: Renting by $6,517 over 20 years · Most futures: buying a house (60%) — too close to call`; the other states read as before |
 | 2 The race | cumulative cost curves and crossover years | running sums of `pv_single` of each year's out-of-pocket flow ("paid"); "net" adds the year-N equity credit so it reconciles to `total_pv`; a crossover is a year where the cheaper option flips |
 | 3 The uncertainty | overlaid per-path `total_pv` histograms | p10 / median / p90 of the same arrays `p5`–`p95` summarise |
 | 4 Home-value futures | a fan of value paths | the user's growth plus the prior row's `demo_drift_p10` / mean / `demo_drift_p90` per band, compounded yearly (deterministic quantile paths, not MC paths) |
@@ -375,13 +375,16 @@ as `error`, not skipped silently. Monte Carlo runs per point unless
 `--no-monte-carlo` or the point is a single-path run. A sweep of an owned
 option's `initial_value` also carries the price-scan coherence note below.
 
-Each row also carries the Monte Carlo majority — `mc_best` (the option called
-cheapest most often) and `mc_prob_best` (how often) — beside `best`,
-`decisive` and `prob_best`. `decisive` keys to the DETERMINISTIC winner by
-design, and `prob_best` is that winner's probability, so a row can read
-`best: rent`, `decisive: false`, `prob_best: 0.34` while the majority and the
-mean both favour the house; the `reason` clause said so in prose, these two
-fields make it machine-visible (2026-09-04 review). `mc_majority_flips` tracks
+Each row also carries the verdict's `state` and the Monte Carlo majority —
+`mc_best` (the option called cheapest most often) and `mc_prob_best` (how
+often), the verdict's own — beside `best`, `decisive` and `prob_best`. `best`
+is the DETERMINISTIC winner and `prob_best` is that winner's probability, so
+a row can read `best: rent`, `prob_best: 0.34` while the majority and the
+mean both favour the house: that row's `state` is `disagreement`, its
+`decisive` is false, and its `sentence` names both sides — `best guess rent
+by $6,517 (1.9% of rent PV), most futures house (60%) — disagree` (ruled
+2026-09-04: served answers showed a table reading "rent, not decisive"
+beside a 66% house column). `mc_majority_flips` tracks
 the majority the way `flips` tracks the deterministic best, and the block
 prints a `majority flip:` line only where that turn differs from the
 deterministic `flip:` — a majority that turns where the deterministic line
