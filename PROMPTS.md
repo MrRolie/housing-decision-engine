@@ -39,7 +39,10 @@ answer the form. Front-loading these saves that round trip:
   that is left and the share of the price the mortgage covers. Say whether that amount
   already includes the closing costs, or give the two amounts ("$60k all in", or "$52k for
   the down payment plus $8k for closing"). If you have a mortgage quote, give the rate and
-  the amortization ("4.65% five-year fixed, 25 years").
+  the amortization ("4.65% five-year fixed, 25 years"). If you have no quote, say so: the
+  engine runs the rate borrowers actually paid (the Bank of Canada's contracted 5-year
+  rate) as the base, shows the posted rate as a ceiling, and the verdict names the rate
+  it is at.
 - **Province and city**, and whether this is your first home. Québec and Ontario transfer
   taxes (Montréal and Toronto municipal) and the insurance-premium tax are priced from the
   published schedules; the first-time-buyer rebate is applied where one is sourced.
