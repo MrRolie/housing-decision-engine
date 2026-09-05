@@ -1,53 +1,54 @@
 Assumptions
-  mode: real terms · discount_rate 5.0%
-  condo: value growth +2.0%/yr · fee escalation +3.0%/yr · selling_cost_rate 5.0%
-  house: value growth +2.0%/yr · maintenance 1.2% of value/yr · selling_cost_rate 5.0%
+  mode: real terms · discount_rate 7.2% as quoted → 5.0% real (after 2.1% inflation)
+  condo: value growth +2.0%/yr (4.1% as quoted) · fee escalation +3.0%/yr (5.2% as quoted) · selling_cost_rate 5.0%
+  house: value growth +2.0%/yr (4.1% as quoted) · maintenance 1.2% of value/yr · selling_cost_rate 5.0%
   condo other costs: property_tax $3,600/yr = 0.750% of price [no anchor match — hde --print-anchors]
   house other costs: property_tax $4,700/yr = 0.855% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]
-  rent: escalation +2.5%/yr · invested capital $145,000 at +5.0%/yr
+  rent: escalation +2.5%/yr (4.7% as quoted) · invested capital $145,000 at +5.0%/yr (7.2% as quoted)
   conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)
   demographic prior: MTL_RMR (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · sha256 e73fff23ef46… [demoflow ScenarioPrior v1] · reference REAL drift over this 25-year run — all: +0.27%/yr (2030 band), +0.25%/yr (2035 band), +0.09%/yr (2040 band), +0.03%/yr (2045 band), +0.01%/yr (2050 band) (added to value_growth_rate in the Monte Carlo; all bands and the scenario range in --json)
-  defaults applied: economic.mode='real', economic.inflation_rate=0.0% [ref: FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
+  defaults applied: economic.mode='real', economic.inflation_rate=2.1% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]
+  rates: as quoted · discount_rate 7.2% as quoted = 5.0% after 2.1% inflation · condo.fee_escalation_rate 5.2% as quoted = 3.0% after 2.1% inflation · condo.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · condo.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · house.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.other_recurring_costs.home_insurance.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · rent.rent_escalation_rate 4.7% as quoted = 2.5% after 2.1% inflation · rent.investment_return_rate 7.2% as quoted = 5.0% after 2.1% inflation
   user-stated: years=25, market_scenario.geography='MTL_RMR', condo.monthly_fee=$800/mo, condo.initial_value=$480,000, condo.all_cash=true, house.initial_value=$550,000, house.all_cash=true, rent.monthly_rent=$2,400/mo, rent.invested_down_payment=$145,000
-  assistant-typed: discount_rate=5.0%, market_scenario.path='tests/fixtures/scenario_prior_golden.json', condo.fee_escalation_rate=3.0%, condo.value_growth_rate=2.0%, condo.purchase_costs=$7,200, condo.other_recurring_costs=1 entry, condo.price_shock.annual_hazard=3.0%, condo.price_shock.severity_mean=20.0%, condo.events=1 entry, house.value_growth_rate=2.0%, house.annual_maintenance_rate=1.2%, house.purchase_costs=$8,200, house.other_recurring_costs=2 entries, house.price_shock.annual_hazard=3.0%, house.price_shock.severity_mean=20.0%, house.events=1 entry, rent.rent_escalation_rate=2.5%, rent.investment_return_rate=5.0%, simulation.num_sims=5,000, simulation.random_seed=42, simulation.investment_return_vol=10.0%
+  assistant-typed: discount_rate=7.2%, market_scenario.path='tests/fixtures/scenario_prior_golden.json', condo.fee_escalation_rate=5.2%, condo.value_growth_rate=4.1%, condo.purchase_costs=$7,200, condo.other_recurring_costs=1 entry, condo.price_shock.annual_hazard=3.0%, condo.price_shock.severity_mean=20.0%, condo.events=1 entry, house.value_growth_rate=4.1%, house.annual_maintenance_rate=1.2%, house.purchase_costs=$8,200, house.other_recurring_costs=2 entries, house.price_shock.annual_hazard=3.0%, house.price_shock.severity_mean=20.0%, house.events=1 entry, rent.rent_escalation_rate=4.7%, rent.investment_return_rate=7.2%, simulation.num_sims=5,000, simulation.random_seed=42, simulation.investment_return_vol=10.0%
   anchor-sourced: condo.price_shock.severity_vol=10.0% [price_shock.severity_vol], house.price_shock.severity_vol=10.0% [price_shock.severity_vol]
 
-Condo  total PV:  $     515,883
+Condo  total PV:  $     518,779
   purchase_costs_pv: $       7,200
-  fee_pv: $     188,713
-  events_pv: $      10,153
-  other_pv: $      50,738
+  fee_pv: $     189,619
+  events_pv: $      10,156
+  other_pv: $      50,763
   reserve_pv: $           0
   downpayment_pv: $     480,000
   mortgage_pv: $           0
-  terminal_equity_pv: $    -220,921
-House  total PV:  $     512,768
+  terminal_equity_pv: $    -218,959
+House  total PV:  $     514,644
   purchase_costs_pv: $       8,200
-  maintenance_pv: $     113,415
-  events_pv: $      11,137
-  other_pv: $      83,154
+  maintenance_pv: $     112,997
+  events_pv: $      11,143
+  other_pv: $      83,195
   downpayment_pv: $     550,000
   mortgage_pv: $           0
-  terminal_equity_pv: $    -253,138
-Rent   total PV:  $     534,342
-  rent_pv: $     534,342
+  terminal_equity_pv: $    -250,891
+Rent   total PV:  $     537,498
+  rent_pv: $     537,498
   events_pv: $           0
   other_pv: $           0
   invested_capital_pv: $     145,000
   invested_dp_benefit_pv: $    -145,000
 Year-1 cash (undiscounted; PV totals above credit equity at sale)
-  Condo: $    13,200/yr ($1,100/mo); expected appreciation $9,600 (value × real growth, not cash)
-  House: $    12,500/yr ($1,042/mo); expected appreciation $11,000 (value × real growth, not cash)
+  Condo: $    13,200/yr ($1,100/mo); expected appreciation $9,403 (value × real growth, not cash)
+  House: $    12,500/yr ($1,042/mo); expected appreciation $10,774 (value × real growth, not cash)
   Rent: $    28,800/yr ($2,400/mo)
 
-Too close to call: House edges Condo by $3,115 (0.6%)
-  ≈ $18/month equivalent
-  decisiveness: P(house cheapest) = 36% < 65% floor [hde verdict rule]; Monte Carlo mean favours rent ($534,231 vs $534,778)
+Too close to call: House edges Condo by $4,135 (0.8%)
+  ≈ $24/month equivalent
+  decisiveness: P(house cheapest) = 36% < 65% floor [hde verdict rule]
 
 Monte Carlo:
-  Condo: mean $538,151  p5 $450,774  p50 $550,065  p95 $618,432
-  House: mean $534,778  p5 $452,387  p50 $544,320  p95 $604,915
-  Rent: mean $534,231  p5 $391,540  p50 $550,119  p95 $622,465
-  P(condo cheapest): 32.0%
-  P(house cheapest): 35.6%
-  P(rent cheapest): 32.3%
+  Condo: mean $540,844  p5 $454,226  p50 $552,668  p95 $620,404
+  House: mean $536,435  p5 $454,812  p50 $545,872  p95 $605,969
+  Rent: mean $537,386  p5 $394,696  p50 $553,275  p95 $625,621
+  P(condo cheapest): 31.7%
+  P(house cheapest): 36.4%
+  P(rent cheapest): 32.0%
