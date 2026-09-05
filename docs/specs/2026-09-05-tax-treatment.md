@@ -1,7 +1,9 @@
 # Tax treatment of the two sides' money — design
 
-**Status:** proposed. Design only — no engine code. Ruling settled 2026-09-05
-(roadmap): tax asymmetry first, the FHSA as its first-home slice. Two folds.
+**Status:** accepted 2026-09-05 for build, both folds. Ruling (roadmap): tax asymmetry
+first, the FHSA as its first-home slice. Review settled three points on the proposal: the
+HBP leg is the like-for-like repayment schedule (§4.5), a config without the block gets an
+engine warning (§7), and the intake asks where the savings sit (§7).
 
 ## 1. Why
 
@@ -85,12 +87,16 @@ engines hold it (real in real mode, composed in nominal mode), `t_ret` retiremen
      the renter eventually pays on the FHSA→RRSP rollover (fhsa.max_years_open names the
      deadline): haircut_N, at t_ret, at the horizon end. The buyer's F_0 leaves tax-free.
 
-4.5  HBP: tranche H/Y repaid at t_j = g + j, j = 1..Y, τ_j = min(t_j, N) — a tranche past
-     N returns at N (Y hbp.repayment_years, g hbp.repayment_grace_years)
-     lost_N = H (1 + r)^N − Σ_j (H/Y)(1 + r)^(N − τ_j)      sheltered growth lost, no drag
-     hbp_cost_pv = lost_N / (1 + dr)^N — a new breakdown key on both owned options
-     (0.0 without an HBP); the MC owned paths add the same constant (r is the renter's
-     return, unshocked). Repayments themselves are not a cost.
+4.5  HBP: H is already priced by the existing legs — the renter earns r on it, the
+     buyer's down payment carries it — so the plan's own cost is the repayment schedule:
+     tranche H/Y is an owner outlay at t_j = g + j − 1, j = 1..Y (g hbp.repayment_grace_years
+     = first repayment year − withdrawal year; Y hbp.repayment_years), τ_j = min(t_j, N) —
+     a tranche past N returns at N — and the rebuilt RRSP is credited at N, sheltered:
+     out_j = H/Y nominal mode | (H/Y)/(1 + π)^τ_j real mode   (FIXED NOMINAL dollars)
+     hbp_repayment_pv = Σ_j out_j (1 + dr)^(−τ_j) − [Σ_j out_j (1 + r)^(N − τ_j)] (1 + dr)^(−N)
+     zero at r = dr; a new breakdown key on both owned options (0.0 without an HBP); the MC
+     owned paths add the same constant (r unshocked). Outside the affordability ratio and
+     the year-1 cash line — a transfer into the household's own RRSP, not a housing cost.
 ```
 
 Where it enters: the loader derives `R + H` before the options are parsed and adds them
@@ -99,14 +105,11 @@ between `_net_down_payment` and `_apply_mortgage_insurance` on every owned optio
 chosen on the loan that remains; `cash_available` stays as typed and the financing line
 shows the addition. `_parse_rent` receives `R` for the taxable share.
 
-**Pushback, once (the HBP cost).** Inside this engine the `H` already sits in the buyer's
-down payment (earning the mortgage rate and the home's return through the existing legs)
-and in the renter's capital (earning `r`); `lost_N` charges the buyer `r` on `H` a second
-time — ≈ $6,500 PV on a $20,000 HBP over 10 years at 5.1%, four times the example's margin.
-The like-for-like leg is the repayment schedule: outlays `H/Y` at `t_j`, the RRSP's
-`Σ (H/Y)(1 + r)^(N − τ_j)` credited at N — zero at `r = dr`; `--sweep tax.hbp_withdrawal`
-then shows HBP-versus-bigger-loan through the existing legs. §4.5 is the ruled cost and is
-what "build it" builds; the alternative is one function swap.
+Why the repayment leg and not "sheltered growth lost": that figure — `H(1 + r)^N` less the
+rebuilt RRSP — charges the buyer `r` on `H` a second time (≈ $6,500 PV on a $20,000 HBP
+over 10 years at 5.1%, four times the example's margin) when the capital legs already deny
+the buyer `r` on `H`. `--sweep tax.hbp_withdrawal` shows HBP-versus-bigger-loan through
+those legs.
 
 ## 5. The owner's side
 
@@ -115,19 +118,20 @@ with `tax.principal_residence_exempt_fraction` (consumed there, as
 `economic.inflation_rate.nominal_planning` is by its warning). A non-exempt fraction at
 sale (the partly-rented duplex) is the follow-up, not this fold.
 
-## 6. Read-back — verbatim shapes (figures illustrative: QC, $95,000, 60/40 at 5.1%, 10 years)
+## 6. Read-back — verbatim shapes (figures illustrative: QC, $100,000, 60/40 at 5.1%, 10 years)
 
 Each row illustrates its own shape; the rows do not compose into one config.
 
 | Line | Shape |
 |---|---|
-| `tax:` — a new read-back section after `purchase costs` | `tax: marginal rate 37.12% resolved from income $95,000 in QC — federal 20.5% × (1 − 16.5% Québec abatement) + QC 20% [tax.federal.*, tax.qc.* 2026] · renter capital $60,000 = sheltered $45,000 (TFSA $25,000 + RRSP $20,000 + FHSA $0) + taxable $15,000 (+ FHSA refunds $0) · taxable share: 5.1% × (1 − 37.12% × 50% inclusion, capital gains — default) = 4.15% after tax [tax.capital_gains_inclusion_rate]; blended 4.87%; drag $2,134 at year 10 (PV $1,290) charged to rent · owner: principal-residence exemption — no tax on the equity gain at sale [tax.principal_residence_exempt_fraction]`. Typed: `marginal rate 37.1% as typed`. With `F > 0`, appended: ` · FHSA share $31,000 rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open]) — haircut 37.12% retirement marginal rate (= current, default) on $50,979 at year 10 = $18,923 (PV $11,438) charged to rent [tax.retirement_marginal_rate]` |
-| `fhsa:` clause on the financing line | head: `cash available $60,000 + FHSA refunds $5,939 + HBP $20,000 − purchase_costs $6,860 − premium tax $1,110 = down payment $77,969`; clause: `fhsa: balance $15,000 + $16,000 contributed over 2 saving years (room $8,000/yr + carry-forward ≤ $8,000, lifetime $40,000, $25,000 remaining [fhsa.annual_limit, fhsa.carry_forward_max, fhsa.lifetime_limit]) → refunds $5,939 at 37.12%, added to both sides' capital`; k = 0: `fhsa: balance $15,000, no saving years — no refunds to add` |
-| `hbp:` — per owned option, same section | `condo hbp: $20,000 withdrawn from the RRSP into the down payment (≤ $60,000 [hbp.withdrawal_limit]) · repaid $1,333/yr over 15 years from year 3 [hbp.repayment_years, hbp.repayment_grace_years]; 7 tranches fall past year 10 and return at the horizon · sheltered growth lost: the RRSP ends year 10 $10,778 below the $32,889 it would hold at 5.1% — PV $6,515 charged to condo (hbp_cost_pv)` |
+| `tax:` — a new read-back section after `purchase costs` | `tax: marginal rate 36.12% resolved from income $100,000 in QC — federal 20.5% × (1 − 16.5% Québec abatement) + QC 19% [tax.federal.*, tax.qc.* 2026] · renter capital $60,000 = sheltered $45,000 (TFSA $25,000 + RRSP $20,000 + FHSA $0) + taxable $15,000 (+ FHSA refunds $0) · taxable share: 5.1% × (1 − 36.12% × 50% inclusion, capital gains — default) = 4.18% after tax [tax.capital_gains_inclusion_rate]; blended 4.88%; drag $2,078 at year 10 (PV $1,256) charged to rent · owner: principal-residence exemption — no tax on the equity gain at sale [tax.principal_residence_exempt_fraction]`. Typed: `marginal rate 36.1% as typed`. With `F > 0`, appended: ` · FHSA share $31,000 rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open]) — haircut 36.12% retirement marginal rate (= current, default) on $50,979 at year 10 = $18,412 (PV $11,130) charged to rent [tax.retirement_marginal_rate]` |
+| `fhsa:` clause on the financing line | head: `cash available $60,000 + FHSA refunds $5,779 + HBP $20,000 − purchase_costs $6,860 − premium tax $1,110 = down payment $77,809`; clause: `fhsa: balance $15,000 + $16,000 contributed over 2 saving years (room $8,000/yr + carry-forward ≤ $8,000, lifetime $40,000, $25,000 remaining [fhsa.annual_limit, fhsa.carry_forward_max, fhsa.lifetime_limit]) → refunds $5,779 at 36.12%, added to both sides' capital`; k = 0: `fhsa: balance $15,000, no saving years — no refunds to add` |
+| `hbp:` — per owned option, same section | `condo hbp: $20,000 withdrawn from the RRSP into the down payment (≤ $60,000 [hbp.withdrawal_limit]) · repaid $1,333/yr over 15 years from year 5 [hbp.repayment_years, hbp.repayment_grace_years]; 10 tranches fall at or past year 10 and return at the horizon · the RRSP is rebuilt to $21,092 by year 10 (repayments PV $12,758 against the rebuilt RRSP's PV $12,749) — net PV $9 charged to condo (hbp_repayment_pv)` |
+| `[warning]` with no `tax:` block | `rent: invested capital $60,000 earns 5.1% untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)` |
 
-`--json`: `assumptions.tax` carries the same facts structured; `breakdown.hbp_cost_pv` is
-always present. The text report prints `hbp_cost_pv` only when non-zero (the one special
-case, stated in `reporting.py`), so every existing text run stays byte-identical.
+`--json`: `assumptions.tax` carries the same facts structured; `breakdown.hbp_repayment_pv`
+is always present. The text report prints `hbp_repayment_pv` only when non-zero (the one
+special case, stated in `reporting.py`).
 
 ## 7. Interactions
 
@@ -144,18 +148,25 @@ case, stated in `reporting.py`), so every existing text run stays byte-identical
   derivation; a derived `renter_capital.fhsa` is attributed through the `fhsa` leaves.
 - **As-quoted rule:** `marginal_rate` and `retirement_marginal_rate` are never in
   `CONVERTIBLE_KEYS`, never on the `rates:` line — pinned by a test.
-- **No block ⇒ no new warning:** STORY.md carries warnings and is byte-stable, and the
-  seven examples stay identical. Skill gate 8 keeps "taxes on the renter's return (toward
-  renting)" without the block and drops it with it. (The alternative — an engine warning
-  when `invested_down_payment > 0` and no `tax:` — regenerates the showcase in the same commit.)
+- **No block ⇒ the engine warns** (§6, last row) when `rent.invested_down_payment > 0`
+  and no `tax:` block. STORY.md carries warnings, so the showcase is regenerated in the
+  same commit; the seven examples' totals and verdicts are unchanged and only that line is
+  new in their read-backs. Skill gate 8 quotes the engine's warning instead of carrying
+  its own not-modelled text.
 - **Refusals** (`ConfigValidationError`, each naming the fix): no rate typed and none
   resolvable; `marginal_rate` outside [0, 1); shares not summing (both figures);
   `renter_capital.fhsa` beside `tax.fhsa`; `renter_capital` without `rent:`; `fhsa` /
   `hbp_withdrawal` without a `first_time_buyer: true` owned option; `hbp_withdrawal` above
   the limit or the RRSP share; an unknown `taxable_return_treatment`.
 - `single_path_run` / `dispersion_sources` unchanged — the drag adds no randomness. Docs:
-  `CONFIG_SCHEMAS.md`, `API_CONTRACT.md`, the `ARCHITECTURE.md` glossary, `PROMPTS.md`
-  "What it does not do", the skill's intake (where the savings sit) and gate 8.
+  `CONFIG_SCHEMAS.md`, `API_CONTRACT.md`, the `ARCHITECTURE.md` glossary, `AGENTS.md`
+  (the "no geographic tax rules" line and the package layout).
+- **Skill and prompts:** the intake's money ask (SKILL.md elicit item 2) gains "and
+  where does it sit — TFSA, RRSP, FHSA, or a taxable account?"; `references/translation.md`
+  gains a `tax:` row and a first-home row (FHSA balance and contributions, HBP withdrawal →
+  the keys); `PROMPTS.md` "How to ask" gains one bullet and "What it does not do" drops
+  "taxes on the renter's return" for the §8 list in one sentence; the hot path stays under
+  300 lines / 2,600 words.
 
 ## 8. Not modelled after this lands
 
@@ -168,44 +179,39 @@ cases; the AMT.
 
 ## 9. Test plan (failing tests first)
 
-- `tests/test_tax_treatment.py` with a `stand_in_anchors` fixture: for every name in §10
-  absent from `ANCHORS`, `monkeypatch.setitem(ANCHORS, name, Anchor(..., source="TEST
-  STAND-IN — not an engine default", kind="derivation"))`, and a `monkeypatch.setattr`
-  stand-in `marginal_rate` / `marginal_rate_breakdown` while the helper is absent. Every
-  engine lookup is lazy — no module-level import, no dataclass default reading a new anchor
-  — so `import hde` never breaks before the merge.
-- One hand-checked example per province (QC, ON): the resolved rate against the helper's
-  breakdown; `V_N`, `drag_N`, `haircut_N`, `R`, `F_0`, `lost_N`, `hbp_cost_pv` to the dollar
-  against §4, nominal and real mode. These FORCE their stand-in rates whatever the registry
-  holds (re-pinned against the merged anchors as a follow-up, said in the docstring); the
-  invariant tests below read whatever is registered, so neither lane's merge turns them red.
+- `tests/test_tax_treatment.py` reads the merged registry (the anchors lane landed first);
+  a stand-in is registered only for a name the registry lacks — none today. Every engine
+  lookup is lazy (inside the function; no dataclass default reads a new anchor).
+- One hand-checked example per province at $100,000: QC 36.12% (20.5% × 0.835 + 19%), ON
+  31.48% (20.5% + 9.15% × 1.20) against `tax_rates.marginal_rate_breakdown`; `V_N`,
+  `drag_N`, `haircut_N`, `R`, `F_0`, `hbp_repayment_pv` to the dollar against §4, nominal and
+  real mode; `hbp_repayment_pv = 0` at `r = dr`.
 - Zero-vol Monte Carlo equals the deterministic rent AND owned PVs with a `tax:` block
   (both modes).
-- Absence invariant: the seven examples' totals, verdicts, text report, `--read-back` and
-  STORY.md byte-identical; `--json` differs only by `hbp_cost_pv: 0.0`.
+- Absence invariant: the seven examples' totals, verdicts and breakdowns unchanged; text,
+  `--read-back` and `--json` byte-identical apart from the one `[warning]` line and
+  `hbp_repayment_pv: 0.0`; `docs/story/` regenerated once and byte-stable after.
 - Every refusal in §7 names its fix; every line in §6 matches its shape; the capital-spread
   warning's blended rate equals the helper's; the `rates:` line never lists a tax key;
   `--sweep tax.hbp_withdrawal=0:20000:3` re-derives through the loader.
 - `tests/test_anchors.py`: `tax.`, `fhsa.`, `hbp.`, `tfsa.` join `CONSUMED_FAMILIES` naming
-  `tax_treatment.py`; `tests/test_docs.py` excludes the four families from the Defaults
-  Summary (tables and limits, not per-field defaults — the mortgage-insurance precedent).
+  `tax_treatment.py` (they are reference families, so the Defaults Summary test already
+  excludes them).
 
-## 10. Coordination with the anchors lane
+## 10. What the anchors lane supplies (merged first)
 
-Imported by name, lazily, from `hde.anchors`: `tax.<federal|qc|on>.bracket_<k>_ceiling` /
-`_rate`, `tax.<jur>.basic_personal_amount`, `tax.federal.quebec_abatement`,
-`tax.on.surtax_<k>_threshold` / `_rate`, `tax.capital_gains_inclusion_rate`,
+Read by name from `ANCHORS`, lazily: `tax.capital_gains_inclusion_rate`,
 `tax.principal_residence_exempt_fraction`, `fhsa.annual_limit`, `fhsa.lifetime_limit`,
 `fhsa.carry_forward_max`, `fhsa.max_years_open`, `hbp.withdrawal_limit`,
 `hbp.repayment_years`, `hbp.repayment_grace_years`, `tfsa.annual_limit`,
-`tfsa.cumulative_room_since_2009`, and `marginal_rate(taxable_income, province)` with
-`marginal_rate_breakdown` — assumed to live in `hde.anchors`; if the lane lands them
-elsewhere, one import line moves. Whichever lane merges second carries the
-`CONSUMED_FAMILIES` and Defaults Summary declarations to green. Nothing here writes an anchor.
+`tfsa.cumulative_room_since_2009`; the brackets, abatement and surtax through
+`hde.tax_rates.marginal_rate(taxable_income, province)` and `marginal_rate_breakdown`
+(federal, abatement, provincial and surtax components), imported inside the resolver so
+`import hde` never depends on it. Nothing here writes an anchor.
 
 ## 11. The two folds
 
 Fold 1 — the asymmetry: `marginal_rate`, `renter_capital`, `taxable_return_treatment`, the
 drag (§4.2–4.3 without `F`), the owner's line, the warnings, the docs. Fold 2 — the
 first-home slice: `fhsa`, `hbp_withdrawal`, `retirement_marginal_rate`, the day-one cash,
-the haircut, `hbp_cost_pv`, the financing clause and the `hbp:` line.
+the haircut, `hbp_repayment_pv`, the financing clause and the `hbp:` line.
