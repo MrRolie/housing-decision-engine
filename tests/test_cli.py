@@ -123,8 +123,9 @@ class TestJsonContract:
         assert doc["engine_version"]
         assert doc["monte_carlo"] is not None
         assert set(doc["verdict"]) == {"best", "runner_up", "margin_pv", "margin_frac",
-                                       "monthly_equivalent", "prob_best", "decisive",
-                                       "rule", "reason", "mc_mean_best"}
+                                       "monthly_equivalent", "prob_best", "decisive", "state",
+                                       "rule", "reason", "mc_mean_best", "mc_best", "mc_prob_best"}
+        assert doc["verdict"]["state"] in {"option", "tie", "disagreement"}
 
     def test_break_even_rides_json(self, tmp_path, monkeypatch, capsys):
         import json

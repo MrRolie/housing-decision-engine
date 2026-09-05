@@ -740,8 +740,9 @@ class TestNextStepUnderAPrior:
     def _verdict(self, *, rule="mc_floor", decisive=False):
         return Verdict(best="rent", runner_up="house", margin_pv=1_000.0,
                        margin_frac=0.002, monthly_equivalent=8.0, prob_best=0.42,
-                       decisive=decisive, rule=rule,
-                       reason="P(rent cheapest) = 42% < 65% floor [hde verdict rule]")
+                       decisive=decisive, state="option" if decisive else "tie", rule=rule,
+                       reason="P(rent cheapest) = 42% < 65% floor [hde verdict rule]",
+                       mc_best="rent", mc_prob_best=0.42)
 
     def _lines(self, *, prior=True, verdict_kw=None, break_evens=()):
         raw = self._raw(prior)

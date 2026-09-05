@@ -358,23 +358,28 @@ class TestRoundFiveWarningsAndNotes:
             assert geo in note, geo
 
 
-class TestVerdictReasonNamesTheFloorForTheOtherSide:
-    """Round 5: at $1,900 the persona's run read P(house)=66.4% as 'not decisive'
-    because decisiveness keys to the deterministic best (rent, 33.6%); the reason
-    line must say the other side clears the floor."""
+class TestVerdictNamesTheOtherSideAsADisagreement:
+    """Round 5: at $1,900 a served run read P(house)=66.4% as 'not decisive'
+    because decisiveness keyed to the deterministic best (rent, 33.6%). Ruled
+    2026-09-04: that is a named DISAGREEMENT — both figures, never decisive —
+    whether or not the other side clears the floor."""
 
-    def test_other_side_above_floor_is_said(self):
+    def test_other_side_above_floor_is_a_disagreement(self):
         det = _det({"condo": 156_000.0, "rent": 155_000.0})  # rent is the deterministic best
         mc = _mc({"condo": 150_000.0, "rent": 160_000.0}, {"condo": 0.664, "rent": 0.336})
         v = compute_verdict(det, mc, years=9, discount_rate=0.05)
-        assert v.best == "rent" and not v.decisive
-        assert "Monte Carlo favours condo (66.4%, above the 65% floor — decisiveness keys to the deterministic best)" in v.reason
+        assert v.best == "rent" and v.mc_best == "condo"
+        assert v.state == "disagreement" and not v.decisive
+        assert v.reason.startswith(
+            "best guess says rent by $1,000 (0.6% of rent PV); most futures say condo "
+            "(66% cheapest) — the two disagree, not decisive [hde verdict rule]")
 
-    def test_other_side_below_floor_keeps_the_short_clause(self):
+    def test_other_side_below_floor_is_the_same_disagreement(self):
         det = _det({"condo": 156_000.0, "rent": 155_000.0})
         mc = _mc({"condo": 150_000.0, "rent": 160_000.0}, {"condo": 0.60, "rent": 0.40})
         v = compute_verdict(det, mc, years=9, discount_rate=0.05)
-        assert "Monte Carlo favours condo (60.0%)" in v.reason and "above the" not in v.reason
+        assert v.state == "disagreement"
+        assert "most futures say condo (60% cheapest)" in v.reason and "floor" not in v.reason
 
 
 class TestPriorSaysWhatItEncodes:

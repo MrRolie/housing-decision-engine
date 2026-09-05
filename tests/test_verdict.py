@@ -80,11 +80,11 @@ class TestMonteCarloRule:
         assert at.decisive and at.rule == "mc_floor"
         assert below.prob_best == pytest.approx(FLOOR - 0.001)
 
-    def test_mc_favouring_another_option_is_named(self):
+    def test_mc_favouring_another_option_is_a_disagreement(self):
         det = _det({"condo": 400_000.0, "house": 400_200.0})
         v = compute_verdict(det, _mc(condo=0.472, house=0.528), years=20)
-        assert not v.decisive
-        assert "house" in v.reason and "52.8%" in v.reason
+        assert not v.decisive and v.state == "disagreement"
+        assert "most futures say house (53% cheapest)" in v.reason
 
     def test_single_path_run_ignores_mc(self):
         det = _det({"condo": 400_000.0, "house": 404_000.0})   # 1% margin
@@ -145,3 +145,79 @@ class TestReasonNeverPrintsAsItsOwnThreshold:
         v = compute_verdict(_det({"condo": 400_000.0, "house": 900_000.0, "rent": 520_000.0}),
                             None, years=30)
         assert "margin 30.0% of condo PV ≥ 5% tie band" in v.reason
+
+
+class TestThreeStates:
+    """2026-09-04: served answers showed a table reading "rent, not decisive"
+    beside a 66% house column. The verdict has three states — `option`
+    (decisive), `tie` (not decisive; the majority agrees or is absent) and
+    `disagreement` (the deterministic central case and the Monte Carlo
+    majority favour different options — named with both figures, never
+    decisive). `best` stays the deterministic winner; `mc_best` is the
+    majority's option, None without Monte Carlo."""
+
+    def test_disagreement_names_both_figures_and_is_never_decisive(self):
+        det = _det({"rent": 400_000.0, "house": 404_551.0})
+        v = compute_verdict(det, _mc(rent=0.39, house=0.61), years=20)
+        assert v.state == "disagreement"
+        assert not v.decisive
+        assert v.best == "rent" and v.mc_best == "house"
+        assert v.prob_best == pytest.approx(0.39)
+        assert v.mc_prob_best == pytest.approx(0.61)
+        assert v.reason.startswith(
+            "best guess says rent by $4,551 (1.1% of rent PV); most futures say house "
+            "(61% cheapest) — the two disagree, not decisive [hde verdict rule]")
+
+    def test_a_wide_margin_does_not_rescue_a_disagreement(self):
+        det = _det({"rent": 400_000.0, "house": 480_000.0})   # 20% margin
+        v = compute_verdict(det, _mc(rent=0.40, house=0.60), years=20)
+        assert v.state == "disagreement" and not v.decisive
+
+    def test_majority_equal_to_best_under_the_floor_stays_tie(self):
+        det = _det({"condo": 400_000.0, "house": 440_000.0})
+        v = compute_verdict(det, _mc(condo=0.55, house=0.45), years=20)
+        assert v.state == "tie" and not v.decisive
+        assert v.mc_best == "condo" and v.mc_prob_best == pytest.approx(0.55)
+        assert v.reason.startswith("P(condo cheapest) = 55% < 65% floor [hde verdict rule]")
+
+    def test_majority_equal_to_best_above_the_floor_is_option(self):
+        det = _det({"condo": 400_000.0, "house": 440_000.0})
+        v = compute_verdict(det, _mc(condo=0.81, house=0.19), years=20)
+        assert v.state == "option" and v.decisive and v.mc_best == "condo"
+
+    def test_an_exact_probability_tie_sides_with_the_deterministic_best(self):
+        det = _det({"condo": 400_000.0, "house": 440_000.0})
+        v = compute_verdict(det, _mc(condo=0.5, house=0.5), years=20)
+        assert v.state == "tie" and v.mc_best == "condo"
+
+    def test_three_options_majority_is_the_highest_probability(self):
+        det = _det({"rent": 400_000.0, "condo": 410_000.0, "house": 420_000.0})
+        v = compute_verdict(det, _mc(rent=0.30, condo=0.25, house=0.45), years=20)
+        assert v.state == "disagreement" and v.mc_best == "house"
+        assert "most futures say house (45% cheapest)" in v.reason
+
+    def test_margin_band_states_carry_no_majority(self):
+        tie = compute_verdict(_det({"condo": 400_000.0, "rent": 401_000.0}), None, years=15)
+        option = compute_verdict(_det({"condo": 400_000.0, "rent": 460_000.0}), None, years=15)
+        assert (tie.state, tie.mc_best, tie.mc_prob_best) == ("tie", None, None)
+        assert (option.state, option.mc_best, option.mc_prob_best) == ("option", None, None)
+
+    def test_single_path_run_carries_no_majority(self):
+        det = _det({"condo": 400_000.0, "house": 404_000.0})
+        v = compute_verdict(det, _mc(condo=0.0, house=1.0), years=20, single_path=True)
+        assert v.state == "tie" and v.mc_best is None
+
+    def test_single_option_is_option(self):
+        v = compute_verdict(_det({"rent": 123_456.0}), None, years=5)
+        assert v.state == "option" and v.mc_best is None
+
+    def test_the_mean_clause_still_appends(self):
+        import numpy as np
+        from hde.models import MonteCarloOptionResult, MonteCarloSummary
+        det = _det({"rent": 400_000.0, "house": 404_551.0})
+        mc = _mc(rent=0.39, house=0.61)
+        mc.rent = MonteCarloOptionResult(np.zeros(1), MonteCarloSummary(420_000.0, 0.0, 0.0, 0.0, 0.0))
+        mc.house = MonteCarloOptionResult(np.zeros(1), MonteCarloSummary(404_000.0, 0.0, 0.0, 0.0, 0.0))
+        v = compute_verdict(det, mc, years=20)
+        assert v.state == "disagreement"
+        assert "[hde verdict rule]; Monte Carlo mean favours house ($404,000 vs $420,000)" in v.reason

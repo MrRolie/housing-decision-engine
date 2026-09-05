@@ -480,9 +480,28 @@ class Verdict:
     runner-up (the decision-relevant gap, never the costliest), and whether
     that gap is decisive under the rule that applied.
 
+    state (ruled 2026-09-04): "option" | "tie" | "disagreement" — the three
+        things a verdict can be. `option`: `best` wins, decisive under the
+        rule. `tie`: not decisive, and the Monte Carlo majority (when there is
+        one) is `best` itself — too close to call. `disagreement`: the
+        deterministic central case and the Monte Carlo majority favour
+        DIFFERENT options; the verdict names both with their figures and is
+        never decisive. Served answers showed a table reading "rent, not
+        decisive" beside a 66% house column — a state with no name gets
+        softened into one side or the other. `decisive` ⇔ `state == "option"`.
+    best: the deterministic winner, in every state.
+    mc_best / mc_prob_best: the option Monte Carlo calls cheapest most often
+        (the majority) and how often; both None without Monte Carlo or on a
+        single-path run. An exact tie in probability sides with `best`, so
+        `state` is `disagreement` only when another option is STRICTLY more
+        often cheapest. On a disagreement `mc_prob_best` is the second figure
+        every surface prints beside the margin.
     rule: "single_option" | "mc_floor" | "margin_band"
     reason: one sentence stating the rule, the measured quantity and the
-        anchored threshold, e.g. "P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]".
+        anchored threshold, e.g. "P(rent cheapest) = 81% ≥ 65% floor [hde verdict rule]";
+        on a disagreement, both figures: "best guess says rent by $4,551
+        (1.1% of rent PV); most futures say house (61% cheapest) — the two
+        disagree, not decisive [hde verdict rule]".
     mc_mean_best: the option with the lowest Monte Carlo MEAN total PV when
         Monte Carlo ran with real uncertainty (None otherwise). When it
         differs from `best` — a jump process such as price_shock moves the
@@ -496,9 +515,12 @@ class Verdict:
     monthly_equivalent: Optional[float]
     prob_best: Optional[float]
     decisive: bool
+    state: str
     rule: str
     reason: str
     mc_mean_best: Optional[str] = None
+    mc_best: Optional[str] = None
+    mc_prob_best: Optional[float] = None
 
 
 def compute_verdict(
@@ -513,7 +535,9 @@ def compute_verdict(
     Decisiveness rule (operator-ruled 2026-09-01; constants in anchors.py):
       - primary, when Monte Carlo ran with real uncertainty (``mc`` given and
         not ``single_path``) and carries a probability for the deterministic
-        winner: decisive ⇔ P(best cheapest) ≥ verdict.prob_floor;
+        winner: decisive ⇔ P(best cheapest) ≥ verdict.prob_floor — unless
+        another option is cheapest MORE often than `best`, which is a
+        `disagreement` (ruled 2026-09-04): never decisive, both figures named;
       - fallback otherwise: decisive ⇔ margin / |best PV| ≥ verdict.tie_band.
     Returns None when no option is priced.
     """
@@ -527,8 +551,10 @@ def compute_verdict(
     ranked = sorted(costs.items(), key=lambda kv: kv[1])
     best, best_pv = ranked[0]
     if len(ranked) == 1:
-        return Verdict(best, None, 0.0, 0.0, None, None, True, "single_option",
-                       "only one option priced — nothing to compare")
+        return Verdict(best=best, runner_up=None, margin_pv=0.0, margin_frac=0.0,
+                       monthly_equivalent=None, prob_best=None, decisive=True,
+                       state="option", rule="single_option",
+                       reason="only one option priced — nothing to compare")
     runner_up, runner_pv = ranked[1]
     margin = runner_pv - best_pv
     # Fraction of the WINNER's total PV (the ruled tie band is stated that way);
@@ -542,42 +568,49 @@ def compute_verdict(
     )
 
     prob_best: Optional[float] = None
+    probs: Dict[str, float] = {}
     means: Dict[str, float] = {}
     mc_mean_best: Optional[str] = None
+    mc_best: Optional[str] = None
     if mc is not None and not single_path:
         prob_best = getattr(mc, f"prob_{best}_cheapest")
+        probs = {k: p for k in costs if (p := getattr(mc, f"prob_{k}_cheapest")) is not None}
+        if prob_best is not None:
+            # The majority: the option cheapest most often. An exact tie sides
+            # with the deterministic best — a disagreement needs another option
+            # STRICTLY more often cheapest.
+            mc_best = max(probs, key=lambda k: (probs[k] > prob_best, probs[k]))
         means = {k: getattr(mc, k).summary.mean for k in costs if getattr(mc, k) is not None}
         if means:
             mc_mean_best = min(means, key=lambda k: means[k])
 
     floor = ANCHORS["verdict.prob_floor"].value
     band = ANCHORS["verdict.tie_band"].value
-    if prob_best is not None:
+    if prob_best is not None and mc_best != best:
+        # Ruled 2026-09-04: the central case and the majority on different
+        # sides is its own state, named with both figures — never one option
+        # dressed as "not decisive", never a coin flip dressed as a win.
+        decisive = False
+        rule = "mc_floor"
+        state = "disagreement"
+        reason = (
+            f"best guess says {best} by ${margin:,.0f} ({margin_frac:.1%} of {best} PV); "
+            f"most futures say {mc_best} ({probs[mc_best]:.0%} cheapest) — "
+            f"the two disagree, not decisive [hde verdict rule]"
+        )
+    elif prob_best is not None:
         decisive = prob_best >= floor
         rule = "mc_floor"
+        state = "option" if decisive else "tie"
         measured, threshold_txt = _against(prob_best, floor)
         reason = (
             f"P({best} cheapest) = {measured} {'≥' if decisive else '<'} "
             f"{threshold_txt} floor [hde verdict rule]"
         )
-        if not decisive:
-            others = {
-                k: getattr(mc, f"prob_{k}_cheapest") for k in costs if k != best
-            }
-            others = {k: v for k, v in others.items() if v is not None}
-            if others:
-                mc_best = max(others, key=lambda k: others[k])
-                if others[mc_best] > prob_best:
-                    reason += f"; Monte Carlo favours {mc_best} ({others[mc_best]:.1%}"
-                    # Decisiveness keys to the deterministic best (ruled 2026-09-01);
-                    # when the other side clears the floor, say so rather than let
-                    # "not decisive" read as "nobody wins".
-                    if others[mc_best] >= floor:
-                        reason += f", above the {floor:.0%} floor — decisiveness keys to the deterministic best"
-                    reason += ")"
     else:
         decisive = margin_frac >= band
         rule = "margin_band"
+        state = "option" if decisive else "tie"
         why = "single-path run, uncertainty inputs off" if single_path else "no Monte Carlo"
         measured, threshold_txt = _against(margin_frac, band, decimals=1)
         reason = (
@@ -587,5 +620,7 @@ def compute_verdict(
     if mc_mean_best is not None and mc_mean_best != best:
         reason += (f"; Monte Carlo mean favours {mc_mean_best} "
                    f"(${means[mc_mean_best]:,.0f} vs ${means[best]:,.0f})")
-    return Verdict(best, runner_up, margin, margin_frac, monthly, prob_best,
-                   decisive, rule, reason, mc_mean_best)
+    return Verdict(best=best, runner_up=runner_up, margin_pv=margin, margin_frac=margin_frac,
+                   monthly_equivalent=monthly, prob_best=prob_best, decisive=decisive,
+                   state=state, rule=rule, reason=reason, mc_mean_best=mc_mean_best,
+                   mc_best=mc_best, mc_prob_best=probs.get(mc_best) if mc_best else None)
