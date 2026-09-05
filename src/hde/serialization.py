@@ -309,6 +309,27 @@ def echo_value(spec: ComparisonSpec, dotted: str) -> str:
     return f"{value:.1%}"
 
 
+def real_discount_rate(spec: ComparisonSpec) -> float:
+    """The discount rate in REAL terms — the figure typed, or the anchored
+    default, before nominal composition. The spec holds only the rate in use,
+    so nominal mode inverts `(1 + real)(1 + π) − 1`; exact at display precision."""
+    dr = spec.simulation.discount_rate
+    if spec.economic.mode != "nominal":
+        return dr
+    return (1 + dr) / (1 + spec.economic.inflation_rate) - 1
+
+
+def discount_rate_note(spec: ComparisonSpec) -> Optional[str]:
+    """How `discount_rate` relates to the figure stated (typed or the anchor)
+    when nominal mode composed it at parse; None in real mode, where the rate
+    in use is the figure stated."""
+    if spec.economic.mode != "nominal":
+        return None
+    return (f"composed at parse: (1 + {real_discount_rate(spec):.1%} real)"
+            f"(1 + {spec.economic.inflation_rate:.1%} inflation_rate) − 1 = "
+            f"{spec.simulation.discount_rate:.2%} nominal")
+
+
 def format_assumptions(
     spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
     raw: Optional[Dict[str, Any]] = None,
@@ -347,14 +368,19 @@ def format_assumptions(
         eff = (1 + rate) * (1 + pi) - 1
         return f"{rate:+.1%}/yr real → {eff:+.1%}/yr nominal (incl. {pi:.1%} inflation)"
 
-    dr_note = ""
-    if nominal and "simulation.discount_rate" in spec.defaults_applied:
-        dr_note = (f" ({ANCHORS['simulation.discount_rate'].value:.1%} real default composed "
-                   f"with inflation_rate)")
+    dr = spec.simulation.discount_rate
+    if nominal:
+        # The discount rate is a REAL opportunity cost — typed or the anchored
+        # default — composed with inflation_rate at parse like every other rate
+        # in nominal mode; name both figures in the words `_g` uses.
+        default = " default" if "simulation.discount_rate" in spec.defaults_applied else ""
+        dr_text = f"{real_discount_rate(spec):.1%} real{default} → {dr:.1%} nominal (incl. {pi:.1%} inflation)"
+    else:
+        dr_text = f"{dr:.1%}"
     lines = [
-        f"mode: {spec.economic.mode} terms · discount_rate {spec.simulation.discount_rate:.1%}{dr_note}"
-        + (" (growth, escalation and investment-return inputs are REAL and composed with "
-           "inflation_rate; discount_rate and mortgage_rate are used as entered)" if nominal else "")
+        f"mode: {spec.economic.mode} terms · discount_rate {dr_text}"
+        + (" (growth, escalation, investment-return and discount-rate inputs are REAL and "
+           "composed with inflation_rate; mortgage_rate is used as entered)" if nominal else "")
     ]
     if spec.condo is not None:
         lines.append(
@@ -542,8 +568,7 @@ def assumptions_to_dict(
         note: Optional[str] = None
         if nominal and anchor is not None:
             if key == "simulation.discount_rate":
-                note = (f"composed at parse: (1 + {anchor.value:.1%} real)(1 + {pi:.1%} "
-                        f"inflation_rate) − 1 = {resolved:.2%} nominal")
+                note = discount_rate_note(spec)
             elif field in _COMPOSED_AT_COMPUTE:
                 note = (f"REAL rate; the engine composes inflation_rate on top at compute "
                         f"time: (1 + {resolved:.1%})(1 + {pi:.1%}) − 1 = {(1 + resolved) * (1 + pi) - 1:.2%} nominal")
@@ -560,6 +585,9 @@ def assumptions_to_dict(
         "mode": spec.economic.mode,
         "years": spec.simulation.years,
         "discount_rate": spec.simulation.discount_rate,
+        # A typed discount_rate is composed too (2026-09-04), so the rate in
+        # use and the `sources` figure differ in nominal mode; this says how.
+        "discount_rate_note": discount_rate_note(spec),
         "lines": format_assumptions(spec, prior, raw),
         "defaults_applied": entries,
         # Jurisdiction figures the USER supplied that a published source agrees
@@ -805,7 +833,9 @@ def read_back_lines(
     Order: the `[warning]` lines; the source classes the user did not state (or
     the one line saying no `sources:` block was declared); the `defaults
     applied:` line, so the numbers the ENGINE chose are named with their
-    citations; the decisiveness rule; each option's financing line and its
+    citations; in nominal mode the `mode:` line, which names the REAL discount
+    rate stated and the nominal rate composed from it; the decisiveness rule;
+    each option's financing line and its
     `purchase costs:` line; the year-1 cash view; each option's other-costs
     line with its citation or `no anchor match`; the affordability summary;
     each break-even's sentence, its re-solutions across a sweep, and the
@@ -819,6 +849,12 @@ def read_back_lines(
     # largest numbers the engine set for that run — were named nowhere in the
     # answer, because the block did not carry the line that states them.
     lines.extend(line for line in echo if line.startswith("defaults applied:"))
+    # In nominal mode the discount rate in use is the engine's composition of
+    # a REAL figure — the user's own or the default (2026-09-04) — and the
+    # `mode:` line is the one that names both; in real mode the rate is the
+    # user's own or on the `defaults applied:` line, so the block has it.
+    if spec.economic.mode == "nominal":
+        lines.extend(line for line in echo if line.startswith("mode:"))
     decisiveness = decisiveness_line(verdict)
     if decisiveness is not None:
         lines.append(decisiveness)

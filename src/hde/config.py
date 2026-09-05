@@ -374,27 +374,6 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
             f"double-check units/decimals"
         )
 
-    # A REAL-looking discount rate typed into nominal mode (2026-09-04 review):
-    # a run typed `discount_rate: 0.03` under `mode: nominal`, so nominal cash
-    # flows were discounted at a real rate — every PV on both sides overstated,
-    # and the 10-year verdict's sign reversed once corrected. The comparator is
-    # the engine's OWN composition (`_discount_rate_for`), which is also the
-    # number the warning names: half a point of tolerance keeps a deliberate
-    # nominal rate near the default quiet. A judgment gate, never a refusal:
-    # the user may mean a lower nominal rate.
-    real_default = ANCHORS["simulation.discount_rate"]
-    if (econ.mode == "nominal" and real_default.value is not None
-            and "simulation.discount_rate" not in spec.defaults_applied):
-        composed = (1 + real_default.value) * (1 + econ.inflation_rate) - 1
-        if sim.discount_rate < composed - 0.005:
-            warns.append(
-                f"discount_rate={sim.discount_rate:.1%} typed in nominal mode is below the "
-                f"{composed:.1%} the engine would have composed ({real_default.value:.1%} real "
-                f"[{real_default.short_cite}] with inflation_rate {econ.inflation_rate:.1%}) — "
-                f"a real-looking discount rate on nominal flows overstates every PV; omit "
-                f"discount_rate or state the nominal rate you mean"
-            )
-
     if spec.rent is not None and spec.rent.monthly_rent > 20_000:
         warns.append(
             f"rent.monthly_rent=${spec.rent.monthly_rent:,.0f}/mo above "
@@ -1503,15 +1482,17 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
 
 
 def _discount_rate_for(data: Dict[str, Any], econ: EconomicParams) -> float:
-    """The discount rate: as entered, else the anchored REAL return
-    (simulation.discount_rate, echoed under `defaults applied`) — composed with
-    inflation_rate in nominal mode like every other real input there. Round-
-    three dogfood 2026-09-02: the real anchor used as a nominal rate priced the
-    future at ~0.9% real and mis-fired the capital-spread warning against the
-    composed investment return."""
-    if "discount_rate" in data:
-        return float(data["discount_rate"])
-    real = ANCHORS["simulation.discount_rate"].value
+    """The discount rate in the run's terms: the typed figure, else the
+    anchored return (simulation.discount_rate, echoed under `defaults applied`)
+    — both REAL, the household's opportunity cost, and both composed with
+    inflation_rate in nominal mode like every other rate there; only a quoted
+    contract rate (mortgage_rate) is used as typed. Round-three dogfood
+    2026-09-02: the real anchor used as a nominal rate priced the future at
+    ~0.9% real and mis-fired the capital-spread warning against the composed
+    investment return; 2026-09-04: served answers typed a real rate and
+    discounted nominal flows with it — every PV overstated, one verdict's sign
+    reversed — so the typed figure now follows the same rule."""
+    real = float(data["discount_rate"]) if "discount_rate" in data else ANCHORS["simulation.discount_rate"].value
     if econ.mode == "nominal":
         return (1 + real) * (1 + econ.inflation_rate) - 1
     return real

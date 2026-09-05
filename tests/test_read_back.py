@@ -653,11 +653,12 @@ class TestSweepCarriesTheMonteCarloMajority:
         assert not any(line.startswith("majority flip years:") for line in flip_lines(same))
 
 
-class TestARealRateTypedIntoNominalMode:
-    """Round-9 review: a config typed `discount_rate: 0.03` under
-    `mode: nominal`, so nominal cash flows were discounted at a real rate.
-    Every PV on both sides was overstated and the 10-year verdict's sign
-    reversed once corrected."""
+class TestTheModeLineRidesTheReadBackInNominalMode:
+    """A typed `discount_rate` is a REAL opportunity cost, composed with
+    inflation_rate in nominal mode like every other rate (2026-09-04). The
+    figure in use is then an engine composition of the user's number, and the
+    block must show both: the `mode:` line names the typed real rate, the
+    composed nominal rate and the inflation between them."""
 
     def _cfg(self, discount_rate=None, mode="nominal"):
         cfg = {
@@ -673,37 +674,45 @@ class TestARealRateTypedIntoNominalMode:
             cfg["discount_rate"] = discount_rate
         return cfg
 
-    def _fired(self, cfg):
-        return [w for w in coherence_warnings(load_config_dict(cfg))
-                if "in nominal mode is below" in w]
+    def _block(self, cfg):
+        spec = load_config_dict(cfg)
+        return read_back_lines(spec, warnings=coherence_warnings(spec))
 
-    def test_a_real_looking_rate_names_both_rates_and_the_direction(self):
-        fired = self._fired(self._cfg(0.03))
-        assert len(fired) == 1, fired
-        warning = fired[0]
-        assert "discount_rate=3.0%" in warning          # what was typed
-        assert "5.2%" in warning                        # what the engine composes
-        assert "3.0% real" in warning and "2.1%" in warning
-        assert "overstates every PV" in warning
-        assert "omit discount_rate or state the nominal rate you mean" in warning
+    def test_a_typed_rate_shows_both_figures(self):
+        lines = self._block(self._cfg(0.035))
+        mode = [l for l in lines if l.startswith("mode:")]
+        assert mode == [
+            "mode: nominal terms · discount_rate 3.5% real → 5.7% nominal (incl. 2.1% inflation) "
+            "(growth, escalation, investment-return and discount-rate inputs are REAL and "
+            "composed with inflation_rate; mortgage_rate is used as entered)"]
+        # it follows the engine's own numbers, the `defaults applied:` line
+        defaults = next(i for i, l in enumerate(lines) if l.startswith("defaults applied:"))
+        assert lines[defaults + 1] == mode[0]
 
-    def test_a_nominal_rate_is_quiet(self):
-        assert not self._fired(self._cfg(0.052))
+    def test_the_composed_default_shows_both_too(self):
+        lines = self._block(self._cfg())
+        assert any(l.startswith("mode: nominal terms · discount_rate 3.0% real default → 5.2% nominal")
+                   for l in lines), lines
 
-    def test_an_omitted_discount_rate_is_quiet(self):
-        """Omitting it is the skill's default: the engine composes it itself."""
-        assert not self._fired(self._cfg())
+    def test_no_warning_names_a_typed_rate(self):
+        """The retired tripwire: a typed rate can no longer discount nominal
+        flows at a real rate, so nothing is left to warn about."""
+        assert not [w for w in coherence_warnings(load_config_dict(self._cfg(0.03)))
+                    if "discount_rate" in w]
 
-    def test_real_mode_is_quiet(self):
-        assert not self._fired(self._cfg(0.03, mode="real"))
+    def test_real_mode_carries_no_mode_line(self):
+        """In real mode the figure is the user's own or the `defaults applied:`
+        line's — the block already has it."""
+        assert not [l for l in self._block(self._cfg(0.03, mode="real")) if l.startswith("mode:")]
 
-    def test_it_reaches_the_read_back_block(self, tmp_path, monkeypatch, capsys):
-        config = _yaml(tmp_path, self._cfg(0.03))
+    def test_it_reaches_the_cli(self, tmp_path, monkeypatch, capsys):
+        config = _yaml(tmp_path, self._cfg(0.035))
         monkeypatch.setattr(sys, "argv", ["hde", config, "--no-monte-carlo", "--read-back"])
         assert cli_main() == 0
         out = capsys.readouterr().out
-        assert any(line.startswith("[warning] discount_rate=3.0% typed in nominal mode")
+        assert any(line.startswith("mode: nominal terms · discount_rate 3.5% real → 5.7% nominal")
                    for line in out.splitlines()), out
+
 
 
 class TestNextStepUnderAPrior:

@@ -562,9 +562,13 @@ class TestNominalRentOtherCosts:
         spec = load_config_dict(self.CFG)
         det = compute_deterministic(spec)
         composed = (1 + 0.01) * (1 + 0.02) - 1
-        expected = pv_recurring_with_escalation(1200, composed, 0.03, 6)
+        # the typed 3% is a REAL rate and is composed too (2026-09-04); discount
+        # at the rate the spec carries, which is the rate the engine uses
+        dr = spec.simulation.discount_rate
+        assert dr == pytest.approx(1.03 * 1.02 - 1)
+        expected = pv_recurring_with_escalation(1200, composed, dr, 6)
         assert det.rent.breakdown["other_pv"] == pytest.approx(expected)
-        assert det.rent.breakdown["other_pv"] > pv_recurring_with_escalation(1200, 0.01, 0.03, 6)
+        assert det.rent.breakdown["other_pv"] > pv_recurring_with_escalation(1200, 0.01, dr, 6)
 
     def test_zero_vol_monte_carlo_matches_deterministic(self):
         from hde.config import load_config_dict

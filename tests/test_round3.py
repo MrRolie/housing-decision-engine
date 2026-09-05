@@ -68,17 +68,36 @@ class TestNominalDiscountDefault:
         assert spec.simulation.discount_rate == pytest.approx((1 + REAL_DR) * 1.021 - 1)
         assert "simulation.discount_rate" in spec.defaults_applied
 
-    def test_nominal_mode_explicit_is_used_as_entered(self):
+    def test_nominal_mode_explicit_is_composed_too(self):
+        """A typed discount_rate is the household's REAL opportunity cost and
+        follows the rule every other rate follows in nominal mode (2026-09-04):
+        composed with inflation_rate, never used as a nominal figure."""
         spec = load_config_dict(_base(discount_rate=0.045,
                                       economic={"mode": "nominal", "inflation_rate": 0.021}))
-        assert spec.simulation.discount_rate == pytest.approx(0.045)
+        assert spec.simulation.discount_rate == pytest.approx(1.045 * 1.021 - 1)
         assert "simulation.discount_rate" not in spec.defaults_applied
+
+    def test_real_mode_explicit_is_the_typed_figure(self):
+        spec = load_config_dict(_base(discount_rate=0.045))
+        assert spec.simulation.discount_rate == pytest.approx(0.045)
 
     def test_composed_default_is_named_in_the_echo(self):
         spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021}))
         text = "\n".join(format_assumptions(spec))
-        assert "discount_rate 5.2%" in text
-        assert "3.0% real default composed with inflation" in text
+        assert "discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation)" in text
+
+    def test_composed_typed_rate_is_named_in_the_echo(self):
+        spec = load_config_dict(_base(discount_rate=0.045,
+                                      economic={"mode": "nominal", "inflation_rate": 0.021}))
+        text = "\n".join(format_assumptions(spec))
+        assert "discount_rate 4.5% real → 6.7% nominal (incl. 2.1% inflation)" in text
+        assert "default" not in text.split("\n")[0]
+        assert ("growth, escalation, investment-return and discount-rate inputs are REAL "
+                "and composed with inflation_rate; mortgage_rate is used as entered") in text
+
+    def test_real_mode_echo_is_unchanged(self):
+        spec = load_config_dict(_base(discount_rate=0.05))
+        assert format_assumptions(spec)[0] == "mode: real terms · discount_rate 5.0%"
 
     def test_no_spurious_capital_spread_warning_in_nominal_mode(self):
         # Defaulted discount rate and defaulted investment return must land on
@@ -166,6 +185,28 @@ class TestComposedDefaultsAreReconcilableInJson:
         e = entries["rent.investment_return_rate"]
         assert e["value"] == pytest.approx(0.03)
         assert "REAL rate" in e["note"] and "5.16%" in e["note"]
+
+    def test_typed_discount_rate_is_reconcilable_with_the_source_echo(self):
+        """`sources` keeps the figure as typed (real); `discount_rate` is the
+        composed value in use; `discount_rate_note` says how the two relate,
+        in the words the composed default already uses."""
+        spec = load_config_dict(_base(discount_rate=0.045, sources={"discount_rate": "user"},
+                                      economic={"mode": "nominal", "inflation_rate": 0.021}))
+        block = assumptions_to_dict(spec)
+        assert block["discount_rate"] == pytest.approx(1.045 * 1.021 - 1)
+        assert block["sources"]["user"] == [
+            {"key": "discount_rate", "value": 0.045, "formatted": "4.5%"}]
+        assert block["discount_rate_note"] == (
+            "composed at parse: (1 + 4.5% real)(1 + 2.1% inflation_rate) − 1 = 6.69% nominal")
+
+    def test_default_discount_rate_note_matches_its_entry(self):
+        spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021}))
+        block = assumptions_to_dict(spec)
+        entry = {e["key"]: e for e in block["defaults_applied"]}["simulation.discount_rate"]
+        assert block["discount_rate_note"] == entry["note"]
+
+    def test_real_mode_carries_no_discount_rate_note(self):
+        assert assumptions_to_dict(load_config_dict(_base()))["discount_rate_note"] is None
 
     def test_real_mode_entries_carry_no_note(self):
         spec = load_config_dict(_base())
