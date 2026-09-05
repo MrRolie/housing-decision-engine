@@ -667,7 +667,10 @@ class TestReviewModifications:
         from hde.config import coherence_warnings, load_config_dict
         cfg = {"years": 15, "discount_rate": 0.05,
                "rent": {"monthly_rent": 2_000, "invested_down_payment": 480_000, "investment_return_rate": 0.03}}
-        warns = [w for w in coherence_warnings(load_config_dict(cfg)) if w.startswith("rent: invested capital")]
+        # the spread warning, not the no-tax-block warning that shares its prefix (2026-09-05)
+        warns = [w for w in coherence_warnings(load_config_dict(cfg))
+                 if w.startswith("rent: invested capital") and "vs discount_rate" in w]
         assert len(warns) == 1 and "charged to the renter" in warns[0] and "$120," in warns[0]
         neutral = {**cfg, "rent": {**cfg["rent"], "investment_return_rate": 0.05}}
-        assert not any(w.startswith("rent: invested capital") for w in coherence_warnings(load_config_dict(neutral)))
+        assert not any(w.startswith("rent: invested capital") and "vs discount_rate" in w
+                       for w in coherence_warnings(load_config_dict(neutral)))

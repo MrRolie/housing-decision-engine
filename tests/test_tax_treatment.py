@@ -265,6 +265,20 @@ class TestRenterCapital:
 
 
 class TestNoBlock:
+    def test_the_engine_warns_when_the_renter_holds_untaxed_capital(self):
+        warnings = coherence_warnings(load_config_dict(cfg()))
+        assert ("rent: invested capital $60,000 earns 5.1% untaxed — no tax: block, so tax on the "
+                "taxable share is not modelled (toward renting); state where the savings sit "
+                "(tax.renter_capital)") in warnings
+
+    def test_silent_without_renter_capital(self):
+        doc = cfg(rent={"monthly_rent": 1_850})
+        assert not any("no tax: block" in w for w in coherence_warnings(load_config_dict(doc)))
+
+    def test_silent_with_a_block(self):
+        warnings = coherence_warnings(load_config_dict(cfg({"renter_capital": SPLIT})))
+        assert not any("no tax: block" in w for w in warnings)
+
     def test_nothing_else_moves(self):
         spec = load_config_dict(cfg())
         det = compute_deterministic(spec)

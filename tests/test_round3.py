@@ -107,7 +107,8 @@ class TestNominalDiscountDefault:
         spec = load_config_dict(_base(economic={"mode": "nominal", "inflation_rate": 0.021},
                                       rent={"monthly_rent": 2000, "rent_escalation_rate": 0.0,
                                             "invested_down_payment": 85_000}))
-        assert not any("invested capital" in w and "earns" in w for w in coherence_warnings(spec))
+        # the spread warning, not the no-tax-block warning that shares its prefix (2026-09-05)
+        assert not any("invested capital" in w and "vs discount_rate" in w for w in coherence_warnings(spec))
 
 
 class TestRealModeMortgageAffordabilityWarning:

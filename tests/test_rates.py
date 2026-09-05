@@ -398,10 +398,13 @@ class TestTheStoryNamesTheQuotedFigure:
         assert rate_label(load_config_dict(_cfg(rates="real")), "discount_rate", 0.05) == "5.0%"
 
     def test_the_capital_spread_warning_names_both_rates_as_quoted(self):
-        warns = [w for w in coherence_warnings(load_config_dict(_cfg())) if "invested capital" in w]
+        # the spread warning, not the no-tax-block warning that shares its prefix (2026-09-05)
+        warns = [w for w in coherence_warnings(load_config_dict(_cfg()))
+                 if "invested capital" in w and "vs discount_rate" in w]
         assert len(warns) == 1
         assert "earns 3.8% real (6.0% as quoted) vs discount_rate 2.8% real (5.0% as quoted)" in warns[0]
-        warns = [w for w in coherence_warnings(load_config_dict(_nominal())) if "invested capital" in w]
+        warns = [w for w in coherence_warnings(load_config_dict(_nominal()))
+                 if "invested capital" in w and "vs discount_rate" in w]
         assert len(warns) == 1
         assert "earns 6.0% vs discount_rate 5.0%" in warns[0]
 

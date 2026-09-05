@@ -467,8 +467,10 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
         dr, n_years, capital = spec.simulation.discount_rate, spec.simulation.years, spec.rent.invested_down_payment
         terminal = renter_terminal_for(spec)
         taxed = spec.tax is not None and spec.tax.renter_capital is not None
-        if abs(r_inv - dr) > 1e-12 or taxed:
-            net = terminal.capital - terminal.value / (1 + dr) ** n_years
+        net = terminal.capital - terminal.value / (1 + dr) ** n_years
+        # A fully sheltered renter at the discount rate has nothing to warn on:
+        # the taxed case fires only when the drag moves a dollar.
+        if abs(r_inv - dr) > 1e-12 or (taxed and abs(net) >= 0.5):
             side = "charged to" if net > 0 else "credited to"
             after_tax = (f" (after tax on the taxable share: blended {terminal.blended_rate:.2%})"
                          if taxed else "")
@@ -478,6 +480,17 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
                 f"{rate_label(spec, 'discount_rate', dr)} — "
                 f"net capital term ${abs(net):,.0f} {side} the renter over {n_years} years; set "
                 f"investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately"
+            )
+        # No `tax:` block (2026-09-05): the renter's return is untaxed and the
+        # owner's gain is exempt either way, so the omission leans toward
+        # renting by the size of the drag — said by the engine, not left to the
+        # answer's memory.
+        if spec.tax is None:
+            warns.append(
+                f"rent: invested capital ${capital:,.0f} earns "
+                f"{rate_label(spec, 'rent.investment_return_rate', r_inv)} untaxed — no tax: block, "
+                f"so tax on the taxable share is not modelled (toward renting); state where the "
+                f"savings sit (tax.renter_capital)"
             )
         # The tax side of the same money (2026-09-05). Gains are taxed in
         # nominal terms: a real-mode config that declares its rates real leaves

@@ -758,6 +758,10 @@ class TestCoherenceWarnings:
                      "invested_down_payment": 400_000},
         }
         cfg.update(overrides)
+        # 2026-09-05: a quiet run states where the renter's savings sit, or the
+        # engine warns that the return is untaxed; all-RRSP keeps the drag at 0.
+        cfg.setdefault("tax", {"marginal_rate": 0.36, "renter_capital": {
+            "rrsp": cfg["rent"].get("invested_down_payment", 0)}})
         return load_config_dict(cfg)
 
     def test_clean_config_no_warnings(self):
