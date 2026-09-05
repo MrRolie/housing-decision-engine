@@ -612,9 +612,10 @@ class TestMortgageInsuranceCliff:
 
 
 class TestSweepCarriesTheMonteCarloMajority:
-    """A row's `decisive` flag keys to the DETERMINISTIC best by design, so a
-    row can read best=rent / decisive=false / prob_best=0.34 while the Monte
-    Carlo majority favours house. The fields make that machine-visible."""
+    """A row's `best` is the DETERMINISTIC winner, so a row can read best=rent
+    / prob_best=0.34 while the Monte Carlo majority favours house — a
+    `disagreement` row since 2026-09-04. The majority fields are the verdict's
+    own, so the row's `state` and its `mc_best` cannot disagree."""
 
     def _raw(self):
         return {

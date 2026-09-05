@@ -316,16 +316,18 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                        if getattr(det, k) is not None},
             "best": verdict.best, "runner_up": verdict.runner_up,
             "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
-            "decisive": verdict.decisive, "rule": verdict.rule, "prob_best": verdict.prob_best,
+            "decisive": verdict.decisive, "state": verdict.state, "rule": verdict.rule,
+            "prob_best": verdict.prob_best,
             "mc_mean_best": verdict.mc_mean_best, "reason": verdict.reason,
-            # The Monte Carlo majority, beside the deterministic best. `decisive`
-            # keys to the DETERMINISTIC winner by design (ruled 2026-09-01), so a
-            # row can read best=rent / decisive=false / prob_best=34% while the
-            # majority and the mean both favour house; readers of the bare triple
-            # were misled (2026-09-04 review). `prob_best` answers "how often is
-            # the deterministic winner cheapest?", `mc_prob_best` "how often is
-            # the most likely winner cheapest?" — never the same question.
-            **_mc_majority(mc, det),
+            # The Monte Carlo majority, beside the deterministic best — the
+            # verdict's own, so a row's `state` and its `mc_best` cannot
+            # disagree. `prob_best` answers "how often is the deterministic
+            # winner cheapest?", `mc_prob_best` "how often is the most likely
+            # winner cheapest?" — never the same question; when the two name
+            # different options the row's `state` is `disagreement` and its
+            # `decisive` is False (ruled 2026-09-04: served answers showed a
+            # table reading "rent, not decisive" beside a 66% house column).
+            "mc_best": verdict.mc_best, "mc_prob_best": verdict.mc_prob_best,
             "affordability": affordability_of(det),
             # The insured tier the loader derived at this point, per owned
             # option — a price scan walks the loan-to-value across tier edges.
@@ -393,6 +395,9 @@ def point_sentence(
     """One grid point in words: `<key>=<v>: best <opt> by $<margin> (<pct>% of
     <opt> PV)[, P(best) <p>%][, insured <opt> <tier>%][, affordability <opt>
     max <r>% breaches years […]]` — only the clauses whose data the run has.
+    On a disagreement point the verdict clause names both sides instead:
+    `<key>=<v>: best guess <opt> by $<margin> (<pct>% of <opt> PV), most
+    futures <other> (<p>%) — disagree`, the other clauses unchanged.
 
     `base` marks the point equal to the base config and keeps its verdict
     clauses alone: its affordability and financing are already in the block.
@@ -402,11 +407,15 @@ def point_sentence(
     if "error" in row:
         return f"{head}: refused: {row['error']}"
     best = row["best"]
-    parts = [f"best {best} by ${row['margin_pv']:,.0f} ({row['margin_frac']:.1%} of {best} PV)"]
-    prob = row.get("prob_best")
-    if prob is not None:
-        measured, _ = _against(prob, ANCHORS["verdict.prob_floor"].value)
-        parts.append(f"P(best) {measured}" + (" (at the floor)" if at_the_floor(prob) else ""))
+    if row.get("state") == "disagreement":
+        parts = [f"best guess {best} by ${row['margin_pv']:,.0f} ({row['margin_frac']:.1%} of {best} PV), "
+                 f"most futures {row['mc_best']} ({row['mc_prob_best']:.0%}) — disagree"]
+    else:
+        parts = [f"best {best} by ${row['margin_pv']:,.0f} ({row['margin_frac']:.1%} of {best} PV)"]
+        prob = row.get("prob_best")
+        if prob is not None:
+            measured, _ = _against(prob, ANCHORS["verdict.prob_floor"].value)
+            parts.append(f"P(best) {measured}" + (" (at the floor)" if at_the_floor(prob) else ""))
     if not base:
         for option, rate in (row.get("insured") or {}).items():
             if option not in drop_insured:
@@ -448,23 +457,6 @@ def sweep_lines(result: Dict[str, Any]) -> List[str]:
                                     drop_insured=(insured or {}).keys() if same_tier else ()))
     lines.extend(flip_lines(result))
     return lines
-
-
-def _mc_majority(mc: Optional[Any], det: ComparisonDeterministicResult) -> Dict[str, Any]:
-    """`mc_best` / `mc_prob_best`: the option Monte Carlo calls cheapest most
-    often, and how often. Both None without a Monte Carlo run."""
-    if mc is None:
-        return {"mc_best": None, "mc_prob_best": None}
-    probs = {
-        name: getattr(mc, f"prob_{name}_cheapest")
-        for name in ("condo", "house", "rent")
-        if getattr(det, name, None) is not None
-        and getattr(mc, f"prob_{name}_cheapest") is not None
-    }
-    if not probs:
-        return {"mc_best": None, "mc_prob_best": None}
-    best = max(probs, key=lambda name: probs[name])
-    return {"mc_best": best, "mc_prob_best": probs[best]}
 
 
 def track_flips(rows: List[Dict[str, Any]], field: str) -> List[Dict[str, Any]]:
@@ -529,6 +521,10 @@ def format_sweep(result: Dict[str, Any]) -> str:
         rule = r.get("rule", "?")
         if at_the_floor(r["prob_best"]):
             rule += ", at the floor"  # decisive by ≥, on nothing to spare
+        if r.get("state") == "disagreement":
+            # The majority beside the deterministic best, in the column that
+            # says "not decisive" — never a bare False next to a 66% column.
+            rule += f", disagree: {r['mc_best']} {r['mc_prob_best']:.0%}"
         lines.append(
             f"  {val:>{max(len(key), 10)}} | {totals} | {r['best']:>8} | "
             f"${r['margin_pv']:>11,.0f} ({r['margin_frac']:.1%}) | {str(r['decisive']):>5} ({rule}) | {prob:>7} | {mean_best:>12}"

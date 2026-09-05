@@ -141,6 +141,14 @@ class TestProbabilityExactlyAtTheFloor:
         assert "at the floor" not in self._table(0.80)
         assert "at the floor" not in self._table(0.6499)
 
+    def test_a_disagreement_row_names_the_majority_in_the_decisive_column(self):
+        from hde.sweep import format_sweep
+        row = {**self._row(0.40), "best": "rent", "runner_up": "condo", "state": "disagreement",
+               "mc_best": "condo", "mc_prob_best": 0.60, "decisive": False}
+        table = format_sweep({"key": "years", "values": [10], "rows": [row],
+                              "flips": [], "mc_mean_flips": [], "mc_majority_flips": []})
+        assert "False (mc_floor, disagree: condo 60%) |" in table
+
 
 class TestPointSentences:
     """One line per grid point in the read-back — the verdict, its margin, the
@@ -178,6 +186,44 @@ class TestPointSentences:
                "prob_best": 0.65, "insured": {}, "affordability": None}
         assert point_sentence("years", row) == (
             "years=5: best house by $1,000 (1.0% of house PV), P(best) 65% (at the floor)")
+
+    def test_a_disagreement_point_names_both_figures(self):
+        """2026-09-04: served answers showed a table reading "rent, not
+        decisive" beside a 66% house column — the point's line names the
+        central case and the majority, and keeps the other clauses."""
+        from hde.sweep import point_sentence
+        row = {"value": 5, "best": "rent", "margin_pv": 6_517.0, "margin_frac": 0.019,
+               "prob_best": 0.40, "state": "disagreement", "mc_best": "house",
+               "mc_prob_best": 0.60, "insured": {"house": 0.028},
+               "affordability": {"house": {"max_ratio": 0.35, "years_exceeding": [1, 2]}}}
+        assert point_sentence("years", row) == (
+            "years=5: best guess rent by $6,517 (1.9% of rent PV), most futures house (60%) "
+            "— disagree, insured house 2.80%, affordability house max 35.0% breaches years [1, 2]")
+
+    def test_every_row_carries_its_state(self):
+        result = run_sweep(self.RICH, "years", [5, 10], monte_carlo=False)
+        for row in result["rows"]:
+            assert row["state"] == ("option" if row["decisive"] else "tie")
+
+    def test_a_real_disagreement_point_is_stated_as_one(self):
+        raw = {
+            "years": 20, "economic": {"mode": "nominal", "inflation_rate": 0.021},
+            "house": {"initial_value": 550_000, "down_payment": 110_000, "mortgage_rate": 0.044,
+                      "mortgage_term_years": 25, "purchase_costs": 8_200, "value_growth_rate": 0.01,
+                      "annual_maintenance_rate": 0.01,
+                      "other_recurring_costs": [
+                          {"name": "property_tax", "annual_amount": 4_700, "escalation_rate": 0.0},
+                          {"name": "home_insurance", "annual_amount": 1_200, "escalation_rate": 0.0}]},
+            "rent": {"monthly_rent": 1_740, "rent_escalation_rate": 0.01,
+                     "invested_down_payment": 110_000, "investment_return_rate": 0.03},
+            "simulation": {"num_sims": 400, "random_seed": 42, "investment_return_vol": 0.15},
+        }
+        row = run_sweep(raw, "rent.monthly_rent", [1_740])["rows"][0]
+        assert row["state"] == "disagreement" and row["best"] == "rent" and row["mc_best"] == "house"
+        assert not row["decisive"]
+        assert row["sentence"].startswith("rent.monthly_rent=1740: best guess rent by $")
+        assert ", most futures house (" in row["sentence"] and row["sentence"].endswith("— disagree")
+        assert "P(best)" not in row["sentence"]
 
     def test_a_refused_point_is_one_line_too(self):
         from hde.sweep import point_sentence
