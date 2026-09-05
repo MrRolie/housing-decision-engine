@@ -141,6 +141,33 @@ class TestVerdictSentence:
         mc = ComparisonMonteCarloResult(prob_condo_cheapest=0.81, prob_house_cheapest=0.19)
         assert verdict_sentence(det, 20, mc=mc, num_sims=5_000) == "Buying a condo wins by $40,000 over 20 years"
 
+    # --- 2026-09-04: served answers showed a table reading "rent, not decisive"
+    # beside a 66% house column — act 1 names both sides of a disagreement ---
+
+    def test_a_disagreement_headline_names_both_sides(self):
+        det = _det_from_pvs({"rent": 400_000.0, "house": 406_517.0})
+        mc = ComparisonMonteCarloResult(prob_rent_cheapest=0.40, prob_house_cheapest=0.60)
+        assert verdict_sentence(det, 20, mc=mc, num_sims=5_000) == (
+            "Best guess: Renting by $6,517 over 20 years · Most futures: buying a house (60%) "
+            "— too close to call")
+
+    def test_a_disagreement_headline_does_not_repeat_a_mean_that_agrees_with_the_majority(self):
+        det = _det_from_pvs({"rent": 400_000.0, "house": 406_517.0})
+
+        def opt(mean):
+            return MonteCarloOptionResult(np.full(10, mean), MonteCarloSummary(mean, 0.0, mean, mean, mean))
+
+        mc = ComparisonMonteCarloResult(rent=opt(420_000.0), house=opt(404_000.0),
+                                        prob_rent_cheapest=0.40, prob_house_cheapest=0.60)
+        sentence = verdict_sentence(det, 20, mc=mc, num_sims=5_000)
+        assert sentence.endswith("— too close to call") and "mean" not in sentence
+
+    def test_a_tie_with_an_agreeing_majority_keeps_the_tie_headline(self):
+        det = _det_from_pvs({"condo": 400_000.0, "house": 440_000.0})
+        mc = ComparisonMonteCarloResult(prob_condo_cheapest=0.55, prob_house_cheapest=0.45)
+        sentence = verdict_sentence(det, 20, mc=mc, num_sims=5_000)
+        assert sentence.startswith("Too close to call — effectively a tie:") and "Best guess" not in sentence
+
 
 class TestCumulativeCurves:
     def test_net_curves_reconcile_to_total_pv_and_paid_is_gross(self):

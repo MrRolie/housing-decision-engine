@@ -152,7 +152,10 @@ def verdict_sentence(
     """
     Act 1 title, as words: e.g. "Renting wins by $84,000 over 25 years", or —
     when the shared decisiveness rule (models.compute_verdict) says the gap is
-    inside the noise — "Too close to call — effectively a tie: …".
+    inside the noise — "Too close to call — effectively a tie: …", or — when
+    the central case and the Monte Carlo majority favour different options
+    (ruled 2026-09-04) — both sides: "Best guess: Renting by $6,517 over 20
+    years · Most futures: buying a house (60%) — too close to call".
 
     The margin is vs the closest competitor (the decision-relevant gap).
     """
@@ -163,6 +166,17 @@ def verdict_sentence(
     if verdict.runner_up is None:
         pv = getattr(det, verdict.best).total_pv
         return f"Only one option priced: {best} at ${pv:,.0f} over {years} years"
+    if verdict.state == "disagreement":
+        sentence = (
+            f"Best guess: {best} by ${verdict.margin_pv:,.0f} over {years} years · "
+            f"Most futures: {OPTION_DISPLAY[verdict.mc_best].lower()} "
+            f"({verdict.mc_prob_best:.0%}) — too close to call"
+        )
+        # The mean clause names a side the headline does not; here the
+        # headline already names the majority.
+        if verdict.mc_mean_best not in (None, verdict.best, verdict.mc_best):
+            sentence += f" — the Monte Carlo mean favours {OPTION_DISPLAY[verdict.mc_mean_best].lower()}"
+        return sentence
     if verdict.decisive:
         sentence = f"{best} wins by ${verdict.margin_pv:,.0f} over {years} years"
         if verdict.mc_mean_best is not None and verdict.mc_mean_best != verdict.best:
