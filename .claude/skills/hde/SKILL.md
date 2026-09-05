@@ -90,8 +90,8 @@ otherwise").
    (0.6% `maintenance.nahb_routine` or the examples' 1.2% — name which), the
    uncertainty vols. "I don't know" here means take the default and name it; a
    RANGE is two configs (gate 5).
-4. **Units and terms:** decimals in the YAML; quoted rates are usually sticker
-   figures — settle real vs nominal (gate 3).
+4. **Units and terms:** decimals in the YAML; rates as quoted — sticker
+   figures, never converted by hand (gate 3).
 
 ONE follow-up is right when their answers open a new question (the arithmetic
 does not close, one number contradicts another); it never asks the user to
@@ -112,7 +112,7 @@ required key with the exact message — show it.
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point | `--sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
 | The threshold on ONE input — rent, price, years, growth, a placeholder in rate form | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30` · `--break-even condo.value_growth_rate=-0.02:0.05` · `--break-even house.property_tax_rate=0.004:0.016`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination is a second config); two priced options only; the lane is `references/threshold-lane.md` |
 | Agent-consumable result | append `--json` |
-| Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml`; Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns; a financed buyer keeps `mode: nominal` |
+| Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml`; Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns |
 
 ## Judgment gates (one rule each; the why and the worked phrasing are in `references/gates.md`)
 
@@ -126,14 +126,14 @@ required key with the exact message — show it.
    prior as a second config (it is the growth view), leave the base growth at
    0, and quote the drift the assumptions line prints for the horizon's bands
    — in ADDITION to the growth sweep, never instead of it.
-3. **A mortgage means `mode: nominal`** (`inflation_rate: 0.021`, declared
+3. **Rates as quoted; a mortgage means `mode: nominal`.** Type every growth,
+   escalation, return and discount rate the way the user sees it quoted — the
+   engine converts once (deflated in real mode, as typed in nominal) and the
+   read-back's `rates:` line shows both forms; never convert by hand; "above
+   inflation" = `rates: real`. Nominal mode: `inflation_rate: 0.021`, declared
    `anchor:economic.inflation_rate.nominal_planning`; `mortgage_rate` = the
-   quote's effective annual, used as typed). Growth, escalation, return and
-   discount rates are REAL; the engine composes inflation: omit
-   `discount_rate` for the anchor or state the user's REAL opportunity cost —
-   the read-back shows both; never a nominal figure. `mode: real` for all-cash
-   and rent-only. Quoted growth and return rates are sticker figures — convert
-   to real (`references/translation.md`).
+   quote's effective annual, the one rate never converted. `mode: real` for
+   all-cash and rent-only (`references/translation.md`).
 4. **Like-for-like renter capital.** `rent.invested_down_payment` = the
    buyer's total year-0 cash (down payment + purchase costs; all cash = price
    + purchase costs). Never call that capital a drag or an advantage — only

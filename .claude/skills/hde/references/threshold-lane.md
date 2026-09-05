@@ -19,7 +19,7 @@ the answer. Everything property-specific they cannot know yet
 `--print-anchors` first. Declare the placeholder itself, and every estimate,
 as `assistant` in the config's `sources:` block — the seed price is not the
 user's number. A renter whose money sits in equities gets a bracketed return
-(3% and 5% real; `references/translation.md`), never the 60/40 anchor
+typed as the fund quotes it (say 5% and 7%; `references/translation.md`), never the 60/40 anchor
 unnamed: on a price threshold the buy edge can move six figures between them. State the cash pile as `cash_available` (never a
 hand-computed `down_payment`): along a price scan the engine re-nets it at
 every point, so the loan-to-value, the 20% line and the premium tier move

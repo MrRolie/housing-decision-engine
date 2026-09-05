@@ -42,27 +42,30 @@ exit.
 
 ## 3. Real vs nominal — the contract, not a vibe
 
-Defaults are REAL terms. With a mortgage, run `mode: nominal`: `economic:
-{mode: nominal, inflation_rate: 0.021}`, `mortgage_rate` = the quoted rate's
-effective annual (no real conversion — a quoted contract rate is the one
-input used as typed). `discount_rate` is a REAL opportunity cost like every
-other rate: omit it for the anchor — the engine composes its 3% real default
-with inflation (5.2%) and echoes it — or state the user's own REAL figure and
-the engine composes it the same way; the read-back's `mode:` line shows both
-(`discount_rate 3.5% real → 5.7% nominal (incl. 2.1% inflation)`). Never type
-a nominal discount rate — it is inflated twice. Growth, escalation and return
-inputs stay REAL in nominal mode and the engine composes `inflation_rate` on
-top (that includes `investment_return_rate`); never type a sticker growth
-rate into nominal mode — inflated twice the same way. Why nominal: the lender collects the NOMINAL payment;
-a real-rate level payment understates year-1 cash by about a fifth and hides
-GDS/TDS breaches (the engine warns when a mortgage runs in real mode with an
-income). `mode: real` is for all-cash and rent-only comparisons, where every
-rate you enter is real. `mortgage_rate` is an effective annual rate with
-annual payments; a Canadian posted rate compounds semi-annually — convert it
-(the schema note carries the formula). Every colloquial GROWTH or RETURN rate
-a member of the public quotes is a sticker rate unless they say "above
-inflation": convert each to real before typing it; the mortgage is the
-exception — compounding only.
+Type every rate the way the user sees it quoted — rent up 3%, prices up 4%, a
+fund returning 6%, a 5% discount rate — and let the engine convert it once:
+in real mode it deflates each typed rate by `inflation_rate`, in nominal mode
+it uses it as typed, and the read-back's `rates:` line shows both forms
+(`rent.rent_escalation_rate 3.0% as quoted = 0.9% after 2.1% inflation`).
+Never convert a sticker figure to real by hand: served answers did, and the
+engine deflated a second time. The engine's DEFAULTS are real (the 3% return,
+the 1% rent escalation) and compose with inflation on their own; a user who
+says "above inflation" has given a real figure — set `rates: real` at the top
+level, and every typed rate is then read as real. With a mortgage, run
+`mode: nominal`: `economic: {mode: nominal, inflation_rate: 0.021}`,
+`mortgage_rate` = the quoted rate's effective annual — a contract rate, never
+converted in either mode. Omit `discount_rate` for the anchor — the engine
+composes its 3% real default with inflation (5.2%) and echoes it — or type
+the user's own quoted figure; the `mode:` line shows the rate in use either
+way. Why nominal: the lender collects the NOMINAL payment; a real-rate level
+payment understates year-1 cash by about a fifth and hides GDS/TDS breaches
+(the engine warns when a mortgage runs in real mode with an income). `mode:
+real` is for all-cash and rent-only comparisons; `inflation_rate` still
+matters there as the deflator (omitted, the engine applies the 2.1% planning
+figure and echoes it under `defaults applied`). `mortgage_rate` is an
+effective annual rate with annual payments; a Canadian posted rate compounds
+semi-annually — convert it (the schema note carries the formula); that is the
+mortgage's only conversion.
 
 ## 4. Like-for-like renter capital
 
@@ -81,7 +84,7 @@ When the user gives a range on a decision-relevant input (growth, horizon,
 price), bracket it with `--sweep` and lead with whether the verdict survives
 the bracket; never quietly take the midpoint. Author brackets in the USER's
 units and include their stated value, zero in their units (flat sticker
-prices = −2.1% real) and one step below; read the flip point back in their
+prices — the engine reads 0 as quoted, −2.1% real) and one step below; read the flip point back in their
 units. The flip point is the engine's `flip <key>:` line — the bracket between two
 run points; if it is too coarse to act on, densify with the range form
 (`--sweep key=lo:hi:n`) and rerun — never interpolate a flip from two points.
