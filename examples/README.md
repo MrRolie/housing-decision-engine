@@ -115,23 +115,35 @@ the Montréal welcome tax is priced from the published brackets (`land_transfer_
 in cash); `first_time_buyer: true` is recorded and the run says it applied nothing, because
 no Québec rebate is anchored — the engine reports that rather than guess a refund. The
 listing's tax bill is entered as two lines, municipal and school, because a Québec bill is
-both. The `income` block turns on the affordability ratios, and every value the file sets is
-declared in `sources:`.
+both. The `income` block turns on the affordability ratios, the `tax:` block says where the
+renter's money sits, and every value the file sets is declared in `sources:`.
 
 ```bash
 uv run hde examples/first_time_buyer_montreal.yaml
 ```
 
-Read the `financing:` line first: the $60,000 less the $4,860 duty, $2,000 of notary and
-inspection and the $1,110 tax on the premium leaves a down payment of about $52k (11.6% of
-price), an insured mortgage at the 3.10% CMHC tier, and the price up to which that cash
-would still cover 20% down. The verdict is "too close to call" — a single-path run, so the
-rule is the 5% tie band — and the affordability line shows the condo above the 32%
-guideline (under the 39% GDS cap) for the first seven years. The two things the run warns
-on are the next step: the 0% real growth default (`--sweep condo.value_growth_rate=0.021:0.041:3`
-in quoted terms, or the `MTL_ISLAND_RA06` prior copied from the showcase) and the 3.1% quoted
-(1% real) rent escalation for a continuing Québec lease, which runs nearer CPI
-(`--sweep rent.rent_escalation_rate=0.021,0.031`).
+Read the `financing:` line first: the $60,000, plus the $2,889 of FHSA refunds and the
+$15,000 Home Buyers' Plan withdrawal, less the $4,860 duty, $2,000 of notary and inspection
+and the $957 tax on the premium, leaves a down payment of about $70k (15.6% of price), an
+insured mortgage at the 2.80% CMHC tier, and the price up to which that cash would still
+cover 20% down. The verdict is "too close to call" — a single-path run, so the rule is the 5%
+tie band — and the affordability line shows the condo above the 32% guideline (under the 39%
+GDS cap) for the first five years.
+
+The `tax:` block is what tips this run from renting to buying, and the `tax:` line in the
+read-back shows how: the marginal rate resolved from the income through the 2026 Québec and
+federal brackets; the renter's $75,000 split into sheltered accounts and a $14,000 taxable
+share whose return is taxed at half the marginal rate (capital-gains treatment), a drag of
+about $1.4k in present value; the owner's principal-residence exemption named; and the
+FHSA's asymmetry — the buyer's $16,000 leaves tax-free while the renter's rolls into an RRSP
+and is taxed at retirement, a haircut worth about $5.7k in present value. The `hbp:` line
+prices the withdrawal as its repayment schedule alone, which nets to a few dollars because
+the renter's return and the discount rate almost coincide. Without the block the same file
+warns that the renter's capital is untaxed and the verdict leans the other way. The two
+things the run still warns on are the next step: the 0% real growth default
+(`--sweep condo.value_growth_rate=0.021:0.041:3` in quoted terms, or the `MTL_ISLAND_RA06`
+prior copied from the showcase) and the 3.1% quoted (1% real) rent escalation for a
+continuing Québec lease, which runs nearer CPI (`--sweep rent.rent_escalation_rate=0.021,0.031`).
 
 ## Parameter sources
 

@@ -52,11 +52,21 @@
 #   rent_escalation_rate 0.031 .... FP Canada 2026 shelter-cost growth, 3.1% as the PAG quotes it
 #                                   (≈ 1.0% real — the registry value's quoted form); a Québec
 #                                   continuing lease runs nearer CPI (0% real) — sweep it
-#   invested_down_payment 60000 ... like-for-like: the renter keeps the same $60,000 invested
+#   invested_down_payment 75000 ... like-for-like: the renter keeps the $60,000 AND the $15,000 the
+#                                   buyer draws through the Home Buyers' Plan
 #   investment_return_rate 0.051 .. FP Canada 2026 PAG 60/40 ≈ 5.1% quoted (≈ 3.0% real, the registry value)
 #   annual_income 95000 ........... the household's income
 #   income_growth_rate 0.031 ...... FP Canada 2026 PAG salary growth, 3.1% as the PAG quotes it (≈ 1.0% real)
 #   affordability_threshold (omitted) engine default 32% (legacy GDS guideline), echoed
+#   tax.renter_capital ............ where the $75,000 sits: TFSA $30,000, RRSP $15,000, taxable $14,000,
+#                                   plus the FHSA share derived below — only the taxable share's
+#                                   return is taxed (capital-gains treatment), the rest is sheltered
+#   tax.marginal_rate (omitted) ... resolved from the income in QC through the 2026 brackets
+#   tax.fhsa ...................... $8,000 in the account, one more $8,000 year before closing: the
+#                                   refunds join BOTH sides' capital; the buyer's $16,000 leaves
+#                                   tax-free, the renter's rolls to an RRSP and is haircut at the end
+#   tax.hbp_withdrawal 15000 ...... the RRSP money into the down payment; priced as its repayment
+#                                   schedule alone (the withdrawn dollars are already in both piles)
 #   num_sims / random_seed ........ structural; no uncertainty input is set, so the Monte Carlo is a
 #                                   single path and the verdict rests on the 5% tie band
 #
@@ -97,12 +107,24 @@ condo:
 rent:
   monthly_rent: 1850  # the household's current rent
   rent_escalation_rate: 0.031  # as quoted; FP Canada 2026 shelter-cost growth 3.1% — a Québec continuing lease runs nearer CPI: sweep it
-  invested_down_payment: 60000  # like-for-like with cash_available
+  invested_down_payment: 75000  # like-for-like: cash_available $60,000 + the $15,000 HBP withdrawal — the renter keeps both invested
   investment_return_rate: 0.051  # as quoted; FP Canada 2026 PAG 60/40 ≈ 5.1%
 
 income:
   annual_income: 95000  # the household's income
   income_growth_rate: 0.031  # as quoted; FP Canada 2026 PAG salary growth 3.1%
+
+tax:  # where the renter's money sits decides how much of its return is taxed; the owner's gain is exempt
+  # marginal_rate omitted: resolved from income $95,000 in QC through the 2026 brackets (tax.federal.*, tax.qc.*)
+  renter_capital:  # the $75,000 the renter keeps invested, by account; the FHSA share is derived from fhsa: below
+    tfsa: 30000
+    rrsp: 15000  # the $15,000 the buyer draws through the Home Buyers' Plan (hbp_withdrawal)
+    taxable: 14000  # the only share whose return is taxed (capital-gains treatment by default)
+  fhsa:  # $8,000 in the account today, one more $8,000 year before closing — refunds accrue to BOTH sides
+    balance: 8000
+    annual_contribution: 8000
+    years_until_purchase: 1
+  hbp_withdrawal: 15000  # joins the down payment; its cost is the repayment schedule alone
 
 simulation:
   num_sims: 5000
@@ -135,5 +157,12 @@ sources:
   rent.investment_return_rate: anchor:rent.investment_return_rate
   income.annual_income: user
   income.income_growth_rate: anchor:income.income_growth_rate
+  tax.renter_capital.tfsa: user
+  tax.renter_capital.rrsp: user
+  tax.renter_capital.taxable: user
+  tax.fhsa.balance: user
+  tax.fhsa.annual_contribution: user
+  tax.fhsa.years_until_purchase: user
+  tax.hbp_withdrawal: user
   simulation.num_sims: assistant
   simulation.random_seed: assistant

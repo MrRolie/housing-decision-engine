@@ -413,7 +413,9 @@ class TestTheExamplesTeachTheDefault:
     CHEAPEST = {
         "advanced_config.yaml": "house",
         "basic_config.yaml": "house",
-        "first_time_buyer_montreal.yaml": "rent",
+        # condo since the example gained its tax: block (the renter's taxable share is
+        # taxed and the FHSA rollover is haircut); rent before it, inside the tie band both ways
+        "first_time_buyer_montreal.yaml": "condo",
         "income_shock.yaml": "condo",
         "mortgage_house_vs_rent.yaml": "house",
         "rent_vs_condo_vs_house.yaml": "house",
