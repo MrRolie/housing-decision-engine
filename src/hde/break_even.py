@@ -38,6 +38,25 @@ MONEY_BRACKET = (0.25, 4.0)
 # about a key's kind (2026-09-08).
 _MONEY_KEYS = MONEY_LEAVES
 
+# Rates whose domain stops at 0 beside the dollar leaves: a tax or cost rate,
+# a mortgage rate, a share of price or income. A growth, escalation, return
+# or discount rate may be negative and is deliberately absent — its floor is
+# open (2026-09-08: a property-tax rate widened to 0% was then offered
+# "widen with … = -0.005:…", one bracket width below a floor the input
+# cannot cross).
+_FLOOR_AT_ZERO_LEAVES = frozenset({
+    "property_tax_rate", "purchase_costs_rate", "annual_maintenance_rate", "mortgage_rate",
+    "selling_cost_rate", "reserve_contribution_rate", "marginal_rate",
+    "retirement_marginal_rate", "affordability_threshold",
+})
+
+
+def floor_at_zero(key: str) -> bool:
+    """True for an input the widen hint must never take below 0 — a dollar
+    figure, one of the rates above, or a volatility."""
+    leaf = key.rsplit(".", 1)[-1]
+    return leaf in _MONEY_KEYS or leaf in _FLOOR_AT_ZERO_LEAVES or leaf.endswith("_vol")
+
 # A rate has no natural multiple of itself (0% growth × 4 is still 0%), so its
 # default bracket is absolute: the plausible range for that rate, wide enough to
 # hold the crossing and narrow enough that every point loads. 2026-09-03 review:
@@ -307,23 +326,34 @@ def no_crossing_record(
     2026-09-04: `<opt> is cheaper throughout` named neither the bounds it held
     for nor what to run next. `widen` is None when the gap narrows toward an
     end the config refuses beyond — no bracket reaches a crossing there.
+
+    2026-09-08: an input whose domain stops at 0 (`floor_at_zero`) is never
+    widened below it. `at_floor` is True when the gap narrows toward the low
+    end and that end already sits at 0: nothing below is searchable, so the
+    hint goes UP instead (when the high end is open), and the sentence says
+    the range ran down to 0.
     """
     lo, hi = searched[0][0], searched[-1][1]
     side = "high" if abs(gap_hi) < abs(gap_lo) else "low"
     width = hi - lo
-    open_end = (hi == asked[1]) if side == "high" else (lo == asked[0])
+    floor = floor_at_zero(key)
+    at_floor = floor and side == "low" and lo <= 0
+    open_end = (hi == asked[1]) if (side == "high" or at_floor) else (lo == asked[0])
     widen: Optional[List[float]] = None
     if open_end and width > 0:
-        if side == "high":
+        if side == "high" or at_floor:
             widen = [lo, hi + width]
         else:
             new_lo = lo - width
             if lo > 0:
                 new_lo = max(new_lo, lo / 2)
+            if floor:
+                new_lo = max(new_lo, 0.0)
             if is_int:
                 new_lo = max(1.0, float(math.floor(new_lo)))
             widen = [new_lo, hi]
-    return {"lo": lo, "hi": hi, "cheaper": cheaper, "narrows_toward": side, "widen": widen}
+    return {"lo": lo, "hi": hi, "cheaper": cheaper, "narrows_toward": side,
+            "at_floor": at_floor, "widen": widen}
 
 
 def solve_break_even(
@@ -848,6 +878,16 @@ def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> L
         record = result_like.get("no_crossing")
         if record is None:  # a caller that solved without the record
             return [f"no crossing in the bracket: {result_like['cheaper_throughout']} is cheaper throughout"]
+        if record.get("at_floor"):
+            # The low end is the input's floor: the range ran down to 0 and
+            # the only direction left is up (2026-09-08).
+            head = (f"no crossing down to 0 on {key}: {record['cheaper']} is cheaper "
+                    f"throughout that range")
+            if record["widen"] is not None:
+                _, w_hi = record["widen"]
+                return [f"{head} — widen upward with --break-even {key}=0:{_arg_value(key, w_hi)}"]
+            return [f"{head} — the high end is one the config refuses beyond; no wider "
+                    f"bracket reaches a crossing"]
         head = (f"no crossing between {_fmt_value(key, record['lo'])} and "
                 f"{_fmt_value(key, record['hi'])}: {record['cheaper']} is cheaper at both ends")
         if record["widen"] is not None:

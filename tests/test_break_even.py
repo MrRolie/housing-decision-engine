@@ -413,3 +413,58 @@ class TestValuesPrintByTheKeysKind:
         assert _fmt_value("condo.value_growth_rate", 0.0) == "0.00%"
         assert _fmt_value("condo.value_growth_rate", 1.5) == "150.00%"
         assert _fmt_value("years", 7) == "7"
+
+
+class TestTheWidenHintRespectsAZeroFloor:
+    """A property-tax rate widened to 0% was then offered "widen with
+    … = -0.005:…" (2026-09-08): the hint walked one bracket width below a
+    floor the input cannot cross. A dollar figure, a tax or cost rate, a
+    mortgage rate or a volatility stops at 0 — the hint stops there too, and
+    at 0 the only direction left is up. A growth, escalation, return or
+    discount rate may be negative and keeps the open floor."""
+
+    def _rent_cheaper(self):
+        raw = _base()
+        raw["rent"]["monthly_rent"] = 1_200
+        return raw
+
+    def test_a_money_key_at_zero_says_so_and_widens_upward(self):
+        from hde.break_even import read_back_block, threshold_sentences
+        out = solve_break_even(self._rent_cheaper(), "condo.purchase_costs", lo=0.0, hi=6_000.0)
+        record = out["no_crossing"]
+        assert record["narrows_toward"] == "low" and record["at_floor"] is True
+        assert record["widen"] == [0.0, 12_000.0]
+        [line] = threshold_sentences("condo.purchase_costs", out, BAND)
+        assert line == ("no crossing down to 0 on condo.purchase_costs: rent is cheaper throughout "
+                        "that range — widen upward with --break-even condo.purchase_costs=0:12000")
+        assert line in format_break_even(out) and line in read_back_block(out)[1]
+
+    def test_a_tax_rate_never_goes_negative(self):
+        from hde.break_even import threshold_sentences
+        raw = self._rent_cheaper()
+        raw["condo"]["property_tax_rate"] = 0.01
+        del raw["condo"]["other_recurring_costs"]
+        out = solve_break_even(raw, "condo.property_tax_rate", lo=0.0, hi=0.005)
+        assert out["no_crossing"]["widen"] == [0.0, 0.01]
+        [line] = threshold_sentences("condo.property_tax_rate", out, BAND)
+        assert line.endswith("widen upward with --break-even condo.property_tax_rate=0:0.01")
+        assert "-0.005" not in line
+
+    def test_a_growth_rate_keeps_the_open_floor(self):
+        from hde.break_even import threshold_sentences
+        out = solve_break_even(_base(), "condo.value_growth_rate", lo=0.0, hi=0.01)
+        assert out["no_crossing"]["narrows_toward"] == "low"
+        assert out["no_crossing"]["at_floor"] is False
+        assert out["no_crossing"]["widen"] == [-0.01, 0.01]
+        [line] = threshold_sentences("condo.value_growth_rate", out, BAND)
+        assert line.endswith("widen with --break-even condo.value_growth_rate=-0.01:0.01")
+
+    def test_the_floor_is_by_key_kind(self):
+        from hde.break_even import floor_at_zero
+        assert floor_at_zero("condo.purchase_costs") and floor_at_zero("rent.monthly_rent")
+        assert floor_at_zero("house.property_tax_rate") and floor_at_zero("condo.mortgage_rate")
+        assert floor_at_zero("condo.other_recurring_costs.tax.annual_amount")
+        assert floor_at_zero("simulation.investment_return_vol")
+        assert not floor_at_zero("condo.value_growth_rate")
+        assert not floor_at_zero("rent.rent_escalation_rate")
+        assert not floor_at_zero("discount_rate")
