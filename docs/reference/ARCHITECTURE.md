@@ -105,11 +105,19 @@ Three rules hold across the reference tables, enforced at import time by
    the source publishes one figure.
 
 `kind: "unsourced"` is a first-class state, not an omission: `value` is `None`,
-`url` records what was tried, and it prints as `source: none`. Gatineau and
-Ottawa hold it today — Gatineau because it taxes by neighbourhood unit, so no
-single city-wide rate exists to cite; Ottawa because the rate by-law was not
-reachable. An unsourced entry can never match a user's figure, so a run in
-either city gets silence rather than a borrowed number.
+`url` records what was tried, and it prints as `source: none`. Gatineau holds
+it today — its own 2026 budget prints « Par unité de voisinage » where a
+residential rate would be, so no single city-wide rate exists to cite. An
+unsourced entry can never match a user's figure, so a Gatineau run gets
+silence rather than a borrowed number. Ottawa left the state on 2026-09-08:
+ottawa.ca has no rate-table page and the 2026 rate by-laws (2026-185 / 186 /
+190 / 192, Council 2026-05-13) are not published in fetchable form, but the
+City's own property-tax estimator publishes the residential rates they set,
+component by component — `property_tax.ottawa` is the urban full-service total
+with education (1.272144% of the 2016-base assessment), banded down to the
+rural municipal-only reading (0.852441%). An Ottawa line is cited by value
+alone; `municipality:` accepts no Ottawa value and needs none — `province: "ON"`
+is what the near-miss hint joins on.
 
 **`mortgage_rate.posted_5y`** (2026-09-04) is the same idea for financing: the
 Bank of Canada's weekly posted 5-year conventional rate (Valet series

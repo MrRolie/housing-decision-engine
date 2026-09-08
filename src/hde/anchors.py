@@ -896,22 +896,36 @@ ANCHORS: Dict[str, Anchor] = {
         value=None,
         as_of="2026",
         source="none — no single city-wide residential rate exists to cite",
-        url="none — tried gatineau.ca's taxes municipales pages and the 2026 budget "
-            "documents; the budget's « Taux de taxes 2026 » pages are image-only "
-            "scans with no extractable text, and the 2026 explanatory notes PDF "
-            "(gatineau.ca/docs/guichet_municipal/taxes_municipales/"
-            "notes_explicatives.fr-CA.pdf) likewise carries no machine-readable text",
+        url="none — read (2026-09-08) the city's own 2026 documents: the budget "
+            "(gatineau.ca/docs/guichet_municipal/administration_municipale/budget/"
+            "budget_2026/budget.fr-CA.pdf, p. 15 « Taux de taxes 2026 ») and the "
+            "tax-bill notes (gatineau.ca/docs/guichet_municipal/taxes_municipales/"
+            "notes_explicatives.fr-CA.pdf); both are image-only PDFs with no "
+            "machine-readable text, read visually, and both print « Par unité de "
+            "voisinage » in the residential row where a rate would be; the taxes "
+            "municipales page states the method in words",
         rationale=(
-            "NOT merely a failed fetch — a structural absence, which is the more "
-            "useful finding. Since 2024 Gatineau levies a rate per NEIGHBOURHOOD "
-            "UNIT rather than one rate across the city, expressly to damp the "
-            "assessment roll's effect on individual bills, so 'the Gatineau "
-            "residential rate' is not a quantity that exists. A Gatineau run must "
-            "take the rate from the property's own tax bill or the city's online "
-            "tax roll for that address; any single percentage offered for the city "
-            "is the assistant's own estimate and must be labelled one. The only "
-            "2026 figure confirmed is the budgeted residential increase, which is "
-            "a change, not a rate."
+            "NOT a failed fetch — a structural absence, read from the primary "
+            "source. Since 2024 Gatineau levies the residential general tax at a "
+            "rate per UNITÉ DE VOISINAGE (« un ensemble de propriétés avoisinantes, "
+            "dans un environnement similaire, ayant des caractéristiques "
+            "homogènes »), expressly to damp the assessment roll's effect on "
+            "individual bills, so 'the Gatineau residential rate' is not a quantity "
+            "that exists: the 2026 budget's « Taux par 1 000 $ d'évaluation » table "
+            "prints « Par unité de voisinage » for « Catégorie résidentielle » and a "
+            "figure only for the 6-or-more-dwellings subclass (6,964 $). What the "
+            "same table DOES publish city-wide, and this entry does not register "
+            "because it is a fraction of the bill: « Transport en commun » 1,417 $ "
+            "and « Service de dettes – nouvelle ville » 0,830 $ per 1 000 $, plus a "
+            "flat 178,83 $ per dwelling for « Gestion des matières résiduelles » and "
+            "ex-city debt charges by sector. The budget's own illustration, for a "
+            "median residence with an étalée (phased-in) value of 454 600 $: "
+            "2 374,83 $ residential + 644,17 $ transit + 377,32 $ debt + 178,83 $ "
+            "waste = 3 575,15 $ — one median case, not a rate, and any percentage "
+            "an assistant derives from it is the assistant's own estimate and must "
+            "be labelled one. A Gatineau run takes the rate from the property's own "
+            "tax bill or the city's online roll for that address. School tax "
+            "excluded here as everywhere — a Gatineau owner also pays `school_tax.qc`."
         ),
         band=(0.0, 0.0),
         short_cite="source: none",
@@ -920,30 +934,59 @@ ANCHORS: Dict[str, Anchor] = {
     ),
     "property_tax.ottawa": Anchor(
         name="property_tax.ottawa",
-        value=None,
+        value=0.01272144,
         as_of="2026",
-        source="none — the 2026 rate-setting by-law was not located in fetchable form",
-        url="none — tried ottawa.ca's property-tax-rates and calculating-your-property-"
-            "taxes pages (both returned empty), the City's 2026 final-tax mailer at "
-            "documents.ottawa.ca (dollar totals only, no rate), and the 2026 tax-policy "
-            "report on the Council agenda portal (tax RATIOS by class, not rates); the "
-            "Ontario education rate on e-Laws sits behind a JavaScript shell",
+        source="City of Ottawa, « Online property tax and assessment tools » — the "
+               "Property Tax Estimator's own rate table for the 2026 tax year "
+               "(yearId 149), property class « RESIDENTIAL - TAXABLE: FULL - (RT) », "
+               "Transit Zone « Full Service (T) », Fire Services « Full Service "
+               "(FSU) », read from the tool's `api/estimate` response (the rate the "
+               "City applies per service, in percent of assessment). The rates were "
+               "set by By-laws 2026-185 (general levy), 2026-186 (police), 2026-190 "
+               "(urban fire) and 2026-192 (urban transit), enacted by Council on "
+               "2026-05-13 (Minutes 79); the by-law texts are not published in "
+               "fetchable form and ottawa.ca has no rate-table page — the estimator "
+               "is the City surface that prints the resulting rates",
+        url="https://propertytaxes-taxesfoncieres.ottawa.ca/api/estimate?yearId=149&propertyClassId=110&transitZoneId=1&fireServicesId=8&solidWasteId=5&sewerSurcharge=false&assessmentAmount=100000",
+        quoted="serviceEstimates (percentage; 2026, RT, urban full service): CIT "
+               "« City Wide » 0.593374 ; POL « Ottawa Police Services » 0.180986 ; F "
+               "« Fire Services — Full Service (FSU) » 0.094972 ; TR « Transit Zone — "
+               "Full Service (T) » 0.242185 ; CAL « Conservation Authority Levy » "
+               "0.007627 ; EDN « Education » 0.153 ; CTL « Capital Tax Levy » 0 ; SW "
+               "« Solid Waste\\Garbage — Curb Pick-up (C) » percentageIsFixed true, "
+               "amount 267",
+        unit="rate on ASSESSED value (MPAC CVA — a January 1, 2016 value in the "
+             "2026 tax year; urban full-service area) — assessed ≠ market",
         rationale=(
-            "No figure is registered rather than a plausible one. Ottawa's rate is "
-            "set annually by by-law and the components (city-wide, transit, police, "
-            "urban-area, provincial education) are published separately; none was "
-            "reached. An Ottawa run must take the rate from the property's own tax "
-            "bill, the City's online property-tax estimator, or the rate by-law; a "
-            "percentage typed from anywhere else is the assistant's estimate and "
-            "must be labelled one. What DOES carry over from the Toronto entry is "
-            "the base: Ontario assesses the 2026 tax year on January 1, 2016 MPAC "
-            "values (mpac.ca AssessmentCycle, retrieved 2026-09-03), so any Ontario "
-            "rate applied to a 2026 purchase price overstates the bill."
+            "The six ad-valorem lines an urban Ottawa house or condo pays, summed: "
+            "0.593374 + 0.180986 + 0.094972 + 0.242185 + 0.007627 + 0.153 = "
+            "1.272144% of assessed value, provincial education rate included "
+            "(0.153% — the same province-wide residential education rate the "
+            "Toronto entry quotes; the City's 2026 tax-policy report says the "
+            "education rates are unchanged for 2026). Band top is that urban "
+            "total; band bottom is the RURAL municipal share alone — City Wide + "
+            "Police + volunteer fire (FSR) 0.057407 + Para Transpo-only transit "
+            "(TRB) 0.013047 + Conservation 0.007627 = 0.852441%, education "
+            "excluded — the narrowest reading of the same table. A rural owner's "
+            "full bill is 1.005441% with education; a commuter-transit (TRA) zone "
+            "sits between. EXCLUDED and material: the solid-waste fee, a FLAT $267 "
+            "per curbside household in 2026 (not a rate), and the sewer surcharge "
+            "(0.088251%) charged only to properties without a water bill — a "
+            "user's figure that includes either will legitimately fail to match. "
+            "THE ASSESSMENT LAG IS A DECADE: Ontario assesses the 2026 tax year on "
+            "fully phased-in January 1, 2016 MPAC values (mpac.ca AssessmentCycle, "
+            "retrieved 2026-09-03), so this rate applied to a 2026 purchase price "
+            "overstates the bill by the whole 2016→2026 appreciation — a CEILING "
+            "on the true bill, not an estimate of it. Set by By-laws 2026-185, "
+            "2026-186, 2026-190 and 2026-192 (Council 2026-05-13); the City's "
+            "estimator is where the resulting rates are published, and its own "
+            "request is the URL above because ottawa.ca's bot wall refuses "
+            "non-browser clients."
         ),
-        band=(0.0, 0.0),
-        short_cite="source: none",
+        band=(0.00852441, 0.01272144),
+        short_cite="City of Ottawa 2026 (urban, education included)",
         province="on",
-        kind="unsourced",
+        retrieved_on="2026-09-08",
     ),
     "home_insurance.qc": Anchor(
         name="home_insurance.qc",

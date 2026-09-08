@@ -799,3 +799,117 @@ class TestNearMiss:
         for name, anchor in ANCHORS.items():
             if name.startswith(("property_tax.", "home_insurance.")) and anchor.value is not None:
                 assert anchor.province.strip(), f"{name}: no province"
+
+
+# ---------------------------------------------------------------------------
+# Ottawa sourced, Gatineau confirmed unsourced (2026-09-08)
+#
+# Ottawa's 2026 rate by-laws (2026-185 general, 2026-186 police, 2026-190
+# urban fire, 2026-192 urban transit; Council 2026-05-13) are not published in
+# fetchable form, but the City's own property-tax estimator publishes the
+# residential rates they set, component by component, so an Ottawa figure is
+# now cited by value and hinted at by province. Gatineau's own 2026 budget
+# prints « Par unité de voisinage » where a residential rate would be, so it
+# stays `source: none` — the absence is now read from the primary source.
+# ---------------------------------------------------------------------------
+
+OTTAWA_URBAN_COMPONENTS = (0.593374, 0.180986, 0.094972, 0.242185, 0.007627, 0.153)
+OTTAWA_RURAL_MUNICIPAL = (0.593374, 0.180986, 0.057407, 0.013047, 0.007627)
+
+
+class TestOttawaReference:
+    NAME = "property_tax.ottawa"
+
+    def test_registered_fetched_and_quoted(self):
+        anchor = ANCHORS[self.NAME]
+        assert anchor.kind == "cited"
+        assert anchor.province == "on"
+        assert anchor.url.startswith("https://propertytaxes-taxesfoncieres.ottawa.ca/api/estimate?")
+        assert anchor.retrieved_on == "2026-09-08"
+        for component in ("0.593374", "0.180986", "0.094972", "0.242185", "0.007627", "0.153"):
+            assert component in anchor.quoted, component
+        assert "assess" in anchor.unit.lower() and "2016" in anchor.unit
+        assert anchor.restatements == ()
+
+    def test_the_value_is_the_urban_full_service_total_with_education(self):
+        anchor = ANCHORS[self.NAME]
+        assert anchor.value == pytest.approx(sum(OTTAWA_URBAN_COMPONENTS) / 100, abs=1e-12)
+        assert anchor.value == pytest.approx(0.01272144, abs=1e-12)
+
+    def test_the_band_spans_rural_municipal_only_to_urban_total(self):
+        anchor = ANCHORS[self.NAME]
+        assert anchor.band[0] == pytest.approx(sum(OTTAWA_RURAL_MUNICIPAL) / 100, abs=1e-12)
+        assert anchor.band[1] == pytest.approx(anchor.value, abs=1e-12)
+
+    def test_the_rationale_names_the_by_laws_and_the_assessment_base(self):
+        rationale = ANCHORS[self.NAME].rationale
+        for by_law in ("2026-185", "2026-186", "2026-190", "2026-192"):
+            assert by_law in rationale, by_law
+        assert "2016" in rationale and "overstates" in rationale
+
+    def test_a_matching_line_is_cited_by_value_without_province_or_municipality(self):
+        """The `property_tax.` family matches by figure alone, so an Ottawa
+        run needs no `municipality:` value (the loader accepts none for it) —
+        the figure is enough."""
+        ottawa = ANCHORS[self.NAME]
+        spec = _spec_with_costs([{"name": "property tax",
+                                  "annual_amount": round(ottawa.value * 600_000, 2)}])
+        line = _other_costs_line(spec)
+        assert ottawa.short_cite in line and "no anchor match" not in line
+        [entry] = reference_matches(spec)
+        assert [m["name"] for m in entry["matches"]] == [self.NAME]
+        assert entry["province"] is None
+
+    def test_a_matching_ontario_line_is_cited_not_suffixed(self):
+        ottawa = ANCHORS[self.NAME]
+        spec = _spec_with_costs([{"name": "property tax",
+                                  "annual_amount": round(ottawa.value * 600_000, 2)}],
+                                province="ON")
+        line = _other_costs_line(spec)
+        assert ottawa.short_cite in line and "2016" in line  # the unit carries the base
+        assert "no anchor match" not in line
+
+    def test_an_ontario_near_miss_names_ottawa_and_keeps_the_suffix(self):
+        ottawa = ANCHORS[self.NAME]
+        spec = _spec_in("ON", _tax_line(ottawa.value * 1.005))
+        entry = assumptions_to_dict(spec)["reference_matches"][0]
+        assert entry["citations"] == []
+        assert entry["nearest"]["name"] == self.NAME
+        text = " ".join(format_assumptions(spec))
+        assert "nearest: property_tax.ottawa 1.2721% (Δ +0.0064 pt) — not a match" in text
+        assert ONTARIO_SUFFIX.rstrip("]") in text
+
+    def test_never_offered_to_a_quebec_figure(self):
+        ottawa = ANCHORS[self.NAME]
+        entry = assumptions_to_dict(_spec_in("QC", _tax_line(ottawa.value * 1.001)))["reference_matches"][0]
+        assert entry["nearest"] is None
+
+    def test_never_summed_with_the_quebec_school_tax(self):
+        ottawa = ANCHORS[self.NAME].value
+        school = ANCHORS["school_tax.qc"].value
+        assert match_reference_sum(PROPERTY_TAX, ottawa + school) == []
+
+    def test_the_schema_note_no_longer_names_ottawa(self):
+        import re
+        from hde.input_schema import input_schema
+        text = str(input_schema())
+        found = re.search(r"No source registered for: ([^.]*)\.", text)
+        assert found, "the schema lost its no-source note"
+        assert "Gatineau" in found.group(1)
+        assert "Ottawa" not in found.group(1)
+
+
+class TestGatineauStaysUnsourced:
+    NAME = "property_tax.gatineau"
+
+    def test_the_absence_is_read_from_the_city_documents(self):
+        anchor = ANCHORS[self.NAME]
+        assert anchor.kind == "unsourced" and anchor.value is None
+        assert anchor.short_cite == "source: none"
+        assert "budget.fr-CA.pdf" in anchor.url and "2026-09-08" in anchor.url
+        assert "par unité de voisinage" in anchor.rationale.lower()
+
+    def test_the_rationale_quotes_the_city_wide_lines_it_does_not_register(self):
+        rationale = ANCHORS[self.NAME].rationale
+        assert "1,417" in rationale and "0,830" in rationale
+        assert "454 600" in rationale
