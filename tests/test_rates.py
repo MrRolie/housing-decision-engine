@@ -267,6 +267,56 @@ class TestAnchorDeclarationsCompareInTheAnchorsConvention:
             load_config_dict(_cfg(discount_rate=0.03, sources={"discount_rate": "anchor:simulation.discount_rate"}))
 
 
+class TestNominalZeroGrowthWarning:
+    """A home's value typed as a NOMINAL 0% is a real decline of inflation's
+    size — served answers took "prices flat" typed as 0.0 for the neutral view
+    (the omitted key, 0% real) and a 5% margin became 36%. The engine says
+    which readings exist; the omitted default and real mode stay silent."""
+
+    TEXT = ("house.value_growth_rate 0.0% as quoted is a 2.1%/yr REAL decline in the "
+            "home's value; a \"flat\" view that tracks inflation is 2.1% quoted — or omit "
+            "the key for the neutral 0% real default; say which reading the user meant")
+
+    def _house(self, **over):
+        cfg = _nominal(**over)
+        del cfg["condo"]
+        cfg["house"] = {"initial_value": 500_000, "all_cash": True, "value_growth_rate": 0.0,
+                        "purchase_costs": 6_000,
+                        "other_recurring_costs": [{"name": "tax", "annual_amount": 3_000}]}
+        return cfg
+
+    def test_typed_nominal_zero_fires_with_the_exact_text(self):
+        warnings = coherence_warnings(load_config_dict(self._house()))
+        assert self.TEXT in warnings
+        assert not any("no appreciation modelled (neutral)" in w for w in warnings)
+
+    def test_once_per_owned_option(self):
+        cfg = self._house()
+        cfg["condo"] = {"initial_value": 400_000, "monthly_fee": 300, "all_cash": True,
+                        "value_growth_rate": 0, "purchase_costs": 6_000}
+        warnings = coherence_warnings(load_config_dict(cfg))
+        assert sum("REAL decline in the home's value" in w for w in warnings) == 2
+        assert any(w.startswith("condo.value_growth_rate 0.0% as quoted") for w in warnings)
+
+    def test_silent_on_the_omitted_default(self):
+        cfg = self._house()
+        del cfg["house"]["value_growth_rate"]
+        warnings = coherence_warnings(load_config_dict(cfg))
+        assert not any("REAL decline" in w for w in warnings)
+        assert any("house.value_growth_rate=0.0% — no appreciation modelled (neutral)" in w
+                   for w in warnings)
+
+    def test_silent_in_real_mode_and_under_rates_real(self):
+        real = self._house(economic={"mode": "real", "inflation_rate": PI})
+        assert not any("REAL decline" in w for w in coherence_warnings(load_config_dict(real)))
+        declared = self._house(rates="real")
+        assert not any("REAL decline" in w for w in coherence_warnings(load_config_dict(declared)))
+
+    def test_silent_when_nominal_inflation_is_zero(self):
+        cfg = self._house(economic={"mode": "nominal", "inflation_rate": 0.0})
+        assert not any("REAL decline" in w for w in coherence_warnings(load_config_dict(cfg)))
+
+
 class TestTheReadBackLine:
     def test_real_mode_prints_both_forms_per_typed_rate(self):
         spec = load_config_dict(_cfg())
@@ -279,11 +329,22 @@ class TestTheReadBackLine:
             "rent.investment_return_rate 6.0% as quoted = 3.8% after 2.1% inflation · "
             "income.income_growth_rate 3.0% as quoted = 0.9% after 2.1% inflation")
 
-    def test_nominal_mode_says_the_quoted_figure_is_used_as_typed(self):
+    def test_nominal_mode_prints_the_real_equivalent_beside_the_quoted_figure(self):
+        """A nominal run uses the typed figure as typed — and says what it is in
+        real terms, the same arithmetic the real-mode clause prints, so a
+        nominal 0% for a home's value is never read as "flat"."""
         spec = load_config_dict(_nominal())
         line = rates_line(spec)
-        assert line.startswith("rates: as quoted · discount_rate 5.0% as quoted = 5.0% nominal, as typed · ")
-        assert "rent.rent_escalation_rate 3.0% as quoted = 3.0% nominal, as typed" in line
+        assert line.startswith("rates: as quoted · discount_rate 5.0% as quoted = 5.0% nominal = 2.8% real · ")
+        assert "condo.value_growth_rate 4.0% as quoted = 4.0% nominal = 1.9% real" in line
+        assert "rent.rent_escalation_rate 3.0% as quoted = 3.0% nominal = 0.9% real" in line
+        assert "as typed" not in line
+
+    def test_nominal_zero_growth_reads_as_a_real_decline(self):
+        cfg = _nominal()
+        cfg["condo"]["value_growth_rate"] = 0.0
+        assert ("condo.value_growth_rate 0.0% as quoted = 0.0% nominal = -2.1% real"
+                in rates_line(load_config_dict(cfg)))
 
     def test_nothing_typed_says_so(self):
         cfg = {"years": 5, "rent": {"monthly_rent": 1_500}}

@@ -38,7 +38,7 @@ from .models import (
     MonteCarloSummary,
     Verdict,
 )
-from .rates import ConvertedRate, converted_for, inflation_anchor_name
+from .rates import ConvertedRate, converted_for, deflate, inflation_anchor_name
 from .sources import SourceEcho, source_echo_to_dict, source_lines
 from .tax_treatment import (
     fhsa_clause, financing_additions, hbp_line, tax_line, tax_summary_line, tax_to_dict,
@@ -365,7 +365,13 @@ def rates_line(spec: ComparisonSpec) -> str:
     if not spec.converted_rates:
         return "rates: as quoted · no typed rate to convert"
     if spec.economic.mode == "nominal":
-        clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} nominal, as typed"
+        # The quoted figure is the one in use — and its real equivalent rides
+        # beside it, the same arithmetic as the real-mode clause, so a nominal
+        # 0% typed for a home's value reads as the real decline it is
+        # (2026-09-08: served answers took "prices flat" typed as 0.0 for the
+        # neutral view and a 5% margin became 36%).
+        clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} nominal = "
+                   f"{deflate(c.quoted, pi):.1%} real"
                    for c in spec.converted_rates]
     else:
         clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} after {pi:.1%} inflation"

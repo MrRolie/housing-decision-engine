@@ -33,7 +33,9 @@ from .rates import (
     RateConventionError,
     RateConverter,
     convention_of,
+    converted_for,
     default_inflation_rate,
+    deflate,
 )
 from .serialization import (
     cost_family,
@@ -578,6 +580,24 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"{name}.value_growth_rate=0.0% — no appreciation modelled (neutral); "
                 f"the verdict is sensitive to it: state a view or bracket it "
                 f"(a market_scenario prior adds drift in the Monte Carlo only)"
+            )
+        # A NOMINAL 0% typed for the home's value is a real decline of
+        # inflation's size, not the neutral view — that is the OMITTED key
+        # (0% real). Served answers took "prices flat" typed as 0.0 for
+        # neutral and a 5% margin became 36% (2026-09-08). Only a typed
+        # figure under the as-quoted convention is recorded as converted, so
+        # the default and `rates: real` never reach here; nominal mode with
+        # inflation_rate=0 leaves 0 quoted at 0 real, which the neutral
+        # warning above already names.
+        typed_growth = converted_for(spec.converted_rates, f"{name}.value_growth_rate")
+        if (econ.mode == "nominal" and typed_growth is not None
+                and typed_growth.quoted == 0 and econ.inflation_rate > 0):
+            decline = -deflate(0.0, econ.inflation_rate)
+            warns.append(
+                f"{name}.value_growth_rate {typed_growth.quoted:.1%} as quoted is a "
+                f"{decline:.1%}/yr REAL decline in the home's value; a \"flat\" view that "
+                f"tracks inflation is {econ.inflation_rate:.1%} quoted — or omit the key for "
+                f"the neutral 0% real default; say which reading the user meant"
             )
 
     # Under 20% down with nothing financed (round 6): a Canadian mortgage below
