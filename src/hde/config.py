@@ -528,17 +528,35 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             warns.append(room)
         # Like-for-like under the block: the buyer's pile plus the HBP withdrawal
         # IS the renter's capital, or the two sides do not hold the same money.
+        # The HBP joins either financing path (2026-09-08): a stated
+        # `cash_available` is the pile itself; a stated `down_payment` is the
+        # pile less the cash purchase costs, so the buyer's year-0 cash —
+        # down payment + purchase_costs, the schema's own like-for-like
+        # definition — is what the withdrawal is added to. The loader has
+        # already folded the additions into `down_payment`; the typed figure
+        # is what the sentence names.
         if spec.tax is not None and spec.tax.hbp is not None:
+            hbp = spec.tax.hbp.withdrawal
             for name, opt in (("condo", spec.condo), ("house", spec.house)):
-                if opt is None or opt.cash_available is None or not opt.first_time_buyer:
+                if opt is None or not opt.first_time_buyer or opt.all_cash:
                     continue
-                pile = opt.cash_available + spec.tax.hbp.withdrawal
+                if opt.cash_available is not None:
+                    pile = opt.cash_available + hbp
+                    stated = f"{name} cash_available ${opt.cash_available:,.0f} + HBP ${hbp:,.0f}"
+                    rule = "cash_available + hbp_withdrawal"
+                elif opt.down_payment is not None:
+                    typed_down = opt.down_payment - spec.tax.day_one_additions
+                    pile = typed_down + opt.purchase_costs + hbp
+                    stated = (f"{name} down payment ${typed_down:,.0f} + purchase_costs "
+                              f"${opt.purchase_costs:,.0f} + HBP ${hbp:,.0f}")
+                    rule = "down_payment + purchase_costs + hbp_withdrawal"
+                else:
+                    continue
                 if abs(pile - capital) > 1.0:
                     warns.append(
-                        f"tax: like-for-like — {name} cash_available ${opt.cash_available:,.0f} + HBP "
-                        f"${spec.tax.hbp.withdrawal:,.0f} = ${pile:,.0f} while rent.invested_down_payment "
+                        f"tax: like-for-like — {stated} = ${pile:,.0f} while rent.invested_down_payment "
                         f"is ${capital:,.0f}; the two sides do not hold the same money — like-for-like "
-                        f"is cash_available + hbp_withdrawal = rent.invested_down_payment"
+                        f"is {rule} = rent.invested_down_payment"
                     )
 
     # Owner carrying and purchase costs left at zero understate the buy side;

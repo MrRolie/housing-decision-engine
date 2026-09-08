@@ -480,6 +480,24 @@ class TestHbp:
         doc["condo"]["cash_available"] = 40_000
         assert not any("like-for-like" in w for w in coherence_warnings(load_config_dict(doc)))
 
+    def test_like_for_like_warning_on_the_down_payment_path(self):
+        """The HBP joins a `down_payment`-typed option too (the loader adds it
+        to the stated figure), so the like-for-like check reads that path as
+        well: the buyer's year-0 cash — down payment + purchase costs — plus
+        the withdrawal, against the renter's capital (2026-09-08)."""
+        doc = cfg({"renter_capital": SPLIT, "hbp_withdrawal": self.H})
+        del doc["condo"]["cash_available"]
+        doc["condo"]["down_payment"] = 54_000
+        spec = load_config_dict(doc)
+        assert spec.condo.down_payment == 54_000 + self.H
+        assert ("tax: like-for-like — condo down payment $54,000 + purchase_costs $6,000 + HBP "
+                "$20,000 = $80,000 while rent.invested_down_payment is $60,000; the two sides do "
+                "not hold the same money — like-for-like is down_payment + purchase_costs + "
+                "hbp_withdrawal = rent.invested_down_payment") in coherence_warnings(spec)
+        doc["rent"]["invested_down_payment"] = 80_000
+        doc["tax"]["renter_capital"] = dict(SPLIT, taxable=35_000)
+        assert not any("like-for-like" in w for w in coherence_warnings(load_config_dict(doc)))
+
     def test_sweeping_the_withdrawal_re_derives_through_the_loader(self):
         from hde.sweep import run_sweep
         result = run_sweep(cfg({"renter_capital": SPLIT, "hbp_withdrawal": 0}), "tax.hbp_withdrawal",

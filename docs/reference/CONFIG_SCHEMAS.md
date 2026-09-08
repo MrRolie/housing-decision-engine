@@ -26,7 +26,7 @@ tax:                       # Optional: the tax treatment of the two sides' money
   taxable_return_treatment: <string>  # "capital_gains" (default: marginal × the one-half inclusion) or "interest" (marginal × 1)
   retirement_marginal_rate: <float>   # Optional: the rate on the renter's FHSA→RRSP rollover at the horizon (default: the current marginal rate)
   fhsa:                    # Optional, first-time buyer only: {balance, annual_contribution, years_until_purchase}
-  hbp_withdrawal: <float>  # Optional, first-time buyer only: ≤ $60,000 and ≤ renter_capital.rrsp; joins the down payment
+  hbp_withdrawal: <float>  # Optional, first-time buyer only: ≤ $60,000 and ≤ renter_capital.rrsp; joins the down payment (state cash_available OR down_payment without it; it joins either)
 
 economic:                  # Optional: Economic assumptions
   mode: <string>           # "real" or "nominal" (default: "real")
@@ -482,8 +482,12 @@ taxable share is not modelled (toward renting); state where the savings sit
   `retirement_marginal_rate` at the horizon; the buyer's leaves tax-free.
 - **The Home Buyers' Plan** (`hbp_withdrawal`, ≤ $60,000 and ≤
   `renter_capital.rrsp`) joins the down payment before the insurance tier is
-  chosen — state `cash_available` without it; like-for-like is `cash_available
-  + hbp_withdrawal = rent.invested_down_payment` and the engine warns otherwise.
+  chosen, on either financing path — state `cash_available` OR `down_payment`
+  without it and the loader adds it to whichever is stated. Like-for-like is
+  `cash_available + hbp_withdrawal = rent.invested_down_payment`, or
+  `down_payment + purchase_costs + hbp_withdrawal = rent.invested_down_payment`
+  (the buyer's year-0 cash plus the withdrawal), and the engine warns
+  otherwise (2026-09-08).
   The withdrawn amount is already priced by the capital legs (the renter earns
   the return on it, the buyer's down payment carries it); the plan's own cost
   is the repayment schedule, `hbp_repayment_pv`: fixed nominal outlays of 1/15 a
