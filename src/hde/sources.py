@@ -86,7 +86,7 @@ _LINE_LEAVES = ("annual_amount", "escalation_rate")
 _RATE_ON_VALUE = ("property_tax.", "school_tax.")
 
 
-def _split_line_key(key: str) -> Optional[Tuple[str, str, str]]:
+def split_line_key(key: str) -> Optional[Tuple[str, str, str]]:
     """(option, line name, leaf) for the named-line form, else None. The name
     is whatever sits between the fixed prefix and the leaf suffix, so a name
     with dots or spaces in it (`property tax (0.55% of value)`) resolves."""
@@ -102,7 +102,7 @@ def _split_line_key(key: str) -> Optional[Tuple[str, str, str]]:
     return None
 
 
-def _lines_of(data: Dict[str, Any], option: str) -> List[Dict[str, Any]]:
+def option_lines(data: Dict[str, Any], option: str) -> List[Dict[str, Any]]:
     block = data.get(option)
     lines = block.get(_LINE_LIST) if isinstance(block, dict) else None
     if not isinstance(lines, list):
@@ -114,7 +114,7 @@ def line_keys(data: Dict[str, Any], option: str) -> List[str]:
     """The named-line keys one option's list states, in config order — one
     per leaf each line actually sets. A name two lines share is not a key at
     all: it cannot say which line it means, and `_line_problem` says so."""
-    lines = _lines_of(data, option)
+    lines = option_lines(data, option)
     names = [str(line["name"]) for line in lines if "name" in line]
     out: List[str] = []
     for line in lines:
@@ -129,7 +129,7 @@ def line_keys(data: Dict[str, Any], option: str) -> List[str]:
 def _line_problem(data: Dict[str, Any], key: str, option: str,
                   line_name: str, leaf: str) -> str:
     """Why a named-line key cannot be declared — always naming what exists."""
-    lines = _lines_of(data, option)
+    lines = option_lines(data, option)
     if not lines:
         return f"sources: '{key}' — {option} has no other_recurring_costs lines"
     named = [line for line in lines if str(line.get("name")) == line_name]
@@ -147,10 +147,10 @@ def _line_problem(data: Dict[str, Any], key: str, option: str,
 def raw_value(data: Dict[str, Any], dotted: str) -> Any:
     """The value a dotted key holds in the raw YAML mapping — a named line's
     leaf, or the plain walk."""
-    split = _split_line_key(dotted)
+    split = split_line_key(dotted)
     if split is not None:
         option, line_name, leaf = split
-        named = [line for line in _lines_of(data, option)
+        named = [line for line in option_lines(data, option)
                  if str(line.get("name")) == line_name]
         if len(named) == 1 and leaf in named[0]:
             return named[0][leaf]
@@ -445,7 +445,7 @@ def _anchor_declaration(
     # this accepts, and a line it does not cite is refused here too.
     figure = float(stated)
     figure_text = f"{figure:g}"
-    split = _split_line_key(key)
+    split = split_line_key(key)
     if (split is not None and split[2] == "annual_amount"
             and all(a.name.startswith(_RATE_ON_VALUE) for a in anchors)):
         option = split[0]
@@ -560,7 +560,7 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
             for key, value in block.items():
                 key = str(key)
                 if key not in keys and key not in all_named:
-                    split = _split_line_key(key)
+                    split = split_line_key(key)
                     problems.append(_line_problem(data, key, *split) if split is not None
                                     else _key_problem(data, key, keys + all_named))
                     continue

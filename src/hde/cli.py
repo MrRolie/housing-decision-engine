@@ -128,8 +128,9 @@ def main() -> int:
         default=[],
         metavar="KEY=v1,v2,...|KEY=start:stop:n",
         help="Re-run the comparison across values of one input (repeatable), e.g. "
-             "--sweep years=5,10,20 or --sweep condo.value_growth_rate=0:0.04:5; prints "
-             "per-point verdicts and where the cheapest option flips; rides --json as 'sweeps'",
+             "--sweep years=5,10,20 or --sweep condo.value_growth_rate=0:0.04:5; a cost line "
+             "by its name, --sweep 'house.other_recurring_costs.property_tax.annual_amount=3000,6000'; "
+             "prints per-point verdicts and where the cheapest option flips; rides --json as 'sweeps'",
     )
     parser.add_argument(
         "--break-even",

@@ -20,7 +20,7 @@ from .deterministic import compute_deterministic
 from .models import ComparisonDeterministicResult, ComparisonSpec, _against, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .serialization import mc_to_dict
-from .sources import MONEY_LEAVES
+from .sources import MONEY_LEAVES, option_lines, split_line_key
 
 # Inputs the parser reads as integers.
 INT_KEYS = frozenset({
@@ -117,7 +117,13 @@ def price_scan_note(raw: Dict[str, Any], key: str) -> Optional[str]:
 
 def base_value(raw: Dict[str, Any], key: str) -> Optional[Any]:
     """The value the raw YAML states for a dotted key (the `simulation.years` /
-    `simulation.discount_rate` aliases read the top level), or None."""
+    `simulation.discount_rate` aliases read the top level; a named cost line's
+    leaf through `<opt>.other_recurring_costs.<name>.<leaf>`), or None."""
+    split = split_line_key(key)
+    if split is not None:
+        option, line_name, leaf = split
+        named = [line for line in option_lines(raw, option) if str(line.get("name")) == line_name]
+        return named[0].get(leaf) if len(named) == 1 else None
     parts = key.split(".")
     if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
         parts = [parts[1]]
@@ -255,21 +261,50 @@ def with_value(raw: Dict[str, Any], key: str, value: Any) -> Dict[str, Any]:
     scan that moves the key would otherwise be refused at every off-anchor
     point (2026-09-04). The base run still validates it — only the copy a grid
     point loads is relabelled. Load the copy through `load_at`.
+
+    A cost line is reached by the name path `sources:` accepts,
+    `<opt>.other_recurring_costs.<line name>.<leaf>` (2026-09-08): the list
+    is resolved by each line's `name`, and a name no line carries is refused
+    naming the lines that exist.
     """
     doc = copy.deepcopy(raw)
-    parts = key.split(".")
-    if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
-        parts = [parts[1]]
-    node: Any = doc
-    for part in parts[:-1]:
-        node = node.setdefault(part, {})
-        if not isinstance(node, dict):
-            raise ValueError(f"cannot sweep {key}: {part} is not a mapping")
-    node[parts[-1]] = value
+    split = split_line_key(key)
+    if split is not None:
+        _set_named_line(doc, key, *split, value)
+        declared = key
+    else:
+        parts = key.split(".")
+        if len(parts) == 2 and parts[0] == "simulation" and parts[1] in _TOP_LEVEL:
+            parts = [parts[1]]
+        node: Any = doc
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise ValueError(f"cannot sweep {key}: {part} is not a mapping")
+        node[parts[-1]] = value
+        declared = ".".join(parts)
     sources = doc.get("sources")
-    if isinstance(sources, dict) and ".".join(parts) in sources:
-        sources[".".join(parts)] = SWEEP_SOURCE
+    if isinstance(sources, dict) and declared in sources:
+        sources[declared] = SWEEP_SOURCE
     return doc
+
+
+def _set_named_line(doc: Dict[str, Any], key: str, option: str, line_name: str,
+                    leaf: str, value: Any) -> None:
+    """Set one leaf of the `other_recurring_costs` line named `line_name`, in
+    place — or refuse, always naming what exists."""
+    lines = option_lines(doc, option)
+    if not lines:
+        raise ValueError(f"cannot sweep {key}: {option} has no other_recurring_costs lines")
+    named = [line for line in lines if str(line.get("name")) == line_name]
+    if not named:
+        existing = ", ".join(repr(str(line.get("name"))) for line in lines)
+        raise ValueError(f"cannot sweep {key}: {option}.other_recurring_costs has no line "
+                         f"named {line_name!r} — lines named {existing}")
+    if len(named) > 1:
+        raise ValueError(f"cannot sweep {key}: two {option}.other_recurring_costs lines are "
+                         f"named {line_name!r} — give each a distinct name")
+    named[0][leaf] = value
 
 
 def load_at(raw: Dict[str, Any], key: str, value: Any) -> ComparisonSpec:
@@ -283,8 +318,13 @@ def load_at(raw: Dict[str, Any], key: str, value: Any) -> ComparisonSpec:
     sources = doc.get("sources")
     swept = ([k for k, v in sources.items() if v == SWEEP_SOURCE]
              if isinstance(sources, dict) else [])
+    # The marker loads as `user` — always valid for a key the config states,
+    # and it keeps the entry the relabel needs: a cost line declared by name
+    # is echoed per leaf only while some line of its option is declared, so
+    # deleting the one declaration would drop the swept line's entry with it
+    # (2026-09-08).
     for k in swept:
-        del sources[k]
+        sources[k] = "user"
     spec = load_config_dict(doc)
     if swept and spec.sources is not None:
         spec.sources = dataclasses.replace(spec.sources, entries=tuple(
@@ -563,6 +603,13 @@ def flip_lines(result: Dict[str, Any]) -> List[str]:
     # Every line names its key: two --sweep flags printed two bare "no flip"
     # lines and nothing said which sweep each belonged to (2026-09-04).
     lines: List[str] = []
+    rows = result.get("rows") or []
+    if rows and all("error" in r for r in rows):
+        # Nothing ran, so nothing was cheapest anywhere: the one line says so
+        # and no flip line follows (2026-09-08 — the block printed "the same
+        # option is cheapest across the whole sweep" over a refused grid).
+        reasons = "; ".join(dict.fromkeys(r["error"] for r in rows))
+        return [f"sweep {key}: every point refused — {reasons}"]
     if result["flips"]:
         for f in result["flips"]:
             lines.append(f"flip {key}: cheapest changes from {_move(f, 'to')}")

@@ -58,6 +58,89 @@ class TestRun:
         assert "0.00%" not in format_sweep(result)
 
 
+class TestNamedLinePaths:
+    """`--sweep` and `--break-even` reach one `other_recurring_costs` line by
+    the dotted name path `sources:` already accepts,
+    `<opt>.other_recurring_costs.<line name>.<leaf>` (2026-09-08)."""
+
+    KEY = "condo.other_recurring_costs.tax.annual_amount"
+
+    def test_with_value_sets_the_named_lines_leaf_and_leaves_the_seed_alone(self):
+        doc = with_value(RAW, self.KEY, 4_500.0)
+        assert doc["condo"]["other_recurring_costs"] == [
+            {"name": "tax", "annual_amount": 4_500.0, "escalation_rate": 0.0}]
+        assert RAW["condo"]["other_recurring_costs"][0]["annual_amount"] == 3_000
+        assert with_value(RAW, "condo.other_recurring_costs.tax.escalation_rate", 0.02)[
+            "condo"]["other_recurring_costs"][0]["escalation_rate"] == 0.02
+
+    def test_an_unknown_name_is_refused_naming_the_lines_that_exist(self):
+        with pytest.raises(ValueError, match=r"no line named 'taxes' — lines named 'tax'"):
+            with_value(RAW, "condo.other_recurring_costs.taxes.annual_amount", 1.0)
+        bare = {"years": 10, "condo": {"monthly_fee": 300, "initial_value": 400_000, "all_cash": True},
+                "rent": {"monthly_rent": 1_800}}
+        with pytest.raises(ValueError, match="condo has no other_recurring_costs lines"):
+            with_value(bare, "condo.other_recurring_costs.tax.annual_amount", 1.0)
+
+    def test_base_value_reads_the_named_leaf(self):
+        from hde.sweep import base_value
+        assert base_value(RAW, self.KEY) == 3_000
+        assert base_value(RAW, "condo.other_recurring_costs.taxes.annual_amount") is None
+
+    def test_the_sweep_runs_and_marks_the_base_point(self):
+        from hde.sweep import sweep_lines
+        result = run_sweep(RAW, self.KEY, [0.0, 3_000.0, 30_000.0], monte_carlo=False)
+        assert all("error" not in r for r in result["rows"])
+        assert result["base_value"] == 3_000
+        lines = sweep_lines(result)
+        assert lines[0].startswith(f"sweep {self.KEY} (3 points")
+        assert lines[1].startswith(f"{self.KEY}=0: best ")
+        assert lines[2].startswith(f"{self.KEY}=3,000 (= base): best ")
+
+    def test_a_declared_line_is_echoed_as_swept_at_the_grid_point(self):
+        from hde.sources import source_lines
+        from hde.sweep import load_at
+        raw = dict(RAW, sources={self.KEY: "user"})
+        spec = load_at(raw, self.KEY, 4_500.0)
+        assert f"swept: {self.KEY}=$4,500" in source_lines(spec.sources)
+        assert not any(line.startswith("user-stated:") for line in source_lines(spec.sources))
+
+    def test_break_even_gets_the_money_bracket_from_the_lines_value(self):
+        from hde.break_even import solve_break_even
+        out = solve_break_even(RAW, self.KEY)
+        assert out["bracket"] == [750.0, 12_000.0] and out["base_value"] == 3_000
+
+
+class TestEveryPointRefused:
+    """A sweep the loader refused at every point printed `no flip along
+    <key>: the same option is cheapest across the whole sweep` — false, since
+    nothing ran (2026-09-08). The block says so instead, once, and no flip
+    line follows."""
+
+    def test_one_line_names_the_reason_and_no_flip_line_follows(self):
+        from hde.sweep import format_sweep, sweep_lines
+        result = run_sweep(RAW, "years", [0, -1], monte_carlo=False)
+        assert all("error" in r for r in result["rows"])
+        lines = sweep_lines(result)
+        assert lines[-1].startswith("sweep years: every point refused — ")
+        assert "years" in lines[-1].split("—", 1)[1]
+        assert not any("no flip" in line for line in lines)
+        assert "no flip" not in format_sweep(result)
+        assert "every point refused" in format_sweep(result)
+
+    def test_an_unknown_line_name_is_that_refusal_at_every_point(self):
+        from hde.sweep import sweep_lines
+        key = "condo.other_recurring_costs.taxes.annual_amount"
+        result = run_sweep(RAW, key, [1.0, 2.0], monte_carlo=False)
+        assert sweep_lines(result)[-1] == (
+            f"sweep {key}: every point refused — cannot sweep {key}: "
+            f"condo.other_recurring_costs has no line named 'taxes' — lines named 'tax'")
+
+    def test_a_partly_refused_sweep_keeps_its_flip_lines(self):
+        from hde.sweep import sweep_lines
+        result = run_sweep(RAW, "years", [0, 10], monte_carlo=False)
+        assert any(line.startswith("no flip along years") for line in sweep_lines(result))
+
+
 class TestCli:
     def _cfg(self, tmp_path):
         import yaml
