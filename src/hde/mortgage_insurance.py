@@ -45,6 +45,10 @@ INSURED_LTV_THRESHOLD = 0.80
 # is 85%, not the next tier up.
 _LTV_TOL = 1e-9
 
+# What a schedule the user quoted cites — the one schedule with no anchor
+# behind it, which is how `anchors_used` tells it from the CMHC table.
+EXPLICIT_CITE = "schedule stated in the config"
+
 # province -> the registry key holding its tax on insurance premiums.
 _PREMIUM_TAX_ANCHORS = {
     "QC": "mortgage_insurance.premium_tax_rate.qc",
@@ -197,8 +201,26 @@ def _parse_explicit(setting: Dict[str, Any], name: str) -> PremiumSchedule:
         surcharge_rate=float(setting.get("amortization_surcharge", 0.0)),
         surcharge_above_years=int(setting.get("surcharge_above_years", 25)),
         province=None,
-        cite="schedule stated in the config",
+        cite=EXPLICIT_CITE,
     )
+
+
+def anchors_used(record: Optional[MortgageInsurance]) -> Tuple[str, ...]:
+    """The registry entries whose figures priced one option's insurance: the
+    band the loan-to-value fell in, the surcharge when the amortization drew
+    it, the province's tax on the premium. Empty with no record, at or under
+    the 20% line (nothing priced), or for a schedule the config stated (no
+    anchor behind it). What a run USED, so a lapsed figure can be named."""
+    if record is None or not record.required or record.cite == EXPLICIT_CITE:
+        return ()
+    names = [f"mortgage_insurance.premium_rate.{key}"
+             for key, _edge, _rate, label in _CMHC_PREMIUM_BANDS if label == record.band_label]
+    if record.surcharge_rate:
+        names.append("mortgage_insurance.amortization_surcharge")
+    tax_key = _PREMIUM_TAX_ANCHORS.get(record.province) if record.province else None
+    if tax_key:
+        names.append(tax_key)
+    return tuple(names)
 
 
 def _rate_for(schedule: PremiumSchedule, ltv: float, term_years: Optional[int],

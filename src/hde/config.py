@@ -17,11 +17,13 @@ from .anchors import ANCHORS, match_window
 from .mortgage_insurance import (
     MortgageInsurance,
     MortgageInsuranceError,
+    anchors_used as insurance_anchors_used,
     resolve as resolve_mortgage_insurance,
 )
 from .land_transfer_tax import (
     LandTransferTax,
     LandTransferTaxError,
+    anchors_used as transfer_tax_anchors_used,
     option_province,
     resolve as resolve_land_transfer_tax,
 )
@@ -33,11 +35,19 @@ from .rates import (
     convention_of,
     default_inflation_rate,
 )
-from .serialization import cost_family, rate_label, real_discount_rate, reference_matches, school_tax_line
+from .serialization import (
+    cost_family,
+    default_anchor,
+    rate_label,
+    real_discount_rate,
+    reference_matches,
+    school_tax_line,
+)
 from .sources import build_source_echo, unstated_uncertainty
 from .tax_treatment import (
     TaxParams,
     TaxTreatmentError,
+    anchors_used as tax_anchors_used,
     resolve as resolve_tax,
     tfsa_room_warning,
 )
@@ -821,18 +831,72 @@ def uncertainty_source_warnings(
     ]
 
 
+def anchors_in_use(spec: ComparisonSpec) -> List[str]:
+    """Every registry entry whose figure this run USED, in use order, once
+    each: the defaults the loader applied, the anchors a `sources:` block
+    declared, and the schedules the loader priced — the insured mortgage's
+    band and premium tax, the transfer-tax brackets the price reached, the
+    brackets a `tax:` block's income reached and the limits its legs read. A
+    reference entry the run never touched is not here, so nothing can be said
+    about it — a lapsed figure the run did not use is not the run's problem."""
+    names: List[str] = []
+    for key in spec.defaults_applied:
+        anchor = default_anchor(spec, key)
+        if anchor is not None:
+            names.append(anchor.name)
+    if spec.sources is not None:
+        for entry in spec.sources.of_class("anchor"):
+            for part in (entry.anchor or "").split("+"):
+                part = part.strip()
+                # `<family>.*` is the loader's own attribution of a derived
+                # transfer tax; the record below carries it bracket by bracket.
+                if part and not part.endswith(".*") and part in ANCHORS:
+                    names.append(part)
+    for opt in (spec.condo, spec.house):
+        if opt is None:
+            continue
+        names.extend(insurance_anchors_used(opt.mortgage_insurance))
+        names.extend(transfer_tax_anchors_used(opt.land_transfer_tax, opt.initial_value))
+    names.extend(tax_anchors_used(spec.tax))
+    return list(dict.fromkeys(names))
+
+
+def validity_warnings(spec: ComparisonSpec, run_date: datetime.date) -> List[str]:
+    """One line per anchor the run used whose source says the figure changes
+    after a date `run_date` has passed (`Anchor.valid_until`: the Québec tax
+    on insurance premiums steps up for premiums paid after 2026-12-31; an
+    indexed 2026 bracket ceiling is a 2026 ceiling). Silent through the date
+    itself, silent for every entry the run never touched. Pure in `run_date`,
+    which `all_warnings` reads from the wall clock at the edge."""
+    lines: List[str] = []
+    for name in anchors_in_use(spec):
+        anchor = ANCHORS[name]
+        if not anchor.valid_until or anchor.value is None:
+            continue
+        if run_date > datetime.date.fromisoformat(anchor.valid_until):
+            lines.append(
+                f"anchor {name} ({anchor.value:g}) is past its validity date "
+                f"{anchor.valid_until}: the source says the figure changes after that "
+                f"date — re-read {anchor.short_cite} before relying on the run"
+            )
+    return lines
+
+
 def all_warnings(
     spec: ComparisonSpec,
     prior: Optional[LoadedScenarioPrior] = None,
     current_year: Optional[int] = None,
+    run_date: Optional[datetime.date] = None,
 ) -> List[str]:
     """
     Every warning a surface should show for one run: the coherence warnings
     plus, when a demographic prior is loaded, the time-anchor violations
-    (wall clock past START_CALENDAR_YEAR). ONE assembly for the CLI's stderr,
-    and the CLI's --json `warnings`, so no surface can drop
+    (wall clock past START_CALENDAR_YEAR), plus the anchors the run used past
+    their validity date (`validity_warnings`). ONE assembly for the CLI's
+    stderr, and the CLI's --json `warnings`, so no surface can drop
     a class of warning the others carry (readiness plan A.2). `current_year`
-    is injectable for tests; the wall clock is read only here at the edge.
+    and `run_date` are injectable for tests; the wall clock is read only here
+    at the edge.
     """
     warns = coherence_warnings(spec)
     if prior is not None:
@@ -841,7 +905,9 @@ def all_warnings(
         raw = prior.data_vintage.get("constants_as_of")
         warns = warns + time_anchor_violations(
             current_year, raw if isinstance(raw, str) else None)
-    return warns
+    if run_date is None:
+        run_date = datetime.date.today()
+    return warns + validity_warnings(spec, run_date)
 
 
 def single_path_run(spec: ComparisonSpec) -> bool:

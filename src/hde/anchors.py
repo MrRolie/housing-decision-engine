@@ -18,6 +18,8 @@ plausible-sounding source. Where a number is a calibration choice rather than a
 measurement (e.g. price_shock.severity_vol), the rationale says so explicitly.
 """
 
+import datetime
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -80,6 +82,9 @@ _MATCH_TOLERANCE: Dict[str, float] = {
 }
 # Every other figure is a rate or a fraction, so the rate window governs.
 _DEFAULT_MATCH_TOLERANCE = 5e-6
+
+# The one shape `valid_until` takes: an ISO calendar date, nothing looser.
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 # How near a user's figure may sit to a published one, MISSING it, before the
 # read-back names the near miss. Relative to the published figure: 2% of
@@ -162,6 +167,12 @@ class Anchor:
     # cite this anchor as its source.
     restatements: Tuple[Tuple[float, str], ...] = ()
     replaces: Optional[Tuple[float, str]] = None
+    # ISO date through which the SOURCE says this is the figure — set only
+    # where the source itself states when the figure changes (a legislated
+    # step, an annually indexed threshold), never as a "review by" guess:
+    # `retrieved_on` is the date to review by. A run that uses the anchor
+    # after this date is warned once per anchor (config.validity_warnings).
+    valid_until: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or "." not in self.name or not self.name.strip():
@@ -208,6 +219,11 @@ class Anchor:
                     f"anchor {self.name!r}: an unsourced entry must read "
                     f"'source: none' wherever it is cited, got {self.short_cite!r}"
                 )
+            if self.valid_until:
+                raise AnchorError(
+                    f"anchor {self.name!r}: kind='unsourced' with valid_until — "
+                    f"no figure, so no date on which it changes"
+                )
         else:
             if self.value is None:
                 raise AnchorError(
@@ -236,6 +252,19 @@ class Anchor:
             raise AnchorError(
                 f"anchor {self.name!r}: a live URL needs retrieved_on (the date the source was retrieved)"
             )
+        if self.valid_until:
+            if not isinstance(self.valid_until, str) or not _ISO_DATE.fullmatch(self.valid_until):
+                raise AnchorError(
+                    f"anchor {self.name!r}: valid_until must be an ISO date (YYYY-MM-DD), "
+                    f"got {self.valid_until!r}"
+                )
+            try:
+                datetime.date.fromisoformat(self.valid_until)
+            except ValueError as exc:
+                raise AnchorError(
+                    f"anchor {self.name!r}: valid_until {self.valid_until!r} is not a "
+                    f"calendar date ({exc})"
+                ) from exc
         for entry in self.restatements:
             if (not isinstance(entry, tuple) or len(entry) != 2
                     or not isinstance(entry[1], str) or not entry[1].strip()):
@@ -1312,6 +1341,7 @@ ANCHORS["mortgage_insurance.premium_tax_rate.qc"] = Anchor(
     band=(0.09, 0.09975),
     short_cite="Revenu Québec IPT",
     retrieved_on="2026-09-03",
+    valid_until="2026-12-31",
 )
 
 ANCHORS["mortgage_insurance.premium_tax_rate.on"] = Anchor(
@@ -1669,6 +1699,19 @@ _TAX_OPT_IN = (
     "credits no room until a config opts into a tax block, and "
     "tax_rates.marginal_rate reads this figure from the registry when it does."
 )
+# The thresholds and amounts below are 2026 figures of annually indexed
+# schedules — the CRA table prints them under 'Indexation increase 2.0 %',
+# Revenu Québec under 'the taxable income thresholds and constants ... have
+# been indexed' — so each is valid through the last day of 2026 and a run past
+# that date is told to re-read the source. The RATES in the same tables carry
+# no date: Revenu Québec states 'the income tax rates remain unchanged', and
+# no source says a rate changes.
+_TAX_YEAR_END = "2026-12-31"
+_INDEXED_2026 = (
+    "A 2026 figure of an annually indexed schedule (CRA 'Indexation increase "
+    "2.0 %'; Revenu Québec 'indexed'): valid through 2026-12-31, after which "
+    "the 2027 table must be re-read."
+)
 
 _FED_RATES_URL = ("https://www.canada.ca/en/revenue-agency/services/tax/individuals/"
                   "tax-rates-brackets/current-year.html")
@@ -1784,7 +1827,7 @@ for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.
                     f"A legislated, indexed 2026 threshold, not an estimate, so "
                     f"its band is itself. Engine use: locating the marginal rate "
                     f"at a taxable income, which prices what a renter's invested "
-                    f"capital earns after tax. {_TAX_OPT_IN}"
+                    f"capital earns after tax. {_TAX_OPT_IN} {_INDEXED_2026}"
                 ),
                 band=(_ceiling, _ceiling),
                 short_cite=_cite,
@@ -1792,6 +1835,7 @@ for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.
                 unit=_unit,
                 province=_TAX_PROVINCE[_jur],
                 retrieved_on=_TAX_RETRIEVED,
+                valid_until=_TAX_YEAR_END,
             )
         _span = ("with no ceiling" if _ceiling is None
                  else f"up to and including ${_ceiling:,.0f}")
@@ -1837,7 +1881,9 @@ for _k, ((_threshold, _fraction), _quoted) in enumerate(
             f"knows one credit (5.05% × the basic personal amount), so "
             f"tax_rates.ontario_basic_tax nets that and nothing else — every "
             f"other credit moves the crossover income higher. Engine use: "
-            f"deciding which surtax tier a taxable income sits in. {_TAX_OPT_IN}"
+            f"deciding which surtax tier a taxable income sits in. {_TAX_OPT_IN} "
+            f"A 2026 threshold ('Effective January 1, 2026'), indexed annually: "
+            f"valid through 2026-12-31, after which the 2027 table must be re-read."
         ),
         band=(_threshold, _threshold),
         short_cite="CRA T4032-ON 2026",
@@ -1846,6 +1892,7 @@ for _k, ((_threshold, _fraction), _quoted) in enumerate(
               "less non-refundable credits) above which the tier applies"),
         province="on",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     )
     ANCHORS[f"tax.on.surtax_{_k}_rate"] = Anchor(
         name=f"tax.on.surtax_{_k}_rate",
@@ -1889,12 +1936,14 @@ ANCHORS.update({
             "implicit ~0.3-point marginal between $181,440 and $258,482 — 14% × "
             "($16,452 − $14,829) / ($258,482 − $181,440) — which "
             "tax_rates.marginal_rate leaves out, as the CRA table does. The band "
-            "is the base-to-maximum range the page prints. " + _TAX_OPT_IN),
+            "is the base-to-maximum range the page prints. " + _TAX_OPT_IN + " "
+            + _INDEXED_2026),
         band=(14_829.0, 16_452.0),
         short_cite="CRA 2026 indexation",
         quoted="$16,452 (maximum for lower-income individuals); $14,829 (base amount for higher-income individuals)",
         unit="dollars of the federal non-refundable credit base; the credit is 14% of it",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     ),
     "tax.qc.basic_personal_amount": Anchor(
         name="tax.qc.basic_personal_amount",
@@ -1906,13 +1955,14 @@ ANCHORS.update({
             "The income Québec's lowest rate leaves untaxed: the credit is 14% of "
             "this amount, indexed 2.05% from $18,571 in 2025. Engine use: tax on "
             "income when a tax block computes the average Québec rate; it does "
-            "not move the marginal rate. " + _TAX_OPT_IN),
+            "not move the marginal rate. " + _TAX_OPT_IN + " " + _INDEXED_2026),
         band=(18_952.0, 18_952.0),
         short_cite="Revenu Québec 2026 rates",
         quoted="Basic personal amount $18,952",
         unit="dollars of the Québec non-refundable credit base; the credit is 14% of it",
         province="qc",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     ),
     "tax.on.basic_personal_amount": Anchor(
         name="tax.on.basic_personal_amount",
@@ -1929,13 +1979,16 @@ ANCHORS.update({
             "The income Ontario's lowest rate leaves untaxed. Engine use: the one "
             "credit tax_rates.ontario_basic_tax nets before the surtax tiers are "
             "tested, and tax on income when a tax block computes the average "
-            "Ontario rate. " + _TAX_OPT_IN),
+            "Ontario rate. " + _TAX_OPT_IN + " Stated 'For 2026' in a table "
+            "'Effective January 1, 2026' and indexed annually: valid through "
+            "2026-12-31, after which the 2027 table must be re-read."),
         band=(12_989.0, 12_989.0),
         short_cite="CRA T4032-ON 2026",
         quoted="For 2026, the Ontario non‑refundable basic personal tax credit is $12,989.",
         unit="dollars of the Ontario non-refundable credit base; the credit is 5.05% of it",
         province="on",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     ),
     "tax.federal.quebec_abatement": Anchor(
         name="tax.federal.quebec_abatement",
@@ -2190,12 +2243,15 @@ ANCHORS.update({
             "2031. The standard rule is 2 (the second year after the withdrawal "
             "year) and resumes for a first withdrawal after 2028-12-31 unless the "
             "relief is extended again; the band spans the two. Engine use: the "
-            "year the HBP repayment stream starts. " + _TAX_OPT_IN),
+            "year the HBP repayment stream starts. " + _TAX_OPT_IN + " The source "
+            "names the window's end: valid through 2028-12-31, after which the "
+            "figure reverts to 2 unless the relief is extended."),
         band=(2.0, 5.0),
         short_cite="CRA HBP",
         quoted="if you made your first withdrawal in 2026, your first year of repayment will be 2031",
         unit="years from the withdrawal year to the first repayment year (first repayment year − withdrawal year)",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until="2028-12-31",
     ),
     "tfsa.annual_limit": Anchor(
         name="tfsa.annual_limit",
@@ -2213,12 +2269,16 @@ ANCHORS.update({
             "New tax-free room per calendar year. Engine use: how much of the "
             "renter's invested down payment can grow untaxed each year, which "
             "bounds the tax the after-tax return comparison charges. "
-            + _TAX_OPT_IN),
+            + _TAX_OPT_IN + " The 2026 limit of a figure RC4466 says is 'indexed "
+            "to inflation and rounded to the nearest $500': valid through "
+            "2026-12-31 — the 2027 limit may round to the same $7,000 and is "
+            "still the 2027 figure to re-read."),
         band=(7_000.0, 7_000.0),
         short_cite="CRA TFSA",
         quoted="The TFSA dollar limit for 2026 is $7,000",
         unit="dollars of new TFSA contribution room per calendar year",
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     ),
     "tfsa.cumulative_room_since_2009": Anchor(
         name="tfsa.cumulative_room_since_2009",
@@ -2242,7 +2302,8 @@ ANCHORS.update({
             "since 2009 who never contributed. A younger or newer resident has "
             "less; withdrawals add back the next year. Engine use: the ceiling "
             "on how much of a renter's capital can sit tax-free at all. "
-            + _TAX_OPT_IN),
+            + _TAX_OPT_IN + " The sum THROUGH 2026: on 2027-01-01 it grows by "
+            "the indexed 2027 limit, so it is valid through 2026-12-31."),
         band=(109_000.0, 109_000.0),
         short_cite="CRA TFSA",
         quoted=("2009 to 2012: $5,000; 2013 and 2014: $5,500; 2015: $10,000; 2016 to "
@@ -2251,6 +2312,7 @@ ANCHORS.update({
         unit=("dollars of total TFSA room through 2026 for a person eligible every year "
               "since 2009 who never contributed"),
         retrieved_on=_TAX_RETRIEVED,
+        valid_until=_TAX_YEAR_END,
     ),
 })
 

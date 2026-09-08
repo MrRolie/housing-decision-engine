@@ -54,6 +54,15 @@ NAME carries the threshold (`land_transfer_tax.montreal.to_552300` = 1.5%) so th
 registry dump alone shows the whole table; `market_scenario.py` guards the
 demographic prior (schema, closed enums, `constants_as_of` within a year of
 `START_CALENDAR_YEAR = 2026`) and renders its provenance only from the file.
+An anchor whose source states when its figure changes carries that date as
+`valid_until` (2026-09-08) — never a guess at a review date, which is what
+`retrieved_on` is for — and `config.validity_warnings` names, once per anchor,
+every entry a run USED past its date (`config.anchors_in_use`: the applied
+defaults, the `anchor:` declarations in `sources:`, and what the priced
+schedules read — the insured mortgage's band and premium tax, the transfer-tax
+brackets the price reached, the brackets a `tax:` block's income reached); the
+run date is read at the CLI edge, so the line is silent until the day after the
+date and a reference entry the run never touched is never mentioned.
 
 ### Anchors: two kinds of entry
 
@@ -71,6 +80,7 @@ They are opposite in how they reach a run.
 | applied by the engine? | yes, when the YAML omits the key | **never** — the user supplies the figure |
 | cited when? | in `defaults applied:`, because the engine supplied it | in `<option> other costs:`, when the user's own figure **equals** a published one; in `anchor-sourced:`, when a `sources:` line declares it |
 | extra fields | — | `quoted` (the figure as printed by the source), `unit` (the base it is stated on), `province` (property/school tax), `restatements` (the same figure in another convention) |
+| dated? (`valid_until`, 2026-09-08) | only where the source states when the figure changes: `mortgage_insurance.premium_tax_rate.qc` (9% for premiums paid on or before 2026-12-31, 9.975% after) | the annually indexed 2026 figures — `tax.<jur>.bracket_<k>_ceiling`, `tax.<jur>.basic_personal_amount`, `tax.on.surtax_<k>_threshold`, `tfsa.annual_limit`, `tfsa.cumulative_room_since_2009` — dated 2026-12-31; `hbp.repayment_grace_years` dated 2028-12-31 (the relief window the CRA names). The bracket and surtax RATES carry no date: Revenu Québec states the rates "remain unchanged" |
 
 Property tax and home insurance were the two largest unsourced numbers in a
 typical run — together roughly 15% of an owned option's year-1 cash. They stay

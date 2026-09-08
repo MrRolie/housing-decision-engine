@@ -166,6 +166,39 @@ def marginal_rate_breakdown(taxable_income: float, province: str) -> MarginalRat
     )
 
 
+def anchors_consulted(taxable_income: float, province: str) -> Tuple[str, ...]:
+    """The registry entries `marginal_rate_breakdown` reads at this income —
+    what a run USED, so a lapsed figure can be named. In each schedule: every
+    ceiling compared on the way to the bracket reached and that bracket's rate
+    (for Ontario every rate walked, since `progressive_tax` sums the tranches
+    below for the surtax base); the Québec abatement; for Ontario the basic
+    personal amount, both surtax thresholds tested and the rate of each tier
+    applied. Mirrors the reads above; the pins hold the two together."""
+    code = (province or "").strip().lower()
+    _family(code)  # refuses an unknown province
+    names = []
+    for jurisdiction in ("federal", code):
+        family = _family(jurisdiction)
+        for k, (ceiling, _rate) in enumerate(bracket_schedule(jurisdiction), start=1):
+            if ceiling is not None:
+                names.append(f"{family}.bracket_{k}_ceiling")
+            reached = ceiling is None or taxable_income <= ceiling
+            if reached or jurisdiction == "on":
+                names.append(f"{family}.bracket_{k}_rate")
+            if reached:
+                break
+    if code == "qc":
+        names.append("tax.federal.quebec_abatement")
+    if code == "on":
+        names.append("tax.on.basic_personal_amount")
+        basic = ontario_basic_tax(taxable_income)
+        for k, (threshold, _fraction) in enumerate(ontario_surtax_tiers(), start=1):
+            names.append(f"tax.on.surtax_{k}_threshold")
+            if basic > threshold:
+                names.append(f"tax.on.surtax_{k}_rate")
+    return tuple(names)
+
+
 def marginal_rate(taxable_income: float, province: str) -> float:
     """The combined federal + provincial marginal rate at `taxable_income` in
     `province` ('qc' or 'on', any case): federal bracket rate × (1 − the Québec

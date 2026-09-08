@@ -185,6 +185,33 @@ def anchored_schedule(family: str) -> TransferTaxSchedule:
     )
 
 
+def anchors_used(record: Optional[LandTransferTax], base: float) -> Tuple[str, ...]:
+    """The registry entries whose figures priced one option's transfer tax:
+    for each anchored schedule levied, every bracket the base reached (a
+    tranche the price never entered changed nothing), and the first-time-buyer
+    entry the flag consulted — the unsourced one included, since the read-back
+    names it. Empty with no record or for a schedule the config stated. What a
+    run USED, so a lapsed figure can be named."""
+    if record is None:
+        return ()
+    by_label = {label: family for family, (label, *_rest) in TRANSFER_TAX_SCHEDULES.items()}
+    names: List[str] = []
+    for leg in record.legs:
+        family = by_label.get(leg.schedule)
+        if family is None:
+            continue
+        lower = 0.0
+        for key, edge, _rate, _quoted in TRANSFER_TAX_SCHEDULES[family][4]:
+            if base > lower:
+                names.append(f"{family}.{key}")
+            if edge is None:
+                break
+            lower = edge
+        if record.first_time_buyer:
+            names.append(_REBATE_ANCHORS[family])
+    return tuple(names)
+
+
 def anchored_schedules(province: Optional[str],
                        municipality: Optional[str] = None,
                        name: str = "land_transfer_tax") -> Tuple[TransferTaxSchedule, ...]:

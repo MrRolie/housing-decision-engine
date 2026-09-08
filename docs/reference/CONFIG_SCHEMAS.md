@@ -273,8 +273,8 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 **Rates as quoted (2026-09-05).** Every rate you TYPE — `discount_rate`, `value_growth_rate`, `fee_escalation_rate`, `reserve_growth_rate`, `rent_escalation_rate`, `investment_return_rate`, `income_growth_rate`, every `other_recurring_costs[].escalation_rate` — is the figure as you see it quoted, and the engine converts it once at load: deflated by `inflation_rate` in real mode (`(1 + r)/(1 + π) − 1`), used as typed in nominal mode. The read-back's `rates:` line shows each converted rate in both forms (`rent.rent_escalation_rate 3.0% as quoted = 0.9% after 2.1% inflation`). The defaults in the table above are REAL and untouched: in `mode: nominal` the engine composes `inflation_rate` onto them (`(1 + real)(1 + π) − 1`) and the echo names both figures — `discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation)`. A config that states real figures says `rates: real` at the top level and is read as before. `economic.inflation_rate`'s table row is the registry's inert zero; under the default convention an omitted `inflation_rate` in real mode is the FP Canada 2.1% planning figure (`economic.inflation_rate.nominal_planning`), because it is the deflator there — the run echoes it under `defaults applied`. A quoted `mortgage_rate` is a contract rate and is used as typed in both modes.
 
 Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
-source, url, rationale, band, retrieved_on, kind); `uv run hde --print-anchors` prints
-them. `ref:` marks a source that informs the value without stating it; `neutral,
+source, url, rationale, band, retrieved_on, kind, and valid_until where the source
+states when the figure changes); `uv run hde --print-anchors` prints them. `ref:` marks a source that informs the value without stating it; `neutral,
 uncited` is a deliberate zero the engine will not invent a value for (the assumptions
 echo warns when `house.annual_maintenance_rate` is omitted). Rows marked "—" are
 structural or presentation defaults with no evidentiary content. This table is pinned

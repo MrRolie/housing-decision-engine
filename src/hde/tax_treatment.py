@@ -680,6 +680,34 @@ def tax_to_dict(tax: TaxParams, terminal: Optional[RenterTerminal], n_years: int
     }
 
 
+def anchors_used(tax: Optional[TaxParams]) -> Tuple[str, ...]:
+    """The registry entries a resolved `tax:` block read — what a run USED, so
+    a lapsed figure can be named: the brackets a resolved rate walked
+    (tax_rates.anchors_consulted; a typed rate walked none), the inclusion
+    rate under the capital-gains treatment, the principal-residence exemption,
+    the FHSA limits when a plan exists (the maximum open period alone when an
+    FHSA share rolls over without one), the HBP limits when a withdrawal
+    exists, and the cumulative TFSA room the TFSA share was checked against."""
+    if tax is None:
+        return ()
+    names: List[str] = []
+    if tax.marginal_rate_source == "resolved" and tax.income is not None and tax.province:
+        from .tax_rates import anchors_consulted  # lazy, as _resolve_rate imports it
+        names.extend(anchors_consulted(tax.income, tax.province))
+    if tax.taxable_return_treatment == "capital_gains":
+        names.append(_INCLUSION)
+    names.append(_EXEMPT)
+    if tax.fhsa is not None:
+        names.extend(_FHSA)
+    elif tax.renter_capital is not None and tax.renter_capital.fhsa > 0:
+        names.append("fhsa.max_years_open")
+    if tax.hbp is not None:
+        names.extend(_HBP)
+    if tax.renter_capital is not None:
+        names.append(_TFSA_ROOM)
+    return tuple(names)
+
+
 def tfsa_room_warning(tax: Optional[TaxParams]) -> Optional[str]:
     """A TFSA share above the cumulative room since 2009 — a check, not a
     refusal: growth can outrun contributions."""

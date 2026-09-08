@@ -23,7 +23,7 @@ MINIMAL_CONFIG = {
 ANCHOR_FIELDS = {
     "name", "value", "as_of", "source", "url", "rationale", "band",
     "short_cite", "quoted", "unit", "province", "retrieved_on", "kind",
-    "restatements", "replaces",
+    "restatements", "replaces", "valid_until",
 }
 
 
