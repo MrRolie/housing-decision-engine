@@ -23,7 +23,7 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .anchors import ANCHORS, match_window
+from .anchors import ANCHORS, Anchor, match_reference_sum, match_window
 from .land_transfer_tax import anchor_families
 from .rates import RateConventionError, deflate, is_convertible, resolve_convention
 
@@ -394,6 +394,22 @@ def _sibling_hint(data: Dict[str, Any], joined: str) -> str:
             f"'{sibling.name}' ({sibling.value:.1%}) — declare that one")
 
 
+def _sum_hint(anchor: Anchor, figure: float, window: float) -> str:
+    """The other case where the registry DOES publish a refused figure: as a
+    registered sum containing the declared anchor — a Québec owner's bill is
+    the municipal rate plus the province's school rate, and the most careful
+    config states that sum while declaring the municipal anchor alone
+    (2026-09-08). The refusal stands; the clause names the declaration that
+    IS the number. Checked within the same window the refusal applied."""
+    municipal_family = _RATE_ON_VALUE[0]
+    for municipal, school in match_reference_sum(municipal_family, figure, tol=window):
+        if anchor.name in (municipal.name, school.name):
+            joined = f"{municipal.name}+{school.name}"
+            return (f" — the figure equals {joined} ({municipal.value + school.value:.4%}): "
+                    f"declare anchor:{joined}")
+    return ""
+
+
 def _anchor_declaration(
     data: Dict[str, Any], key: str, declaration: str,
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -499,6 +515,7 @@ def _anchor_declaration(
             f"where the number CAME FROM, so the two have to be the same number "
             f"(uv run hde --print-anchors)"
             + _sibling_hint(data, joined)
+            + (_sum_hint(anchors[0], figure, window) if len(anchors) == 1 else "")
         )
     return joined, None
 

@@ -471,6 +471,35 @@ class TestDeclarationsAreValidatedByFigure:
         with pytest.raises(ConfigValidationError, match="property_tax.montreal"):
             load_config_dict(_tax_cfg("anchor:property_tax.montreal+school_tax.qc"))
 
+    def test_a_figure_that_is_a_registered_sum_names_the_sum_to_declare(self):
+        """The most careful Québec config states the municipal rate PLUS the
+        school rate and declares the municipal anchor alone; the refusal is
+        right and, since 2026-09-08, says which declaration IS the number."""
+        total = ANCHORS["property_tax.montreal"].value + ANCHORS["school_tax.qc"].value
+        hint = (" — the figure equals property_tax.montreal+school_tax.qc (0.6346%): "
+                "declare anchor:property_tax.montreal+school_tax.qc")
+        for declared in ("anchor:property_tax.montreal", "anchor:school_tax.qc"):
+            cfg = _tax_cfg(declared)
+            cfg["house"]["property_tax_rate"] = total
+            with pytest.raises(ConfigValidationError) as excinfo:
+                load_config_dict(cfg)
+            message = str(excinfo.value)
+            assert message.endswith(hint), message
+            assert "the two have to be the same number (uv run hde --print-anchors)" in message
+        # a dollar line compares as amount ÷ initial_value and gets the same hint
+        cfg = {"years": 10, "rent": {"monthly_rent": 2_000},
+               "house": {"initial_value": 600_000, "all_cash": True,
+                         "other_recurring_costs": [{"name": "tax", "annual_amount": round(total * 600_000, 2)}]},
+               "sources": {"house.other_recurring_costs.tax.annual_amount": "anchor:property_tax.montreal"}}
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(cfg)
+        assert str(excinfo.value).endswith(hint)
+
+    def test_a_figure_that_is_no_registered_sum_gets_no_hint(self):
+        with pytest.raises(ConfigValidationError) as excinfo:
+            load_config_dict(_tax_cfg("anchor:property_tax.quebec_city"))
+        assert "the figure equals" not in str(excinfo.value)
+
     def test_a_source_none_anchor_cannot_be_declared(self):
         """Gatineau holds no figure at all; a declaration pointing at it would
         cite an absence as a source."""
