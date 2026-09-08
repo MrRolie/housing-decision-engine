@@ -20,6 +20,7 @@ from .deterministic import compute_deterministic
 from .models import ComparisonDeterministicResult, ComparisonSpec, _against, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .serialization import mc_to_dict
+from .sources import MONEY_LEAVES
 
 # Inputs the parser reads as integers.
 INT_KEYS = frozenset({
@@ -486,9 +487,19 @@ def find_flips(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[D
 
 
 def _fmt_value(key: str, v: Any) -> str:
-    if key in INT_KEYS or isinstance(v, int):
+    """One grid point, bound or bracket edge as every block prints it — by the
+    KEY's kind, never the value's size (2026-09-08: `condo.purchase_costs=0:6000`
+    printed "0.00%–6,000", the low bound formatted as a rate because it was
+    small). A count prints bare, a dollar leaf with separators, everything
+    else the config states as a number — a rate, a volatility, a fraction —
+    as a percentage."""
+    if key in INT_KEYS:
         return str(v)
-    return f"{v:.2%}" if abs(v) < 1 else f"{v:,.0f}"
+    if key.rsplit(".", 1)[-1] in MONEY_LEAVES:
+        return f"{v:,.0f}"
+    if isinstance(v, int):
+        return str(v)
+    return f"{v:.2%}"
 
 
 def at_the_floor(prob_best: Optional[float]) -> bool:

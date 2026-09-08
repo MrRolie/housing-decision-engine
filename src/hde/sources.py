@@ -172,6 +172,11 @@ _MONEY = frozenset({
     # the tax block's dollar leaves (2026-09-05)
     "tfsa", "rrsp", "fhsa", "taxable", "balance", "annual_contribution", "hbp_withdrawal",
 })
+# Every dollar leaf, by name — the one answer to "is this key money?" that the
+# sweep and break-even formatters and default brackets read too (2026-09-08:
+# a $0 bound on `purchase_costs` printed as "0.00%" because the formatter went
+# by the value's size instead).
+MONEY_LEAVES = _MONEY | _MONTHLY_MONEY
 _COUNTS = frozenset({"years", "num_sims", "random_seed"})
 _FRACTIONS = frozenset({"severity_mean", "magnitude"})
 

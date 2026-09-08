@@ -47,6 +47,16 @@ class TestRun:
         assert "error" in result["rows"][0] and "years" in result["rows"][0]["error"]
         assert "best" in result["rows"][1] and result["flips"] == []
 
+    def test_money_points_print_as_money_at_every_magnitude(self):
+        """A $0 grid point on a dollar key printed `condo.purchase_costs=0.00%`
+        — the value's size chose the format, not the key's kind (2026-09-08)."""
+        from hde.sweep import format_sweep, sweep_lines
+        result = run_sweep(RAW, "condo.purchase_costs", [0.0, 6_000.0], monte_carlo=False)
+        lines = sweep_lines(result)
+        assert lines[1].startswith("condo.purchase_costs=0: best ")
+        assert lines[2].startswith("condo.purchase_costs=6,000: best ")
+        assert "0.00%" not in format_sweep(result)
+
 
 class TestCli:
     def _cfg(self, tmp_path):
@@ -221,7 +231,9 @@ class TestPointSentences:
         row = run_sweep(raw, "rent.monthly_rent", [1_740])["rows"][0]
         assert row["state"] == "disagreement" and row["best"] == "rent" and row["mc_best"] == "house"
         assert not row["decisive"]
-        assert row["sentence"].startswith("rent.monthly_rent=1740: best guess rent by $")
+        # A dollar key prints as money whether the caller passed 1740 or 1740.0
+        # (the CLI's grid is floats): the label goes by the key's kind.
+        assert row["sentence"].startswith("rent.monthly_rent=1,740: best guess rent by $")
         assert ", most futures house (" in row["sentence"] and row["sentence"].endswith("— disagree")
         assert "P(best)" not in row["sentence"]
 

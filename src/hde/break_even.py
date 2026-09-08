@@ -25,6 +25,7 @@ from .deterministic import compute_deterministic
 from .rates import RateConventionError, compose, resolve_convention
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
+from .sources import MONEY_LEAVES
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
                     join_notes, load_at, price_scan_note, with_value)
 
@@ -32,12 +33,10 @@ from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
 # same bracket, so the act and `--break-even rent.monthly_rent` search alike.
 MONEY_BRACKET = (0.25, 4.0)
-_MONEY_KEYS = frozenset({
-    "monthly_rent", "initial_value", "down_payment", "cash_available", "purchase_costs",
-    "financed_purchase_costs", "monthly_fee", "invested_down_payment", "annual_income",
-    # the tax block's dollar leaves (2026-09-05)
-    "hbp_withdrawal", "tfsa", "rrsp", "fhsa", "taxable", "balance", "annual_contribution",
-})
+# The dollar leaves, by name — one set for the default bracket and for how a
+# bound or grid point prints (`sweep._fmt_value`), so the two cannot disagree
+# about a key's kind (2026-09-08).
+_MONEY_KEYS = MONEY_LEAVES
 
 # A rate has no natural multiple of itself (0% growth × 4 is still 0%), so its
 # default bracket is absolute: the plausible range for that rate, wide enough to

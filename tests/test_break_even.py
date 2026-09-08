@@ -388,3 +388,28 @@ class TestDeclaredSourcesAtGridPoints:
         across = solve_break_even_across(raw, "rent.monthly_rent", None, None,
                                          "discount_rate", [0.02, 0.04])
         assert all(row["break_evens"] for row in across["rows"]), across
+
+
+class TestValuesPrintByTheKeysKind:
+    """`--break-even condo.purchase_costs=0:6000` printed "0.00%–6,000" and
+    "no crossing between 0.00% and 6,000": the low bound was formatted by its
+    size, not by the key's kind (2026-09-08). A dollar key prints as money at
+    every magnitude; a rate key keeps the percent form."""
+
+    def test_bracket_bounds_and_the_no_crossing_line_print_as_money(self):
+        from hde.break_even import read_back_block
+        out = solve_break_even(_base(), "condo.purchase_costs", lo=0.0, hi=6_000.0)
+        text = format_break_even(out)
+        assert "bracket 0–6,000" in text
+        assert "no crossing between 0 and 6,000: condo is cheaper at both ends" in text
+        assert "0.00%" not in text
+        assert read_back_block(out)[0].startswith("break-even condo.purchase_costs (bracket 0–6,000;")
+
+    def test_the_formatter_goes_by_kind_not_magnitude(self):
+        from hde.sweep import _fmt_value
+        assert _fmt_value("condo.purchase_costs", 0.0) == "0"
+        assert _fmt_value("condo.purchase_costs", 6_000) == "6,000"
+        assert _fmt_value("condo.other_recurring_costs.tax.annual_amount", 0.5) == "0"
+        assert _fmt_value("condo.value_growth_rate", 0.0) == "0.00%"
+        assert _fmt_value("condo.value_growth_rate", 1.5) == "150.00%"
+        assert _fmt_value("years", 7) == "7"
