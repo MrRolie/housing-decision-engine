@@ -149,6 +149,44 @@ not been re-served since round 7 (19).
   starting `--break-even <option>.initial_value` from that fixed point automatically instead of the
   assistant reading it off a first run.
 
+### Round 11 (2026-09-06, the same four shapes on the tip that carries the four 2026-09-05 rulings)
+
+Scores (round 10 in brackets): condo 18 (21), gist 16 (21), Ottawa 19 (16), price threshold 20 (19).
+One intake round each; no opener fact re-asked in any of the four. Every rate was typed as quoted,
+the three-state verdict was used and never softened into an option, the tax block was asked for and
+written in all four, the gist shape used the short block. The scores fell where the new machinery gave
+the assistant more to carry and rose where round 10's misses had since become engine-printed lines.
+
+Findings, one line each:
+- **The flat trap.** "Run prices flat" typed as `value_growth_rate: 0.0` in nominal mode is 0% quoted =
+  a 2.1%/yr REAL decline; the Ottawa run's rent margin was $100,924 as typed and $14,673 with the key
+  omitted (the neutral 0% real default) — 85% of the verdict was that one undisclosed reading, and the
+  `rates:` line said only "0.0% as quoted = 0.0% nominal". The same trap sits in the threshold lane's
+  growth sweep (`0:0.04:5`), where the literal 0 moved a price crossing by $137k.
+- The 20%-down ceiling the engine prints reached no gist prose for the second round; the short block
+  omits the financing line by design.
+- A parental gift tier was hand-computed (80/485 = 16.5%) instead of run; the engine nets to 14.84% and
+  keeps the 3.10% tier.
+- The mean-flip price led a threshold answer at a $752 gap and 52/48; the skill's shop-under edge and
+  gate 6 contradicted each other; the 65% floor was placed $80k below where the engine crosses it.
+- The posted-to-effective mortgage-rate conversion was the one rate still converted by hand after the
+  sticker-rate ruling — or skipped.
+- "No rebate anchored" was told to users as "nothing exists" for the third round.
+- Engine defects confirmed by hand: a money key's bracket printed as a percent at 0; the sweep refuses
+  the line-name path the sources block accepts and prints "no flip" over an all-refused scan; a summed
+  tax anchor validates but the refusal never offers it; the widen hint proposes a negative property tax.
+
+Folded (2026-09-06), by concept: nominal-mode rates lines and sweep labels carry the real equivalent, a
+typed 0% home-value growth warns; the under-20%-down warning carries the 20%-down ceiling so it rides
+every block; the short block gains a one-line tax summary and a `you said:` echo; a typed mortgage rate
+is the quoted rate and the engine applies the semi-annual convention; `rent.invested_down_payment`
+derives from the tax block; money keys format as money; line-name paths sweep; summed-anchor refusals
+name the form; the widen hint respects a zero floor; anchor validity dates warn when a source's stated
+change date passes; Ottawa and Gatineau property-tax rates and Montréal's home-ownership assistance
+fetched where reachable; the skill's shop-under edge defined as the decisive edge, a top-up or an
+assumed HBP is a second config, the growth break-even is mandatory beside the prior, "no source" is
+never "none exists", and the gist shape has a cut order.
+
 ### Round 10 (2026-09-04, four shapes, openers shaped by PROMPTS.md)
 
 Scores: quick-sense 21 (17), reverse 19 (20), condo 21 (21), Ottawa 16 (19). Intake rounds
