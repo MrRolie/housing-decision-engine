@@ -39,8 +39,10 @@
 #   land_transfer_tax auto ........ the Montréal droits de mutation from the published brackets,
 #                                   re-derived at every --sweep / --break-even price
 #   municipality montreal ......... Montréal's own table REPLACES the provincial one
-#   first_time_buyer true ......... recorded; no Québec or Montréal rebate is anchored, so the run
-#                                   says "applied nothing" rather than invent a refund
+#   first_time_buyer true ......... recorded; nothing is refunded at closing in Québec — Montréal's
+#                                   program closed 2026-07-07 and the province's first-home credit
+#                                   (up to $5,875) comes on the tax return — so the run says
+#                                   "applied nothing" and names the credit rather than book it
 #   purchase_costs 2000 ........... notary + inspection, the household's quotes; the duty is ADDED
 #   other_recurring_costs ......... the listing's tax bill as two lines, municipal and school (a
 #                                   Québec bill is both; property_tax.montreal and school_tax.qc are
@@ -91,7 +93,7 @@ condo:
   mortgage_insurance: auto  # under 20% down: CMHC tier picked by the engine, premium on the loan, QC tax in cash
   land_transfer_tax: auto  # Montréal droits de mutation from the published brackets
   municipality: montreal  # Montréal's table replaces the provincial one
-  first_time_buyer: true  # recorded; no rebate anchored for this schedule — the run says so
+  first_time_buyer: true  # recorded; no refund at closing in Québec — the run names the tax credit instead
   purchase_costs: 2000  # notary + inspection, the household's quotes; the duty is added by the engine
   other_recurring_costs:
     - name: municipal_tax

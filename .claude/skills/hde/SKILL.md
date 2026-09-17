@@ -212,8 +212,8 @@ lane's cap ranks what stays and never drops an item:
       crossing and band edges as well as the base run; a range you call
       cheaper is checked against the 32% and 39% lines, never softened
 - [ ] **No source for:** every figure you estimated because neither the user
-      nor the anchor registry had it (an Ottawa or Gatineau property-tax rate
-      has no anchor — say so); every assistant-typed
+      nor the anchor registry had it; outside the anchored jurisdictions say so
+      (a Gatineau property-tax rate has no anchor); every assistant-typed
       placeholder the verdict could turn on (a tax bill, insurance, the seed
       price) is typed in a form `--break-even` can solve (`property_tax_rate`,
       `purchase_costs`) and solved on a bracket spanning BOTH sides of your

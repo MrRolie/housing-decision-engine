@@ -126,9 +126,9 @@ uv run hde examples/basic_config.yaml --json          # the full result document
 - **Mortgage renewal risk.** The quoted rate is held for the whole horizon; a design
   exists but is not built. When rates rise, this biases the answer toward buying. Ask the
   "what if rates are 6%" follow-up to see the exposure.
-- **Property tax outside Laval, Montréal, Québec City and Toronto.** Gatineau and Ottawa
-  have no registered source; any figure used there is a labelled placeholder until you
-  supply your bill.
+- **Property tax outside Laval, Montréal, Québec City, Ottawa and Toronto.** Gatineau has
+  no registered source (it taxes by neighbourhood unit, so no city-wide rate exists); any
+  figure used there is a labelled placeholder until you supply your bill.
 - **Transfer tax and insurance-premium tax outside Québec and Ontario.** Elsewhere you
   supply the closing-cost number.
 - **Rental income.** A duplex you partly rent out is priced as a home you occupy entirely.
