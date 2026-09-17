@@ -24,11 +24,16 @@ After the checklist in SKILL.md, the prose, in this order:
    p95").
 5. **The flip point or threshold** — the engine's `sentence` verbatim, at both
    ends of any estimate it rests on, every bracket that ran in one clause
-   each; when a story exists, the story's headline and the answer agree (a
+   each. "Decisively cheaper above X" takes X from the engine's DECISIVE edge
+   (the band edge on that option's side), never from the crossing: at the
+   crossing the two options tie, so a decisiveness claim made there is false
+   by the engine's own rule; when a story exists, the story's headline and the answer agree (a
    story at the placeholder seed is never linked as if it were the verdict at
    the user's number — say which price it is at).
 6. **The affordability line** whenever an income was given, from the
-   nominal-mode run when there is a mortgage: max ratio and breach years,
+   nominal-mode run when there is a mortgage: the max ratio WITH THE YEAR it
+   falls in (it is one year's peak, never "every year" — the breach years are
+   the separate count) and the breach years,
    quoting the engine's affordability warning (it names the 32% guideline,
    the 39% GDS cap and the 44% TDS cap — the ratio is GDS-shaped, so never
    compare it to the TDS cap unless other debts were asked, and never soften
@@ -38,7 +43,14 @@ After the checklist in SKILL.md, the prose, in this order:
    user nor the anchor registry had it (an Ottawa tax rate, an insurance
    quote, a purchase-cost rate, an Ontario land-transfer tax) — said plainly,
    never filled silently; outside the anchored jurisdictions say the registry
-   does not cover them; this line is what the engine anchors next.
+   does not cover them; this line is what the engine anchors next. An
+   insurance figure taken from `home_insurance.qc` / `.on` is a household
+   AVERAGE FLOOR, not a premium — say so, with its direction (a real premium
+   is higher, so the run flatters buying). What the registry lacks is said as
+   lacking, never as absent from the world: "no rebate ANCHORED", "no source
+   in the registry for X — check the city's own page before relying on it".
+   Montréal's first-time-buyer programme exists and is unsourced here; "there
+   is no rebate" would be false.
 8. **Not modelled:** each item with its direction of bias ("renewal risk —
    biases toward buying").
 9. **Where the story is** (`scenarios/<slug>/STORY.md` and the act PNGs) and
@@ -48,8 +60,9 @@ After the checklist in SKILL.md, the prose, in this order:
 10. **The engine's READ-BACK block**, pasted verbatim, last — the full block:
     every warning, the typed values, the decisiveness rule, financing, other
     costs, affordability, the break-even sentences. The gist shape pastes the
-    short block (`--read-back short`: every warning, the source lines, the
-    decisiveness rule) and turns its closing line into a one-line offer of
+    short block (`--read-back short`: every warning, the source lines, a
+    one-line `tax:` summary, a `you said:` line and the decisiveness rule)
+    and turns its closing line into a one-line offer of
     the full block (`references/quick-sense.md`). It is the engine speaking;
     the prose above never contradicts it.
 

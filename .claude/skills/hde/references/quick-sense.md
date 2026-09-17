@@ -72,7 +72,8 @@ and offer the full pass for a real listing. The shape binds the ANSWER, not
 only the intake: an intake that took this shape and an answer that runs a
 price scan across several horizons and quotes a band three ways has failed the
 lane. The engine's SHORT read-back block (`--read-back short`: the header,
-every `[warning]` line, the source lines, the `decisiveness:` line) is pasted
+every `[warning]` line, the source lines, a one-line `tax:` summary, a
+`you said:` line and the `decisiveness:` line) is pasted
 after those sentences, outside the cap; its closing line — the engine's count
 of what the full block adds — becomes the answer's one-line offer of the full
 block ("the full read-back is 14 more lines — defaults applied, financing,
@@ -81,6 +82,15 @@ reaches the user; the threshold `sentence` and the 20%-down ceiling live in
 the prose above, not in the short block. The dollar band is deferred, and
 said to be deferred, never dropped silently. The follow-up round never asks the user to choose a method or a
 dwelling they said they do not care about.
+
+**The cut order for the gist answer.** In this order and no other: the verdict
+with ONE conditional; the financing ceiling, quoting the clause of the
+engine's under-20%-down warning ("this cash covers 20% down up to a price of
+$X …; above it the mortgage is insured"); the prior's clause; "not modelled";
+the one-line offer of the full block. About 170 words for a plain case, about
+220 when a rate bracket or a prior is mandatory — and the rule below still
+binds: cut words, never items. A warning shed to make weight fails the answer
+at any length.
 
 ## A listing, a price or a date — the threshold shape
 

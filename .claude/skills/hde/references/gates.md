@@ -175,4 +175,8 @@ pre-tax (biases toward renting); every dollar input the engine's coherence
 note held fixed along a price scan (a `purchase_costs` figure, a dollar tax or
 insurance line sized for the seed) goes here with the note's direction — it
 favours buying above the seed price and renting below it — every item gets a
-direction, none gets none.
+direction, none gets none. Say what the registry LACKS as lacking, never as
+absent from the world: the engine reports "no rebate anchored", and the answer
+says the same ("no source in the registry for a Montréal first-time-buyer
+rebate — check the city's own page before relying on it"). The programme may
+well exist; what the run can prove is only that nothing here priced it.
