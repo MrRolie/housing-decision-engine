@@ -552,14 +552,26 @@ def _derived_anchor_sources(data: Dict[str, Any]) -> Dict[str, Tuple[str, str]]:
     return out
 
 
-def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
+def build_source_echo(
+    data: Dict[str, Any],
+    derived_values: Optional[Dict[str, Tuple[Any, str]]] = None,
+) -> Tuple[SourceEcho, List[str]]:
     """Parse `sources:` against the config it describes.
 
     Returns the echo and a list of refusal messages (the caller raises, so this
     module stays free of the config exception type).
+
+    `derived_values` maps a key the config does NOT state to `(value, origin)`
+    — a figure the loader derived from the leaves under `origin`
+    (`rent.invested_down_payment` from `tax.renter_capital`, 2026-09-08). Such
+    a key is echoed beside its section with the class its leaves carry —
+    `assistant` if any leaf is, else `unattributed` if any leaf is undeclared,
+    else `user` — and its formatted value says what it was derived from; it
+    is never declarable itself, since the config does not set it.
     """
     problems: List[str] = []
     keys = attributable_keys(data)
+    derived_values = derived_values or {}
     named = {option: line_keys(data, option) for option in ("condo", "house", "rent")}
     all_named = [key for option_keys in named.values() for key in option_keys]
     declared_map: Dict[str, Tuple[str, Optional[str]]] = {}
@@ -594,11 +606,33 @@ def build_source_echo(data: Dict[str, Any]) -> Tuple[SourceEcho, List[str]]:
                 else:
                     problems.append(_value_problem(key, value))
 
+    # A derived key joins the echo AFTER the declarations were checked against
+    # what the config states: it is echoed beside its section, never declared.
+    for derived_key in derived_values:
+        if derived_key in keys:
+            continue
+        section = derived_key.split(".", 1)[0]
+        after = [i for i, k in enumerate(keys) if k.split(".", 1)[0] == section]
+        keys.insert(after[-1] + 1 if after else len(keys), derived_key)
+
     details = dict(uncertainty_inputs(data))
     derived = _derived_anchor_sources(data)
     entries: List[SourceEntry] = []
 
     def add(key: str) -> None:
+        if key in derived_values:
+            value, origin = derived_values[key]
+            leaves = [k for k in keys if k.startswith((f"{origin}.", "tax.fhsa."))]
+            classes = [declared_map.get(k, ("unattributed", None))[0] for k in leaves]
+            source = ("assistant" if "assistant" in classes
+                      else "unattributed" if ("unattributed" in classes or not leaves)
+                      else "user")
+            entries.append(SourceEntry(
+                key=key, value=value,
+                formatted=f"{format_source_value(key, value)} (derived from {origin})",
+                source=source, anchor=None, detail=None,
+            ))
+            return
         source, anchor = declared_map.get(key, derived.get(key, ("unattributed", None)))
         value = raw_value(data, key)
         entries.append(SourceEntry(

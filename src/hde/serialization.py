@@ -630,9 +630,15 @@ def format_assumptions(
                 + " · ".join(_reference_line(entry) for entry in own)
             )
     if spec.rent is not None:
+        # A capital the tax block derived from its shares says so beside the
+        # figure (2026-09-08) — the read-back never shows a derived number as
+        # a typed one.
+        derived = (" (derived from tax.renter_capital)"
+                   if spec.tax is not None and spec.tax.renter_capital is not None
+                   and spec.tax.renter_capital.total_derived else "")
         lines.append(
             f"rent: escalation {_g(spec.rent.rent_escalation_rate, 'rent.rent_escalation_rate')} · "
-            f"invested capital ${spec.rent.invested_down_payment:,.0f} at "
+            f"invested capital ${spec.rent.invested_down_payment:,.0f}{derived} at "
             f"{_g(spec.rent.investment_return_rate, 'rent.investment_return_rate')}"
         )
     # The tax treatment of the two sides' money (2026-09-05): the rate and its

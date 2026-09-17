@@ -86,13 +86,16 @@ def _pct(x: float) -> str:
 class RenterCapital:
     """Where the renter's capital sits at year 0, in dollars. `fhsa_derived`
     says the FHSA share came from the `fhsa` block (balance + contributions)
-    rather than being stated."""
+    rather than being stated; `total_derived` says the capital itself —
+    `rent.invested_down_payment` — was omitted and IS the sum of the shares
+    (2026-09-08: the same figure no longer has to be typed twice)."""
 
     tfsa: float
     rrsp: float
     fhsa: float
     taxable: float
     fhsa_derived: bool = False
+    total_derived: bool = False
 
     @property
     def total(self) -> float:
@@ -425,7 +428,12 @@ def resolve(data: Dict[str, Any], *, rent: Optional[Dict[str, Any]],
     renter_stated = "renter_capital" in block
     fhsa_stated = "fhsa" in block
     hbp_stated = "hbp_withdrawal" in block
-    renter_capital_total = float(rent.get("invested_down_payment", 0.0)) if isinstance(rent, dict) else 0.0
+    # The renter's capital: stated in `rent.invested_down_payment`, or — with
+    # the key omitted beside a `renter_capital` block — DERIVED as the sum of
+    # the shares (2026-09-08). Stated, the shares must add up to it.
+    stated_total = rent.get("invested_down_payment") if isinstance(rent, dict) else None
+    renter_capital_total = float(stated_total) if stated_total is not None else 0.0
+    derive_total = renter_stated and isinstance(rent, dict) and stated_total is None
 
     if (renter_stated or fhsa_stated or hbp_stated) and rent is None:
         what = "tax.renter_capital" if renter_stated else ("tax.fhsa" if fhsa_stated else "tax.hbp_withdrawal")
@@ -458,7 +466,8 @@ def resolve(data: Dict[str, Any], *, rent: Optional[Dict[str, Any]],
 
     capital: Optional[RenterCapital] = None
     if renter_stated:
-        capital = _parse_renter_capital(block["renter_capital"], renter_capital_total, plan)
+        capital = _parse_renter_capital(block["renter_capital"], renter_capital_total, plan,
+                                        derive_total=derive_total)
         if hbp is not None and hbp.withdrawal > capital.rrsp + 0.005:
             raise TaxTreatmentError(
                 f"tax.hbp_withdrawal={_money(hbp.withdrawal)} exceeds the RRSP share "
@@ -503,7 +512,17 @@ def _parse_hbp(value: Any) -> HbpPlan:
     return HbpPlan(withdrawal=withdrawal, limit=limit, repayment_years=int(years), grace_years=int(grace))
 
 
-def _parse_renter_capital(block: Any, total: float, plan: Optional[FhsaPlan]) -> RenterCapital:
+def derives_renter_capital(data: Dict[str, Any]) -> bool:
+    """True when the raw config omits `rent.invested_down_payment` beside a
+    `tax.renter_capital` mapping — the loader then derives the capital from
+    the shares, and the key is neither a default applied nor a stated value."""
+    rent, tax = data.get("rent"), data.get("tax")
+    return (isinstance(rent, dict) and "invested_down_payment" not in rent
+            and isinstance(tax, dict) and isinstance(tax.get("renter_capital"), dict))
+
+
+def _parse_renter_capital(block: Any, total: float, plan: Optional[FhsaPlan],
+                          *, derive_total: bool = False) -> RenterCapital:
     if not isinstance(block, dict):
         raise TaxTreatmentError("tax.renter_capital must be a mapping {tfsa, rrsp, fhsa, taxable} in dollars")
     shares = {}
@@ -519,8 +538,8 @@ def _parse_renter_capital(block: Any, total: float, plan: Optional[FhsaPlan]) ->
                 "tax.renter_capital.fhsa is stated beside tax.fhsa — the FHSA share is derived from "
                 "the fhsa block (balance + contributions over the saving years); drop one")
         shares["fhsa"] = plan.share_at_year0
-    capital = RenterCapital(fhsa_derived=derived, **shares)
-    if abs(capital.total - total) > 1.0:
+    capital = RenterCapital(fhsa_derived=derived, total_derived=derive_total, **shares)
+    if not derive_total and abs(capital.total - total) > 1.0:
         parts = " + ".join(f"{k.upper() if k != 'taxable' else k} {_money(shares[k])}"
                            + (" (derived)" if k == "fhsa" and derived else "") for k in _SHARES)
         raise TaxTreatmentError(
@@ -686,7 +705,8 @@ def tax_to_dict(tax: TaxParams, terminal: Optional[RenterTerminal], n_years: int
         "retirement_rate_source": tax.retirement_rate_source,
         "renter_capital": (
             {"tfsa": rc.tfsa, "rrsp": rc.rrsp, "fhsa": rc.fhsa, "taxable": rc.taxable,
-             "fhsa_derived": rc.fhsa_derived, "total": rc.total, "refunds_added": tax.refunds}
+             "fhsa_derived": rc.fhsa_derived, "total": rc.total, "total_derived": rc.total_derived,
+             "refunds_added": tax.refunds}
             if rc is not None else None),
         "after_tax_factor": terminal.after_tax_factor if terminal is not None else None,
         "blended_rate": terminal.blended_rate if terminal is not None else None,

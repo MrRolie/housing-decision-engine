@@ -257,7 +257,9 @@ The tax treatment of the two sides' money (`docs/specs/2026-09-05-tax-treatment.
   bracket derivation), `province`, `income`, `taxable_return_treatment`,
   `inclusion_rate`, `inclusion_applied`, `retirement_marginal_rate`,
   `retirement_rate_source`, `renter_capital` (`tfsa`, `rrsp`, `fhsa`,
-  `fhsa_derived`, `taxable`, `total`, `refunds_added`), `after_tax_factor`,
+  `fhsa_derived`, `taxable`, `total`, `total_derived` — true when
+  `rent.invested_down_payment` was omitted and IS the sum of the shares,
+  2026-09-08 — `refunds_added`), `after_tax_factor`,
   `blended_rate`, `drag_at_horizon` / `drag_pv`, `haircut_at_horizon` /
   `haircut_pv`, `fhsa` (`balance`, `years_until_purchase`, `contributions`,
   `refunds`, `share_at_year0`, `lifetime_remaining`) or `null`, `hbp`
@@ -274,6 +276,18 @@ The tax treatment of the two sides' money (`docs/specs/2026-09-05-tax-treatment.
   without an HBP); the text report prints it only when non-zero. The rent
   breakdown's `invested_capital_pv` is `D + refunds` and
   `invested_dp_benefit_pv` the after-tax terminal value (glossary).
+- The renter's capital is DERIVED when `rent.invested_down_payment` is omitted
+  beside a `renter_capital` block (2026-09-08): the sum of the shares plus the
+  derived FHSA share. It is then neither in `defaults_applied` nor a stated
+  value: the `rent:` assumptions line reads `invested capital $X (derived from
+  tax.renter_capital) at …`, and `assumptions.sources` carries
+  `rent.invested_down_payment` with `formatted` `$X (derived from
+  tax.renter_capital)` under the class its leaves carry — `assistant` if any
+  `tax.renter_capital.*` (or `tax.fhsa.*`) leaf is declared so, else
+  `unattributed` if any is undeclared, else `user`; the key itself is not
+  declarable, since the config does not set it. Stated beside the block, the
+  shares must still add up to it, and a mismatch is refused naming both
+  figures; the like-for-like warning reads the derived figure like a typed one.
 - Library: `tax_treatment.resolve`, `after_tax_factor`, `renter_terminal`,
   `fhsa_plan`, `hbp_repayment_leg`; `deterministic.renter_terminal_for`,
   `hbp_leg_for`, `hbp_repayment_pv_for`.

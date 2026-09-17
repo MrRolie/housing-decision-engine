@@ -51,6 +51,7 @@ from .tax_treatment import (
     TaxParams,
     TaxTreatmentError,
     anchors_used as tax_anchors_used,
+    derives_renter_capital,
     resolve as resolve_tax,
     tfsa_room_warning,
 )
@@ -331,6 +332,10 @@ def _defaults_applied(data: Dict[str, Any]) -> List[str]:
                 for sub in ("severity_mean", "severity_vol"):
                     if sub not in shock:
                         applied.append(f"{section}.price_shock.{sub}")
+    # A capital the tax block derived from its shares is neither a default nor
+    # a stated value (2026-09-08): the source echo carries it as derived.
+    if derives_renter_capital(data) and "rent.invested_down_payment" in applied:
+        applied.remove("rent.invested_down_payment")
     return applied
 
 
@@ -1473,18 +1478,22 @@ def _parse_tax(data: Dict[str, Any]) -> Optional[TaxParams]:
         raise ConfigValidationError(str(exc)) from exc
 
 
-def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter) -> RentParams:
-    """Parse RentParams from YAML data."""
+def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter,
+                derived_capital: Optional[float] = None) -> RentParams:
+    """Parse RentParams from YAML data. `derived_capital` is the renter's
+    capital the `tax:` block derived from its `renter_capital` shares when
+    `invested_down_payment` is omitted (2026-09-08); a stated figure wins."""
     if "monthly_rent" not in data:
         raise ConfigValidationError("rent section missing required field: monthly_rent")
     events = [_parse_event(e, years) for e in data.get("events", [])]
     other = [_parse_recurring_cost(c, conv, "rent") for c in data.get("other_recurring_costs", [])]
+    fallback = 0.0 if derived_capital is None else derived_capital
     return RentParams(
         monthly_rent=float(data["monthly_rent"]),
         # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% = 1.0% real
         rent_escalation_rate=conv.real(data, "rent_escalation_rate", "rent.rent_escalation_rate",
                                        ANCHORS["rent.rent_escalation_rate"].value),
-        invested_down_payment=float(data.get("invested_down_payment", 0.0)),
+        invested_down_payment=float(data.get("invested_down_payment", fallback)),
         # FP Canada 2026 PAG 60/40 ≈ 3.0% real
         investment_return_rate=conv.real(data, "investment_return_rate", "rent.investment_return_rate",
                                          ANCHORS["rent.investment_return_rate"].value),
@@ -1806,7 +1815,12 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     tax = _parse_tax(data)
     condo = _parse_condo(data["condo"], years, conv, data.get("province"), tax) if "condo" in data else None
     house = _parse_house(data["house"], years, conv, data.get("province"), tax) if "house" in data else None
-    rent = _parse_rent(data["rent"], years, conv) if "rent" in data else None
+    # The renter's capital derived from the tax block's shares when the config
+    # omits `rent.invested_down_payment` (2026-09-08); the echo says so.
+    derived_capital = (tax.renter_capital.total
+                       if tax is not None and tax.renter_capital is not None
+                       and tax.renter_capital.total_derived else None)
+    rent = _parse_rent(data["rent"], years, conv, derived_capital) if "rent" in data else None
     income = _parse_income(data["income"], conv) if "income" in data else None
     sim = _parse_simulation(data.get("simulation"), years, discount_rate)
     market_scenario = (
@@ -1821,7 +1835,9 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     # Source classes: who stated each value (2026-09-03). Parsed against the
     # config it describes, so a key the config does not set is refused here
     # rather than echoed as an attribution of nothing.
-    spec.sources, source_problems = build_source_echo(data)
+    derived_values = ({"rent.invested_down_payment": (derived_capital, "tax.renter_capital")}
+                      if derived_capital is not None else None)
+    spec.sources, source_problems = build_source_echo(data, derived_values=derived_values)
     if source_problems:
         raise ConfigValidationError("\n".join(source_problems))
     warnings = validate_config(spec)

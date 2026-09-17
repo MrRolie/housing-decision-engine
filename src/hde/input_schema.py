@@ -402,7 +402,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "invested_down_payment": (False, "capital the renter keeps invested instead of buying: charged at year 0 like "
                                         "the buyer's down payment and credited at its terminal value; like-for-like "
                                         "= the buyer's TOTAL year-0 cash, down_payment + purchase_costs (all cash: "
-                                        "price + purchase_costs); DEFAULT 0 = assume it earns exactly the discount rate"),
+                                        "price + purchase_costs); DEFAULT 0 = assume it earns exactly the discount rate. "
+                                        "With a tax.renter_capital block, OMIT it and the engine derives it as the sum "
+                                        "of the shares (plus the derived FHSA share) — the read-back says "
+                                        "'(derived from tax.renter_capital)'; stated beside the block, the shares must "
+                                        "add up to it"),
         "investment_return_rate": (False, "annual, AS QUOTED — the return as your fund quotes "
                                             "it, converted once at load like value growth; "
                                             "DEFAULT 0.03 real (FP Canada 2026 PAG 60/40, ≈ 5.1% "
@@ -481,7 +485,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                   "invested capital sits at year 0; REQUIRED when "
                                   "rent.invested_down_payment > 0 and refused without a rent: "
                                   "block; the shares must sum to rent.invested_down_payment (an "
-                                  "omitted share is 0). The taxable share earns the after-tax "
+                                  "omitted share is 0) — or omit rent.invested_down_payment and "
+                                  "the engine DERIVES it from the shares, so the figure is typed "
+                                  "once. The taxable share earns the after-tax "
                                   "return; the sheltered shares are untouched (the RRSP's pre-tax "
                                   "nature is not modelled — symmetric across the two sides). With "
                                   "a tax.fhsa block the fhsa share is DERIVED (balance + "

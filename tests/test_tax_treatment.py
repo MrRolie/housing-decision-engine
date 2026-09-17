@@ -480,6 +480,13 @@ class TestHbp:
         doc["condo"]["cash_available"] = 40_000
         assert not any("like-for-like" in w for w in coherence_warnings(load_config_dict(doc)))
 
+    def test_like_for_like_reads_a_derived_capital(self):
+        doc = cfg({"renter_capital": SPLIT, "hbp_withdrawal": self.H})
+        del doc["rent"]["invested_down_payment"]
+        warnings = coherence_warnings(load_config_dict(doc))
+        assert any("$60,000 + HBP $20,000 = $80,000 while rent.invested_down_payment is $60,000" in w
+                   for w in warnings)
+
     def test_like_for_like_warning_on_the_down_payment_path(self):
         """The HBP joins a `down_payment`-typed option too (the loader adds it
         to the stated figure), so the like-for-like check reads that path as
@@ -653,3 +660,66 @@ class TestShortBlockTaxSummary:
         # the full block is unchanged: its tax section is the full line
         assert [line for line in full if line.startswith("tax:")] == \
             [line for line in read_back_lines(load_config_dict(cfg({"renter_capital": SPLIT}))) if line.startswith("tax:")]
+
+
+class TestDerivedRenterCapital:
+    """`rent.invested_down_payment` is DERIVED when omitted beside a
+    `tax.renter_capital` block — the sum of the shares plus the derived FHSA
+    share — so the same figure is never typed twice (served answers typed
+    $140,000 in both places and were refused once for a rounding gap,
+    2026-09-08). Both stated and apart still refuses, naming both figures."""
+
+    def _derived(self, tax):
+        doc = cfg(tax)
+        del doc["rent"]["invested_down_payment"]
+        return doc
+
+    def test_the_omitted_figure_is_the_sum_of_the_shares(self):
+        spec = load_config_dict(self._derived({"renter_capital": SPLIT}))
+        assert spec.rent.invested_down_payment == 60_000
+        assert spec.tax.renter_capital.total_derived is True
+        assert "rent.invested_down_payment" not in spec.defaults_applied
+        rent_line = next(line for line in format_assumptions(spec) if line.startswith("rent:"))
+        assert "invested capital $60,000 (derived from tax.renter_capital) at" in rent_line
+        assert assumptions_to_dict(spec)["tax"]["renter_capital"]["total_derived"] is True
+
+    def test_the_derived_fhsa_share_joins_the_sum(self):
+        spec = load_config_dict(self._derived({"renter_capital": FHSA_SPLIT, "fhsa": FHSA}))
+        assert spec.rent.invested_down_payment == 60_000
+        assert spec.tax.renter_capital.fhsa == 11_000 and spec.tax.renter_capital.total_derived
+
+    def test_a_stated_figure_is_not_derived_and_a_mismatch_still_refuses(self):
+        spec = load_config_dict(cfg({"renter_capital": SPLIT}))
+        assert spec.tax.renter_capital.total_derived is False
+        assert "derived from" not in "\n".join(format_assumptions(spec))
+        assert assumptions_to_dict(spec)["tax"]["renter_capital"]["total_derived"] is False
+        doc = cfg({"renter_capital": SPLIT})
+        doc["rent"]["invested_down_payment"] = 61_000
+        with pytest.raises(ConfigValidationError, match=r"sums to \$60,000.*\$61,000"):
+            load_config_dict(doc)
+        doc["rent"]["invested_down_payment"] = 0
+        with pytest.raises(ConfigValidationError, match="must add up"):
+            load_config_dict(doc)
+
+    def test_the_source_echo_classes_it_by_its_leaves(self):
+        from hde.sources import source_lines
+        doc = self._derived({"renter_capital": SPLIT})
+        doc["sources"] = {f"tax.renter_capital.{k}": "user" for k in SPLIT}
+        spec = load_config_dict(doc)
+        entry = spec.sources.get("rent.invested_down_payment")
+        assert entry.source == "user" and entry.value == 60_000
+        assert entry.formatted == "$60,000 (derived from tax.renter_capital)"
+        assert "rent.invested_down_payment=$60,000 (derived from tax.renter_capital)" in "\n".join(
+            source_lines(spec.sources))
+        doc["sources"]["tax.renter_capital.taxable"] = "assistant"
+        assert load_config_dict(doc).sources.get("rent.invested_down_payment").source == "assistant"
+        del doc["sources"]["tax.renter_capital.taxable"]
+        assert load_config_dict(doc).sources.get("rent.invested_down_payment").source == "unattributed"
+        stated = load_config_dict(cfg({"renter_capital": SPLIT}))
+        assert stated.sources.get("rent.invested_down_payment").formatted == "$60,000"
+
+    def test_declaring_the_derived_key_itself_stays_refused(self):
+        doc = self._derived({"renter_capital": SPLIT})
+        doc["sources"] = {"rent.invested_down_payment": "user"}
+        with pytest.raises(ConfigValidationError, match="not a value this config states"):
+            load_config_dict(doc)

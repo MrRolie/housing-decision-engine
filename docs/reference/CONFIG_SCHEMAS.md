@@ -18,7 +18,7 @@ rates: <string>            # Optional: "as_quoted" (default) — every typed gro
 
 tax:                       # Optional: the tax treatment of the two sides' money (2026-09-05; opt-in — absent = neither side taxed, and the engine warns when the renter holds capital)
   marginal_rate: <float>   # Optional: a FRACTION in [0, 1); omitted = resolved from income.annual_income and the top-level province (QC | ON) through the registry's 2026 brackets
-  renter_capital:          # Required when rent.invested_down_payment > 0: where the renter's capital sits, in dollars, summing to it
+  renter_capital:          # Required when rent.invested_down_payment > 0: where the renter's capital sits, in dollars, summing to it — or omit rent.invested_down_payment and the engine derives it from these shares
     tfsa: <float>
     rrsp: <float>
     fhsa: <float>          # derived (balance + contributions) when a tax.fhsa block is present — never stated beside it
@@ -470,6 +470,16 @@ taxable share is not modelled (toward renting); state where the savings sit
   return alone.
 - **The owner** changes nowhere: the `tax:` line names the principal-residence
   exemption (`tax.principal_residence_exempt_fraction`).
+- **The renter's capital** (`renter_capital: {tfsa, rrsp, fhsa, taxable}`, in
+  dollars) either adds up to a stated `rent.invested_down_payment` — a
+  mismatch is refused naming both figures — or, with that key omitted, IS the
+  capital (2026-09-08): the engine derives it as the sum of the shares plus the
+  derived FHSA share, so the figure is typed once. The `rent:` assumptions line
+  then reads `invested capital $60,000 (derived from tax.renter_capital) at …`,
+  the source echo carries the key with the class its leaves carry (`assistant`
+  if any share is, else `unattributed` if any is undeclared, else `user`) and
+  the same `(derived from tax.renter_capital)` note, and it is not listed under
+  `defaults applied`.
 - **The FHSA** (`fhsa: {balance, annual_contribution, years_until_purchase}`,
   a financed `first_time_buyer: true` option and a `rent:` block required): each
   saving year's deductible contribution is capped by the room — $8,000 plus the
