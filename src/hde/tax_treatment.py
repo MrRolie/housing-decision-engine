@@ -587,6 +587,36 @@ def tax_line(tax: TaxParams, terminal: Optional[RenterTerminal], r: Optional[flo
     return "tax: " + " · ".join(parts)
 
 
+def tax_summary_line(tax: TaxParams, terminal: Optional[RenterTerminal], n_years: int, dr: float,
+                     owned: bool) -> str:
+    """The short block's `tax:` line (2026-09-08): the facts of `tax_line`, one
+    clause each — the rate and where it came from, the sheltered/taxable split,
+    the drag charged to rent (or that the capital is all sheltered), the
+    owner's exemption, the FHSA rollover haircut — each only when the run has
+    it. The refunds sit in the taxable pot and are dragged with it, so a
+    `taxable: 0` config with an FHSA saving year names them beside the split
+    and states its drag rather than saying "none"."""
+    if tax.marginal_rate_source == "typed":
+        parts = [f"marginal rate {tax.marginal_rate:.2%} (as typed)"]
+    else:
+        parts = [f"marginal rate {tax.marginal_rate:.2%} (resolved from income in {tax.province})"]
+    rc = tax.renter_capital
+    if rc is not None and terminal is not None:
+        refunds = f" (+ FHSA refunds {_money(tax.refunds)})" if tax.refunds >= 0.005 else ""
+        parts.append(f"renter capital sheltered {_money(rc.sheltered)} / taxable {_money(rc.taxable)}{refunds}")
+        if rc.taxable + tax.refunds < 0.005:
+            parts.append("drag none — all sheltered")
+        else:
+            pv = terminal.drag / (1 + dr) ** n_years
+            parts.append(f"drag {_money(terminal.drag)} at year {n_years} (PV {_money(pv)}) charged to rent")
+    if owned:
+        parts.append("owner exempt (principal residence)")
+    if rc is not None and rc.fhsa > 0 and terminal is not None:
+        pv = terminal.haircut / (1 + dr) ** n_years
+        parts.append(f"FHSA rollover haircut PV {_money(pv)} charged to rent")
+    return "tax: " + " · ".join(parts)
+
+
 def financing_additions(tax: Optional[TaxParams], first_time_buyer: bool) -> str:
     """` + FHSA refunds $R + HBP $H` for the financing line's head."""
     if tax is None or not first_time_buyer:

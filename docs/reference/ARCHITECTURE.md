@@ -753,16 +753,35 @@ other shape keeps the full block. The flag takes an optional value:
 `--read-back short` prints the short one, and `--json` carries
 `assumptions.read_back_short` beside `read_back`. Both views are cut from ONE
 assembly (`_read_back_sections`, the block as labelled sections in its own
-order): the short block is a strict subsequence of the full one by
-construction, and the closing line — `full read-back: <n> more lines
-(defaults applied, financing, year-1 cash, …) — rerun with --read-back
-full` — carries the real count of omitted lines and names only the sections
-this run actually holds beyond the short ones (a run with no income block
-never promises affordability); it is omitted when nothing was left out. No
-classifier reads finished lines back by prefix — that would be the second
-formatter this section warns against. Every warning reaches the user either
-way: a shorter block that lost one would be a regression, and the skill's
-gist shape turns the closing line into a one-line offer of the full block.
+order, each with the lines the short block carries for it — the same lines,
+a one-line summary, or nothing): the short block's shared lines are a
+subsequence of the full one by construction, and the closing line — `full
+read-back: <n> more lines (defaults applied, financing, year-1 cash, …) —
+rerun with --read-back full` — counts the lines the full block has beyond the
+short body and names only the sections this run actually holds beyond the
+short ones (a run with no income block never promises affordability); it is
+omitted when nothing was left out. No classifier reads finished lines back by
+prefix — that would be the second formatter this section warns against. Every
+warning reaches the user either way: a shorter block that lost one would be a
+regression, and the skill's gist shape turns the closing line into a one-line
+offer of the full block.
+
+Two lines ride the short block ALONE (2026-09-08: two consecutive rounds of
+served answers lost these facts from the prose), between the source lines and
+`decisiveness:`. `you said:` echoes the `user` entries of the source echo in
+the config's own units, only when `sources:` declares a `user` key — the full
+block never carried the `user-stated:` line, by design, and still does not.
+The one-line `tax:` summary (`tax_treatment.tax_summary_line`) stands in for
+the full `tax:` section when a `tax:` block is present — the rate and its
+source, the sheltered/taxable split, the drag charged to rent or `drag none —
+all sheltered`, the owner's exemption, the FHSA rollover haircut, each clause
+only when the run has it, from the same `renter_terminal_for` computation the
+full line reads; the full block keeps its full `tax:` line unchanged. In the
+same spirit the under-20%-down `[warning]` ends with the financing line's
+price ceiling (`serialization.cover_clause`, one builder for both lines; the
+YAML mapping is threaded through `all_warnings` so the figure is solved
+through the loader on every surface that has it, and held at the seed figure
+on both lines where none does).
 
 **Jurisdiction coherence (2026-09-04).** Where an owned option sits is decided
 by ONE resolver, `land_transfer_tax.option_province` (the stated `province`,

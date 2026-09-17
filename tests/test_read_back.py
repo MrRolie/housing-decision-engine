@@ -356,7 +356,13 @@ class TestShortReadBack:
     """The gist shape (2026-09-05): a user who asked for the gist gets the
     header, every `[warning]`, the source lines and the `decisiveness:` line,
     closed by ONE engine line counting what the full block adds. Every other
-    shape keeps the full block, byte for byte."""
+    shape keeps the full block, byte for byte. Since 2026-09-08 the short block
+    alone also carries a `you said:` line (the user's own figures) and a one-line
+    `tax:` summary between the source lines and `decisiveness:` — two facts the
+    served answers lost from the prose in two consecutive rounds."""
+
+    # The lines the short block carries that the full block does not (by design).
+    SHORT_ONLY = ("you said:",)
 
     def _both(self):
         spec = load_config_dict(_rich())
@@ -376,16 +382,18 @@ class TestShortReadBack:
         it = iter(whole)
         return all(any(line == candidate for candidate in it) for line in part)
 
-    def test_short_block_is_a_strict_subsequence_of_the_full_block_plus_its_closing_line(self):
+    def test_short_block_is_a_subsequence_of_the_full_block_plus_its_own_lines_and_closing_line(self):
         full, short = self._both()
         closing = short[-1]
         body = short[:-1]
         assert closing.startswith("full read-back: ")
         assert closing.endswith("— rerun with --read-back full")
-        assert self._is_ordered_subsequence(body, full)
-        assert len(body) < len(full)
-        # the count is the real number of omitted lines, and the sections named
-        # are the ones this run actually holds beyond the short lines
+        shared = [line for line in body if not line.startswith(self.SHORT_ONLY)]
+        assert self._is_ordered_subsequence(shared, full)
+        assert len(shared) < len(body) < len(full)  # the rich config has user-stated keys
+        # the count is the number of lines the full block has beyond the short
+        # body, and the sections named are the ones this run actually holds
+        # beyond the short lines
         omitted = len(full) - len(body)
         assert closing.startswith(f"full read-back: {omitted} more lines (")
         named = closing.split("(", 1)[1].split(")", 1)[0]
@@ -400,7 +408,7 @@ class TestShortReadBack:
                                     "anchor-sourced:", "swept:", "sources: none declared",
                                     "decisiveness:"))]
         assert kept, "the rich config carries every class"
-        assert short[:-1] == kept
+        assert [line for line in short[:-1] if not line.startswith(self.SHORT_ONLY)] == kept
         assert any(line.startswith("[warning] ") for line in short)
         assert any(line.startswith("decisiveness:") for line in short)
         # and nothing from the omitted sections leaked in
@@ -435,7 +443,8 @@ class TestShortReadBack:
         assert short[0] == READ_BACK_HEADER == full[0]
         assert "Assumptions" not in out and "total PV" not in out
         assert short[-1].startswith(f"full read-back: {len(full) - len(short) + 1} more lines (")
-        assert self._is_ordered_subsequence(short[:-1], full)
+        assert self._is_ordered_subsequence(
+            [l for l in short[:-1] if not l.startswith(self.SHORT_ONLY)], full)
         assert [l for l in full if l.startswith("[warning] ")] == \
             [l for l in short if l.startswith("[warning] ")]
 
@@ -450,10 +459,43 @@ class TestShortReadBack:
         assert "read_back" in doc["assumptions"] and "read_back_short" in doc["assumptions"]
         short = doc["assumptions"]["read_back_short"]
         assert short[-1].startswith("full read-back: ")
-        assert self._is_ordered_subsequence(short[:-1], doc["assumptions"]["read_back"])
+        assert self._is_ordered_subsequence(
+            [l for l in short[:-1] if not l.startswith(self.SHORT_ONLY)],
+            doc["assumptions"]["read_back"])
+        # the user's own figures ride the short block alone — the full block
+        # never carried them, by design
+        assert any(l.startswith("you said:") for l in short)
+        assert not any(l.startswith("you said:") for l in doc["assumptions"]["read_back"])
         monkeypatch.setattr(sys, "argv", argv + ["--read-back", "short"])
         assert cli_main() == 0
         assert capsys.readouterr().out.rstrip("\n").splitlines()[1:] == short
+
+    def test_the_short_block_says_what_the_user_said_after_the_source_lines(self):
+        """Two rounds of served answers lost the user's own figures from the
+        prose. The full block never carried the `user-stated:` line by design
+        (they are the user's numbers, not the engine's); the gist shape now
+        echoes them once, in the config's own units, right after the source
+        lines and before the decisiveness rule."""
+        full, short = self._both()
+        you_said = [line for line in short if line.startswith("you said:")]
+        assert you_said == ["you said: years=10, rent.monthly_rent=$2,000/mo"]
+        at = short.index(you_said[0])
+        last_source = max(i for i, line in enumerate(short)
+                          if line.startswith(("assistant-typed:", "unattributed:", "anchor-sourced:")))
+        decisiveness = next(i for i, line in enumerate(short) if line.startswith("decisiveness:"))
+        assert last_source < at < decisiveness
+        assert not any(line.startswith(("you said:", "user-stated:")) for line in full)
+
+    def test_no_you_said_line_without_a_user_key_or_without_a_sources_block(self):
+        cfg = _rich(sources={"years": "assistant", "rent.monthly_rent": "assistant"})
+        spec = load_config_dict(cfg)
+        assert not any(line.startswith("you said:") for line in read_back_lines(spec, short=True))
+        cfg = _rich()
+        cfg.pop("sources")
+        spec = load_config_dict(cfg)
+        short = read_back_lines(spec, short=True)
+        assert not any(line.startswith("you said:") for line in short)
+        assert any(line.startswith("sources: none declared") for line in short)
 
     def test_the_bare_run_still_prints_the_full_block_last(self, tmp_path, monkeypatch, capsys):
         config = _yaml(tmp_path, _rich())

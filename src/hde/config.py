@@ -912,9 +912,9 @@ def all_warnings(
     if prior is not None:
         if current_year is None:
             current_year = datetime.date.today().year
-        raw = prior.data_vintage.get("constants_as_of")
+        as_of = prior.data_vintage.get("constants_as_of")
         warns = warns + time_anchor_violations(
-            current_year, raw if isinstance(raw, str) else None)
+            current_year, as_of if isinstance(as_of, str) else None)
     if run_date is None:
         run_date = datetime.date.today()
     return warns + validity_warnings(spec, run_date)

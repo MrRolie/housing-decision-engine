@@ -528,3 +528,110 @@ class TestSurfaces:
         hbp_at = next(i for i, line in enumerate(lines) if line.startswith("condo hbp:"))
         financing_at = next(i for i, line in enumerate(lines) if line.startswith("condo financing:"))
         assert financing_at < tax_at < hbp_at
+
+
+class TestShortBlockTaxSummary:
+    """The short block's one-line `tax:` summary (2026-09-08): the rate and its
+    source, the sheltered/taxable split, the drag charged (or that there is
+    none), the owner's exemption, the FHSA rollover haircut — each clause only
+    when the run has it. The full block keeps the full `tax:` line unchanged;
+    the summary rides the short block alone, before `decisiveness:`."""
+
+    @staticmethod
+    def _money(x):
+        return f"${x:,.0f}"
+
+    def _summary(self, spec):
+        short = read_back_lines(spec, short=True)
+        lines = [line for line in short if line.startswith("tax:")]
+        assert len(lines) == 1, short
+        return lines[0]
+
+    def test_the_summary_carries_the_rate_the_split_the_drag_and_the_exemption(self):
+        spec = load_config_dict(cfg({"renter_capital": SPLIT}))
+        block = assumptions_to_dict(spec)["tax"]
+        summary = self._summary(spec)
+        assert summary == (
+            "tax: marginal rate 36.12% (resolved from income in QC) · "
+            "renter capital sheltered $45,000 / taxable $15,000 · "
+            f"drag {self._money(block['drag_at_horizon'])} at year 10 "
+            f"(PV {self._money(block['drag_pv'])}) charged to rent · "
+            "owner exempt (principal residence)")
+        assert block["drag_at_horizon"] > 0
+
+    def test_the_full_block_keeps_the_full_tax_line_and_neither_carries_the_other(self):
+        spec = load_config_dict(cfg({"renter_capital": SPLIT}))
+        full = read_back_lines(spec)
+        full_tax = [line for line in full if line.startswith("tax:")]
+        assert full_tax == [next(line for line in format_assumptions(spec) if line.startswith("tax:"))]
+        assert full_tax[0].startswith("tax: marginal rate 36.12% resolved from income $100,000 in QC — ")
+        summary = self._summary(spec)
+        assert summary not in full and full_tax[0] not in read_back_lines(spec, short=True)
+
+    def test_all_sheltered_capital_says_drag_none(self):
+        spec = load_config_dict(cfg({"renter_capital": {"tfsa": 40_000, "rrsp": 20_000, "fhsa": 0, "taxable": 0}}))
+        summary = self._summary(spec)
+        assert "renter capital sheltered $60,000 / taxable $0 · drag none — all sheltered · " in summary
+        assert "FHSA rollover" not in summary
+
+    def test_an_fhsa_share_adds_the_rollover_haircut_clause(self):
+        spec = load_config_dict(cfg({"renter_capital": FHSA_SPLIT, "fhsa": FHSA}))
+        block = assumptions_to_dict(spec)["tax"]
+        summary = self._summary(spec)
+        assert "renter capital sheltered $45,000 / taxable $15,000 · drag $" in summary
+        assert summary.endswith(
+            f"owner exempt (principal residence) · FHSA rollover haircut PV "
+            f"{self._money(block['haircut_pv'])} charged to rent")
+        assert block["haircut_pv"] > 0
+
+    def test_refunds_in_the_taxable_pot_keep_the_drag_honest(self):
+        """taxable: 0 with an FHSA saving year: the refunds sit in the taxable
+        pot and ARE dragged — the summary says so rather than "none"."""
+        saving = {"balance": 3_000, "annual_contribution": 8_000, "years_until_purchase": 1}
+        spec = load_config_dict(cfg({"renter_capital": {"tfsa": 29_000, "rrsp": 20_000, "taxable": 0},
+                                     "fhsa": saving}))
+        block = assumptions_to_dict(spec)["tax"]
+        summary = self._summary(spec)
+        assert block["drag_at_horizon"] > 0
+        assert "drag none" not in summary
+        assert ("renter capital sheltered $60,000 / taxable $0 (+ FHSA refunds $2,889) · "
+                f"drag {self._money(block['drag_at_horizon'])} at year 10") in summary
+
+    def test_a_typed_rate_says_as_typed(self):
+        spec = load_config_dict(cfg({"marginal_rate": 0.40, "renter_capital": SPLIT}))
+        assert self._summary(spec).startswith("tax: marginal rate 40.00% (as typed) · renter capital sheltered")
+
+    def test_no_renter_capital_leaves_the_rate_and_the_exemption(self):
+        spec = load_config_dict(cfg({"marginal_rate": 0.40},
+                                    rent={"monthly_rent": 1_850, "invested_down_payment": 0,
+                                          "investment_return_rate": R_QUOTED}))
+        assert spec.tax.renter_capital is None
+        assert self._summary(spec) == "tax: marginal rate 40.00% (as typed) · owner exempt (principal residence)"
+
+    def test_the_cli_short_block_places_the_summary_before_decisiveness_and_counts_the_rest(
+            self, tmp_path, monkeypatch, capsys):
+        import sys
+
+        import yaml
+
+        from hde.cli import main as cli_main
+
+        path = tmp_path / "cfg.yaml"
+        path.write_text(yaml.safe_dump(cfg({"renter_capital": SPLIT}), sort_keys=False), encoding="utf-8")
+        argv = ["hde", str(path), "--no-monte-carlo"]
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "full"])
+        assert cli_main() == 0
+        full = capsys.readouterr().out.rstrip("\n").splitlines()[1:]
+        monkeypatch.setattr(sys, "argv", argv + ["--read-back", "short"])
+        assert cli_main() == 0
+        short = capsys.readouterr().out.rstrip("\n").splitlines()[1:]
+        body, closing = short[:-1], short[-1]
+        tax_at = next(i for i, line in enumerate(body) if line.startswith("tax:"))
+        source_at = next(i for i, line in enumerate(body) if line.startswith("sources: none declared"))
+        decisiveness_at = next(i for i, line in enumerate(body) if line.startswith("decisiveness:"))
+        assert source_at < tax_at < decisiveness_at
+        assert closing.startswith(f"full read-back: {len(full) - len(body)} more lines (")
+        assert "tax" in closing.split("(", 1)[1].split(")", 1)[0].split(", ")
+        # the full block is unchanged: its tax section is the full line
+        assert [line for line in full if line.startswith("tax:")] == \
+            [line for line in read_back_lines(load_config_dict(cfg({"renter_capital": SPLIT}))) if line.startswith("tax:")]
