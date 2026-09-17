@@ -176,16 +176,25 @@ Findings, one line each:
   the line-name path the sources block accepts and prints "no flip" over an all-refused scan; a summed
   tax anchor validates but the refusal never offers it; the widen hint proposes a negative property tax.
 
-Folded (2026-09-06), by concept: nominal-mode rates lines and sweep labels carry the real equivalent, a
-typed 0% home-value growth warns; the under-20%-down warning carries the 20%-down ceiling so it rides
-every block; the short block gains a one-line tax summary and a `you said:` echo; a typed mortgage rate
-is the quoted rate and the engine applies the semi-annual convention; `rent.invested_down_payment`
-derives from the tax block; money keys format as money; line-name paths sweep; summed-anchor refusals
-name the form; the widen hint respects a zero floor; anchor validity dates warn when a source's stated
-change date passes; Ottawa and Gatineau property-tax rates and Montréal's home-ownership assistance
-fetched where reachable; the skill's shop-under edge defined as the decisive edge, a top-up or an
-assumed HBP is a second config, the growth break-even is mandatory beside the prior, "no source" is
-never "none exists", and the gist shape has a cut order.
+Folded (built 2026-09-06 to 09-08, merged 2026-09-17), by concept: nominal-mode `rates:` lines and
+sweep labels carry the real equivalent, a typed 0% home-value growth warns that it is a real decline;
+the under-20%-down warning carries the 20%-down ceiling so it rides every block; the short block gains a
+one-line tax summary and a `you said:` echo; a typed mortgage rate is the quoted rate and the engine
+converts it by its compounding (`mortgage_rate_compounding: semi_annual`, the Canadian fixed-rate
+default, or `effective_annual` for a rate already effective — a monthly convention was not built);
+`rent.invested_down_payment` derives from the tax block; money keys format as money; line-name paths
+sweep and an all-refused scan says so instead of "no flip"; summed-anchor refusals name the form; the
+widen hint respects a zero floor; anchor validity dates warn when a source's stated change date passes
+(20 anchors dated); Ottawa's property-tax rate is anchored from the City's own estimator
+(`property_tax.ottawa`, retrieved 2026-09-08) — Gatineau's stays unsourced, no published rate was
+reached; Montréal's own home-ownership assistance closed to new applications on 2026-07-07 and is
+anchored at $0 with that fact, while Québec's first-time-buyer credit on the duty (up to $5,875) is a
+named anchor the purchase-costs line reports as not applied; the skill's shop-under edge is the decisive
+edge, a top-up or an assumed HBP is a second config, the growth break-even is mandatory beside the
+prior, "no source" is never "none exists", and the gist shape has a cut order. Found at the merge, by
+diffing every shipped example's read-back against its pre-merge baseline: the source echo printed a
+typed 4.55% mortgage rate as `4.5%`; a rate now echoes at the precision that round-trips the typed
+figure.
 
 ### Round 10 (2026-09-04, four shapes, openers shaped by PROMPTS.md)
 
