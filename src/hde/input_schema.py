@@ -35,7 +35,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                   "2026 PAG 60/40), composed with inflation_rate in nominal mode"),
         "rates": (False, "'as_quoted' (DEFAULT) or 'real' — the convention of every rate you "
                          "TYPE (growth, escalation, return and discount rates; never "
-                         "mortgage_rate, a contract rate): as_quoted means the figure as you see "
+                         "mortgage_rate, a contract rate converted by its own compounding, "
+                         "mortgage_rate_compounding, not by inflation): as_quoted means the figure as you see "
                          "it quoted, converted ONCE at load — deflated by inflation_rate in real "
                          "mode, (1 + r)/(1 + π) − 1, used as typed in nominal mode — and the "
                          "read-back's `rates:` line shows both forms; 'real' means your figures "
@@ -114,14 +115,23 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "the loan-to-value and the 20% mortgage-insurance test read the "
                                    "computed figure. Like-for-like rent.invested_down_payment = this "
                                    "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
-                                "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1. No quote in hand? "
+        "mortgage_rate": (False, "the lender's rate AS QUOTED, decimal — a contract rate, never "
+                                "converted by inflation; the engine converts it ONCE by its "
+                                "compounding (mortgage_rate_compounding, default semi_annual: "
+                                "(1 + r/2)^2 − 1) to the EFFECTIVE ANNUAL rate the ANNUAL level "
+                                "payment uses, and the read-back's `rates:` line shows both "
+                                "figures. No quote in hand? "
                                 "`hde --print-anchors` → `mortgage_rate.posted_5y`, the Bank of "
                                 "Canada's weekly POSTED 5-year conventional rate: a list price and "
                                 "so a CEILING — contracted rates run lower, and the anchor's "
                                 "rationale carries what borrowers actually paid", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_rate_compounding": (False, "how mortgage_rate was quoted: 'semi_annual' (DEFAULT — "
+                                             "the Canadian fixed-rate convention the registry's "
+                                             "mortgage_rate.* restatements encode; the engine converts "
+                                             "the quote to its effective annual rate, (1 + r/2)^2 − 1) "
+                                             "or 'effective_annual' (the figure is already the effective "
+                                             "annual rate and is used as typed)"),
+        "mortgage_term_years": (False, "amortization term in years","owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026); "
@@ -268,14 +278,23 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                    "the loan-to-value and the 20% mortgage-insurance test read the "
                                    "computed figure. Like-for-like rent.invested_down_payment = this "
                                    "number", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_rate": (False, "EFFECTIVE ANNUAL rate, decimal, with ANNUAL level payments; "
-                                "a Canadian posted rate is semi-annually compounded — convert: "
-                                "r_eff = (1 + r_posted/2)^2 − 1. No quote in hand? "
+        "mortgage_rate": (False, "the lender's rate AS QUOTED, decimal — a contract rate, never "
+                                "converted by inflation; the engine converts it ONCE by its "
+                                "compounding (mortgage_rate_compounding, default semi_annual: "
+                                "(1 + r/2)^2 − 1) to the EFFECTIVE ANNUAL rate the ANNUAL level "
+                                "payment uses, and the read-back's `rates:` line shows both "
+                                "figures. No quote in hand? "
                                 "`hde --print-anchors` → `mortgage_rate.posted_5y`, the Bank of "
                                 "Canada's weekly POSTED 5-year conventional rate: a list price and "
                                 "so a CEILING — contracted rates run lower, and the anchor's "
                                 "rationale carries what borrowers actually paid", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
-        "mortgage_term_years": (False, "amortization term in years", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_rate_compounding": (False, "how mortgage_rate was quoted: 'semi_annual' (DEFAULT — "
+                                             "the Canadian fixed-rate convention the registry's "
+                                             "mortgage_rate.* restatements encode; the engine converts "
+                                             "the quote to its effective annual rate, (1 + r/2)^2 − 1) "
+                                             "or 'effective_annual' (the figure is already the effective "
+                                             "annual rate and is used as typed)"),
+        "mortgage_term_years": (False, "amortization term in years","owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026)"),

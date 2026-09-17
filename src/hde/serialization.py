@@ -358,12 +358,18 @@ def rates_line(spec: ComparisonSpec) -> str:
     convention the user did not type it in.
     """
     pi = spec.economic.inflation_rate
+    # A typed mortgage rate is converted by its compounding, not by inflation
+    # (2026-09-08): its clause closes the line under either convention.
+    mortgage = mortgage_rate_clauses(spec)
     if spec.rates == "real":
         tail = (f"composed with {pi:.1%} inflation_rate at compute"
                 if spec.economic.mode == "nominal" else "used as typed")
-        return f"rates: real (declared) · typed rates are real figures, {tail}"
-    if not spec.converted_rates:
+        return (f"rates: real (declared) · typed rates are real figures, {tail}"
+                + "".join(f" · {clause}" for clause in mortgage))
+    if not spec.converted_rates and not mortgage:
         return "rates: as quoted · no typed rate to convert"
+    if not spec.converted_rates:
+        return "rates: as quoted · " + " · ".join(mortgage)
     if spec.economic.mode == "nominal":
         # The quoted figure is the one in use — and its real equivalent rides
         # beside it, the same arithmetic as the real-mode clause, so a nominal
@@ -376,7 +382,36 @@ def rates_line(spec: ComparisonSpec) -> str:
     else:
         clauses = [f"{c.key} {c.quoted:.1%} as quoted = {c.effective:.1%} after {pi:.1%} inflation"
                    for c in spec.converted_rates]
-    return "rates: as quoted · " + " · ".join(clauses)
+    return "rates: as quoted · " + " · ".join(clauses + mortgage)
+
+
+def mortgage_rate_clauses(spec: ComparisonSpec) -> List[str]:
+    """One `rates:` clause per owned option whose `mortgage_rate` the config
+    typed (2026-09-08): the figure as quoted and the effective annual rate the
+    payment uses — `condo.mortgage_rate 4.95% as quoted (semi-annual) = 5.011%
+    effective annual` — or, for an `effective_annual` quote, `… 4.95% effective
+    annual, as typed`. Nothing for an option with no typed rate."""
+    clauses: List[str] = []
+    for name in _OWNED:
+        opt = getattr(spec, name)
+        if opt is None or opt.mortgage_rate_quoted is None:
+            continue
+        if opt.mortgage_rate_compounding == "semi_annual":
+            clauses.append(f"{name}.mortgage_rate {opt.mortgage_rate_quoted:.2%} as quoted "
+                           f"(semi-annual) = {opt.mortgage_rate:.3%} effective annual")
+        else:
+            clauses.append(f"{name}.mortgage_rate {opt.mortgage_rate_quoted:.2%} effective annual, "
+                           f"as typed")
+    return clauses
+
+
+def mortgage_rates_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
+    """`assumptions.mortgage_rates`: one `{option, quoted, compounding,
+    effective}` per owned option whose `mortgage_rate` the config typed."""
+    return [{"option": name, "quoted": opt.mortgage_rate_quoted,
+             "compounding": opt.mortgage_rate_compounding, "effective": opt.mortgage_rate}
+            for name in _OWNED
+            if (opt := getattr(spec, name)) is not None and opt.mortgage_rate_quoted is not None]
 
 
 def rate_label(spec: ComparisonSpec, dotted: str, rate: float) -> str:
@@ -750,6 +785,8 @@ def assumptions_to_dict(
         "rates": spec.rates,
         "inflation_rate": spec.economic.inflation_rate,
         "converted_rates": converted_rates_to_list(spec),
+        # A typed mortgage rate, as quoted and as the payment uses it (2026-09-08).
+        "mortgage_rates": mortgage_rates_to_list(spec),
         "lines": format_assumptions(spec, prior, raw),
         "defaults_applied": entries,
         # Jurisdiction figures the USER supplied that a published source agrees

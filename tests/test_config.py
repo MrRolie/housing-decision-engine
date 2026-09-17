@@ -1106,7 +1106,12 @@ class TestPostedRateWarning:
         assert POSTED_WARNING in warns
 
     def test_the_effective_restatement_fires_it_too(self):
-        warns = coherence_warnings(load_config_dict(_mortgaged(0.0618270225)))
+        # The typed figure is the effective annual rate, so the config says so
+        # (a typed mortgage_rate is the QUOTED rate, semi-annual by default,
+        # 2026-09-08); the warning quotes the figure as typed.
+        cfg = _mortgaged(0.0618270225)
+        cfg["house"]["mortgage_rate_compounding"] = "effective_annual"
+        warns = coherence_warnings(load_config_dict(cfg))
         assert any(w.startswith("house.mortgage_rate 6.18% is the POSTED 5-year rate")
                    for w in warns)
 

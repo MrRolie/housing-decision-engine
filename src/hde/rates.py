@@ -17,7 +17,13 @@ nominal mode exactly as before), so:
 A config that states real figures says so with a top-level ``rates: real``.
 ``inflation_rate`` is therefore the deflator in real mode too; omitted, it is
 the FP Canada planning figure (echoed under `defaults applied`). A mortgage
-rate is a quoted contract rate in both modes and never converted.
+rate is a quoted contract rate in both modes and is never converted by
+inflation; its own compounding convention converts it instead (2026-09-08):
+a Canadian fixed rate is quoted with semi-annual compounding, and the level
+payment wants the effective annual rate, so under the default
+``mortgage_rate_compounding: semi_annual`` the loader applies
+(1 + r/2)^2 − 1 once — the conversion the registry's `mortgage_rate.*`
+restatements encode; ``effective_annual`` is used as typed.
 
 Import-light on purpose (anchors only): `sources` and `models` both read this.
 """
@@ -91,6 +97,41 @@ def default_inflation_rate(mode: str, rates: str) -> float:
 
 class RateConventionError(ValueError):
     """A `rates:` value outside as_quoted | real."""
+
+
+# How a typed `mortgage_rate` was quoted (2026-09-08). `semi_annual` is the
+# Canadian fixed-rate convention — the Bank of Canada's posted and contracted
+# series are read that way by the registry's `mortgage_rate.*` restatements —
+# and the default; `effective_annual` says the figure is already the rate the
+# level payment uses. A monthly convention is deliberately absent: nothing in
+# the registry sources one.
+MORTGAGE_COMPOUNDING: Tuple[str, ...] = ("semi_annual", "effective_annual")
+DEFAULT_MORTGAGE_COMPOUNDING = "semi_annual"
+
+
+class MortgageCompoundingError(ValueError):
+    """A `mortgage_rate_compounding` value outside semi_annual | effective_annual."""
+
+
+def mortgage_compounding_of(data: Dict[str, Any]) -> str:
+    """One owned option's `mortgage_rate_compounding`, validated."""
+    compounding = data.get("mortgage_rate_compounding", DEFAULT_MORTGAGE_COMPOUNDING)
+    if compounding not in MORTGAGE_COMPOUNDING:
+        raise MortgageCompoundingError(
+            f"mortgage_rate_compounding: {compounding!r} — must be 'semi_annual' (the default: "
+            f"the quoted Canadian fixed rate, converted once to its effective annual rate, "
+            f"(1 + r/2)^2 − 1) or 'effective_annual' (the figure is already the effective "
+            f"annual rate and is used as typed)")
+    return compounding
+
+
+def effective_mortgage_rate(quoted: float, compounding: str) -> float:
+    """The EFFECTIVE annual rate the level payment uses, from the rate as
+    quoted: (1 + r/2)^2 − 1 for a semi-annually compounded quote, the figure
+    itself for an effective annual one."""
+    if compounding == "semi_annual":
+        return (1 + quoted / 2) ** 2 - 1
+    return quoted
 
 
 def convention_of(data: Dict[str, Any]) -> str:

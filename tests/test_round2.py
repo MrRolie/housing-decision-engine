@@ -45,6 +45,7 @@ class TestInvestmentReturnVol:
 class TestFinancedPurchaseCosts:
     BASE = {"years": 10, "discount_rate": 0.03, "rates": "real",
             "house": {"initial_value": 400_000, "down_payment": 40_000, "mortgage_rate": 0.04,
+                      "mortgage_rate_compounding": "effective_annual",  # the figures below use 4% as the effective rate
                       "mortgage_term_years": 25, "value_growth_rate": 0.01, "annual_maintenance_rate": 0.01,
                       "purchase_costs": 6_000,
                       "other_recurring_costs": [{"name": "tax", "annual_amount": 3400, "escalation_rate": 0.0}]}}

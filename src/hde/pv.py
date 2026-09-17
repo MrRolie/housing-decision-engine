@@ -156,9 +156,11 @@ def mortgage_payment(principal: float, rate: float, term_years: int) -> float:
 
     Convention: one payment per year, annual compounding. A Canadian posted
     mortgage rate is quoted with semi-annual compounding and monthly payments;
-    convert before use: r_eff = (1 + r_posted/2)^2 − 1 (the difference on the
-    annual outlay is ≈ 1.7% at 5%). Stated in the schema note for
-    mortgage_rate and in the figure glossary (docs/reference/ARCHITECTURE.md).
+    the LOADER converts a typed quote once under `mortgage_rate_compounding`
+    (default semi_annual: r_eff = (1 + r_quoted/2)^2 − 1 — the difference on
+    the annual outlay is ≈ 1.7% at 5%), so `rate` here is always the effective
+    annual figure. Stated in the schema note for mortgage_rate and in the
+    figure glossary (docs/reference/ARCHITECTURE.md).
     """
     if term_years <= 0:
         raise ValueError(f"term_years must be positive, got {term_years}")

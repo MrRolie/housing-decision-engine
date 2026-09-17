@@ -89,6 +89,7 @@ condo:
   monthly_fee: 380  # the listing's condo fee
   cash_available: 60000  # the whole pile for day one — the engine nets purchase costs and the premium tax out of it
   mortgage_rate: 0.0455  # 4.50% quoted, semi-annual compounding ⇒ 4.55% effective annual
+  mortgage_rate_compounding: effective_annual  # the figure above is the converted one; typing the 4.50% quote under the default does the same conversion
   mortgage_term_years: 25  # amortization, as quoted
   mortgage_insurance: auto  # under 20% down: CMHC tier picked by the engine, premium on the loan, QC tax in cash
   land_transfer_tax: auto  # Montréal droits de mutation from the published brackets
@@ -146,6 +147,7 @@ sources:
   condo.monthly_fee: user
   condo.cash_available: user
   condo.mortgage_rate: user
+  condo.mortgage_rate_compounding: user
   condo.mortgage_term_years: user
   condo.mortgage_insurance: assistant
   condo.land_transfer_tax: assistant

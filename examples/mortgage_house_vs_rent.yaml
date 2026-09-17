@@ -21,8 +21,9 @@
 #   discount_rate (omitted) ....... engine default: 3% real (FP Canada 2026 PAG 60/40) composed with
 #                                   inflation ⇒ 5.2% nominal, echoed under `defaults applied`
 #   mortgage_rate 0.044 ........... FP Canada 2026 borrowing rate 4.4% nominal, used as an EFFECTIVE
-#                                   ANNUAL rate with annual payments. A POSTED Canadian rate compounds
-#                                   semi-annually — convert it first: r_eff = (1 + r_posted/2)^2 − 1.
+#                                   ANNUAL rate with annual payments, so mortgage_rate_compounding says
+#                                   effective_annual. A lender's QUOTE compounds semi-annually — type it
+#                                   as quoted and leave the default: the engine converts (1 + r/2)^2 − 1.
 #   down_payment 110000 ........... 20% of price — scenario-specific
 #   mortgage_term_years 25 ........ common Canadian amortization — scenario-specific
 #   value_growth_rate 0.031 ....... illustrative market view, 3.1% quoted ≈ 1.0% real — see the
@@ -46,6 +47,7 @@ house:
   initial_value: 550000  # scenario-specific market input
   down_payment: 110000  # 20% — scenario-specific
   mortgage_rate: 0.044  # NOMINAL effective annual; FP Canada 2026 borrowing rate — a contract rate, used as entered in both modes
+  mortgage_rate_compounding: effective_annual  # the figure above is already the effective annual rate; the default (semi_annual) would convert a lender's quote
   mortgage_term_years: 25  # scenario-specific
   purchase_costs: 8200  # illustrative — a hand-typed welcome tax + notary; prefer land_transfer_tax: auto with a quoted province so the engine prices the duty (first_time_buyer_montreal.yaml)
   other_recurring_costs:

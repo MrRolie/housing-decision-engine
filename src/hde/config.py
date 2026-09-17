@@ -30,12 +30,15 @@ from .land_transfer_tax import (
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .rates import (
+    MortgageCompoundingError,
     RateConventionError,
     RateConverter,
     convention_of,
     converted_for,
     default_inflation_rate,
     deflate,
+    effective_mortgage_rate,
+    mortgage_compounding_of,
 )
 from .serialization import (
     cost_family,
@@ -102,7 +105,8 @@ _CONDO_KEYS = frozenset({
     "reserve_contribution_rate", "reserve_initial_balance",
     "reserve_growth_rate", "initial_value", "purchase_costs", "purchase_costs_rate",
     "financed_purchase_costs", "value_growth_rate", "property_tax_rate",
-    "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years", "all_cash",
+    "down_payment", "cash_available", "mortgage_rate", "mortgage_rate_compounding",
+    "mortgage_term_years", "all_cash",
     "selling_cost_rate", "price_shock", "mortgage_insurance", "province",
     "land_transfer_tax", "municipality", "first_time_buyer",
 })
@@ -110,7 +114,8 @@ _HOUSE_KEYS = frozenset({
     "initial_value", "purchase_costs", "purchase_costs_rate", "financed_purchase_costs",
     "value_growth_rate", "annual_maintenance_rate", "property_tax_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
-    "mortgage_rate", "mortgage_term_years", "all_cash", "selling_cost_rate",
+    "mortgage_rate", "mortgage_rate_compounding", "mortgage_term_years", "all_cash",
+    "selling_cost_rate",
     "price_shock", "mortgage_insurance", "province",
     "land_transfer_tax", "municipality", "first_time_buyer",
 })
@@ -751,8 +756,11 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
         if opt is None or opt.all_cash or opt.mortgage_rate is None:
             continue
         if any(abs(opt.mortgage_rate - stated) <= window for stated in posted.stated_values()):
+            # The figure as the config typed it (2026-09-08: the spec's rate is
+            # the effective annual one the quote converts to).
+            shown = opt.mortgage_rate if opt.mortgage_rate_quoted is None else opt.mortgage_rate_quoted
             warns.append(
-                f"{name}.mortgage_rate {opt.mortgage_rate:.2%} is the POSTED 5-year rate "
+                f"{name}.mortgage_rate {shown:.2%} is the POSTED 5-year rate "
                 f"({posted.name}); its source says contracted rates run lower — see "
                 f"mortgage_rate.contracted_5y_uninsured / mortgage_rate.contracted_5y_insured "
                 f"in --print-anchors; the verdict's margin moves with the rate"
@@ -1304,6 +1312,22 @@ def _apply_mortgage_insurance(
         raise ConfigValidationError(str(exc)) from exc
 
 
+def _mortgage_rate(data: Dict[str, Any], name: str) -> Tuple[Optional[float], str, Optional[float]]:
+    """(the rate as quoted, its compounding, the EFFECTIVE annual rate the
+    payment uses) for one owned option — the one conversion a typed mortgage
+    rate gets (2026-09-08): a semi-annual quote (the default, the Canadian
+    fixed-rate convention) becomes (1 + r/2)^2 − 1; an effective annual quote
+    is used as typed. (None, convention, None) with no rate typed."""
+    try:
+        compounding = mortgage_compounding_of(data)
+    except MortgageCompoundingError as exc:
+        raise ConfigValidationError(f"{name}.{exc}") from exc
+    if "mortgage_rate" not in data:
+        return None, compounding, None
+    quoted = float(data["mortgage_rate"])
+    return quoted, compounding, effective_mortgage_rate(quoted, compounding)
+
+
 def _day_one_additions(data: Dict[str, Any], name: str, tax: Optional[TaxParams]) -> Tuple[bool, float]:
     """(first_time_buyer, what the `tax:` block adds to this option's day-one
     cash — the FHSA refunds and the HBP withdrawal, for a first-time buyer)."""
@@ -1333,6 +1357,7 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
 
     value_growth_rate = conv.real(condo_data, "value_growth_rate", "condo.value_growth_rate",
                                   ANCHORS["condo.value_growth_rate"].value)
+    mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(condo_data, "condo")
     property_tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -1368,7 +1393,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
         value_growth_rate=value_growth_rate,
         down_payment=down_payment,
         cash_available=cash_available,
-        mortgage_rate=(None if "mortgage_rate" not in condo_data else float(condo_data["mortgage_rate"])),
+        mortgage_rate=mortgage_rate, mortgage_rate_quoted=mortgage_rate_quoted,
+        mortgage_rate_compounding=mortgage_rate_compounding,
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
@@ -1416,6 +1442,7 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
 
     value_growth_rate = conv.real(house_data, "value_growth_rate", "house.value_growth_rate",
                                   ANCHORS["house.value_growth_rate"].value)
+    mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(house_data, "house")
     property_tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -1443,7 +1470,8 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
         maintenance_curve=maintenance_curve,
         down_payment=down_payment,
         cash_available=cash_available,
-        mortgage_rate=(None if "mortgage_rate" not in house_data else float(house_data["mortgage_rate"])),
+        mortgage_rate=mortgage_rate, mortgage_rate_quoted=mortgage_rate_quoted,
+        mortgage_rate_compounding=mortgage_rate_compounding,
         mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in

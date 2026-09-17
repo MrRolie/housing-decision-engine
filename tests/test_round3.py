@@ -47,6 +47,7 @@ def _base(**over):
         "condo": {
             "initial_value": 400_000, "monthly_fee": 300, "value_growth_rate": 0.0,
             "down_payment": 80_000, "mortgage_rate": 0.04, "mortgage_term_years": 25,
+            "mortgage_rate_compounding": "effective_annual",  # the figures below use 4% as the effective rate
             "purchase_costs": 5_000,
             "other_recurring_costs": [
                 {"name": "tax", "annual_amount": 3_000, "escalation_rate": 0.0}],

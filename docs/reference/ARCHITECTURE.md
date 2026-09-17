@@ -256,7 +256,14 @@ figure and is re-fetched, not indexed, for 2027.
   anchored defaults are real and untouched. A config that states real figures says
   `rates: real` (top level) and is read as before. `inflation_rate` is therefore the
   deflator in real mode too — the FP Canada 2.1% planning figure when omitted there.
-  Only `mortgage_rate`, a quoted contract rate, is never converted.
+  Only `mortgage_rate`, a quoted contract rate, is never converted by inflation:
+  its own compounding converts it (2026-09-08) — under the default
+  `mortgage_rate_compounding: semi_annual` (the Canadian fixed-rate convention
+  the registry's `mortgage_rate.*` restatements encode) the loader turns the
+  quote into the effective annual rate the level payment uses, `(1 + r/2)^2 − 1`,
+  once; `effective_annual` is used as typed; the `rates:` line shows both
+  figures (`condo.mortgage_rate 4.95% as quoted (semi-annual) = 5.011% effective
+  annual`).
 - **Nominal mode composes inflation into every escalation:** `g_eff = (1 + g)(1 + π) − 1`
   (`_effective_growth_rate`); in real mode `g_eff = g`. Defaults are REAL terms.
 - **Two escalation-start conventions coexist by design.** Condo fees, rent and
@@ -613,6 +620,7 @@ and `sources` — the source-class echo.
 | `converted_rates` | every typed rate the loader converted, in read-back order (the discount rate; then per option its own rates, then its cost lines; then income) | one `{key, quoted, effective}` per rate; empty under `rates: real` |
 | `quoted` | the figure exactly as the config typed it | — |
 | `effective` | the rate the run uses, in the run's own terms | real mode: `(1 + quoted)/(1 + inflation_rate) − 1`, the spec's stored figure; nominal mode: the quoted figure itself — the spec stores its deflated real form and `_effective_growth_rate` composes it back, `(1 + r_real)(1 + π) − 1 = quoted` |
+| `mortgage_rates` | every typed `mortgage_rate`, as quoted and as the level payment uses it (2026-09-08) | one `{option, quoted, compounding, effective}` per owned option that typed a rate; `effective = (1 + quoted/2)^2 − 1` under `mortgage_rate_compounding: semi_annual` (the default), `= quoted` under `effective_annual`; never touched by `inflation_rate` in either mode |
 
 **Source classes (`sources`).** `defaults_applied` answers "what did the engine
 fill in?"; the source echo answers the other half, "who stated the rest?". The

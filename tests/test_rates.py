@@ -267,6 +267,82 @@ class TestAnchorDeclarationsCompareInTheAnchorsConvention:
             load_config_dict(_cfg(discount_rate=0.03, sources={"discount_rate": "anchor:simulation.discount_rate"}))
 
 
+class TestMortgageRateCompounding:
+    """A typed `mortgage_rate` is the QUOTED rate (2026-09-08). A Canadian fixed
+    rate is quoted with semi-annual compounding — the convention the
+    registry's `mortgage_rate.*` restatements encode — so under the default
+    `mortgage_rate_compounding: semi_annual` the loader converts it once,
+    (1 + r/2)^2 − 1, to the effective annual rate the level payment uses;
+    `effective_annual` is used as typed. Served answers typed the raw quote
+    where the schema asked for the converted figure: 4.95% vs 5.011% on the
+    payment."""
+
+    EFFECTIVE = (1 + 0.0495 / 2) ** 2 - 1
+
+    def _mortgaged(self, **over):
+        cfg = _cfg()
+        cfg["condo"] = {"initial_value": 400_000, "monthly_fee": 300, "down_payment": 100_000,
+                        "mortgage_rate": 0.0495, "mortgage_term_years": 25, "purchase_costs": 6_000,
+                        **over}
+        cfg["rent"]["invested_down_payment"] = 106_000
+        return cfg
+
+    def test_the_default_converts_a_semi_annual_quote_once(self):
+        spec = load_config_dict(self._mortgaged())
+        assert spec.condo.mortgage_rate == pytest.approx(self.EFFECTIVE)
+        assert spec.condo.mortgage_rate_quoted == 0.0495
+        assert spec.condo.mortgage_rate_compounding == "semi_annual"
+        assert ("condo.mortgage_rate 4.95% as quoted (semi-annual) = 5.011% effective annual"
+                in rates_line(spec))
+
+    def test_effective_annual_is_used_as_typed(self):
+        spec = load_config_dict(self._mortgaged(mortgage_rate_compounding="effective_annual"))
+        assert spec.condo.mortgage_rate == 0.0495
+        assert "condo.mortgage_rate 4.95% effective annual, as typed" in rates_line(spec)
+        assert "semi-annual" not in rates_line(spec)
+
+    def test_the_payment_uses_the_converted_rate(self):
+        from hde.pv import mortgage_payment
+        semi = compute_deterministic(load_config_dict(self._mortgaged()))
+        typed = compute_deterministic(load_config_dict(
+            self._mortgaged(mortgage_rate_compounding="effective_annual")))
+        assert semi.condo.total_pv > typed.condo.total_pv
+        loan = 300_000.0
+        assert (mortgage_payment(loan, self.EFFECTIVE, 25)
+                > mortgage_payment(loan, 0.0495, 25))
+
+    def test_an_unknown_convention_is_refused_naming_both(self):
+        with pytest.raises(ConfigValidationError, match="semi_annual.*effective_annual"):
+            load_config_dict(self._mortgaged(mortgage_rate_compounding="monthly"))
+
+    def test_no_mortgage_no_clause_and_rates_real_keeps_the_clause(self):
+        assert "mortgage_rate" not in rates_line(load_config_dict(_cfg()))
+        declared = self._mortgaged()
+        declared["rates"] = "real"
+        line = rates_line(load_config_dict(declared))
+        assert line.startswith("rates: real (declared) · typed rates are real figures, used as typed · ")
+        assert line.endswith("condo.mortgage_rate 4.95% as quoted (semi-annual) = 5.011% effective annual")
+
+    def test_a_declaration_validates_under_either_convention(self):
+        posted = ANCHORS["mortgage_rate.posted_5y"]
+        for rate, compounding in ((posted.value, "semi_annual"),
+                                  (posted.stated_values()[1], "effective_annual"),
+                                  (posted.value, "effective_annual")):
+            cfg = self._mortgaged(mortgage_rate=rate, mortgage_rate_compounding=compounding,
+                                  sources={"condo.mortgage_rate": "anchor:mortgage_rate.posted_5y"})
+            cfg["sources"] = cfg["condo"].pop("sources")
+            spec = load_config_dict(cfg)
+            assert spec.sources.anchor_name("condo.mortgage_rate") == "mortgage_rate.posted_5y"
+            assert any("is the POSTED 5-year rate" in w for w in coherence_warnings(spec))
+
+    def test_the_json_carries_the_quote_and_the_effective_rate(self):
+        doc = assumptions_to_dict(load_config_dict(self._mortgaged()))
+        assert doc["mortgage_rates"] == [{"option": "condo", "quoted": 0.0495,
+                                          "compounding": "semi_annual",
+                                          "effective": pytest.approx(self.EFFECTIVE)}]
+        assert assumptions_to_dict(load_config_dict(_cfg()))["mortgage_rates"] == []
+
+
 class TestNominalZeroGrowthWarning:
     """A home's value typed as a NOMINAL 0% is a real decline of inflation's
     size — served answers took "prices flat" typed as 0.0 for the neutral view

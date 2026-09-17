@@ -685,6 +685,7 @@ class TestMortgageInsuranceCliff:
             "house": {"initial_value": 600_000, "value_growth_rate": 0.0,
                       "cash_available": 130_000, "purchase_costs": 5_000,
                       "mortgage_rate": 0.04, "mortgage_term_years": 25,
+                      "mortgage_rate_compounding": "effective_annual",  # the cliff figures use 4% as the effective rate
                       "mortgage_insurance": "auto"},
             "rent": {"monthly_rent": monthly_rent, "rent_escalation_rate": 0.0,
                      "invested_down_payment": 125_000, "investment_return_rate": 0.03},

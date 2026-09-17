@@ -142,8 +142,13 @@ class CondoParams:
     # ride the loan and are never netted). Kept on the params so the assumption
     # echo can show the netting rather than only its result.
     cash_available: Optional[float] = None
-    mortgage_rate: Optional[float] = None
+    mortgage_rate: Optional[float] = None  # the EFFECTIVE annual rate the level payment uses
     mortgage_term_years: Optional[int] = None
+    # The rate as the config quoted it and the compounding it was quoted with
+    # (2026-09-08): the loader converts a semi-annual quote once, (1 + r/2)^2 − 1,
+    # into `mortgage_rate`; None when no rate was typed (a directly built spec).
+    mortgage_rate_quoted: Optional[float] = None
+    mortgage_rate_compounding: str = "semi_annual"
     all_cash: bool = False
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
@@ -204,8 +209,13 @@ class HouseParams:
     # ride the loan and are never netted). Kept on the params so the assumption
     # echo can show the netting rather than only its result.
     cash_available: Optional[float] = None
-    mortgage_rate: Optional[float] = None
+    mortgage_rate: Optional[float] = None  # the EFFECTIVE annual rate the level payment uses
     mortgage_term_years: Optional[int] = None
+    # The rate as the config quoted it and the compounding it was quoted with
+    # (2026-09-08): the loader converts a semi-annual quote once, (1 + r/2)^2 − 1,
+    # into `mortgage_rate`; None when no rate was typed (a directly built spec).
+    mortgage_rate_quoted: Optional[float] = None
+    mortgage_rate_compounding: str = "semi_annual"
     all_cash: bool = False
     # WOWA 2026: seller-side commissions ≈ 4–5% + notary/discharge ⇒ 5% all-in
     selling_cost_rate: float = ANCHORS["condo.house.selling_cost_rate"].value
