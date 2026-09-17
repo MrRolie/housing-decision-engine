@@ -553,14 +553,23 @@ def format_assumptions(
         dr_text = f"{typed_dr.quoted:.1%} as quoted → {dr:.1%} real (after {pi:.1%} inflation)"
     else:
         dr_text = f"{dr:.1%}"
+    # The mortgage clause is only true when it is so: a semi-annual quote is
+    # converted by its compounding (the `rates:` line shows both figures), and
+    # "used as entered" would contradict that line on the same number.
+    converted_quote = any(
+        opt is not None and opt.mortgage_rate_quoted is not None
+        and opt.mortgage_rate_compounding == "semi_annual"
+        for opt in (spec.condo, spec.house))
+    mortgage_clause = ("mortgage_rate is converted by its compounding, not by inflation — see the rates: line"
+                       if converted_quote else "mortgage_rate is used as entered")
     if not nominal:
         convention = ""
     elif spec.rates == "real":
         convention = (" (growth, escalation, investment-return and discount-rate inputs are REAL and "
-                      "composed with inflation_rate; mortgage_rate is used as entered)")
+                      f"composed with inflation_rate; {mortgage_clause})")
     else:
         convention = (" (typed rates are as quoted and used as typed; anchored defaults are real "
-                      "and composed with inflation_rate; mortgage_rate is used as entered)")
+                      f"and composed with inflation_rate; {mortgage_clause})")
     lines = [f"mode: {spec.economic.mode} terms · discount_rate {dr_text}{convention}"]
     if spec.condo is not None:
         lines.append(

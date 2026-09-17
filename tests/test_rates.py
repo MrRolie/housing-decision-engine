@@ -342,6 +342,21 @@ class TestMortgageRateCompounding:
                                           "effective": pytest.approx(self.EFFECTIVE)}]
         assert assumptions_to_dict(load_config_dict(_cfg()))["mortgage_rates"] == []
 
+    def test_the_nominal_mode_line_never_contradicts_the_rates_line(self):
+        """The `mode:` line's convention clause said "mortgage_rate is used as
+        entered" — false for a semi-annual quote the loader converts. It says
+        so only when it is so; otherwise it points at the `rates:` line."""
+        nominal = {"mode": "nominal", "inflation_rate": PI}
+        semi = format_assumptions(load_config_dict(
+            {**self._mortgaged(), "economic": nominal}))[0]
+        assert semi.endswith("mortgage_rate is converted by its compounding, not by "
+                             "inflation — see the rates: line)")
+        typed = format_assumptions(load_config_dict(
+            {**self._mortgaged(mortgage_rate_compounding="effective_annual"), "economic": nominal}))[0]
+        assert typed.endswith("mortgage_rate is used as entered)")
+        assert format_assumptions(load_config_dict(_nominal()))[0].endswith(
+            "mortgage_rate is used as entered)")
+
 
 class TestNominalZeroGrowthWarning:
     """A home's value typed as a NOMINAL 0% is a real decline of inflation's

@@ -68,7 +68,7 @@ RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
     "value_growth_rate": (-0.02, 0.05),        # on the config's own axis (as quoted by default): a shrinking market to a hot one
     "rent_escalation_rate": (-0.01, 0.05),     # shelter-cost growth, on the same axis
     "annual_maintenance_rate": (0.0, 0.03),    # nothing modelled to a high-upkeep house
-    "mortgage_rate": (0.01, 0.10),             # effective annual, two decades of Canadian rates
+    "mortgage_rate": (0.01, 0.10),             # as quoted (semi-annual by default), two decades of Canadian rates
     "discount_rate": (0.0, 0.08),              # the loader refuses outside [0, 15%]
 }
 
