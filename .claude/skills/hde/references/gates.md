@@ -114,7 +114,14 @@ both means (the `reason` line carries the clause); "too close to call"
 survives, the sign does not go unmentioned. When the mean disagrees only
 because of an uncertainty input YOU chose (a crash hazard, a vol), say that
 the input is yours and sweep it (`--sweep condo.price_shock.annual_hazard=…`)
-so the user sees where their fear starts to matter. Smallest worst case →
+so the user sees where their fear starts to matter. On a price question the
+price to SHOP UNDER is the highest price at which the verdict is still
+decisive for buying under that criterion — with uncertainty on, where P(buy
+cheapest) last clears the 65% floor on the densified sweep (an insured-tier
+cliff can move it); on a single-path run, the deterministic band's low edge —
+while the `mean flip <key>:` line and the crossing are where the advantage
+VANISHES, a conditional ceiling quoted with its P and both means, never a
+shop-under price. Smallest worst case →
 turn the uncertainty inputs ON (`simulation.*_vol`, `price_shock`), label
 them illustrative, and read the p95 and `prob_*_cheapest`.
 `investment_return_vol` is the ANNUAL volatility of the renter's return (0.10

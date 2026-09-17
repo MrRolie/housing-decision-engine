@@ -38,7 +38,11 @@ uv run hde scenarios/<slug>.yaml --break-even <option>.initial_value=<lo>:<hi>
 ```
 
 Read the threshold `sentence` and the `financing:` line from that run's
-output; the same command with `--read-back short` appended is the paste —
+output (a break-even prints affordability only at the crossing and the band
+edges — "where does the affordability line bite along a price?" is a
+`--sweep <option>.initial_value=lo:hi:n` and its per-point
+`affordability … breaches years` lines, densified, which this shape runs only
+when the user asks for it); the same command with `--read-back short` appended is the paste —
 the engine re-cuts its own block from the same seeded run, so the two agree
 line for line. Never hand-shorten the full block.
 

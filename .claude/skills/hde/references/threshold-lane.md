@@ -33,7 +33,15 @@ below). Prefer the rate forms on any price threshold. The break-even also
 prints affordability at the crossing and the band edges when an income is
 given — quote it, and at every bracket end too: the `across` rows carry
 affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
-income is a breach, not a ceiling.
+income is a breach, not a ceiling. "Where does the affordability line bite
+along a price?" is its own run, not a reading of the break-even: a break-even
+prints affordability only at the crossing and the band edges, so scan the
+price — `--sweep <opt>.initial_value=lo:hi:n` — and read the per-point
+`affordability … breaches years` lines, densifying until two neighbouring
+points are close enough to shop between. The threshold those breaches are
+measured against is the engine's (32% by default, or the config's
+`affordability_threshold`) and is named as the engine's; a 39% GDS figure you
+use as the safe line is YOUR reference and is labelled so.
 
 ## One command, several brackets
 
@@ -51,7 +59,12 @@ uv run hde scenarios/<slug>.yaml --break-even rent.monthly_rent \
 
 - **Growth first.** With no price-growth view, `value_growth_rate` is the
   least certain estimate by construction (the engine's default is neutral,
-  uncited): quote the threshold at 0% and at the top of the band.
+  uncited): quote the threshold at 0% and at the top of the band. Author the
+  bracket in the config's own convention: `0:0.02:3` above is REAL-mode
+  syntax, where 0 is 0% real; in nominal mode the bracket is quoted
+  (`0.021:0.061:5` — inflation to 4% above it) and the rows' real equivalents
+  come from the engine's own labels (`house.value_growth_rate=0.0% (−2.1%
+  real): …`), never from your arithmetic.
 - **Then the largest labelled dollar estimate** (maintenance 1.2% vs 0.6%).
 - **Then every default the engine warned on** (the 1% real rent escalation:
   a Québec continuing lease is ≈ 0% real).
@@ -103,11 +116,16 @@ On a price threshold the sentence is the mirror, owned side first:
 > the condo is cheaper below $412,000; too close to call between $412,000 and
 > $455,000; renting is cheaper above $455,000.
 
-The **shop-under edge** is the band edge on the buyer's side — the low edge,
-$412,000 here, the highest price at which buying is still the decisive call.
-It is the price the story runs at, the price the `financing:` line and
-`Affordability` are quoted at, and the number the user shops with; the
-crossing and the high edge are the other two clauses, never the headline.
+The **shop-under edge** is the highest price at which the verdict is DECISIVE
+for buying under the user's criterion — with uncertainty on, the last price
+where P(buy cheapest) still clears the 65% floor on the densified sweep
+(watch for an insured-tier cliff that moves it); on a single-path run, the
+deterministic band's low edge ($412,000 here). It is the price the story runs
+at, the price the `financing:` line and `Affordability` are quoted at, and the
+number the user shops with. The `mean flip <key>:` line and the crossing are
+where the advantage VANISHES — a ceiling with a near-zero gap, never a
+shop-under price: quote them as the conditional ceiling with their P and both
+means.
 
 ## The prior and the second band
 
