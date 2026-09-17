@@ -127,12 +127,13 @@ required key with the exact message — show it.
    0, and quote the drift the assumptions line prints for the horizon's bands
    — in ADDITION to the growth sweep, never instead of it.
 3. **Rates as quoted; a mortgage means `mode: nominal`.** Type every growth,
-   escalation, return and discount rate the way the user sees it quoted — the
-   engine converts once (deflated in real mode, as typed in nominal) and the
-   read-back's `rates:` line shows both forms; never convert by hand; "above
-   inflation" = `rates: real`. Nominal mode: `inflation_rate: 0.021`, declared
-   `anchor:economic.inflation_rate.nominal_planning`; `mortgage_rate` = the
-   quote's effective annual, the one rate never converted. `mode: real` for
+   escalation, return, discount and mortgage rate the way the user sees it
+   quoted — the engine converts once (deflated in real mode, as typed in
+   nominal; a quoted `mortgage_rate` semi-annual → effective annual, per
+   `mortgage_rate_compounding`) and the read-back's `rates:` line shows both
+   forms; never convert by hand; "above inflation" = `rates: real`. Nominal
+   mode: `inflation_rate: 0.021`, declared
+   `anchor:economic.inflation_rate.nominal_planning`; `mode: real` for
    all-cash and rent-only (`references/translation.md`).
 4. **Like-for-like renter capital.** `rent.invested_down_payment` = the
    buyer's total year-0 cash (down payment + purchase costs; all cash = price

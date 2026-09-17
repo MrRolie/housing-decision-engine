@@ -87,8 +87,9 @@ input AS QUOTED (3.1% shelter-cost growth, 5.1% on the 60/40 portfolio — the f
 prints; nominal mode uses them as typed and the `rates:` line says so), and omits `discount_rate`
 so the engine's 3% real default is composed to 5.2% and echoed. A typed `discount_rate` is as
 quoted too (`advanced_config.yaml` types 6.1% and runs at 6.1%; in real mode it would be deflated
-and the echo would name both) — and the quoted `mortgage_rate` is a contract rate, used as entered
-in both modes. Running a mortgage in real mode prices a level real-rate payment that understates
+and the echo would name both) — and the `mortgage_rate` is typed as quoted: a contract rate no
+inflation conversion touches in either mode, converted once from its
+semi-annual compounding to the effective annual rate the engine amortizes at. Running a mortgage in real mode prices a level real-rate payment that understates
 the lender's cash payment — the engine warns when an income block is present.
 
 ```bash
@@ -96,9 +97,11 @@ uv run hde examples/mortgage_house_vs_rent.yaml
 ```
 
 The report's `mortgage_pv` and the outstanding balance netted inside `terminal_equity_pv`
-are non-zero here and in the next example. `mortgage_rate` is an EFFECTIVE ANNUAL rate with
-annual payments; a posted Canadian rate compounds semi-annually — convert it first (the
-schema note and the figure glossary state the formula).
+are non-zero here and in the next example. Type the rate the way it is quoted: a posted or
+contracted Canadian rate compounds semi-annually and the engine amortizes at an effective
+annual rate with annual payments, so it converts the one into the other
+(`mortgage_rate_compounding`, semi-annual by default) and the `rates:` line shows both
+forms — never do that conversion by hand.
 
 ## 6. `first_time_buyer_montreal.yaml` — the financed first home, under 20% down
 
@@ -182,7 +185,7 @@ sensitivity-test them (edit the value and re-run; act 6 sweeps rent and purchase
 | Discount rate (typed as quoted; 0.03–0.05 real) | DEFAULT 0.03 real = the anchored investment return (FP Canada 2026 PAG 60/40), the household's opportunity cost, composed with inflation in nominal mode (`mortgage_house_vs_rent.yaml`: 3% real → 5.2%); the examples that state their own view type it as quoted — `income_shock.yaml` and `showcase_demographic_prior.yaml` 7.2% (≈ 5.0% real after the 2.1% planning inflation), `advanced_config.yaml` 6.1% used as typed in nominal mode — and the echo names both figures; sanity band [0.02, 0.06] real; the engine warns outside ±15% (units tripwire) and when a quoted rate sits below inflation | `discount_rate` in all examples |
 | Property tax, insurance (`other_recurring_costs`) | the listing's tax bill and an insurance quote — the engine applies no default for either. Registry checks (`uv run hde --print-anchors`): `property_tax.laval` / `.montreal` / `.quebec_city` / `.toronto` are rates on ASSESSED value, not market value; `school_tax.qc` is the separate Québec school levy a Québec bill also carries; `home_insurance.qc` / `.on` are household-average floors, not premiums. The read-back cites a match by name and says "no anchor match" otherwise; Gatineau and Ottawa have no registered source | every owned option; `first_time_buyer_montreal.yaml` enters the municipal and school lines separately |
 | Purchase costs (`purchase_costs`, `land_transfer_tax`) | the welcome / land-transfer tax is priced by the ENGINE from the anchored bracket schedules — Québec and Ontario provincial, Montréal (which replaces Québec's table) and Toronto (which adds to Ontario's), first-time-buyer rebates where one is sourced — with `land_transfer_tax: auto` + a quoted `province: "QC"` / `"ON"` (+ `municipality`), re-derived at every `--sweep` / `--break-even` price; notary and inspection are the household's own quotes in `purchase_costs`. A mortgage-insurance premium is priced by `mortgage_insurance: auto` (the anchored CMHC schedule, the provincial tax on the premium in cash); `financed_purchase_costs` only carries a premium the lender quoted | `first_time_buyer_montreal.yaml`; `mortgage_house_vs_rent.yaml` types a hand-figured `purchase_costs` because it sets no province |
-| Mortgage / financing | FP Canada 2026 borrowing rate 4.4% nominal, run in nominal mode as entered; a lender's quote is the household's own figure (`first_time_buyer_montreal.yaml`); with no quote the registry's Bank of Canada contracted 5-year rates (`mortgage_rate.contracted_5y_uninsured` / `mortgage_rate.contracted_5y_insured`) are the base and the posted 5-year rate (`mortgage_rate.posted_5y`) the ceiling; engine convention: level ANNUAL payment at an EFFECTIVE ANNUAL rate (posted Canadian rates compound semi-annually — convert) | `mortgage_house_vs_rent.yaml`, `first_time_buyer_montreal.yaml` |
+| Mortgage / financing | FP Canada 2026 borrowing rate 4.4% nominal, run in nominal mode as entered; a lender's quote is the household's own figure (`first_time_buyer_montreal.yaml`); with no quote the registry's Bank of Canada contracted 5-year rates (`mortgage_rate.contracted_5y_uninsured` / `mortgage_rate.contracted_5y_insured`) are the base and the posted 5-year rate (`mortgage_rate.posted_5y`) the ceiling; engine convention: level ANNUAL payment at an EFFECTIVE ANNUAL rate, which the engine converts the quoted semi-annually-compounded rate into (`mortgage_rate_compounding`) | `mortgage_house_vs_rent.yaml`, `first_time_buyer_montreal.yaml` |
 | `value_growth_rate` | illustrative market view — no defensible universal long-run real appreciation default | all owned-option examples; see `showcase_demographic_prior.yaml` for the demographic alternative |
 | Event costs, service lives, timings (roof, HVAC, water heater, appliances, paint, driveway, special assessments) | illustrative — calibrate to your reserve study or component inventory | `events:` blocks in all examples |
 | Vols, correlations, hazard rates (`cost_vol`, `*_vol`, `corr_*`, `hazard_*`) | illustrative uncertainty calibration — sensitivity-test via sweep | `events:` and `simulation:` blocks in all examples |

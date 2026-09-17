@@ -46,15 +46,16 @@ Type every rate the way the user sees it quoted — rent up 3%, prices up 4%, a
 fund returning 6%, a 5% discount rate — and let the engine convert it once:
 in real mode it deflates each typed rate by `inflation_rate`, in nominal mode
 it uses it as typed, and the read-back's `rates:` line shows both forms
-(`rent.rent_escalation_rate 3.0% as quoted = 0.9% after 2.1% inflation`).
-Never convert a sticker figure to real by hand: served answers did, and the
-engine deflated a second time. The engine's DEFAULTS are real (the 3% return,
+(`rent.rent_escalation_rate 3.0% as quoted = 0.9% after 2.1% inflation`; in
+nominal mode all three forms, `<key> 0.0% as quoted = 0.0% nominal = −2.1%
+real`). Never convert a sticker figure to real by hand: served answers did,
+and the engine deflated a second time. The engine's DEFAULTS are real (the 3% return,
 the 1% rent escalation) and compose with inflation on their own; a user who
 says "above inflation" has given a real figure — set `rates: real` at the top
 level, and every typed rate is then read as real. With a mortgage, run
 `mode: nominal`: `economic: {mode: nominal, inflation_rate: 0.021}`,
-`mortgage_rate` = the quoted rate's effective annual — a contract rate, never
-converted in either mode. Omit `discount_rate` for the anchor — the engine
+`mortgage_rate` = the rate as quoted — a contract rate the inflation
+conversion never touches in either mode. Omit `discount_rate` for the anchor — the engine
 composes its 3% real default with inflation (5.2%) and echoes it — or type
 the user's own quoted figure; the `mode:` line shows the rate in use either
 way. Why nominal: the lender collects the NOMINAL payment; a real-rate level
@@ -62,18 +63,22 @@ payment understates year-1 cash by about a fifth and hides GDS/TDS breaches
 (the engine warns when a mortgage runs in real mode with an income). `mode:
 real` is for all-cash and rent-only comparisons; `inflation_rate` still
 matters there as the deflator (omitted, the engine applies the 2.1% planning
-figure and echoes it under `defaults applied`). `mortgage_rate` is an
-effective annual rate with annual payments; a Canadian posted rate compounds
-semi-annually — convert it (the schema note carries the formula); that is the
-mortgage's only conversion.
+figure and echoes it under `defaults applied`). The engine amortizes at an effective
+annual rate with annual payments and a Canadian posted or contracted rate
+compounds semi-annually: type the quoted rate and the engine converts it
+(`mortgage_rate_compounding`, semi-annual by default), showing both forms on
+the `rates:` line — that compounding is the mortgage's only conversion, and
+it is the engine's, not yours.
 
 ## 4. Like-for-like renter capital
 
 Put the buyer's total year-0 cash — down payment + purchase costs (all cash =
 the whole price + purchase costs) — in `rent.invested_down_payment`; the
 engine charges it at year 0 and credits its terminal value, mirroring the
-buyer. Omitting it assumes the renter earns exactly the discount rate — say so
-if you do. When the return equals the discount rate the capital term nets to
+buyer. Omitted with a `tax.renter_capital` block, the engine DERIVES it from
+that block's piles — read the derived figure back and check it against the
+buyer's year-0 cash; omitted with no block, the renter earns exactly the
+discount rate — say so if you do. When the return equals the discount rate the capital term nets to
 zero in PV (the breakdown shows +D and −D): never describe the renter's
 capital as a drag or an advantage; a spread is the engine's capital-spread
 warning, and only that warning says which way it cuts.
