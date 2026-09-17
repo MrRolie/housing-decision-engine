@@ -210,8 +210,20 @@ def format_source_value(key: str, value: Any) -> str:
     if leaf in _COUNTS or leaf.endswith(("_year", "_years")):
         return _number(value)
     if leaf.endswith(("_rate", "_vol", "_hazard", "_threshold")) or leaf in _FRACTIONS:
-        return f"{value:.1%}"
+        return _percent(value)
     return _number(value)
+
+
+def _percent(value: float) -> str:
+    """A rate at the precision that round-trips the typed figure: one decimal
+    of a percent when that is the figure (`4.5%`), more when the user typed
+    more (`4.55%`, `3.125%`), four at most. A `you said:` line must never
+    quote a figure the user did not type (2026-09-17)."""
+    for digits in (1, 2, 3):
+        text = f"{value:.{digits}%}"
+        if abs(float(text[:-1]) / 100 - value) < 1e-12:
+            return text
+    return f"{value:.4%}"
 
 
 # ---------------------------------------------------------------------------

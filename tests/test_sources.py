@@ -394,7 +394,9 @@ class TestSummedAnchorDeclarations:
     def test_the_echo_prints_both_anchors(self):
         line = [ln for ln in format_assumptions(load_config_dict(_tax_cfg(SUM_DECL)))
                 if ln.startswith("anchor-sourced:")]
-        assert line == ["anchor-sourced: house.property_tax_rate=0.7% "
+        # 0.0066989 typed: the echo prints to the digit that round-trips it
+        # (four at most), never a rounded figure the config does not state.
+        assert line == ["anchor-sourced: house.property_tax_rate=0.6699% "
                         "[property_tax.laval+school_tax.qc]"]
 
     def test_the_json_echo_carries_both_anchors(self):
@@ -733,3 +735,23 @@ class TestLineSourcesByName:
         cfg["rent"]["other_recurring_costs"] = [{"name": "property tax", "annual_amount": 3_545.4}]
         with pytest.raises(ConfigValidationError, match="no initial_value"):
             load_config_dict(cfg)
+
+
+class TestRateEchoPrecision:
+    """A typed rate echoes at the precision that round-trips the typed figure
+    (found at the round-11 merge, 2026-09-17: `condo.mortgage_rate: 0.0455`
+    echoed as `4.5%` on the `you said:` line — a figure the user never typed).
+    Round values keep their one-decimal form."""
+
+    def test_a_rate_with_a_second_decimal_keeps_it(self):
+        assert format_source_value("condo.mortgage_rate", 0.0455) == "4.55%"
+        assert format_source_value("rent.rent_escalation_rate", 0.0311) == "3.11%"
+
+    def test_round_rates_keep_the_one_decimal_form(self):
+        assert format_source_value("condo.mortgage_rate", 0.045) == "4.5%"
+        assert format_source_value("house.value_growth_rate", 0.0) == "0.0%"
+        assert format_source_value("economic.inflation_rate", 0.021) == "2.1%"
+
+    def test_a_finer_figure_prints_to_the_digit_it_needs(self):
+        assert format_source_value("simulation.discount_rate", 0.03125) == "3.125%"
+        assert format_source_value("condo.property_tax_rate", 0.01272144) == "1.2721%"
