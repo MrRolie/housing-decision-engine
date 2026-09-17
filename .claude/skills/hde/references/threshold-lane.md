@@ -29,7 +29,10 @@ either scale them with the rate forms (`property_tax_rate` as a fraction of
 value, `purchase_costs_rate` as a fraction of price — the engine re-derives
 both at every point) or read back the engine's coherence `note` with its
 direction (sized for the seed, they favour buying above it and renting
-below). Prefer the rate forms on any price threshold. The break-even also
+below). Prefer the rate forms on any price threshold. A dollar line the
+verdict could turn on is solved in its own units instead —
+`--break-even <opt>.other_recurring_costs.<name>.annual_amount=lo:hi`, on a
+bracket spanning both sides of your figure. The break-even also
 prints affordability at the crossing and the band edges when an income is
 given — quote it, and at every bracket end too: the `across` rows carry
 affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
