@@ -374,9 +374,18 @@ both, and both rebates.
 
 First-time buyers: Ontario refunds up to **$4,000**, Toronto up to **$4,475**,
 each capped at its own leg's tax so a rebate never becomes a payment to the
-buyer. Neither Québec schedule has an anchored first-time-buyer rebate of the
-duty — both carry a `source: none` entry naming what was tried, and the
-read-back says so rather than implying a zero was computed. `first_time_buyer`
+buyer. Neither Québec schedule refunds anything AT CLOSING: the provincial
+schedule has no first-time-buyer rebate of the duty (`qc.first_time_buyer_rebate`
+stays `source: none`), and Montréal's « Programme d'appui à l'acquisition
+résidentielle » closed to new applications on 2026-07-07
+(`montreal.first_time_buyer_rebate` is a sourced $0, quoting the city's notice).
+What Québec does since 2026 is refund the duty AFTER the fact as a refundable
+tax credit — up to $5,875 (100% of the first $5,000, 25% of the next $3,500),
+phased out between $750,000 and $1,000,000 of value, for a first home acquired
+after 2025-12-31 — registered as `qc.first_time_buyer_credit_max`, a reference
+the read-back names for a Québec first-time buyer and the engine never applies
+(a tax-return credit is not cash at closing, and eligibility cannot be checked).
+`first_time_buyer`
 is the USER's assertion of eligibility: the engine applies the published
 maximum and cannot check age, occupancy or prior ownership.
 

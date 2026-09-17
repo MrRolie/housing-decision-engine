@@ -186,19 +186,95 @@ def test_toronto_applies_both_rebates_each_capped_against_its_own_leg():
     assert record.rebate == pytest.approx(4_000.0 + 4_475.0, abs=1e-6)
 
 
-def test_quebec_has_no_anchored_first_time_buyer_rebate_and_says_so():
-    """No Québec transfer-duty first-time-buyer rebate was fetched, so the flag
-    changes nothing and the record says the rebate is unanchored — never a
-    silent zero that reads like 'there is none'."""
+def test_quebec_provincial_schedule_has_no_rebate_at_closing_and_says_so():
+    """The Québec duty carries no first-time-buyer rebate at closing, so the
+    flag changes nothing against the provincial schedule and the record says
+    the rebate is unanchored — never a silent zero that reads like 'there is
+    none'. The province's refund is a TAX CREDIT, its own anchor below."""
+    record = resolve(
+        {"land_transfer_tax": "auto", "province": "QC", "first_time_buyer": True},
+        "house", top_province=None, initial_value=650_000)[1]
+    assert record.rebate == 0.0
+    assert not record.legs[0].rebate_anchored
+    anchor = ANCHORS["land_transfer_tax.qc.first_time_buyer_rebate"]
+    assert anchor.value is None and anchor.kind == "unsourced"
+    assert "land_transfer_tax.qc.first_time_buyer_credit_max" in anchor.short_cite
+
+
+def test_montreal_first_time_buyer_applies_the_closed_programs_sourced_zero():
+    """2026-09-08: montreal.ca states the Programme d'appui à l'acquisition
+    résidentielle accepts no new applications from 2026-07-07. The municipal
+    assistance available to a buyer running the engine today is therefore a
+    SOURCED zero — anchored, applied as nothing, never `source: none`."""
     record = resolve(
         {"land_transfer_tax": "auto", "province": "QC", "municipality": "montreal",
          "first_time_buyer": True},
         "house", top_province=None, initial_value=650_000)[1]
     assert record.rebate == 0.0
     assert record.total == pytest.approx(8_349.00, abs=0.005)
-    assert not record.legs[0].rebate_anchored
-    assert ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"].value is None
-    assert ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"].kind == "unsourced"
+    assert record.legs[0].rebate_anchored and record.legs[0].rebate_max == 0.0
+    anchor = ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"]
+    assert anchor.value == 0.0 and anchor.kind == "cited"
+    assert anchor.url.startswith("https://montreal.ca/programmes/")
+    assert anchor.retrieved_on == "2026-09-08" and anchor.as_of == "2026-07-07"
+    assert "7 juillet 2026" in anchor.quoted
+    assert "crédit d’impôt remboursable" in anchor.quoted
+
+
+def test_the_quebec_home_ownership_credit_is_a_reference_the_engine_never_applies():
+    """Québec's refundable tax credit for a first home refunds up to $5,875 of
+    the duty ON THE TAX RETURN — not cash at closing, and its 100% / 25%
+    slices and $750,000–$1,000,000 phase-out are not the engine's cap shape —
+    so it is registered, named by the read-back, and applied by nothing."""
+    anchor = ANCHORS["land_transfer_tax.qc.first_time_buyer_credit_max"]
+    assert anchor.value == 5_875.0 and anchor.band == (5_875.0, 5_875.0)
+    assert anchor.url.startswith("https://cdn-contenu.quebec.ca/")
+    assert anchor.retrieved_on == "2026-09-08"
+    for figure in ("5 875 $", "100 %", "5 000 $", "25 %", "3 500 $", "31 décembre 2025"):
+        assert figure in anchor.quoted, figure
+    assert "750 000" in anchor.rationale and "1 000 000" in anchor.rationale
+    assert "applies nothing" in anchor.rationale.lower() or "applies it to nothing" in anchor.rationale.lower()
+    for municipality in (None, "montreal"):
+        opt = {"land_transfer_tax": "auto", "province": "QC", "first_time_buyer": True}
+        if municipality:
+            opt["municipality"] = municipality
+        record = resolve(opt, "house", top_province=None, initial_value=650_000)[1]
+        assert record.rebate == 0.0
+
+
+def test_the_read_back_names_the_quebec_credit_and_montreals_closed_program():
+    cfg = _montreal_config(650_000)
+    cfg["house"]["first_time_buyer"] = True
+    line = _purchase_costs_line(load_config_dict(cfg))
+    assert "first_time_buyer: true applied nothing" in line
+    assert ("Québec refunds up to $5,875 of the duty as a refundable tax credit on the "
+            "return (land_transfer_tax.qc.first_time_buyer_credit_max) — not applied here") in line
+    assert ("Montréal's own acquisition program closed to new applications on 2026-07-07 "
+            "(land_transfer_tax.montreal.first_time_buyer_rebate)") in line
+    assert "no first-time-buyer rebate is anchored" not in line
+
+
+def test_the_provincial_leg_names_the_credit_beside_its_unanchored_rebate():
+    cfg = _montreal_config(650_000)
+    cfg["house"].pop("municipality", None)
+    cfg["house"]["first_time_buyer"] = True
+    line = _purchase_costs_line(load_config_dict(cfg))
+    assert "no first-time-buyer rebate is anchored for this schedule" in line
+    assert "land_transfer_tax.qc.first_time_buyer_credit_max" in line
+    assert "Montréal" not in line
+
+
+def test_a_non_first_time_buyer_in_quebec_is_told_the_credit_is_for_first_homes():
+    """As the Ontario line names the rebate it did not apply: a buyer who left
+    the flag false learns the measure exists and whom it is for."""
+    cfg = _montreal_config(650_000)
+    cfg["house"]["first_time_buyer"] = False
+    line = _purchase_costs_line(load_config_dict(cfg))
+    assert ("first_time_buyer is false — Québec's refundable first-time-buyer tax credit "
+            "of up to $5,875 (land_transfer_tax.qc.first_time_buyer_credit_max) is not in "
+            "play") in line
+    assert "refunds up to" not in line and "closed" not in line
+    assert "of rebate not applied" not in line  # the sourced $0 leaves nothing unapplied
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +471,8 @@ def test_the_missing_purchase_costs_warning_is_not_silenced_by_the_tax():
 def test_every_bracket_is_an_anchor_carrying_url_date_and_threshold(family, brackets):
     entries = {name: a for name, a in ANCHORS.items()
                if name.startswith(f"{family}.") and a.kind != "unsourced"
-               and "rebate" not in name and "refund" not in name}
+               and "rebate" not in name and "refund" not in name
+               and "credit" not in name}
     assert len(entries) == len(brackets), (family, sorted(entries))
     for name, anchor in entries.items():
         assert anchor.url.startswith("http"), name
@@ -421,9 +498,7 @@ def test_the_rebate_anchors_carry_their_maximum_and_a_source():
         assert anchor.value > 0
 
 
-def test_unsourced_rebates_report_the_absence_rather_than_a_zero():
-    for name in ("land_transfer_tax.qc.first_time_buyer_rebate",
-                 "land_transfer_tax.montreal.first_time_buyer_rebate"):
-        anchor = ANCHORS[name]
-        assert anchor.kind == "unsourced" and anchor.value is None, name
-        assert anchor.short_cite.startswith("source: none"), name
+def test_the_unsourced_rebate_reports_the_absence_rather_than_a_zero():
+    anchor = ANCHORS["land_transfer_tax.qc.first_time_buyer_rebate"]
+    assert anchor.kind == "unsourced" and anchor.value is None
+    assert anchor.short_cite.startswith("source: none")

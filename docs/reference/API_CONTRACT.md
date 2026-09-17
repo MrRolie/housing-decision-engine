@@ -209,8 +209,13 @@ applies: one entry per bracket, whose NAME carries the threshold
 (`land_transfer_tax.montreal.to_552300` = 1.5%, `…over_3113000` = 4% for the
 uncapped top band), plus the first-time-buyer maximums
 (`ontario.first_time_buyer_refund_max` $4,000, `toronto.first_time_buyer_rebate_max`
-$4,475). Neither Québec schedule has an anchored first-time-buyer rebate, so both
-carry a `source: none` entry naming what was tried. `quoted` holds each bracket
+$4,475). Neither Québec schedule refunds anything at closing: `qc.first_time_buyer_rebate`
+stays `source: none` (the duty has no rebate) and `montreal.first_time_buyer_rebate`
+is a sourced $0 — the city's acquisition program closed to new applications on
+2026-07-07. Québec's refundable tax credit for a first home (up to $5,875 of the
+duty, on the return) is `qc.first_time_buyer_credit_max`, a reference the
+purchase-costs line names for a Québec first-time buyer and the engine never
+applies. `quoted` holds each bracket
 exactly as the source prints it and `unit` names the base it is levied on.
 
 The `mortgage_insurance.*` entries are the premium schedule the engine applies:

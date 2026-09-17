@@ -1664,46 +1664,123 @@ ANCHORS["land_transfer_tax.toronto.first_time_buyer_rebate_max"] = Anchor(
     retrieved_on="2026-09-04",
 )
 
-# No first-time-buyer rebate of the transfer duty was found for either Québec
-# schedule, so neither holds a figure. An absent rebate is REPORTED — a 0.0
-# would read as "the province has none", which is a claim this registry has no
-# source for.
+# Neither Québec schedule refunds anything AT CLOSING, and the two absences are
+# different facts (2026-09-08). The provincial duty carries no first-time-buyer
+# rebate — that entry stays `source: none`, because a 0.0 there would claim the
+# province refunds nothing, and since 2026 it does, AFTER the fact, as the
+# refundable tax credit registered below as a reference. Montréal's own
+# acquisition program, by contrast, closed to new applications on 2026-07-07 —
+# the city says so on its page, so the municipal assistance available to a
+# buyer running the engine today is a SOURCED zero, anchored and applied.
 ANCHORS["land_transfer_tax.qc.first_time_buyer_rebate"] = Anchor(
     name="land_transfer_tax.qc.first_time_buyer_rebate",
     value=None,
     as_of="2026",
     source=("no source: the Québec droits-sur-les-mutations-immobilières page "
-            "describes no first-time-buyer rebate or exemption of the duty, and "
-            "no provincial program page stating one was found"),
+            "describes no first-time-buyer rebate or exemption of the duty at "
+            "closing; the province's first-buyer measure is a refundable TAX "
+            "CREDIT claimed on the return (advance payments from October 2026), "
+            "registered separately as land_transfer_tax.qc.first_time_buyer_credit_max"),
     url=("tried: quebec.ca droits-mutations-immobilieres (fetched 2026-09-04, "
-         "no first-time-buyer rebate of the duty described)"),
+         "no first-time-buyer rebate of the duty described); the ministère des "
+         "Finances' « Crédit d'impôt remboursable pour l'accès à la propriété : "
+         "document explicatif » (fetched 2026-09-08) describes a tax credit, not "
+         "a rebate of the duty"),
     rationale=("first_time_buyer: true against the Québec provincial schedule "
-               "changes nothing, and the read-back says so rather than "
-               "implying a rebate of zero was computed"),
+               "applies nothing at closing, and the read-back says so rather than "
+               "implying a rebate of zero was computed — then names the credit "
+               "the province pays later, by anchor, so a buyer who qualifies is "
+               "told it exists without the engine booking cash it cannot verify"),
     band=(0.0, 0.0),
-    short_cite="source: none (no Québec first-time-buyer transfer-duty rebate found)",
+    short_cite=("source: none (no Québec rebate of the duty at closing — the refund "
+                "is a tax credit, see land_transfer_tax.qc.first_time_buyer_credit_max)"),
     kind="unsourced",
+)
+
+ANCHORS["land_transfer_tax.qc.first_time_buyer_credit_max"] = Anchor(
+    name="land_transfer_tax.qc.first_time_buyer_credit_max",
+    value=5_875.0,
+    as_of="2026",
+    source=("Ministère des Finances du Québec, « Crédit d'impôt remboursable pour "
+            "l'accès à la propriété : document explicatif » (PDF dated 2026-04-17, "
+            "companion to Bulletin d'information 2026-2), and the Gouvernement du "
+            "Québec news release « Québec vient en aide aux acheteurs d'une "
+            "première habitation » (quebec.ca, 2026-04-17)"),
+    url="https://cdn-contenu.quebec.ca/cdn-contenu/adm/min/finances/publications-adm/Bulletins/FR/BI_Explication_technique.pdf",
+    quoted=("« le crédit d'impôt remboursable pour l'accès à la propriété qui "
+            "permettra de rembourser jusqu'à 5 875 $ des droits de mutation "
+            "immobilière payés pour l'achat d'une première propriété, soit : — 100 % "
+            "des premiers 5 000 $ en droits de mutation payés; — 25 % sur les 3 500 $ "
+            "de droits de mutation payés qui excèdent ce premier 5 000 $, pour une "
+            "aide additionnelle de 875 $ » ; « Ce remboursement s'appliquera à "
+            "l'égard des propriétés admissibles acquises après le 31 décembre "
+            "2025 » ; « dès le mois d'octobre 2026, les acheteurs pourront "
+            "bénéficier d'un versement anticipé […] lorsque le montant admissible "
+            "sera supérieur à 1 000 $ » ; release: « réduit progressivement lorsque "
+            "la valeur de l'habitation dépasse 750 000 $, jusqu'à devenir nul "
+            "lorsque la valeur atteint 1,0 M$ »"),
+    unit=("CAD — the maximum refundable Québec income-tax credit for the transfer "
+          "duty on a first home acquired after 2025-12-31, paid on the return or "
+          "as an advance from October 2026; NOT a rebate at closing"),
+    rationale=(
+        "THE ENGINE APPLIES NOTHING FROM THIS ENTRY. It is a reference the "
+        "purchase-costs read-back names for a Québec first-time buyer, for "
+        "three reasons that are each sufficient: the credit arrives on the tax "
+        "return (or as an advance once the duty is paid), not as cash at "
+        "closing, which is what `purchase_costs` books; its shape — 100 % of "
+        "the first 5 000 $ of duty, 25 % of the next 3 500 $ (5 000 $ + 875 $ = "
+        "5 875 $), then « réduit progressivement » from a home value of "
+        "750 000 $ to nil at 1 000 000 $ — is not the engine's min(maximum, duty) "
+        "cap, so applying the maximum would overstate the refund on every duty "
+        "between 5 000 $ and 8 500 $ and on every home above 750 000 $; and the "
+        "eligibility the document states (principal residence; neither buyer "
+        "nor spouse lived in a home they owned in the acquisition year or the "
+        "four before; the listed dwelling types) is the buyer's to assert, as "
+        "for every first-time-buyer figure here. Worked from the source: a "
+        "Montréal duty of 8 349 $ on a 650 000 $ home would draw 5 000 + 0.25 × "
+        "3 349 = 5 837 $. Zero-width band: one published maximum. Montréal's own "
+        "acquisition program, which this credit « remplace », is "
+        "land_transfer_tax.montreal.first_time_buyer_rebate. The document names "
+        "no end date for the measure."
+    ),
+    band=(5_875.0, 5_875.0),
+    short_cite="Québec crédit d'impôt accès à la propriété 2026",
+    retrieved_on="2026-09-08",
 )
 
 ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"] = Anchor(
     name="land_transfer_tax.montreal.first_time_buyer_rebate",
-    value=None,
-    as_of="2026",
-    source=("no source: Montréal runs a « Programme d'appui à l'acquisition "
-            "résidentielle » that can reimburse the mutation duty for some "
-            "first buyers, but it is a subsidy with eligibility conditions "
-            "rather than a rebate of the schedule, and no page stating its "
-            "amount was retrieved"),
-    url=("tried: montreal.ca/en/topics/property-transfer-duties-welcome-tax "
-         "(HTTP 404 on 2026-09-04); the droits-de-mutation article carries the "
-         "brackets but no first-time-buyer rebate"),
-    rationale=("first_time_buyer: true against the Montréal schedule applies "
-               "nothing and the read-back names the gap — a buyer who may "
-               "qualify for the city's acquisition program should check it "
-               "outside the engine"),
+    value=0.0,
+    as_of="2026-07-07",
+    source=("Ville de Montréal, « Programme d'appui à l'acquisition résidentielle » "
+            "(montreal.ca, page marked « Terminé », « Mis à jour le 7 juillet "
+            "2026 »)"),
+    url="https://montreal.ca/programmes/programme-dappui-lacquisition-residentielle",
+    quoted=("« Depuis avril 2026, un crédit d’impôt remboursable pour l’accès à la "
+            "propriété remplace l’aide municipale équivalente. La Ville de Montréal "
+            "met fin au Programme d’appui à l’acquisition résidentielle. » ; « À "
+            "compter du 7 juillet 2026, le programme n’accepte plus de nouvelles "
+            "demandes, sans exception. » ; « Les demandes reçues avant le 7 juillet "
+            "2026 demeurent admissibles et seront traitées d’ici la fin de l’année "
+            "2026. »"),
+    unit=("CAD of Ville de Montréal acquisition assistance available to an "
+          "application filed after 2026-07-07"),
+    rationale=(
+        "A SOURCED zero, not an absent one: the city's own page says the program "
+        "that reimbursed part of the transfer duty for eligible first buyers "
+        "accepts no new applications from 2026-07-07, so a buyer running the "
+        "engine for a purchase from here on receives nothing from it, and "
+        "first_time_buyer: true against the Montréal schedule applies exactly "
+        "that. The page states no amounts or ceilings (the program regulation "
+        "18-025 held them), so none is registered. What replaced it is "
+        "provincial and on the tax return — "
+        "land_transfer_tax.qc.first_time_buyer_credit_max — which the read-back "
+        "names beside this closure. Applications filed before 2026-07-07 are "
+        "outside the engine's horizon."
+    ),
     band=(0.0, 0.0),
-    short_cite="source: none (Montréal acquisition program not retrieved)",
-    kind="unsourced",
+    short_cite="Ville de Montréal 2026 (acquisition program closed 2026-07-07)",
+    retrieved_on="2026-09-08",
 )
 
 

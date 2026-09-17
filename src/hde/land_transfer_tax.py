@@ -70,6 +70,14 @@ _REBATE_ANCHORS: Dict[str, str] = {
     "land_transfer_tax.toronto": "land_transfer_tax.toronto.first_time_buyer_rebate_max",
 }
 
+# Québec's first-buyer measure is a refundable TAX CREDIT on the return, not a
+# rebate at closing (2026-09-08): the read-back names it for a Québec
+# first-time buyer and the engine applies it to nothing — the anchor's
+# rationale says why. Montréal's own program closed to new applications the
+# same year; its anchor is the sourced $0 `_REBATE_ANCHORS` already applies.
+_QUEBEC_CREDIT = "land_transfer_tax.qc.first_time_buyer_credit_max"
+_QUEBEC_FAMILIES = ("land_transfer_tax.qc", "land_transfer_tax.montreal")
+
 _PROVINCES_WITH_SCHEDULES = ("QC", "ON")
 
 
@@ -403,6 +411,29 @@ def purchase_costs_clause(record: LandTransferTax, purchase_costs: float,
                      f"${record.unrebated_maximum:,.0f} of rebate not applied")
         if unanchored:
             head += f"; no first-time-buyer rebate is anchored for {where}"
+    # A Québec first-time buyer is refunded AFTER closing, on the tax return,
+    # and the engine books nothing for it — so the line names the credit by
+    # anchor, with its maximum from the registry, and names Montréal's closed
+    # program beside it: the buyer learns what exists without the engine
+    # claiming cash it cannot verify. A buyer who left the flag false is told
+    # the credit is a first-time-buyer measure, as the Ontario line names the
+    # rebate it did not apply.
+    labels = {TRANSFER_TAX_SCHEDULES[f][0]: f for f in _QUEBEC_FAMILIES}
+    quebec = {labels[leg.schedule] for leg in legs if leg.schedule in labels}
+    if quebec:
+        credit = ANCHORS[_QUEBEC_CREDIT]
+        if record.first_time_buyer:
+            head += (f"; Québec refunds up to ${credit.value:,.0f} of the duty as a "
+                     f"refundable tax credit on the return ({_QUEBEC_CREDIT}) — "
+                     f"not applied here")
+            if "land_transfer_tax.montreal" in quebec:
+                closed = ANCHORS[_REBATE_ANCHORS["land_transfer_tax.montreal"]]
+                head += (f"; Montréal's own acquisition program closed to new "
+                         f"applications on {closed.as_of} ({closed.name})")
+        else:
+            head += (f"; first_time_buyer is false — Québec's refundable "
+                     f"first-time-buyer tax credit of up to ${credit.value:,.0f} "
+                     f"({_QUEBEC_CREDIT}) is not in play")
     stated = f"${record.stated_purchase_costs:,.0f} stated"
     parts = f"{stated} + transfer tax ${record.total:,.0f}"
     if premium_tax:
