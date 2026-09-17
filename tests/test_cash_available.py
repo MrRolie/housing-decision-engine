@@ -335,3 +335,61 @@ class TestUnchangedConfigsAreUntouched:
         before = copy.deepcopy(cfg)
         load_config_dict(cfg)
         assert cfg == before, "the loader must not mutate the caller's mapping"
+
+
+class TestUnderTwentyWarningEndsWithTheCeilingClause:
+    """Two consecutive rounds of served answers lost the price ceiling — "this
+    cash covers 20% down up to $X" — from the prose. The financing line carried
+    it; the `[warning]` the answer did quote did not. The warning now ends with
+    the financing line's clause, built once, so the two agree to the dollar."""
+
+    @staticmethod
+    def _insured(**over):
+        """The base pile under an engine-priced insured mortgage (auto needs a province)."""
+        cfg = _condo(mortgage_insurance="auto", **over)
+        cfg["province"] = "QC"
+        return cfg
+
+    @staticmethod
+    def _clause(financing_line):
+        start = financing_line.index("this cash covers 20% down up to a price of")
+        return financing_line[start:financing_line.index(")", start) + 1]
+
+    def test_the_warning_ends_with_the_financing_lines_solved_clause_through_the_cli(
+            self, tmp_path, monkeypatch, capsys):
+        import json
+        import sys
+
+        import yaml
+
+        from hde.cli import main as cli_main
+
+        path = tmp_path / "cfg.yaml"
+        path.write_text(yaml.safe_dump(self._insured(), sort_keys=False),
+                        encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hde", str(path), "--json", "--no-monte-carlo"])
+        assert cli_main() == 0
+        doc = json.loads(capsys.readouterr().out)
+        warning = next(w for w in doc["warnings"] if "engine priced the insured mortgage" in w)
+        financing = next(l for l in doc["assumptions"]["lines"] if l.startswith("condo financing:"))
+        clause = self._clause(financing)
+        assert "at that price; above it the mortgage is insured)" in clause  # solved, not held
+        assert warning.endswith(f"; {clause}"), warning
+        # the read-back carries the same warning line, tail included
+        assert f"[warning] {warning}" in doc["assumptions"]["read_back"]
+
+    def test_without_the_raw_mapping_both_lines_hold_the_seed_figure_and_agree(self):
+        spec = load_config_dict(self._insured())
+        warning = next(w for w in coherence_warnings(spec) if "engine priced the insured mortgage" in w)
+        financing = next(l for l in assumptions_to_dict(spec, None)["lines"]
+                         if l.startswith("condo financing:"))
+        clause = self._clause(financing)
+        assert clause == ("this cash covers 20% down up to a price of $390,000 "
+                          "(purchase_costs held at $12,000; above it the mortgage is insured)")
+        assert warning.endswith(f"; {clause}")
+
+    def test_a_typed_down_payment_gets_no_ceiling_on_the_warning(self):
+        spec = load_config_dict(self._insured(cash_available=None, down_payment=78_000))
+        warning = next(w for w in coherence_warnings(spec) if "engine priced the insured mortgage" in w)
+        assert "covers 20% down" not in warning
+        assert warning.endswith("carries interest for the whole amortization")

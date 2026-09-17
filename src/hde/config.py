@@ -37,6 +37,7 @@ from .rates import (
 )
 from .serialization import (
     cost_family,
+    cover_clause,
     default_anchor,
     rate_label,
     real_discount_rate,
@@ -331,13 +332,16 @@ def _defaults_applied(data: Dict[str, Any]) -> List[str]:
     return applied
 
 
-def coherence_warnings(spec: ComparisonSpec) -> List[str]:
+def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = None) -> List[str]:
     """
     Coherence warnings (audit U2): assumptions that parse fine but smell wrong.
 
     Pure function of the spec; callers surface these (CLI stderr '[warning]',
     the --json `warnings` list) and NEVER refuse — these are judgment calls
-    the operator may well have made deliberately.
+    the operator may well have made deliberately. `raw` is the YAML mapping the
+    spec was loaded from: with it the under-20% warning's price ceiling is
+    solved through the loader like the financing line's (2026-09-08); without
+    it both hold the seed figure — either way the two lines agree.
     """
     warns: List[str] = []
     econ = spec.economic
@@ -593,12 +597,16 @@ def coherence_warnings(spec: ComparisonSpec) -> List[str]:
                 f"cash at closing (it cannot be added to the loan)"
                 if record.premium_tax else ", with no provincial tax on the premium"
             )
+            # The ceiling a stated cash pile puts on the price closes the
+            # warning (2026-09-08): the financing line's clause, built once.
+            ceiling = cover_clause(spec, name, raw)
             warns.append(
                 f"{name}: down payment {share:.2%} of price is under the 20% mortgage-insurance "
                 f"line — the engine priced the insured mortgage at {record.ltv:.2%} loan-to-value: "
                 f"{record.rate:.2%} = ${record.premium:,.0f} added to the loan{tax_clause} "
                 f"[{record.cite}]. The premium is non-refundable and carries interest for the "
                 f"whole amortization"
+                + (f"; {ceiling}" if ceiling else "")
             )
         elif opt.financed_purchase_costs == 0:
             warns.append(
@@ -887,6 +895,7 @@ def all_warnings(
     prior: Optional[LoadedScenarioPrior] = None,
     current_year: Optional[int] = None,
     run_date: Optional[datetime.date] = None,
+    raw: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """
     Every warning a surface should show for one run: the coherence warnings
@@ -896,9 +905,10 @@ def all_warnings(
     stderr, and the CLI's --json `warnings`, so no surface can drop
     a class of warning the others carry (readiness plan A.2). `current_year`
     and `run_date` are injectable for tests; the wall clock is read only here
-    at the edge.
+    at the edge. `raw` (the YAML mapping) reaches `coherence_warnings` for the
+    price ceiling.
     """
-    warns = coherence_warnings(spec)
+    warns = coherence_warnings(spec, raw)
     if prior is not None:
         if current_year is None:
             current_year = datetime.date.today().year

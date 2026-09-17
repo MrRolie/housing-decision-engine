@@ -409,6 +409,48 @@ def default_anchor(spec: ComparisonSpec, key: str) -> Optional[Anchor]:
     return ANCHORS.get(_ECHO_ALIASES.get(key, key))
 
 
+def cover_clause(spec: ComparisonSpec, name: str, raw: Optional[Dict[str, Any]]) -> str:
+    """`this cash covers 20% down up to a price of $X (purchase_costs $Y at that
+    price; above it the mortgage is insured)` — the ceiling a stated
+    `cash_available` puts on the price, built ONCE for the financing line and
+    the under-20% warning (2026-09-08: two consecutive rounds of served answers
+    lost the ceiling from the prose; the warning the answer did quote now ends
+    with it, and the two lines agree to the dollar because neither recomputes
+    it). Solved through the loader (`sweep.cover_price`) when `raw` — the YAML
+    mapping the spec was loaded from — is given, so a `purchase_costs_rate`, a
+    transfer-tax schedule and the premium tax are re-derived along the price;
+    a surface holding the spec alone keeps the seed's dollar figure and says it
+    holds it. The netted cash IS the down payment, so the fixed point is
+    (cash − cash purchase_costs) / 20%; at that price no premium is due, which
+    is why the premium tax is not a term of it (2026-09-04 review: a real answer
+    hand-solved "your $140,000 covers 20% down up to $642,893"). Empty without
+    `cash_available`, or when no price in reach covers 20% down.
+    """
+    opt = getattr(spec, name)
+    if opt is None or opt.cash_available is None or opt.all_cash or opt.down_payment is None:
+        return ""
+    solved = None
+    if raw is not None:
+        # Local import: sweep.py imports this module for its per-point Monte
+        # Carlo serialization, so the dependency runs one way at import time.
+        from .sweep import cover_price
+        solved = cover_price(raw, name)
+    if solved is not None:
+        price, costs_at = solved
+        return (f"this cash covers 20% down up to a price of ${price:,.0f} "
+                f"(purchase_costs ${costs_at:,.0f} at that price; above it the "
+                f"mortgage is insured)")
+    # A first-time buyer's FHSA refunds and HBP withdrawal join the pile
+    # (2026-09-05), so they cover part of the 20%.
+    additions = spec.tax.day_one_additions if (spec.tax is not None and opt.first_time_buyer) else 0.0
+    covered = (opt.cash_available + additions - opt.purchase_costs) / 0.20
+    if covered <= 0:
+        return ""
+    return (f"this cash covers 20% down up to a price of ${covered:,.0f} "
+            f"(purchase_costs held at ${opt.purchase_costs:,.0f}; above it the "
+            f"mortgage is insured)")
+
+
 def format_assumptions(
     spec: ComparisonSpec, prior: Optional[LoadedScenarioPrior] = None,
     raw: Optional[Dict[str, Any]] = None,
@@ -546,37 +588,11 @@ def format_assumptions(
                     if adds else f"down payment ${opt.down_payment:,.0f}")
             parts = "down payment + purchase_costs" + (" + premium tax" if taxed else "")
             year0_clause = f" · year-0 cash ${year0:,.0f} ({parts})"
-        # Where the pile stops covering 20% down (2026-09-04 review: a real
-        # answer hand-solved "your $140,000 covers 20% down up to $642,893").
-        # The netted cash IS the down payment, so the fixed point is
-        # (cash − cash purchase_costs) / 20%; at that price no premium is due,
-        # which is why the premium tax is not a term of it. Stated with what it
-        # holds fixed: a dollar purchase_costs figure — a derived transfer tax
-        # included — does not rescale with the price.
-        cover_clause = ""
-        if opt.cash_available is not None:
-            solved = None
-            if raw is not None:
-                # Local import: sweep.py imports this module for its per-point
-                # Monte Carlo serialization, so the dependency runs one way at
-                # import time.
-                from .sweep import cover_price
-                solved = cover_price(raw, name)
-            if solved is not None:
-                price, costs_at = solved
-                cover_clause = (
-                    f" · this cash covers 20% down up to a price of ${price:,.0f} "
-                    f"(purchase_costs ${costs_at:,.0f} at that price; above it the "
-                    f"mortgage is insured)"
-                )
-            else:
-                covered = (opt.cash_available + additions - opt.purchase_costs) / 0.20
-                if covered > 0:
-                    cover_clause = (
-                        f" · this cash covers 20% down up to a price of ${covered:,.0f} "
-                        f"(purchase_costs held at ${opt.purchase_costs:,.0f}; above it the "
-                        f"mortgage is insured)"
-                    )
+        # Where the pile stops covering 20% down — the clause the under-20%
+        # warning ends with too (`cover_clause`, the one builder). Stated with
+        # what it holds fixed: a dollar purchase_costs figure — a derived
+        # transfer tax included — does not rescale with the price.
+        cover = cover_clause(spec, name, raw)
         lines.append(
             f"{name} financing: {head} = {down_frac:.2%} of price, "
             f"${abs(gap):,.0f} {side} the 20% mortgage-insurance line (${line:,.0f}) · "
@@ -587,7 +603,7 @@ def format_assumptions(
             + (f" · financed_purchase_costs ${opt.financed_purchase_costs:,.0f} on the loan"
                if opt.financed_purchase_costs and record is None else "")
             + (f" · {financing_clause(record)}" if record is not None else "")
-            + cover_clause
+            + (f" · {cover}" if cover else "")
             + (f" · {fhsa_clause(spec.tax)}"
                if spec.tax is not None and spec.tax.fhsa is not None and opt.first_time_buyer else "")
         )

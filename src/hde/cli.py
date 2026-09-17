@@ -197,9 +197,9 @@ def main() -> int:
     # Warnings (audit U2 coherence + the time-anchor staleness guard + anchors
     # used past their validity date): surface, never refuse. stderr so --quiet
     # and piped stdout stay clean; the same list rides the --json document. The
-    # wall clock is read here, at the edge.
+    # wall clock is read here, at the edge; `raw` reaches the price ceiling.
     today = datetime.date.today()
-    warnings = all_warnings(spec, prior, current_year=today.year, run_date=today)
+    warnings = all_warnings(spec, prior, current_year=today.year, run_date=today, raw=raw)
     if args.no_monte_carlo and spec.market_scenario is not None:
         warnings.append(PRIOR_WITHOUT_MONTE_CARLO)
     for warning in warnings:
