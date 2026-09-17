@@ -33,7 +33,13 @@ question back: run a second config with the prior and lead with whether the
 verdict survives it; only an area with no prior gets the question back. On a
 threshold question the prior informs the verdict band only (a break-even is
 deterministic and does not move), so the growth sweep in the threshold lane
-still runs. Say what growth the prior encodes — the run's `demographic prior:`
+still runs. With no price view at all the growth BREAK-EVEN
+(`--break-even <opt>.value_growth_rate`) is mandatory IN ADDITION to the
+prior: it names the growth the two options tie at, which no prior run gives.
+Quote its band with the real equivalents the engine prints beside each quoted
+figure in nominal mode (`house.value_growth_rate=0.0% (−2.1% real): …`), and
+never call a verdict decisive when its margin turns on which reading of the
+growth you take and that line did not run. Say what growth the prior encodes — the run's `demographic prior:`
 assumptions line prints the reference drift for the bands the horizon touches
 (all bands and the scenario range are in `--json` under the prior's
 provenance `encoded_drift`); quote only the bands inside the horizon — an
