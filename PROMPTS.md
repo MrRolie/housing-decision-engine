@@ -55,7 +55,8 @@ answer the form. Front-loading these saves that round trip:
 - **Rates the way you see them quoted** — rent rising 3% a year, prices up 4%, a fund
   returning 6%: give the sticker figure; the engine converts it once and the read-back shows
   both forms (`3.0% as quoted = 0.9% after 2.1% inflation`), so never adjust for inflation
-  yourself.
+  yourself. If you say prices stay flat, say which you mean: flat in dollars, or keeping up
+  with inflation — they are different assumptions and they can change the answer.
 - **Owner costs if you have them**: the property-tax bill, home or unit insurance, condo
   fees. "No idea" is fine: the engine takes a labelled default or a placeholder and the
   answer names it as such, so you can replace it later.

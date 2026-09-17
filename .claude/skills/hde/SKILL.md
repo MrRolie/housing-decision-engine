@@ -24,8 +24,8 @@ Reference files live under `.claude/skills/hde/references/`;
 
 | When | Read |
 |---|---|
-| The user is certain about one side and vague about the other — "what rent keeps renting the better deal?", "at what price is buying worth it?" — always the full run with a threshold, never the short shape | `references/threshold-lane.md`, before authoring the config |
-| The user asks for brevity in their own words ("just roughly", "the gist") — OR the question names no listing, no price, no date and asks for no threshold ("is it dumb to rent forever?") | `references/quick-sense.md`, before the intake message: brevity words set the cap, the no-listing test sets the asks |
+| The user is certain about one side and vague about the other ("at what price is buying worth it?") — always the full run with a threshold, never the short shape | `references/threshold-lane.md`, before authoring the config |
+| The user asks for brevity in their own words ("the gist") — OR names no listing, no price, no date and asks for no threshold | `references/quick-sense.md`, before the intake message: brevity words set the cap, the no-listing test sets the asks |
 | A user phrase you cannot place in the schema (a posted rate, "houses around $650k", "$X down plus $Y for closing") | `references/translation.md` |
 | Writing the answer | the checklist below, then `references/answer-template.md` |
 | Why a gate exists, or the worked phrasing that satisfies it | `references/gates.md` |
@@ -68,7 +68,13 @@ Work out everything the config needs and ask for ALL of it in ONE message,
 grouped as a short form the user answers in one reply, with every modelling
 default you will take stated in the same message as a labelled default they
 can overrule ("25-year amortization, the engine's 3% real return, 1% real
-rent escalation, 0.6% maintenance — unless you say otherwise").
+rent escalation, 0.6% maintenance — unless you say otherwise"). "Flat
+prices" is two readings under the sticker convention: state both in one
+clause — flat in dollars is 0% quoted, a 2.1%/yr real decline; keeping up
+with inflation is 2.1% quoted, the engine's neutral default when the key is
+omitted — and run the neutral one unless they pick. A typed 0.0 is never
+declared `user` on a "flat" answer, and the engine's warning on it is
+quoted.
 
 1. **Which options the question implies** → which sections: "keep renting or
    buy a condo" = `rent` + `condo`; "house or condo" = `condo` + `house`; no
@@ -82,9 +88,8 @@ rent escalation, 0.6% maintenance — unless you say otherwise").
    report it as not modelled"; offer to bracket rather than pick. Before
    guessing an owner cost run `uv run hde --print-anchors` (what it covers:
    `references/translation.md`). "No idea" on closing costs must NOT become
-   `purchase_costs: 0` — set `land_transfer_tax: auto` with a QUOTED
-   `province: "QC"` / `"ON"` (plus `municipality: montreal|toronto`) so the
-   engine prices the duty, then add notary and inspection.
+   `purchase_costs: 0` — `land_transfer_tax: auto` prices the duty from the
+   published brackets; notary and inspection are what is left to state.
 3. **Modelling parameters — may be proposed, always labelled:** discount rate
    (engine default 3% real, cited), growth and escalation rates, maintenance
    (0.6% `maintenance.nahb_routine` or the examples' 1.2% — name which), the
@@ -108,9 +113,9 @@ required key with the exact message — show it.
 | Contract question (what inputs exist, what is required) | `uv run hde --print-schema` |
 | "Where did that number come from?" (source, URL, band, what it replaced) | `uv run hde --print-anchors` |
 | Quick estimate from a ready config | `uv run hde <config.yaml>` |
-| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` — on the config the answer leads with (a rent threshold: at the user's actual rent, uncertainty on; a price threshold: at the shop-under edge, never the placeholder seed — `references/threshold-lane.md`; say which price the story is at) |
+| Full answer with visuals (default for real questions) | `uv run hde <config.yaml> --story scenarios/<slug>` — on the config the answer leads with, at the user's own rent or the shop-under edge, never the placeholder seed (`references/threshold-lane.md`); say which the story is at |
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point | `--sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; `--no-monte-carlo` for speed) |
-| The threshold on ONE input — rent, price, years, growth, a placeholder in rate form | `--break-even rent.monthly_rent` · `--break-even condo.initial_value` · `--break-even years=3:30` · `--break-even condo.value_growth_rate=-0.02:0.05` · `--break-even house.property_tax_rate=0.004:0.016`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination is a second config); two priced options only; the lane is `references/threshold-lane.md` |
+| The threshold on ONE input — rent, price, years, growth, a placeholder in rate or dollar form | `--break-even rent.monthly_rent` · `--break-even years=3:30` · `--break-even condo.value_growth_rate=-0.02:0.05` · `--break-even house.other_recurring_costs.municipal_tax.annual_amount=2000:8000`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination is a second config); two priced options only; the lane is `references/threshold-lane.md` |
 | Agent-consumable result | append `--json` |
 | Demographic prior (Québec only: `MTL_RMR`, `MTL_ISLAND_RA06`, `LAVAL_RA13`, `QC_RMR`, `HORS_RMR` — the finest geography containing the user's area, and say which) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml`; Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns |
 
@@ -209,9 +214,7 @@ cap of any lane ranks what stays and never drops an item:
       placeholder the verdict could turn on (a tax bill, insurance, the seed
       price) is typed in a form `--break-even` can solve (`property_tax_rate`,
       `purchase_costs`) and solved on a bracket spanning BOTH sides of your
-      figure (`KEY=lo:hi`) — never a one-sided `--sweep`; an Ontario tax
-      placeholder is checked downward first (bills rest on a 2016 assessment
-      base, so a rate on price overstates them)
+      figure (`KEY=lo:hi`) — never a one-sided `--sweep`
 - [ ] **Not modelled:** every item with a direction (gate 8)
 - [ ] where the story is (`scenarios/<slug>/STORY.md`), and the one next step
 
@@ -224,11 +227,10 @@ lane's cap overrides the template's; the READ-BACK block is outside both.
 
 - Exit 0 AND every `[warning]` line surfaced with the verdict.
 - `--story`: STORY.md's headline states the verdict in words; the acts the
-  config supports — acts 1 and 2 always; act 4 ("Home-value futures") with an
-  owned option; act 3 ("The uncertainty") only when at least one
-  uncertainty input is on (a single-path run skips it); act 5 ("Why", the demographic
-  signal) only with `market_scenario:`; act 6 ("The market line", break-even
-  rent) only with `rent` plus an owned option.
+  config supports — acts 1 and 2 always; act 4 with an owned option; act 3
+  only when at least one uncertainty input is on (a single-path run skips
+  it); act 5 only with `market_scenario:`; act 6 only with `rent` plus an
+  owned option.
 - `--json`: `engine_version`, `warnings`, `assumptions`, `verdict`,
   `deterministic`, `monte_carlo` present; every `assumptions.defaults_applied`
   entry carries an `anchor` with a `source`.
