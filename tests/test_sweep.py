@@ -141,6 +141,52 @@ class TestEveryPointRefused:
         assert any(line.startswith("no flip along years") for line in sweep_lines(result))
 
 
+NOMINAL = dict(RAW, economic={"mode": "nominal", "inflation_rate": 0.021})
+
+
+class TestQuotedRatePointsCarryTheirRealEquivalent:
+    """In nominal mode a sweep over a rate the loader reads AS QUOTED walks
+    nominal figures: its 0 point is a 2.1%/yr real decline, while the omitted
+    key is the neutral 0% real — a $76k swing in house PV between the two
+    with no engine signal (2026-09-08). Every row label and sentence for such
+    a key carries the real equivalent, and the header says what the points
+    are. Real mode, `rates: real` and every other key are unchanged."""
+
+    def test_row_labels_and_the_header_in_nominal_mode(self):
+        from hde.sweep import format_sweep, sweep_lines
+        result = run_sweep(NOMINAL, "condo.value_growth_rate", [0.0, 0.02], monte_carlo=False)
+        assert result["real_equivalent_inflation"] == 0.021
+        lines = sweep_lines(result)
+        assert lines[0] == ("sweep condo.value_growth_rate (2 points; points are quoted rates; "
+                            "0.0% quoted = -2.1% real, the neutral default is 2.1% quoted)")
+        assert lines[1].startswith("condo.value_growth_rate=0.00% (-2.06% real): best ")
+        assert lines[2].startswith("condo.value_growth_rate=2.00% (-0.10% real): best ")
+        assert result["rows"][0]["sentence"] == lines[1]
+        table = format_sweep(result)
+        assert "0.00% (-2.06% real) |" in table and "2.00% (-0.10% real) |" in table
+
+    def test_a_key_with_an_anchored_default_names_that_default(self):
+        from hde.sweep import sweep_lines
+        result = run_sweep(NOMINAL, "rent.investment_return_rate", [0.0, 0.05], monte_carlo=False)
+        assert sweep_lines(result)[0].endswith(
+            "points are quoted rates; 0.0% quoted = -2.1% real, "
+            "the anchored default 3.0% real is 5.2% quoted)")
+
+    def test_real_mode_rates_real_and_other_keys_are_unchanged(self):
+        from hde.sweep import sweep_lines
+        real = run_sweep(RAW, "condo.value_growth_rate", [0.0, 0.02], monte_carlo=False)
+        assert real["real_equivalent_inflation"] is None
+        assert sweep_lines(real)[0] == "sweep condo.value_growth_rate (2 points)"
+        assert sweep_lines(real)[1].startswith("condo.value_growth_rate=0.00%: best ")
+        declared = run_sweep(dict(NOMINAL, rates="real"), "condo.value_growth_rate", [0.0, 0.02],
+                             monte_carlo=False)
+        assert declared["real_equivalent_inflation"] is None
+        assert "quoted" not in sweep_lines(declared)[0]
+        money = run_sweep(NOMINAL, "rent.monthly_rent", [1_000.0, 3_000.0], monte_carlo=False)
+        assert money["real_equivalent_inflation"] is None
+        assert sweep_lines(money)[1].startswith("rent.monthly_rent=1,000: best ")
+
+
 class TestCli:
     def _cfg(self, tmp_path):
         import yaml

@@ -22,12 +22,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .anchors import ANCHORS
 from .config import ConfigValidationError
 from .deterministic import compute_deterministic
-from .rates import RateConventionError, compose, resolve_convention
+from .rates import RateConventionError, compose, deflate, resolve_convention
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
 from .sources import MONEY_LEAVES
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
-                    join_notes, load_at, price_scan_note, with_value)
+                    join_notes, load_at, point_label, price_scan_note,
+                    real_equivalent_inflation, with_value)
 
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
@@ -407,12 +408,20 @@ def solve_break_even(
         key, (a, b), lo, hi, totals_at,
         is_int=key in INT_KEYS, iterations=iterations, refused=refused,
     )
+    # A quoted rate in a nominal run: each edge and the crossing carry their
+    # real equivalent, glossed once (2026-09-08).
+    pi = real_equivalent_inflation(raw, key)
     for entry in core["break_evens"]:
         entry["affordability"] = _affordability_at(raw, key, entry)
+        if pi is not None:
+            entry["sentence"] = band_sentence(
+                key, entry, core["tie_band_fraction"], band_clause=False,
+                note=lambda v: f"{deflate(v, pi):.2%} real")
 
     out: Dict[str, Any] = {
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": core["searched"],
         "base_value": base, "tie_band_fraction": core["tie_band_fraction"],
+        "real_equivalent_inflation": pi,
         "break_evens": core["break_evens"],
     }
     prior_note = None
@@ -819,8 +828,11 @@ def solve_break_even_across(
                 row[carried] = r[carried]
         rows.append(row)
     # The sweep key's base value, so the row that re-solves the base config
-    # can say "(= base)" instead of repeating the base line.
-    return {"key": sweep_key, "base_value": base_value(raw, sweep_key), "rows": rows}
+    # can say "(= base)" instead of repeating the base line; and the sweep
+    # key's own quoted-rate marker, so its row labels carry the real figure.
+    return {"key": sweep_key, "base_value": base_value(raw, sweep_key),
+            "real_equivalent_inflation": real_equivalent_inflation(raw, sweep_key),
+            "rows": rows}
 
 
 def band_rule(band: float) -> str:
@@ -834,6 +846,7 @@ def band_sentence(
     fmt: Optional[Callable[[float], str]] = None,
     label: Optional[Callable[[str], str]] = None,
     band_clause: bool = True,
+    note: Optional[Callable[[float], str]] = None,
 ) -> str:
     """The threshold as the user should read it: band-first, the edges named.
     "rent is cheaper below 2,537; too close to call between 2,537 and 2,797;
@@ -844,10 +857,21 @@ def band_sentence(
     house" — one grammar, so the drawn crossing and the reported one read the
     same, in each surface's own units. ``band_clause`` keeps the band rule in
     the closing bracket (the story's caption stands alone); the CLI's blocks
-    state the rule once, in their header, and pass False.
+    state the rule once, in their header, and pass False. ``note`` adds one
+    clause after the FIRST mention of each edge and after the crossing — the
+    real equivalent of a quoted rate in a nominal run (2026-09-08) — so each
+    figure is glossed once and the sentence stays readable.
     """
     show = fmt or (lambda v: _fmt_value(key, v))
     name = label or (lambda option: option)
+
+    def gloss(v: float, edge: bool = True) -> str:
+        """`note`'s text for one figure, punctuated for its place: ` (…)`
+        after an edge, `, …` inside the crossing's own bracket."""
+        if note is None:
+            return ""
+        return f" ({note(v)})" if edge else f", {note(v)}"
+
     rule = f"; {band_rule(band)}" if band_clause else ""
     left, right = be["tie_band"]
     if "last_value_below" in be:
@@ -863,10 +887,12 @@ def band_sentence(
         )
     lo_txt = show(left) if left is not None else "the bracket's low end"
     hi_txt = show(right) if right is not None else "the bracket's high end"
+    lo_first = lo_txt + (gloss(left) if left is not None else "")
+    hi_first = hi_txt + (gloss(right) if right is not None else "")
     return (
-        f"{name(be['cheaper_below'])} is cheaper below {lo_txt}; too close to call between {lo_txt} and "
-        f"{hi_txt}; {name(be['cheaper_above'])} is cheaper above {hi_txt} "
-        f"(crossing {show(be['value'])}{rule})"
+        f"{name(be['cheaper_below'])} is cheaper below {lo_first}; too close to call between {lo_txt} and "
+        f"{hi_first}; {name(be['cheaper_above'])} is cheaper above {hi_txt} "
+        f"(crossing {show(be['value'])}{gloss(be['value'], edge=False)}{rule})"
     )
 
 
@@ -987,6 +1013,7 @@ def _refused_clause(carrier: Dict[str, Any]) -> Optional[str]:
 def across_row_sentence(
     key: str, sweep_key: str, row: Dict[str, Any], band: float,
     *, refused_clause: bool = True, drop: Any = (), head: bool = True,
+    pi: Optional[float] = None,
 ) -> str:
     """One `across` row in words: the sweep point, the threshold re-solved
     there, what the config refused, and what the crossing costs against income.
@@ -1000,7 +1027,7 @@ def across_row_sentence(
     sentences = threshold_sentences(key, row, band)
     if refused_clause and _refused_clause(row):
         sentences.append(_refused_clause(row))
-    text = f"{sweep_key}={_fmt_value(sweep_key, row['value'])}: " + "; ".join(sentences)
+    text = f"{sweep_key}={point_label(sweep_key, row['value'], pi)}: " + "; ".join(sentences)
     for be in row["break_evens"]:
         text += _affordability_clause(key, be, drop=drop, head=head)
     return text
@@ -1048,10 +1075,11 @@ def read_back_block(result: Dict[str, Any]) -> List[str]:
     lines.append(f"break-even {key}: {base_text}")
     for across in result.get("across", []):
         skey, base = across["key"], across.get("base_value")
+        spi = across.get("real_equivalent_inflation")
         for row in across["rows"]:
             text = across_row_sentence(key, skey, row, band, refused_clause=not refused_once,
-                                       drop=drop, head=False)
-            prefix = f"{skey}={_fmt_value(skey, row['value'])}: "
+                                       drop=drop, head=False, pi=spi)
+            prefix = f"{skey}={point_label(skey, row['value'], spi)}: "
             at_base = (isinstance(base, (int, float)) and not isinstance(base, bool)
                        and float(row["value"]) == float(base))
             if at_base and text[len(prefix):] == base_text:
@@ -1086,5 +1114,5 @@ def format_break_even(result: Dict[str, Any]) -> str:
         skey = across["key"]
         lines.append(f"  across {skey} (the threshold re-solved at each value):")
         for row in across["rows"]:
-            lines.append(f"    {across_row_sentence(key, skey, row, band)}")
+            lines.append(f"    {across_row_sentence(key, skey, row, band, pi=across.get('real_equivalent_inflation'))}")
     return "\n".join(lines)

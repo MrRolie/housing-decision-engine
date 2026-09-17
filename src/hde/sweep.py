@@ -19,6 +19,7 @@ from .config import single_path_run
 from .deterministic import compute_deterministic
 from .models import ComparisonDeterministicResult, ComparisonSpec, _against, compute_verdict
 from .monte_carlo import run_monte_carlo
+from .rates import RateConventionError, compose, deflate, is_convertible, resolve_convention
 from .serialization import mc_to_dict
 from .sources import MONEY_LEAVES, option_lines, split_line_key
 
@@ -340,6 +341,7 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
     price while a price-proportional input is stated in dollars carries the
     coherence note."""
     values, collapse = dedupe(key, values)
+    pi = real_equivalent_inflation(raw, key)
     rows: List[Dict[str, Any]] = []
     for v in values:
         try:
@@ -379,11 +381,14 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                 if mc is not None else None
             ),
         }
-        row["sentence"] = point_sentence(key, row)
+        row["sentence"] = point_sentence(key, row, pi=pi)
         rows.append(row)
     flips, mc_mean_flips = find_flips(rows)
     out: Dict[str, Any] = {"key": key, "values": values, "rows": rows,
                            "base_value": base_value(raw, key),
+                           # set when the points are quoted rates in a nominal
+                           # run: the labels carry their real equivalent
+                           "real_equivalent_inflation": pi,
                            "flips": flips, "mc_mean_flips": mc_mean_flips,
                            "mc_majority_flips": track_flips(rows, "mc_best")}
     note = join_notes(collapse, price_scan_note(raw, key))
@@ -432,7 +437,7 @@ def _breaches(entry: Dict[str, Any]) -> str:
 
 def point_sentence(
     key: str, row: Dict[str, Any], *, base: bool = False,
-    drop_affordability: Any = (), drop_insured: Any = (),
+    drop_affordability: Any = (), drop_insured: Any = (), pi: Optional[float] = None,
 ) -> str:
     """One grid point in words: `<key>=<v>: best <opt> by $<margin> (<pct>% of
     <opt> PV)[, P(best) <p>%][, insured <opt> <tier>%][, affordability <opt>
@@ -443,9 +448,11 @@ def point_sentence(
 
     `base` marks the point equal to the base config and keeps its verdict
     clauses alone: its affordability and financing are already in the block.
-    `drop_*` name the options a header stated once for every point.
+    `drop_*` name the options a header stated once for every point. `pi` is
+    `real_equivalent_inflation` for the key: set, the label carries the
+    point's real equivalent (2026-09-08).
     """
-    head = f"{key}={_fmt_value(key, row['value'])}" + (" (= base)" if base else "")
+    head = f"{key}={point_label(key, row['value'], pi)}" + (" (= base)" if base else "")
     if "error" in row:
         return f"{head}: refused: {row['error']}"
     best = row["best"]
@@ -476,7 +483,8 @@ def sweep_lines(result: Dict[str, Any]) -> List[str]:
     holds at every point, one line per grid point, then the flip lines."""
     key, rows = result["key"], result["rows"]
     ok = [r for r in rows if "error" not in r]
-    clauses: List[str] = []
+    pi = result.get("real_equivalent_inflation")
+    clauses: List[str] = [quoted_points_clause(key, pi)] if pi is not None else []
     sets = [r.get("affordability") for r in ok]
     constant = constant_options(sets) if ok and all(sets) and len(ok) > 1 else {}
     if constant:
@@ -496,7 +504,8 @@ def sweep_lines(result: Dict[str, Any]) -> List[str]:
                    and abs(float(r["value"]) - float(base)) <= 1e-12 * max(1.0, abs(float(base))))
         lines.append(point_sentence(key, r, base=is_base,
                                     drop_affordability=constant.keys(),
-                                    drop_insured=(insured or {}).keys() if same_tier else ()))
+                                    drop_insured=(insured or {}).keys() if same_tier else (),
+                                    pi=pi))
     lines.extend(flip_lines(result))
     return lines
 
@@ -542,6 +551,60 @@ def _fmt_value(key: str, v: Any) -> str:
     return f"{v:.2%}"
 
 
+def real_equivalent_inflation(raw: Dict[str, Any], key: str) -> Optional[float]:
+    """The inflation rate a grid point's REAL equivalent is shown with — set
+    only when `key` is a rate the loader reads as quoted and the run is
+    nominal. There a point labelled `0.00%` is a nominal figure, a 2.1%/yr
+    real decline, while the omitted key is the neutral 0% real: a served
+    answer saw a $76k swing in house PV between the two at one seed with no
+    engine signal (2026-09-08). None in real mode, under `rates: real`, and
+    for every key that is not converted."""
+    if not is_convertible(key):
+        return None
+    try:
+        rates, mode, pi = resolve_convention(raw)
+    except RateConventionError:
+        return None
+    if rates != "as_quoted" or mode != "nominal":
+        return None
+    return pi
+
+
+def point_label(key: str, v: Any, pi: Optional[float] = None) -> str:
+    """`<value>` as `_fmt_value` prints it — followed by ` (<real>% real)` when
+    the point is a quoted rate in a nominal run (`real_equivalent_inflation`)."""
+    text = _fmt_value(key, v)
+    if pi is None:
+        return text
+    return f"{text} ({deflate(float(v), pi):.2%} real)"
+
+
+def _default_real_rate(key: str) -> Optional[float]:
+    """The REAL figure the loader uses when `key` is omitted: its anchor, or
+    the loader's own zero for a cost line's escalation and the reserve
+    growth rate."""
+    if key == "discount_rate":
+        return ANCHORS["simulation.discount_rate"].value
+    if key == "condo.reserve_growth_rate" or split_line_key(key) is not None:
+        return 0.0
+    anchor = ANCHORS.get(key)
+    return None if anchor is None else anchor.value
+
+
+def quoted_points_clause(key: str, pi: float) -> str:
+    """The sweep header's clause for a quoted-rate axis in a nominal run:
+    what the points are, what its zero is in real terms, and what the
+    omitted key would have been — in quoted terms, on the same axis."""
+    clause = f"points are quoted rates; 0.0% quoted = {deflate(0.0, pi):.1%} real"
+    default = _default_real_rate(key)
+    if default is None:
+        return clause
+    if default == 0:
+        return clause + f", the neutral default is {pi:.1%} quoted"
+    return clause + (f", the anchored default {default:.1%} real is "
+                     f"{compose(default, pi):.1%} quoted")
+
+
 def at_the_floor(prob_best: Optional[float]) -> bool:
     """True when P(best) EQUALS the verdict's probability floor: decisive by
     the rule (≥), with nothing to spare — a row says so rather than print a
@@ -562,8 +625,9 @@ def format_sweep(result: Dict[str, Any]) -> str:
         lines.append(f"  {result['note']}")
     head = f"  {key:>{max(len(key), 10)}} | " + " | ".join(f"{o.capitalize():>12}" for o in opts) + " | cheapest | margin vs runner-up | decisive (rule) | P(best) | MC-mean best"
     lines.append(head)
+    pi = result.get("real_equivalent_inflation")
     for r in rows:
-        val = _fmt_value(key, r["value"])
+        val = point_label(key, r["value"], pi)
         if "error" in r:
             lines.append(f"  {val:>{max(len(key), 10)}} | refused: {r['error']}")
             continue

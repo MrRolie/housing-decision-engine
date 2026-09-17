@@ -468,3 +468,58 @@ class TestTheWidenHintRespectsAZeroFloor:
         assert not floor_at_zero("condo.value_growth_rate")
         assert not floor_at_zero("rent.rent_escalation_rate")
         assert not floor_at_zero("discount_rate")
+
+
+class TestQuotedRateThresholdsCarryTheRealEquivalent:
+    """`--break-even <opt>.value_growth_rate` in nominal mode solves on quoted
+    rates; each band edge and the crossing state their real equivalent once,
+    and an `across` row over such a key labels its point the same way
+    (2026-09-08). Real mode is unchanged."""
+
+    PI = 0.021
+
+    def _nominal(self):
+        raw = _base()
+        del raw["rates"]
+        raw["economic"] = {"mode": "nominal", "inflation_rate": self.PI}
+        raw["condo"]["all_cash"] = True
+        del raw["condo"]["down_payment"], raw["condo"]["mortgage_rate"], raw["condo"]["mortgage_term_years"]
+        raw["rent"]["monthly_rent"] = 1_800
+        raw["rent"]["invested_down_payment"] = 400_000
+        return raw
+
+    def test_each_edge_and_the_crossing_say_the_real_figure_once(self):
+        from hde.rates import deflate
+        out = solve_break_even(self._nominal(), "condo.value_growth_rate")
+        assert out["real_equivalent_inflation"] == self.PI
+        [be] = out["break_evens"]
+        lo, hi = be["tie_band"]
+        v = be["value"]
+        assert be["sentence"] == (
+            f"{be['cheaper_below']} is cheaper below {lo:.2%} ({deflate(lo, self.PI):.2%} real); "
+            f"too close to call between {lo:.2%} and {hi:.2%} ({deflate(hi, self.PI):.2%} real); "
+            f"{be['cheaper_above']} is cheaper above {hi:.2%} "
+            f"(crossing {v:.2%}, {deflate(v, self.PI):.2%} real)")
+        assert be["sentence"] in format_break_even(out)
+
+    def test_real_mode_is_unchanged(self):
+        out = solve_break_even(_base(), "condo.value_growth_rate", lo=-0.02, hi=0.05)
+        assert out["real_equivalent_inflation"] is None
+        for be in out["break_evens"]:
+            assert "real" not in be["sentence"]
+
+    def test_an_across_row_over_a_quoted_rate_labels_its_point(self):
+        from hde.break_even import across_row_sentence, read_back_block
+        raw = self._nominal()
+        base = solve_break_even(raw, "rent.monthly_rent")
+        across = solve_break_even_across(raw, "rent.monthly_rent", None, None,
+                                         "condo.value_growth_rate", [0.0, 0.02])
+        assert across["real_equivalent_inflation"] == self.PI
+        text = across_row_sentence("rent.monthly_rent", "condo.value_growth_rate",
+                                   across["rows"][0], BAND, pi=self.PI)
+        assert text.startswith("condo.value_growth_rate=0.00% (-2.06% real): ")
+        base["across"] = [across]
+        assert any(line.startswith("break-even rent.monthly_rent at condo.value_growth_rate=0.00% (-2.06% real): ")
+                   for line in read_back_block(base))
+        assert any("at condo.value_growth_rate=2.00% (-0.10% real): " in line
+                   for line in format_break_even(base).splitlines() + read_back_block(base))
