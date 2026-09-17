@@ -105,6 +105,12 @@ forms — never do that conversion by hand.
 
 ## 6. `first_time_buyer_montreal.yaml` — the financed first home, under 20% down
 
+This is the worked END-TO-END first-home config — the `tax:` block, the FHSA and the Home
+Buyers' Plan in one file — and the one to copy for that case. The HBP withdrawal joins
+whichever cash key the option carries (`cash_available` here; a stated `down_payment`
+otherwise), and the engine adds it, with the FHSA refunds, before it picks the insurance
+tier.
+
 **Question:** a first-time buyer with $60k saved, renting at $1,850 in Montréal and looking at
 a $450k condo with $380 fees — does buying beat renting over 10 years when the down payment
 lands under 20%?
