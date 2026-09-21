@@ -286,10 +286,14 @@ class SimulationParams:
         random_seed: Seed for reproducible random number generation
         house_maintenance_vol: Volatility (std dev) for house maintenance costs
         condo_fee_vol: Volatility (std dev) for condo fee costs
-        other_cost_vol: Volatility for other_recurring_costs
+        other_cost_vol: Volatility of the year-to-year change in each
+            other_recurring_costs line, on EVERY option including the renter's
+            (one meaning, 2026-09-21). One shock per year per line, compounding
+            on the carried amount, so the level's spread grows as vol*sqrt(t)
         corr_inflation_house: Correlation between inflation shock and house maintenance shock
         corr_inflation_condo: Correlation between inflation shock and condo fee shock
-        corr_inflation_other: Correlation between inflation shock and other cost shock
+        corr_inflation_other: Correlation between inflation shock and other cost shock,
+            on all three options' other_recurring_costs lines
         corr_inflation_event_cost: Correlation between inflation shock and event cost shock
         shock_model: "lognormal" (default) or "normal" for multiplicative shocks
         value_growth_vol: Annual volatility of the home's value growth. Applied to

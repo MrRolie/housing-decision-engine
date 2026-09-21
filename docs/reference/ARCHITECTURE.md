@@ -439,7 +439,13 @@ path, which the report stamps "not a forecast"):
   ANNUAL volatility of the gross return:
   one mean-preserving shock per year on `(1 + r_inv)`, so the capital's terminal value is
   `D · Π_t (1 + r_inv)·shock_t` and can end below principal (0.10 ≈ a 60/40 portfolio);
-  `other_cost_vol` shocks the level of each other cost.
+  `other_cost_vol` shocks each other cost the SAME way it shocks the owners'
+  (one meaning since 2026-09-21): one lognormal innovation per year per line,
+  compounding on the carried amount and correlated with that year's `z_π`
+  through `corr_inflation_other`. Before that it was a single level shock on
+  the whole series — the renter's line was uncertain about its year-0 figure
+  and then frozen, so at `other_cost_vol: 0.05` over 25 years the owners' lines
+  carried a 25% level spread and the renter's 5%.
 - **Demographic drift (only with `market_scenario`).** Per path: one scenario drawn
   uniformly from {low, reference, high} and SHARED by every option, and one `z_h` per horizon
   band, also shared. A path realizes one population future; each option then looks that

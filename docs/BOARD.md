@@ -256,18 +256,54 @@ numbers rather than claims, and below 6 because each calibration is an anchor pr
 
 ## 14. One key, three meanings
 
-**open** · cheap, and it makes a schema note true
+**LANDED 2026-09-21**
 
-`simulation.other_cost_vol` is applied three different ways: per year per cost on the condo and
-house paths, and once per path as a level shock on the rent path. One key, three semantics, and
-the schema note describes only the first — so it is false for the rent side, which is the side
-a reader checking the renter's exposure would look at.
+`simulation.other_cost_vol` was applied two ways, not three: the condo and house paths ran the
+same code (one shock per year per cost line, compounding on the carried amount), and the rent
+path ran one level shock per path on the whole series. Measured over 40,000 paths with the key
+the only stochastic input and an identical $10,000/yr line on each option, the owned lines
+carried a level spread of `vol·√t` — 0.25 at 25 years against the renter's flat 0.05 — and the
+renter's PV dispersion from the channel ran 3.0x narrower. The schema note said "annual vol of
+other recurring costs", true of the owned side only.
 
-Decide which meaning is right, make the key mean it everywhere, and if the rent side genuinely
-needs a level shock rather than an annual one, that is a second key with its own name.
+The owned meaning is the right one and the renter now shares it: an assessor re-assesses from
+last year's assessment and an insurer re-prices from last year's premium, so the innovation is
+annual and the level is sticky. A one-off level shock is not that process — it is uncertainty
+about today's figure, which is a `--sweep`. No second key, and no second correlation key:
+`corr_inflation_other` is named for the cost CATEGORY, as `corr_inflation_event_cost` already
+is, and it now governs the renter's lines too. The note states the compounding, because "annual
+vol" alone would have been the next false sentence.
 
-*Why now:* it is a false sentence in a surface the honesty contract governs, and the fix is an
-afternoon. Ranked here rather than higher because no verdict has been shown to turn on it.
+No shipped example moved: `other_cost_vol` is set only in `advanced_config.yaml`, which has no
+rent block, and no example gives the renter `other_recurring_costs` — which is item 12's point,
+and why this cost nothing to land.
+
+## 15. The other-cost channel's siblings
+
+**open** · found by the item-14 sweep, not yet priced
+
+Three findings, none of which item 14 was allowed to touch without moving published answers for
+a reason outside its scope:
+
+- Every OWNED cost channel consumes its draws while switched off. `_correlated_z` always calls
+  `rng.normal()`, and `_shock_multiplier(0, …)` then discards the result, so a 10-year condo
+  path spends 10 draws on the fee at `condo_fee_vol: 0` and a further 10 per other-cost line at
+  `other_cost_vol: 0` (measured: 0 / 1 / 2 lines → 10 / 20 / 30 draws). A channel that consumes
+  a draw while off is exactly what `test_no_channel_consumes_a_draw_while_switched_off` exists
+  to forbid; these predate that test and are baked into every shipped example's numbers, so
+  fixing them moves published answers. The rent side does NOT leak — item 14 kept its gate.
+- `condo_fee_vol` has item 14's shape and item 14's old note: `fee_amount` is carried, so the
+  shock compounds. Measured at 0.05 over 25 years with the knob the only stochastic input, the
+  fee line's PV sd runs 20.8% of its base (`other_cost_vol` runs 15.0% on the same test; the
+  fee is higher because the reserve contribution rides it). The note says only "annual vol of
+  condo fees".
+- `house_maintenance_vol` has a DIFFERENT shape — `maint_t` is rebuilt from `house_value` each
+  year, so its shock is iid on the level and does not accumulate: 1.0% on the same test, twenty
+  times narrower than the fee knob at the same typed figure. Two cost knobs, two processes, and
+  nothing on any surface says which is which.
+
+*Why now:* not urgent — no verdict is known to turn on any of them — but the second and third
+are the same false-sentence class item 14 just closed, and the first is a live draw-order leak.
 
 ---
 

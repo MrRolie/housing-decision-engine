@@ -563,7 +563,20 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                          "multiplicative shock); uncertainty knobs all "
                                          "default 0 = single-path run, NOT a forecast"),
         "condo_fee_vol": (False, "annual vol of condo fees; default 0 (see house_maintenance_vol)"),
-        "other_cost_vol": (False, "annual vol of other recurring costs; default 0"),
+        "other_cost_vol": (False, "annual vol of each other recurring cost — ONE meaning on all "
+                                    "three options (condo, house AND the renter's lines): a "
+                                    "lognormal shock drawn once per YEAR per cost line and "
+                                    "applied to the amount carried forward, so it is the vol of "
+                                    "the year-to-year CHANGE and the level's uncertainty "
+                                    "COMPOUNDS — a line's spread around its escalation path "
+                                    "widens roughly as vol x sqrt(years), so 0.05 over 25 years "
+                                    "is about 25% on the level, not 5%. That is the process an "
+                                    "assessor or an insurer runs: each year re-prices from last "
+                                    "year's figure, so the innovation is annual and the level is "
+                                    "sticky. Correlated with the year's inflation shock through "
+                                    "corr_inflation_other, on the renter's lines as on the "
+                                    "owners'. Not a knob for 'I am unsure what my insurance "
+                                    "quote is today' — that is a --sweep. Default 0"),
         "rent_escalation_vol": (False, "vol of the rent escalation rate per path; default 0"),
         "value_growth_vol": (False, "ANNUAL vol of the home's value growth, applied to the "
                                       "value track every year from ONE draw the condo and the "
@@ -589,7 +602,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                         "inflation shock, [-1, 1]; default 0; inert unless "
                                         "economic.inflation_vol > 0"),
         "corr_inflation_condo": (False, "correlation of condo-fee shocks with inflation, [-1, 1]; default 0"),
-        "corr_inflation_other": (False, "correlation of other-cost shocks with inflation, [-1, 1]; default 0"),
+        "corr_inflation_other": (False, "correlation of other-cost shocks with inflation, [-1, 1]; "
+                                         "default 0. Named for the COST CATEGORY, not a tenure: it "
+                                         "governs the other_recurring_costs lines on the condo, the "
+                                         "house AND the renter alike, as corr_inflation_event_cost "
+                                         "already does for events"),
         "corr_inflation_event_cost": (False, "correlation of event-cost shocks with inflation, [-1, 1]; default 0"),
         "shock_model": (False, '"lognormal" (default) or "normal"'),
     },

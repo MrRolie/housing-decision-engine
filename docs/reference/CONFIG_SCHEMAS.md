@@ -55,7 +55,7 @@ simulation:                # Optional: Monte Carlo settings
   random_seed: <integer>   # RNG seed (default: 42)
   house_maintenance_vol: <float>  # Maintenance volatility (default: 0.0)
   condo_fee_vol: <float>   # Fee volatility (default: 0.0)
-  other_cost_vol: <float>  # Volatility for other_recurring_costs (default: 0.0)
+  other_cost_vol: <float>  # Vol of the year-to-year change in each other_recurring_costs line, on every option INCLUDING the renter's; compounds, so the level's spread grows as vol×√years (default: 0.0)
   corr_inflation_house: <float>       # Corr(inflation, house maintenance shock)
   corr_inflation_condo: <float>       # Corr(inflation, condo fee shock)
   corr_inflation_other: <float>       # Corr(inflation, other cost shock)

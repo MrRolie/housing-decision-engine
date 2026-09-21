@@ -808,7 +808,9 @@ def _simulate_rent_pv_once(
     Mirrors the deterministic rent model (`_compute_rent_option`) but layers on:
     - Rent escalation shock (if sim.rent_escalation_vol > 0)
     - Event costs and timing (jitter or hazard)
-    - Other recurring cost volatility (if sim.other_cost_vol > 0)
+    - Other recurring cost volatility (if sim.other_cost_vol > 0): one
+      compounding shock per year per cost line, the condo/house arithmetic
+      exactly
     - Investment-return shock on the invested down payment
       (if sim.investment_return_vol > 0)
     - A lease reset: `reset_year` is the year the tenancy ends on this path, or
@@ -872,22 +874,47 @@ def _simulate_rent_pv_once(
         event_cost = _sample_event_cost(event, z_event)
         events_pv += pv_single(event_cost, dr, year)
 
-    # Other recurring costs, optionally shocked (level shock applied to the
-    # series; it carries no year index, so it keeps its own independent draw —
-    # there is no `corr_inflation_rent_other` key and this slice invents none).
+    # Other recurring costs, optionally shocked — the SAME arithmetic the condo
+    # and house loops run on their own other-cost lines, line for line: one
+    # persistent lognormal innovation per YEAR, compounding on the carried
+    # amount, correlated with that year's inflation z through
+    # `corr_inflation_other`.
+    #
+    # Until 2026-09-21 this was ONE level shock per path on the whole series:
+    # the renter's parking fee was uncertain about its year-0 figure and then
+    # frozen for the horizon, while the owner's identical parking fee drifted.
+    # `other_cost_vol: 0.05` over 25 years therefore meant a 25% level spread
+    # on the owned side and 5% on the renter's (measured 2026-09-21, 40,000
+    # paths), and the renter's PV dispersion from this channel ran 3.0x narrower
+    # — an artificial certainty on exactly the side `prob_rent_cheapest` ranks.
+    # The key names a COST CATEGORY, not a tenure, so it gets one meaning; the
+    # correlation key is shared for the same reason (and because
+    # `corr_inflation_event_cost` already spans all three options).
     other_pv = 0.0
     for cost in rent.other_recurring_costs:
-        if sim.other_cost_vol > 0:
-            z_other = float(rng.normal())
-            shock = _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
-            annual = cost.annual_amount * shock
-        else:
-            annual = cost.annual_amount
         esc_series = [
             _effective_growth_rate(cost.escalation_rate, factor, econ)
             for factor in world.inflation_factors
         ]
-        other_pv += _pv_escalating_series(annual, esc_series, dr, sim.years)
+        if sim.other_cost_vol > 0:
+            amount = cost.annual_amount
+            for year in range(1, sim.years + 1):
+                amount *= (1 + esc_series[year - 1])
+                z_other = _correlated_z(
+                    world.z_inflation[year - 1],
+                    world.corr(sim.corr_inflation_other),
+                    rng,
+                )
+                amount *= _shock_multiplier(
+                    sim.other_cost_vol, z_other, sim.shock_model)
+                other_pv += pv_single(amount, dr, year)
+        else:
+            # Switched off, the channel consumes NO draw and keeps the closed
+            # form: `_pv_escalating_series` collapses a flat rate to
+            # `pv_recurring_with_escalation`, so every config that does not use
+            # this feature stays bit-for-bit where it was.
+            other_pv += _pv_escalating_series(
+                cost.annual_amount, esc_series, dr, sim.years)
 
     # Capital leg, mirroring the owned side (downpayment_pv + terminal equity):
     # the renter's capital is charged at year 0 and its terminal value credited.
