@@ -63,7 +63,11 @@ Build: a diffusion on the value track beside the jump channel, anchored to Canad
 house-price series, with the anchor stating what window it was measured over.
 
 *Why now:* without it, any statement about price risk versus rate risk is a comparison
-against zero.
+against zero. Measured this round: every cost input carries a volatility and the home's value
+carries none, while terminal equity is the largest single term in an owned option's total
+(-$218,959 of $518,779 in the shipped showcase). The dispersion of the biggest term is the one
+thing not modelled, and it feeds the decisiveness rule, so the engine calls runs decisive that
+are not.
 
 ## 4. Which risk actually decides it
 

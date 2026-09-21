@@ -72,24 +72,32 @@ somebody had filled in a field. Both mean the number in front of them omits it.
 state three, and state three prints nothing. So this line's population SHRINKS as the product
 grows. A future reviewer should be able to check that and find fewer entries firing, not more.
 
-## 4. What fires, and what prints
+## 4. What fires, what leads, and what prints
 
-A dimension reaches the line only if all three hold:
+**Rarity was the wrong variable.** What kills a disclosure channel is INVARIANCE, not
+frequency. The existing `[warning]` lines and the `decisiveness:` line fire on nearly every run
+and nobody proposes gating them, because their text differs every time. So the guard belongs on
+variance, and admission and prominence are separate decisions.
 
-1. **This run does not price it** (§3).
-2. **Its size is solvable from the user's own inputs**, under §2's rule, with no forecast.
-3. **That size is at least the verdict's margin in dollars.** Below the margin the unknown
-   cannot reach the decision.
+**Admission.** The line carries at least one quantity from THIS run, and it either states a
+direction or refuses one with a stated reason. A line that can offer neither does not print.
 
-**The cap is one line.** The value of the feature is the ranking, so printing two is the engine
-declining to rank. And the runner-up is by construction the smaller exposure: if the largest
-unpriced dimension already exceeds the margin, the verdict is not safe and a second line
-changes nothing the reader does.
+**Promotion.** A line whose size is computed and exceeds the verdict's margin leads. Lines whose
+size cannot be computed follow it. The margin is an ordering rule, not an admission rule —
+demoting it is what lets an uncomputable dimension be disclosed at all, and §9 shows why that
+matters.
+
+**Cap.** At most a small fixed number per run, in that order.
 
 **When nothing qualifies, nothing prints.** Not a reassurance — `references/quick-sense.md`
 lists reassurance phrases as the first thing to cut, so a line reporting survival is exactly
-what the repo already refuses. Silence gets its documented meaning in `PROMPTS.md`, which is
-user-facing and outside the skill's word budget.
+what the repo already refuses. Silence gets its documented meaning in `PROMPTS.md`.
+
+**The honest limit of this, recorded rather than argued away.** Specificity contains the
+boilerplate failure; it does not eliminate it. A line whose only varying part is one dollar
+figure inside a fixed sentence is nearer to boilerplate than "run-specific" suggests. The cap
+and the ordering contain that. Nothing in this design proves it solved, and a future round that
+measures block words per shape should look here first.
 
 ## 5. The guard
 
@@ -144,14 +152,24 @@ Renewing 0.44 points higher and holding it there flips the verdict; 1 point high
 $14,900 in PV against a margin of $6,517. A sensitivity on your own loan, not a forecast.
 ```
 
-**State one** (all-cash, renewal irrelevant, no price spread). Nothing above owns it, so it
-carries the mechanism and closes on what the registry lacks:
+**State one** (all-cash, renewal irrelevant, no price dispersion). The first draft of this line
+solved for where the central case flips — "prices would have to run 0.6 points slower than you
+typed" — and that draft was WRONG in a way worth recording, because it is the failure mode in
+its purest form. The solve answers where the central case flips. The blind spot is the absence
+of DISPERSION around that case, which is a different quantity: it feeds `P(each option
+cheapest)` and therefore the decisiveness rule that settles most runs. A reader told the flip
+point will reasonably conclude the price dimension has been handled. It has not, and the solved
+number makes that conclusion MORE likely, not less. A computable number standing where an
+uncomputable one belongs is worse than silence.
+
+So this line refuses its direction and says what is absent:
 
 ```
-[warning] condo prices: this run follows one price path, your 2.0%/yr, with no year-to-year
-spread around it, so nothing here says how often prices alone would change the answer.
-Prices would have to run 0.6 points slower than you typed to flip this verdict. No anchored
-figure for how far a decade of prices misses that mark.
+[warning] condo: unpriced — every cost in this run varies across the 5,000 futures and the
+home's value does not; it follows one path, your 2.0%/yr, plus the crash you set. Terminal
+equity is -$218,959 of this option's $518,779, so the largest single term is the one with no
+spread. How often prices alone would change the answer is not in this run, and P(cheapest)
+below reads narrower than the truth because of it.
 ```
 
 **Nothing qualifying:** no line.
@@ -178,11 +196,23 @@ Three classes, not two.
 |---|---|---|
 | Renewal rate held for life | measurable | solve `mortgage_renewal_rates` once the ladder ships |
 | Early exit / horizon | measurable | solve `years` over the user's own range |
-| Ordinary price variation | nameable | no `value_growth_vol` exists to stress |
+| Dispersion on the home's value | nameable, direction REFUSED | see below — NOT covered by solving `value_growth_rate` |
 | Rental income | measurable on cue | mechanically solvable, but the engine cannot see whether a suite exists — belongs to the intake's missing-information gate |
 | Break / prepayment cost | qualifier | bounds the early-exit figure in a known direction |
 | Unpriced tax items | qualifier | direction already recorded in the schema notes |
 | Existing-owner state | nameable, direction REFUSED | see §10 |
+
+**The asymmetry that makes dispersion the sharpest entry**, verified at HEAD: every cost input
+carries a volatility — `condo_fee_vol`, `house_maintenance_vol`, `rent_escalation_vol`,
+`other_cost_vol`, `inflation_vol`, `investment_return_vol` — and the home's value carries none.
+`severity_vol` is the crash channel and `magnitude_vol` is events. So the engine models
+dispersion on every cost and none on the asset, while the asset drives the largest single term
+in an owned option's total: in the shipped showcase the condo's terminal equity is -$218,959
+against a $518,779 total. The dispersion of the biggest term is the one thing not modelled, and
+it feeds the decisiveness rule directly, biasing it toward calling runs decisive that are not.
+
+Its siblings, for the same reason: correlation between house prices and the user's own income,
+and regime change in any anchored series.
 
 **Qualifier** is the class worth naming. A nameable-only omission that bounds a MEASURED number
 in a known direction should print attached to that number, never as a free-standing disclaimer.
@@ -215,6 +245,19 @@ prices an owned option. The engine refuses a config that omits it, the same way 
 other missing required key. On a value that says the household already owns, it refuses to run
 at all, and the refusal names the limit and the one substitute question it can still answer.
 Detection stops depending on anyone remembering, because there is no run to produce without it.
+
+**The principle that decides which organ applies, and it generalises past tenure:** a required
+field works when the missing dimension is a fact THE USER POSSESSES. It fails when the missing
+dimension is a fact NOBODY IN THE TRANSACTION POSSESSES. Tenure is the first kind — the
+household knows whether they own — which is why refusal fits it exactly. A price volatility is
+the second: requiring a household to state one would be requiring them to supply the very thing
+the engine should anchor, and `2026-09-03-mortgage-renewal-risk.md` §11 already made this
+argument in the other direction, that a household can reason about renewing two points higher
+and cannot reason about a calibrated diffusion. Renewal escapes by reframing to a scenario the
+user chooses. Dispersion cannot take that route, by §11's own reasoning.
+
+So: **refusal is the organ for a dangerous dimension the user could state; the line is the organ
+for one nobody can.** The two designs stop competing once that is said.
 
 This is the repo's existing law, not a new one: a surface that cannot verify must REFUSE.
 Refusal is the correct organ for a dimension whose bite is unbounded. An uncomputable bite IS
