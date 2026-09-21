@@ -62,7 +62,9 @@ src/hde/            # Core engine (Python package)
   story_plots.py    # The six-act decision story (plots)
   story_page.py     # STORY.md one-pager + report.txt package (--story)
   cli.py            # CLI entry point (hde)
-tests/              # pytest suite (fixtures/ holds the golden ScenarioPrior)
+tests/              # pytest suite (fixtures/ holds the golden ScenarioPrior and the
+                    #   uncertainty surface: a config wiring every stochastic channel
+                    #   at once, with its Monte Carlo block pinned)
 examples/           # Example YAML scenario configs + ordered walkthrough (README.md)
 docs/
   roadmaps/         # Roadmap spines (do not edit arc spine)
@@ -125,6 +127,7 @@ full-suite invocation.
 - **3-way comparison** — rent, condo, house are all first-class options. Rent PV books the renter's capital exactly like the buyer's: `invested_capital_pv = +D` at year 0 and `invested_dp_benefit_pv = −D × (1+r_inv)^N / (1+dr)^N` at the horizon (2026-09-02 fix — the outlay was missing, biasing every verdict toward renting by D).
 - **Affordability layer** — `IncomeParams` + `PayDropEvent` produce per-year housing-cost/income ratios returned as the `affordability` block of `--json`.
 - **Deterministic + Monte Carlo** run as separate engines; deterministic is the sanity check, MC is the uncertainty surface.
+- **The uncertainty machinery has a regression surface** (2026-09-21, board item 12) — `tests/fixtures/uncertainty_surface.yaml` wires every stochastic channel the engine has (a cash condo, a leveraged house and a sitting tenant in one world) and `tests/fixtures/uncertainty_surface_mc_golden.json` pins its Monte Carlo block, so a change to the simulation has to explain itself against a committed figure. It is a FIXTURE, not an example: `examples/` stays a reading-order walkthrough, and `tests/test_price_dispersion_and_lease_reset.py::test_no_shipped_example_wires_either_channel` stays able to assert that EVERY file in `examples/` reads `value_growth_vol` as 0 and wires no lease reset. `tests/test_uncertainty_surface.py` also checks that each channel is live and reaches the options it belongs to — a pinned constant wearing a volatility's name is the same defect one level down.
 - **YAML config** is the input contract — scenarios are files, not code. `load_config_dict` returns `ComparisonSpec`.
 - **Pure functions** throughout — no global state, seeded RNG for reproducibility.
 - **MC numpy arrays** never cross a surface boundary; only `MonteCarloSummary` scalars + `prob_X_cheapest` are serialized.

@@ -214,7 +214,7 @@ margin. Run it on Opus and Sonnet, never on the steering model.
 
 ## 12. The shipped examples barely exercise uncertainty
 
-**open** · a gate that mostly cannot fail
+**LANDED 2026-09-21** · a gate that mostly could not fail
 
 Six of the seven example configs set no inflation volatility, and until this week none of
 them could have detected that the renter's total was one value across five hundred paths.
@@ -230,6 +230,35 @@ itself against a committed figure.
 
 *Why now:* it is the cheapest of the open items and it is what makes items 3 and 4 defensible
 later. A variance decomposition nobody can regress is a study, not a product feature.
+
+**What landed.** One config, and it is a FIXTURE rather than an eighth example:
+`tests/fixtures/uncertainty_surface.yaml`, pinned by
+`tests/fixtures/uncertainty_surface_mc_golden.json` and read by
+`tests/test_uncertainty_surface.py`. It wires every stochastic channel the engine has —
+inflation vol and its four correlations, the four cost vols, return vol, the shared value
+dispersion, a price shock on both owned options, the demographic prior, the lease-reset pair
+and a pay-drop event — across a cash condo, a leveraged house and a sitting tenant, in one
+world, in nominal mode (`inflation_vol` is inert on escalation in real mode, so a real-mode
+fixture would wire the month's biggest defect half dead).
+
+It sits outside `examples/` for two reasons and the second decides it. `examples/` is a
+reading-order walkthrough and these figures are chosen for mechanism coverage, not because
+a household has them. And `test_no_shipped_example_wires_either_channel` asserts that EVERY
+file in `examples/` reads `value_growth_vol` as 0 and wires no lease reset — the absence
+invariant checked by RUNNING the shipped configs. Landing a fully-stochastic config there
+would have forced that assertion down to "every example that existed before", which is a
+gate with no failure state: trading one such gate for another. Outside `examples/`, it keeps
+its full form and the seven published answers are byte-identical.
+
+The pin was proved able to fail before it was trusted: reverting the shared crash draw in
+`monte_carlo._apply_price_shock` — the exact defect fixed that morning — moves
+P(house cheapest) from 0.0905 to 0.172 and P(condo cheapest) from 0.5705 to 0.4915, and the
+failure names all 21 moved figures with pinned, observed and delta, plus which side of the
+engine each moved figure points at. The companion tests perturb each channel one at a time,
+SCALING it rather than switching it off so the draw count is unchanged, and require it to
+move the options it belongs to and leave the others bit-identical — because a channel that
+went inert would otherwise sit on this surface as a constant wearing a volatility's name,
+which is this same item one level down.
 
 ## 13. What still moves independently, and shouldn't
 

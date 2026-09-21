@@ -1,0 +1,254 @@
+# The uncertainty surface — a TEST FIXTURE, not a shipped example.
+#
+# WHY IT IS NOT IN examples/ (board item 12, 2026-09-21). Six of the seven
+# shipped examples set no inflation volatility, so their Monte Carlo block is a
+# constant, and a constant cannot regress: that is why the renter's one-value
+# total and the three-unrelated-economies defect both sat undetected. This file
+# is the fix — one config whose job is to make every stochastic channel draw at
+# once, with its Monte Carlo block pinned in
+# tests/fixtures/uncertainty_surface_mc_golden.json.
+#
+# It lives here rather than in examples/ for two reasons. First, examples/ is a
+# reading-order walkthrough for a stranger learning the tool, and these figures
+# are chosen for mechanism coverage, not because any household has them — it
+# would teach nothing and would have to be walked through anyway. Second,
+# tests/test_price_dispersion_and_lease_reset.py asserts that EVERY file in
+# examples/ reads value_growth_vol as 0 and wires no lease reset; that is how
+# the absence invariant is checked by RUNNING the shipped configs rather than by
+# reading the code. Landing this file there would have forced that test down to
+# "every example that existed before", which is a gate with no failure state.
+# Here, it stays exactly as strong as it was.
+#
+# --- Parameter provenance (the honesty contract, AGENTS.md) ---
+# NOT ONE FIGURE HERE IS A FORECAST. Every number is one of three things, and
+# the `sources:` block at the bottom says which for every key this file sets:
+#
+#   user ...... a fact a household would possess (a price, a rent, a fee, a
+#               horizon). Here they are INVENTED for the fixture — no household
+#               stated them — and they are marked `user` only because that is
+#               the class the engine's echo puts them in. Nothing downstream
+#               should read any figure in this file as evidence about a market.
+#   assistant . a calibration chosen for this fixture. Every volatility below is
+#               one of these except ONE: the registry ships exactly one
+#               volatility anchor, `price_shock.severity_vol`, and this file
+#               cites it by name on both owned options. Nothing under
+#               `simulation:` is anchored and neither is `economic.inflation_vol`
+#               (`uv run hde --print-anchors`), so each of those is a size picked
+#               to make the channel visibly draw, not a measured figure.
+#               Sensitivity-test any of them with --sweep.
+#   anchor:<n>  exactly the registry's published value, cited by name.
+#
+# Sources named below:
+#   FP Canada 2026 = Standards Council / Institute of Financial Planning, 2026
+#                    Projection Assumption Guidelines (fpcanada.ca)
+#   TREB 1989–96   = Toronto peak-trough −27.6% nominal, Canada's largest
+#                    observed metro correction (Better Dwelling)
+#   NAHB 2019      = "Operating Costs of Owning a Home" (2019 AHS)
+#   BoC            = Bank of Canada weekly rates (the engine's mortgage_rate.*)
+#
+# --- Why NOMINAL mode ---
+# `economic.inflation_vol` is INERT ON ESCALATION IN REAL MODE: real-mode rates
+# are used as typed, so the inflation draw reaches a cash flow only through the
+# corr_inflation_* channels. Running this fixture in real mode would wire the
+# channel that caught the biggest defect of the month and leave it half dead.
+# So the fixture runs nominal, and every rate below is typed AS QUOTED (sticker),
+# which in nominal mode means used as typed.
+
+years: 25  # fixture horizon — long enough for the renewal ladder and the prior's far band
+discount_rate: 0.052  # sticker; ≈ 3.0% real at 2.1% inflation, the FP Canada 2026 60/40 figure composed — assistant
+
+economic:
+  mode: nominal  # the only mode where inflation_vol moves an escalation; see the header
+  inflation_rate: 0.021  # FP Canada 2026 planning inflation, typed explicitly (nominal mode defaults it to 0.0 and warns)
+  inflation_vol: 0.012  # assistant — annual vol of the inflation factor, ONE draw per path shared by every option; sized to be visible, not measured
+
+market_scenario:
+  # demoflow's audited ScenarioPrior — the same artifact the shipped showcase
+  # uses. Its provenance chain is that repo's; here it supplies the demographic
+  # drift fan AND the shared population-scenario draw (one Québec per path).
+  path: tests/fixtures/scenario_prior_golden.json
+  geography: MTL_RMR
+
+condo:
+  # The CASH owner. Carries fee, other-cost, value-dispersion, crash and event
+  # channels, and shares the housing-market draw with the house.
+  initial_value: 465000  # fixture market input
+  province: "QC"  # quoted: an unquoted QC is fine but ON is a YAML boolean, so the engine's convention is to quote
+  municipality: montreal  # places the option for the coherence checks (Québec school tax); no land-transfer tax is priced here (land_transfer_tax defaults to 'none')
+  monthly_fee: 620  # fixture market input
+  fee_escalation_rate: 0.041  # sticker ≈ 2.0% real; FP Canada 2026 shelter growth is 3.1% sticker ≈ 1.0% real — an aggressive aging-building view, assistant
+  value_growth_rate: 0.031  # sticker ≈ 1.0% real; assistant base drift only — the prior's demographic tilt is added on top in the Monte Carlo
+  all_cash: true
+  purchase_costs: 9300  # assistant — Québec welcome tax + notary ≈ 2.0% of price
+  other_recurring_costs:  # the BASE other_cost_vol multiplies; without a line here that channel is inert
+    - name: property_tax
+      annual_amount: 2951  # anchor:property_tax.montreal (0.5556%) + anchor:school_tax.qc (0.07899%) = 0.63459% on $465,000, rounded to the dollar. The municipal rate alone is NOT the bill in Québec
+      escalation_rate: 0.021  # sticker: tracks inflation ⇒ 0% real; assistant
+  price_shock:
+    annual_hazard: 0.03  # assistant — no anchor exists for a crash frequency; sensitivity-test via sweep
+    severity_mean: 0.20  # assistant — TREB 1989–96 implies ≈ 0.25; 0.20 is a deliberately milder Montréal view, so NOT the anchor
+    severity_vol: 0.10  # anchor:price_shock.severity_vol
+  events:
+    - name: "special_assessment"
+      base_cost: 15000  # assistant — calibrate to a real reserve study
+      expected_year: 9  # assistant timing
+      cost_vol: 0.25  # assistant — the event-cost draw, correlated with inflation through corr_inflation_event_cost
+
+house:
+  # The LEVERAGED owner. Same housing market as the condo (one shared value draw,
+  # one shared crash draw), but a fixed nominal payment, so the inflation path
+  # moves this option's costs and its asset in opposite directions — the
+  # covariance a single-option test cannot see.
+  initial_value: 610000  # fixture market input
+  province: "QC"
+  municipality: montreal
+  value_growth_rate: 0.031  # sticker ≈ 1.0% real; assistant base drift — the prior's tilt is added on top
+  annual_maintenance_rate: 0.012  # assistant — NAHB 2019 AHS routine ≈ 0.6%/yr is the narrow definition; 1.2% is the 1%-rule budgeting family. The BASE house_maintenance_vol multiplies
+  down_payment: 150000  # fixture household cash: 24.6% of price, above the 20% insurance line on purpose (this fixture is not about CMHC)
+  mortgage_rate: 0.0435  # anchor:mortgage_rate.contracted_5y_uninsured — a contract rate, never deflated
+  mortgage_term_years: 25  # the AMORTIZATION
+  mortgage_renewal_years: 5  # the TERM: a 25-year amortization on 5-year terms renews four times
+  mortgage_renewal_rates: [0.046, 0.050, 0.048, 0.044]  # assistant — A STATED SCENARIO, NOT A FORECAST: the engine anchors no forward rate and never will. Bracket it with --sweep
+  purchase_costs: 12200  # assistant — Québec welcome tax + notary ≈ 2.0% of price
+  other_recurring_costs:
+    - name: property_tax
+      annual_amount: 3871  # anchor:property_tax.montreal + anchor:school_tax.qc = 0.63459% on $610,000, rounded to the dollar
+      escalation_rate: 0.021  # sticker: tracks inflation ⇒ 0% real; assistant
+    - name: home_insurance
+      annual_amount: 813  # anchor:home_insurance.qc
+      escalation_rate: 0.021  # sticker: tracks inflation; assistant
+  price_shock:
+    annual_hazard: 0.03  # assistant — same market as the condo, so the same hazard; the crash draw itself is SHARED
+    severity_mean: 0.20  # assistant — milder-than-TREB Montréal view, not the anchor
+    severity_vol: 0.10  # anchor:price_shock.severity_vol
+  events:
+    - name: "roof_replacement"
+      base_cost: 21000  # assistant — calibrate to a component inventory
+      expected_year: 14  # assistant service life
+      cost_vol: 0.20  # assistant — the event-cost draw
+
+rent:
+  # The RENTER, who must carry real risk or P(cheapest) compares a distribution
+  # to a point. Three channels do it: escalation vol, return vol on the invested
+  # capital, and the lease-reset hazard — the renter's mirror of the owner's crash.
+  monthly_rent: 1880  # fixture market input: a sitting tenant well BELOW the market figure below, which is what makes the reset channel bite
+  rent_escalation_rate: 0.021  # sticker ≈ 0.0% real — a protected Québec lease renews at the TAL base rate, which is CPI; assistant (the anchor is the MARKET figure, 1.0% real, and it is a different number)
+  reset_hazard: 0.07  # assistant — annual probability the tenancy ends. NOBODY POSSESSES THIS NUMBER; no anchor ships and the engine refuses to guess one. 7%/yr ≈ one reset per 14 years
+  reset_to_monthly_rent: 2650  # fixture market input — what a comparable unit asks TODAY (a fact a household can look up, which is why the engine requires it rather than estimating it)
+  # reset_market_escalation_rate is deliberately NOT set: the engine applies its
+  # anchored default (1.0% real, FP Canada 2026 shelter) and says so under
+  # `defaults applied`. Leaving it out exercises that path too.
+  # NO tax: block, on purpose. The engine warns that the renter's capital grows
+  # untaxed and that this leans toward renting — a true warning, left standing:
+  # the tax treatment is a DETERMINISTIC leg and wiring it here would add machinery
+  # this surface is not about. Read the warning, do not read it as an oversight.
+  invested_down_payment: 474300  # = the condo's year-0 cash (465,000 + 9,300). A single scalar cannot match both owned options: against the house's 162,200 the renter is over-credited here, and the comparison is the condo's
+  investment_return_rate: 0.052  # sticker ≈ 3.0% real; assistant (the anchor is 3.0% REAL and this is its nominal composition, not the anchor's own figure)
+  other_recurring_costs:
+    - name: tenant_insurance
+      annual_amount: 360  # assistant — the home_insurance.* anchors are HOMEOWNER premiums and are deliberately never matched to a tenant policy
+      escalation_rate: 0.021  # sticker: tracks inflation; assistant
+  events:
+    - name: "moving_costs"
+      base_cost: 3500  # assistant — calibrate to mover quotes
+      expected_year: 11  # assistant timing
+      cost_vol: 0.20  # assistant — the event-cost draw on the renter's side
+
+income:
+  # Present so the affordability block of the Monte Carlo output is pinned too:
+  # prob_*_exceeds is otherwise null and that part of the surface is unguarded.
+  annual_income: 152000  # fixture household figure
+  income_growth_rate: 0.031  # sticker ≈ 1.0% real, FP Canada 2026 salary growth; assistant
+  affordability_threshold: 0.32  # anchor:income.affordability_threshold
+  pay_drop_events:
+    - year: 8  # assistant timing
+      magnitude: 0.62  # assistant — 62% of income RETAINED, i.e. a 38% cut. Sized so that P(condo exceeds) is neither 0 nor 1: a probability pinned at exactly 0 is a figure that cannot regress downward
+      year_jitter_std: 2.0  # assistant — the timing draw
+      magnitude_vol: 0.25  # assistant — the severity draw
+
+simulation:
+  num_sims: 2000  # enough that P(cheapest) is stable to the pin's precision without making the suite slow
+  random_seed: 42  # same seed, same answer — the pin depends on it
+  # --- every volatility channel the engine has, all live at once ---
+  # NO ANCHOR EXISTS FOR ANY OF THESE. Each is an assistant-chosen size, picked
+  # large enough that the channel visibly moves its option and small enough to
+  # stay a plausible calibration. They are NOT measured figures.
+  condo_fee_vol: 0.08
+  house_maintenance_vol: 0.20
+  other_cost_vol: 0.10
+  rent_escalation_vol: 0.06
+  investment_return_vol: 0.10  # ≈ a 60/40 portfolio's annual vol; the like-for-like answer to the owners' price_shock
+  value_growth_vol: 0.07  # the home's ordinary year-to-year spread, from ONE draw the condo and the house SHARE
+  shock_model: lognormal  # the default, typed so the pin records which model produced it
+  # --- the correlations that make the shared inflation draw reach the costs ---
+  corr_inflation_condo: 0.5
+  corr_inflation_house: 0.5
+  corr_inflation_other: 0.4
+  corr_inflation_event_cost: 0.3
+
+# WHO stated each value. No effect on any computation: it splits the assumption
+# echo into user-stated / assistant-typed / anchor-sourced lines. See the header
+# for what `user` means in a fixture nobody lives in.
+sources:
+  years: user
+  discount_rate: assistant
+  economic.mode: assistant
+  economic.inflation_rate: assistant
+  economic.inflation_vol: assistant
+  market_scenario.path: assistant
+  market_scenario.geography: user
+  condo.initial_value: user
+  condo.province: user
+  condo.municipality: user
+  condo.monthly_fee: user
+  condo.fee_escalation_rate: assistant
+  condo.value_growth_rate: assistant
+  condo.all_cash: user
+  condo.purchase_costs: assistant
+  condo.other_recurring_costs.property_tax.annual_amount: anchor:property_tax.montreal+school_tax.qc
+  condo.price_shock.annual_hazard: assistant
+  condo.price_shock.severity_mean: assistant   # 0.20 is a milder Montréal view than the 0.25 TREB anchor — a choice, not the anchor
+  condo.price_shock.severity_vol: anchor:price_shock.severity_vol
+  condo.events: assistant
+  house.initial_value: user
+  house.province: user
+  house.municipality: user
+  house.value_growth_rate: assistant
+  house.annual_maintenance_rate: assistant
+  house.down_payment: user
+  house.mortgage_rate: anchor:mortgage_rate.contracted_5y_uninsured
+  house.mortgage_term_years: user
+  house.mortgage_renewal_years: user
+  house.mortgage_renewal_rates: assistant
+  house.purchase_costs: assistant
+  house.other_recurring_costs.property_tax.annual_amount: anchor:property_tax.montreal+school_tax.qc
+  house.other_recurring_costs.home_insurance.annual_amount: anchor:home_insurance.qc
+  house.price_shock.annual_hazard: assistant
+  house.price_shock.severity_mean: assistant
+  house.price_shock.severity_vol: anchor:price_shock.severity_vol
+  house.events: assistant
+  rent.monthly_rent: user
+  rent.rent_escalation_rate: assistant
+  rent.reset_hazard: assistant
+  rent.reset_to_monthly_rent: user
+  rent.invested_down_payment: user
+  rent.investment_return_rate: assistant
+  rent.other_recurring_costs: assistant
+  rent.events: assistant
+  income.annual_income: user
+  income.income_growth_rate: assistant
+  income.affordability_threshold: anchor:income.affordability_threshold
+  income.pay_drop_events: assistant
+  simulation.num_sims: assistant
+  simulation.random_seed: assistant
+  simulation.condo_fee_vol: assistant
+  simulation.house_maintenance_vol: assistant
+  simulation.other_cost_vol: assistant
+  simulation.rent_escalation_vol: assistant
+  simulation.investment_return_vol: assistant
+  simulation.value_growth_vol: assistant
+  simulation.shock_model: assistant
+  simulation.corr_inflation_condo: assistant
+  simulation.corr_inflation_house: assistant
+  simulation.corr_inflation_other: assistant
+  simulation.corr_inflation_event_cost: assistant
