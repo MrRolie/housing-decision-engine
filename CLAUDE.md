@@ -20,8 +20,9 @@ biases the verdict). Missing information is said plainly ("no source for
 an Ottawa property-tax rate; 1.0% of value is a placeholder") and never filled
 silently; every engine warning reaches the user; a breach is never softened
 into "not a breach" without naming both thresholds. A "no source for X" line
-is not a failure of the answer: what the assistant had to estimate or could
-not anchor is what the engine builds next.
+is not a failure of the answer: it tells the user which figure to go check
+themselves, and which number the verdict would move on if they find a better
+one.
 
 ## Surface doctrine (2026-08-26; MCP server removed 2026-09-01)
 

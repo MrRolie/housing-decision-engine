@@ -12,8 +12,33 @@ for agents, `--print-schema` for the input contract, `--print-anchors` for prove
 
 ## Scope
 
-Personal financial tooling, for the author's own use. Nothing here places trades or moves
-money — it computes present-value comparisons from parameters you supply.
+A shipped product: other people run it with their own Claude, on their own numbers.
+Nothing here places trades or moves money — it computes present-value comparisons from
+parameters you supply.
+
+## What kind of system this is (the artifact boundary)
+
+This engine is an ARTIFACT, not a habitat: it is operated by people whose context this
+repo will never see, with nobody who built it present when it runs. Five things follow,
+and they bind every change.
+
+1. **Every load-bearing contract lives in this repo's own bytes** — `--print-schema` for
+   input, `--print-anchors` for provenance, `--json` for agents, the read-back block for
+   the answer, `docs/reference/` for the contract, and the skill at `.claude/skills/hde/`
+   for the flow. Nothing a correct answer depends on may live in a maintainer's memory,
+   notes or habits: none of that exists at use time.
+2. **Stability outranks velocity at the shipped edge.** Users take a tagged release; the
+   development tree moves underneath them.
+3. **The engine fails safe with nobody stewarding it.** A surface that cannot verify warns
+   or refuses in its own output — a stale anchor says so on the run that used it, an
+   unmatched figure says no source agrees — and no surface tells the user to go ask a
+   person.
+4. **Scaffolding built for developing the engine is not the product.** `docs/plans/`,
+   `docs/roadmaps/` and `docs/research/` are a build record kept for contributors; nothing
+   on a user's path may depend on them, and conveniences built for this repo's own work do
+   not ship.
+5. **The quality bar is "correct for a stranger's Claude, cold"** — never "correct for
+   whoever built it".
 
 ## Package layout
 
@@ -56,13 +81,15 @@ This repo serves TWO consumer layers, and every output surface is designed for b
 1. **Agents and other systems** — the `hde` CLI (`--json`) and the Python
    library. Typed inputs/outputs, deterministic, seeded. demoflow consumes the actuarial
    package through this layer's discipline.
-2. **The personal consumer using Claude as the interface** — the operator making their own
-   rent/buy/house decisions through conversation. Not a separate build yet; today's CLI,
-   YAML scenarios, and reports are its seed.
+2. **A person using Claude as the interface** — anyone deciding their own rent/buy/house
+   question in conversation, with their own Claude and their own numbers. The CLI, the
+   YAML scenario and the read-back block ARE that surface; the skill is how Claude drives
+   them.
 
 Binding design constraint: anything emitted by this engine must be **person-readable** —
 a number that cannot be explained to the layer-2 consumer in one paragraph does not ship.
-Layer 1 is built; layer 2 is a constraint on everything built now, not a build item.
+Both layers are built, and layer 2's reader is a stranger: the constraint is that every
+emitted number explains itself to someone who has never read this file.
 
 ## Entry points
 

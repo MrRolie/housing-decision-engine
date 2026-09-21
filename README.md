@@ -5,6 +5,11 @@
 A present-value comparison engine for housing decisions — rent vs condo vs house on a
 net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 
+You run it with your own Claude, on your own numbers. Nothing here reports anywhere, and
+no part of an answer depends on the people who built it being around: every assumption,
+source and caveat an answer needs is printed by the engine itself. Take a tagged release
+if you want a stable engine — `main` is the development tree.
+
 ## What you get
 
 - **3-way PV comparison** — rent / condo / house, leveraged or all-cash, with end-of-horizon equity credited back
@@ -20,7 +25,8 @@ net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 ## Test drive
 
 1. Install [uv](https://docs.astral.sh/uv/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
-2. `git clone https://github.com/MrRolie/housing-decision-engine.git && cd housing-decision-engine`
+2. `git clone https://github.com/MrRolie/housing-decision-engine.git && cd housing-decision-engine`,
+   then `git checkout $(git describe --tags --abbrev=0)` for the latest release
 3. `claude` — accept the one-time dialog listing what this folder pre-approves (running the
    engine, writing your scenario under `scenarios/`), then ask in plain words, e.g.
    *"I pay $2,100 rent and condos like mine go for $450k. Should I buy?"* —
@@ -73,7 +79,7 @@ demoflow/            # Self-contained uv project — the upstream demand-model p
 - **Example walkthrough** — [examples/README.md](examples/README.md): the smallest config that runs, then six scenarios in reading order
 - **Every figure explained** — [docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md) § Figure glossary; every default's source — `uv run hde --print-anchors`
 - **Library use** — all engines take a single `ComparisonSpec`; see `src/hde/__init__.py` exports
-- **Roadmap** — `docs/roadmaps/2026-06-07_housing-decision-engine.md`
+- **What changed between releases** — `git tag -n99` (each tag's note lists what landed); the build record is `docs/roadmaps/2026-06-07_housing-decision-engine.md`
 
 ## Tests
 
