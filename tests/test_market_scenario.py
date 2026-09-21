@@ -407,26 +407,37 @@ class TestPriceShockChannel:
     def test_apply_price_shock_full_hazard_exact_haircut(self):
         # hazard=1 fires every year; severity_vol=0 collapses the lognormal
         # machinery to its mean: exactly a 20% haircut per firing year.
-        rng = np.random.default_rng(0)
+        # u and the severity z now come from the path's PathWorld, so every
+        # option on a path sees the same market (2026-09-21).
         track = [100.0]
-        _apply_price_shock(track, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 1.0, rng)
+        _apply_price_shock(track, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 1.0, 0.0, 0.0)
         assert track[0] == pytest.approx(80.0)
 
     def test_tilt_scales_the_hazard(self):
-        # hazard 1.0 x tilt 0.0 never fires: track untouched, no draw consumed.
-        rng = np.random.default_rng(0)
+        # hazard 1.0 x tilt 0.0 never fires: track untouched even with the
+        # uniform at its floor, where any positive hazard would have fired.
         track = [100.0]
-        _apply_price_shock(track, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 0.0, rng)
+        _apply_price_shock(track, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 0.0, 0.0, 0.0)
         assert track[0] == 100.0
 
     def test_shock_hits_both_house_tracks(self, tmp_path):
-        rng = np.random.default_rng(0)
         house_value = 400_000.0
         terminal_value = 400_000.0
         tracks = [house_value, terminal_value]
-        _apply_price_shock(tracks, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 1.0, rng)
+        _apply_price_shock(tracks, PriceShockParams(annual_hazard=1.0, severity_mean=0.2, severity_vol=0.0), 1.0, 0.0, 0.0)
         assert tracks[0] == pytest.approx(320_000.0)
         assert tracks[1] == pytest.approx(320_000.0)
+
+    def test_uniform_at_or_above_the_hazard_does_not_fire(self):
+        # The coupling's whole content: the SAME uniform decides for every
+        # option, so a uniform that clears the hazard must leave the track
+        # alone. Without this, `u < hazard` could be inverted and the two
+        # tests above would still pass (both use u = 0.0).
+        track = [100.0]
+        _apply_price_shock(track, PriceShockParams(annual_hazard=0.3, severity_mean=0.2, severity_vol=0.0), 1.0, 0.3, 0.0)
+        assert track[0] == 100.0
+        _apply_price_shock(track, PriceShockParams(annual_hazard=0.3, severity_mean=0.2, severity_vol=0.0), 1.0, 0.299, 0.0)
+        assert track[0] == pytest.approx(80.0)
 
     def test_default_off_shock_is_byte_identical(self):
         result = run_monte_carlo(_spec(house_price_shock=None, num_sims=50))

@@ -137,6 +137,19 @@ uv run hde examples/basic_config.yaml --json          # the full result document
   forecast, and nothing in the engine anchors a forward rate. State no path and the
   quoted rate is held for the whole amortization, which biases the answer toward buying
   when rates rise; the run says so itself. Sweep the renewal rate to see the exposure.
+- **How much house prices move, as a number.** The engine can now put ordinary year-to-year
+  variation on a home's value, and it prices a crash if you describe one. What it will not do
+  is pick the size of either for you. No anchor in its registry carries a Canadian house-price
+  volatility, so both keys ship off and any figure you put there is yours — the read-back says
+  so, and names it among the inputs the verdict rests on. Leave them off and terminal equity,
+  the largest single figure in an owned option's total, is the one figure in the model with no
+  spread at all, which makes the answer look steadier than it should. Sweep it to see what the
+  reading costs you.
+- **Whether your lease survives the horizon.** A sitting tenant far below market can now say
+  what a comparable unit asks and how likely the tenancy is to end, and the engine prices the
+  reset. It will not guess the probability: nobody possesses that number. Leave it off and
+  renting is modelled as a smooth drift for the whole horizon, which reads as safer than a
+  long tenancy actually is.
 - **Property tax outside Laval, Montréal, Québec City, Ottawa and Toronto.** Gatineau has
   no registered source (it taxes by neighbourhood unit, so no city-wide rate exists); any
   figure used there is a labelled placeholder until you supply your bill.

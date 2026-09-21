@@ -8,6 +8,7 @@ them into the appropriate dataclass instances.
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import difflib
+import math
 
 import yaml
 
@@ -125,6 +126,7 @@ _HOUSE_KEYS = frozenset({
 _RENT_KEYS = frozenset({
     "monthly_rent", "rent_escalation_rate", "invested_down_payment",
     "investment_return_rate", "events", "other_recurring_costs",
+    "reset_hazard", "reset_to_monthly_rent",
 })
 _ECONOMIC_KEYS = frozenset({"mode", "inflation_rate", "inflation_vol"})
 _INCOME_KEYS = frozenset({
@@ -135,7 +137,7 @@ _SIMULATION_KEYS = frozenset({
     "num_sims", "random_seed", "house_maintenance_vol", "condo_fee_vol",
     "other_cost_vol", "corr_inflation_house", "corr_inflation_condo",
     "corr_inflation_other", "corr_inflation_event_cost", "shock_model",
-    "rent_escalation_vol", "investment_return_vol",
+    "rent_escalation_vol", "investment_return_vol", "value_growth_vol",
 })
 _MARKET_SCENARIO_KEYS = frozenset({"path", "geography"})
 _PRICE_SHOCK_KEYS = frozenset({"annual_hazard", "severity_mean", "severity_vol"})
@@ -721,13 +723,16 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
         if renter_spread:
             carrier, still = "the renter's PV", "the owned option's PV"
             listed, fix = renter_spread, ("give the owned side its own uncertainty "
-                                          "(price_shock, simulation.house_maintenance_vol / "
+                                          "(simulation.value_growth_vol, price_shock, "
+                                          "simulation.house_maintenance_vol / "
                                           "condo_fee_vol, or a market_scenario prior)")
         else:
             carrier, still = "the owned option's PV", "the renter's PV"
             listed, fix = owned_spread, ("give the renter's side its own uncertainty "
                                          "(simulation.investment_return_vol, 0.10 ≈ 60/40 "
-                                         "portfolio, or simulation.rent_escalation_vol)")
+                                         "portfolio; simulation.rent_escalation_vol; or, for a "
+                                         "sitting tenant below market, rent.reset_hazard with "
+                                         "rent.reset_to_monthly_rent)")
         warns.append(
             f"one-sided uncertainty: {carrier} is the only stochastic side "
             f"({', '.join(listed)}) while {still} is a single path — P(cheapest) measures that "
@@ -911,6 +916,10 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
         shared.append("economic.inflation_vol")
     if spec.market_scenario is not None:
         owned.append("market_scenario (demographic drift per path)")
+    # value_growth_vol moves the value track of EVERY owned option, so it is
+    # named once against the owned side rather than once per option.
+    if sim.value_growth_vol and any(o is not None for o in (spec.condo, spec.house)):
+        owned.append("simulation.value_growth_vol")
     for name, option, own_vol in (("condo", spec.condo, "condo_fee_vol"),
                                   ("house", spec.house, "house_maintenance_vol")):
         if option is None:
@@ -933,6 +942,16 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
             renter.append("simulation.other_cost_vol")
         if _stochastic_events(spec.rent):
             renter.append("rent.events")
+        # The lease reset is the renter's own tail: on some paths the rent
+        # series moves to a different track and on others it does not. Missing
+        # it made this function assert the OPPOSITE of the truth -- a config
+        # with an owned price_shock and a renter reset was told "the renter's
+        # PV is a single path" while that PV ran from $291,579 to $534,562
+        # (measured 2026-09-21 over 2,000 paths). A warning that states the
+        # opposite of the truth is worse than no warning, so every channel
+        # that widens a side is named here.
+        if spec.rent.reset_hazard > 0:
+            renter.append("rent.reset_hazard")
     return owned, renter, shared
 
 
@@ -1107,10 +1126,13 @@ def single_path_run(spec: ComparisonSpec) -> bool:
         sim.other_cost_vol,
         sim.rent_escalation_vol,
         sim.investment_return_vol,
+        sim.value_growth_vol,
         spec.economic.inflation_vol,
     )
     if any(v != 0 for v in vols):
         return False
+    if spec.rent is not None and spec.rent.reset_hazard > 0:
+        return False  # the tenancy can end on some paths and not others
     if spec.market_scenario is not None:
         return False  # prior draws demographic drift per path
     for opt in (spec.condo, spec.house, spec.rent):
@@ -1725,6 +1747,43 @@ def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter,
     events = [_parse_event(e, years) for e in data.get("events", [])]
     other = [_parse_recurring_cost(c, conv, "rent") for c in data.get("other_recurring_costs", [])]
     fallback = 0.0 if derived_capital is None else derived_capital
+
+    # The lease-reset channel: both keys or neither. A hazard with no market
+    # figure has nothing to reset to, and a market figure with no hazard is a
+    # number the user supplied that the engine would silently ignore — the
+    # honesty contract makes that the worse of the two failures, so both raise
+    # (docs/specs/2026-09-21-one-world-simulation.md §4).
+    reset_hazard = float(data.get("reset_hazard", 0.0))
+    reset_to = data.get("reset_to_monthly_rent")
+    # `not (0 <= h <= 1)` rather than `h < 0 or h > 1`, because every comparison
+    # against NaN is False: the second form ACCEPTS `.nan`, and a NaN hazard
+    # then never fires (`rng.random() < nan` is always False), so the engine
+    # would silently price no reset at all for a user who stated one. Same
+    # class as the paired-key refusals below.
+    if not (0.0 <= reset_hazard <= 1.0):
+        raise ConfigValidationError(
+            f"rent.reset_hazard must be an annual probability in [0, 1], got {reset_hazard}"
+        )
+    if reset_hazard > 0 and reset_to is None:
+        raise ConfigValidationError(
+            "rent.reset_hazard is set but rent.reset_to_monthly_rent is missing: the "
+            "engine will not guess what a comparable unit asks. State the monthly "
+            "market rent, or remove reset_hazard."
+        )
+    if reset_to is not None and reset_hazard <= 0:
+        raise ConfigValidationError(
+            "rent.reset_to_monthly_rent is set but rent.reset_hazard is 0, so the "
+            "reset can never happen and the figure would be ignored. State the annual "
+            "probability the tenancy ends, or remove reset_to_monthly_rent."
+        )
+    # Finite AND positive. `inf > 0` is True, so a bare positivity test lets an
+    # infinite figure through validation and the run then dies in the read-back
+    # formatter with an OverflowError — a crash where a refusal belongs.
+    if reset_to is not None and not (0 < float(reset_to) < math.inf):
+        raise ConfigValidationError(
+            f"rent.reset_to_monthly_rent must be a positive number, got {reset_to}"
+        )
+
     return RentParams(
         monthly_rent=float(data["monthly_rent"]),
         # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% = 1.0% real
@@ -1736,6 +1795,8 @@ def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter,
                                          ANCHORS["rent.investment_return_rate"].value),
         events=events,
         other_recurring_costs=other,
+        reset_hazard=reset_hazard,
+        reset_to_monthly_rent=None if reset_to is None else float(reset_to),
     )
 
 
@@ -1779,6 +1840,7 @@ def _parse_simulation(sim_data: Optional[Dict[str, Any]], years: int, discount_r
         corr_inflation_event_cost=float(sim_data.get("corr_inflation_event_cost", 0.0)),
         shock_model=shock_model,  # type: ignore
         rent_escalation_vol=float(sim_data.get("rent_escalation_vol", 0.0)),
+        value_growth_vol=float(sim_data.get("value_growth_vol", 0.0)),
         investment_return_vol=float(sim_data.get("investment_return_vol", 0.0)),
     )
 
@@ -1848,8 +1910,21 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     if sim.num_sims < 1:
         warnings.append(f"num_sims must be >= 1, got {sim.num_sims}")
 
-    if sim.other_cost_vol < 0:
-        warnings.append(f"other_cost_vol should be >= 0, got {sim.other_cost_vol}")
+    # Every volatility is a standard deviation, so every one refuses a negative.
+    # Until 2026-09-21 only `other_cost_vol` and `inflation_vol` did, and the
+    # other four accepted a negative and treated it as OFF — a figure the user
+    # took the trouble to type that the engine silently ignored, which is the
+    # failure the honesty contract cares most about. One rule, one place.
+    for _name, _vol in (
+        ("house_maintenance_vol", sim.house_maintenance_vol),
+        ("condo_fee_vol", sim.condo_fee_vol),
+        ("other_cost_vol", sim.other_cost_vol),
+        ("rent_escalation_vol", sim.rent_escalation_vol),
+        ("investment_return_vol", sim.investment_return_vol),
+        ("value_growth_vol", sim.value_growth_vol),
+    ):
+        if _vol < 0:
+            warnings.append(f"{_name} should be >= 0, got {_vol}")
 
     for name, rho in [
         ("corr_inflation_house", sim.corr_inflation_house),

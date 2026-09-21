@@ -48,7 +48,8 @@ cannot see, not only what it was not told.
 
 ## 3. The simulation's risk model, and what it does to the verdict
 
-**open** · blocks: 4 · three defects in one object, found by audit 2026-09-21
+**LANDED 2026-09-21** · unblocks 4 · three defects in one object, found by audit 2026-09-21,
+and a fourth found while fixing them
 
 The Monte Carlo produces `P(each option cheapest)`, the decisiveness rule reads it, and every
 verdict rests on it. Three things are wrong with how it is produced. They are listed together
@@ -83,9 +84,31 @@ say that it can end.
 *Why now:* (b) changes what the headline number MEANS, and nothing downstream of it can be
 trusted until it is right. (a) and (c) are the two asymmetries that bias which way it points.
 
+**What landed.** All three, plus one the audit missed. (b) turned out to be THREE channels
+rather than one: the inflation path went first, and building (a) and (c) surfaced that the
+price-crash draw and the ISQ population scenario were still drawn per option. Measured on the
+shipped showcase, two Montréal properties with identical crash parameters were essentially
+uncorrelated (corr −0.038) and picked the same population future on 35% of paths against 33%
+by chance. Both now come from the path's shared world; the rule is that the MARKET is shared
+and the PROPERTY is not. Consequences: `prob_condo_cheapest` on the showcase fell from 0.317
+to 0.140 — its one-in-three was almost all spurious variance — and the verdict moved from a
+`tie` produced by noise to a named `disagreement` produced by signal. Six of seven shipped
+examples are byte-identical.
+
+(a) is `simulation.value_growth_vol` and (c) is `rent.reset_hazard` plus
+`rent.reset_to_monthly_rent`, both opt-in, neither anchored, each refusing to guess a figure
+nobody has published. Spec and measurements:
+`docs/specs/2026-09-21-one-world-simulation.md`.
+
+**What it leaves for later, and where each one went.** The two unanchored keys mean a run that
+does not set them is SILENT about price movement and about a lease ending — which is item 2's
+job, not this one's. A published Canadian house-price series is the anchor item 6 would carry.
+Price ↔ income correlation is still independent and needs a calibrated rho, so it is a new
+item rather than a quiet default.
+
 ## 4. Which risk actually decides it
 
-**open** · needs 1 and 3
+**open, UNBLOCKED** · 1 and 3 have both landed
 
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a
@@ -180,6 +203,40 @@ hosted. Parked deliberately, not forgotten.
 Round 12: four question shapes on the current tip, scored, gaps folded into the engine
 rather than into prose. The last round found the flat trap, worth 85% of one verdict's
 margin. Run it on Opus and Sonnet, never on the steering model.
+
+## 12. The shipped examples barely exercise uncertainty
+
+**open** · a gate that mostly cannot fail
+
+Six of the seven example configs set no inflation volatility, and until this week none of
+them could have detected that the renter's total was one value across five hundred paths.
+Only `showcase_demographic_prior.yaml` wires a prior and a crash, so it is the only example
+whose Monte Carlo block moves when the simulation changes — every other example's uncertainty
+output is a constant, and a constant cannot regress. That is why the one-world defect sat
+undetected: the regression surface had nothing on it.
+
+The fix is not to bolt volatility onto every example, which would change seven published
+answers for no reader's benefit. It is one example whose job is to exercise the uncertainty
+machinery, and whose Monte Carlo block is pinned, so a change to the simulation has to explain
+itself against a committed figure.
+
+*Why now:* it is the cheapest of the open items and it is what makes items 3 and 4 defensible
+later. A variance decomposition nobody can regress is a study, not a product feature.
+
+## 13. Price and income still move independently
+
+**open** · needs a calibrated figure, not a default
+
+A leveraged owner's bad income year cannot coincide with their bad price year: the crash draw
+and the income channel share nothing. Sharing a draw was free for the market channels because
+a crash IS the market, and the coupling needed no parameter. This one is different — it needs
+an actual correlation between house prices and household income, which needs calibrating
+against published series, which means it must not ship as an invented rho.
+
+*Why now:* it is the last place where the phrase "the same future" is not yet literally true,
+and item 4's variance decomposition will be read as though it were. Rank it below 12 because
+it changes a number rather than a claim, and below 6 because the calibration is an anchor
+problem first.
 
 ---
 

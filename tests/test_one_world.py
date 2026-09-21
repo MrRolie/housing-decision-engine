@@ -197,3 +197,147 @@ def test_constant_rate_closed_form_matches_the_year_loop():
     nudged[-1] = rate + 1e-15  # forces the loop branch on the same economics
     assert _pv_escalating_series(amount, nudged, dr, years) == pytest.approx(
         closed, rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# The market joins the world (2026-09-21, the completion of Part A)
+# ---------------------------------------------------------------------------
+#
+# Part A shared the INFLATION path and stopped there. Two channels kept
+# drawing per option, and both are properties of the market rather than of a
+# property:
+#
+#   * the price-crash Bernoulli and its severity. Measured on the shipped
+#     Montréal showcase before the fix: 325 condo crashes against 308 house
+#     crashes over 400 paths, in unrelated years, leaving the condo total and
+#     the house total essentially UNCORRELATED (corr −0.038) although both are
+#     wired with the same 3% hazard and the same 20% severity in one city.
+#     std(condo − house) came out at 68,852 — larger than either option's own
+#     std (50,478 and 44,941), which is the signature of a covariance pinned
+#     at zero.
+#
+#   * the ISQ population scenario. The condo and the house picked the SAME
+#     scenario on 105 of 300 paths (35%), against the 33% you get by chance
+#     with three scenarios. Quebec realizes one population future per path.
+#
+# The tests below invert those two measurements. Both fail on the engine as it
+# stood before this slice.
+
+SHOWCASE = REPO_ROOT / "examples" / "showcase_demographic_prior.yaml"
+
+
+def _showcase(num_sims: int):
+    spec = load_config(str(SHOWCASE))
+    return dataclasses.replace(
+        spec, simulation=dataclasses.replace(spec.simulation, num_sims=num_sims)
+    )
+
+
+def test_condo_and_house_crash_in_the_same_years(monkeypatch):
+    """One market, one crash. With identical hazard and severity the two
+    properties must take the drawdown in exactly the same years on every path.
+
+    Asserts SET EQUALITY of the (path, year) pairs each option crashed in, not
+    a count or a spread: equal counts would also hold if the crashes merely
+    happened to balance out across unrelated years, which is the defect.
+    """
+    from hde import monte_carlo as mc
+
+    fired: dict = {"condo": [], "house": []}
+    which = {"option": None, "year": 0}
+
+    real_apply = mc._apply_price_shock
+
+    def spy(value_tracks, shock, tilt, u, z):
+        before = list(value_tracks)
+        out = real_apply(value_tracks, shock, tilt, u, z)
+        if any(a != b for a, b in zip(before, out)):
+            fired[which["option"]].append((which["path"], which["year"]))
+        return out
+
+    monkeypatch.setattr(mc, "_apply_price_shock", spy)
+
+    # Label the draws by option and count years inside each option's loop by
+    # watching the world accessor, which is called once per year per option.
+    real_crash_draw = mc.PathWorld.crash_draw
+
+    def counting_crash_draw(self, year):
+        which["year"] = year
+        return real_crash_draw(self, year)
+
+    monkeypatch.setattr(mc.PathWorld, "crash_draw", counting_crash_draw)
+
+    for name, label in (("_simulate_condo_pv_once", "condo"),
+                        ("_simulate_house_pv_once", "house")):
+        real = getattr(mc, name)
+
+        def wrapped(*a, _real=real, _label=label, **k):
+            which["option"] = _label
+            if _label == "condo":
+                which["path"] = which.get("path", -1) + 1
+            return _real(*a, **k)
+
+        monkeypatch.setattr(mc, name, wrapped)
+
+    mc.run_monte_carlo(_showcase(120))
+
+    assert fired["condo"], "the showcase's 3% hazard must fire somewhere in 120 paths"
+    assert set(fired["condo"]) == set(fired["house"]), (
+        "identical price_shock params in one market must crash both properties "
+        "in the same (path, year) slots"
+    )
+    assert len(fired["condo"]) == len(fired["house"])
+
+
+def test_condo_and_house_share_one_population_future(monkeypatch):
+    """The ISQ scenario is a property of the path, so both options must read
+    the same one — 100% agreement, not the 35% that independent draws give."""
+    from hde import monte_carlo as mc
+
+    seen: list = []
+    real = mc._drift_context
+
+    def spy(prior_rows, world):
+        out = real(prior_rows, world)
+        if out is not None:
+            seen.append(out[0])
+        return out
+
+    monkeypatch.setattr(mc, "_drift_context", spy)
+    mc.run_monte_carlo(_showcase(150))
+
+    pairs = list(zip(seen[0::2], seen[1::2]))
+    assert len(pairs) == 150
+    assert all(a == b for a, b in pairs), (
+        "the condo and the house must read the same ISQ scenario on every path"
+    )
+    # And the scenario must still VARY across paths, or the assertion above
+    # would pass on an engine that had stopped drawing altogether.
+    assert len(set(seen)) > 1
+
+
+def test_sharing_the_market_raises_the_condo_house_correlation():
+    """The measured consequence: two properties in one market must move
+    together. Pins a floor, never a figure — but a floor chosen to need BOTH
+    shared channels, because a threshold either partial fix clears would not
+    be testing what its name says.
+
+    Measured on the showcase at 400 paths, all three regimes:
+
+        neither shared (the defect)      corr −0.038   std(c−h) 68,852
+        drift shared, crash per option   corr  0.540   std(c−h) 44,965
+        both shared (this engine)        corr  0.991   std(c−h)  7,721
+
+    The 0.9 floor and the 0.3 ratio sit in the gap above the middle row, so
+    reverting either channel to a per-option draw fails this test. Both
+    thresholds were confirmed by mutating each channel in turn.
+    """
+    result = run_monte_carlo(_showcase(400))
+    c = np.asarray(result.condo.pvs)
+    h = np.asarray(result.house.pvs)
+    corr = float(np.corrcoef(c, h)[0, 1])
+    assert corr > 0.9, f"condo/house correlation fell to {corr:.3f}"
+    # The spurious variance is out of the comparison: the difference is now
+    # far tighter than either leg, which is what a positive covariance means.
+    spread_ratio = float(np.std(c - h)) / float(np.std(c))
+    assert spread_ratio < 0.3, f"std(condo − house) is {spread_ratio:.2f} of std(condo)"

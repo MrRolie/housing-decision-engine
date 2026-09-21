@@ -100,9 +100,14 @@ class TestRequiredFlagsAreTrue:
         # 2026-09-21): each of the two keys requires the other, because a term
         # with no rate has nothing to renew at and no rate is anchored.
         renewal = {"mortgage_renewal_years", "mortgage_renewal_rates"}
+        # The lease-reset channel is the fourth conditional class
+        # (2026-09-21): a hazard with no market rent has nothing to reset to,
+        # and a market rent with no hazard is a figure the engine would
+        # silently ignore, so each key requires the other.
+        reset = {"reset_hazard", "reset_to_monthly_rent"}
         # tax.marginal_rate is the other conditional: typed, or resolved from
         # income + a QC/ON province — its sentence is its own (2026-09-05).
-        assert {k for _, k in CONDITIONAL} == capital | renewal | {"marginal_rate"}
+        assert {k for _, k in CONDITIONAL} == capital | renewal | reset | {"marginal_rate"}
         for section, key in CONDITIONAL:
             assert not SCHEMA[section][key]["required"], (section, key)
             if key in capital:
@@ -110,6 +115,9 @@ class TestRequiredFlagsAreTrue:
             elif key in renewal:
                 assert "travel together" in SCHEMA[section][key]["required_if"]
                 assert (renewal - {key}).pop() in SCHEMA[section][key]["required_if"]
+            elif key in reset:
+                assert "both keys or neither" in SCHEMA[section][key]["required_if"]
+                assert (reset - {key}).pop() in SCHEMA[section][key]["required_if"]
             else:
                 assert "income.annual_income" in SCHEMA[section][key]["required_if"]
 

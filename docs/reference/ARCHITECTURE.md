@@ -441,7 +441,9 @@ path, which the report stamps "not a forecast"):
   `D · Π_t (1 + r_inv)·shock_t` and can end below principal (0.10 ≈ a 60/40 portfolio);
   `other_cost_vol` shocks the level of each other cost.
 - **Demographic drift (only with `market_scenario`).** Per path: one scenario drawn
-  uniformly from {low, reference, high}, and one `z_h` per horizon band. For simulation
+  uniformly from {low, reference, high} and SHARED by every option, and one `z_h` per horizon
+  band, also shared. A path realizes one population future; each option then looks that
+  scenario up in its OWN dwelling's rows. For simulation
   year t the band is the first of {2030, 2035, 2040, 2045, 2050} ≥ 2026 + t (the last band
   holds); the year's growth is `value_growth_rate + demo_drift_mean(h, s) + z_h · σ_h`,
   `σ_h = (demo_drift_p90 − demo_drift_p10) / 2.5632` (a Normal fitted through the published
@@ -453,6 +455,24 @@ path, which the report stamps "not a forecast"):
   row, 1 without a prior — the value drops by `severity = min(severity_mean · exp(σ_s z − σ_s²/2), 1)`.
   For a house the drop hits both the maintenance base and the terminal value; for a
   condo the terminal value. More than one drawdown can occur on a path.
+  The uniform and `z` are the PATH's, shared by every owned option: one housing market. Each
+  option still applies its OWN hazard, tilt, `severity_mean` and `severity_vol` to them, so
+  options with the same EFFECTIVE hazard (`annual_hazard × tilt`) crash in the same years, and
+  a higher effective hazard's crash years are a superset of a lower one's.
+- **Ordinary value dispersion (only with `simulation.value_growth_vol`).** Each year the value
+  track is multiplied by `shock(value_growth_vol)` under `shock_model`, from a `z` shared by
+  every owned option, so the condo and the house move together. Applied to the same tracks as
+  the crash and BEFORE it: everyday movement first, the rare drawdown on top. Default 0, which
+  leaves terminal equity — the largest single term in an owned option's total — with no
+  spread; no anchor ships, because a defensible figure needs a published Canadian price series
+  with a stated window.
+- **Lease reset (only with `rent.reset_hazard`).** Each year, with probability `reset_hazard`,
+  the tenancy ends; the first such year switches rent from the household's own escalating
+  track to a market track that carried `reset_to_monthly_rent` forward under the same
+  escalation, so a reset in year 8 lands on year 8's asking rent. Drawn PER OPTION, not in the
+  world: a tenancy ending is a household event, unlike the crash, which is the market. Both
+  keys are required together and neither is anchored. This is the renter's side of the owned
+  options' tail — without it the model gives the owner a crash and the renter nothing.
 
 ### Affordability — `affordability` (deterministic) and `affordability_mc`
 

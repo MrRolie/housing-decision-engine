@@ -60,6 +60,9 @@ simulation:                # Optional: Monte Carlo settings
   corr_inflation_condo: <float>       # Corr(inflation, condo fee shock)
   corr_inflation_other: <float>       # Corr(inflation, other cost shock)
   corr_inflation_event_cost: <float>  # Corr(inflation, event cost shock)
+  value_growth_vol: <float>  # ANNUAL vol of the home's value growth, shared by the condo and the house — one housing market per path (default: 0.0, no anchor)
+  rent_escalation_vol: <float>     # Vol of the rent escalation rate, once per path (default: 0.0)
+  investment_return_vol: <float>   # ANNUAL vol of the renter's gross return (default: 0.0)
   shock_model: <string>  # "lognormal" (default) or "normal" shock multiplier
 ```
 
@@ -264,6 +267,9 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.other_cost_vol` | 0.0 | — |
 | `simulation.rent_escalation_vol` | 0.0 | — |
 | `simulation.investment_return_vol` | 0.0 | — |
+| `simulation.value_growth_vol` | 0.0 | — |
+| `rent.reset_hazard` | 0.0 | — |
+| `rent.reset_to_monthly_rent` | none | — |
 | `simulation.corr_inflation_house` | 0.0 | — |
 | `simulation.corr_inflation_condo` | 0.0 | — |
 | `simulation.corr_inflation_other` | 0.0 | — |

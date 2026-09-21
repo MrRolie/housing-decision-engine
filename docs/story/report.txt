@@ -41,14 +41,14 @@ Year-1 cash (undiscounted; PV totals above credit equity at sale)
   House: $    12,500/yr ($1,042/mo); expected appreciation $10,774 (value × real growth, not cash)
   Rent: $    28,800/yr ($2,400/mo)
 
-Too close to call: House edges Condo by $4,135 (0.8%)
+Best guess says House by $4,135 (0.8%) vs Condo; most futures say Rent (44% cheapest) — the two disagree, not decisive
   ≈ $24/month equivalent
-  decisiveness: P(house cheapest) = 36% < 65% floor [hde verdict rule]
+  decisiveness: best guess says house by $4,135 (0.8% of house PV); most futures say rent (44% cheapest) — the two disagree, not decisive [hde verdict rule]; Monte Carlo mean favours rent ($536,242 vs $536,366)
 
 Monte Carlo:
-  Condo: mean $540,844  p5 $454,226  p50 $552,668  p95 $620,404
-  House: mean $536,435  p5 $454,812  p50 $545,872  p95 $605,969
-  Rent: mean $537,386  p5 $394,696  p50 $553,275  p95 $625,621
-  P(condo cheapest): 31.7%
-  P(house cheapest): 36.4%
-  P(rent cheapest): 32.0%
+  Condo: mean $542,414  p5 $454,274  p50 $553,493  p95 $621,343
+  House: mean $536,366  p5 $455,217  p50 $545,279  p95 $606,285
+  Rent: mean $536,242  p5 $390,770  p50 $554,318  p95 $625,708
+  P(condo cheapest): 14.0%
+  P(house cheapest): 42.0%
+  P(rent cheapest): 44.0%

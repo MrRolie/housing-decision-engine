@@ -2,7 +2,7 @@
 
 # The story of this housing decision
 
-**Too close to call — effectively a tie: Buying a house edges buying a condo by $4,135 (0.8%) over 25 years, cheapest in only 36% of 5,000 simulations** — under MTL_RMR demographic conditions · 25-year horizon.
+**Best guess: Buying a house by $4,135 over 25 years · Most futures: renting (44%) — too close to call** — under MTL_RMR demographic conditions · 25-year horizon.
 
 > warning: rent: invested capital $145,000 earns 5.0% real (7.2% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)
 > warning: decisiveness rests on uncertainty inputs the user did not state: simulation.investment_return_vol=10.0% (assistant), condo.price_shock.annual_hazard=3.0% (assistant), condo.price_shock.severity_mean=20.0% (assistant), condo.events=1 entry (cost_vol 20.0%) (assistant), house.price_shock.annual_hazard=3.0% (assistant), house.price_shock.severity_mean=20.0% (assistant), house.events=1 entry (cost_vol 15.0%) (assistant), market_scenario.path='tests/fixtures/scenario_prior_golden.json' (assistant) — the deterministic line alone says house by $4,135 (0.8% of its PV — not decisive under the 5% band)
@@ -11,7 +11,7 @@ Demographic prior: MTL_RMR demand model (ISQ 2026 scenarios, 2021 census) · con
 
 ## Act — The answer
 
-Too close to call — effectively a tie: Buying a house edges buying a condo by $4,135 (0.8%) over 25 years, cheapest in only 36% of 5,000 simulations
+Best guess: Buying a house by $4,135 over 25 years · Most futures: renting (44%) — too close to call
 
 ![The answer](act1_the_answer.png)
 
@@ -23,7 +23,7 @@ Renting costs less out of pocket every single year — the ranking never flips (
 
 ## Act — The uncertainty
 
-In 36% of 5,000 simulations, buying a house came out cheapest.
+In 44% of 5,000 simulations, renting came out cheapest.
 
 ![The uncertainty](act3_the_uncertainty.png)
 

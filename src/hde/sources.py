@@ -254,7 +254,7 @@ def _percent(value: float) -> str:
 # the engine treats as uncertainty.
 
 _SIM_VOLS = ("house_maintenance_vol", "condo_fee_vol", "other_cost_vol",
-             "rent_escalation_vol", "investment_return_vol")
+             "rent_escalation_vol", "investment_return_vol", "value_growth_vol")
 _EVENT_WIDENERS = ("timing_std_years", "cost_vol", "hazard_base", "hazard_growth")
 _DROP_WIDENERS = ("year_jitter_std", "magnitude_vol")
 
@@ -299,6 +299,12 @@ def uncertainty_inputs(data: Dict[str, Any]) -> List[Tuple[str, Optional[str]]]:
             for sub in ("annual_hazard", "severity_mean", "severity_vol"):
                 if sub in shock:
                     out.append((f"{option}.price_shock.{sub}", None))
+        # The rent side's tail: the tenancy can end on some paths and not
+        # others, so both keys widen the distribution and both get echoed.
+        if option == "rent" and _nonzero(block.get("reset_hazard")):
+            for sub in ("reset_hazard", "reset_to_monthly_rent"):
+                if sub in block:
+                    out.append((f"rent.{sub}", None))
         events = block.get("events")
         if isinstance(events, list):
             detail = _entry_detail(events, _EVENT_WIDENERS,

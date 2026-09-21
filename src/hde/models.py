@@ -292,6 +292,15 @@ class SimulationParams:
         corr_inflation_other: Correlation between inflation shock and other cost shock
         corr_inflation_event_cost: Correlation between inflation shock and event cost shock
         shock_model: "lognormal" (default) or "normal" for multiplicative shocks
+        value_growth_vol: Annual volatility of the home's value growth. Applied to
+            the value track the way the cost vols are applied to theirs, from ONE
+            draw per year shared by the condo and the house: a path has one
+            housing market, not one per option. Default 0 — the home's value then
+            moves only by its growth rate and, if wired, the price_shock crash
+            channel. No anchor ships with it: a defensible figure needs a
+            published Canadian price series with a stated window, and inventing
+            one would breach the honesty contract
+            (docs/specs/2026-09-21-one-world-simulation.md §3).
     """
     years: int
     discount_rate: float = ANCHORS["simulation.discount_rate"].value
@@ -307,6 +316,7 @@ class SimulationParams:
     shock_model: Literal["lognormal", "normal"] = "lognormal"
     rent_escalation_vol: float = 0.0
     investment_return_vol: float = 0.0
+    value_growth_vol: float = 0.0
 
 
 @dataclass
@@ -341,7 +351,22 @@ class PayDropEvent:
 
 @dataclass
 class RentParams:
-    """Parameters for the rent option."""
+    """Parameters for the rent option.
+
+    `reset_hazard` and `reset_to_monthly_rent` are the renter's side of the tail
+    the owned side has had since S4b. The owned options carry a price-crash
+    channel; rent could only ever drift smoothly, so the model handed the owner
+    a crash and the renter nothing, which is not neutral between them. The
+    asymmetry bites hardest exactly where the engine already anchors the
+    continuing-tenant protection: a long-tenure tenant far below market whose
+    real exposure is the day the tenancy ends
+    (docs/specs/2026-09-21-one-world-simulation.md §4).
+
+    Both are opt-in and neither is defaulted or anchored. The market rent is a
+    fact the household possesses — they know roughly what a comparable unit
+    asks — and the hazard is a fact nobody possesses, so the engine refuses to
+    guess either and requires them together.
+    """
     monthly_rent: float
     # FP Canada 2026 PAG shelter-cost growth 3.1% − 2.1% inflation = 1.0% real
     rent_escalation_rate: float = ANCHORS["rent.rent_escalation_rate"].value
@@ -350,6 +375,14 @@ class RentParams:
     investment_return_rate: float = ANCHORS["rent.investment_return_rate"].value
     events: List[EventConfig] = field(default_factory=list)
     other_recurring_costs: List[RecurringOtherCost] = field(default_factory=list)
+    # Annual probability the tenancy ends and rent resets to market. Opt-in,
+    # unanchored; requires reset_to_monthly_rent (config validation pairs them).
+    reset_hazard: float = 0.0
+    # The monthly asking rent of a comparable unit TODAY. When the reset fires
+    # in year k the tenant moves onto the market track, which carries this
+    # figure forward under the same escalation their own rent was carrying —
+    # a reset in year 8 lands on year 8's market rent, not today's.
+    reset_to_monthly_rent: Optional[float] = None
 
 
 @dataclass

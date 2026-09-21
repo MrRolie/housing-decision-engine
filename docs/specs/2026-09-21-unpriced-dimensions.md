@@ -169,8 +169,16 @@ So this line refuses its direction and says what is absent:
 home's value does not; it follows one path, your 2.0%/yr, plus the crash you set. Terminal
 equity is -$218,959 of this option's $518,779, so the largest single term is the one with no
 spread. How often prices alone would change the answer is not in this run, and P(cheapest)
-below reads narrower than the truth because of it.
+below reads narrower than the truth because of it. Set simulation.value_growth_vol to price
+it — the engine anchors no figure for it, so the number would be yours.
 ```
+
+That last clause was added 2026-09-21, when `simulation.value_growth_vol` landed. The line's
+job did not change: the key defaults to zero and no anchor supports a value, so the dimension
+is still unpriced in every run that does not set it. What changed is that the user can now DO
+something, and a disclosure that names the key beats one that only names the gap. The clause
+also keeps the line honest in the other direction: it says plainly that any figure they put
+there is theirs, not the engine's.
 
 **Nothing qualifying:** no line.
 
@@ -202,17 +210,30 @@ Three classes, not two.
 | Unpriced tax items | qualifier | direction already recorded in the schema notes |
 | Existing-owner state | nameable, direction REFUSED | see §10 |
 
-**The asymmetry that makes dispersion the sharpest entry**, verified at HEAD: every cost input
-carries a volatility — `condo_fee_vol`, `house_maintenance_vol`, `rent_escalation_vol`,
-`other_cost_vol`, `inflation_vol`, `investment_return_vol` — and the home's value carries none.
-`severity_vol` is the crash channel and `magnitude_vol` is events. So the engine models
-dispersion on every cost and none on the asset, while the asset drives the largest single term
-in an owned option's total: in the shipped showcase the condo's terminal equity is -$218,959
-against a $518,779 total. The dispersion of the biggest term is the one thing not modelled, and
-it feeds the decisiveness rule directly, biasing it toward calling runs decisive that are not.
+**The asymmetry that makes dispersion the sharpest entry.** As this spec was written, every
+cost input carried a volatility — `condo_fee_vol`, `house_maintenance_vol`,
+`rent_escalation_vol`, `other_cost_vol`, `inflation_vol`, `investment_return_vol` — and the
+home's value carried none; `severity_vol` was the crash channel and `magnitude_vol` events. So
+the engine modelled dispersion on every cost and none on the asset, while the asset drives the
+largest single term in an owned option's total: in the shipped showcase the condo's terminal
+equity is -$218,959 against a $518,779 total.
+
+**Amended 2026-09-21, and the amendment sharpens the case rather than closing it.**
+`simulation.value_growth_vol` now exists, so the MECHANISM is there. But it ships with no
+default and no anchor, because a defensible figure needs a published Canadian price series
+with a stated window and nobody has cited one here. So the state of affairs this section
+describes is unchanged for every run that does not set the key, which is every run today
+including all seven shipped examples: the dispersion of the biggest term is still not modelled,
+and it still feeds the decisiveness rule.
+
+What changed is WHAT THIS LINE MUST SAY. It can no longer say the engine cannot represent the
+dimension — it can, and naming an absent capability would be false. It has to say that the
+dimension is representable, is currently zero, and that zero is a choice nobody sourced. That
+is a better line than the original: it points at a key the user can set and sweep, rather than
+at a limitation they can do nothing about.
 
 Its siblings, for the same reason: correlation between house prices and the user's own income,
-and regime change in any anchored series.
+which is still independent (board item 13), and regime change in any anchored series.
 
 **Qualifier** is the class worth naming. A nameable-only omission that bounds a MEASURED number
 in a known direction should print attached to that number, never as a free-standing disclaimer.

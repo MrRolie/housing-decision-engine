@@ -143,6 +143,26 @@ alone. Most wealth at the end → compare `total_pv` (net cost including the
 terminal assets of both sides); `terminal_equity_pv` is a component, not the
 answer.
 
+Two more knobs carry that same both-or-neither rule, and both are UNANCHORED
+— if you set one, it is an assistant-typed figure and gets labelled, swept and
+named in "No source for" like any other.
+`simulation.value_growth_vol` is the ANNUAL volatility of the home's value,
+shared by the condo and the house because one path has one housing market. Off
+by default, so terminal equity — the largest single figure in an owned
+option's total — is the only figure in the model with no spread, and with a
+`price_shock` on but this at 0 the owner gets a crash and no everyday
+movement. No published Canadian price series is anchored for it, so state
+plainly that any figure here is yours.
+`rent.reset_hazard` with `rent.reset_to_monthly_rent` is the renter's mirror of
+the owned side's crash: the annual probability the tenancy ends and rent steps
+to the market track. Both keys or neither — the engine refuses one alone. The
+market rent is a fact the household HAS, so ask them ("what does a comparable
+unit in your building ask?") rather than estimating it; the hazard is a fact
+nobody has, so it stays theirs to state. This is the knob for a long-tenure
+tenant far below market: without it their rent can only drift, which reads as
+safer than a long tenancy is, and that bias points at buying looking worse
+than it is.
+
 ## 7. Cash line — cash is not PV
 
 Beside the $/month PV equivalent, quote the report's `Year-1 cash` line: each

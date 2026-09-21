@@ -495,6 +495,21 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                          "The home_insurance.* anchors are HOMEOWNER premiums "
                                          "and are deliberately never matched against a tenant "
                                          "policy: different product, different price"),
+        "reset_hazard": (False, "annual probability the tenancy ENDS and rent resets to market "
+                                "— the renter's side of the owned options' price-crash channel, "
+                                "which the model otherwise gives only to the owner. Default 0. "
+                                "Nobody possesses this number, so no anchor ships and the "
+                                "engine will not guess it; it is the honest place for a "
+                                "sitting tenant far below market to state their exposure",
+                         "rent: requires reset_to_monthly_rent — both keys or neither"),
+        "reset_to_monthly_rent": (False, "what a COMPARABLE UNIT asks per month TODAY. The "
+                                         "engine carries it forward under the same escalation "
+                                         "your own rent is carrying, so a reset in year 8 lands "
+                                         "on year 8's market rent, not today's figure. This is "
+                                         "a fact the household has (you can look up what your "
+                                         "building asks), which is why it is a required field "
+                                         "rather than an estimate",
+                                  "rent: requires reset_hazard — both keys or neither"),
     },
     "economic": {
         "mode": (False, '"real" (DEFAULT) or "nominal". In both, a typed growth, escalation, '
@@ -540,6 +555,16 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "condo_fee_vol": (False, "annual vol of condo fees; default 0 (see house_maintenance_vol)"),
         "other_cost_vol": (False, "annual vol of other recurring costs; default 0"),
         "rent_escalation_vol": (False, "vol of the rent escalation rate per path; default 0"),
+        "value_growth_vol": (False, "ANNUAL vol of the home's value growth, applied to the "
+                                      "value track every year from ONE draw the condo and the "
+                                      "house share (a path has one housing market). Default 0, "
+                                      "which leaves the value with no ORDINARY year-to-year "
+                                      "spread — the price_shock channel, if you wire one, still "
+                                      "supplies a rare drawdown, so the two are different "
+                                      "things and setting one is not setting the other. No "
+                                      "anchor ships: a defensible figure needs a published "
+                                      "Canadian price series with a stated window, so whatever "
+                                      "you put here is your figure and the read-back says so"),
         "investment_return_vol": (False, "ANNUAL volatility of the renter's gross return "
                                            "(one mean-preserving shock per year on 1 + r, so "
                                            "capital can end below principal): 0.10 ≈ a 60/40 "

@@ -327,8 +327,22 @@ class TestUncertaintyKeysMirrorSinglePath:
         "economic": {"inflation_vol": 0.01},
         "simulation": {"num_sims": 50, "house_maintenance_vol": 0.2,
                        "condo_fee_vol": 0.05, "other_cost_vol": 0.05,
-                       "rent_escalation_vol": 0.01, "investment_return_vol": 0.1},
+                       "rent_escalation_vol": 0.01, "investment_return_vol": 0.1,
+                       "value_growth_vol": 0.06},
     }
+    # The lease-reset pair lives here rather than in RICH's `rent` block above
+    # so the pair's own keys stay adjacent to the note explaining them.
+    RICH["rent"].update({"reset_hazard": 0.07, "reset_to_monthly_rent": 2_400})
+
+    # Most uncertainty inputs are OFF at zero. The lease-reset pair is not:
+    # both keys travel together, so zeroing EITHER one alone is refused while
+    # the other is still present — a market rent of zero is not a rent, and a
+    # hazard of zero beside a stated market rent is a figure the engine would
+    # silently ignore. The channel's off state is ABSENCE, for both keys. So
+    # the zero-out protocol below deletes these instead of zeroing them, and
+    # `test_the_absence_classification_is_measured_not_asserted` proves the
+    # split by actually trying every key, so this set cannot drift.
+    OFF_BY_ABSENCE = frozenset({"rent.reset_hazard", "rent.reset_to_monthly_rent"})
 
     def test_a_rich_config_is_not_single_path(self):
         assert not single_path_run(load_config_dict(copy.deepcopy(self.RICH)))
@@ -342,12 +356,46 @@ class TestUncertaintyKeysMirrorSinglePath:
             block = data
             for part in parts[:-1]:
                 block = block[part]
+            if key in self.OFF_BY_ABSENCE:
+                block.pop(parts[-1])
+                continue
             leaf = block[parts[-1]]
             if isinstance(leaf, list):
                 block[parts[-1]] = []
             else:
                 block[parts[-1]] = 0.0
         assert single_path_run(load_config_dict(data)), named
+
+    def test_the_rich_config_names_both_new_channels(self):
+        """The mirror is only exhaustive if RICH actually contains every
+        channel. Pins the two added 2026-09-21 by name, because a key absent
+        from RICH is a key this whole class silently does not check."""
+        named = uncertainty_keys(copy.deepcopy(self.RICH))
+        for key in ("simulation.value_growth_vol", "rent.reset_hazard",
+                    "rent.reset_to_monthly_rent"):
+            assert key in named, key
+
+    def test_the_absence_classification_is_measured_not_asserted(self):
+        """`OFF_BY_ABSENCE` is a claim about the config loader, so measure it
+        rather than trust it: every key in the set must REFUSE at zero, and
+        every key outside it must ACCEPT zero. Without this, a future key whose
+        zero is refused would make the zero-out test fail for a reason nobody
+        could read."""
+        for key in uncertainty_keys(copy.deepcopy(self.RICH)):
+            parts = key.split(".")
+            data = copy.deepcopy(self.RICH)
+            block = data
+            for part in parts[:-1]:
+                block = block[part]
+            if isinstance(block[parts[-1]], list):
+                continue  # lists turn off by emptying, a third case
+            block[parts[-1]] = 0.0
+            try:
+                load_config_dict(data)
+                refused = False
+            except ConfigValidationError:
+                refused = True
+            assert refused == (key in self.OFF_BY_ABSENCE), (key, refused)
 
     def test_market_scenario_counts_as_uncertainty(self):
         # The prior draws demographic drift per path — `single_path_run` says so,

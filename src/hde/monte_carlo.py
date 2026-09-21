@@ -14,7 +14,7 @@ One economy per path: the inflation path is drawn ONCE per iteration as a
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -94,26 +94,134 @@ class PathWorld:
 
     inflation_factors: Tuple[float, ...]
     z_inflation: Tuple[float, ...]
+    # The HOUSING MARKET on this path. Every owned option reads the same
+    # draws, so a crash is one market event and not one per property.
+    # Empty when this run wires no crash channel.
+    crash_uniforms: Tuple[float, ...] = ()
+    crash_zs: Tuple[float, ...] = ()
+    # (ISQ scenario, one z per declared horizon band): the population future
+    # this path realizes. One per path, not one per option — Quebec does not
+    # grow one way for the condo and another for the house. None with no prior.
+    drift: Optional[Tuple[str, Dict[int, float]]] = None
+    # Ordinary year-to-year variation in home value (simulation.value_growth_vol).
+    # Empty when that key is 0.
+    z_value: Tuple[float, ...] = ()
+
+    def crash_draw(self, year: int) -> Tuple[float, float]:
+        """(uniform, severity z) for `year`.
+
+        The `(1.0, 0.0)` fallback is reachable only when every wired
+        `price_shock` has a non-positive hazard, because `_world_draws` gates
+        the channel on `annual_hazard > 0` and `_apply_price_shock` returns
+        before reading either figure at a hazard that low.
+        """
+        if not self.crash_uniforms:
+            return 1.0, 0.0
+        return self.crash_uniforms[year - 1], self.crash_zs[year - 1]
+
+    def value_z(self, year: int) -> float:
+        """The shared value-dispersion z for `year`; 0.0 when the channel is
+        off, which `_apply_value_dispersion` discards before using it."""
+        if not self.z_value:
+            return 0.0
+        return self.z_value[year - 1]
+
+
+@dataclass(frozen=True)
+class WorldDraws:
+    """Which market channels this run's paths draw, derived ONCE per run.
+
+    Each flag mirrors the condition that made the corresponding channel
+    consume draws before the world existed, so a spec that wires none of them
+    leaves the generator stream exactly where it was.
+    """
+
+    crash: bool = False
+    drift_bands: Tuple[int, ...] = ()
+    value_vol: float = 0.0
+
+
+def _world_draws(spec: ComparisonSpec, prior_rows_by_option) -> WorldDraws:
+    """Read the spec once for what the WORLD must draw per path.
+
+    `crash` gates on a positive hazard rather than a present `price_shock`
+    block: at a hazard of zero the old code consumed no draw, and a spec that
+    spells out `annual_hazard: 0` must keep the stream it had.
+
+    `drift_bands` is the SORTED union of the horizon bands the wired priors
+    declare. Sorted because the band z's are drawn in this order and a run must
+    be reproducible from its seed without depending on set iteration order.
+    """
+    crash = False
+    for opt in (spec.condo, spec.house, spec.rent):
+        shock = getattr(opt, "price_shock", None) if opt is not None else None
+        if shock is not None and shock.annual_hazard > 0:
+            crash = True
+    bands: set = set()
+    for rows in prior_rows_by_option:
+        if rows is not None:
+            bands.update(h for h, _ in rows.keys())
+    return WorldDraws(
+        crash=crash,
+        drift_bands=tuple(sorted(bands)),
+        value_vol=max(0.0, spec.simulation.value_growth_vol),
+    )
 
 
 def _draw_path_world(
     rng: np.random.Generator,
     econ: EconomicParams,
     years: int,
+    draws: WorldDraws = WorldDraws(),
 ) -> PathWorld:
-    """Draw one path's economy: the inflation factor and its z, per year.
+    """Draw one path's world: the economy, then the housing market in it.
 
-    Consumes NO draws when `inflation_vol <= 0` (the guard inside
-    `_draw_inflation_factor`), so a run with no inflation uncertainty leaves
-    the generator stream exactly where it was before the world existed.
+    Consumes NO draws for a channel this run does not wire — the inflation
+    guard lives inside `_draw_inflation_factor` and the other three are gated
+    on `draws`. So a run with none of them leaves the generator stream exactly
+    where it was before the world existed.
+
+    The inflation loop stays FIRST and unchanged for the same reason: a spec
+    that wires inflation uncertainty and nothing else keeps the stream it had
+    when the world held only inflation.
     """
+    n = max(0, years)
     factors: List[float] = []
     zs: List[float] = []
-    for _ in range(max(0, years)):
+    for _ in range(n):
         factor, z = _draw_inflation_factor(rng, econ)
         factors.append(factor)
         zs.append(z)
-    return PathWorld(tuple(factors), tuple(zs))
+
+    # The market. One crash uniform and one severity z per year, read by every
+    # owned option: with equal hazards the condo and the house crash in the
+    # same years, and with unequal ones the higher hazard's crash years are a
+    # superset of the lower's. That coupling needs no correlation parameter —
+    # it is the same market, not two markets to correlate
+    # (docs/specs/2026-09-21-one-world-simulation.md §2).
+    #
+    # The severity z is drawn every year whether or not the hazard fires, so
+    # the stream does not depend on which options crashed.
+    crash_u: List[float] = []
+    crash_z: List[float] = []
+    if draws.crash:
+        for _ in range(n):
+            crash_u.append(float(rng.random()))
+            crash_z.append(float(rng.normal()))
+
+    drift: Optional[Tuple[str, Dict[int, float]]] = None
+    if draws.drift_bands:
+        scenario = SCENARIOS[int(rng.integers(0, len(SCENARIOS)))]
+        drift = (scenario, {h: float(rng.normal()) for h in draws.drift_bands})
+
+    z_value: List[float] = []
+    if draws.value_vol > 0:
+        z_value = [float(rng.normal()) for _ in range(n)]
+
+    return PathWorld(
+        tuple(factors), tuple(zs), tuple(crash_u), tuple(crash_z), drift,
+        tuple(z_value),
+    )
 
 
 def _is_flat(values: Sequence[float]) -> bool:
@@ -149,6 +257,40 @@ def _pv_escalating_series(
     for year in range(1, n_years + 1):
         amount *= (1 + growth_rates[year - 1])
         pv += pv_single(amount, discount_rate, year)
+    return pv
+
+
+def _pv_reset_series(
+    own_annual: float,
+    market_annual: float,
+    growth_rates: Sequence[float],
+    discount_rate: float,
+    n_years: int,
+    reset_year: int,
+) -> float:
+    """PV of rent that runs on the tenant's own figure until `reset_year` and
+    on the market figure from that year on.
+
+    Two tracks escalate side by side under the SAME year-indexed rates: the
+    rent this household pays, and what a comparable unit asks. The tenant
+    moves from the first to the second in the year the tenancy ends, so a
+    reset in year 8 lands on year 8's market rent rather than on today's
+    figure — the market does not wait for the lease.
+
+    Both tracks use the convention of `_pv_escalating_series`: year 1 already
+    carries one year of escalation. So with `market_annual == own_annual` this
+    reproduces that function's series for any reset year, which is the
+    cleanest statement of what a reset to your own rent costs: nothing.
+    """
+    if n_years <= 0:
+        return 0.0
+    pv = 0.0
+    own = own_annual
+    market = market_annual
+    for year in range(1, n_years + 1):
+        own *= (1 + growth_rates[year - 1])
+        market *= (1 + growth_rates[year - 1])
+        pv += pv_single(market if year >= reset_year else own, discount_rate, year)
     return pv
 
 
@@ -194,17 +336,23 @@ def _load_prior_if_any(spec: ComparisonSpec):
 # Montréal prior was unreachable from it).
 
 
-def _draw_drift_context(prior_rows, rng):
-    """
-    One MC draw's demographic context: uniform scenario choice from the ISQ fan,
-    then ONE Z per declared band (constant within a band, independent across).
-    Returns None when no prior rows are wired (no rng consumed).
+def _drift_context(prior_rows, world: PathWorld):
+    """This option's view of the path's demographic context.
+
+    The context itself — the ISQ scenario and one z per declared band — is a
+    property of the WORLD and is drawn once per path in `_draw_path_world`.
+    This returns it only when the option actually has prior rows to look it up
+    in, so an option with no prior composes no drift.
+
+    Until 2026-09-21 this drew the context per option, so on the shipped
+    showcase the condo and the house picked the same ISQ population scenario
+    on 35% of paths — indistinguishable from the 33% you get by chance with
+    three scenarios. Quebec realizes one population future per path
+    (docs/specs/2026-09-21-one-world-simulation.md §2).
     """
     if prior_rows is None:
         return None
-    scenario = SCENARIOS[int(rng.integers(0, len(SCENARIOS)))]
-    zs = {h: float(rng.normal()) for h in set(h for h, _ in prior_rows.keys())}
-    return scenario, zs
+    return world.drift
 
 
 def _band_growth_additive(prior_rows, drift_context, sim_year: int):
@@ -219,13 +367,24 @@ def _band_growth_additive(prior_rows, drift_context, sim_year: int):
 
 
 def _apply_price_shock(value_tracks, shock: PriceShockParams, tilt: float,
-                       rng: np.random.Generator):
+                       u: float, sev_z: float):
     """
     S4b Slot 3: with probability annual_hazard × tilt a drawdown begins this year;
     severity reuses the lognormal shock machinery. Returns the (possibly
     shocked) value tracks — callers must rebind their locals from the return.
-    No-op (no draw consumed) when the effective hazard is 0 — this keeps
-    default-off byte-identical.
+    No-op when the effective hazard is 0 — this keeps default-off
+    byte-identical.
+
+    `u` and `sev_z` come from the path's `PathWorld` and are the SAME figures
+    for every option on that path. Until 2026-09-21 each option drew its own
+    `rng.random()` here, so on the shipped Montréal showcase — two properties
+    in one market with identical hazard and severity — the condo and the house
+    crashed in unrelated years and their totals came out essentially
+    uncorrelated (measured: corr −0.038 over 400 paths, and
+    std(condo − house) LARGER than either option's own std). That is the same
+    defect the shared inflation path fixed, in the channel that carries all of
+    this engine's price risk
+    (docs/specs/2026-09-21-one-world-simulation.md §2).
     """
     # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
     # the composed hazard is capped at certainty — the same clamp the event
@@ -233,14 +392,34 @@ def _apply_price_shock(value_tracks, shock: PriceShockParams, tilt: float,
     hazard = min(shock.annual_hazard * tilt, 1.0)
     if hazard <= 0:
         return value_tracks
-    if rng.random() < hazard:
-        sev_z = float(rng.normal())
+    if u < hazard:
         severity = min(
             shock.severity_mean * _shock_multiplier(shock.severity_vol, sev_z, "lognormal"),
             1.0,
         )
         for i in range(len(value_tracks)):
             value_tracks[i] *= (1 - severity)
+    return value_tracks
+
+
+def _apply_value_dispersion(value_tracks, vol: float, z: float, model: str):
+    """Ordinary year-to-year variation in the home's value.
+
+    The crash channel is a rare large drawdown; this is the everyday movement
+    that sat at exactly zero while every cost in the model had a spread —
+    terminal equity being the largest single term in an owned option's total
+    (docs/specs/2026-09-21-one-world-simulation.md §1.B).
+
+    `z` is the world's, shared with every other owned option on the path, so
+    the condo and the house move together. Mean-preserving under the lognormal
+    model, and a no-op at `vol <= 0` consuming nothing: the z was drawn by the
+    world or not at all.
+    """
+    if vol <= 0:
+        return value_tracks
+    mult = _shock_multiplier(vol, z, model)
+    for i in range(len(value_tracks)):
+        value_tracks[i] *= mult
     return value_tracks
 
 
@@ -281,6 +460,27 @@ def _sample_event_year_hazard(
         if hazard <= 0:
             continue
         if rng.random() < hazard:
+            return year
+    return None
+
+
+def _sample_reset_year(
+    hazard: float, max_year: int, rng: np.random.Generator
+) -> Optional[int]:
+    """First year the tenancy ends, from a constant annual hazard; None when it
+    never does inside the horizon.
+
+    Drawn per option rather than in the `PathWorld` because a tenancy ending is
+    a HOUSEHOLD event, not a market one — unlike the crash, which is the market
+    and therefore shared. Consumes NO draw at a non-positive hazard, which is
+    what keeps every spec that does not wire the channel byte-identical. The
+    clamp to certainty mirrors `_sample_event_year_hazard`.
+    """
+    if hazard <= 0:
+        return None
+    h = min(hazard, 1.0)
+    for year in range(1, max_year + 1):
+        if rng.random() < h:
             return year
     return None
 
@@ -397,19 +597,26 @@ def _simulate_condo_pv_once(
     # Precompute event years
     event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in condo.events}
 
-    drift_context = _draw_drift_context(prior_rows, rng)
+    drift_context = _drift_context(prior_rows, world)
 
     for year in range(1, sim.years + 1):
         inflation_factor = world.inflation_factors[year - 1]
         z_inf = world.z_inflation[year - 1]
         growth_base = condo.value_growth_rate + _band_growth_additive(prior_rows, drift_context, year)
         terminal_value *= (1 + _effective_growth_rate(growth_base, inflation_factor, econ))
+        # Ordinary variation first, then the rare drawdown on top of it: the
+        # two are different channels, and the crash is a shock to the value
+        # the market had reached this year.
+        terminal_value, = _apply_value_dispersion(
+            [terminal_value], sim.value_growth_vol, world.value_z(year), sim.shock_model)
         if shock is not None:
             tilt = 1.0
             if prior_rows is not None:
                 horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
                 tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
-            terminal_value, = _apply_price_shock([terminal_value], shock, tilt, rng)
+            crash_u, crash_z = world.crash_draw(year)
+            terminal_value, = _apply_price_shock(
+                [terminal_value], shock, tilt, crash_u, crash_z)
 
         # Condo fee with escalation and volatility
         fee_growth = _effective_growth_rate(fee_growth_base, inflation_factor, econ)
@@ -493,7 +700,7 @@ def _simulate_house_pv_once(
     other_amounts = [c.annual_amount for c in house.other_recurring_costs]
     event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in house.events}
 
-    drift_context = _draw_drift_context(prior_rows, rng)
+    drift_context = _drift_context(prior_rows, world)
 
     for year in range(1, sim.years + 1):
         inflation_factor = world.inflation_factors[year - 1]
@@ -505,13 +712,20 @@ def _simulate_house_pv_once(
             value_growth = _effective_growth_rate(growth_base, inflation_factor, econ)
             house_value *= (1 + value_growth)
 
+        # Both tracks are the same asset, so both take the same move — the
+        # treatment `_apply_price_shock` has always given them.
+        house_value, terminal_value = _apply_value_dispersion(
+            [house_value, terminal_value], sim.value_growth_vol,
+            world.value_z(year), sim.shock_model)
+
         if shock is not None:
             tilt = 1.0
             if prior_rows is not None:
                 horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
                 tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
+            crash_u, crash_z = world.crash_draw(year)
             house_value, terminal_value = _apply_price_shock(
-                [house_value, terminal_value], shock, tilt, rng)
+                [house_value, terminal_value], shock, tilt, crash_u, crash_z)
 
         maintenance_rate = _maintenance_rate_for_year(house, year)
         maint_t = maintenance_rate * house_value
@@ -564,6 +778,8 @@ def _simulate_rent_pv_once(
     - Other recurring cost volatility (if sim.other_cost_vol > 0)
     - Investment-return shock on the invested down payment
       (if sim.investment_return_vol > 0)
+    - A lease reset: with probability `rent.reset_hazard` each year the tenancy
+      ends and rent steps onto the market track (if the channel is wired)
 
     Inflation comes from `world`, the same economy the owned options are priced
     in. Until 2026-09-21 this function composed with the fixed scalar
@@ -589,8 +805,21 @@ def _simulate_rent_pv_once(
         for factor in world.inflation_factors
     ]
 
+    # The tenancy's own hazard, drawn AFTER the escalation shock so a spec
+    # that wires no reset keeps the draw order it had. Nothing is consumed at
+    # a hazard of zero, which is every spec shipped before 2026-09-21.
+    reset_year = _sample_reset_year(rent.reset_hazard, sim.years, rng)
+
     annual_rent = rent.monthly_rent * 12
-    rent_pv = _pv_escalating_series(annual_rent, esc_rates, dr, sim.years)
+    if reset_year is None:
+        rent_pv = _pv_escalating_series(annual_rent, esc_rates, dr, sim.years)
+    else:
+        # Config validation pairs the two keys, so a live hazard always has a
+        # market figure to reset to.
+        rent_pv = _pv_reset_series(
+            annual_rent, rent.reset_to_monthly_rent * 12, esc_rates, dr,
+            sim.years, reset_year,
+        )
 
     # Events (same pattern as condo/house: None-guarded, correlated z draw
     # against the world's z for the year the event lands in — before the world
@@ -774,11 +1003,15 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
           The world consumes no draws when `inflation_vol` is 0, so every run
           without inflation uncertainty keeps the stream it had before the
           world existed.
-        - Every option on one iteration is priced in the SAME economy: the
-          inflation path is drawn once into a `PathWorld` and handed to all
-          three simulators, which is what makes `prob_*_cheapest` the chance
-          an option is cheapest in one future rather than across three
+        - Every option on one iteration is priced in the SAME world: the
+          inflation path, the housing market's crash draws and the path's
+          demographic scenario are drawn once into a `PathWorld` and handed to
+          all three simulators, which is what makes `prob_*_cheapest` the
+          chance an option is cheapest in one future rather than across three
           unrelated ones (docs/specs/2026-09-21-one-world-simulation.md §2).
+          What stays per-option is what belongs to the PROPERTY rather than the
+          market: its fee or maintenance shock, its own events, and — on the
+          rent side — the tenancy's own reset hazard and the renter's portfolio.
         - This function has no side effects and does not print anything.
     """
     sim = spec.simulation
@@ -835,9 +1068,13 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
         np.zeros(n, dtype=bool) if spec.rent is not None and spec.income is not None else None
     )
 
+    # What the world must draw per path: read once from the spec, not per path.
+    world_draws = _world_draws(spec, (condo_prior_rows, house_prior_rows))
+
     for i in range(n):
-        # ONE economy per iteration, drawn before any option is priced.
-        world = _draw_path_world(rng, econ, sim.years)
+        # ONE economy and ONE housing market per iteration, drawn before any
+        # option is priced.
+        world = _draw_path_world(rng, econ, sim.years, world_draws)
         if spec.condo is not None:
             condo_pvs[i] = _simulate_condo_pv_once(
                 spec.condo, sim, econ, world, rng,
