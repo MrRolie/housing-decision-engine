@@ -510,7 +510,13 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                     f"({_NOMINAL_PLANNING.short_cite}, echoed under defaults "
                                     "applied), 0.0 in nominal mode (the engine warns and suggests "
                                     "the same figure) and under rates: real (inert there)"),
-        "inflation_vol": (False, "drives correlated cost shocks; default 0.0"),
+        "inflation_vol": (False, "vol of the annual inflation factor, drawn ONCE per Monte "
+                                    "Carlo path and shared by every option; drives the "
+                                    "correlated cost shocks through corr_inflation_*, and in "
+                                    "NOMINAL mode also moves every escalation on that path — "
+                                    "the owners' costs and value growth, and the renter's rent, "
+                                    "other costs and invested return. Inert on escalation in "
+                                    "real mode, where rates are used as typed. Default 0.0"),
     },
     "income": {
         "annual_income": (True, "$/year — REQUIRED whenever an income: block is present; "

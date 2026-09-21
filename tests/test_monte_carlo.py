@@ -472,7 +472,7 @@ class TestAffordabilityMC:
 def test_mc_house_zero_vol_converges_with_mortgage():
     from hde.models import HouseParams, SimulationParams, EconomicParams
     from hde.deterministic import _compute_house_option
-    from hde.monte_carlo import _simulate_house_pv_once
+    from hde.monte_carlo import _draw_path_world, _simulate_house_pv_once
     import numpy as np
     h = HouseParams(initial_value=400_000, value_growth_rate=0.03,
                     annual_maintenance_rate=0.01, down_payment=80_000,
@@ -481,14 +481,14 @@ def test_mc_house_zero_vol_converges_with_mortgage():
     econ = EconomicParams(mode="real", inflation_vol=0.0)
     det = _compute_house_option(h, sim, econ).total_pv
     rng = np.random.default_rng(0)
-    mc = _simulate_house_pv_once(h, sim, econ, rng)
+    mc = _simulate_house_pv_once(h, sim, econ, _draw_path_world(rng, econ, sim.years), rng)
     assert mc == pytest.approx(det, rel=1e-9)
 
 
 def test_mc_condo_zero_vol_converges_with_value():
     from hde.models import CondoParams, SimulationParams, EconomicParams
     from hde.deterministic import _compute_condo_option
-    from hde.monte_carlo import _simulate_condo_pv_once
+    from hde.monte_carlo import _draw_path_world, _simulate_condo_pv_once
     import numpy as np
     c = CondoParams(monthly_fee=500, fee_escalation_rate=0.02, initial_value=300_000,
                     value_growth_rate=0.03, down_payment=60_000, mortgage_rate=0.05,
@@ -497,7 +497,7 @@ def test_mc_condo_zero_vol_converges_with_value():
     econ = EconomicParams(mode="real", inflation_vol=0.0)
     det = _compute_condo_option(c, sim, econ).total_pv
     rng = np.random.default_rng(0)
-    mc = _simulate_condo_pv_once(c, sim, econ, rng)
+    mc = _simulate_condo_pv_once(c, sim, econ, _draw_path_world(rng, econ, sim.years), rng)
     assert mc == pytest.approx(det, rel=1e-9)
 
 

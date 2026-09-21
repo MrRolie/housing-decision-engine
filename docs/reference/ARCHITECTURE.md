@@ -393,14 +393,25 @@ text report ("Cheapest … / decisiveness:") and `--json`.
 
 ### Monte Carlo — `monte_carlo`
 
-Per option, `num_sims` paths seeded by `random_seed`; each path recomputes the
+`num_sims` paths seeded by `random_seed`; each path recomputes every present
 option's net cost with randomness, then the same `_financing_pv` closes it.
+
+**One economy per path.** The inflation path — the factor for each year and the
+`z_π` behind it — is drawn ONCE at the top of each path and handed to every
+option, so the condo, the house and the renter on one path are priced in the
+same future and `prob_*_cheapest` means the chance an option is cheapest in
+that one future. (Until 2026-09-21 each owned option drew its own inflation
+path and the renter composed with the fixed `inflation_rate`, so the three
+totals being ranked came from three unrelated economies; the fix is
+`docs/specs/2026-09-21-one-world-simulation.md` Part A. It changes no
+deterministic figure and no Monte Carlo figure on a run with `inflation_vol`
+at 0, which consumes no draw for the economy.)
 
 | Key | What it is | As computed |
 |---|---|---|
 | `mean`, `std` | distribution of the per-path `total_pv` | `numpy.mean`, `numpy.std` (population, ddof = 0) |
 | `p5`, `p50`, `p95` | percentiles of the per-path `total_pv` | `numpy.percentile` (linear interpolation); act 3 annotates p10 / median / p90 of the same array |
-| `prob_condo_cheapest` / `prob_house_cheapest` / `prob_rent_cheapest` | share of paths in which that option has the lowest PV | `mean(argmin over present options == option)`; exact ties go to the first present option in condo → house → rent order; `null` with fewer than two options |
+| `prob_condo_cheapest` / `prob_house_cheapest` / `prob_rent_cheapest` | share of paths in which that option has the lowest PV, the options on a path sharing one economy | `mean(argmin over present options == option)`; exact ties go to the first present option in condo → house → rent order; `null` with fewer than two options |
 
 **What is random on a path** (all default-off; every vol at 0 = one repeated
 path, which the report stamps "not a forecast"):
@@ -411,13 +422,21 @@ path, which the report stamps "not a forecast"):
   correlated with the year's inflation draw through `corr_inflation_*`
   (`z = ρ z_π + √(1 − ρ²) ε`).
 - **Inflation (nominal mode).** The year's escalation factor is
-  `(1 + π) · exp(σ_π z_π − σ_π²/2)` when `inflation_vol > 0`.
+  `(1 + π) · exp(σ_π z_π − σ_π²/2)` when `inflation_vol > 0`, drawn once per
+  path per year and shared by every option. In REAL mode the factor reaches no
+  cash flow (a real rate is used as typed); only `z_π` is live there, through
+  the `corr_inflation_*` keys.
 - **Events.** Timing: `jitter` → `round(clamp(Normal(expected_year, timing_std_years)))`
   within `[min_year, max_year]` and the horizon; `hazard` → the first year a uniform
   draw falls under `hazard_base + hazard_growth · (year − hazard_start_year)` (clamped
   to `[0, 1]`), possibly never. Cost: `base_cost × shock(cost_vol)` under `cost_distribution`.
-- **Rent side.** `rent_escalation_vol` shocks the escalation RATE once per path
-  (`e × shock`); `investment_return_vol` is the ANNUAL volatility of the gross return:
+- **Rent side.** The renter rides the same inflation path as the owners: in
+  nominal mode the rent escalation, each other cost's escalation and the
+  invested capital's return all compose with the year's shared factor, and an
+  event's cost shock correlates with that year's `z_π` like any other.
+  `rent_escalation_vol` shocks the escalation RATE once per path
+  (`e × shock`, applied to the composed rate); `investment_return_vol` is the
+  ANNUAL volatility of the gross return:
   one mean-preserving shock per year on `(1 + r_inv)`, so the capital's terminal value is
   `D · Π_t (1 + r_inv)·shock_t` and can end below principal (0.10 ≈ a 60/40 portfolio);
   `other_cost_vol` shocks the level of each other cost.

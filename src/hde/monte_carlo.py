@@ -7,9 +7,14 @@ with randomness in:
 - Event timing (via jitter or hazard models)
 - Event costs (via cost volatility and distribution)
 - Inflation-linked correlated shocks (optional)
+
+One economy per path: the inflation path is drawn ONCE per iteration as a
+`PathWorld` and handed to every option, so the three totals that
+`prob_*_cheapest` ranks are three prices of the SAME future.
 """
 
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -66,6 +71,85 @@ def _draw_inflation_factor(
     z = float(rng.normal())
     factor = float(base * np.exp(econ.inflation_vol * z - 0.5 * econ.inflation_vol ** 2))
     return factor, z
+
+
+@dataclass(frozen=True)
+class PathWorld:
+    """The economy ONE Monte Carlo path happens in.
+
+    Drawn once at the top of each iteration and handed to every option, so the
+    condo, the house and the renter are priced in the SAME future. Before
+    2026-09-21 each owned option drew its own inflation path from the shared
+    generator and the renter composed with the fixed scalar `inflation_rate`,
+    so the three totals `np.argmin` ranks came from three unrelated economies
+    and `prob_condo_cheapest` did not mean what it says
+    (docs/specs/2026-09-21-one-world-simulation.md §2).
+
+    `inflation_factors[t - 1]` and `z_inflation[t - 1]` are year t's factor and
+    the standard normal behind it: the factor multiplies every escalation
+    through `_effective_growth_rate`, the z drives every `corr_inflation_*`
+    shock. In REAL mode `_effective_growth_rate` discards the factor by
+    construction, so there only the z is live.
+    """
+
+    inflation_factors: Tuple[float, ...]
+    z_inflation: Tuple[float, ...]
+
+
+def _draw_path_world(
+    rng: np.random.Generator,
+    econ: EconomicParams,
+    years: int,
+) -> PathWorld:
+    """Draw one path's economy: the inflation factor and its z, per year.
+
+    Consumes NO draws when `inflation_vol <= 0` (the guard inside
+    `_draw_inflation_factor`), so a run with no inflation uncertainty leaves
+    the generator stream exactly where it was before the world existed.
+    """
+    factors: List[float] = []
+    zs: List[float] = []
+    for _ in range(max(0, years)):
+        factor, z = _draw_inflation_factor(rng, econ)
+        factors.append(factor)
+        zs.append(z)
+    return PathWorld(tuple(factors), tuple(zs))
+
+
+def _is_flat(values: Sequence[float]) -> bool:
+    """True when every entry is the same float — the test that lets a constant
+    series take its exact closed form instead of accumulating a loop."""
+    return not values or all(v == values[0] for v in values)
+
+
+def _pv_escalating_series(
+    annual_amount: float,
+    growth_rates: Sequence[float],
+    discount_rate: float,
+    n_years: int,
+) -> float:
+    """PV of a recurring cost growing at `growth_rates[t - 1]` into year t,
+    with year 1 already carrying one year of escalation — the convention of
+    `pv_recurring_with_escalation`, which this generalises to a rate that
+    varies by year.
+
+    When every year's rate is identical the series is geometric and the closed
+    form is exact, so it is used. That keeps a flat world — every real-mode
+    run, and every nominal run with `inflation_vol` at zero — bit-for-bit on
+    the arithmetic that shipped before the world existed.
+    """
+    if n_years <= 0:
+        return 0.0
+    if _is_flat(growth_rates):
+        return pv_recurring_with_escalation(
+            annual_amount, growth_rates[0], discount_rate, n_years
+        )
+    pv = 0.0
+    amount = annual_amount
+    for year in range(1, n_years + 1):
+        amount *= (1 + growth_rates[year - 1])
+        pv += pv_single(amount, discount_rate, year)
+    return pv
 
 
 def _correlated_z(base_z: float, rho: float, rng: np.random.Generator) -> float:
@@ -278,6 +362,7 @@ def _simulate_condo_pv_once(
     condo: CondoParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    world: PathWorld,
     rng: np.random.Generator,
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
@@ -293,6 +378,9 @@ def _simulate_condo_pv_once(
     - S4b: demographic drift (if a ScenarioPrior is wired) and the price-drawdown
       channel (if PriceShockParams are wired); both default-off, consuming no
       rng draws when absent.
+
+    The inflation path comes from `world`, shared with every other option on
+    this path; this function draws no inflation of its own.
     """
     pv = 0.0
     r = sim.discount_rate
@@ -312,7 +400,8 @@ def _simulate_condo_pv_once(
     drift_context = _draw_drift_context(prior_rows, rng)
 
     for year in range(1, sim.years + 1):
-        inflation_factor, z_inf = _draw_inflation_factor(rng, econ)
+        inflation_factor = world.inflation_factors[year - 1]
+        z_inf = world.z_inflation[year - 1]
         growth_base = condo.value_growth_rate + _band_growth_additive(prior_rows, drift_context, year)
         terminal_value *= (1 + _effective_growth_rate(growth_base, inflation_factor, econ))
         if shock is not None:
@@ -375,6 +464,7 @@ def _simulate_house_pv_once(
     house: HouseParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    world: PathWorld,
     rng: np.random.Generator,
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
@@ -389,6 +479,9 @@ def _simulate_house_pv_once(
     - S4b: demographic drift (if a ScenarioPrior is wired) and the price-drawdown
       channel (if PriceShockParams are wired); both default-off, consuming no
       rng draws when absent.
+
+    The inflation path comes from `world`, shared with every other option on
+    this path; this function draws no inflation of its own.
     """
     pv = 0.0
     r = sim.discount_rate
@@ -403,7 +496,8 @@ def _simulate_house_pv_once(
     drift_context = _draw_drift_context(prior_rows, rng)
 
     for year in range(1, sim.years + 1):
-        inflation_factor, z_inf = _draw_inflation_factor(rng, econ)
+        inflation_factor = world.inflation_factors[year - 1]
+        z_inf = world.z_inflation[year - 1]
         growth_base = value_growth_base + _band_growth_additive(prior_rows, drift_context, year)
         terminal_value *= (1 + _effective_growth_rate(growth_base, inflation_factor, econ))
 
@@ -457,6 +551,7 @@ def _simulate_rent_pv_once(
     rent: RentParams,
     sim: SimulationParams,
     econ: EconomicParams,
+    world: PathWorld,
     rng: np.random.Generator,
     tax: Optional[TaxParams] = None,
 ) -> float:
@@ -470,41 +565,51 @@ def _simulate_rent_pv_once(
     - Investment-return shock on the invested down payment
       (if sim.investment_return_vol > 0)
 
+    Inflation comes from `world`, the same economy the owned options are priced
+    in. Until 2026-09-21 this function composed with the fixed scalar
+    `econ.inflation_rate`, which is not merely independent of the owners' draws
+    but deterministic — the renter's costs could not move with the economy at
+    all, so the argmin that produces `prob_rent_cheapest` compared a stochastic
+    owner against a frozen renter.
+
     Discounting uses `sim.discount_rate` directly, matching the condo/house
     simulators and the deterministic rent model.
     """
     dr = sim.discount_rate
 
-    # Base escalation, folding in nominal-mode inflation the same way the
-    # deterministic rent model does (so zero-vol MC converges to deterministic
-    # in both real and nominal modes).
-    base_esc = rent.rent_escalation_rate
-    if econ.mode == "nominal":
-        base_esc = (1 + base_esc) * (1 + econ.inflation_rate) - 1
-
-    # Rent escalation, optionally shocked.
+    # One path-level escalation shock, scaling the composed rate exactly as it
+    # did when that rate was a single scalar for the whole horizon.
     if sim.rent_escalation_vol > 0:
         z_esc = float(rng.normal())
         esc_shock = _shock_multiplier(sim.rent_escalation_vol, z_esc, sim.shock_model)
-        effective_esc = base_esc * esc_shock
     else:
-        effective_esc = base_esc
+        esc_shock = 1.0
+    esc_rates = [
+        _effective_growth_rate(rent.rent_escalation_rate, factor, econ) * esc_shock
+        for factor in world.inflation_factors
+    ]
 
     annual_rent = rent.monthly_rent * 12
-    rent_pv = pv_recurring_with_escalation(annual_rent, effective_esc, dr, sim.years)
+    rent_pv = _pv_escalating_series(annual_rent, esc_rates, dr, sim.years)
 
-    # Events (same pattern as condo/house: None-guarded, correlated z draw).
+    # Events (same pattern as condo/house: None-guarded, correlated z draw
+    # against the world's z for the year the event lands in — before the world
+    # this passed a hardcoded 0.0, because the renter had no z of their own).
     events_pv = 0.0
     event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in rent.events}
     for event in rent.events:
         year = event_years[event.name]
         if year is None:
             continue
-        z_event = _correlated_z(0.0, sim.corr_inflation_event_cost, rng)
+        z_event = _correlated_z(
+            world.z_inflation[year - 1], sim.corr_inflation_event_cost, rng
+        )
         event_cost = _sample_event_cost(event, z_event)
         events_pv += pv_single(event_cost, dr, year)
 
-    # Other recurring costs, optionally shocked (level shock applied to the series).
+    # Other recurring costs, optionally shocked (level shock applied to the
+    # series; it carries no year index, so it keeps its own independent draw —
+    # there is no `corr_inflation_rent_other` key and this slice invents none).
     other_pv = 0.0
     for cost in rent.other_recurring_costs:
         if sim.other_cost_vol > 0:
@@ -513,19 +618,23 @@ def _simulate_rent_pv_once(
             annual = cost.annual_amount * shock
         else:
             annual = cost.annual_amount
-        esc = cost.escalation_rate
-        if econ.mode == "nominal":  # compose inflation as the deterministic rent model does
-            esc = (1 + esc) * (1 + econ.inflation_rate) - 1
-        other_pv += pv_recurring_with_escalation(annual, esc, dr, sim.years)
+        esc_series = [
+            _effective_growth_rate(cost.escalation_rate, factor, econ)
+            for factor in world.inflation_factors
+        ]
+        other_pv += _pv_escalating_series(annual, esc_series, dr, sim.years)
 
     # Capital leg, mirroring the owned side (downpayment_pv + terminal equity):
     # the renter's capital is charged at year 0 and its terminal value credited.
     refunds = tax.refunds if tax is not None else 0.0
     capital = rent.invested_down_payment + refunds
     if capital > 0:
-        base_r = rent.investment_return_rate
-        if econ.mode == "nominal":  # a REAL input, composed like value growth
-            base_r = (1 + base_r) * (1 + econ.inflation_rate) - 1
+        # investment_return_rate is a REAL input, composed with the world's
+        # inflation year by year exactly as value growth is on the owned side.
+        inv_rates = [
+            _effective_growth_rate(rent.investment_return_rate, factor, econ)
+            for factor in world.inflation_factors
+        ]
         # investment_return_vol is the ANNUAL volatility of the gross return
         # (1 + r): one mean-preserving shock per year on (1 + r), so a run of
         # bad years can leave the renter's capital below principal, exactly as
@@ -535,21 +644,33 @@ def _simulate_rent_pv_once(
         # Under a `tax:` block (2026-09-05) the taxable share compounds the
         # after-tax factor of the SAME shocked gross factor each year, so a
         # zero-vol path reproduces the deterministic engine exactly.
+        # `after_tax_factor` keeps the FIXED inflation_rate: in nominal mode it
+        # ignores that argument outright, and in real mode the world's factor
+        # never reaches a growth rate, so no stochastic figure belongs there.
         growth = 1.0
         taxed = 1.0
         if sim.investment_return_vol > 0:
-            for _ in range(sim.years):
+            for t in range(sim.years):
                 z_inv = float(rng.normal())
-                gross = (1 + base_r) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
+                gross = (1 + inv_rates[t]) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
                 growth *= gross
                 if tax is not None:
                     taxed *= after_tax_factor(gross, econ.mode, econ.inflation_rate,
                                               tax.marginal_rate, tax.inclusion)
-        else:
-            growth = (1 + base_r) ** sim.years
+        elif sim.years > 0 and _is_flat(inv_rates):
+            # Constant rate: the power is exact, so a flat world reproduces the
+            # pre-world arithmetic bit for bit.
+            growth = (1 + inv_rates[0]) ** sim.years
             if tax is not None:
-                taxed = after_tax_factor(1 + base_r, econ.mode, econ.inflation_rate,
+                taxed = after_tax_factor(1 + inv_rates[0], econ.mode, econ.inflation_rate,
                                          tax.marginal_rate, tax.inclusion) ** sim.years
+        else:
+            for t in range(sim.years):
+                gross = 1 + inv_rates[t]
+                growth *= gross
+                if tax is not None:
+                    taxed *= after_tax_factor(gross, econ.mode, econ.inflation_rate,
+                                              tax.marginal_rate, tax.inclusion)
         benefit = terminal_from_growth(tax, capital, growth, taxed) / ((1 + dr) ** sim.years)
     else:
         benefit = 0.0
@@ -649,8 +770,15 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     Note:
         - Only options present in the spec are simulated.
         - RNG is seeded with sim.random_seed for reproducibility.
-        - Per-iteration draw order is condo -> house -> rent -> income, so
-          existing condo+house numerics are preserved when rent/income absent.
+        - Per-iteration draw order is world -> condo -> house -> rent -> income.
+          The world consumes no draws when `inflation_vol` is 0, so every run
+          without inflation uncertainty keeps the stream it had before the
+          world existed.
+        - Every option on one iteration is priced in the SAME economy: the
+          inflation path is drawn once into a `PathWorld` and handed to all
+          three simulators, which is what makes `prob_*_cheapest` the chance
+          an option is cheapest in one future rather than across three
+          unrelated ones (docs/specs/2026-09-21-one-world-simulation.md §2).
         - This function has no side effects and does not print anything.
     """
     sim = spec.simulation
@@ -708,22 +836,24 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     )
 
     for i in range(n):
+        # ONE economy per iteration, drawn before any option is priced.
+        world = _draw_path_world(rng, econ, sim.years)
         if spec.condo is not None:
             condo_pvs[i] = _simulate_condo_pv_once(
-                spec.condo, sim, econ, rng,
+                spec.condo, sim, econ, world, rng,
                 prior_rows=condo_prior_rows,
                 shock=spec.condo.price_shock,
                 hbp_repayment_pv=condo_hbp,
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
-                spec.house, sim, econ, rng,
+                spec.house, sim, econ, world, rng,
                 prior_rows=house_prior_rows,
                 shock=spec.house.price_shock,
                 hbp_repayment_pv=house_hbp,
             )
         if spec.rent is not None:
-            rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, rng, spec.tax)
+            rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, world, rng, spec.tax)
         if spec.income is not None:
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,
