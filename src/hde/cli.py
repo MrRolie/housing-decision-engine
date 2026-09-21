@@ -376,7 +376,7 @@ def main() -> int:
                 print(f"Error rendering story plots: {e}", file=sys.stderr)
                 return 1
             # Under --json stdout is the document; status lines go to stderr
-            # (round-6 dogfood: a saved `--story --json` output did not parse).
+            # (round-6 evaluation: a saved `--story --json` output did not parse).
             status_out = sys.stderr if (args.json or args.read_back) else sys.stdout
             for path in saved:
                 print(f"Saved plot: {path}", file=status_out)

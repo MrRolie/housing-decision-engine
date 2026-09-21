@@ -1,4 +1,4 @@
-"""Dogfood round two (2026-09-02): the renter's return can lose, financed purchase
+"""Evaluation round two (2026-09-02): the renter's return can lose, financed purchase
 costs ride the loan, act 6 respects the tie band, sweeps carry percentiles."""
 
 import numpy as np

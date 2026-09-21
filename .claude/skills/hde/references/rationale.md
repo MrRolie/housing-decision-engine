@@ -11,7 +11,7 @@ when the engine changes.
   confident-looking wrong verdict, the exact failure this engine exists to
   prevent. Every number you do not ask for becomes a default the engine
   echoes back with its source, which is the honest form.
-- **A mortgage means nominal mode** (2026-09-02 dogfood, two persona runs):
+- **A mortgage means nominal mode** (2026-09-02 evaluation, two trial runs):
   the real-rate level payment reported 27.9% and 30.2% housing-cost ratios
   where the lender's nominal payment gave 33.2% and 35.8% — the 32% breaches
   were hidden. The engine now warns; the routing lives in gate 3.
@@ -33,11 +33,11 @@ when the engine changes.
   substituted for the growth sweep; it cannot move a deterministic crossing
   and encoded roughly flat drift, so "instead of flat prices" checked nothing.
 - **One-sided uncertainty reads overconfident** (serve 2): with the renter's
-  return vol at 0 the persona wrote that the simulation "overstates the
+  return vol at 0 the trial run wrote that the simulation "overstates the
   uncertainty"; the like-for-like rerun widened the toss-up zone from $50 to
   about $300 of rent.
 - **GDS, not TDS** (serve 1): the engine's ratio is housing cost over income
-  with no other debts; the 44% cap the persona reached for is the TDS cap.
+  with no other debts; the 44% cap the trial run reached for is the TDS cap.
   The affordability warning now names all three thresholds.
 - **The quick-sense cap** (serves 2 and 3): 200 words is unreachable with a
   mortgage, an income and a threshold together; the never-drop items were shed

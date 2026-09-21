@@ -148,7 +148,7 @@ class TestFormat:
         assert "Break-even rent.monthly_rent" in text and "a market_scenario prior does not move it" in text
         assert "rent is cheaper below" in text and "condo is cheaper above" in text
         assert "too close to call between" in text
-        # Band-first, and the JSON entry leads with the same sentence (three dogfood
+        # Band-first, and the JSON entry leads with the same sentence (three evaluation
         # serves copied a crossing-first shape into the user's text).
         be = out["break_evens"][0]
         assert list(be)[0] == "sentence"
@@ -264,7 +264,7 @@ class TestBandEdges:
 
 
 class TestPriorDoesNotMoveTheThreshold:
-    """Round 5b: the persona ran a demographic-prior variant to test the threshold's
+    """Round 5b: the trial run ran a demographic-prior variant to test the threshold's
     growth sensitivity; the prior's drift enters the Monte Carlo only, so the
     deterministic crossing is identical and the output must say so."""
 

@@ -382,7 +382,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
 
     # Real mode prices the mortgage as a level payment at the REAL rate; the
     # lender collects the payment at the quoted NOMINAL rate, which is higher.
-    # Round-three dogfood 2026-09-02: two persona runs reported 27.9% / 30.2%
+    # Round-three evaluation 2026-09-02: two trial runs reported 27.9% / 30.2%
     # against a 32% threshold where the cash ratio was 33.2% / 35.8%.
     if econ.mode == "real" and spec.income is not None:
         for name, opt in (("condo", spec.condo), ("house", spec.house)):
@@ -570,7 +570,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                     )
 
     # Owner carrying and purchase costs left at zero understate the buy side;
-    # say so by name (2026-09-02 user-model dogfood: every persona's property
+    # say so by name (2026-09-02 user-model evaluation: every trial run's property
     # tax, insurance and closing costs were silently zero).
     for name, opt in (("condo", spec.condo), ("house", spec.house)):
         if opt is None:
@@ -589,7 +589,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             typed_purchase_costs -= opt.land_transfer_tax.total
         if typed_purchase_costs <= 0.005:
             # A financed premium is modelled (it rides the loan) — do not list it
-            # as missing (round-four dogfood 2026-09-02).
+            # as missing (round-four evaluation 2026-09-02).
             premium = ("" if opt.financed_purchase_costs > 0
                        else ", mortgage-insurance premium")
             transfer = ("notary, inspection — the transfer tax is priced separately"
@@ -665,7 +665,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"financed_purchase_costs, and label it; omitting it biases the verdict toward buying"
             )
 
-    # Asymmetric tails (review F4 + dogfood round 2): an owned option with a
+    # Asymmetric tails (review F4 + evaluation round 2): an owned option with a
     # price-shock channel against a renter whose capital cannot lose.
     # `named_one_sided` records that one of the two SPECIFIC one-sided warnings
     # already fired with its own actionable fix, so the general symmetric check
@@ -681,7 +681,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             "investment_return_vol (0.10 ≈ 60/40 portfolio) or drop price_shock for a like-for-like "
             "worst case"
         )
-    # One-sided uncertainty (dogfood round 5): a demographic prior makes the
+    # One-sided uncertainty (evaluation round 5): a demographic prior makes the
     # owned value stochastic while the renter's capital stays a point mass, so
     # P(cheapest) compares a distribution to a point.
     if (spec.rent is not None and spec.rent.invested_down_payment > 0
@@ -861,7 +861,7 @@ def uncertainty_source_warnings(
     uncertainty input, so nothing rests on one there. Every uncertainty input
     (the same set `single_path_run` reads) that is assistant-typed or
     unattributed is named with its value, and the closing clause states what
-    the deterministic line alone says: in three of five dogfood answers the
+    the deterministic line alone says: in three of five evaluation answers the
     decision was called "too close to call" on volatility the user never
     stated, while the deterministic margin was decisive.
     """
@@ -1292,7 +1292,7 @@ def _apply_mortgage_insurance(
 
     Derived HERE, in the loader, so `--sweep` and `--break-even` — which re-run
     the loader at every grid point — re-derive the tier per point instead of
-    freezing the base config's premium (round-7 dogfood 2026-09-03: a price scan
+    freezing the base config's premium (round-7 evaluation 2026-09-03: a price scan
     held a 2.80% premium fixed while the loan-to-value crossed into 3.10%).
     """
     try:
@@ -1816,7 +1816,7 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     engines compose it back) — under the default `rates: as_quoted`; a config
     that states real figures says `rates: real` and is read as before. The
     discount rate anchor and every other anchored default stay real and compose
-    in nominal mode exactly as they did (round-three dogfood 2026-09-02: the
+    in nominal mode exactly as they did (round-three evaluation 2026-09-02: the
     real anchor used as a nominal rate priced the future at ~0.9% real). Why the
     typed figure changed convention: served answers converted sticker numbers
     to real by hand and the engine composed inflation back on — one figure,

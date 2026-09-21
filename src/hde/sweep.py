@@ -1,6 +1,6 @@
-"""Parameter sweeps — the flip point on ANY input (2026-09-02, user-model dogfood).
+"""Parameter sweeps — the flip point on ANY input (2026-09-02, user-model evaluation).
 
-Every persona's assistant hand-rolled sed loops over throwaway YAML copies to
+Every trial run's assistant hand-rolled sed loops over throwaway YAML copies to
 find where the verdict flips on horizon, growth or price. This does it once,
 through the same loader (so every point is validated and echoes its defaults)
 and the same verdict rule as the main run.
@@ -530,7 +530,7 @@ def track_flips(rows: List[Dict[str, Any]], field: str) -> List[Dict[str, Any]]:
 def find_flips(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Consecutive points whose cheapest option differs — once for the
     deterministic `best`, once for `mc_mean_best` (the Monte Carlo mean can
-    change sides where the deterministic line does not; round-four dogfood
+    change sides where the deterministic line does not; round-four evaluation
     2026-09-02 printed 'no flip' on exactly such a sweep)."""
     return track_flips(rows, "best"), track_flips(rows, "mc_mean_best")
 

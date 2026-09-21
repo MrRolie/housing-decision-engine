@@ -250,7 +250,7 @@ def solve_crossings(
                     "cheaper_below": below, "cheaper_above": above,
                     "tie_band": [left, right],
                 }
-            # Band-first, and FIRST in the entry: three dogfood serves copied the
+            # Band-first, and FIRST in the entry: three evaluation runs copied the
             # crossing-first shape into the user's text ("$2,663: renting below,
             # buying above; too close between…" contradicts itself on the gap).
             # The band rule itself is the block header's, said once.
@@ -815,8 +815,8 @@ def solve_break_even_across(
     """
     The threshold re-solved at each value of a SECOND input (--break-even
     beside --sweep): "the rent threshold at 0% and at 2% growth" in one call.
-    Round 5b dogfood: the skill asked for the threshold at both ends of the
-    growth bracket and the persona could not produce it — --break-even solved
+    Round 5b evaluation: the skill asked for the threshold at both ends of the
+    growth bracket and the trial run could not produce it — --break-even solved
     the base config once and --sweep reported verdicts at the placeholder rent.
     """
     rows: List[Dict[str, Any]] = []

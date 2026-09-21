@@ -1,6 +1,6 @@
 """
-Round-three dogfood fixes (2026-09-02). Two Opus/Sonnet persona runs and their
-critics converged on the same engine gaps:
+Round-three evaluation fixes (2026-09-02). Two Opus/Sonnet trial runs and their
+reviewers converged on the same engine gaps:
 
 1. In nominal mode the default discount rate was the REAL anchor (3%) used as
    a nominal rate, so an omitted discount_rate silently priced the future at
@@ -8,7 +8,7 @@ critics converged on the same engine gaps:
    composes with inflation_rate like every other real input in nominal mode.
 2. In real mode the affordability ratio uses the level payment at the REAL
    mortgage rate; the lender collects the payment at the quoted NOMINAL rate,
-   which is higher (the two persona runs: 27.9% vs 33.2%, 30.2% vs 35.8%
+   which is higher (the two trial runs: 27.9% vs 33.2%, 30.2% vs 35.8%
    against a 32% threshold). The engine now warns instead of staying silent.
 3. When a price shock makes the Monte Carlo MEAN favour the other option, the
    verdict said nothing (Montréal run: deterministic condo −$4.7k, MC mean
@@ -291,7 +291,7 @@ class TestYearOneCashLine:
 
 
 class TestSweepTracksTheMonteCarloMean:
-    """Opus persona critic: flips tracked only the deterministic cheapest, so a
+    """Trial-run reviewer (Opus): flips tracked only the deterministic cheapest, so a
     sweep whose Monte Carlo mean changed sides printed 'no flip'."""
 
     def test_mc_mean_flips_are_detected_and_printed(self):
@@ -331,7 +331,7 @@ class TestYearOneAppreciation:
 
 
 class TestRoundFiveWarningsAndNotes:
-    """Dogfood round 5 (Duvernay threshold): the persona reached for the TDS cap,
+    """Evaluation round 5 (Duvernay threshold): the trial run reached for the TDS cap,
     inferred the prior's base-growth convention from an example comment, and
     compared a stochastic owner to a point-mass renter without a warning."""
 
@@ -416,7 +416,7 @@ class TestAssumptionsLineCarriesTheHorizonDrift:
 
 
 class TestFinancingLineAndAffordabilityHeader:
-    """Round 6 (restructured-skill serves on Sonnet and Opus): both personas computed
+    """Round 6 (restructured-skill serves on Sonnet and Opus): both trial runs computed
     the loan-to-value and the distance to the 20% insurance line by hand and landed
     $250 over it; the report's affordability header named only the 32% figure."""
 

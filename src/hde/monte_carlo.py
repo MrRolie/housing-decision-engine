@@ -105,7 +105,7 @@ def _load_prior_if_any(spec: ComparisonSpec):
 # value_growth_rate and the sum is composed with inflation by
 # _effective_growth_rate — the same contract as every other real input, so a
 # nominal run with a prior is coherent. The S4b-era refusal of that
-# combination was lifted 2026-09-02 (round-four dogfood: a financed Montréal
+# combination was lifted 2026-09-02 (round-four evaluation: a financed Montréal
 # buyer must run nominal mode for the lender's payment, and the shipped
 # Montréal prior was unreachable from it).
 
@@ -526,7 +526,7 @@ def _simulate_rent_pv_once(
         # bad years can leave the renter's capital below principal, exactly as
         # the owned side can be hit by a price shock. (Before 2026-09-02 the
         # knob scaled the RATE once per path — the renter could never lose and
-        # 0.10 moved a 3% return by ±0.3pp; the dogfood found both.)
+        # 0.10 moved a 3% return by ±0.3pp; the evaluation found both.)
         # Under a `tax:` block (2026-09-05) the taxable share compounds the
         # after-tax factor of the SAME shocked gross factor each year, so a
         # zero-vol path reproduces the deterministic engine exactly.

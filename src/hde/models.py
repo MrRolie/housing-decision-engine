@@ -413,7 +413,7 @@ RENT_BREAKDOWN_KEYS: FrozenSet[str] = frozenset({"invested_capital_pv", "rent_pv
 class OptionResult:
     """Per-option deterministic result.
 
-    cash_year1 / principal_year1 (round-four dogfood 2026-09-02): the
+    cash_year1 / principal_year1 (round-four evaluation 2026-09-02): the
     UNDISCOUNTED year-1 cash outlay (the affordability numerator: fees, tax,
     other costs, the full mortgage payment; rent for the renter) and the
     principal repaid in year 1 (payment − loan × rate; 0 without a mortgage).

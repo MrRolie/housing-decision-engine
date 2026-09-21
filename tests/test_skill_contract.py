@@ -33,7 +33,7 @@ def test_every_reference_file_is_pointed_at_and_every_pointer_resolves():
 
 def test_hot_path_stays_under_the_documented_body_budget():
     """Claude Code's skill guidance: keep SKILL.md under 500 lines and move
-    reference material out; the dogfood rounds grew it to 436 lines / 5,400
+    reference material out; the evaluation rounds grew it to 436 lines / 5,400
     words before the restructure. Pin the hot path well under both."""
     assert TEXT.count("\n") < 300, TEXT.count("\n")
     assert len(TEXT.split()) < 2600, len(TEXT.split())
@@ -130,7 +130,7 @@ def test_project_settings_preapprove_the_user_flow():
 
 
 def test_skill_translates_real_world_items_and_dispatches_sweeps():
-    """The dogfood's top friction: owner costs silently zero, flip points hand-rolled.
+    """The evaluation's top friction: owner costs silently zero, flip points hand-rolled.
     Hot-path pins are the rules applied on every run; the rest live in references/."""
     for phrase in ("property tax", "purchase_costs", "--sweep", "Not modelled",
                    "A range is two configs", "Cash line", "sticker",

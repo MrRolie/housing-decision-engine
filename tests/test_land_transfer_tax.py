@@ -133,7 +133,7 @@ def test_montreal_worked_example_from_the_source():
 
 
 def test_montreal_650k_house():
-    """The dogfood case: a $650,000 Montréal house. 314.50 + 2,521 + 3,559.50
+    """The evaluation case: a $650,000 Montréal house. 314.50 + 2,521 + 3,559.50
     + 1,954 = 8,349.00 — against the 1.5%-of-price guess ($9,750) the answers
     had been using."""
     assert _tax("QC", "montreal", 650_000) == pytest.approx(8_349.00, abs=0.005)

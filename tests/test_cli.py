@@ -175,7 +175,7 @@ def test_print_anchors_dumps_the_registry(monkeypatch, capsys):
 
 
 def test_story_status_lines_never_pollute_json_stdout(tmp_path, monkeypatch, capsys):
-    """Round-6 dogfood: `--story DIR --json` printed 'Saved plot:' lines after the
+    """Round-6 evaluation: `--story DIR --json` printed 'Saved plot:' lines after the
     document and the saved output did not parse. Under --json, stdout is the
     document alone; status goes to stderr."""
     import json

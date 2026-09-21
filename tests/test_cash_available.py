@@ -1,5 +1,5 @@
 """
-`cash_available` on an owned option (2026-09-03, round-7 dogfood).
+`cash_available` on an owned option (2026-09-03, round-7 evaluation).
 
 Every threshold serve so far hand-computed `down_payment = cash − purchase_costs`
 on the user's behalf and typed the result in — unchecked arithmetic that landed

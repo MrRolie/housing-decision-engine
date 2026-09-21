@@ -64,7 +64,7 @@ cost component must obey them:
   in both modes. A mortgage
   in real mode prices a level real-rate payment — lower than the lender's
   nominal payment — so `coherence_warnings` flags it when an income block is
-  present (round-three dogfood 2026-09-02).
+  present (round-three evaluation 2026-09-02).
 - Two escalation-start conventions coexist by design: condo fees, rent and
   other recurring costs escalate before year 1 (`base × (1 + e)^t`); house
   maintenance is `rate(t) × V0 (1 + g)^(t−1)`.

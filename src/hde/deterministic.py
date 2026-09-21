@@ -418,7 +418,7 @@ def _compute_rent_option(
                                   term = D − D(1+r_inv)^N/(1+dr)^N: zero when the renter
                                   earns exactly the discount rate. (Before 2026-09-02 the
                                   outlay was never charged, biasing every verdict toward
-                                  renting by exactly D — found by the user-model dogfood.)
+                                  renting by exactly D — found by the user-model evaluation.)
     """
     dr = sim.discount_rate
     rent_escalation = _effective_growth_rate(rent.rent_escalation_rate, econ)

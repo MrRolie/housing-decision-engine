@@ -581,7 +581,7 @@ class TestNominalRentOtherCosts:
 
 
 class TestRenterCapitalSymmetry:
-    """2026-09-02 (user-model dogfood): the renter's invested capital must be
+    """2026-09-02 (user-model evaluation): the renter's invested capital must be
     charged at year 0 exactly as the buyer's down payment is; only the excess of
     its return over the discount rate may move the verdict."""
 

@@ -1,5 +1,5 @@
 """
-2026-09-02 (user-model dogfood): purchase-time costs are a first-class owned-option
+2026-09-02 (user-model evaluation): purchase-time costs are a first-class owned-option
 input, the discount rate has a cited default, and the warnings say by name what
 an owned option leaves unmodelled.
 """

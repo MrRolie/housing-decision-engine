@@ -1,6 +1,6 @@
 """Source classes for the values in a config — who put each number there.
 
-The honesty problem this solves (dogfood rounds 1–7, 2026-09-03): a value the
+The honesty problem this solves (evaluation rounds 1–7, 2026-09-03): a value the
 ASSISTANT typed on the user's behalf is indistinguishable, in every surface the
 engine emits, from a value the user stated. It is not `defaults applied` (the
 YAML did state it), it fires no coherence warning, and it never reaches the

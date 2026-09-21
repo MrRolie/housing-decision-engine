@@ -3,7 +3,7 @@ The source-class echo (2026-09-03): every value in a config carries who put it
 there — the user, the assistant answering for them, or a cited anchor — so the
 read-back can tell one from the other.
 
-Five dogfood reviews found the same failure: numbers the assistant typed on the
+Five evaluation reviews found the same failure: numbers the assistant typed on the
 user's behalf (a 0% rent escalation, `investment_return_vol: 0.10`, a 25-year
 amortization) left no trace — they are not `defaults applied` (the YAML DID
 state them) and fired no warning, and in three of five answers the Monte Carlo

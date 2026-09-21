@@ -527,7 +527,7 @@ def format_assumptions(
         holds the REAL rate; a rate typed as quoted (2026-09-05) shows its
         quoted form beside it, and in nominal mode the effective composed rate
         leads, so a sticker rate is never shown in a convention the user did
-        not type it in (2026-09-02 dogfood: the echo printed the raw rate and
+        not type it in (2026-09-02 evaluation: the echo printed the raw rate and
         every nominal-thinking user was inflated twice)."""
         typed = converted_for(spec.converted_rates, dotted)
         if not nominal:
@@ -601,7 +601,7 @@ def format_assumptions(
         if opt is None or opt.all_cash or opt.down_payment is None:
             continue
         # Loan-to-value and the distance to the 20% insurance line (round-6
-        # dogfood: every persona computed it by hand and landed $250 over).
+        # evaluation: every trial run computed it by hand and landed $250 over).
         # With cash_available the head shows the netting itself (round-7: the
         # subtraction was done FOR the user, off-engine and unchecked) — the
         # down payment still appears exactly once, as its result.
@@ -965,7 +965,7 @@ def year1_cash_lines(
 
     Unindented like `affordability_lines`: the text report indents the
     per-option lines under the same header and the read-back carries them as
-    they are. Round-four dogfood: the PV $/month equivalent was read as
+    they are. Round-four evaluation: the PV $/month equivalent was read as
     out-of-pocket and had the wrong sign for that reading. Round 9: the block
     an answer carries held no cash line, so the answer quoted no cash figure.
     """

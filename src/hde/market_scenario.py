@@ -195,7 +195,7 @@ class LoadedScenarioPrior:
     def encoded_drift(self) -> Dict[str, Dict[str, object]]:
         """The growth view the prior encodes, per dwelling type and band: the
         reference scenario's demo_drift_mean (REAL decimal/yr) and the range of
-        scenario means. Round 5b dogfood: a persona introduced a flat Laval prior
+        scenario means. Round 5b evaluation: a trial run introduced a flat Laval prior
         as "instead of flat prices" because nothing printed what it encodes."""
         out: Dict[str, Dict[str, object]] = {}
         for (d, h, s), row in sorted(self.rows.items()):
