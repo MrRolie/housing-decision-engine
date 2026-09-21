@@ -370,7 +370,7 @@ Migration also covers (not only tests):
 - `src/hde/cli.py` — quiet-mode summary logic reads `result.condo_total_pv` / `result.house_total_pv`; update to `result.condo.total_pv` etc.
 - `mcp_server/tools.py` — `_det_to_dict`, `_mc_to_dict`, `sweep_param` all reference old result shape
 
-A single implementer subagent handles all 115 tests + all above call sites in one task (mechanical search-and-replace pattern).
+A single implementer handles all 115 tests + all above call sites in one task (mechanical search-and-replace pattern).
 
 ---
 

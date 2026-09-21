@@ -485,7 +485,7 @@ total-population statistic to compare against. The construction is therefore REF
   creep with no discriminating power the controlled residual lacks.
 
 Lineage, recorded because a wrong why outdamages a missing one: the "quantified population
-comparison" wording was advisor-recommended, seat-ruled into amendment #10 without checking that the
+comparison" wording came from a review, was ruled into amendment #10 without checking that the
 two sides shared a universe, and refuted by the probe that tried to execute it.
 
 **THE RATIO EXCEEDS 1 AT BOTH, and that is COMPOSITION, not contradiction.** On the island the
