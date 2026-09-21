@@ -115,6 +115,13 @@ CONSUMED_FAMILIES = {
     "fhsa.": "tax_treatment.fhsa_plan",
     "hbp.": "tax_treatment.hbp_repayment_leg",
     "tfsa.": "tax_treatment.tfsa_room_warning + the schema note",
+    # OSFI's minimum qualifying rate, as its two published legs (2026-09-21).
+    # Its own family and NOT `mortgage_rate.`: every entry there is a rate that
+    # was or could be CHARGED, and a lender's TEST threshold read off that row
+    # gets read as a price whatever the label says. The engine applies the pair
+    # to one disclosure and to nothing a verdict reads, so it is neither an
+    # engine default nor a jurisdiction reference table — hence this line.
+    "qualifying_rate.": "unpriced.qualifying_rate_quoted (the affordability load)",
 }
 
 

@@ -59,6 +59,11 @@ from .tax_treatment import (
     resolve as resolve_tax,
     tfsa_room_warning,
 )
+# The direction vocabulary, one home (docs/specs/2026-09-21-unpriced-dimensions.md
+# §13): the coherence warnings below FORMAT from these rather than each spelling
+# its own. Import-safe — `unpriced` reaches only `anchors` and `rates` at module
+# level and loads this module lazily, inside the call.
+from .unpriced import NEUTRAL, TOWARD_BUYING, TOWARD_RENTING
 from .deterministic import (
     mortgage_leg_pv, renewals_priced_inside, renter_terminal_for,
 )
@@ -541,7 +546,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             warns.append(
                 f"rent: invested capital ${capital:,.0f} earns "
                 f"{rate_label(spec, 'rent.investment_return_rate', r_inv)} untaxed — no tax: block, "
-                f"so tax on the taxable share is not modelled (toward renting); state where the "
+                f"so tax on the taxable share is not modelled ({TOWARD_RENTING}); state where the "
                 f"savings sit (tax.renter_capital)"
             )
         # The tax side of the same money (2026-09-05). Gains are taxed in
@@ -553,7 +558,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             warns.append(
                 "tax: real mode with inflation_rate=0 — the drag is applied to the real return, "
                 "but gains are taxed in nominal terms; set economic.inflation_rate for the full "
-                "drag (understated: toward renting)"
+                f"drag (understated: {TOWARD_RENTING})"
             )
         room = tfsa_room_warning(spec.tax)
         if room is not None:
@@ -623,11 +628,11 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
         if missing:
             warns.append(
                 f"{name}: not modelled — {'; '.join(missing)} — owner costs are "
-                f"understated, which biases the verdict toward buying"
+                f"understated, which biases the verdict {TOWARD_BUYING}"
             )
         if opt.value_growth_rate == 0:
             warns.append(
-                f"{name}.value_growth_rate=0.0% — no appreciation modelled (neutral); "
+                f"{name}.value_growth_rate=0.0% — no appreciation modelled ({NEUTRAL}); "
                 f"the verdict is sensitive to it: state a view or bracket it "
                 f"(a market_scenario prior adds drift in the Monte Carlo only)"
             )
@@ -684,7 +689,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"mortgage-insurance line with no financed_purchase_costs — an insured mortgage carries a "
                 f"premium on the loan (CMHC/Sagen by loan-to-value band). Set mortgage_insurance: auto to "
                 f"have the engine price it from the anchored schedule, or compute it, put it in "
-                f"financed_purchase_costs, and label it; omitting it biases the verdict toward buying"
+                f"financed_purchase_costs, and label it; omitting it biases the verdict {TOWARD_BUYING}"
             )
 
     # Asymmetric tails (review F4 + evaluation round 2): an owned option with a
@@ -767,7 +772,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
         warns.append(
             f"{name}: no school-tax line — Québec levies {school.name} "
             f"({school.value:.5%} of assessed value) on top of the municipal rate; add it "
-            f"or list it as not modelled (toward buying)"
+            f"or list it as not modelled ({TOWARD_BUYING})"
         )
 
     # Renewal risk (slice 1, docs/specs/2026-09-03-mortgage-renewal-risk.md §6).
@@ -831,7 +836,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"{name}: the stated renewal ladder prices nothing in this run — the "
                 f"first renewal falls at year {first}, past the {horizon}-year horizon, "
                 f"so the verdict holds mortgage_rate {opt.mortgage_rate:.2%} for its whole "
-                f"length and renewal risk is still not modelled (toward buying while rates "
+                f"length and renewal risk is still not modelled ({TOWARD_BUYING} while rates "
                 f"rise); run at least {first} years to price the renewal path"
             )
             continue
@@ -879,7 +884,7 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"below its contract rate mortgage_rate {opt.mortgage_rate:.2%} held "
                 f"throughout (PV ${laddered_pv:,.0f} against ${flat_pv:,.0f} over the "
                 f"{horizon}-year horizon) — a renewal path that costs less than the "
-                f"contract biases the verdict toward buying; state the renewal path you "
+                f"contract biases the verdict {TOWARD_BUYING}; state the renewal path you "
                 f"want stressed, not the one you hope for"
             )
 

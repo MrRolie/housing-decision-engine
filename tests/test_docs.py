@@ -42,9 +42,16 @@ def test_defaults_table_matches_the_registry():
     # `hde --print-anchors`, pinned in test_reference_anchors. The mortgage-insurance
     # premium and the land-transfer-tax schedules are tables of bands, not per-field
     # defaults, documented under their own headings in CONFIG_SCHEMAS.md.
+    # `qualifying_rate.` joins that list for the same reason `verdict.` is on
+    # it: OSFI's minimum qualifying rate is an engine RULE applied to one
+    # disclosure, not a per-field default any config key falls back to, so a
+    # "Defaults Summary" row for it would claim the opposite of the truth. Its
+    # doc surface is `hde --print-anchors`, and the line that applies it cites
+    # both legs by name.
     expected = {n for n in ANCHORS
                 if not n.startswith(("verdict.", "market_scenario.",
-                                     "mortgage_insurance.", "land_transfer_tax."))
+                                     "mortgage_insurance.", "land_transfer_tax.",
+                                     "qualifying_rate."))
                 and not is_reference(n)
                 and n != "economic.inflation_rate.nominal_planning"}
     assert expected <= seen, sorted(expected - seen)

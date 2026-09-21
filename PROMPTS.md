@@ -123,6 +123,15 @@ uv run hde examples/basic_config.yaml --json          # the full result document
 
 ## What it does not do (yet)
 
+Some runs close with an `unpriced:` warning. That line is not from this list: it names one
+dimension **your** run does not price and sizes it on your own numbers — today, the
+affordability ratio recomputed at the rate a lender would actually test it at, which the run
+itself does not apply. Because it is a measurement, it appears only when there is something
+to measure: an all-cash purchase has no rate to test, and a run with no `income:` block has
+no ratio, so neither gets a line. **No line is not an all-clear.** It means nothing in this
+run could be sized — never that nothing is missing. What follows is the inventory that does
+not depend on your run, and it is the one to read before you ask.
+
 - **Households that already own.** This is the big one, and it is a limit of the frame, not
   of a detail. Every owned option here starts at a purchase: a price, a down payment, a
   fresh mortgage. There is no way to tell it you bought in 2014, owe $240,000, have eleven

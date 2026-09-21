@@ -19,6 +19,7 @@ from .market_scenario import ScenarioPriorError
 from .models import InputError, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .reporting import format_text_report, verdict_line
+from .unpriced import unpriced_warnings
 
 # A demographic prior enters the Monte Carlo only: a run that skips it shows
 # the deterministic line alone, and says so rather than let the prior's
@@ -239,6 +240,16 @@ def main() -> int:
             single_path=single_path_run(spec),
         )
         for warning in uncertainty_source_warnings(spec, det_result, verdict):
+            warnings.append(warning)
+            print(f"[warning] {warning}", file=sys.stderr)
+
+        # The dimensions this RUN does not price, measured on its own numbers
+        # (docs/specs/2026-09-21-unpriced-dimensions.md §6: this channel, this
+        # position — after the verdict, beside the decisiveness provenance).
+        # Silent whenever nothing qualifies, which is the design's own guard
+        # (§5): a line that cannot come out silent is a disclaimer, not a
+        # measurement.
+        for warning in unpriced_warnings(spec, det_result, raw):
             warnings.append(warning)
             print(f"[warning] {warning}", file=sys.stderr)
 

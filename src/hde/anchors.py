@@ -301,6 +301,14 @@ class Anchor:
         return (self.value,) + tuple(v for v, _ in self.restatements)
 
 
+# The minimum qualifying rate's rule, VERBATIM from OSFI, and its only home:
+# both legs below quote it, `--print-anchors` shows it, and the line in
+# `unpriced` cites the legs by name rather than restating the sentence — so
+# there is exactly one place the rule is written down, and a test pins the two
+# stored values against it (tests/test_unpriced.py).
+MQR_RULE = "The greater of the mortgage contract rate plus 2% or 5.25%."
+
+
 ANCHORS: Dict[str, Anchor] = {
     # --- Re-anchored defaults (values changed; old defaults were uncited) ---
     "rent.investment_return_rate": Anchor(
@@ -1201,6 +1209,148 @@ ANCHORS: Dict[str, Anchor] = {
                        "reading the published 4.01% as semi-annually compounded "
                        "(the Canadian fixed-rate convention — the series itself "
                        "does not state one): (1 + 0.0401/2)^2 − 1 = 0.0405020025"),),
+    ),
+    # --- The lender's TEST rate: the minimum qualifying rate (2026-09-21) ----
+    # NOT a price, and deliberately not in the `mortgage_rate.` reference family
+    # for that reason: every entry there is a rate that was or could be CHARGED,
+    # and a test threshold read off the same row gets read as a price whatever
+    # the label says (docs/specs/2026-09-21-unpriced-dimensions.md §14). Its own
+    # family, consumed by `unpriced.qualifying_rate_quoted` — the engine applies
+    # it to ONE DISCLOSURE and to nothing the verdict reads: no dataclass falls
+    # back to either leg and no present value moves with them.
+    #
+    # ONE rule in two legs. `MQR_RULE` below is the source's own sentence and is
+    # the single home of the greater-of; each leg quotes it plus the sentence
+    # that names that leg's own figure, so neither can be read on its own.
+    "qualifying_rate.buffer": Anchor(
+        name="qualifying_rate.buffer",
+        value=0.02,
+        as_of="2026-01-29",
+        source="Office of the Superintendent of Financial Institutions (OSFI), "
+               "« Minimum qualifying rate for uninsured mortgages »: « "
+               + MQR_RULE + " » — of which this leg is « The buffer: Currently "
+               "set at 2%, this is a safety margin that shows that borrowers "
+               "can absorb some negative impacts to their finances »"
+               "; and, for an INSURED mortgage, the same figures set by the "
+               "federal government rather than by OSFI: Department of Finance "
+               "Canada, « Statement by the Deputy Prime Minister and Minister "
+               "of Finance on the Canadian housing market », 2021-05-20 "
+               "(canada.ca/en/department-finance/news/2021/05/statement-by-the-"
+               "deputy-prime-minister-and-minister-of-finance-on-the-canadian-"
+               "housing-market.html) — « the federal government will align with "
+               "OSFI by establishing a new minimum qualifying rate for insured "
+               "mortgages, subject to review and periodic adjustment, which will "
+               "be the greater of the borrower's mortgage contract rate plus 2 "
+               "per cent, or 5.25 per cent », « This will apply to insured "
+               "mortgages approved on June 1, 2021, or later »",
+
+        url="https://www.osfi-bsif.gc.ca/en/supervision/financial-institutions/banks/minimum-qualifying-rate-uninsured-mortgages",
+        quoted="« " + MQR_RULE + " » / « The buffer: Currently set at 2% »",
+        unit="percentage POINTS added to the mortgage contract rate AS QUOTED — "
+             "the Canadian fixed-rate quoting convention, the same axis "
+             "`mortgage_rate` is typed on, so the SUM is what "
+             "`mortgage_rate_compounding` converts to an effective annual rate. "
+             "Adding it to an effective annual figure would apply the "
+             "conversion to the contract rate alone and understate the test",
+        rationale=(
+            "THE WHOLE RULE IS '" + MQR_RULE + "', and this entry is one of its "
+            "two legs: the sibling `qualifying_rate.floor` is the other, and "
+            "neither is the qualifying rate on its own. "
+            "SCOPE — TWO AUTHORITIES, ONE FORMULA, and the formula is not "
+            "the thing that could change. OSFI's rule governs UNINSURED "
+            "mortgages; its page is titled « Minimum qualifying rate for "
+            "uninsured mortgages » and says so. On an INSURED mortgage the "
+            "same two figures are the federal government's, set by "
+            "Department of Finance Canada on 2021-05-20 expressly to "
+            "« align with OSFI » and applying to insured mortgages approved "
+            "on 2021-06-01 or later (quoted in `source`). So the two agree "
+            "today BY DECISION, not by identity, and either could move "
+            "without the other — which is why a citation to one must never "
+            "be passed off as a citation to the other. The line that "
+            "applies this pair names which case the run is in. "
+            "The engine applies the "
+            "pair to ONE DISCLOSURE — the affordability ratio recomputed at the "
+            "rate a lender would test, printed beside the ratio the run itself "
+            "prices — and to nothing else: no default falls back to it, no "
+            "present value moves with it, no verdict reads it. It is a TEST "
+            "THRESHOLD, never a price: the rates a borrower can be charged are "
+            "the `mortgage_rate.*` family, and this one belongs in no row with "
+            "them. The band has zero width because 2% is a policy parameter "
+            "OSFI sets and publishes, not a measurement with dispersion; the "
+            "figure to watch is therefore the review, not a range. No "
+            "`valid_until`: OSFI says it reviews the MQR but states no date on "
+            "which this figure changes, and this registry sets that field only "
+            "where the source itself states the change."
+        ),
+        band=(0.02, 0.02),
+        short_cite="OSFI MQR buffer",
+        retrieved_on="2026-09-21",
+    ),
+    "qualifying_rate.floor": Anchor(
+        name="qualifying_rate.floor",
+        value=0.0525,
+        as_of="2026-01-29",
+        source="Office of the Superintendent of Financial Institutions (OSFI), "
+               "« Minimum qualifying rate for uninsured mortgages »: « "
+               + MQR_RULE + " » — of which this leg is « The floor: Currently "
+               "set at 5.25%, this number accounts for risks that can emerge "
+               "from changes in the broader economy »; confirmed unchanged by "
+               "« OSFI maintains Minimum Qualifying Rate for uninsured "
+               "mortgages » (2023-12-12): « the minimum qualifying rate for "
+               "uninsured residential mortgages (MQR) will remain the greater "
+               "of 5.25 per cent or the mortgage contract rate plus 2 per cent »"
+               "; and, for an INSURED mortgage, the same figures set by the "
+               "federal government rather than by OSFI: Department of Finance "
+               "Canada, « Statement by the Deputy Prime Minister and Minister "
+               "of Finance on the Canadian housing market », 2021-05-20 "
+               "(canada.ca/en/department-finance/news/2021/05/statement-by-the-"
+               "deputy-prime-minister-and-minister-of-finance-on-the-canadian-"
+               "housing-market.html) — « the federal government will align with "
+               "OSFI by establishing a new minimum qualifying rate for insured "
+               "mortgages, subject to review and periodic adjustment, which will "
+               "be the greater of the borrower's mortgage contract rate plus 2 "
+               "per cent, or 5.25 per cent », « This will apply to insured "
+               "mortgages approved on June 1, 2021, or later »",
+
+        url="https://www.osfi-bsif.gc.ca/en/supervision/financial-institutions/banks/minimum-qualifying-rate-uninsured-mortgages",
+        quoted="« " + MQR_RULE + " » / « The floor: Currently set at 5.25% »",
+        unit="percent per year as a CONTRACT RATE IS QUOTED — the same axis "
+             "`mortgage_rate` is typed on, converted to an effective annual "
+             "rate by `mortgage_rate_compounding` like any quoted rate, never "
+             "compared against an effective annual figure as it stands",
+        rationale=(
+            "THE WHOLE RULE IS '" + MQR_RULE + "', and this entry is one of its "
+            "two legs: the sibling `qualifying_rate.buffer` is the other, and "
+            "neither is the qualifying rate on its own. WHICH LEG BINDS IS "
+            "ARITHMETIC: the floor is the greater of the two only while the "
+            "contract rate is below 5.25% − 2% = 3.25%, so at every contract "
+            "rate at or above 3.25% the qualifying rate IS the contract rate "
+            "plus two points and this figure never enters. No Canadian "
+            "five-year fixed rate in the registry sits that low — the "
+            "contracted averages are 4.01% insured and 4.35% uninsured — so "
+            "the floor leg is the rule's behaviour for a cheaper rate "
+            "environment than today's, kept because dropping it would store a "
+            "different rule from the one the source states. The engine applies "
+            "the pair to ONE DISCLOSURE and to nothing the verdict reads. Zero-"
+            "width band and no `valid_until` for the same reasons as the "
+            "buffer: a published policy parameter, with no stated date of "
+            "change. "
+            "SCOPE — TWO AUTHORITIES, ONE FORMULA, and the formula is not "
+            "the thing that could change. OSFI's rule governs UNINSURED "
+            "mortgages; its page is titled « Minimum qualifying rate for "
+            "uninsured mortgages » and says so. On an INSURED mortgage the "
+            "same two figures are the federal government's, set by "
+            "Department of Finance Canada on 2021-05-20 expressly to "
+            "« align with OSFI » and applying to insured mortgages approved "
+            "on 2021-06-01 or later (quoted in `source`). So the two agree "
+            "today BY DECISION, not by identity, and either could move "
+            "without the other — which is why a citation to one must never "
+            "be passed off as a citation to the other. The line that "
+            "applies this pair names which case the run is in."
+        ),
+        band=(0.0525, 0.0525),
+        short_cite="OSFI MQR floor",
+        retrieved_on="2026-09-21",
     ),
     # --- Routine maintenance: the published figure beside an uncited zero ----
     # `house.annual_maintenance_rate` stays 0.0 and deliberately uncited (the

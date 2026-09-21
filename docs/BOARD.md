@@ -27,7 +27,24 @@ only worth having beside a price distribution.
 
 ## 2. Name the unknown that changes the verdict
 
-**designed** · design: `docs/specs/2026-09-21-unpriced-dimensions.md` · builds after item 1
+**slice 1 LANDED 2026-09-21** · design: `docs/specs/2026-09-21-unpriced-dimensions.md`
+
+Slice 1 ships the channel itself, on the smallest dimension that needs nothing from the
+renewal ladder (§14, §16): OSFI's minimum qualifying rate, anchored as its two published
+legs, loaded onto the user's own contract rate on the as-quoted axis, and the affordability
+ratio recomputed at it beside the ratio the run prices. The line names the gap the registry
+itself records — this engine's numerator is broader than a lender's gross debt service — and
+never says the household would fail to qualify, because the engine is not a lender and does
+not have the lender's numerator. It also names WHICH authority sets the test for this loan:
+OSFI's rule governs uninsured mortgages, and on an insured one the same two figures are the
+federal government's, so a citation to one is not a citation to the other. Silence is real
+and tested: no income block, no financed option, or no rate on the quoted axis, and nothing
+prints.
+
+Left for slice 2: the renewal dimension in state two, which needs item 1's ladder; then the
+tenure field and its refusal (§10), which is independent of both and is the largest single
+gain in who the tool serves honestly. §15's straight-switch exemption — the one qualifier on
+the list that runs in the user's favour — rides the affordability line once renewal lands.
 
 The engine says a great deal about what it does not KNOW: a figure with no source, an
 estimate the assistant chose, decisiveness resting on inputs the user never stated. It says
