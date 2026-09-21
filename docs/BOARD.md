@@ -51,23 +51,42 @@ This one makes the answers already being given more honest, and it is the smalle
 here. An instrument that refuses to be falsely confident should be able to say what it
 cannot see, not only what it was not told.
 
-## 3. Price risk as a distribution, not just a crash
+## 3. The simulation's risk model, and what it does to the verdict
 
-**open** · blocks: 4
+**open** · blocks: 4 · three defects in one object, found by audit 2026-09-21
 
-`value_growth_vol` does not exist. House prices move only through a jump channel
-(`price_shock`) and inflation. So the Monte Carlo's picture of owning is a straight line
-with occasional disasters, and `P(each option cheapest)` is narrower than the truth.
+The Monte Carlo produces `P(each option cheapest)`, the decisiveness rule reads it, and every
+verdict rests on it. Three things are wrong with how it is produced. They are listed together
+because they are one pass over the same file and because each one alone would mislead about
+the other two.
 
-Build: a diffusion on the value track beside the jump channel, anchored to Canadian
-house-price series, with the anchor stating what window it was measured over.
+**a. Every cost has dispersion; the asset has none.** `condo_fee_vol`,
+`house_maintenance_vol`, `rent_escalation_vol`, `other_cost_vol`, `inflation_vol`,
+`investment_return_vol` all exist. The home's value has no dispersion parameter at all — the
+crash channel is a jump, not a spread. Meanwhile terminal equity is the largest single term in
+an owned option's total: -$218,959 of $518,779 in the shipped showcase. The biggest term is
+the one with no spread, and it feeds the decisiveness rule.
 
-*Why now:* without it, any statement about price risk versus rate risk is a comparison
-against zero. Measured this round: every cost input carries a volatility and the home's value
-carries none, while terminal equity is the largest single term in an owned option's total
-(-$218,959 of $518,779 in the shipped showcase). The dispersion of the biggest term is the one
-thing not modelled, and it feeds the decisiveness rule, so the engine calls runs decisive that
-are not.
+**b. The three options are not compared in the same future.** Within one iteration, the condo
+draws its own inflation path and the house draws a separate, unrelated one; rent draws none at
+all and composes with the fixed scalar. Then the three are stacked and compared
+index-for-index, and the result is reported as the probability each option is cheapest. That
+number reads as "the chance buying beats renting in the same future". It is not: it is three
+unrelated draws compared by position. Independence also maximises the variance of the
+difference, so the comparison is noisier than the world it models, and a leveraged owner's bad
+income year can never coincide with their bad price year.
+
+**c. The owner gets a tail; the renter does not.** The owned side has a discrete price-shock
+channel. The rent side can only drift smoothly — no level jump, no lease-reset hazard. So the
+model hands the owner a crash and the renter nothing, which biases the comparison toward
+renting looking safer than it is. It bites hardest exactly where rent control is strongest: a
+long-tenure Montréal or Toronto tenant paying far below market, whose real exposure is a
+renoviction or lease-end reset that can double the figure in one year. The engine already
+anchors the continuing-tenant protection, so it knows the protection exists; it has no way to
+say that it can end.
+
+*Why now:* (b) changes what the headline number MEANS, and nothing downstream of it can be
+trusted until it is right. (a) and (c) are the two asymmetries that bias which way it points.
 
 ## 4. Which risk actually decides it
 
@@ -144,6 +163,13 @@ hosted. Parked deliberately, not forgotten.
 
 **open**
 
+- The fixed-payment variable-rate mortgage, where the payment holds while the rate floats and
+  the cost lands in a growing balance. The engine can express a payment that moves with the
+  rate and one fixed for years, never one that stays put while the true cost does not, so the
+  balance can never grow. Measured on a plausible shock, the mortgage leg is understated by
+  about 1.4% structurally and 9.7% under the encoding a user would naturally reach for. The
+  sharper harm is misplacement: the ladder asserts a payment step this household does not
+  take, and stays silent on the balance growth they do.
 - `--sweep` accepts sticker points in nominal mode instead of hand-authored real decimals.
 - `--print-schema` / `--print-anchors` filter by section or key; both are multi-KB blobs.
 - `--break-even` under the verdict's own criterion, not only the deterministic tie band.
