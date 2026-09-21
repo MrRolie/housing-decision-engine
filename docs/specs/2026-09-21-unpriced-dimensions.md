@@ -1,6 +1,6 @@
 # Unpriced dimensions — design
 
-**Status:** proposed, 2026-09-21. Design only, no engine code. One open question, named in §10.
+**Status:** proposed, 2026-09-21, revised the same day after the open question in §10 was answered. Design only, no engine code.
 
 ## 1. Why
 
@@ -189,7 +189,7 @@ in a known direction should print attached to that number, never as a free-stand
 A break penalty makes early exit worse than the measured early-exit figure. Printed alone it is
 noise; printed on that line it makes the measured number honest.
 
-## 10. The cohort the engine cannot detect — OPEN
+## 10. The cohort the engine cannot detect — REFUSE, do not disclose
 
 Every owned option starts at a purchase. A household that already owns cannot be described:
 no existing balance, no years already paid, no equity accrued. Whether selling helps or hurts
@@ -197,20 +197,37 @@ depends on that equity, on their rate against today's, and on whether the princi
 exemption covers the gain — which pull opposite ways, so the direction is genuinely
 indeterminate. Claiming one would be the cheap all-clear in a new costume.
 
-It cannot be a per-run line: the engine has no input that detects it, so the line would fire
-unconditionally, which §5 forbids by name.
+It cannot be a per-run line. The engine has no input that detects it, so the line would fire
+unconditionally, which §5 forbids by name. Worse, the exclusion is invisible BY CONSTRUCTION:
+the people the frame excludes are exactly the people whose configs cannot record that they are
+excluded. Their config is indistinguishable from a first-time buyer's.
 
-**Provisional resolution, and the open question.** The organ that CAN detect this cohort is the
-intake, because the assistant is talking to the person. The skill's missing-information gate
-asks whether they already own, and on a yes the answer says plainly that the tool cannot take
-their situation yet, before anything runs.
+**The first answer was wrong and is recorded because the reason generalises.** It was to move
+the detection into the intake, where the assistant can simply ask. That fails on this repo's
+own evidence: the `you said:` line exists because two consecutive rounds of served answers lost
+the user's own figures from the prose, which is why that fact was moved into the engine's
+block. Instructions in prose fail here — measured, twice. Routing the single highest-stakes
+case through the one mechanism already proven unreliable is worse than either alternative,
+because a missed cohort question does not degrade an answer, it invalidates all of it.
 
-The objection to that is serious and unresolved: this whole feature exists because disclosure
-must not depend on the assistant remembering to be honest, and the resolution puts the most
-important case back in the assistant's hands. Open until answered: whether anything in the
-ENGINE can make that question unskippable, and whether any config carries a reliable signature
-that its author already owns. If such a signature exists, the line can fire conditionally and
-this section is unnecessary.
+**The answer is a required field and a refusal.** A tenure input, REQUIRED on any config that
+prices an owned option. The engine refuses a config that omits it, the same way it refuses any
+other missing required key. On a value that says the household already owns, it refuses to run
+at all, and the refusal names the limit and the one substitute question it can still answer.
+Detection stops depending on anyone remembering, because there is no run to produce without it.
+
+This is the repo's existing law, not a new one: a surface that cannot verify must REFUSE.
+Refusal is the correct organ for a dimension whose bite is unbounded. An uncomputable bite IS
+more dangerous than a computable one — the person gets a full page of internally consistent
+numbers answering a question they did not ask, and no line at the bottom undoes a page of them.
+
+**The obvious shortcut is already visible.** An assistant that types the tenure itself to clear
+the gate is caught by machinery that exists: `sources:` classes every input, so an
+assistant-supplied tenure surfaces in the read-back as an `assistant-typed:` entry, in BOTH
+blocks, where the user can see that nobody asked them. No new mechanism.
+
+The ladder in §3 gains a state at the top: **refused**, then not priced with no input, then not
+priced with the input unfilled, then priced.
 
 ## 11. Staleness
 
@@ -250,11 +267,61 @@ What IS duplicated is the direction vocabulary, currently written three differen
 those four. That taxonomy gets one home in the new module and the coherence warnings format
 from it.
 
-## 14. Smallest shippable slice
+## 14. The qualifying rate — one citation, two channels
 
-The renewal dimension alone, state two, on financed runs, after the renewal ladder lands. One
-solve, one comparison, one line, both pinning assertions, and the `PROMPTS.md` sentence that
-gives silence its meaning.
+A published figure converts the common case from a convention into an anchor. The banking
+regulator's minimum qualifying rate for uninsured mortgages is the greater of the contract rate
+plus two points, or 5.25%, unchanged through 2026. Anchor it with the FULL greater-of rule so
+the stored figure reconciles with the source verbatim, and record in the rationale that the
+floor leg binds only below a 3.25% contract rate. The spread lands on the as-quoted axis, which
+`mortgage_rate_compounding` then converts, so it must never be added to an effective-annual
+figure.
+
+**What it buys on the verdict line:** the common case becomes ONE deterministic load carrying a
+citation instead of ninety loads carrying none. The threshold solve of §2 remains the primary
+form; this is the cheap cited point beside it.
+
+**What it buys on the affordability line, which is better:** there the citation is exactly on
+label, because the affordability channel already runs a cost-over-income test and the
+qualifying rate is the published rule FOR that test. Move `mortgage_rate` by the rule, run
+deterministically, read only the income report and discard the present value.
+
+**One guard, from the registry itself.** The `income.affordability_threshold` anchor records
+that its numerator is broader than a lender's gross debt service measure. So the line prints
+the ratio on the engine's own measure and NAMES that gap. It must never print that the user
+would fail to qualify. That is the sentence that would fail contact with a reader.
+
+**This ships on the committed engine today**, with no dependency on the renewal ladder.
+
+## 15. The channel must sometimes carry good news
+
+Every qualifier in §9 makes the stated answer worse: the break penalty, the deferral, the
+understated owner costs. A disclosure channel that only ever says the answer is worse than it
+looks is not calibrated, it is pessimistic, and a reader learns to discount it.
+
+One published rule runs the other way. Since 2024-11-21 a straight switch to a new lender at
+renewal — same loan amount, same amortization — is exempt from the qualifying rate, so the
+household qualifies at their contract rate. It belongs as a qualifier on the affordability
+line, not the verdict line, because it changes whether the stress binds and moves no present
+value. Its wording branches on the insured tier, which `sweep.insured_of` already derives.
+
+It is the most valuable entry on the list, and not because of renewal. It tells a household
+that a lever exists in their favour. That is what makes the channel credible rather than
+decorative, and it should be treated as a design requirement: **a channel that can only deliver
+bad news will be discounted, so a qualifier that helps the user ranks above one that hurts
+them, all else equal.**
+
+## 16. Smallest shippable slice
+
+The affordability application of §14 alone: one cited load, one ratio, one named gap, on the
+committed engine. It needs nothing from the renewal ladder and proves the whole mechanism.
+
+Then the renewal dimension, state two, on financed runs, after the ladder lands: one solve, one
+comparison, one line, both pinning assertions, and the `PROMPTS.md` sentence that gives silence
+its meaning.
+
+Then the tenure field and its refusal (§10), which is independent of both and is the largest
+single gain in who the tool serves honestly.
 
 Deliberately left out of round one: price variation (it needs the diffusion channel first),
-early exit, every qualifier, the registry for state-one dimensions, and §10.
+early exit, the remaining qualifiers, and the registry for state-one dimensions.
