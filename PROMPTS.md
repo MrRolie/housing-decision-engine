@@ -123,6 +123,13 @@ uv run hde examples/basic_config.yaml --json          # the full result document
 
 ## What it does not do (yet)
 
+- **Households that already own.** This is the big one, and it is a limit of the frame, not
+  of a detail. Every owned option here starts at a purchase: a price, a down payment, a
+  fresh mortgage. There is no way to tell it you bought in 2014, owe $240,000, have eleven
+  years left and renew in March. So if your question is "my payment is about to jump, do I
+  stay, downsize, or sell and rent?", this tool cannot take your situation yet. Everything
+  below is a refinement inside the rent-versus-buy frame; this one says who the frame leaves
+  out.
 - **Mortgage renewal risk.** The quoted rate is held for the whole horizon; a design
   exists but is not built. When rates rise, this biases the answer toward buying. Ask the
   "what if rates are 6%" follow-up to see the exposure.

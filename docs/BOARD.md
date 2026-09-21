@@ -13,7 +13,7 @@ Each item: **what**, *why now*, and what it unblocks. Status is `open`, `doing` 
 
 ## 1. Rate risk over the horizon — the renewal a Canadian mortgage actually has
 
-**doing** · blocks: 2, 3 · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
+**doing** · blocks: 3, 4 · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
 
 Today a mortgage carries ONE rate for the whole amortization. That is a US 30-year fixed.
 A Canadian household signs a 5-year term against a 25-year amortization and re-prices four
@@ -30,9 +30,28 @@ rate from a calibrated process and arrives with item 2.
 *Why now:* it is the one modelling gap that can flip a shipped verdict, and everything
 below that compares risks needs a rate path to compare against.
 
-## 2. Price risk as a distribution, not just a crash
+## 2. Name the unknown that changes the verdict
 
-**open** · blocks: 3
+**open** · cheapest honest win on the current tip
+
+The engine says a great deal about what it does not KNOW: a figure with no source, an
+estimate the assistant chose, decisiveness resting on inputs the user never stated. It says
+nothing about what it cannot SEE. Renewal risk is not an input a user forgot to supply, it
+is a dimension the model lacks, so no warning fires and the answer reads as complete.
+
+Build: a line in the read-back that names the unmodelled dimensions which could move THIS
+verdict, and says which way. Not modelling every uncertainty. Naming it. "This answer holds
+your rate for the full term; a Canadian five-year term does not, and the gap between rent
+and buy here is smaller than that unknown."
+
+*Why second:* every other item on this board changes the engine and helps the next user.
+This one makes the answers already being given more honest, and it is the smallest thing
+here. An instrument that refuses to be falsely confident should be able to say what it
+cannot see, not only what it was not told.
+
+## 3. Price risk as a distribution, not just a crash
+
+**open** · blocks: 4
 
 `value_growth_vol` does not exist. House prices move only through a jump channel
 (`price_shock`) and inflation. So the Monte Carlo's picture of owning is a straight line
@@ -44,9 +63,9 @@ house-price series, with the anchor stating what window it was measured over.
 *Why now:* without it, any statement about price risk versus rate risk is a comparison
 against zero.
 
-## 3. Which risk actually decides it
+## 4. Which risk actually decides it
 
-**open** · needs 1 and 2
+**open** · needs 1 and 3
 
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a
@@ -58,7 +77,24 @@ would cite. It is also the first thing the engine will have said that nobody els
 saying: the rent-versus-buy literature is shaped by a 30-year fixed rate, under which
 renewal risk does not exist.
 
-## 4. Anchors that survive their author
+## 5. A household that already owns
+
+**open** · a whole cohort, not a refinement
+
+Every owned option starts at a purchase: a price, a down payment, a fresh mortgage. There
+is no way to state an existing mortgage, its balance, the years already paid or the equity
+accrued. So the person whose payment is about to jump — the first user named when the
+purpose of this thing was written down — cannot describe their situation to it at all.
+Their question is not rent or buy, it is stay, downsize, or sell and rent.
+
+Build: an existing-mortgage starting state, and the owned option able to begin mid-life.
+Much of the machinery exists; the renewal schedule from item 1 is most of the hard part.
+
+*Why here and not higher:* items 1, 3 and 4 are on a clock that this one is not. That is a
+scheduling reason, not a judgment that this matters less. It is the largest hole in who the
+tool serves, and the ranking is worth re-arguing.
+
+## 6. Anchors that survive their author
 
 **open** · artifact boundary, clause 3
 
@@ -73,7 +109,7 @@ with the run refusing to silently substitute.
 *Why now:* the first anchors expire 2026-12-31. It is the last resident-builder assumption
 left after the 2026-09-20 pass.
 
-## 5. What the owner never gets back
+## 7. What the owner never gets back
 
 **open**
 
@@ -81,7 +117,7 @@ The breakdown prints year-1 cash, principal and appreciation. Over the horizon t
 interest/principal split and selling costs are not separated, so the owner's unrecoverable
 cost is not a line anyone can read. That figure is the honest counterpart to rent.
 
-## 6. The decision the user actually faces
+## 8. The decision the user actually faces
 
 **open**
 
@@ -89,7 +125,7 @@ Three items, one theme: rank on the figure the user cares about (`expected`, `p9
 wealth) rather than always the mean; let the horizon itself be uncertain ("we might move
 for work"); and solve the crossing act 6 draws instead of sweeping ±35% around it.
 
-## 7. Cuts, and what is in them
+## 9. Cuts, and what is in them
 
 **parked** · needs a delivery decision
 
@@ -98,7 +134,7 @@ and the build record. `v0.4.0` exists, so cuts exist. What a cut CONTAINS is und
 because the delivery form is undecided: a repo people clone, a package, or something
 hosted. Parked deliberately, not forgotten.
 
-## 8. Smaller, real, and cheap
+## 10. Smaller, real, and cheap
 
 **open**
 
@@ -110,7 +146,7 @@ hosted. Parked deliberately, not forgotten.
 - Whether the 200-word quick-sense cap should rise, now that disclosures are ranked and
   never dropped.
 
-## 9. Measure the engine again
+## 11. Measure the engine again
 
 **open**
 

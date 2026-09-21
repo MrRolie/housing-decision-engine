@@ -5,6 +5,21 @@
 A present-value comparison engine for housing decisions — rent vs condo vs house on a
 net-wealth basis — with demographic scenario priors from a UN-data pipeline.
 
+## What this is for
+
+This tool answers one question — should this household rent or buy — and it is built to let
+the answer be "I can't tell you." Every number it uses carries its source. Every number it
+lacks is named as missing. When the best guess and the futures do not agree, it says so
+instead of picking. It exists so a person renewing a mortgage, a kid leaving home, or a
+renter weighing a purchase can see the shape of the question themselves, without paying
+someone to see it first. It does not advise. It shows its work.
+
+Of those three, it serves two today. **A household that already owns cannot yet be
+described to it:** there is no way to state an existing mortgage, its remaining balance or
+the years already paid, so someone facing a renewal cannot run their own situation. That is
+open work, ranked, in [docs/BOARD.md](docs/BOARD.md). Until it lands this page says so,
+rather than letting the tool look like it fits.
+
 You run it with your own Claude, on your own numbers. Nothing here reports anywhere, and
 no part of an answer depends on the people who built it being around: every assumption,
 source and caveat an answer needs is printed by the engine itself. Take a tagged release
