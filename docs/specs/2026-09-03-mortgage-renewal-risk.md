@@ -1,6 +1,6 @@
 # Mortgage renewal risk — design
 
-**Status:** proposed. Design only — no engine code.
+**Status:** slice 1 APPROVED and in build (2026-09-21). Slice 2 direction ruled, see §11.
 
 ## 1. Why
 
@@ -119,3 +119,30 @@ renewal, cumulative, clamped at zero since `_financing_pv` refuses a negative ra
 renewal-rate anchor or forward curve; mean reversion and `_correlated_z`-style coupling to
 the inflation shock; variable- and trigger-rate products; prepayment penalties and break
 costs; the qualifying-rate stress test; the Fisher split in real mode.
+
+## 11. Ruling 2026-09-21 — two surfaces, one engine
+
+The renewal rate reaches the answer two ways, and the choice between them was settled rather
+than left open:
+
+- **The product gets a ladder.** A user states the renewal path, or a short list of them, and
+  sees what each does. That is §3's `mortgage_renewal_rates` exactly as designed: the user's
+  own figure, no forecast, no anchor, and the honesty contract's "no source for" line carries
+  any rate an assistant supplied. A household can reason about "what if I renew 200 basis
+  points higher"; it cannot reason about a calibrated diffusion, and a number nobody chose is
+  not a number anyone should act on.
+- **The study gets a fitted process.** Renewal rates drawn from a mean-reverting short-rate
+  model calibrated to published Canadian series, so the question "how large is renewal risk
+  next to price risk" has a distribution behind it rather than a scenario. This supersedes
+  §10's "deliberately left out" line for mean reversion: it is now planned work, not excluded
+  work. The ladder stays the default surface; the process is opt-in.
+
+Sequencing: slice 1 (the ladder, §10) ships first and alone. The process arrives with the
+price-diffusion channel (board item 2), because a rate distribution is only worth having
+beside a price distribution — comparing one risk against a constant is comparing it against
+zero.
+
+What does NOT change: no renewal-rate anchor ships with the ladder, because no defensible
+forward path exists for a user's own scenario. The fitted process is a MODEL with stated
+calibration and a stated window, which is a different claim from an anchored figure and must
+be labelled as one wherever it prints.

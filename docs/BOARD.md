@@ -13,17 +13,19 @@ Each item: **what**, *why now*, and what it unblocks. Status is `open`, `doing` 
 
 ## 1. Rate risk over the horizon — the renewal a Canadian mortgage actually has
 
-**open** · blocks: 2, 3, the project's core claim
+**doing** · blocks: 2, 3 · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
 
 Today a mortgage carries ONE rate for the whole amortization. That is a US 30-year fixed.
 A Canadian household signs a 5-year term against a 25-year amortization and re-prices four
 times before the horizon ends. The engine is silent on the single largest buy-side risk in
 the market it models, and every verdict it has ever produced assumes that risk away.
 
-Build: `mortgage_term_years` becomes the TERM, amortization becomes its own field, and the
-payment re-solves at each renewal off a rate path. Deterministic mode takes a stated
-renewal path; Monte Carlo draws one. A renewal is a read-back line with its new payment,
-because a user who learns this at renewal instead of at decision time has been failed.
+Build, slice 1: `mortgage_renewal_years` joins `mortgage_term_years`, which keeps its
+meaning as the amortization so no shipped config changes meaning silently. The payment
+re-solves over the REMAINING amortization at each renewal off a rate the user states. A
+renewal is an assumptions line with its new payment and the step in dollars, because a user
+who learns this at renewal instead of at decision time has been failed. Slice 2 draws the
+rate from a calibrated process and arrives with item 2.
 
 *Why now:* it is the one modelling gap that can flip a shipped verdict, and everything
 below that compares risks needs a rate path to compare against.
