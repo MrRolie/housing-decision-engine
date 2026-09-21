@@ -4,7 +4,7 @@ The plan's six bodies are carried verbatim in intent. Four gates are ADDED, each
 claim the plan's six cannot reach:
 
   test_hors_rmr_is_province_net_of_all_six_cmas
-      codex r4-F2 is THE correction this task exists to honour, and nothing in the plan's
+      cross-model review r4-F2 is THE correction this task exists to honour, and nothing in the plan's
       six touches it: a derivation that nets only MTL+QC emits a HORS_RMR rate that is
       still in [0,1], still present for every enum member, and still equal to its own
       regenerated artifact — every one of the plan's gates stays green. This gate
@@ -1078,7 +1078,7 @@ def test_missing_headship_key_raises_rather_than_serving_an_empty_curve(tmp_path
 
 
 def test_hors_rmr_is_province_net_of_all_six_cmas():
-    """codex r4-F2: the residual is province NET OF ALL QC CMAs, not merely MTL+QC.
+    """cross-model review r4-F2: the residual is province NET OF ALL QC CMAs, not merely MTL+QC.
 
     Owner and total are netted separately THEN divided — never a difference of rates.
     The FINAL assertion is the discriminator: it pins that the two nettings give
@@ -1477,7 +1477,7 @@ def test_absent_statistic_or_total_member_names_the_member_and_not_the_geographi
     A renamed `Statistics (3C)` member or a renamed `Total -` member empties the rate slice —
     every row is skipped by the slice predicate — and the only surviving check was the GEO-set
     equality gate, which then raised "GEO set is [], expected [the seven geographies…]". The
-    reader is sent to the geography map and the netting rule (codex r4-F2) for a fault that is
+    reader is sent to the geography map and the netting rule (cross-model review r4-F2) for a fault that is
     in a DIFFERENT dimension's member label. Each mutant must now name the absent member, and
     must NOT mention the geographies at all.
     """
@@ -1700,7 +1700,7 @@ def test_hors_rmr_netting_identity_is_anchored_by_the_published_province_cell():
     ruling W (2026-08-20) each of those cells is a MODEL BAND, so the netting identity is
     anchored at each of them separately as well as at their union.
 
-    HORS_RMR is `province NET OF all six wholly-Québec CMAs` (codex r4-F2), and the province
+    HORS_RMR is `province NET OF all six wholly-Québec CMAs` (cross-model review r4-F2), and the province
     term is the whole residual's scale — it is ~74% larger than the six CMAs combined, so a
     wrong province cell moves HORS_RMR more than any other single input while leaving the rate
     a perfectly plausible fraction. `test_hors_rmr_is_province_net_of_all_six_cmas` pins the

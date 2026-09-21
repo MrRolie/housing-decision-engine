@@ -49,7 +49,7 @@ BASIS_DIGEST_YEARS = tuple(range(2021, 2052))    # the ISQ population lattice
 
 def ensure_qc_basis() -> None:
     set_active_mortality(*QC_BASIS)
-    if active_mortality() != QC_BASIS:   # if-check, not assert (codex F7)
+    if active_mortality() != QC_BASIS:   # if-check, not assert (cross-model review F7)
         raise BasisError(f"active basis {active_mortality()} is not the Québec basis {QC_BASIS}")
 
 

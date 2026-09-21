@@ -884,7 +884,7 @@ def test_a_reconciliation_violating_central_run_refuses(monkeypatch, tmp_path):
 
 
 def test_the_reconciliation_cohort_is_the_spec_pinned_one():
-    """Composition is a caller obligation `check_reconciliation` cannot verify (codex r9-F4):
+    """Composition is a caller obligation `check_reconciliation` cannot verify (cross-model review r9-F4):
     the band is well-defined only against the mix the INITIALIZATION EQUATIONS produce on the
     committed vintage for MTL_RMR. `tests/test_rollforward.py` discharged it with a private
     helper and recorded that Task 29's pipeline is where it folds — this is that fold."""
@@ -1387,7 +1387,7 @@ def test_the_per_age_P_resident_operand_is_NONNEG_BY_COMPOSITION(frames, monkeyp
     rather than on a re-implementation of it: `native_formation` is wrapped, so what is measured
     is the operand `_ed_series` actually hands the consumer, once per projected year at both `t`
     and `t-1`. Each cell is `P_ISQ(a) x scale` with `P_ISQ(a) >= 0` refused at load
-    (`loaders/isq.py`, codex r4-F3) and `scale = P_resident_total / P_ISQ_total >= 0` refused by
+    (`loaders/isq.py`, cross-model review r4-F3) and `scale = P_resident_total / P_ISQ_total >= 0` refused by
     the total-level gate.
 
     ARM 2 IS WHAT MAKES IT A THEOREM RATHER THAN A PROPERTY OF THIS VINTAGE. On the committed

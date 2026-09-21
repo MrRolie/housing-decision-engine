@@ -6,7 +6,7 @@ This gate is the coarse half of enforcing that. Roll a 75+ owner cohort forward 
 all-cause retention (survivors still owning / initial) must land in [0.20, 0.40] — the Myers
 0.26–0.31 all-cause envelope WIDENED. Outside → CalibrationError.
 
-WHAT THE GATE DELIBERATELY DOES NOT DO (spec §5, codex r7-F5 — the reason this file pins the
+WHAT THE GATE DELIBERATELY DOES NOT DO (spec §5, cross-model review r7-F5 — the reason this file pins the
 band and nothing else): a DOUBLED mortality decrement still lands INSIDE this band, so the
 envelope cannot carry exactly-once. FIGURE CORRECTED by ruling O (spec §5 amendment,
 2026-08-08) and re-measured on the spec-pinned cohort in tests/test_rollforward.py: the doubled
@@ -25,7 +25,7 @@ doubled one (21/21 start years). `check_reconciliation` takes a bare float and c
 run is calling, so no test here can enforce the scope; it is an orchestrator obligation (plan
 Task 29), stated in `gates.py` for the same reason the composition caveat below is.
 
-COMPOSITION CAVEAT, recorded not asserted (spec §5, codex r9-F4): retention is STATE-DEPENDENT,
+COMPOSITION CAVEAT, recorded not asserted (spec §5, cross-model review r9-F4): retention is STATE-DEPENDENT,
 so the band is only well-defined against a PINNED cohort mix — the one the initialization
 equations produce on the committed vintage for MTL_RMR, with per-state Solo_m/Solo_f/Couple
 retention paths additionally pinned in the oracle fixture. `check_reconciliation` takes a bare

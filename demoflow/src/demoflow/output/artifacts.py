@@ -2,8 +2,8 @@
 and spec §7's GENERAL "no open string anywhere" rule.
 
 Every shipped file opens with the same envelope {schema, schema_version, data_vintage (incl.
-source_hashes), assumptions_hash} above its rows (codex r7-F6), is serialized with
-`allow_nan=False` over a pre-asserted-finite tree (codex r4-F3), and is validated against a
+source_hashes), assumptions_hash} above its rows (cross-model review r7-F6), is serialized with
+`allow_nan=False` over a pre-asserted-finite tree (cross-model review r4-F3), and is validated against a
 closed schema on the way out.
 
 THE WALK IS A WALK. The plan body shipped a function named `assert_no_open_strings` whose
@@ -67,7 +67,7 @@ there is no call left to delete, and a document assembled outside the two builde
 same contract as one they built.
 
 THE SET CONTRACT IS BOUND AT THIS BOUNDARY TOO, for both artifacts, because a partial file is
-a false green rather than a small one — and its rankings half was overstated here until codex
+a false green rather than a small one — and its rankings half was overstated here until cross-model review
 r12-F2 measured it. A tripwire baseline must carry EXACTLY the code-owned required indicator
 set (mirroring `run_exit_code`, so the file and the exit code cannot disagree); a rankings
 artifact must account for the modeled geography DOMAIN — every member ranked or excluded, the
@@ -165,7 +165,7 @@ SOURCE_HASH_FIELDS = frozenset({"sha256", "extracted_at"})
 # costs an assignment because `pipeline._source_hashes` already computed and pin-checked it.
 SOURCE_HASH_OPTIONAL = frozenset({"committed_sha256"})
 
-# Run-level exclusion (codex r10 / spec §8 branch iii): a geography whose demand-side input is
+# Run-level exclusion (cross-model review r10 / spec §8 branch iii): a geography whose demand-side input is
 # unresolvable is EXCLUDED FROM RANKINGS ENTIRELY — no ED row — and named in a typed record.
 # BOTH positions are bound. The plan bound the key set and `unresolved_input` and left
 # `geography` FREE TEXT, so `{"geography": "crash_probability=0.35", "unresolved_input":
@@ -240,7 +240,7 @@ def _fmt(path: tuple[str, ...]) -> str:
     return out
 
 
-# ------------------------------------------------------------------ finiteness (codex r4-F3)
+# ------------------------------------------------------------------ finiteness (cross-model review r4-F3)
 
 def _assert_finite(obj) -> None:
     """Refuse any non-finite float anywhere in the tree, KEYS INCLUDED.
@@ -769,7 +769,7 @@ def stamp_pairing_token(build) -> dict[str, dict]:
 # --------------------------------------------------------------------------- the documents
 
 def _envelope(schema: str, vintage, assumptions_hash: str, run_pairing: str) -> dict:
-    """The identity envelope (codex r7-F6), shape-checked before it is stamped on a file.
+    """The identity envelope (cross-model review r7-F6), shape-checked before it is stamped on a file.
 
     An empty `source_hashes` REFUSES, on the derivation this package has carried since the
     rate-vintage carry: an envelope field that silently degrades to '' or {} publishes an
@@ -830,7 +830,7 @@ def assert_rankings_document_complete(doc: dict) -> None:
     UNIQUE and DISJOINT, their union is exactly the modeled geography domain, and the ranks are
     the contiguous permutation 1..len(rankings).
 
-    IT EXISTS BECAUSE §7(b) WAS THE ONE TRANCHE-1 ARTIFACT WITH NO SET CONTRACT (codex r12-F2).
+    IT EXISTS BECAUSE §7(b) WAS THE ONE TRANCHE-1 ARTIFACT WITH NO SET CONTRACT (cross-model review r12-F2).
     Its two siblings both have one: §7(a) mandates that the Tranche-2 ScenarioPrior row keys
     form "the COMPLETE Cartesian product ... with NO duplicates", and §7(c) mandates that every
     code-required indicator is "present exactly once" — multiset equality in the validator
@@ -912,7 +912,7 @@ def assert_rankings_document_complete(doc: dict) -> None:
 
 def assert_tripwire_document_complete(doc: dict) -> None:
     """Spec §7(c)'s set contract: the baseline carries EXACTLY the code-owned required indicator
-    set, as ONE comparison over the whole class (codex r10-F6).
+    set, as ONE comparison over the whole class (cross-model review r10-F6).
 
     The landed body refused only the EMPTY baseline, on a derivation that applies verbatim to
     its siblings — and the truncated shape is the more dangerous one: a one-indicator file reads
@@ -954,7 +954,7 @@ def rankings_document(rankings, vintage, assumptions_hash, allowed_source_keys,
     if rows_moved is not None:
         doc["rows_moved"] = dict(rows_moved)
     # THE SET CONTRACT, through the same validator `_DOC_CONTRACTS` dispatches on the write path
-    # (spec §7b; codex r12-F2) — one declaration, reached from both doors. `rankings: []` is a
+    # (spec §7b; cross-model review r12-F2) — one declaration, reached from both doors. `rankings: []` is a
     # legitimate document when the exclusion records cover the domain, and nothing else is.
     assert_rankings_document_complete(doc)
     assert_no_open_strings(doc, allowed_source_keys)
@@ -990,7 +990,7 @@ def scenario_prior_document(rows, vintage, assumptions_hash, allowed_source_keys
            "mapping_version": mapping.MAPPING_VERSION,
            "scenario_priors": row_dicts}
     # The SET contract (§7(a)'s COMPLETE Cartesian product), at the builder AND at the writer —
-    # the same both-doors discipline codex r12-F2 mandated for the rankings.
+    # the same both-doors discipline cross-model review r12-F2 mandated for the rankings.
     prior_document_complete(doc)
     assert_no_open_strings(doc, allowed_source_keys)
     return doc
@@ -1076,7 +1076,7 @@ def _assert_rows_valid(doc: dict) -> None:
 # per-record validator can see because each of them sees one record. Same shape as
 # `_ROW_CONTRACTS` above, one level up, and FAIL-CLOSED for the same measured reason.
 #
-# IT IS A TABLE RATHER THAN TWO CALLS BECAUSE OF WHERE THE HOLE WAS (codex r12-F2). Spec §7's
+# IT IS A TABLE RATHER THAN TWO CALLS BECAUSE OF WHERE THE HOLE WAS (cross-model review r12-F2). Spec §7's
 # three emitted documents each carry a set rule — §7(a) the Tranche-2 ScenarioPrior keys as "the
 # COMPLETE Cartesian product ... with NO duplicates", §7(b) the rankings covering the modeled
 # geographies, §7(c) every required indicator "present exactly once" — and only §7(c) was built,
@@ -1129,7 +1129,7 @@ def write_json_strict(path: Path, doc: dict, allowed_source_keys) -> None:
     the two builders ship unvalidated.
 
     EXACTLY WHAT IS CHECKED HERE, because a gate description broader than the gate is the
-    defect this module was written to remove: finiteness over the whole tree (codex r4-F3),
+    defect this module was written to remove: finiteness over the whole tree (cross-model review r4-F3),
     every position's declared kind and binding — every STRING position through
     `_VALUE_VALIDATORS` and the declared COUNT positions through `_SCALAR_VALIDATORS`
     (spec §7) — and, since stress gate F6, the per-ROW contracts, which this function OWNS
@@ -1139,7 +1139,7 @@ def write_json_strict(path: Path, doc: dict, allowed_source_keys) -> None:
     enforcement sat at a deletion-survivable builder call site; they now die here.
 
     COMPLETENESS IS CHECKED HERE TOO, and that is a CORRECTION to what this docstring used to
-    say (codex r12-F2). It read "WHAT IS STILL NOT CHECKED HERE, and deliberately: COMPLETENESS
+    say (cross-model review r12-F2). It read "WHAT IS STILL NOT CHECKED HERE, and deliberately: COMPLETENESS
     ... both are properties of the SET, which the builders own because they are the ones that
     know what a complete set is" — and the builders did not know: `tripwire_document` owned the
     indicator set, `rankings_document` owned only "at least one geography", and this function,

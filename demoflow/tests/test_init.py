@@ -1,7 +1,7 @@
 """Persons->households initialization (spec §5 AS AMENDED by the steering-ruling-A balance-gate amendment, 2026-07-25).
 
 THREE DIVERGENCES FROM THE PLAN'S TASK-18 BODY, all forced by ruling A (which post-dates the
-plan text) or by this tranche's own codex-F7 precedent, all reported:
+plan text) or by this tranche's own cross-model review-F7 precedent, all reported:
 
   1. **The 0.25 SAME-AGE band gate does not exist.** The plan's
      `test_match_couples_20_v_100_balance_breach_raises` asserts `CalibrationError`; spec §5 as
@@ -18,7 +18,7 @@ plan text) or by this tranche's own codex-F7 precedent, all reported:
      runs the COMMITTED cited rates against the COMMITTED ISQ populations through both real
      loaders: the band imbalance is large (0.45 — the retired gate would have fired) and the
      surviving direction gate passes with measured headroom.
-  3. **Person conservation is an explicit raise, not a bare `assert`.** Codex F7 + Task 17's
+  3. **Person conservation is an explicit raise, not a bare `assert`.** Cross-model review F7 + Task 17's
      `basis.py`: `assert` is stripped under `python -O`, so a conservation guard written as one
      is a check that cannot fail in the mode a deployment might actually run.
 """

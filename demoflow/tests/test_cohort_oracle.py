@@ -1,7 +1,7 @@
 """Spec §10's HAND-COMPUTED cohort oracle: 2 cohorts, 3 years, full arithmetic in comments.
 
 WHAT AN ORACLE FIXTURE IS FOR, and why every assertion below is an EQUALITY rather than a
-band: spec §5 (codex r7-F5) records that the reconciliation ENVELOPE cannot carry
+band: spec §5 (cross-model review r7-F5) records that the reconciliation ENVELOPE cannot carry
 exactly-once — a doubled decrement lands inside [0.20, 0.40] at every leg of the q_live axis
 (measured 0.3900 / 0.3001 / 0.2293, ruling O). The exactly-once guarantee therefore lives in
 the stock-flow equation plus EXACT pinned values. An inequality here would inherit the
@@ -211,7 +211,7 @@ def test_state_mass_conservation_every_household_ends_in_one_state():
 
 
 def test_100plus_is_absorbing_bucket_accumulates_age_ins():
-    """Spec §8 terminal-bucket semantics (codex r5-F6): 100+ is an ABSORBING bucket — the
+    """Spec §8 terminal-bucket semantics (cross-model review r5-F6): 100+ is an ABSORBING bucket — the
     age-99 age-ins AND the surviving prior 100+ stock BOTH land in age 100 and ACCUMULATE,
     never overwritten or reinitialized, each decremented exactly once.
 

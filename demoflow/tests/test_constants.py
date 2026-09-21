@@ -136,7 +136,7 @@ def test_fraction_unit_asserts_unit_interval_on_value_and_band():
 
 
 def test_ratio_unit_admits_above_one_and_rejects_negative():
-    """codex r7-F8: the immigrant/non-immigrant ownership RATIO is NOT a fraction — it can
+    """cross-model review r7-F8: the immigrant/non-immigrant ownership RATIO is NOT a fraction — it can
     validly exceed 1 (P4 measured New Brunswick at 1.033). Only the PRODUCT p_imm binds [0,1]."""
     assert Anchor(1.033, "2021", "a documented ratio-valued source", unit="ratio").value == 1.033
     with pytest.raises(LoaderError, match="negative"):

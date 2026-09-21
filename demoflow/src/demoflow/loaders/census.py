@@ -1,6 +1,6 @@
 """Census ownership + headship loaders (spec §8/§7). Ownership: owner-maintainer
 rate by geography x age band, STRICT full-geography join, fractions asserted in
-[0,1]; HORS_RMR is province net of ALL SIX WHOLLY-QUÉBEC CMAs (codex r4-F2) — the
+[0,1]; HORS_RMR is province net of ALL SIX WHOLLY-QUÉBEC CMAs (cross-model review r4-F2) — the
 precise denotation, and NOT the same territory as ISQ's literal hors-RMR population
 row, both recorded in _provenance. Headship: base-year households/person at every SINGLE
 YEAR of age 0-100, graduated from the 14 published maintainer-age members (operator ruling V,
@@ -130,7 +130,7 @@ _PROVINCE = "Quebec"
 _MTL_CMA = "Montréal (CMA), Que."
 _QC_CMA = "Québec (CMA), Que."
 # The six WHOLLY-QUÉBEC CMAs (children of the Québec member in 98-10-0231-01's own metadata;
-# probe P2 §3/§4). HORS_RMR = province NET OF ALL OF THESE (codex r4-F2): netting only MTL+QC
+# probe P2 §3/§4). HORS_RMR = province NET OF ALL OF THESE (cross-model review r4-F2): netting only MTL+QC
 # would fold the other four RMRs into hors-RMR. Ottawa-Gatineau is NOT here and is NOT netted —
 # it is parented to Ontario and publishes no separable Québec-part row, so its Québec side is
 # INSEPARABLE and sits inside the residual (see _CA_CAVEAT / _ISQ_TERRITORY_NOTE). This tuple is
@@ -322,7 +322,7 @@ _CA_CAVEAT = (
     "residual; the same holds for the two cross-border CAs. A published StatCan 'non-CMA/CA' "
     "row would EXCLUDE the Census Agglomerations, but no such row is carried for Québec, so "
     "the residual is COMPUTED and the sentence above is the geography HORS_RMR actually "
-    "denotes (spec §11 item 2, codex r5-F7; probe P2 §4 verbatim denotation)."
+    "denotes (spec §11 item 2, cross-model review r5-F7; probe P2 §4 verbatim denotation)."
 )
 _ISQ_TERRITORY_NOTE = (
     "TERRITORY MISMATCH, MEASURED 2026-08-08 — this rate's territory is NOT the territory of "
@@ -377,7 +377,7 @@ _HEADSHIP_MULTIPLICAND_NOTE = (
 _OWNERSHIP_MULTIPLICAND_NOTE = (
     "WHAT THIS RATE MAY MULTIPLY: owner-maintainer HOUSEHOLDS / total private HOUSEHOLDS — a "
     "household-denominated rate, so its multiplicand is a household count, never a person "
-    "count (spec §6, codex r2-F2: persons never multiply a household rate directly; the "
+    "count (spec §6, cross-model review r2-F2: persons never multiply a household rate directly; the "
     "person -> household step is headship's job, immigrant headship's on the arrival leg). "
     "Both legs of demand hold to that: native formation multiplies a headship-converted "
     "household gain, and the immigrant chain converts arriving PERSONS to HOUSEHOLDS before "
@@ -488,7 +488,7 @@ def _read_totals_cube(csv_path: Path) -> dict[tuple[str, str], tuple[int, int]]:
             f"{csv_path.name}: GEO set is {sorted(found_geos)}, expected "
             f"{sorted(expected_geos)} — HORS_RMR nets province against all six wholly-Québec "
             "CMAs, so an added/removed geography changes what the residual denotes "
-            "(codex r4-F2)")
+            "(cross-model review r4-F2)")
     return cube
 
 
@@ -634,7 +634,7 @@ def derive_ownership_from_csv(csv_path: Path | str) -> dict:
                    "`Total -` member of every non-age dimension",
         "multiplicand_note": _OWNERSHIP_MULTIPLICAND_NOTE,
         "hors_rmr_method": "Québec-province counts NET of all six WHOLLY-QUÉBEC CMA counts; "
-                           "owner and total netted separately THEN divided (codex r4-F2)",
+                           "owner and total netted separately THEN divided (cross-model review r4-F2)",
         "netted_cmas": list(_QC_CMAS),
         "ca_caveat": _CA_CAVEAT,
         "isq_territory_note": _ISQ_TERRITORY_NOTE,

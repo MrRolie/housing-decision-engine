@@ -42,7 +42,7 @@ Rows are re-emitted VERBATIM — the extract is the raw header plus the subset o
 
 ### Why 7 geographies and not 3
 
-`HORS_RMR` = province net of **ALL** Québec CMAs (spec:499, spec:550; codex r4-F2 / r1-F8). Netting only Montréal+Québec would wrongly fold the other four wholly-Québec CMAs into the residual.
+`HORS_RMR` = province net of **ALL** Québec CMAs (spec:499, spec:550; cross-model review r4-F2 / r1-F8). Netting only Montréal+Québec would wrongly fold the other four wholly-Québec CMAs into the residual.
 
 ### Excluded on purpose
 
@@ -50,7 +50,7 @@ Rows are re-emitted VERBATIM — the extract is the raw header plus the subset o
 
 ## 4. What HORS_RMR actually denotes here (spec:552-554)
 
-**CA caveat (codex r5-F7):** a published `non-CMA/CA` row would EXCLUDE Census Agglomerations while province-minus-CMAs INCLUDES them. This table publishes **no** such row. Computed from the metadata member (`98100231_MetaData.csv`), the Geography dimension has **166 members** = `Canada` + 13 provinces/territories + 41 CMAs + 111 CAs; sub-provincial members that are neither CMA nor CA: `none`. The spec:552-554 else-branch therefore fires: **the residual is COMPUTED**, and:
+**CA caveat (cross-model review r5-F7):** a published `non-CMA/CA` row would EXCLUDE Census Agglomerations while province-minus-CMAs INCLUDES them. This table publishes **no** such row. Computed from the metadata member (`98100231_MetaData.csv`), the Geography dimension has **166 members** = `Canada` + 13 provinces/territories + 41 CMAs + 111 CAs; sub-provincial members that are neither CMA nor CA: `none`. The spec:552-554 else-branch therefore fires: **the residual is COMPUTED**, and:
 
 > **HORS_RMR here denotes: Québec outside the six wholly-Québec CMAs — INCLUDING all 23 Census Agglomerations AND the Québec side of Ottawa-Gatineau.**
 

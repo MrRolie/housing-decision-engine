@@ -79,7 +79,7 @@ def test_statut_sublattice_single_transition_and_uniform_projected_domain():
 # --- reported to the seat as a divergence from the plan's "Expected: 7 PASS").
 
 def test_statut_projected_domain_differs_without_reversal():
-    """ADDED (spec §4, codex r10-F5). The plan's RED fixture (proj->est relabel of B's terminal
+    """ADDED (spec §4, cross-model review r10-F5). The plan's RED fixture (proj->est relabel of B's terminal
     year) trips the REVERSAL gate, and its regex alternation accepts that message — so the
     'IDENTICAL projected-year domain' gate the test NAMES never actually runs. A per-geography
     est->proj BOUNDARY shift is monotone AND single-transition, so only the projected-domain gate
@@ -112,7 +112,7 @@ def test_non_integer_year_cells_raise_loader_error_not_bare_valueerror():
 
 
 def test_null_keyed_series_is_not_excised_from_uniform_year_domain():
-    """ADDED (spec §4, codex r6-F3). pandas `groupby` defaults to `dropna=True`, so a row whose
+    """ADDED (spec §4, cross-model review r6-F3). pandas `groupby` defaults to `dropna=True`, so a row whose
     GROUP KEY is null is silently excised — the frame is non-empty, the gate runs, and it returns
     clean without ever examining that series. Reachable on the committed primary workbook:
     `pd.read_excel(pop-as-rmr-base.xlsx, sheet_name="Années d'âge", header=6)` yields 2513 rows of
@@ -126,7 +126,7 @@ def test_null_keyed_series_is_not_excised_from_uniform_year_domain():
 
 
 def test_null_keyed_series_is_not_excised_from_statut_sublattice():
-    """ADDED (spec §4, codex r10-F5). Same `dropna=True` excision on the Statut loop — it fails open
+    """ADDED (spec §4, cross-model review r10-F5). Same `dropna=True` excision on the Statut loop — it fails open
     on ALL THREE per-series gates, so each is pinned by its own message here (an alternation would
     let one branch vouch for the other two, the failure mode
     `test_statut_projected_domain_differs_without_reversal` already exists to prevent)."""

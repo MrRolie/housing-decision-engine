@@ -1,4 +1,4 @@
-"""OwnerStock — the ED DENOMINATOR's ONE defining equation (spec §7, codex r3-F3).
+"""OwnerStock — the ED DENOMINATOR's ONE defining equation (spec §7, cross-model review r3-F3).
 
     OwnerStock(g,t,s) = Σ_over_all_ages pop(a,g,t,s) × headship(a) × ownership(a)
 

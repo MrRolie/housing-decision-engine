@@ -30,7 +30,7 @@ whitespace-only file, which has size > 0 and so slips the empty-file gate.
 `dtype=str` + `keep_default_na=False` (both load-bearing): a suppressed cell is the literal
 token `--` (values 0-5, per the live package notes) and MUST stay distinguishable. Under
 pandas' default NA handling a blank cell would arrive as NaN, and naive band comparisons
-classify NaN as INSIDE every band (spec §7c value integrity, codex r3-F5) — a suppressed or
+classify NaN as INSIDE every band (spec §7c value integrity, cross-model review r3-F5) — a suppressed or
 blank cell degrading into a float is exactly how a verification gate false-greens. Nothing
 here converts `--` into a number: its 0-band interval semantics is VALUE MODELING and belongs
 to the tripwire task, not to a loader.

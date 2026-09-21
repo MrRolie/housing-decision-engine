@@ -13,7 +13,7 @@ carried NO assertions — its `collective_share ... asserted ∈[0,1]` contract 
 by reading back the literal the plan itself typed, which cannot catch the edit the plan
 schedules ("the executor updates collective_share_75plus when P3 lands a firmer figure").
 
-THE UNIT FIELD IS LOAD-BEARING, not decoration (codex r7-F8): fraction-valued anchors bind
+THE UNIT FIELD IS LOAD-BEARING, not decoration (cross-model review r7-F8): fraction-valued anchors bind
 [0,1]; the immigrant/non-immigrant ownership RATIO is nonneg-finite only and validly exceeds
 1 (P4 measured New Brunswick at 1.033). Defaulting `unit` to "fraction" makes the strict
 case the one you get for free — a count anchor must SAY it is a count.
@@ -207,7 +207,7 @@ CONSTANTS = {
 }
 
 
-# RUN CONTRACT (codex r8-F1): the headline run evaluates every banded assumption at its declared
+# RUN CONTRACT (cross-model review r8-F1): the headline run evaluates every banded assumption at its declared
 # CENTRAL value; band ENDPOINTS enter ONLY the robustness sweep (per-geography rank_stable). The
 # central values + sweep grid are enumerated HERE and covered by assumptions_hash — the hash
 # identifies the selection; the spec's central-value rule DETERMINES it.
@@ -576,7 +576,7 @@ def assumptions_hash() -> str:
     could move and re-mint NOTHING (quant gate F4 and stress gate F2 at run 33; the round-3
     audit's HIGH finding at run 36):
 
-      * `central` + `sweep` — the run contract's banded assumptions (codex r8-F1).
+      * `central` + `sweep` — the run contract's banded assumptions (cross-model review r8-F1).
       * `model_choices` — the discrete unbanded picks; each swings the shipped headline numbers
         by 55-66% and both were bare literals in `pipeline.py`.
       * `immigrant_inputs` — the ruled per-geography headship/ratio pairs that amendments

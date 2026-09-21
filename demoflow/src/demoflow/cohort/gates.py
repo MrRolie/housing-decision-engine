@@ -4,7 +4,7 @@ still owning / initial) must land in [0.20, 0.40] — the Myers 0.26-0.31 all-ca
 WIDENED. Outside -> CalibrationError.
 
 WHAT THIS GATE IS: a COARSE gross-mortality-double-count backstop, and nothing more. Spec §5
-(codex r7-F5) records that a DOUBLED mortality decrement still lands INSIDE this band, and
+(cross-model review r7-F5) records that a DOUBLED mortality decrement still lands INSIDE this band, and
 ruling O corrected the FIGURE upward (spec §5 amendment, 2026-08-08): the blindness is WIDER
 than the original ~0.25 reads. Measured on the spec-pinned MTL_RMR cohort, a doubled per-sex
 hazard retains 0.3900 / 0.3001 / 0.2293 at q_live 0.06 / 0.085 / 0.11 — in band at EVERY leg
@@ -29,7 +29,7 @@ notion of which run is calling, so scope is an ORCHESTRATOR obligation — plan 
 call into the central-assumption path only. Recorded at the gate so a later caller cannot
 re-derive the wrong scope from a band that looks universal.
 
-COMPOSITION IS A CALLER OBLIGATION THIS GATE CANNOT VERIFY (spec §5, codex r9-F4): retention
+COMPOSITION IS A CALLER OBLIGATION THIS GATE CANNOT VERIFY (spec §5, cross-model review r9-F4): retention
 is STATE-DEPENDENT, so the band is only well-defined against a PINNED cohort mix — the
 household-state + sex mix the INITIALIZATION EQUATIONS produce on the committed vintage for
 MTL_RMR, with per-state Solo_m / Solo_f / Couple retention paths additionally pinned in the

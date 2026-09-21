@@ -24,7 +24,7 @@ def assert_fraction(name: str, value) -> float:
 
 
 def assert_nonneg_finite(name: str, value) -> float:
-    """Nonnegative-finite (codex r7-F8 ratio carve-out): the immigrant/non-immigrant
+    """Nonnegative-finite (cross-model review r7-F8 ratio carve-out): the immigrant/non-immigrant
     ownership RATIO is NOT a fraction — it can validly exceed 1 (immigrants CAN out-own
     non-immigrants in a cell); only the PRODUCT p_imm binds [0,1]. Also used for stocks."""
     f = assert_finite(name, value)
@@ -33,7 +33,7 @@ def assert_nonneg_finite(name: str, value) -> float:
     return f
 
 
-# Signed-flow carve-out (codex r9-F2): natural increase / net-migration components are
+# Signed-flow carve-out (cross-model review r9-F2): natural increase / net-migration components are
 # legitimately signed — validate them with assert_finite ONLY (never nonneg/fraction); the
 # natural-increase tripwire's job is to EVALUATE a negative value, not raise on it.
 
@@ -71,7 +71,7 @@ def assert_year_lattice(years, ctx: str, expected_span: tuple[int, int] | None =
 
 
 def assert_uniform_year_domain(df: pd.DataFrame, group_keys: list[str], year_col: str, ctx: str) -> None:
-    """Every geography×scenario×sex series must carry the IDENTICAL year set (codex r6-F3);
+    """Every geography×scenario×sex series must carry the IDENTICAL year set (cross-model review r6-F3);
     a missing terminal year for one series raises (never a silently shortened mean)."""
     # dropna=False is LOAD-BEARING: pandas' default excises null-keyed rows before the gate sees
     # them, so the property above fails OPEN for that class — frame non-empty, gate runs, returns
@@ -89,7 +89,7 @@ def assert_uniform_year_domain(df: pd.DataFrame, group_keys: list[str], year_col
 
 def assert_statut_sublattice(df: pd.DataFrame, group_keys: list[str], year_col: str,
                              status_col: str, allowed: set[str], ctx: str) -> None:
-    """Statut SUB-lattice (codex r10): status values in the metadata's allowed set; exactly ONE
+    """Statut SUB-lattice (cross-model review r10): status values in the metadata's allowed set; exactly ONE
     est→proj transition per series (monotone, no proj→est reversal); and an IDENTICAL PROJECTED-year
     domain across every series — so a proj→est relabel of one geography's terminal year raises even
     though the RAW year lattice is intact (it would silently shorten that geography's ranking mean)."""

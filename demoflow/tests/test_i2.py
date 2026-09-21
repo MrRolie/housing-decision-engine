@@ -1,5 +1,5 @@
 """Task 25b — the immigrant-input JOIN TABLE (rulings S/T + amendment #11) and the I2
-decomposition gate (spec §6; codex r5-F3/r5-F4/r6-F1/r7-F3/r7-F8).
+decomposition gate (spec §6; cross-model review r5-F3/r5-F4/r6-F1/r7-F3/r7-F8).
 
 TWO HALVES, and they fail in different ways:
 
@@ -404,7 +404,7 @@ _POOLED = ii.PooledOwnership(non_immigrant=(1252635, 724630), immigrant=(511070,
 # ================================================================= value validation + total join
 
 def test_ratio_is_nonneg_finite_not_fraction():
-    # codex r7-F8: the ownership ratio can validly exceed 1 (immigrants out-own non-immigrants).
+    # cross-model review r7-F8: the ownership ratio can validly exceed 1 (immigrants out-own non-immigrants).
     assert resolve_immigrant_inputs(Geography.QC_RMR).ownership_ratio >= 0.0
     assert ii._validate_ratio(1.2) == 1.2               # >1 accepted
     with pytest.raises(LoaderError):
@@ -539,7 +539,7 @@ def test_p_resident_subtracts_surviving_arrivals():
 
 
 def test_p_resident_nonnegativity_per_cell():
-    # codex r7-F3: arrivals exceeding P_ISQ in a cell = CalibrationError BEFORE any consumer.
+    # cross-model review r7-F3: arrivals exceeding P_ISQ in a cell = CalibrationError BEFORE any consumer.
     assert assert_p_resident_nonneg(0.0, ctx="cell") == 0.0        # zero ok
     with pytest.raises(CalibrationError, match="negative|nonneg"):
         assert_p_resident_nonneg(-5.0, ctx="MTL/2035/ref/age40")

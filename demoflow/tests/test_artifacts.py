@@ -106,7 +106,7 @@ def _vintage() -> dict:
     return json.loads(json.dumps(VINTAGE))          # fresh copy per test — no cross-test mutation
 
 
-# THE FIXTURE COVERS THE MODELED DOMAIN, and since codex r12-F2 that is a CONTRACT rather than
+# THE FIXTURE COVERS THE MODELED DOMAIN, and since cross-model review r12-F2 that is a CONTRACT rather than
 # a courtesy: the rankings document's set contract binds ranked geographies UNION excluded
 # geographies == `MODELED_GEOGRAPHIES`, so the two-row fixture this file shipped was a 3-of-8
 # document — a shape no run emits and one the emitter now refuses. Seven ranked rows carrying
@@ -602,12 +602,12 @@ def test_extracted_at_accepts_real_iso8601_instants(good):
 # --------------------------------------------------------- the closed exclusion schema
 
 def test_hors_rmr_fallback_iii_excluded_from_rankings_with_typed_record():
-    """codex r10: an unresolvable demand input -> EXCLUDED from rankings entirely (no ED row),
+    """cross-model review r10: an unresolvable demand input -> EXCLUDED from rankings entirely (no ED row),
     named in a typed run-level exclusion record.
 
     THE DOCUMENT IS THE ONE THE BRANCH ACTUALLY PRODUCES, which this test used to shortcut: it
     passed `rankings=[]` beside HORS_RMR's exclusion, a 1-of-8 file the set contract now refuses
-    (codex r12-F2). Nothing about branch iii makes the other seven geographies unrankable —
+    (cross-model review r12-F2). Nothing about branch iii makes the other seven geographies unrankable —
     §8 says the rankings cover the REMAINING members — so the honest fixture is seven ranked
     rows plus the one exclusion, and the claim under test is sharper for it: "excluded ENTIRELY"
     is HORS_RMR appearing in `exclusions` and in NO ranking row, which is what is asserted."""
@@ -993,7 +993,7 @@ def test_a_rankings_document_may_omit_rows_moved_ENTIRELY():
 
 
 # ============================================================================================
-# THE WHOLE-DOCUMENT SET CONTRACT (spec §7b — codex r12-F2)
+# THE WHOLE-DOCUMENT SET CONTRACT (spec §7b — cross-model review r12-F2)
 # ============================================================================================
 #
 # THE ASYMMETRY IS THE FINDING. Spec §7(a) mandates as a contract test that the Tranche-2

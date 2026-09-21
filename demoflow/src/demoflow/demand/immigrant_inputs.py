@@ -1,6 +1,6 @@
 """Immigrant-input JOIN TABLE — headship + ownership ratio per modeled geography.
 
-Spec §6 rulings S and T with amendment #11 (codex r5-F4 named the join; r7-F8 rules the
+Spec §6 rulings S and T with amendment #11 (cross-model review r5-F4 named the join; r7-F8 rules the
 ratio's units). Two numbers per modeled geography: the immigrant HEADSHIP (households formed
 per person, a FRACTION) and the immigrant/non-immigrant ownership RATIO (nonneg-finite — the
 [0,1] constraint binds the PRODUCT `p_imm`, never the ratio). Every modeled member resolves
@@ -87,7 +87,7 @@ rather than hidden: P8 §2a publishes the recent-arrival readings beside these (
 0.3604 / 0.3431 / 0.3143, ratio 0.4211 / 0.3679 / 0.4472).
 
 HORS_RMR COMPONENT FLOWS (arrivals) are a SEPARATE resolution and not this table's business:
-three-way at probe P5/P6 (codex r7-F4) — (i) the compo workbook's own hors-RMR row; else
+three-way at probe P5/P6 (cross-model review r7-F4) — (i) the compo workbook's own hors-RMR row; else
 (ii) province compo net of all RMR rows, reconciliation-checked; else (iii) HORS_RMR is
 EXCLUDED FROM RANKINGS ENTIRELY, recorded as a run-level exclusion naming the unresolved
 input (pipeline `EXCLUDED_FROM_RANKINGS` → the rankings document's typed `exclusions[]`,
@@ -146,7 +146,7 @@ FLOOR_NOT_COVERED: dict[Geography, str] = {
 
 
 def _validate_ratio(ratio: float) -> float:
-    """The ownership RATIO is NOT a fraction (codex r7-F8): it can validly exceed 1 —
+    """The ownership RATIO is NOT a fraction (cross-model review r7-F8): it can validly exceed 1 —
     immigrants CAN out-own non-immigrants in a cell, and THREE of the ruled geographies
     measure above 1 (RA06 1.0757, RA13 1.1112, and HORS_RMR 1.0248 since amendment #13 moved
     it to the operand-aligned territory). Only the PRODUCT `p_imm` binds [0,1]."""
@@ -426,7 +426,7 @@ def resolved_selection() -> dict[str, dict[str, object]]:
 
 
 def resolve_immigrant_inputs(geography: Geography) -> ImmigrantInputs:
-    """The full-geography join (codex r5-F4): every MODELED member resolves, or raise.
+    """The full-geography join (cross-model review r5-F4): every MODELED member resolves, or raise.
 
     No unstated default under the no-imputation policy — a geography that fell out of the
     table is a wiring defect, and serving a plausible pair for it would put an unmeasured

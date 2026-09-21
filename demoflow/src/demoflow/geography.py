@@ -58,7 +58,7 @@ _LABEL_TO_GEOGRAPHY = {
     "Lanaudière": Geography.LANAUDIERE_RA14_PROXY,
     "Laurentides": Geography.LAURENTIDES_RA15_PROXY,
     "Montérégie": Geography.MONTEREGIE_RA16_PROXY,
-    # codex r7-F4: the RMR workbook's OWN literal row supplies HORS_RMR POPULATION directly —
+    # cross-model review r7-F4: the RMR workbook's OWN literal row supplies HORS_RMR POPULATION directly —
     # HORS_RMR is a modeled geography, NEVER IGNORED and NEVER a residual on the population side.
     # Measured 2026-08-07: pop-as-rmr-base ships 'Territoire hors des RMR', compo-rmr-base
     # ships 'Hors RMR' — two spellings of the same geography, both live, both required.

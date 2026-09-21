@@ -1,4 +1,4 @@
-"""Competing-risk partition algebra (spec §5 "Pinned competing-risk algebra", codex F3).
+"""Competing-risk partition algebra (spec §5 "Pinned competing-risk algebra", cross-model review F3).
 
 THE THREE CLAIMS THE SPEC PINS, and where each becomes executable here:
   1. DEATH RESOLVES FIRST — a decrement's death mass is a property of q alone, never
@@ -135,7 +135,7 @@ def test_death_resolves_first_so_death_mass_is_invariant_in_q_live():
 
 
 def test_widow_branch_is_retained_and_disjoint_from_the_living_exit_split():
-    """Claims 2 + 3 together — the load-bearing semantic of codex F3.
+    """Claims 2 + 3 together — the load-bearing semantic of cross-model review F3.
 
     DISJOINTNESS: the widow branch must be invariant in q_live (a new widow is NOT
     living-exit-eligible in the transition year). MEASURED (battery): the

@@ -5,13 +5,13 @@ COLLAPSE RULE: rank by MEAN ED under the REFERENCE scenario, ASCENDING (most neg
 highest demographic-flow risk = rank 1); exact ties break by the scenario-named FAIBLE mean
 (worst case), then by enum declaration order as the final deterministic tiebreak.
 
-FAN FIELDS ARE SCENARIO-NAMED, NOT MIN/MAX (spec §7b, codex r6-F6 — the earlier min/max
+FAN FIELDS ARE SCENARIO-NAMED, NOT MIN/MAX (spec §7b, cross-model review r6-F6 — the earlier min/max
 sentence is GONE from the spec): `mean_ed_low` is the Faible (D2026) mean and `mean_ed_high`
 the Fort (E2026) mean, whatever their numeric order. They CAN cross, and a crossing is a
 legitimate reading, not a defect — any min/max envelope is derived at display time, never
 stored. Storing a sorted pair would silently relabel which scenario produced which number.
 
-TEMPORAL DOMAIN IS THE CALLER'S (codex r8-F3): these functions average whatever series they
+TEMPORAL DOMAIN IS THE CALLER'S (cross-model review r8-F3): these functions average whatever series they
 are handed. The spec's domain — PROJECTED years only, first projected year through 2051,
 both endpoints included — is applied by the Task-29 pipeline when it slices the frame. The
 domain is load-bearing (an all-years average can REVERSE a pair's order), so the slice is
@@ -78,7 +78,7 @@ class GeoRanking:
     mean_ed_reference: float
     mean_ed_low: float          # Faible (D2026 / Scenario.LOW) mean — scenario-named, not min
     mean_ed_high: float         # Fort   (E2026 / Scenario.HIGH) mean — scenario-named, not max
-    rank_stable: bool = True    # robustness-sweep verdict (codex r8-F1/r9-F1) — TYPED, never a flag string
+    rank_stable: bool = True    # robustness-sweep verdict (cross-model review r8-F1/r9-F1) — TYPED, never a flag string
     flags: tuple[str, ...] = ()  # tuple, not list: a list default is mutable on a "frozen" row,
                                  # which reopens the closed enum after construction
 
@@ -162,7 +162,7 @@ def rank_geographies(ed: dict[Geography, dict[Scenario, list[float]]],
                                    f"— an absent sweep verdict must not default to STABLE")
         untyped = sorted(g.value for g in ed if not isinstance(rank_stable[g], bool))
         if untyped:
-            raise CalibrationError(f"rank_stable values must be TYPED bools (codex r9-F1), "
+            raise CalibrationError(f"rank_stable values must be TYPED bools (cross-model review r9-F1), "
                                    f"never flag strings: {untyped}")
 
     rows = []

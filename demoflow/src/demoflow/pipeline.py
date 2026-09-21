@@ -12,7 +12,7 @@ each stated at its own gate below and each carrying a test that REDs if the wiri
     consumed by NOTHING, so ED was still computed from the operand-misaligned HORS_RMR rates
     that spec §6 amendment #12(B) was REVERSED to fix. The join is read from the artifact and
     OBEYED here; the pipeline states no scope fence of its own.
-  * THE RUN CONTRACT (codex r8-F1) — central values are the headline, band endpoints enter
+  * THE RUN CONTRACT (cross-model review r8-F1) — central values are the headline, band endpoints enter
     only through the robustness sweep, and the sweep's product is `rank_stable`, never a
     re-calibration.
   * spec §7c's RUN-LEVEL EXIT CODE — `run_exit_code`, not `exit_code`. The latter ranges over
@@ -887,7 +887,7 @@ def _load_all(data_dir: Path | None) -> Frames:
 
 
 def _projected_years(pop_g_s: pd.DataFrame) -> list[int]:
-    """The ranking temporal domain (codex r8-F3): PROJECTED years only (`Statut = proj` — the
+    """The ranking temporal domain (cross-model review r8-F3): PROJECTED years only (`Statut = proj` — the
     estimation years are history, not scenario), the full CONTIGUOUS annual lattice through the
     last projected year, both endpoints included.
 
@@ -1674,7 +1674,7 @@ def _ed_dict(geos, frames: Frames, read_ownership, assumptions: Assumptions) -> 
 def _rank_stability(geos, frames: Frames, read_ownership, central_ed: dict,
                     sweep_axes: tuple[str, ...] | None = None
                     ) -> tuple[dict[Geography, bool], dict[str, int] | None]:
-    """The RUN-CONTRACT robustness sweep (codex r8-F1): a geography's rank is STABLE iff it is
+    """The RUN-CONTRACT robustness sweep (cross-model review r8-F1): a geography's rank is STABLE iff it is
     unchanged across EVERY leg `_sweep_legs` declares — every declared axis at both of its
     endpoints — measured against the central value. Spec §7b's question is "does the ordering
     change ANYWHERE IN THE SWEEP GRID?", so the verdict is a UNION and a single reordering leg is

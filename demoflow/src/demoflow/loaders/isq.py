@@ -1,5 +1,5 @@
 """ISQ population loader — spec §8 junctions + §4 loader contracts
-(codex r2-F5 / r4-F2 / r4-F3 / r5-F1-F2 / r6-F3 / r10).
+(cross-model review r2-F5 / r4-F2 / r4-F3 / r5-F1-F2 / r6-F3 / r10).
 
 Junctions: geography (TOTAL label map with the `IGNORED` sentinel; a label outside the
 verified set raises), scenario (explicit map + all-three completeness), sex (numeric ISQ
@@ -16,7 +16,7 @@ order they run — each one names its own cause, never imputes, never warns-and-
  6. the sex block is a complete {1,2,3} × key lattice (spec: any other code → raise);
  7. sex ADDITIVITY: code3 ≈ code1 + code2 per geography × scenario × year × age × Statut;
  8. sex ORIENTATION: 85+ female-mapped > male-mapped in every geography × scenario × year
-    (additivity alone is swap-symmetric and cannot orient the map — codex r2-F5), and the
+    (additivity alone is swap-symmetric and cannot orient the map — cross-model review r2-F5), and the
     guard REFUSES rather than passes when its own 85+ window is empty or short a sex cell;
  9. primary key unique; year lattice contiguous AND pinned to the file family's span;
     identical year domain across every geography × scenario × sex series; Statut
@@ -85,7 +85,7 @@ def _check_sex_additivity(code3: float, code1: float, code2: float, ctx: str) ->
 def _check_sex_orientation(mf: pd.DataFrame, name: str) -> None:
     """85+ female-mapped population must EXCEED male-mapped in every geography × scenario ×
     year (the universal old-age female survival advantage) — a violation means the 1↔2 map
-    is swapped, which additivity cannot see (codex r2-F5). Aggregated over the 85+ bucket,
+    is swapped, which additivity cannot see (cross-model review r2-F5). Aggregated over the 85+ bucket,
     the spec's own unit. MEASURED 2026-08-07: min F/M = 1.213 (rmr, 279 cells) / 1.212 (ra,
     465 cells); 0 violations per SINGLE age too (0/4464, 0/7440) — a stricter per-age guard
     is available at no measured risk if the model ever wants one."""

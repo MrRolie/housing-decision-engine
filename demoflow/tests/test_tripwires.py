@@ -121,7 +121,7 @@ def test_closed_band_endpoints_are_crossed():
 
 
 def test_registry_completeness_empty_missing_duplicate():
-    with pytest.raises(LoaderError, match="empty"):              # codex r10: empty = RUN-level terminal
+    with pytest.raises(LoaderError, match="empty"):              # cross-model review r10: empty = RUN-level terminal
         check_registry([])
     missing = check_registry(["pr_landings_annual"])            # far short of the required set
     assert any(r.reason is Reason.MISSING_INDICATOR for r in missing) and exit_code(missing) != 0
@@ -1004,7 +1004,7 @@ def test_reason_is_present_exactly_when_status_is_unknown():
 def test_unregistered_indicator_is_a_run_level_terminal():
     """`required - set(indicators)` is one-directional: an EXTRA key was reported
     'complete'. It cannot be a per-indicator UNKNOWN either — the reason enum is
-    spec-closed and carries no token for it — so it is the same RUN-level terminal codex
+    spec-closed and carries no token for it — so it is the same RUN-level terminal cross-model review
     r10 set for the empty registry."""
     with pytest.raises(LoaderError, match="unregistered"):
         check_registry(sorted(REQUIRED_INDICATORS) + ["crash_probability"])

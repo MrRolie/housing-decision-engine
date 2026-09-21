@@ -7,7 +7,7 @@ ScenarioPrior emitter deferred behind an S4b input-slot sketch; 2A subtractive m
 mirror cut, plex compute deferred to v1, CLI folded to run+tripwires, flat error classes,
 enum→string serialization stated); 2C cross-CONTEXT arm WAIVED by operator 2026-07-21 (the session ran on a top-tier model;
 residual gap recorded: the arm's catch mechanism is independent context + hunt-NEW framing,
-not model tier — same-family folded-spec defects go unhunted by that arm; codex cross-FAMILY arm ran
+not model tier — same-family folded-spec defects go unhunted by that arm; cross-model review cross-FAMILY arm ran
 regardless, per doctrine the waiver never reaches it); spec pending operator review
 **Scope:** personal decision tooling — nothing here places trades or moves money
 **load-bearing-claim:** yes (stress-tester) — "fail-loud loaders, no silent fallback" and
@@ -18,7 +18,7 @@ schema can do, and §7 already said so.** Field allowlists, finite checks, close
 band ordering bind **VOCABULARY AND SHAPE, never numeric PROVENANCE**. An unconditional crash
 probability can be computed and placed in an allowed numeric field — `drawdown_weight_tilt` is the
 named candidate — while satisfying every stated schema invariant. §7 records this as its own
-epistemic limit (codex r10-F1: *"field allowlists bind VOCABULARY, not value semantics — no schema
+epistemic limit (cross-model review r10-F1: *"field allowlists bind VOCABULARY, not value semantics — no schema
 proves a number in an allowed field was derived conditionally"*), so this header and §7 disagreed
 about the same guarantee, and the header is the one a reader meets first. **Read it as: the schema
 forbids the VOCABULARY of an unconditional forecast — there is no field to put a `crash_probability`
@@ -74,7 +74,7 @@ flooring, if ever, is an operator decision at the S4b seam).
   artifact file only.
 - **actuarial dependency:** uv path dependency on an external actuarial package (a private
   checkout two levels up from the `demoflow/` project directory, declared in its own
-  `pyproject.toml`; codex r6-F7 caught the §2/§3 contradiction; showcase
+  `pyproject.toml`; cross-model review r6-F7 caught the §2/§3 contradiction; showcase
   runs need both repos checked out side by side, accepted at the operator fork 2026-07-21). Import surface pinned to
   `mcp_server.engine.mortality` public functions only: `set_active_mortality`, `active_mortality`,
   `get_qx`. No private reach-ins. Dependency weight (fastmcp/cvxpy/osqp ride along) accepted —
@@ -83,7 +83,7 @@ flooring, if ever, is an operator decision at the S4b seam).
   RP2014+MP2021 basis. Every demoflow entry point sets
   `set_active_mortality("CPM2014_combined", "CPM-B")` and then CHECKS `active_mortality()` echoes the
   Québec basis before any `get_qx` call — an explicit `if`-check raising `BasisError(Exception)`,
-  NEVER a bare `assert` (stripped under `python -O` — codex F7). Single-threaded batch only
+  NEVER a bare `assert` (stripped under `python -O` — cross-model review F7). Single-threaded batch only
   (the engine's module-level `_active_base` global is a documented v1 concurrency assumption);
   demoflow performs no concurrent engine calls. Scalar `get_qx` loop is accepted for v0 (no
   vectorization request into actuarial-system).
@@ -131,25 +131,25 @@ day one), otherwise a flat module.
 Degenerate policy (load-bearing-claim scope, applies to every loader): empty sheet, missing scenario
 label, unknown geography label, negative or NON-FINITE (NaN/±Inf) values in ANY numeric input —
 populations, headship/ownership/living-arrangement rates, immigrant propensities, hazards q —
-(signed-FLOW carve-out, codex r9-F2: indicators that are legitimately signed — natural increase,
+(signed-FLOW carve-out, cross-model review r9-F2: indicators that are legitimately signed — natural increase,
 net migration components — are exempt from the negativity gate and bind finite-only; the nonneg
 rule governs stocks and rates, never signed flows: the natural-increase tripwire's whole job is to
 evaluate a negative value, not raise on it) —
-non-monotone year index → **raise**, never impute, never warn-and-continue (codex r4-F3: the finite
+non-monotone year index → **raise**, never impute, never warn-and-continue (cross-model review r4-F3: the finite
 contract is END-TO-END — every emitted JSON in every tranche, rankings and tripwires included,
 serializes with `allow_nan=False` and asserts field finiteness pre-write). Two further loader
-contracts (codex r5-F1/F2, ratio carve-out r7-F8): every FRACTION-valued input — living-alone,
+contracts (cross-model review r5-F1/F2, ratio carve-out r7-F8): every FRACTION-valued input — living-alone,
 couple-share, collective-share, headship, ownership, the immigrant PROPENSITY p_imm, φ_market, q —
 is asserted ∈ [0, 1] (1+ε passes a mere finite/negative gate while producing negative buckets or
 owners > households); the immigrant/non-immigrant ownership RATIO is a ratio, not a fraction —
 asserted nonnegative-finite only (immigrants CAN out-own non-immigrants in a cell; ratio 1.2 with
 p_nonimm 0.6 is a valid p_imm 0.72) — the [0,1] probability constraint binds the PRODUCT p_imm; and every loaded series declares its PRIMARY KEY (geography × year × scenario × sex ×
 age-block) with duplicates → raise AND a CONTIGUOUS year lattice pinned to the EXPECTED DOMAIN
-(codex r5-F2 + r6-F3): consecutive year differences exactly 1 AND endpoints equal to the file
+(cross-model review r5-F2 + r6-F3): consecutive year differences exactly 1 AND endpoints equal to the file
 family's declared span (2021–2051 for the RMR/RA workbooks) AND an identical year domain across
 every geography × scenario × sex series — a missing terminal year for one geography must raise,
 never silently shorten that geography's ranking mean. The `Statut` SUB-LATTICE is validated too
-(codex r10-F5 — the raw lattice can be intact while a proj→est relabel silently shortens a ranking
+(cross-model review r10-F5 — the raw lattice can be intact while a proj→est relabel silently shortens a ranking
 mean): values ∈ {r, p, j-family per the metadata}, exactly ONE est→proj transition per series, and
 an IDENTICAL projected-year domain across every geography × scenario × sex — deviation raises;
 RED fixture relabels one geography's 2051 from proj to est. Cause-owner: all of
@@ -165,9 +165,9 @@ apply our own living-arrangement split, ownership propensity, and decrements. **
 mortality is counted exactly once,** via the CPM2014/CPM-B decrement below; no input that already
 embeds mortality (ISQ *household* projections, all-cause retention rates) may enter the roll-forward.
 
-**Initialization — unit-preserving persons→households conversion (codex r1-F1, r2-F1):** at base
+**Initialization — unit-preserving persons→households conversion (cross-model review r1-F1, r2-F1):** at base
 year, per (geography, age, sex), private-household persons partition into exactly THREE buckets
-using SEX-SPECIFIC rates (codex r3-F1 — a pooled couple rate is not sex-conserving: 20 men + 100
+using SEX-SPECIFIC rates (cross-model review r3-F1 — a pooled couple rate is not sex-conserving: 20 men + 100
 women at couple_share=1 would fabricate 40 husbands, and at 85+ the female surplus is the ACTUAL
 population structure): `Solo_s(a) = pop_s(a) × living_alone_rate_s(a)`;
 `coupled_s(a) = pop_s(a) × (1 − living_alone_rate_s(a)) × couple_share_s(a)`;
@@ -175,7 +175,7 @@ population structure): `Solo_s(a) = pop_s(a) × living_alone_rate_s(a)`;
 with others (family/roommates, incl. seniors with adult children), EXPLICITLY EXCLUDED from the
 cohort's owner-unit stock as presumptive non-maintainers (conservative undercount, labeled
 assumption; collective/institutional persons removed before the partition via the Census collective
-share). Couples form only from matched pairs, and matching is a MINIMUM, never an average (codex
+share). Couples form only from matched pairs, and matching is a MINIMUM, never an average (cross-model review
 r4-F1 — averaging 100 vs 80 coupled persons emits 90 couples when at most 80 matched pairs exist):
 `Couple(a) = min(coupled_m(a), coupled_f(a))`; the EXCESS of the larger side,
 `max − min` persons, routes to `Other` (they are real coupled persons whose partners fall outside
@@ -197,17 +197,17 @@ ownership → exactly 60 Couple owner units, 0 Solo, 0 Other; (b) GENERAL case �
 living_alone 0.25, couple_share 0.80 → 50 Solo + 60 Couple + 30 Other, persons reconcile
 50 + 120 + 30 = 200 (the all-coupled fixture alone cannot see a leaked residual).
 
-**Stock-flow discipline (I1 at the equation level — codex F2):** ISQ population enters the owner
+**Stock-flow discipline (I1 at the equation level — cross-model review F2):** ISQ population enters the owner
 roll-forward EXACTLY ONCE per cohort — at band entry (base-year stock + each year's newly-aged-75
 entrants from ISQ cohort aging; their pre-75 mortality is ISQ's, disjoint from our 75+ decrements).
 Post-entry, stocks evolve ONLY by our decrements; the roll-forward is NEVER re-anchored to ISQ's
 projected 75+ stocks in later years (those stocks embed deaths — re-anchor + decrement = the
 double-count). The plan writes the t→t+1 stock-flow equation with every death term appearing exactly
 once, plus a mutation test — **asserted against the ORACLE fixture's exact pinned numbers, NOT the
-aggregate envelope (codex r7-F5: the envelope cannot carry this — at q_live's low end, doubled
+aggregate envelope (cross-model review r7-F5: the envelope cannot carry this — at q_live's low end, doubled
 mortality still retains ≈0.25, inside [0.20, 0.40] — FIGURE CORRECTED by ruling O 2026-08-08: measured on the spec-pinned cohort, a doubled decrement retains 0.3900 at the LOW q_live end and 0.2293 at the HIGH end, so ≈0.25 belongs to the HIGH end; the envelope's blindness to a doubled decrement is confirmed and WIDER than the original figure claimed):** applying the CPM decrement twice must change
 the hand-computed oracle values (exact inequality against the pinned expectations); the envelope
-remains a coarse gross-error backstop only. **RULING O (steering amendment #6, 2026-08-08): the reconciliation gate binds the CENTRAL-ASSUMPTION run ONLY — sweep legs never re-run check_reconciliation.** The band's Myers anchor is central-only, and binding every leg makes the spec self-contradictory: measured at q_live = 0.06 (the sweep grid's own low endpoint), the spec-pinned cohort retains 0.4565 (gate RAISES on the CORRECT model) while a doubled decrement retains 0.3724 (gate PASSES) — inverted at 21/21 start years. The sweep's product is rank stability; the central run's gate is the calibration check (binds the Task-29 orchestrator). **Named omission (codex r3-F2, deliberate
+remains a coarse gross-error backstop only. **RULING O (steering amendment #6, 2026-08-08): the reconciliation gate binds the CENTRAL-ASSUMPTION run ONLY — sweep legs never re-run check_reconciliation.** The band's Myers anchor is central-only, and binding every leg makes the spec self-contradictory: measured at q_live = 0.06 (the sweep grid's own low endpoint), the spec-pinned cohort retains 0.4565 (gate RAISES on the CORRECT model) while a doubled decrement retains 0.3724 (gate PASSES) — inverted at 21/21 start years. The sweep's product is rank stability; the central run's gate is the calibration check (binds the Task-29 orchestrator). **Named omission (cross-model review r3-F2, deliberate
 altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
 omitted. **AMENDED 2026-08-07 (steering ruling J):** the original evidence prescription ("the
 `compo-*` workbooks bound the magnitude — record the 75+ net-migration share there") is REFUTED
@@ -235,7 +235,7 @@ post-entry migration term without reintroducing ISQ-embedded mortality is a v1 i
 
 **Household states, tracked per (geography, age, year, scenario):**
 `Couple`, `Solo_m`, `Solo_f` — owner-households, age = reference person (couples: same-age
-approximation, stated). **Pinned competing-risk algebra (codex F3): death resolves first; living
+approximation, stated). **Pinned competing-risk algebra (cross-model review F3): death resolves first; living
 exit is survivor-conditional; branches partition to 1 by construction.** With q_m, q_f from
 CPM2014+CPM-B (year-projected) and q_live survivor-conditional:
 
@@ -253,7 +253,7 @@ CPM2014+CPM-B (year-projected) and q_live survivor-conditional:
 `1−(1−0.36)^{1/5} ≈ 8.5%/yr`, band **[6%, 11%]/yr**, age-shape (flat vs rising) as a sensitivity
 axis. The Myers all-cause retention numbers are NEVER a calibration target.
 
-**Reconciliation gate (I1's aggregate backstop — honest claim, codex F2; composition PINNED
+**Reconciliation gate (I1's aggregate backstop — honest claim, cross-model review F2; composition PINNED
 r9-F4 — retention is state-dependent, so an unpinned cohort mix makes the gate ambiguous):** roll
 a 75-year-old owner cohort forward one decade, where the cohort's household-state and sex
 composition is the one the INITIALIZATION EQUATIONS produce on the committed data vintage for
@@ -271,7 +271,7 @@ labeled `borrowed_prior`). Registre foncier mutation counts are the coarse valid
 
 ## 6. Demand side
 
-**Invariant I2 — no demand double-count (mirror of I1), EXECUTABLE (codex r5-F3):** ISQ scenario
+**Invariant I2 — no demand double-count (mirror of I1), EXECUTABLE (cross-model review r5-F3):** ISQ scenario
 populations already CONTAIN immigrants. The immigrant channel therefore **decomposes** the projected
 population — it never adds demand on top — and the decomposition is an EQUATION with a gate, not a
 principle: per (age, geography, scenario, year t),
@@ -290,14 +290,14 @@ OVERSTATES the credit. The two errors partially offset with different magnitudes
 detector rather than a size check. No retention number is asserted. **What would settle it:** a Québec
 immigrant-retention rate by years-since-landing (IRCC IMDB longitudinal, or MIFI présence-au-Québec).
 The mortality leg this clause originally stated stands unchanged
-(mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the flow's). **Operand binding (codex r6-F1 — the identity alone cannot catch a mis-wired consumer,
+(mortality once — their post-arrival deaths are ours, their pre-arrival dynamics are the flow's). **Operand binding (cross-model review r6-F1 — the identity alone cannot catch a mis-wired consumer,
 because it holds regardless of what native formation reads):** native formation's ONLY population
 parameter is P_resident by construction (single code path, no access to P_ISQ), and the
 double-entry mutation test operates at the PIPELINE level: with arrivals > 0,
 `D_native(P_resident) ≠ D_native(P_ISQ)` in the fixture, and the emitted demand must equal the
 P_resident evaluation — feeding P_ISQ at the call site changes the output and fails the
 integration assertion. The decomposition-identity gate remains as the data-side check; the
-operand assertion is the consumer-side check; both run. **Nonnegativity (codex r7-F3 — the
+operand assertion is the consumer-side check; both run. **Nonnegativity (cross-model review r7-F3 — the
 identity is tautological when P_resident is DERIVED from it):** `P_resident(a,g,s,t) ≥ 0` is
 asserted per cell BEFORE any consumer — surviving arrivals exceeding P_ISQ in a cell means the
 arrival-survival assumptions contradict the scenario population (CalibrationError), never a
@@ -309,11 +309,11 @@ per-cell assertion. A per-age assertion is not representable in Tranche 1 at all
 operand is a per-YEAR flow carrying no age index — so the original wording named a check that could
 not be written, not one that was skipped.
 
-**Tranche 1 (core) — COARSE netting, dimensionally explicit (codex r2-F2):** ISQ component
+**Tranche 1 (core) — COARSE netting, dimensionally explicit (cross-model review r2-F2):** ISQ component
 arrival flows are PERSON-denominated; ownership propensities are HOUSEHOLD-maintainer-denominated —
 persons never multiply a household rate directly. The chain is: arrivals(persons) × immigrant
 headship rate (households formed per person — Census immigrant household size / maintainer rate,
-probe §11) → immigrant HOUSEHOLDS → × the immigrant ownership propensity, DEFINED (codex r4-F5 — a bare "differential"
+probe §11) → immigrant HOUSEHOLDS → × the immigrant ownership propensity, DEFINED (cross-model review r4-F5 — a bare "differential"
 is ambiguous between relative multiplier and absolute probability): `p_imm(a) = p_nonimm(a) ×
 ratio`, where `ratio` = the **Census immigrant/non-immigrant ownership RATIO at CMA level**
 (banded), `p_nonimm(a)` is the resident-base Census propensity already loaded, and the resulting
@@ -723,7 +723,7 @@ enumeration — grep of every reader call site, PLUS runtime instrumentation of 
 "**exactly three** rate consumers, of which two were lumped", and the parenthetical below said
 "The ENUMERATION — three consumers". Rulings X1 and X2 each added a lumped consumer to the list
 this sentence introduces, and neither edited the count — #28's diagnosed habit, one more
-instance, caught by codex round 16. The rest stands: the count is deliberately not written
+instance, caught by cross-model review round 16. The rest stands: the count is deliberately not written
 here. It was measured as 288 on the TWELVE-leg grid this
 paragraph was written against; amendment #20(D) added a seventh axis, so a golden run is now 336
 evaluations, and a figure derived from the grid goes stale every time the grid widens. The
@@ -855,11 +855,11 @@ None — but `ImmigrantInputs` still needs PER-FIELD provenance, because RA memb
 different provenance per field (a borrowed parent-CMA value beside a computed residual), and one
 flag cannot describe a pair honestly.
 
-**Native formation DEFINED, disjoint from S (codex r6-F2 — without a sign rule, a 75+ headship
+**Native formation DEFINED, disjoint from S (cross-model review r6-F2 — without a sign rule, a 75+ headship
 decline enters D as negative formation while the SAME dissolutions enter S: double-counting the
 senior release):** `D_native(g,t,s) = Σ_{a_min < a < 75} max(0, H_resident(a,t) −
 H_resident(a−1, t−1)) × ownership(a)` **summed over 19 ≤ a < 75, PLUS the explicit age-18 term**
-(codex r7-F7 boundary, summation corrected r10-F4 — the earlier strict inequality excluded the very
+(cross-model review r7-F7 boundary, summation corrected r10-F4 — the earlier strict inequality excluded the very
 term the boundary rule requires): `D_native = max(0, H_resident(18, t)) × ownership(18) +
 Σ_{19 ≤ a < 75} max(0, H_resident(a,t) − H_resident(a−1, t−1)) × ownership(a)` — new entrants at 18
 form against zero prior stock, by equation, never by array wraparound (fixture: nonzero
@@ -869,7 +869,7 @@ UNDER-75 resident base only (cohort-followed headship gains, floored at zero). A
 EXCLUSIVELY in S via the cohort engine; the age-75 boundary makes D and S structurally disjoint.
 Reconciliation fixture: a two-year run with no arrivals, one 75+ cohort declining in headship, and
 one supply-side exit must show the decline in S only, D unchanged. **Full-geography join for the
-immigrant inputs (codex r5-F4 — the base-ownership borrowing rule does not cover them):** immigrant
+immigrant inputs (cross-model review r5-F4 — the base-ownership borrowing rule does not cover them):** immigrant
 headship and the immigrant/non-immigrant ratio resolve per modeled geography from an EXPLICIT
 source table — MTL_RMR/QC_RMR: their CMA values direct; RA members: parent-CMA value,
 `borrowed_prior`; HORS_RMR: the province-net residual, COMPUTED (**CORRECTED
@@ -907,7 +907,7 @@ Geography enum's **string value** — the enum never crosses the file boundary:
 schema_version, mapping_version,
 data_vintage {isq_edition, census_year, constants_as_of,
               source_hashes: {<source>: sha256-of-raw-response, extracted_at}},
-              # codex r3-F6: census_year is not a PIT vintage — StatCan tables get corrected
+              # cross-model review r3-F6: census_year is not a PIT vintage — StatCan tables get corrected
               # in place; every non-ISQ source's RAW RESPONSE is hashed at extract time and
               # the hash is part of artifact identity (ISQ files are already byte-pinned)
 assumptions_hash, geography, dwelling_type, horizon_year, scenario,
@@ -922,7 +922,7 @@ excess_demand_fraction,                             # raw structural signal, tra
     #     fraction. TRANCHE-2 and unbuilt, so the emitter may still be named honestly — a
     #     Tranche-2 author renaming it to `excess_demand_rate` is RULED IN ADVANCE and needs no
     #     further amendment; keeping the stale name requires a unit note at the field.
-flags[]                                             # CLOSED enum (codex r2-F3): exactly
+flags[]                                             # CLOSED enum (cross-model review r2-F3): exactly
                                                     # {borrowed_prior, ra_proxy, never_relax_stress}
                                                     # — value-bearing or unknown flag strings are
                                                     # REJECTED at validation (an open flags[] is a
@@ -931,7 +931,7 @@ flags[]                                             # CLOSED enum (codex r2-F3):
                                                     # present on every row whose tilt < 1.0
 ```
 
-**Prohibition + integrity enforcement (strengthened per codex F6):** the schema is an allowlist; a
+**Prohibition + integrity enforcement (strengthened per cross-model review F6):** the schema is an allowlist; a
 contract test asserts the emitted field set equals it exactly — no `crash_probability`, no point
 forecast, no unconditional quantity can be added without failing the test and amending this spec.
 Further contract tests: `never_relax_stress` present in `flags[]` on EVERY row with
@@ -944,7 +944,7 @@ consumes drift bands as priors on its price-drift generator and the tilt on its 
 conditional inputs; S4b self-computes its shocks (locus rule: substrate supplies raw inputs,
 consumer derives).
 
-**ED→prior mapping (the danger zone, isolated — TRANCHE 2; units PINNED NOW, codex r3-F7 — the
+**ED→prior mapping (the danger zone, isolated — TRANCHE 2; units PINNED NOW, cross-model review r3-F7 — the
 ambiguity was worth 100×):** `balance/mapping.py`, version-stamped; v0 form is LINEAR THROUGH THE
 ORIGIN: `demo_drift = β × ED`, where **ED carries units of yr⁻¹** (amendment #12 established this and
 **AMENDMENT #26(A), 2026-08-23, edits THIS LINE, which had gone on saying "the dimensionless
@@ -953,7 +953,7 @@ instance in this document of a retraction that never edited its own sentence, an
 the pattern as a habit rather than an accident**) and β is **DIMENSIONLESS**, converting to DECIMAL
 real drift per year per unit ED — worked fixture: `ED = 0.01, β = 2.0 → demo_drift = 0.02
 decimal/yr = 2%/yr real`. β band [1.0, 4.0] in these units with a UNIFORM distribution over the
-interval (codex r6-F5 — an interval alone leaves quantiles undefined): demo_drift quantiles follow
+interval (cross-model review r6-F5 — an interval alone leaves quantiles undefined): demo_drift quantiles follow
 in closed form from the linear map (for ED ≥ 0, p10/p90 of drift = β's 10th/90th quantiles × ED;
 reversed for ED < 0; mean = 2.5 × ED). Zero intercept by construction (no demographic tilt at flow
 balance); any knots/saturation or a non-uniform β prior are a Tranche-2 decision made WITH the S4b
@@ -961,7 +961,7 @@ sketch, never improvised. p10/p90 spans INCLUDE β uncertainty (not just input s
 `mapping_version`; changing the mapping without a version bump fails a test. β is unvalidatable
 until the consumer exists — a further reason this whole layer waits for the S4b sketch.
 
-**Tranche 1's `balance/` stops at the raw excess-demand fraction, DEFINED (codex F4) — all terms
+**Tranche 1's `balance/` stops at the raw excess-demand fraction, DEFINED (cross-model review F4) — all terms
 annual, household-denominated, per (geography g, year t, scenario s):**
 
     ED(g,t,s) = [ D(g,t,s) − S(g,t,s) ] / OwnerStock(g,t,s)
@@ -970,13 +970,13 @@ annual, household-denominated, per (geography g, year t, scenario s):**
       + immigrant-cohort formation (arrival flows × immigrant-differential propensity)   # §6
     S = Σ_cause exits(cause) × φ_market(cause), with estate exits lagged L years          # §5
     OwnerStock(g,t,s) = Σ_over_all_ages pop(a,g,t,s) × headship(a) × ownership(a)
-      — DEFINED (codex r3-F3): annual re-estimation from ISQ scenario population with BASE-YEAR
+      — DEFINED (cross-model review r3-F3): annual re-estimation from ISQ scenario population with BASE-YEAR
       Census headship and ownership rates held constant (PIT-fixed, labeled assumption). This is a
       stock LEVEL estimate; ISQ-embedded mortality is correct here and does not conflict with I1,
       which governs the 75+ exit FLOW model only. No carried-forward under-75 stock exists — the
       denominator has exactly one defining equation.
 
-Denominator guard with a NUMERIC boundary (codex r9-F5): `OwnerStock < 1,000` households → raise
+Denominator guard with a NUMERIC boundary (cross-model review r9-F5): `OwnerStock < 1,000` households → raise
 (no modeled geography legitimately carries fewer; fixtures at 999 / 1,000 / 1,001) — never emit an
 unbounded fraction, and never leave "near-zero" to implementation taste. **ED is SCALE-INVARIANT but
 NOT dimensionless — amendment #12 corrects the label, not the equation.** D and S are annual FLOWS
@@ -1272,7 +1272,7 @@ no change to any band, no wiring of any indicator source, and no change to the `
 behaviour. This amendment publishes two declarations that already exist. It does not make a single
 tripwire fire.
 
-**AMENDMENT #22 (2026-08-23, codex cross-family round 11 on the amended bytes; every item verified
+**AMENDMENT #22 (2026-08-23, cross-model review cross-family round 11 on the amended bytes; every item verified
 by an independent adversarial pass that was told to REFUTE it) — ONE FALSE COVERAGE CLAIM RETRACTED,
 ONE SHIPPED MEMBER RETROACTIVELY AUTHORIZED, AND THE PAIRING TOKEN'S PAYLOAD RE-SPECIFIED.**
 
@@ -1321,7 +1321,7 @@ consumer's reading changes. A contract test must hold the emitter's field set eq
 DIRECTLY, never through the golden — the golden re-ratifies whatever the emitter emits, which is how a
 required member reached production unauthorized in the first place. #20(C)'s "exactly three" is
 CORRECTED to: three optional members, beside the required `exclusions` authorized here.
-**The finding that produced this was itself DOWNGRADED**, and the record should say why: codex claimed
+**The finding that produced this was itself DOWNGRADED**, and the record should say why: cross-model review claimed
 case (iii) would either fail validation or validate without an explicit exclusion. Exercised at the
 cause, it does neither — it emits the exclusion row, seven ranked rows, and passes every validator. The
 consequence was refuted on shipped bytes; the SPEC gap the attempt exposed is what survived, and it is
@@ -1358,7 +1358,7 @@ question its consumer contract says it answers. `schema_version` does not bump �
 type and position are unchanged; what changes is what it is computed FROM.
 
 **(D) RECORDED, NOT AMENDED — the I2 age-allocation finding restates NAMED LIMIT (B) verbatim.**
-Codex reported that §6 states the I2 identity per age while the gate compares only totals, so
+Cross-model review reported that §6 states the I2 identity per age while the gate compares only totals, so
 materially different age allocations pass it and reorder the ranking. Every part of that reproduced:
 two age vectors with bit-identical totals both pass at all eight geographies and both domain
 endpoints, per-age cells differ by up to **8,558 persons**, `D_native` differs by **7.05%–48.99%**,
@@ -1402,7 +1402,7 @@ this module keeps re-finding, so the guard is restored where it belongs, as a di
 declaration: `tests/test_golden.py::test_the_goldens_declared_CLOCK_is_pinned_because_no_emitted_byte_holds_it`.
 It is self-retiring by design and cheap enough to leave standing after it retires.
 
-**AMENDMENT #23 (2026-08-23, codex cross-family round 12 + a commissioned §10 sweep; every item
+**AMENDMENT #23 (2026-08-23, cross-model review cross-family round 12 + a commissioned §10 sweep; every item
 measured by an independent pass told to REFUTE it) — ONE REAL CONTRACT GAP CLOSED, TWO FALSE
 COVERAGE CLAIMS RE-POINTED IN PLACE, ONE SHIPPED RULING FINALLY WRITTEN DOWN, AND A HYPOTHESIS OF MY
 OWN REFUTED.**
@@ -1531,7 +1531,7 @@ mechanically checkable today. Also worth recording as an independent confirmatio
 double-decrement mutant the oracle tests went RED (10 of them) while `test_reconciliation_gate.py`
 stayed FULLY GREEN — the retraction's premise, re-measured by a pass that was not looking for it.
 
-**AMENDMENT #24 (2026-08-23, codex cross-family round 13; four findings, three CONFIRMED-and-NEW and
+**AMENDMENT #24 (2026-08-23, cross-model review cross-family round 13; four findings, three CONFIRMED-and-NEW and
 one REFUTED, each measured by an independent pass told to refute it) — ONE REAL MODEL DEFECT IN THE
 SHIPPED NUMBERS, TWO GATES THAT CANNOT REFUSE WHAT THEY CLAIM TO, AND A DEPENDENCY WORRY THAT TURNED
 OUT TO BE ALREADY CLOSED.**
@@ -1559,7 +1559,7 @@ or on the consumer page declares the operand's immigrant-status universe. The ne
 across RECENCY (all immigrants vs recent arrivals) — a different axis, and about the ratio's
 NUMERATOR, not the operand's denominator.
 **RULED: FIX IT, do not declare it.** `B` is computed per geography from the SAME cube that already
-supplies the ratio, so the correction uses data the run already loads; codex's own refuting condition
+supplies the ratio, so the correction uses data the run already loads; cross-model review's own refuting condition
 named this remedy ("algebraically converted from the pooled curve using matched immigrant weights"),
 which makes the fix the thing that was missing rather than a new model. Two facts decided the ruling
 over a named limit. First, **a PUBLISHED value changes SIGN**: MTL_ISLAND_RA06's `mean_ed_low` goes
@@ -1701,7 +1701,7 @@ a lineage limit, not a detection gap:** the dependency is declared by PATH and p
 identity records WHAT the tables contained, never WHICH revision produced them. Detection is closed;
 point-in-time provenance is not, and that distinction is the whole of what survives.
 
-**AMENDMENT #25 (2026-08-23, codex cross-family round 14) — TWO STALE LITERALS RE-POINTED WHERE A
+**AMENDMENT #25 (2026-08-23, cross-model review cross-family round 14) — TWO STALE LITERALS RE-POINTED WHERE A
 READER ACTUALLY MEETS THEM, AND THE LESSON ABOUT WHY MY OWN SWEEP MISSED THEM.**
 
 Round 14 returned four findings against the post-#24 bytes. One is derivative of a hole this document
@@ -1714,7 +1714,7 @@ permits. **But §10's literal checklist entry kept saying "MUST raise Calibratio
 gate test)" for two more amendments.** Fixed at the line itself.
 **THE LESSON, and it indicts a method of mine rather than a fact:** the §10 sweep I commissioned
 called that same bullet DERIVATIVE and correctly declined to re-report it, because the sweep read the
-document WITH its amendments applied and saw the obligation already dispositioned. Codex read the
+document WITH its amendments applied and saw the obligation already dispositioned. Cross-model review read the
 section the way a READER does — in place, top to bottom — and saw a checklist demanding an impossible
 test. Both were right about what they read. **So: a retraction that lives only in an amendment does
 not repair the sentence it retracts. From here, a retraction edits the literal text at its own line,
@@ -1725,7 +1725,7 @@ bullet in the very same section, and #22(A) did not. The inconsistency was mine.
 admitted it could not deliver.** Allowlists, finite checks, closed enums and band ordering bind
 vocabulary and shape, never numeric PROVENANCE, so an unconditional probability can sit in an allowed
 numeric field and satisfy every schema invariant. §7 has recorded exactly that as its epistemic limit
-since codex r10-F1. The header and §7 disagreed about the same guarantee and **the header is the one a
+since cross-model review r10-F1. The header and §7 disagreed about the same guarantee and **the header is the one a
 reader meets first.** Corrected there rather than in §7, and the distinction is stated positively: the
 schema forbids the VOCABULARY of an unconditional forecast — no field to hold a `crash_probability`,
 no free string to smuggle one — while CONDITIONALITY of a number inside an allowed field rests on the
@@ -1808,7 +1808,7 @@ attack recipe preserved there and the Tranche-2 closure obligation. **Derivative
 obligation.** Recorded only so the ledger shows the loop re-derived a declared hole rather than
 finding a new one — which is itself evidence about where the review is converging.
 
-**AMENDMENT #26 (2026-08-23, codex cross-family round 15) — TWO MORE RETRACTIONS THAT NEVER EDITED
+**AMENDMENT #26 (2026-08-23, cross-model review cross-family round 15) — TWO MORE RETRACTIONS THAT NEVER EDITED
 THEIR OWN LINE, AND THE ADMISSION THAT THIS IS NOW A HABIT.**
 
 **CORRECTED BEFORE THIS AMENDMENT EVER LANDED.** Its first draft opened "Round 15 produced no
@@ -1871,7 +1871,7 @@ WITH its amendments applied cannot see this class at all — it resolves the con
 clean, which is exactly what the commissioned §10 sweep did. Finding these requires reading the
 document as a first-time READER does, in place, with no amendment resolution.
 
-**AMENDMENT #27 (2026-08-23, codex cross-family round 15, finding 1; verified by an independent
+**AMENDMENT #27 (2026-08-23, cross-model review cross-family round 15, finding 1; verified by an independent
 adversarial pass and adopted after an unframed strategic review) — `ED(t)` SUBTRACTS TWO ADJACENT,
 DISJOINT 12-MONTH WINDOWS. THIS IS AN IDENTITY ERROR, NOT A NAMED LIMIT, AND IT IS FIXED.**
 
@@ -2071,7 +2071,7 @@ against #13's own table row (HORS_RMR's aligned ratio 1.0248), finding 14 agains
 `assumptions_hash` **(numbering note, amendment #30: these citations use the SWEEP'S internal
 F-numbers, which run to fourteen because the fourteenth landed as the #18(E) housekeeping
 scope-line rather than as a numbered finding — the published enumeration above closes at
-thirteen, and codex round 16 read "finding 14" against it with no way to map the two)**. The peer's two proposals this seat did NOT take verbatim are recorded as such:
+thirteen, and cross-model review round 16 read "finding 14" against it with no way to map the two)**. The peer's two proposals this seat did NOT take verbatim are recorded as such:
 its paste text for finding 4 restated the current reliance verdict, which the #27 cascade would
 stale within days, and its finding-9 wording detached the `§7` pointer from the claim it qualifies.
 
@@ -2106,7 +2106,7 @@ stands verbatim: **never update this record to make a red go away** — a digit 
 be justified at the spec and re-measured against 98-10-0622-01. The dispatch file remains the
 historical audit trail of the re-triage decision; this coupling no longer reads it.
 
-**AMENDMENT #30 (2026-08-24, codex cross-family round 16 — the confirming round #28 scoped) —
+**AMENDMENT #30 (2026-08-24, cross-model review cross-family round 16 — the confirming round #28 scoped) —
 TWO UNMEDIATED CONTRADICTIONS, BOTH CORRECTED AT THEIR OWN LINE; ZERO CLASS-A FINDINGS; THE
 LOOP CLOSES.** Round 16 ran under exactly the scope #28 mandated: a first-time-reader pass
 reporting only (a) corrections unrecognisable as such and (b) body-vs-body contradictions with
@@ -2116,7 +2116,7 @@ re-measuring the count), and this document's own provenance paragraph citing "fi
 against an enumeration of thirteen (sweep F-numbering, unmapped). Both corrected in place;
 both corrections quote their corpses. Coupling verification also passed: the P10 probe reads
 the public record and every required figure literal is present verbatim. **With round 16
-returning no shipping defect and its findings folded, the codex loop is declared DRY at round
+returning no shipping defect and its findings folded, the cross-model review loop is declared DRY at round
 16, per its own stopping rule.**
 
 **(b) Rankings table — TRANCHE 1 CORE OUTPUT.** Relative geography ordering by demographic-flow
@@ -2127,7 +2127,7 @@ skeptic's strongest-honest-output), NOT participants in any balance identity (v0
 cross-geography flows), and they are excluded from any future ScenarioPrior emission. They carry the
 `ra_proxy` label: exact RA data used as couronne/periphery proxies — the caveat is geographic scope,
 not data quality.
-**Identity envelope on SHIPPED files (codex r7-F6 — §9's artifact identity must be carried, not
+**Identity envelope on SHIPPED files (cross-model review r7-F6 — §9's artifact identity must be carried, not
 just defined):** rankings and tripwire JSON each open with the same top-level envelope
 {schema_version, data_vintage (incl. source_hashes), assumptions_hash} above their rows; a
 consumer (and the same-vintage refusal check) reads identity from the envelope and rejects
@@ -2136,18 +2136,18 @@ mixed-identity row sets; contract-tested with a two-vintage mixing RED. **QUALIF
 pairing token is blind to by construction — plus `run_pairing` as the CONTENT half. The trio named
 here cannot refuse a schema_version-only or a code-only mismatch.
 
-**No open string anywhere — the GENERAL rule (codex r9-F3, closing the side-channel class rather
+**No open string anywhere — the GENERAL rule (cross-model review r9-F3, closing the side-channel class rather
 than the next instance):** EVERY string-typed position in every emitted artifact — field values,
 enum members, map KEYS (source_hashes keys are drawn from the code-owned source registry; values
 must be 64-hex), timestamps (ISO-8601-validated) — is either registry/enum-bound or
 format-validated. No free-form string exists in any demoflow artifact; a validator walks the full
 document tree asserting this, so a future field addition cannot silently reopen the channel.
 
-**Tranche-1 output allowlists (codex r5-F5, value channels closed r6-F4 — the prohibition must
+**Tranche-1 output allowlists (cross-model review r5-F5, value channels closed r6-F4 — the prohibition must
 bind SHIPPED formats AND their string fields):** the rankings JSON and tripwire JSON each carry an
 exact nested field allowlist — rankings row: {geography, mean_ed_reference, mean_ed_low,
 mean_ed_high, rank, rank_stable, flags[]} with `rank_stable` a TYPED boolean carrying the r8-F1
-robustness-sweep verdict (codex r9-F1 — the mandated stability result needs a schema home, never a
+robustness-sweep verdict (cross-model review r9-F1 — the mandated stability result needs a schema home, never a
 flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy, closed_cohort_exceedance
 — **added by steering ruling K, 2026-08-07 (operator-resolved): rides every ranking row of a
 geography whose measured 75+ net-migration rate historically exceeded the 1%/yr materiality
@@ -2158,22 +2158,22 @@ band_low, band_high, status, reason?, freshness_years?, source_kind?} (the last 
 amendment #21, 2026-08-22 — measured, every shipped indicator row carries TEN keys) with `reason` drawn from a CLOSED machine-token enum {stale,
 source_unavailable, operator_input_missing, non_finite, malformed_band, future_as_of,
 missing_indicator, duplicate_indicator} AND `source` BOUND to the code-owned
-registry (codex r7-F1 — each indicator's source string is declared in the registry constant; the
+registry (cross-model review r7-F1 — each indicator's source string is declared in the registry constant; the
 record must equal it exactly, so `source` cannot carry smuggled content) — NO free-text string
 field exists in either format (an open string is the same serialization side-channel the
-ScenarioPrior flags enum closes). **UNKNOWN-branch nullability (codex r7-F2 — a first-run failure has
+ScenarioPrior flags enum closes). **UNKNOWN-branch nullability (cross-model review r7-F2 — a first-run failure has
 no honest measurement):** `current_value` and `as_of` are NULLABLE exactly when status=UNKNOWN with
-reason ∈ {source_unavailable, operator_input_missing, missing_indicator, **non_finite** (codex
+reason ∈ {source_unavailable, operator_input_missing, missing_indicator, **non_finite** (cross-model review
 r8-F2 — a NaN/Inf measurement cannot ride a finite-only JSON: current_value is null, the offending
 raw value goes to the run log, never the artifact)} — null, NEVER a fabricated finite value; every
 other status requires all fields non-null; contract-tested both ways. **empty_registry is a
-RUN-level terminal error, not a per-indicator reason (codex r10-F6 — with no indicators there is
+RUN-level terminal error, not a per-indicator reason (cross-model review r10-F6 — with no indicators there is
 nothing to attach an UNKNOWN record to):** removed from the per-indicator reason enum; an empty
 baseline emits NO artifact and exits nonzero with the named error. Contract tests assert field
 sets equal the allowlists AS AMENDED exactly (**#28:** amendment #21's two optional per-row members
 are IN the tripwire allowlist — a validator built from the pre-#21 literal refuses every shipped row) AND every enum-typed value is a member, with RED fixtures adding
 a `crash_probability` field AND smuggling `"crash_probability=0.35"` through flags[]/reason — all
-independent of the goldens. Epistemic limit (codex r10-F1, same class as r4-F4): field allowlists
+independent of the goldens. Epistemic limit (cross-model review r10-F1, same class as r4-F4): field allowlists
 bind VOCABULARY, not value semantics — no schema proves a number in an allowed field was derived
 conditionally; that guarantee lives in the single derivation path (the version-stamped mapping
 module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
@@ -2242,13 +2242,13 @@ truncation state surfaces as `source_unavailable` like every other empty-closed-
 RUN LOG must name member-set truncation or a reader cannot tell a pre-era refusal from a gutted feed.
 
 
-**Scenario-named fan fields (codex r6-F6 — scenario identity vs min/max are DIFFERENT semantics
+**Scenario-named fan fields (cross-model review r6-F6 — scenario identity vs min/max are DIFFERENT semantics
 and can cross):** `mean_ed_low` / `mean_ed_high` are SCENARIO-NAMED — the Faible (D2026) and Fort
 (E2026) scenario means respectively, whatever their numeric order; the ranking tiebreak uses the
 scenario-named Faible mean; any min/max "fan envelope" is derived at display time, never stored.
 A scenario-crossing fixture (Faible mean +0.02, Fort mean −0.03) pins the field semantics.
 
-**Run contract for banded assumptions (codex r8-F1 — bands alone leave the run underdetermined;
+**Run contract for banded assumptions (cross-model review r8-F1 — bands alone leave the run underdetermined;
 two conforming implementations must not emit different rankings from identical data):** a Tranche-1
 run evaluates every banded assumption at its declared CENTRAL value — q_live 0.085/yr flat
 age-shape, φ_market voluntary 0.9 / estate eventual 0.725, estate lag L=2, and the immigrant ownership ratio
@@ -2263,12 +2263,12 @@ per geography as a rank-stability flag (does the ordering change anywhere in the
 The central values + sweep grid are enumerated in `constants.py` and covered by assumptions_hash —
 the hash identifies the selection, the spec's central-value rule DETERMINES it.
 
-**Ranking temporal domain (codex r8-F3):** ranking means average over PROJECTED years only
+**Ranking temporal domain (cross-model review r8-F3):** ranking means average over PROJECTED years only
 (`Statut = proj` rows — estimation years are history, not scenario), the full contiguous annual
 lattice from the first projected year through 2051, both endpoints included; a fixture pins a pair
 of trajectories whose ordering would reverse under an all-years average.
 
-**Ranking collapse rule (codex F4, fan wording reconciled r8-F4 — the earlier min/max sentence
+**Ranking collapse rule (cross-model review F4, fan wording reconciled r8-F4 — the earlier min/max sentence
 contradicted the scenario-named fields):** rank by MEAN ED over the domain above under the
 REFERENCE scenario, ascending (most negative ED = highest demographic-flow risk = rank 1); the fan
 is REPORTED per geography as the SCENARIO-NAMED Faible and Fort means (mean_ed_low / mean_ed_high
@@ -2280,24 +2280,24 @@ fixture (§10) pins one unique ordering, including an exact-tie case and a scena
 assumptions_hash) — cross-vintage comparison is refused at the emitter.
 
 **(c) Tripwire baselines** — file of (indicator, current value, source, as_of, threshold band),
-with a per-indicator SOURCE-COVERAGE declaration (codex F5): `wired` (IRCC PR-by-CMA landings;
+with a per-indicator SOURCE-COVERAGE declaration (cross-model review F5): `wired` (IRCC PR-by-CMA landings;
 temporary-resident stock — source named at probe §11; ISQ edition watch) vs `operator-supplied`
 (Registre foncier transfer volume — manual v0; CMHC senior-sale-rate refresh; natural-increase
 sign, annual ISQ release). **Fail-safe contract (this is a verification gate — it must refuse,
 never false-green):** each indicator's result ∈ {OK, CROSSED, UNKNOWN(reason)}; UNKNOWN fires on
 source-unavailable, operator-input-missing, or `as_of` older than the indicator's declared
 freshness limit — a stale baseline is NEVER reported as within-band. Threshold endpoints evaluate
-as CROSSED (closed bands). **Completeness integrity (codex r2-F4 + r3-F4 — no vacuous green, no
+as CROSSED (closed bands). **Completeness integrity (cross-model review r2-F4 + r3-F4 — no vacuous green, no
 co-deletion):** the required-indicator set is a VERSIONED CONSTANT IN DEMOFLOW SOURCE CODE, not in
 the baseline file it validates (a self-declared set dies to co-deletion: removing an indicator from
 both the declaration and the records leaves an internally consistent partial registry). The
 evaluator asserts exact-key equality of the baseline's records against the code-owned set — empty
-registry, missing required indicator, or duplicate key ⇒ UNKNOWN/nonzero. **Value integrity (codex
+registry, missing required indicator, or duplicate key ⇒ UNKNOWN/nonzero. **Value integrity (cross-model review
 r3-F5):** a present, fresh indicator whose current value is NaN/±Inf/non-numeric, whose `as_of` is
 in the future, or whose band is inverted (lower > upper) ⇒ UNKNOWN, never within-band (naive
 comparisons classify NaN as inside every band — both boundary checks are False); tripwire JSON is
 emitted with `allow_nan=False` too. Exit code: 0 only when every code-required indicator is present
-exactly once, finite, fresh, well-banded, and OK; nonzero otherwise. Epistemic limit (codex r4-F4):
+exactly once, finite, fresh, well-banded, and OK; nonzero otherwise. Epistemic limit (cross-model review r4-F4):
 no runtime check defends the checker's own source from a coordinated edit — the residual guard is
 that the golden-baseline TEST pins the full required-indicator name list LITERALLY in the test body
 (a third, test-owned copy), so a co-deletion must touch code + baseline + test in one diff — a
@@ -2307,12 +2307,12 @@ PR-visible act, which is review's job to catch, not the runtime's. Scheduling is
 
 | Junction | Left | Right | Rule |
 |---|---|---|---|
-| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (codex r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — codex r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is **EXCLUDED FROM RANKINGS ENTIRELY — no ED is computed for it** (codex r10-F2: a supply-side-only ED would have to feed P_ISQ to native formation, omit a demand term, or invent arrivals — each contradicts a stated contract); the run emits a run-level exclusion record naming the unresolved input, and the rankings cover the remaining members — never a partial ED, never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED to v1 (§11.6: a find enables v1, never v0). MRC-level ISQ projection workbooks EXIST — the 2026-07-21 'no MRC workbook (404)' finding was a METHOD ARTIFACT: HEAD 404s where GET 200s on ISQ's descriptive-French slugs, and the original probe's guessed slugs also 404 on GET, so absence was a property of slug + verb, never the data (P6 probe + independent steering re-verification, 2026-07-28; discovery path = sitemap.xml, 3,273 xlsx locs). v1 is PARKED behind two recorded residuals: the RA↔MRC axis is EDITION-SPECIFIC (present in A2021, absent from the 2025 scenarios workbook), and membership-vs-partition of RA14/15/16 vs the RMR couronne is not yet computed |
-| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and a `100+` terminal column — **AMENDED 2026-08-07 (steering ruling I): `100+` occurs exactly ONCE per sheet in the committed edition (measured across all three pop workbooks by two independent probes); the duplicate-name hazard is CROSS-SHEET (`Groupes d'âge` carries its own `100+` column), not within-sheet — the 2026-07-21 junction note mis-scoped it** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (cross-sheet duplicates + future-edition drift); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (codex r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
-| Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (codex r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
+| Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (cross-model review r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — cross-model review r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is **EXCLUDED FROM RANKINGS ENTIRELY — no ED is computed for it** (cross-model review r10-F2: a supply-side-only ED would have to feed P_ISQ to native formation, omit a demand term, or invent arrivals — each contradicts a stated contract); the run emits a run-level exclusion record naming the unresolved input, and the rankings cover the remaining members — never a partial ED, never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED to v1 (§11.6: a find enables v1, never v0). MRC-level ISQ projection workbooks EXIST — the 2026-07-21 'no MRC workbook (404)' finding was a METHOD ARTIFACT: HEAD 404s where GET 200s on ISQ's descriptive-French slugs, and the original probe's guessed slugs also 404 on GET, so absence was a property of slug + verb, never the data (P6 probe + independent steering re-verification, 2026-07-28; discovery path = sitemap.xml, 3,273 xlsx locs). v1 is PARKED behind two recorded residuals: the RA↔MRC axis is EDITION-SPECIFIC (present in A2021, absent from the 2025 scenarios workbook), and membership-vs-partition of RA14/15/16 vs the RMR couronne is not yet computed |
+| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and a `100+` terminal column — **AMENDED 2026-08-07 (steering ruling I): `100+` occurs exactly ONCE per sheet in the committed edition (measured across all three pop workbooks by two independent probes); the duplicate-name hazard is CROSS-SHEET (`Groupes d'âge` carries its own `100+` column), not within-sheet — the 2026-07-21 junction note mis-scoped it** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (cross-sheet duplicates + future-edition drift); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (cross-model review r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
+| Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (cross-model review r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
-| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (codex r1-F8, corrected r4-F2): the residual is Québec-province tenure×age NET of ALL Québec CMAs — not merely MTL+QC (the other RMRs are neither MTL/QC nor hors-RMR); probe §11 item 2 pulls province + every QC CMA the table carries, or the table's own non-CMA/CA aggregate row if published; `borrowed_prior`-flagged if only coarser geography is available** — a strict full-geography join must find a rate for every MODELED enum member or raise |
+| Ownership rate | Census CMA cross-tab (MTL CMA ≡ MTL_RMR; QC CMA ≡ QC_RMR) | cohort engine propensities | CMA↔RMR treated as identical geography (same StatCan delineation); RA-level rows reuse their parent CMA rate with `borrowed_prior`; **HORS_RMR has its OWN named source (cross-model review r1-F8, corrected r4-F2): the residual is Québec-province tenure×age NET of ALL Québec CMAs — not merely MTL+QC (the other RMRs are neither MTL/QC nor hors-RMR); probe §11 item 2 pulls province + every QC CMA the table carries, or the table's own non-CMA/CA aggregate row if published; `borrowed_prior`-flagged if only coarser geography is available** — a strict full-geography join must find a rate for every MODELED enum member or raise |
 
 ## 9. Operational-future statement (item 10)
 
@@ -2349,7 +2349,7 @@ TDD throughout. Anchors:
   re-confirmed by a §10 sweep that was not looking for it: under a double-decrement mutant, ten
   oracle tests go RED while `tests/test_reconciliation_gate.py` stays FULLY GREEN.** A q outside
   [0,1] MUST raise, and that half is unaffected.
-- **Codex-fold fixtures (round 1 F1/F3/F4/F6 + round 2 F1–F5)**: persons→households initialization
+- **Cross-model review-fold fixtures (round 1 F1/F3/F4/F6 + round 2 F1–F5)**: persons→households initialization
   — all-coupled fixture (100+100, 60% → 60 Couple / 0 Solo / 0 Other) AND the general-case fixture
   (200 persons, 0.25/0.80 → 50 Solo + 60 Couple + 30 Other, persons reconcile 200); competing-risk
   partition (0.20/0.08/0.72, sums to 1); dimensional headship test (100 arrivals as 50 couples vs
@@ -2358,7 +2358,7 @@ TDD throughout. Anchors:
   on either leg REDS instead of passing as two bare unlabelled numbers) +
   ranking fixture (unique ordering, exact tie, scenario crossing); sex-code orientation guard RED
   (swapped 1↔2 map must raise on the 85+ female-excess check) + code-3 exclusion test; couple
-  matching fixtures (codex r3-F1 + r4-F1): coupled 100 vs 80 → exactly 80 Couple + 20 excess→Other
+  matching fixtures (cross-model review r3-F1 + r4-F1): coupled 100 vs 80 → exactly 80 Couple + 20 excess→Other
   (never 90 averaged); 20 vs 100 → **RETRACTED BY AMENDMENT #23(C): the per-band imbalance is
   RECORDED, NOT GATED — no CalibrationError, `match_couples(20.0, 100.0)` returns
   `(20.0, 0.0, 80.0)` and the imbalance 0.8 rides the result as a diagnostic**; 0 vs 0 → 0 Couple, no
@@ -2378,7 +2378,7 @@ TDD throughout. Anchors:
   mapping_version bump enforcement.
 - **Golden artifacts (Tranche 1)**: one committed rankings output + one tripwire-baseline output
   from the committed data vintage (JSON, diffable). Tranche 2 adds the golden ScenarioPrior.
-- **Basis guard tests (codex F7 — two directions, both explicit):** (a) normal path: a fresh
+- **Basis guard tests (cross-model review F7 — two directions, both explicit):** (a) normal path: a fresh
   interpreter entry point that sets the Québec basis SUCCEEDS (the US default before set is
   expected, not an error); (b) guard path: with `set_active_mortality` stubbed to a no-op so
   `active_mortality()` returns the US basis, `BasisError` is raised and `get_qx` is never called —
@@ -2390,15 +2390,15 @@ TDD throughout. Anchors:
    the QC basis (in-repo proven; cross-env install mechanical but unproven).
 2. StatCan WDS table-API pull of 98-10-0231-01 — MTL + QC CMAs AND the Québec-province total AND
    every other QC CMA the table carries (or its non-CMA/CA aggregate row if published): the
-   HORS_RMR rate derives as province-net-of-ALL-CMAs (codex r1-F8 + r4-F2 — netting only MTL+QC
-   wrongly folds the five other RMRs into hors-RMR). CA caveat (codex r5-F7): a published
+   HORS_RMR rate derives as province-net-of-ALL-CMAs (cross-model review r1-F8 + r4-F2 — netting only MTL+QC
+   wrongly folds the five other RMRs into hors-RMR). CA caveat (cross-model review r5-F7): a published
    "non-CMA/CA" row EXCLUDES Census Agglomerations while province-minus-CMAs INCLUDES them — use
    the published row only if it reconciles exactly against the computed residual (numerators AND
    denominators); otherwise compute the residual and record which geography HORS_RMR actually
    denotes in the probe note.
 3. Census living-arrangement cross-tab hunt — SEX-SPECIFIC rates required (living-alone AND
    couple shares by age × sex; the r3-F1/r4-F1 matching depends on both). Fallbacks are
-   PER-INPUT (codex r4-F6 — the living-alone fallback cannot supply couple_share): living-alone →
+   PER-INPUT (cross-model review r4-F6 — the living-alone fallback cannot supply couple_share): living-alone →
    vitrine 28% + widened band per-sex; couple_share → pinned at probe time from the Census
    province-level profile with citation (recorded observation). If neither the cross-tab nor a
    citable couple_share exists, initialization RAISES (LoaderError) — couple_share has no
@@ -2406,7 +2406,7 @@ TDD throughout. Anchors:
 4. Census immigrant vs non-immigrant homeownership by CMA (the Tranche-1 coarse-netting
    differential — Census-covered for Québec, unlike CHSP).
 5. IRCC PR-by-CMA CSV download + schema record.
-5b. Temporary-resident STOCK source (codex F5): StatCan NPR estimates (17-10-0121-01 family) vs
+5b. Temporary-resident STOCK source (cross-model review F5): StatCan NPR estimates (17-10-0121-01 family) vs
    IRCC temporary-resident tables — pick one, record schema + cadence; until wired the tripwire
    reports UNKNOWN, never a stale within-band.
 6. MRC-level ISQ source hunt for couronne-nord precision (404 on slug convention; try product pages /
@@ -2436,7 +2436,7 @@ Handed off to the main steering seat per steering routing.
 **Tranche 2 (gated on S4b input-slot sketch):** ScenarioPrior emitter; ED→drift mapping (β band);
 immigrant YSL S-curve + ROC-CHSP borrowing + QC-discount multiplier [0.60, 0.85];
 `never_relax_stress` contract enforcement (rides the emitter). **Named contract DEBTS the sketch
-session inherits (codex r10-F3 — the emitter is not functionally determined without them):** the
+session inherits (cross-model review r10-F3 — the emitter is not functionally determined without them):** the
 ED-trajectory → horizon_year-row aggregation rule (endpoint vs period-mean — pinned with a
 distinguishing fixture), and the ED → drawdown_weight_tilt mapping (currently unspecified; the β
 rule determines drift only).

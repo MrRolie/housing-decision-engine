@@ -62,7 +62,7 @@ def test_sex_additivity_violation_raises():
         isq._check_sex_additivity(code3=100.0, code1=40.0, code2=40.0, ctx="MTL/2035/ref/age75")
 
 
-def test_sex_orientation_guard_raises_on_swapped_map():   # RED (codex r2-F5)
+def test_sex_orientation_guard_raises_on_swapped_map():   # RED (cross-model review r2-F5)
     swapped = pd.DataFrame({
         "geography": [Geography.MTL_RMR, Geography.MTL_RMR],
         "scenario": [Scenario.REFERENCE, Scenario.REFERENCE],
@@ -252,7 +252,7 @@ def test_frame_level_gates_are_wired(monkeypatch, rmr_long, mutate, expect):
         load_population(_RMR)
 
 
-# --- §4 degenerate-population gate (codex r4-F3), mutated at the same seam -----------
+# --- §4 degenerate-population gate (cross-model review r4-F3), mutated at the same seam -----------
 # "finite non-negative populations" had no executable check: the gate could be deleted
 # wholesale with the suite green. Each construction below leaves EVERY other gate satisfied
 # — the target cell sits at age 50 (outside the 85+ orientation window), the sex lattice
@@ -308,7 +308,7 @@ def _negative_population(long):
     (_negative_population, "0 non-finite and 1 negative"),
 ], ids=["nan-population-cell", "inf-population-cell", "negative-population-cell"])
 def test_degenerate_population_raises(monkeypatch, rmr_long, mutate, expect):
-    """Spec §4 degenerate policy / codex r4-F3: a non-finite or negative population cell
+    """Spec §4 degenerate policy / cross-model review r4-F3: a non-finite or negative population cell
     must RAISE, never flow into the cohort roll-forward (a negative cohort silently reverses
     the excess-demand ranking it feeds)."""
     mutated = mutate(rmr_long)
@@ -435,7 +435,7 @@ def test_swapped_sex_codes_raise_orientation_end_to_end(tmp_path, monkeypatch):
     (code3 = code1+code2 is label-symmetric), the sex lattice, the primary key, scenario
     completeness and the year domain ALL survive this mutation; the orientation guard is
     the only thing standing between a swapped 1↔2 map and sex-specific mortality applied
-    to the wrong cohort (codex r2-F5)."""
+    to the wrong cohort (cross-model review r2-F5)."""
     _raw, body, pos, _age_col = _positions(_RMR)
     mtl = _mtl_rows(body, pos)
     male = mtl[mtl.iloc[:, pos["Sexe"]] == 1].iloc[0]

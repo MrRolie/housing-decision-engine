@@ -76,7 +76,7 @@ def test_real_slice_loads_and_keeps_suppressed_token(tmp_path):
     """A verbatim slice of the live feed must load, with `--` preserved as a TOKEN.
 
     `--` may never arrive as NaN: naive band comparisons classify NaN as inside every
-    band (spec §7c value-integrity, codex r3-F5), so a suppressed cell silently becoming
+    band (spec §7c value-integrity, cross-model review r3-F5), so a suppressed cell silently becoming
     a float is exactly how a tripwire false-greens.
     """
     _plant(tmp_path)
@@ -86,7 +86,7 @@ def test_real_slice_loads_and_keeps_suppressed_token(tmp_path):
     assert result.frame is not None
     assert list(result.frame.columns) == list(EXPECTED_COLUMNS)
     # Test-OWNED literals for the two columns the loader actually addresses (the spec's
-    # co-deletion pattern, codex r4-F4): the assertion above alone is circular — it would
+    # co-deletion pattern, cross-model review r4-F4): the assertion above alone is circular — it would
     # survive a co-edit of EXPECTED_COLUMNS and the loader. These do not, and neither does
     # the header gate itself, which runs against the real bytes in the fixture.
     assert len(result.frame.columns) == 11

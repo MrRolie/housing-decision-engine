@@ -1,4 +1,4 @@
-"""Québec-basis guard contract (spec §2 "Basis contract", §10 "Basis guard tests" codex F7).
+"""Québec-basis guard contract (spec §2 "Basis contract", §10 "Basis guard tests" cross-model review F7).
 
 The engine holds its active basis in MODULE-LEVEL GLOBALS (`_active_base`/`_active_scale`
 in `actuarial.compat`, a documented v1 concurrency assumption). Those globals

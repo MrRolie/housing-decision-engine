@@ -1,4 +1,4 @@
-"""P5b — pick the temporary-resident STOCK source (spec §11 item 5b, codex F5).
+"""P5b — pick the temporary-resident STOCK source (spec §11 item 5b, cross-model review F5).
 
 WHO USES THIS (spec §7 / spec:473): the TRIPWIRE BASELINE registry carries a
 `temporary-resident stock` indicator declared `wired`, i.e. (indicator, current value,

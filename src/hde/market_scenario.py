@@ -442,7 +442,7 @@ def load_scenario_prior(path: str, geography: str) -> LoadedScenarioPrior:
         if v_missing:
             errors.append(f"data_vintage is missing field(s): {v_missing}")
         source_hashes = vintage.get("source_hashes")
-        # Values are PROVENANCE OBJECTS per the emitter (codex r3-F6): each maps a
+        # Values are PROVENANCE OBJECTS per the emitter (cross-model review r3-F6): each maps a
         # raw-response extraction to {sha256, extracted_at[, committed_sha256]}.
         def _bad_source_entry(k, v) -> bool:
             if not isinstance(k, str) or not isinstance(v, dict):

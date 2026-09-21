@@ -1,4 +1,4 @@
-"""Excess-demand fraction (spec §7, codex F4). All terms annual, household-
+"""Excess-demand fraction (spec §7, cross-model review F4). All terms annual, household-
 denominated, per (geography g, year t, scenario s):
 
     ED(g,t,s) = [ D(g,t,s) - S(g,t,s) ] / OwnerStock(g,t,s)
@@ -23,7 +23,7 @@ factor leaves the quotient fixed. No numeric error followed from the old "dimens
 exactly why it had to be corrected in words: a wrong label beside a right number is the class
 this module's neighbours keep closing.
 
-Denominator guard has a NUMERIC boundary (codex r9-F5): OwnerStock < 1,000 households -> raise
+Denominator guard has a NUMERIC boundary (cross-model review r9-F5): OwnerStock < 1,000 households -> raise
 (never leave "near-zero" to implementation taste, never emit an unbounded fraction). Tranche 1
 stops at the raw fraction; the ED->drift mapping (beta) is Tranche 2.
 

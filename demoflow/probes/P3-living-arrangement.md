@@ -270,7 +270,7 @@ the table above either way.
   returned non-suppressed values for all 7 wholly-Québec geographies at 75-84 and 85+
   for both Men+ and Women+. Both required rates come from this ONE table.
 
-- PER-INPUT fallbacks (codex r4-F6 — the living-alone fallback CANNOT supply couple_share):
+- PER-INPUT fallbacks (cross-model review r4-F6 — the living-alone fallback CANNOT supply couple_share):
   * `living_alone` -> spec's named fallback is the ISQ vitrine 0.28 (65+, QC), widened band [0.24, 0.34] PER-SEX, flagged `borrowed_prior`.
     **NOT NEEDED** — §4 supplies directly measured per-sex, per-age, per-CMA rates,
     so the `borrowed_prior` flag does not attach to `living_alone` for any geography

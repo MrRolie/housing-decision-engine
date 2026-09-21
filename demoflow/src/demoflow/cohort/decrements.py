@@ -76,7 +76,7 @@ def partition_solo(q_s: float, q_live: float) -> dict[str, float]:
 
 
 def partition_couple(q_m: float, q_f: float, q_live: float) -> dict[str, float]:
-    """Couple owner (spec §5, codex F3): both-die -> estate; exactly-one-dies -> widowed
+    """Couple owner (spec §5, cross-model review F3): both-die -> estate; exactly-one-dies -> widowed
     Solo of the surviving sex, UNIT RETAINED (widow NOT living-exit-eligible in the
     transition year — the widow branch is disjoint from the no-death branch that splits
     q_live); no-death splits q_live -> living exit vs remain. Branches partition to 1."""

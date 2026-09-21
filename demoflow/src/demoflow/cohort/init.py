@@ -136,7 +136,7 @@ def match_couples(coupled_m: float, coupled_f: float) -> tuple[float, float, flo
     """Return (Couple, excess_m, excess_f). `Couple = min(coupled_m, coupled_f)`; the excess
     `max − min` routes to `Other`.
 
-    MINIMUM, never an average (spec §5, codex r4-F1): averaging 100 vs 80 coupled persons emits
+    MINIMUM, never an average (spec §5, cross-model review r4-F1): averaging 100 vs 80 coupled persons emits
     90 couples when at most 80 matched pairs exist. The excess are real coupled persons whose
     partners fall outside the same-age band; routing them to Other keeps them excluded
     conservatively and preserves person conservation BY SEX exactly.
@@ -222,7 +222,7 @@ def initialize_households(
     other_f = other_base["F"] + excess_f
 
     # Per-sex person conservation: `Solo_s + coupled_s + Other_s = private pop_s`. Explicit raise,
-    # NOT `assert` (codex F7, Task 17's basis.py): `assert` is stripped under `python -O`, and a
+    # NOT `assert` (cross-model review F7, Task 17's basis.py): `assert` is stripped under `python -O`, and a
     # conservation guard that vanishes in the mode a deployment might run is not a guard. Its
     # firing condition is a FORMULA EDIT, not a bad input — the identity is algebraic in the three
     # expressions above — which is exactly what makes it worth keeping: it is the tripwire under

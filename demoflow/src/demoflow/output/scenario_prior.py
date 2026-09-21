@@ -68,7 +68,7 @@ DWELLING_TYPES = ("all",)                       # v0 emits `all` only (spec §6)
 PRIOR_GEOGRAPHIES = tuple(g for g in Geography if g not in RA_PROXY_MEMBERS)
 _SCENARIO_VALUES = frozenset(s.value for s in Scenario)
 
-# CLOSED flags enum (codex r2-F3) — value-bearing or unknown flag strings are REJECTED at
+# CLOSED flags enum (cross-model review r2-F3) — value-bearing or unknown flag strings are REJECTED at
 # validation; an open flags[] is a serialization side-channel for the prohibited quantities.
 PRIOR_FLAGS_ALLOWED = frozenset({"borrowed_prior", "ra_proxy", "never_relax_stress"})
 _FLAG_EMIT_ORDER = ("ra_proxy", "borrowed_prior", "never_relax_stress")

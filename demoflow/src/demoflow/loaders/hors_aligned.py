@@ -362,7 +362,7 @@ _ROUNDING_NOTE = (
 _MULTIPLICAND_NOTE = (
     "WHAT THIS RATE MAY MULTIPLY: owner-maintainer HOUSEHOLDS / total private HOUSEHOLDS — a "
     "household-denominated rate, so its multiplicand is a household count, never a person "
-    "count (spec §6, codex r2-F2). Identical in kind to the shipped ownership curve this one "
+    "count (spec §6, cross-model review r2-F2). Identical in kind to the shipped ownership curve this one "
     "sits beside; only the TERRITORY differs."
 )
 _UNIVERSE_NOTE = (

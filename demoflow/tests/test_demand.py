@@ -95,7 +95,7 @@ def test_p_imm_is_product_asserted_in_unit_interval():
 
 
 def test_native_at_a_min_18_forms_against_zero_prior_no_wraparound():
-    # codex r7-F7: at a_min=18 the prior stock is ZERO by equation (never H(17) via wraparound).
+    # cross-model review r7-F7: at a_min=18 the prior stock is ZERO by equation (never H(17) via wraparound).
     # A huge planted 17-yo prior would leak in only through a negative-index bug -> assert it does NOT.
     d = native_formation(
         resident_pop_t={18: 100.0}, resident_pop_tm1={17: 9999.0},
@@ -155,7 +155,7 @@ def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age
     Parametrized over all seven rather than pinned at a_min because the convention and the
     silence it buys are identical at each, and a test that pins only 18 leaves 19..24 free to
     change under it. The a_min term still earns its place independently: it exists to stop
-    entrants forming against H(17) by array wraparound (codex r7-F7), not to claim 18-year-old
+    entrants forming against H(17) by array wraparound (cross-model review r7-F7), not to claim 18-year-old
     buyers. The second arm pins that a rate which IS supplied at a sub-floor age is still USED,
     so the convention can never swallow a curve someone extended downward.
     """
@@ -378,7 +378,7 @@ def test_the_p_imm_docstring_no_longer_claims_the_product_alone_catches_a_negati
     assert not says(text, "cannot pass the product's own")
     # Short unbroken fragments only: a longer phrase spans a line wrap and would red on a
     # reflow rather than on the claim (the coupling `test_i2.py` makes on DIGITS, not prose).
-    assert "exceed 1" in text and "codex r7-F8" in text, (
+    assert "exceed 1" in text and "cross-model review r7-F8" in text, (
         "the r7-F8 ratio carve-out — the ratio may validly exceed 1, only the PRODUCT binds "
         "[0,1] — must SURVIVE the narrowing; asserting each operand must not have quietly "
         "turned the ratio into a fraction")
@@ -401,7 +401,7 @@ def test_the_i2_forward_reference_caveat_is_GONE_now_that_25b_HAS_LANDED():
 
 
 def test_native_formation_has_no_import_path_to_the_population_loader():
-    """Operand binding, spec §6 (codex r6-F1) — the half that is checkable HERE.
+    """Operand binding, spec §6 (cross-model review r6-F1) — the half that is checkable HERE.
 
     Native formation's ONLY population parameter is P_resident "by construction (single code
     path, no access to P_ISQ)". The behavioural half of that binding is a PIPELINE mutation

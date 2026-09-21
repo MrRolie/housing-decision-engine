@@ -1,10 +1,10 @@
-"""I2 decomposition + its reconciliation gate (spec §6; codex r5-F3/r7-F3).
+"""I2 decomposition + its reconciliation gate (spec §6; cross-model review r5-F3/r7-F3).
 
 `P_resident(t) = P_ISQ(t) − Σ_c SurvivingArrivalCohort_c(t)`. ISQ scenario populations
 ALREADY CONTAIN immigrants, so the immigrant channel DECOMPOSES the projected population — it
 never adds demand on top — and native formation consumes P_resident ONLY.
 
-TWO CHECKS, and they catch different things (§6 operand binding, codex r6-F1):
+TWO CHECKS, and they catch different things (§6 operand binding, cross-model review r6-F1):
 
   * the DATA-side check is `assert_i2_identity` — the value handed to native formation is the
     one the decomposition produces;
@@ -47,12 +47,12 @@ def p_resident(p_isq: float, surviving_arrivals: list[float]) -> float:
 
 
 def assert_p_resident_nonneg(value: float, ctx: str) -> float:
-    """Nonnegativity of the P_resident value it is HANDED (codex r7-F3): the identity is
+    """Nonnegativity of the P_resident value it is HANDED (cross-model review r7-F3): the identity is
     tautological when P_resident is DERIVED from it, so a negative residual base must fail LOUD,
     never flow into formation.
 
     IT IS THE TOTAL, NOT THE CELL. This docstring read "Per-cell nonnegativity" and spec §6 says
-    the property is "asserted per cell"; codex r12-F1 measured what the code does. The function
+    the property is "asserted per cell"; cross-model review r12-F1 measured what the code does. The function
     takes a SCALAR and has ONE production call site — `pipeline`'s `resident()`, which hands it
     the (geography, scenario, year) TOTAL, 27 evaluations per geography-scenario against 2,727
     per-age cells, and no call context carries an age. The per-age operand is UNREPRESENTABLE on

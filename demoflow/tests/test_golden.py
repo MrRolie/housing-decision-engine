@@ -52,7 +52,7 @@ from ._prose_binding import EXP, bound_map, flat, says
 
 GOLDEN = GOLDEN_DIR
 
-# THIRD, TEST-OWNED copy of the code-required indicator name list (codex r4-F4): a
+# THIRD, TEST-OWNED copy of the code-required indicator name list (cross-model review r4-F4): a
 # co-deletion must touch code (REQUIRED_INDICATORS) + baseline (golden) + this test in ONE
 # PR-visible diff — the residual guard no runtime check can provide. Do NOT "DRY" it away by
 # importing `REQUIRED_INDICATORS`: the whole value of this copy is that it is not the same

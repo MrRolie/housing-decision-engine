@@ -50,7 +50,7 @@ def test_unique_ordering_with_exact_tie():
 
 
 def test_scenario_named_fan_fields_can_cross():
-    # codex r6-F6: mean_ed_low is the FAIBLE mean, mean_ed_high the FORT mean — NOT min/max.
+    # cross-model review r6-F6: mean_ed_low is the FAIBLE mean, mean_ed_high the FORT mean — NOT min/max.
     # Faible +0.02, Fort -0.03 -> mean_ed_low (0.02) > mean_ed_high (-0.03): a legitimate crossing.
     ed = {Geography.MTL_RMR: _ed([-0.01], [0.02], [-0.03])}
     r = rank_geographies(ed)[0]
@@ -90,7 +90,7 @@ def test_row_allowlist_exact_and_flag_enum_reject_crash_probability():
 
 
 def test_rank_stable_is_typed_bool_not_a_flag_string():
-    # codex r8-F1/r9-F1: the robustness-sweep verdict has a TYPED schema home, never a flag string.
+    # cross-model review r8-F1/r9-F1: the robustness-sweep verdict has a TYPED schema home, never a flag string.
     r = rank_geographies({Geography.MTL_RMR: _ed([-0.02], [-0.03], [-0.01])},
                          rank_stable={Geography.MTL_RMR: False})[0]
     assert r.rank_stable is False
@@ -99,7 +99,7 @@ def test_rank_stable_is_typed_bool_not_a_flag_string():
 
 
 def test_ordering_reverses_all_years_vs_projected_only():
-    # codex r8-F3: the ranking domain (projected years only) is load-bearing — a pair whose order
+    # cross-model review r8-F3: the ranking domain (projected years only) is load-bearing — a pair whose order
     # REVERSES between an all-years average and a projected-only average. rank_geographies averages
     # whatever series it is given; the pipeline supplies the projected-only slice.
     all_years = {   # includes leading "estimation-year" values that pull the mean

@@ -225,7 +225,7 @@ def test_rates_are_exactly_the_cited_census_values():
 
 
 def test_hors_rmr_is_province_net_of_all_six_cmas():
-    """The residual nets ALL SIX wholly-Québec CMAs, not merely MTL+QC (codex r4-F2).
+    """The residual nets ALL SIX wholly-Québec CMAs, not merely MTL+QC (cross-model review r4-F2).
 
     Two arms, and their strengths are DELIBERATELY UNEQUAL — stated, because a gate whose
     power is overclaimed is worse than one whose power is small:

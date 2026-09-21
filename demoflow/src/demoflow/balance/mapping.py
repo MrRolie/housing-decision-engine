@@ -3,7 +3,7 @@ version-stamped. This module is the SINGLE derivation path for every drift and t
 ScenarioPrior artifact carries (the emitter tests origin-assert it); nothing else in the tree
 may multiply an ED by a beta.
 
-UNITS ARE PINNED HERE AND NOWHERE ELSE (codex r3-F7 — the ambiguity was worth 100x). ED carries
+UNITS ARE PINNED HERE AND NOWHERE ELSE (cross-model review r3-F7 — the ambiguity was worth 100x). ED carries
 units of yr^-1 (amendment #12; `balance/excess_demand.py` states the composition), beta is
 DIMENSIONLESS, and demo_drift comes out in DECIMAL REAL drift per year — so a unit ED maps to
 beta-units of decimal/yr per yr^-1 and the worked fixture closes dimensional analysis:
@@ -54,7 +54,7 @@ from demoflow.errors import CalibrationError
 # anything `_mapping_params` returns.
 MAPPING_VERSION = "1"
 
-# beta ~ Uniform[BETA_LOW, BETA_HIGH], dimensionless (spec §7(a), codex r6-F5: an interval
+# beta ~ Uniform[BETA_LOW, BETA_HIGH], dimensionless (spec §7(a), cross-model review r6-F5: an interval
 # alone leaves quantiles undefined — the UNIFORM distribution is part of the pinned contract).
 BETA_LOW = 1.0
 BETA_HIGH = 4.0

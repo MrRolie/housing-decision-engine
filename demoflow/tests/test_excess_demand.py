@@ -1,4 +1,4 @@
-"""The excess-demand fraction (spec §7, codex F4) — the hand-worked fixture, the r9-F5
+"""The excess-demand fraction (spec §7, cross-model review F4) — the hand-worked fixture, the r9-F5
 denominator boundary, and the guards that keep an UNBOUNDED fraction from being emitted.
 
 The first two tests are the plan's Task-26 bodies, unchanged (the boundary triple 999 / 1000 /
@@ -101,7 +101,7 @@ def test_the_hand_worked_fixture_LABELS_ITS_DEMAND_WINDOW_and_the_supply_meets_i
 
 
 def test_owner_stock_numeric_boundary_999_1000_1001():
-    # codex r9-F5: OwnerStock < 1,000 households raises (never leave "near-zero" to taste).
+    # cross-model review r9-F5: OwnerStock < 1,000 households raises (never leave "near-zero" to taste).
     assert MIN_OWNER_STOCK == 1000.0
     with pytest.raises(CalibrationError, match="1000|OwnerStock"):
         excess_demand(D=10.0, S=5.0, owner_stock=999.0)

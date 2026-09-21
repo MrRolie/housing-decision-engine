@@ -37,11 +37,11 @@
       },
       "ownership_by_geo_age.json": {
         "extracted_at": "2026-07-21",
-        "sha256": "2c371f84a7ac1cd1dac4ce0f069993d59fdf32a552c39b147c149c9dc62706e4"
+        "sha256": "ec0e4942c39af6948e3b12b5ca02fd807d1b586aedcec802174d3962203e00a1"
       },
       "ownership_hors_aligned.json": {
         "extracted_at": "2026-08-15",
-        "sha256": "88775eca8ecf6283858155b42787301c614478fee37a29682790758b7831c0e5"
+        "sha256": "233867b45a2c40c02f8dc42fae05b29dbc318dd2b93e1372f18822a10e5bb713"
       },
       "pop-as-qc-base.xlsx": {
         "extracted_at": "2026-07-21",

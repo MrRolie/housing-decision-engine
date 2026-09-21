@@ -36,7 +36,7 @@ from demoflow.loaders.constants import CENTRAL_ASSUMPTIONS, SWEEP_GRID
 # ---------------------------------------------------------------- plan bodies (verbatim)
 
 def test_phi_central_values():
-    # RUN CONTRACT central values (codex r8-F1): voluntary 0.9, estate eventual 0.725, L=2.
+    # RUN CONTRACT central values (cross-model review r8-F1): voluntary 0.9, estate eventual 0.725, L=2.
     assert PHI_VOLUNTARY == 0.9 and 0.7 <= PHI_VOLUNTARY <= 1.0
     assert ESTATE_EVENTUAL_FRACTION == 0.725 and 0.6 <= ESTATE_EVENTUAL_FRACTION <= 0.85
     assert ESTATE_LAG_YEARS == 2 and ESTATE_LAG_YEARS in (1, 2, 3)

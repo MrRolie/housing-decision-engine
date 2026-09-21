@@ -14,12 +14,12 @@
 
 **Not a money-moving change** (personal decision tooling) — but **load-bearing / decision-critical**: the spec's load-bearing-claim tag ("fail-loud loaders, no silent fallback"; the tripwire fail-safe gate) plus the demand/balance math make this audit-worthy. So **three pre-PR adversarial audit tasks ARE injected** — Task 31 (quant-financial-engineer), Task 32 (stress-tester), Task 33 (data-integrity-validator) — run after T1c, before the PR. `stress-tester` runs BOTH as Task 32 (pre-PR, findings foldable into the branch) AND again at PR time via the external review hook. The executor sets audit discipline off THIS line: audit tasks are present, not deferred.
 
-**Session boundaries** (sub-lettered tasks 8b/15b/25b were inserted while folding codex rounds 1–6):
+**Session boundaries** (sub-lettered tasks 8b/15b/25b were inserted while folding cross-model review rounds 1–6):
 - **T1a — Tasks 0–16 (incl. 8b, 15b)** (scaffold + probes + loader-validation contracts + loaders + junctions + per-sex living-arrangement + import-direction contract)
 - **T1b — Tasks 17–24** (basis guard + three-bucket per-sex cohort init + competing-risk algebra + calibration gates + 100+ absorbing bucket + transfer/market split)
 - **T1c — Tasks 25–30 (incl. 25b)** (native-formation + dimensional immigrant chain + I2 gate + OwnerStock eq + excess-demand + rankings + tripwires + golden artifacts + CLI)
 
-**Folded to codex round 9 (FINAL — loop paused)** (spec git `ba9be3d`, sha256 `c5ec0cc…`): rounds 1–6 as before PLUS r7–9 — §4 ratio nonneg carve-out + signed-flow carve-out; §5 reconciliation composition pinned + oracle-exact mutation; §6 native a_min=18 (no wraparound) + P_resident≥0 per cell + HORS_RMR literal row/three-way flows; §7 OwnerStock<1000 guard + identity envelope + typed rank_stable + run-contract central values + projected-year domain + general no-open-string validator; §7c source-bound-to-registry + UNKNOWN-branch nullability; §8 'Territoire hors des RMR'→HORS_RMR.
+**Folded to cross-model review round 9 (FINAL — loop paused)** (spec git `ba9be3d`, sha256 `c5ec0cc…`): rounds 1–6 as before PLUS r7–9 — §4 ratio nonneg carve-out + signed-flow carve-out; §5 reconciliation composition pinned + oracle-exact mutation; §6 native a_min=18 (no wraparound) + P_resident≥0 per cell + HORS_RMR literal row/three-way flows; §7 OwnerStock<1000 guard + identity envelope + typed rank_stable + run-contract central values + projected-year domain + general no-open-string validator; §7c source-bound-to-registry + UNKNOWN-branch nullability; §8 'Territoire hors des RMR'→HORS_RMR.
 
 **Import-direction contract (holds for every task):** a task's test imports ONLY symbols defined in that task or an earlier one. `demoflow` never imports `hde` or hde's `mcp_server`; it MAY import `mcp_server.engine.mortality` — that resolves to **actuarial-system's** `mcp_server`, the only one in demoflow's env. Error classes are flat: `LoaderError(Exception)`, `CalibrationError(Exception)`, `BasisError(Exception)` — following hde's sole precedent `ConfigValidationError(Exception)` (`src/hde/config.py:27`).
 
@@ -290,7 +290,7 @@ git commit -m "test(demoflow): P1 probe — cross-env actuarial import + q_x ora
 """P2 — StatCan WDS table pull for 98-10-0231-01 (tenure x age of primary
 maintainer). Pull the FULL table via the WDS getFullTableDownloadCSV endpoint
 (productId 98100231). Record MTL CMA, QC CMA, AND the Québec-province total
-(HORS_RMR derives as province-net-of-CMAs, codex F8). The fragile FOGS
+(HORS_RMR derives as province-net-of-CMAs, cross-model review F8). The fragile FOGS
 alternative.cfm chart-page path is FORBIDDEN in code."""
 import io
 import zipfile
@@ -324,8 +324,8 @@ def main() -> None:
             f"- distinct GEO count: {len(geos)}; sample: {geos[:12]}",
             "- Pull: 'Quebec' province total AND EVERY QC CMA the table carries (Montréal, Québec,",
             "  Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville).",
-            "- HORS_RMR = province tenure NET of ALL QC CMAs (codex r4-F2 — NOT just MTL+QC).",
-            "- CA CAVEAT (codex r5-F7): a published 'non-CMA/CA' row EXCLUDES Census Agglomerations",
+            "- HORS_RMR = province tenure NET of ALL QC CMAs (cross-model review r4-F2 — NOT just MTL+QC).",
+            "- CA CAVEAT (cross-model review r5-F7): a published 'non-CMA/CA' row EXCLUDES Census Agglomerations",
             "  while province-minus-CMAs INCLUDES them — use the published row ONLY if it reconciles",
             "  exactly (numerators AND denominators) against the computed residual; else COMPUTE the",
             "  residual and RECORD which geography HORS_RMR actually denotes.",
@@ -428,7 +428,7 @@ def main() -> None:
         "",
         "## DECISION — SEX-SPECIFIC rates required (living_alone AND couple_share by age x sex; r3-F1/r4-F1)",
         "- FOUND at CMA granularity (household type x age x SEX)?  [FILL: yes/no]",
-        "- PER-INPUT fallbacks (codex r4-F6 — the living-alone fallback CANNOT supply couple_share):",
+        "- PER-INPUT fallbacks (cross-model review r4-F6 — the living-alone fallback CANNOT supply couple_share):",
         "  * living_alone -> vitrine 28% (65+, QC), widened band [0.24, 0.34] PER-SEX, `borrowed_prior`",
         "    (constants `living_alone_vitrine`; the living-arrangement loader applies it per sex).",
         "  * couple_share -> pinned at probe time from the Census PROVINCE-LEVEL profile WITH CITATION",
@@ -667,7 +667,7 @@ git commit -m "test(demoflow): P5 probe — IRCC PR-by-CMA schema recorded"
 
 `demoflow/probes/run_p5b.py`:
 ```python
-"""P5b — pick the temporary-resident STOCK source (codex F5): StatCan NPR
+"""P5b — pick the temporary-resident STOCK source (cross-model review F5): StatCan NPR
 estimates (17-10-0121-01 family) vs IRCC temporary-resident tables. Record the
 choice + schema + cadence. Note: ISQ compo already carries 'Solde des residents
 non permanents' (net NPR flow, column 18) — record whether that suffices or a
@@ -918,7 +918,7 @@ git commit -m "feat(demoflow): sha256 pins + fail-loud drift check for ISQ workb
 - Create: `demoflow/src/demoflow/loaders/validate.py`
 - Test: `demoflow/tests/test_validate.py`
 
-Folded spec §4 (codex r4-F3, r5-F1/F2, r6-F3): every FRACTION input ∈[0,1]; every numeric input
+Folded spec §4 (cross-model review r4-F3, r5-F1/F2, r6-F3): every FRACTION input ∈[0,1]; every numeric input
 FINITE (NaN/±Inf raise); every loaded series declares its PRIMARY KEY (duplicates raise); the year
 lattice is CONTIGUOUS **and pinned to the expected endpoints (2021–2051)** AND has an IDENTICAL
 year domain across every geography×scenario×sex series (a missing terminal year for one geography
@@ -1040,7 +1040,7 @@ def assert_fraction(name: str, value) -> float:
 
 
 def assert_nonneg_finite(name: str, value) -> float:
-    """Nonnegative-finite (codex r7-F8 ratio carve-out): the immigrant/non-immigrant
+    """Nonnegative-finite (cross-model review r7-F8 ratio carve-out): the immigrant/non-immigrant
     ownership RATIO is NOT a fraction — it can validly exceed 1 (immigrants CAN out-own
     non-immigrants in a cell); only the PRODUCT p_imm binds [0,1]. Also used for stocks."""
     f = assert_finite(name, value)
@@ -1049,7 +1049,7 @@ def assert_nonneg_finite(name: str, value) -> float:
     return f
 
 
-# Signed-flow carve-out (codex r9-F2): natural increase / net-migration components are
+# Signed-flow carve-out (cross-model review r9-F2): natural increase / net-migration components are
 # legitimately signed — validate them with assert_finite ONLY (never nonneg/fraction); the
 # natural-increase tripwire's job is to EVALUATE a negative value, not raise on it.
 
@@ -1071,7 +1071,7 @@ def assert_year_lattice(years, ctx: str, expected_span: tuple[int, int] | None =
 
 
 def assert_uniform_year_domain(df: pd.DataFrame, group_keys: list[str], year_col: str, ctx: str) -> None:
-    """Every geography×scenario×sex series must carry the IDENTICAL year set (codex r6-F3);
+    """Every geography×scenario×sex series must carry the IDENTICAL year set (cross-model review r6-F3);
     a missing terminal year for one series raises (never a silently shortened mean)."""
     domains = df.groupby(group_keys)[year_col].apply(lambda s: frozenset(int(y) for y in s))
     uniq = set(domains)
@@ -1084,7 +1084,7 @@ def assert_uniform_year_domain(df: pd.DataFrame, group_keys: list[str], year_col
 
 def assert_statut_sublattice(df: pd.DataFrame, group_keys: list[str], year_col: str,
                              status_col: str, allowed: set[str], ctx: str) -> None:
-    """Statut SUB-lattice (codex r10): status values in the metadata's allowed set; exactly ONE
+    """Statut SUB-lattice (cross-model review r10): status values in the metadata's allowed set; exactly ONE
     est→proj transition per series (monotone, no proj→est reversal); and an IDENTICAL PROJECTED-year
     domain across every series — so a proj→est relabel of one geography's terminal year raises even
     though the RAW year lattice is intact (it would silently shorten that geography's ranking mean)."""
@@ -1253,7 +1253,7 @@ _LABEL_TO_GEOGRAPHY = {
     "Lanaudière": Geography.LANAUDIERE_RA14_PROXY,
     "Laurentides": Geography.LAURENTIDES_RA15_PROXY,
     "Montérégie": Geography.MONTEREGIE_RA16_PROXY,
-    # codex r7-F4: the RMR workbook's OWN literal row supplies HORS_RMR POPULATION directly —
+    # cross-model review r7-F4: the RMR workbook's OWN literal row supplies HORS_RMR POPULATION directly —
     # HORS_RMR is a modeled geography, NEVER IGNORED and NEVER a residual on the population side.
     "Territoire hors des RMR": Geography.HORS_RMR,
     "Hors RMR": Geography.HORS_RMR,
@@ -1507,7 +1507,7 @@ Folded spec §8/§4: geography via `classify_geography` (TOTAL map, IGNORED sent
 raise); sex TRIPLE-check (additivity + ORIENTATION guard: 85+ female-mapped > male-mapped in every
 geo×year, else swapped map → raise; code-3 excluded); primary-key uniqueness; finite non-negative
 populations; year lattice pinned to 2021–2051 with a uniform domain across every geo×scenario×sex
-series (codex r2-F5/r4-F2/r4-F3/r5-F1-F2/r6-F3).
+series (cross-model review r2-F5/r4-F2/r4-F3/r5-F1-F2/r6-F3).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1544,7 +1544,7 @@ def test_sex_additivity_violation_raises():
         isq._check_sex_additivity(code3=100.0, code1=40.0, code2=40.0, ctx="MTL/2035/ref/age75")
 
 
-def test_sex_orientation_guard_raises_on_swapped_map():   # RED (codex r2-F5)
+def test_sex_orientation_guard_raises_on_swapped_map():   # RED (cross-model review r2-F5)
     import demoflow.loaders.isq as isq
     swapped = pd.DataFrame({
         "geography": [Geography.MTL_RMR, Geography.MTL_RMR],
@@ -1570,7 +1570,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.loaders.isq`).
 
 `demoflow/src/demoflow/loaders/isq.py`:
 ```python
-"""ISQ population loader (spec §8/§4, codex r2-F5/r4-F2/r4-F3/r5-F1-F2/r6-F3):
+"""ISQ population loader (spec §8/§4, cross-model review r2-F5/r4-F2/r4-F3/r5-F1-F2/r6-F3):
 geography (TOTAL map with IGNORED sentinel), scenario, sex (additivity + ORIENTATION
 guard) junctions; primary-key uniqueness; finite non-negative populations; year lattice
 pinned to the expected span with a uniform domain across every geo x scenario x sex series."""
@@ -1858,7 +1858,7 @@ git commit -m "feat(demoflow): ISQ compo loader (classify+IGNORED) + closed-coho
 
 Ownership is a HARD input (no silent fallback), provenance-verified (56.2% owner, 75+, MTL CMA).
 **HORS_RMR = Québec-province tenure NET of ALL QC CMAs** — not just MTL+QC (the other RMRs are
-neither MTL/QC nor hors-RMR; codex r4-F2); CA caveat recorded (r5-F7). Ownership + headship rates
+neither MTL/QC nor hors-RMR; cross-model review r4-F2); CA caveat recorded (r5-F7). Ownership + headship rates
 are fractions asserted ∈[0,1] (r5-F1). Headship (households/person by age) is the base-year Census
 curve the OwnerStock equation and native formation consume, held PIT-fixed (spec §7 r3-F3).
 
@@ -1897,7 +1897,7 @@ Put the derivation in `census.py` as `derive_ownership_from_csv(csv_path) -> dic
   Compute Owner/Total directly; do NOT assert exact component reconciliation, do NOT "correct" it.
 - **Geography derivation** (the CSV carries province + 6 QC CMAs only): `MTL_RMR` ← `Montréal (CMA),
   Que.`; `QC_RMR` ← `Québec (CMA), Que.`; `HORS_RMR` ← `Quebec` province Σ-counts NET of ALL 6 QC
-  CMA Σ-counts (owner and total each netted THEN divided — never a rate difference; codex r4-F2;
+  CMA Σ-counts (owner and total each netted THEN divided — never a rate difference; cross-model review r4-F2;
   record the CA-caveat denotation, §11 item 2). The RA members (`MTL_ISLAND_RA06`, `LAVAL_RA13`,
   the three `*_PROXY`) are NOT in this CMA-level table, so each **borrows its parent CMA's computed
   rate with `_flag: borrowed_prior`** (spec §8: RA rows reuse the parent CMA rate) — all five borrow
@@ -1991,7 +1991,7 @@ def test_committed_ownership_json_equals_generator_output():
 ```python
 """Census ownership + headship loaders (spec §8/§7). Ownership: owner-maintainer
 rate by geography x age band, STRICT full-geography join, fractions asserted in
-[0,1]; HORS_RMR is province-net-of-ALL-QC-CMAs (codex r4-F2), recorded in
+[0,1]; HORS_RMR is province-net-of-ALL-QC-CMAs (cross-model review r4-F2), recorded in
 _provenance. Headship: base-year households/person by age band (PIT-fixed, §7 r3-F3)."""
 import json
 from pathlib import Path
@@ -2242,7 +2242,7 @@ CONSTANTS = {
 }
 
 
-# RUN CONTRACT (codex r8-F1): the headline run evaluates every banded assumption at its declared
+# RUN CONTRACT (cross-model review r8-F1): the headline run evaluates every banded assumption at its declared
 # CENTRAL value; band ENDPOINTS enter ONLY the robustness sweep (per-geography rank_stable). The
 # central values + sweep grid are enumerated HERE and covered by assumptions_hash — the hash
 # identifies the selection; the spec's central-value rule DETERMINES it.
@@ -2578,7 +2578,7 @@ QC_BASIS = ("CPM2014_combined", "CPM-B")
 
 def ensure_qc_basis() -> None:
     set_active_mortality(*QC_BASIS)
-    if active_mortality() != QC_BASIS:   # if-check, not assert (codex F7)
+    if active_mortality() != QC_BASIS:   # if-check, not assert (cross-model review F7)
         raise BasisError(f"active basis {active_mortality()} is not the Québec basis {QC_BASIS}")
 
 
@@ -2598,7 +2598,7 @@ Expected: 3 PASS.
 
 ```bash
 git add demoflow/src/demoflow/cohort/__init__.py demoflow/src/demoflow/cohort/basis.py demoflow/tests/test_basis_guard.py
-git commit -m "feat(demoflow): QC mortality-basis guard (BasisError, if-check, -O safe; codex F7)"
+git commit -m "feat(demoflow): QC mortality-basis guard (BasisError, if-check, -O safe; cross-model review F7)"
 ```
 
 ---
@@ -2609,7 +2609,7 @@ git commit -m "feat(demoflow): QC mortality-basis guard (BasisError, if-check, -
 - Create: `demoflow/src/demoflow/cohort/init.py`
 - Test: `demoflow/tests/test_init.py`
 
-Folded spec §5 (codex r1/r2/r3/r4-F1): per (age, sex), private-household persons partition
+Folded spec §5 (cross-model review r1/r2/r3/r4-F1): per (age, sex), private-household persons partition
 into THREE buckets using SEX-SPECIFIC rates: `Solo_s`, `coupled_s`, `Other_s` (persons living
 with others — EXCLUDED from owner-unit stock as presumptive non-maintainers). Couples form by
 MINIMUM matching, never an average: `Couple = min(coupled_m, coupled_f)`; the excess `max−min`
@@ -2705,7 +2705,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.cohort.init`).
 
 `demoflow/src/demoflow/cohort/init.py`:
 ```python
-"""Persons->households conversion (spec §5, codex r1/r2/r3/r4-F1). Three buckets
+"""Persons->households conversion (spec §5, cross-model review r1/r2/r3/r4-F1). Three buckets
 per SEX using sex-specific rates; couples by MINIMUM matching (never average);
 excess routes to Other; per-sex person conservation; balance gate on the coupled
 counts. Ownership rates are HOUSEHOLD-maintainer-denominated -> multiply households."""
@@ -2920,7 +2920,7 @@ def partition_solo(q_s: float, q_live: float) -> dict[str, float]:
 
 
 def partition_couple(q_m: float, q_f: float, q_live: float) -> dict[str, float]:
-    """Couple owner (spec §5, codex F3): both-die -> estate; exactly-one-dies -> widowed
+    """Couple owner (spec §5, cross-model review F3): both-die -> estate; exactly-one-dies -> widowed
     Solo of the surviving sex, UNIT RETAINED (widow NOT living-exit-eligible in the
     transition year — the widow branch is disjoint from the no-death branch that splits
     q_live); no-death splits q_live -> living exit vs remain. Branches partition to 1."""
@@ -2947,7 +2947,7 @@ Expected: 3 PASS.
 
 ```bash
 git add demoflow/src/demoflow/cohort/decrements.py demoflow/tests/test_partition.py
-git commit -m "feat(demoflow): competing-risk partition (death-first, survivor-conditional, widow retained; codex F3)"
+git commit -m "feat(demoflow): competing-risk partition (death-first, survivor-conditional, widow retained; cross-model review F3)"
 ```
 
 ---
@@ -3000,7 +3000,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.cohort.gates`).
 
 `demoflow/src/demoflow/cohort/gates.py`:
 ```python
-"""Reconciliation gate (spec §5, codex r9-F4): decade all-cause retention of a 75+
+"""Reconciliation gate (spec §5, cross-model review r9-F4): decade all-cause retention of a 75+
 owner cohort must land in [0.20, 0.40] (Myers 0.26-0.31 widened). Outside ->
 CalibrationError. Retention is STATE-DEPENDENT, so the cohort composition is PINNED:
 the household-state + sex mix the initialization equations produce on the committed
@@ -3042,7 +3042,7 @@ git commit -m "feat(demoflow): reconciliation gate [0.20,0.40] -> CalibrationErr
 
 The t→t+1 equation writes every death term exactly once; entrants enter at band-entry only and
 stocks then evolve ONLY by our decrements (NEVER re-anchored to ISQ's projected 75+ stocks). The
-**exactly-once guarantee is proven by ORACLE EXACTNESS (codex r7-F5), not the envelope:** at low
+**exactly-once guarantee is proven by ORACLE EXACTNESS (cross-model review r7-F5), not the envelope:** at low
 q_live a doubled decrement retains ≈0.25, still INSIDE [0.20,0.40], so the envelope cannot carry
 exactly-once. The mutation test therefore pins the hand-computed values on a flat-q cohort and
 asserts that applying the transition twice STRICTLY CHANGES those pinned values (exact inequality);
@@ -3085,7 +3085,7 @@ def test_decade_retention_in_band_gross_backstop():
 
 
 def test_double_decrement_mutation_changes_pinned_oracle():
-    # codex r7-F5: exactly-once is proven by ORACLE EXACTNESS, not the envelope. Flat q -> the
+    # cross-model review r7-F5: exactly-once is proven by ORACLE EXACTNESS, not the envelope. Flat q -> the
     # correct single transition pins couple=864.36 / owner_units=903.56; applying the transition
     # TWICE (the re-anchor double-count) STRICTLY changes those pinned values -> detectable.
     once, _ = roll_one_year(Stock(couple=1000.0), age=80, year=2040, q_live=0.10, qx=_flat_qx(0.02, 0.02))
@@ -3169,7 +3169,7 @@ q, exact arithmetic — so it does not depend on the live CPM curve or the envel
 
 ```bash
 git add demoflow/src/demoflow/cohort/rollforward.py demoflow/tests/test_rollforward.py
-git commit -m "feat(demoflow): stock-flow roll-forward (band-entry once) + oracle-exact mutation (codex F2/r7-F5)"
+git commit -m "feat(demoflow): stock-flow roll-forward (band-entry once) + oracle-exact mutation (cross-model review F2/r7-F5)"
 ```
 
 ---
@@ -3180,7 +3180,7 @@ git commit -m "feat(demoflow): stock-flow roll-forward (band-entry once) + oracl
 - Modify: `demoflow/src/demoflow/cohort/rollforward.py`
 - Test: `demoflow/tests/test_cohort_oracle.py`
 
-The fixtures below PIN the per-state retention paths (codex r9-F4): the Couple remain (864.36),
+The fixtures below PIN the per-state retention paths (cross-model review r9-F4): the Couple remain (864.36),
 the widowed Solo_m / Solo_f transitions (19.6 each, then their next-year exit eligibility), and the
 {remain, widowed, dissolved, exited} mass partition — the state-by-state oracle the reconciliation
 gate's pinned MTL_RMR composition (Task 21) relies on.
@@ -3232,7 +3232,7 @@ def test_state_mass_conservation_every_household_ends_in_one_state():
 
 
 def test_100plus_is_absorbing_bucket_accumulates_age_ins():
-    # codex r5-F6: age-99 age-ins AND surviving prior 100+ stock BOTH land in age 100,
+    # cross-model review r5-F6: age-99 age-ins AND surviving prior 100+ stock BOTH land in age 100,
     # accumulating (never overwritten/reinitialized), each decremented exactly once.
     base = {99: Stock(couple=100.0), 100: Stock(couple=200.0)}
     states = roll_cohort_multi_year(base, entrants_per_year=0.0, start_year=2035, n_years=1,
@@ -3271,7 +3271,7 @@ def _add(a: "Stock", b: "Stock") -> "Stock":
 def roll_cohort_multi_year(base: dict[int, "Stock"], entrants_per_year: float,
                            start_year: int, n_years: int, q_live: float, qx: QxProvider):
     """Roll an age-indexed set of owner cohorts forward n_years. Each year every cohort
-    transitions and ages by one; the 100+ bucket is ABSORBING (codex r5-F6) — the age-99
+    transitions and ages by one; the 100+ bucket is ABSORBING (cross-model review r5-F6) — the age-99
     age-ins AND the surviving prior 100+ stock BOTH land in age 100 and ACCUMULATE (never
     overwritten/reinitialized). NEW age-75 entrants enter EXACTLY ONCE at band entry (the
     75+ roll has no age-74 cohort, so entrants are the sole age-75 source). Returns
@@ -3322,7 +3322,7 @@ from demoflow.cohort.listings import (
 
 
 def test_phi_central_values():
-    # RUN CONTRACT central values (codex r8-F1): voluntary 0.9, estate eventual 0.725, L=2.
+    # RUN CONTRACT central values (cross-model review r8-F1): voluntary 0.9, estate eventual 0.725, L=2.
     assert PHI_VOLUNTARY == 0.9 and 0.7 <= PHI_VOLUNTARY <= 1.0
     assert ESTATE_EVENTUAL_FRACTION == 0.725 and 0.6 <= ESTATE_EVENTUAL_FRACTION <= 0.85
     assert ESTATE_LAG_YEARS == 2 and ESTATE_LAG_YEARS in (1, 2, 3)
@@ -3355,7 +3355,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.cohort.listings`).
 `demoflow/src/demoflow/cohort/listings.py`:
 ```python
 """Transfer-vs-market split (spec §5): exits carry cause; phi_market(cause) fractions
-with estate-lag convolution. Defaults are the RUN-CONTRACT CENTRAL values (codex r8-F1):
+with estate-lag convolution. Defaults are the RUN-CONTRACT CENTRAL values (cross-model review r8-F1):
 voluntary phi 0.9 (band [0.7,1.0]); estate eventual-listing fraction 0.725 (band [0.6,0.85]),
 lag L=2 (band [1,3]). Band endpoints enter ONLY the robustness sweep (rank_stable), never the
 headline run. A hand-worked fixture may pass explicit non-central params for a pinned example."""
@@ -3409,8 +3409,8 @@ git commit -m "feat(demoflow): transfer-vs-market split (phi_market + estate-lag
 - Create: `demoflow/src/demoflow/demand/formation.py`
 - Test: `demoflow/tests/test_demand.py`
 
-Folded spec §6 (codex r2-F2/r4-F5/r6-F1/r6-F2):
-- **Native formation DEFINED, disjoint from S (codex r10 explicit boundary):**
+Folded spec §6 (cross-model review r2-F2/r4-F5/r6-F1/r6-F2):
+- **Native formation DEFINED, disjoint from S (cross-model review r10 explicit boundary):**
   `D_native = max(0, H_res(18,t))×ownership(18) + Σ_{19≤a<75} max(0, H_res(a,t) −
   H_res(a−1,t−1))×ownership(a)` — GROSS under-75 formations only (cohort-followed headship
   gains, floored at 0). ALL 75+ dynamics (dissolution, downsizing, estate) live in S; the age-75
@@ -3475,7 +3475,7 @@ def test_p_imm_is_product_asserted_in_unit_interval():
 
 
 def test_native_at_a_min_18_forms_against_zero_prior_no_wraparound():
-    # codex r7-F7: at a_min=18 the prior stock is ZERO by equation (never H(17) via wraparound).
+    # cross-model review r7-F7: at a_min=18 the prior stock is ZERO by equation (never H(17) via wraparound).
     # A huge planted 17-yo prior would leak in only through a negative-index bug -> assert it does NOT.
     d = native_formation(
         resident_pop_t={18: 100.0}, resident_pop_tm1={17: 9999.0},
@@ -3499,21 +3499,21 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.demand.formation`).
 
 `demoflow/src/demoflow/demand/formation.py`:
 ```python
-"""Demand side (spec §6, codex r2-F2/r4-F5/r6-F1/r6-F2). Native formation = GROSS
+"""Demand side (spec §6, cross-model review r2-F2/r4-F5/r6-F1/r6-F2). Native formation = GROSS
 under-75 cohort-followed headship gains only (75+ dynamics belong to S — structural
 D/S disjointness at the age-75 boundary); its ONLY population input is P_resident.
 The immigrant chain is dimensionally explicit: persons -> households -> owner demand,
 with p_imm = p_nonimm x ratio asserted in [0,1]."""
 from demoflow.loaders.validate import assert_fraction
 
-AGE_MIN = 18        # household-formation floor (codex r7-F7 — a−1 must never leave the domain)
+AGE_MIN = 18        # household-formation floor (cross-model review r7-F7 — a−1 must never leave the domain)
 AGE_BOUNDARY = 75
 
 
 def native_formation(resident_pop_t: dict[int, float], resident_pop_tm1: dict[int, float],
                      headship_by_age: dict[int, float], ownership_by_age: dict[int, float]) -> float:
     """D_native = max(0, H_res(18,t))×ownership(18)  +  Σ_{19≤a<75} max(0, H_res(a,t) −
-    H_res(a−1,t−1))×ownership(a)  (codex r10 — the explicit a_min=18 boundary term is INCLUDED;
+    H_res(a−1,t−1))×ownership(a)  (cross-model review r10 — the explicit a_min=18 boundary term is INCLUDED;
     the earlier strict `a_min < a < 75` form wrongly dropped it). At a_min entrants form against
     ZERO prior stock, by equation, never by array wraparound (r7-F7). `resident_pop_*` is
     P_resident (§6 operand binding) — never total ISQ pop."""
@@ -3533,7 +3533,7 @@ def immigrant_households(arrival_persons: float, immigrant_headship_rate: float)
 
 
 def p_imm(p_nonimm: float, ratio: float) -> float:
-    """p_imm(a) = p_nonimm(a) × ratio, asserted ∈ [0,1] (codex r4-F5 — never a bare ratio)."""
+    """p_imm(a) = p_nonimm(a) × ratio, asserted ∈ [0,1] (cross-model review r4-F5 — never a bare ratio)."""
     return assert_fraction("p_imm", p_nonimm * ratio)
 
 
@@ -3567,7 +3567,7 @@ git commit -m "feat(demoflow): native formation (a_min=18, under-75 gross) + dim
 - Create: `demoflow/src/demoflow/demand/i2.py`
 - Test: `demoflow/tests/test_i2.py`
 
-Folded spec §6 (codex r5-F3/r5-F4/r6-F1). Two pieces:
+Folded spec §6 (cross-model review r5-F3/r5-F4/r6-F1). Two pieces:
 1. **Immigrant-input join table** — immigrant headship + immigrant/non-immigrant ownership ratio
    resolve per MODELED geography from an EXPLICIT source table: MTL_RMR/QC_RMR direct; RA members
    → parent-CMA value `borrowed_prior`; HORS_RMR → province-level `borrowed_prior`; an unresolved
@@ -3598,7 +3598,7 @@ def test_join_direct_borrowed_and_raise():
 
 
 def test_ratio_is_nonneg_finite_not_fraction():
-    # codex r7-F8: the ownership ratio can validly exceed 1 (immigrants out-own non-immigrants).
+    # cross-model review r7-F8: the ownership ratio can validly exceed 1 (immigrants out-own non-immigrants).
     assert resolve_immigrant_inputs(Geography.QC_RMR).ownership_ratio >= 0.0
     import demoflow.demand.immigrant_inputs as ii
     assert ii._validate_ratio(1.2) == 1.2               # >1 accepted
@@ -3611,7 +3611,7 @@ def test_p_resident_subtracts_surviving_arrivals():
 
 
 def test_p_resident_nonnegativity_per_cell():
-    # codex r7-F3: arrivals exceeding P_ISQ in a cell = CalibrationError BEFORE any consumer.
+    # cross-model review r7-F3: arrivals exceeding P_ISQ in a cell = CalibrationError BEFORE any consumer.
     assert_p_resident_nonneg(0.0, ctx="cell")           # zero ok
     with pytest.raises(CalibrationError, match="negative|nonneg"):
         assert_p_resident_nonneg(-5.0, ctx="MTL/2035/ref/age40")
@@ -3632,14 +3632,14 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.demand.immigrant_inputs`).
 
 `demoflow/src/demoflow/demand/immigrant_inputs.py`:
 ```python
-"""Immigrant-input join table (spec §6, codex r5-F4/r7-F8). Immigrant headship + the
+"""Immigrant-input join table (spec §6, cross-model review r5-F4/r7-F8). Immigrant headship + the
 immigrant/non-immigrant ownership RATIO per modeled geography: CMAs direct; RA members
 borrow the parent CMA; HORS_RMR borrows province-level; unresolved -> raise. The ratio is
 NOT a fraction (it can exceed 1); validated nonneg-finite (the [0,1] constraint binds the
 PRODUCT p_imm, §6). HORS_RMR COMPONENT FLOWS (arrivals) resolve three-way at probe P5/P6
-(codex r7-F4): (i) compo's own hors-RMR row; else (ii) province compo net of all RMR rows,
+(cross-model review r7-F4): (i) compo's own hors-RMR row; else (ii) province compo net of all RMR rows,
 reconciliation-checked; else (iii) if UNRESOLVABLE, HORS_RMR is EXCLUDED FROM RANKINGS ENTIRELY
-(codex r10 — a supply-side-only ED would contradict the operand binding, the demand equation, AND
+(cross-model review r10 — a supply-side-only ED would contradict the operand binding, the demand equation, AND
 the ED contract at once), recorded as a run-level exclusion naming the unresolved input (pipeline
 `EXCLUDED_FROM_RANKINGS` → the rankings document's typed `exclusions[]`, Task 29)."""
 from dataclasses import dataclass
@@ -3690,7 +3690,7 @@ def resolve_immigrant_inputs(geography: Geography) -> ImmigrantInputs:
 
 `demoflow/src/demoflow/demand/i2.py`:
 ```python
-"""I2 decomposition + reconciliation gate (spec §6, codex r5-F3/r7-F3). P_resident is
+"""I2 decomposition + reconciliation gate (spec §6, cross-model review r5-F3/r7-F3). P_resident is
 P_ISQ minus surviving arrival cohorts; native formation consumes P_resident ONLY. The
 gate asserts the identity (data-side); P_resident ≥ 0 is asserted per cell BEFORE any
 consumer (arrivals exceeding P_ISQ contradict the scenario population); the operand-
@@ -3705,7 +3705,7 @@ def p_resident(p_isq: float, surviving_arrivals: list[float]) -> float:
 
 
 def assert_p_resident_nonneg(value: float, ctx: str) -> float:
-    """Per-cell nonnegativity (codex r7-F3): the identity is tautological when P_resident is
+    """Per-cell nonnegativity (cross-model review r7-F3): the identity is tautological when P_resident is
     DERIVED from it, so a negative residual base must fail LOUD, never flow into formation."""
     if value < 0.0:
         raise CalibrationError(
@@ -3746,7 +3746,7 @@ git commit -m "feat(demoflow): immigrant-input join + I2 decomposition/reconcili
 - Test: `demoflow/tests/test_owner_stock.py`
 - Test: `demoflow/tests/test_excess_demand.py`
 
-The ED denominator has ONE defining equation (spec §7 codex r3-F3):
+The ED denominator has ONE defining equation (spec §7 cross-model review r3-F3):
 `OwnerStock(g,t,s) = Σ_all_ages pop(a,g,t,s) × headship(a) × ownership(a)` — annual re-estimation
 from ISQ scenario population with BASE-YEAR Census headship + ownership held constant (PIT-fixed,
 labeled assumption). This is a stock LEVEL estimate; ISQ-embedded mortality is correct here and
@@ -3804,7 +3804,7 @@ def test_hand_worked_ed_with_estate_lag_boundary_crossing():
 
 
 def test_owner_stock_numeric_boundary_999_1000_1001():
-    # codex r9-F5: OwnerStock < 1,000 households raises (never leave "near-zero" to taste).
+    # cross-model review r9-F5: OwnerStock < 1,000 households raises (never leave "near-zero" to taste).
     assert MIN_OWNER_STOCK == 1000.0
     with pytest.raises(CalibrationError, match="1000|OwnerStock"):
         excess_demand(D=10.0, S=5.0, owner_stock=999.0)
@@ -3823,7 +3823,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.balance.owner_stock` / `.excess_d
 
 `demoflow/src/demoflow/balance/owner_stock.py`:
 ```python
-"""OwnerStock defining equation (spec §7, codex r3-F3). ONE equation for the ED
+"""OwnerStock defining equation (spec §7, cross-model review r3-F3). ONE equation for the ED
 denominator: annual re-estimation from ISQ scenario population with BASE-YEAR Census
 headship + ownership held constant (PIT-fixed). Stock LEVEL — ISQ-embedded mortality
 is correct here; I1 governs only the 75+ exit FLOW model."""
@@ -3839,7 +3839,7 @@ def owner_stock(pop_by_age: dict[int, float], headship_by_age: dict[int, float],
 
 `demoflow/src/demoflow/balance/excess_demand.py`:
 ```python
-"""Excess-demand fraction (spec §7, codex F4). All terms annual, household-
+"""Excess-demand fraction (spec §7, cross-model review F4). All terms annual, household-
 denominated, per (geography g, year t, scenario s):
 
     ED(g,t,s) = [ D(g,t,s) - S(g,t,s) ] / OwnerStock(g,t,s)
@@ -3849,7 +3849,7 @@ denominated, per (geography g, year t, scenario s):
     OwnerStock = the §7 defining equation                               (balance/owner_stock.py)
 
 ED is scale-invariant (households/households). Denominator guard has a NUMERIC boundary
-(codex r9-F5): OwnerStock < 1,000 households -> raise (no modeled geography legitimately
+(cross-model review r9-F5): OwnerStock < 1,000 households -> raise (no modeled geography legitimately
 carries fewer; never leave "near-zero" to implementation taste, never emit an unbounded
 fraction). Tranche 1 stops at the raw fraction; the ED->drift mapping (beta) is Tranche 2."""
 from demoflow.errors import CalibrationError
@@ -3874,7 +3874,7 @@ Expected: 4 PASS.
 
 ```bash
 git add demoflow/src/demoflow/balance/__init__.py demoflow/src/demoflow/balance/owner_stock.py demoflow/src/demoflow/balance/excess_demand.py demoflow/tests/test_owner_stock.py demoflow/tests/test_excess_demand.py
-git commit -m "feat(demoflow): OwnerStock defining equation + excess-demand fraction + <1000 guard (§7 r3-F3/r9-F5, codex F4)"
+git commit -m "feat(demoflow): OwnerStock defining equation + excess-demand fraction + <1000 guard (§7 r3-F3/r9-F5, cross-model review F4)"
 ```
 
 ---
@@ -3886,13 +3886,13 @@ git commit -m "feat(demoflow): OwnerStock defining equation + excess-demand frac
 - Create: `demoflow/src/demoflow/output/rankings.py`
 - Test: `demoflow/tests/test_rankings.py`
 
-Collapse rule (codex F4): rank by MEAN ED over horizon years under the REFERENCE scenario,
+Collapse rule (cross-model review F4): rank by MEAN ED over horizon years under the REFERENCE scenario,
 ASCENDING (most negative = rank 1); ties break by the LOW-scenario (Faible) mean, then enum order.
-**Scenario-NAMED fan fields (codex r6-F6/r8-F4 — the old min/max sentence is GONE from the spec):**
+**Scenario-NAMED fan fields (cross-model review r6-F6/r8-F4 — the old min/max sentence is GONE from the spec):**
 `mean_ed_low` = the Faible (D2026 / `Scenario.LOW`) mean, `mean_ed_high` = the Fort (E2026 /
 `Scenario.HIGH`) mean — scenario identity, NOT min/max; they can CROSS numerically; any min/max
 envelope is display-derived, never stored. **Row allowlist + closed flags enum + typed rank_stable
-(codex r5-F5/r6-F4/r8-F1/r9-F1):** the emitted rankings row = {geography, mean_ed_reference,
+(cross-model review r5-F5/r6-F4/r8-F1/r9-F1):** the emitted rankings row = {geography, mean_ed_reference,
 mean_ed_low, mean_ed_high, rank, **rank_stable** (TYPED bool — the robustness-sweep verdict, never
 a flag string), flags[]}; `flags[]` is the CLOSED enum {borrowed_prior, ra_proxy} — no free-text; a
 smuggled `crash_probability` (field OR flag token) is rejected, independent of the golden. (Ranking
@@ -3934,7 +3934,7 @@ def test_unique_ordering_with_exact_tie():
 
 
 def test_scenario_named_fan_fields_can_cross():
-    # codex r6-F6: mean_ed_low is the FAIBLE mean, mean_ed_high the FORT mean — NOT min/max.
+    # cross-model review r6-F6: mean_ed_low is the FAIBLE mean, mean_ed_high the FORT mean — NOT min/max.
     # Faible +0.02, Fort -0.03 -> mean_ed_low (0.02) > mean_ed_high (-0.03): a legitimate crossing.
     ed = {Geography.MTL_RMR: _ed([-0.01], [0.02], [-0.03])}
     r = rank_geographies(ed)[0]
@@ -3974,7 +3974,7 @@ def test_row_allowlist_exact_and_flag_enum_reject_crash_probability():
 
 
 def test_rank_stable_is_typed_bool_not_a_flag_string():
-    # codex r8-F1/r9-F1: the robustness-sweep verdict has a TYPED schema home, never a flag string.
+    # cross-model review r8-F1/r9-F1: the robustness-sweep verdict has a TYPED schema home, never a flag string.
     r = rank_geographies({Geography.MTL_RMR: _ed([-0.02], [-0.03], [-0.01])},
                          rank_stable={Geography.MTL_RMR: False})[0]
     assert r.rank_stable is False
@@ -3983,7 +3983,7 @@ def test_rank_stable_is_typed_bool_not_a_flag_string():
 
 
 def test_ordering_reverses_all_years_vs_projected_only():
-    # codex r8-F3: the ranking domain (projected years only) is load-bearing — a pair whose order
+    # cross-model review r8-F3: the ranking domain (projected years only) is load-bearing — a pair whose order
     # REVERSES between an all-years average and a projected-only average. rank_geographies averages
     # whatever series it is given; the pipeline supplies the projected-only slice.
     all_years = {   # includes leading "estimation-year" values that pull the mean
@@ -4010,7 +4010,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.output.rankings`).
 
 `demoflow/src/demoflow/output/rankings.py`:
 ```python
-"""Rankings table (spec §7b, codex F4/r5-F5/r6-F4/r6-F6). Deterministic ordering from a
+"""Rankings table (spec §7b, cross-model review F4/r5-F5/r6-F4/r6-F6). Deterministic ordering from a
 multi-year x 3-scenario ED trajectory. Fan fields are SCENARIO-NAMED (Faible/Fort), not
 min/max. The emitted row obeys a closed field allowlist and a closed flags enum — no
 free-text channel for the prohibited quantities. RA14/15/16 carry `ra_proxy`."""
@@ -4033,7 +4033,7 @@ class GeoRanking:
     mean_ed_reference: float
     mean_ed_low: float        # Faible (D2026 / Scenario.LOW) mean — scenario-named, not min
     mean_ed_high: float       # Fort   (E2026 / Scenario.HIGH) mean — scenario-named, not max
-    rank_stable: bool = True  # robustness-sweep verdict (codex r8-F1/r9-F1) — TYPED, never a flag string
+    rank_stable: bool = True  # robustness-sweep verdict (cross-model review r8-F1/r9-F1) — TYPED, never a flag string
     flags: list[str] = field(default_factory=list)
 
 
@@ -4111,7 +4111,7 @@ git commit -m "feat(demoflow): rankings scenario-named fans + closed flags enum 
 - Create: `demoflow/src/demoflow/output/tripwires.py`
 - Test: `demoflow/tests/test_tripwires.py`
 
-Fail-safe verification gate (spec §7c, codex r2-F4/r3-F4/r3-F5/r6-F4/r7-F1/r7-F2/r8-F2). Per-indicator
+Fail-safe verification gate (spec §7c, cross-model review r2-F4/r3-F4/r3-F5/r6-F4/r7-F1/r7-F2/r8-F2). Per-indicator
 status ∈ {OK, CROSSED, UNKNOWN}; the UNKNOWN `reason` is a CLOSED machine-token enum (no free-text).
 `source` is BOUND to a CODE-owned registry (indicator → declared source string; the record must
 equal it exactly — REQUIRED_INDICATORS derives from that registry). Registry completeness (empty /
@@ -4188,7 +4188,7 @@ def test_closed_band_endpoints_are_crossed():
 
 def test_registry_completeness_empty_missing_duplicate():
     from demoflow.errors import LoaderError
-    with pytest.raises(LoaderError, match="empty"):              # codex r10: empty = RUN-level terminal
+    with pytest.raises(LoaderError, match="empty"):              # cross-model review r10: empty = RUN-level terminal
         check_registry([])
     missing = check_registry(["pr_landings_annual"])            # far short of the required set
     assert any(r.reason is Reason.MISSING_INDICATOR for r in missing) and exit_code(missing) != 0
@@ -4269,7 +4269,7 @@ class SourceKind(str, Enum):
     OPERATOR_SUPPLIED = "operator_supplied"
 
 
-class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (codex r6-F4)
+class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (cross-model review r6-F4)
     STALE = "stale"
     SOURCE_UNAVAILABLE = "source_unavailable"
     OPERATOR_INPUT_MISSING = "operator_input_missing"
@@ -4278,11 +4278,11 @@ class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (codex r
     FUTURE_AS_OF = "future_as_of"
     MISSING_INDICATOR = "missing_indicator"
     DUPLICATE_INDICATOR = "duplicate_indicator"
-    # codex r10: `empty_registry` is NOT a per-indicator reason — an empty baseline is a RUN-level
+    # cross-model review r10: `empty_registry` is NOT a per-indicator reason — an empty baseline is a RUN-level
     # terminal error (check_registry raises; NO artifact is emitted; the run exits nonzero).
 
 
-# CODE-owned registry (spec §7c, codex r7-F1): indicator -> its DECLARED source string. The
+# CODE-owned registry (spec §7c, cross-model review r7-F1): indicator -> its DECLARED source string. The
 # emitted record's `source` must equal this exactly (no smuggled content). REQUIRED_INDICATORS
 # derives from it — one source of truth, NOT in the baseline file it validates.
 SOURCE_REGISTRY = {
@@ -4295,7 +4295,7 @@ SOURCE_REGISTRY = {
 }
 REQUIRED_INDICATORS = frozenset(SOURCE_REGISTRY)
 
-# UNKNOWN-branch nullability (codex r7-F2/r8-F2): current_value + as_of are NULL exactly for these
+# UNKNOWN-branch nullability (cross-model review r7-F2/r8-F2): current_value + as_of are NULL exactly for these
 # reasons (no honest measurement; a non_finite raw value goes to the run log, never the JSON).
 NULLABLE_REASONS = frozenset({
     Reason.SOURCE_UNAVAILABLE, Reason.OPERATOR_INPUT_MISSING, Reason.MISSING_INDICATOR, Reason.NON_FINITE})
@@ -4370,7 +4370,7 @@ def check_registry(indicators: list[str], required: frozenset[str] = REQUIRED_IN
     EXIT CODE (not emitted as JSON records in the normal path). Empty list => registry complete."""
     out: list[TripwireResult] = []
     if not indicators:
-        # RUN-level terminal (codex r10): no artifact emitted; the run exits nonzero.
+        # RUN-level terminal (cross-model review r10): no artifact emitted; the run exits nonzero.
         raise LoaderError("empty tripwire registry — NO artifact emitted, run exits nonzero")
     seen: set[str] = set()
     for name in indicators:
@@ -4466,7 +4466,7 @@ def test_run_pipeline_emits_two_json_artifacts_with_identity_envelope(tmp_path):
     ranks = json.loads((tmp_path / "rankings.json").read_text())
     assert ranks["schema"] == "demoflow.rankings.v1"
     assert "schema_version" in ranks and "assumptions_hash" in ranks        # identity envelope (r7-F6)
-    assert "source_hashes" in ranks["data_vintage"]                         # codex r3-F6
+    assert "source_hashes" in ranks["data_vintage"]                         # cross-model review r3-F6
     r0 = ranks["rankings"][0]
     assert isinstance(r0["geography"], str) and r0["rank"] == 1
     assert set(r0) == {"geography", "mean_ed_reference", "mean_ed_low", "mean_ed_high",
@@ -4508,7 +4508,7 @@ def test_two_vintage_mixing_refused():
 
 
 def test_hors_rmr_fallback_iii_excluded_from_rankings_with_typed_record():
-    # codex r10: unresolvable demand input -> EXCLUDED from rankings entirely (no ED row), named
+    # cross-model review r10: unresolvable demand input -> EXCLUDED from rankings entirely (no ED row), named
     # in a typed run-level exclusion record; `unresolved_input` is a CLOSED enum (no free text).
     from demoflow.output.artifacts import rankings_document
     doc = rankings_document([], {"source_hashes": {}}, "h", frozenset(),
@@ -4530,7 +4530,7 @@ Expected: FAIL (`ModuleNotFoundError: demoflow.pipeline`).
 ```python
 """Golden-artifact JSON writers (spec §4/§7/§9). Identity envelope {schema_version,
 data_vintage (incl source_hashes), assumptions_hash} above the rows; allow_nan=False +
-finite pre-write; row allowlists + a general no-open-string tree-walk (codex r7-F6/r9-F3)."""
+finite pre-write; row allowlists + a general no-open-string tree-walk (cross-model review r7-F6/r9-F3)."""
 import json
 import math
 import re
@@ -4555,7 +4555,7 @@ def _assert_finite(obj) -> None:
 
 
 def assert_no_open_strings(doc: dict, allowed_source_keys: frozenset) -> None:
-    """Every string position is registry/enum-bound or format-validated (codex r9-F3). Closes the
+    """Every string position is registry/enum-bound or format-validated (cross-model review r9-F3). Closes the
     source_hashes-KEY side-channel; validates sha256 (64-hex) + extracted_at (ISO-8601). Row-level
     enum/allowlist binding is enforced by assert_rankings_row_valid / assert_tripwire_record_valid."""
     sh = doc.get("data_vintage", {}).get("source_hashes", {})
@@ -4569,7 +4569,7 @@ def assert_no_open_strings(doc: dict, allowed_source_keys: frozenset) -> None:
 
 
 def write_json_strict(path: Path, obj: dict) -> None:
-    _assert_finite(obj)                       # finite pre-write (codex r4-F3)
+    _assert_finite(obj)                       # finite pre-write (cross-model review r4-F3)
     with open(path, "w") as fh:
         json.dump(obj, fh, allow_nan=False, indent=2, sort_keys=True)
         fh.write("\n")
@@ -4580,7 +4580,7 @@ def _envelope(schema: str, vintage: dict, assumptions_hash: str) -> dict:
             "assumptions_hash": assumptions_hash}
 
 
-# Run-level exclusion (codex r10): a geography whose demand-side input is unresolvable (HORS_RMR
+# Run-level exclusion (cross-model review r10): a geography whose demand-side input is unresolvable (HORS_RMR
 # fallback iii) is EXCLUDED FROM RANKINGS ENTIRELY — no ED row — and named in a typed exclusion
 # record. `unresolved_input` is a CLOSED enum, never free text.
 _UNRESOLVED_INPUTS = frozenset({"immigrant_component_flows"})
@@ -4649,7 +4649,7 @@ HORIZON_YEARS = [2030, 2035, 2040, 2045, 2050]   # ScenarioPrior horizons (T2 re
 _POP_WORKBOOKS = ["pop-as-rmr-base.xlsx", "pop-as-ra-base.xlsx"]
 _COMPO_WORKBOOKS = ["compo-rmr-base.xlsx", "compo-ra-base.xlsx"]
 ALLOWED_SOURCE_KEYS = frozenset(["ownership_by_geo_age.json", "headship_by_age.json", "living_arrangement.json"])
-# codex r10: geographies whose demand-side inputs are unresolvable (HORS_RMR fallback iii) are
+# cross-model review r10: geographies whose demand-side inputs are unresolvable (HORS_RMR fallback iii) are
 # EXCLUDED FROM RANKINGS ENTIRELY (no ED). Populated at probe P5/P6; EMPTY in the committed run
 # (HORS_RMR's immigrant flows resolve from the compo hors-RMR row / province residual).
 EXCLUDED_FROM_RANKINGS: frozenset = frozenset()
@@ -4663,7 +4663,7 @@ def _load_all(data_dir: Path | None):
 
 
 def _projected_years(pop_g_s: pd.DataFrame) -> list[int]:
-    """Ranking temporal domain (codex r8-F3): projected years only (Statut=proj), the full
+    """Ranking temporal domain (cross-model review r8-F3): projected years only (Statut=proj), the full
     contiguous annual lattice through the last projected year (2051), both endpoints included."""
     proj = pop_g_s[pop_g_s["status"].astype(str).str.lower().str.startswith("proj")]
     return sorted(int(y) for y in proj["year"].unique())
@@ -4738,7 +4738,7 @@ def _ed_dict(geos, pop, compo, ownership, headship, la, q_live):
 
 
 def _rank_stability(geos, pop, compo, ownership, headship, la) -> dict:
-    """RUN-CONTRACT robustness sweep (codex r8-F1): a geography's rank is STABLE iff it is
+    """RUN-CONTRACT robustness sweep (cross-model review r8-F1): a geography's rank is STABLE iff it is
     unchanged at both q_live band endpoints vs the central value."""
     lo, hi = SWEEP_GRID["q_live_per_year"]
     orders = [ {r.geography: r.rank for r in rank_geographies(_ed_dict(geos, pop, compo, ownership, headship, la, q))}
@@ -4882,7 +4882,7 @@ from demoflow.pipeline import run_pipeline
 
 GOLDEN = Path(__file__).resolve().parent.parent / "artifacts"
 
-# THIRD, TEST-OWNED copy of the code-required indicator name list (codex r4-F4): a
+# THIRD, TEST-OWNED copy of the code-required indicator name list (cross-model review r4-F4): a
 # co-deletion must touch code (REQUIRED_INDICATORS) + baseline (golden) + this test in ONE
 # PR-visible diff — the residual guard no runtime check can provide.
 _REQUIRED_INDICATOR_NAMES = {
@@ -5024,7 +5024,7 @@ and staleness blind spots.
   cd demoflow && uv run demoflow tripwires --out /tmp/demoflow_trip ; echo "exit=$?"  # exit 0 iff all OK, nonzero on CROSSED/UNKNOWN
   ```
 
-- [ ] **§10 fixture inventory (every Tranche-1 anchor — incl. codex rounds 1–6 — has a running test):**
+- [ ] **§10 fixture inventory (every Tranche-1 anchor — incl. cross-model review rounds 1–6 — has a running test):**
 
   | Spec §10 anchor | Task | Test |
   |---|---|---|
@@ -5071,7 +5071,7 @@ and staleness blind spots.
 
 - [ ] **Probes recorded + committed:** `demoflow/probes/P1..P6` observation notes exist; each states a VERDICT or a recorded failure + the spec-named fallback (never a silent proceed).
 
-- [ ] **Adversarial audits — pre-PR (Tasks 31–33) AND PR-time.** The three injected pre-PR audits (Task 31 quant-financial-engineer, Task 32 stress-tester, Task 33 data-integrity-validator) run after T1c and BEFORE the PR — their findings fold into the branch. At PR time `stress-tester` fires AGAIN via the external review hook (alongside codex + DeepSeek). Then land the branch.
+- [ ] **Adversarial audits — pre-PR (Tasks 31–33) AND PR-time.** The three injected pre-PR audits (Task 31 quant-financial-engineer, Task 32 stress-tester, Task 33 data-integrity-validator) run after T1c and BEFORE the PR — their findings fold into the branch. At PR time `stress-tester` fires AGAIN via the external review hook (alongside cross-model review + DeepSeek). Then land the branch.
 
 ## Out of scope (Tranche 2 — gated, do NOT build here)
 
@@ -5110,7 +5110,7 @@ self-derives shocks), (2) the geography × dwelling_type × horizon × scenario 
 (3) which artifact-identity fields (data_vintage, assumptions_hash, mapping_version, schema_version)
 it records at consumption. Absent that sketch, Tranche 2 does not start.
 
-**Named Tranche-2 contract DEBTS the S4b sketch inherits (codex r10 — currently unspecified, must be
+**Named Tranche-2 contract DEBTS the S4b sketch inherits (cross-model review r10 — currently unspecified, must be
 pinned WITH the sketch, never improvised):**
 1. **ED-trajectory → horizon-row aggregation rule.** Tranche 1 emits a full projected-year ED
    trajectory; the ScenarioPrior row is per horizon_year ∈ {2030,2035,2040,2045,2050}. HOW the

@@ -48,7 +48,7 @@ def _spec_pinned_entry_cohort() -> Stock:
     module EXPORTS its aggregate gate rather than inventing a caller for it. Production's
     cohort builder is Task 29's pipeline `_init_stock` (plan:4677-4687), which assembles the
     same call from the same loaders over the 75+ AGGREGATE; until it exists, this is where
-    the reconciliation gate's caller obligation (gates.py, codex r9-F4) is discharged. When
+    the reconciliation gate's caller obligation (gates.py, cross-model review r9-F4) is discharged. When
     Task 29 lands, this helper is the thing that folds into it, not a second builder to keep.
     """
     pop = load_population(RECON_POP_WORKBOOK)
@@ -91,7 +91,7 @@ def test_roll_one_year_conserves_mass_and_routes_widows():
 def test_decade_retention_in_band_gross_backstop():
     """Spec §5's reconciliation gate, discharged on the composition the gate REQUIRES and
     cannot itself check. Retention is STATE-DEPENDENT, so the band judges a bare float only
-    against a pinned mix (gates.py's caller obligation, codex r9-F4) — this is that discharge,
+    against a pinned mix (gates.py's caller obligation, cross-model review r9-F4) — this is that discharge,
     and the tranche's only live `check_reconciliation` call on real rolled output.
 
     THE ENVELOPE IS A GROSS-ERROR BACKSTOP, never the exactly-once proof — and the blindness is
@@ -252,7 +252,7 @@ def test_pure_couple_decade_retention_exceeds_band_hi():
 
 
 def test_double_decrement_mutation_changes_pinned_oracle():
-    # codex r7-F5: exactly-once is proven by ORACLE EXACTNESS, not the envelope. Flat q -> the
+    # cross-model review r7-F5: exactly-once is proven by ORACLE EXACTNESS, not the envelope. Flat q -> the
     # correct single transition pins couple=864.36 / owner_units=903.56; applying the transition
     # TWICE (the re-anchor double-count) STRICTLY changes those pinned values -> detectable.
     once, _ = roll_one_year(Stock(couple=1000.0), age=80, year=2040, q_live=0.10, qx=_flat_qx(0.02, 0.02))

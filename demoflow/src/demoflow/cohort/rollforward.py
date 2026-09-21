@@ -86,7 +86,7 @@ def roll_cohort_multi_year(base: dict[int, Stock], entrants_per_year: float,
                            start_year: int, n_years: int, q_live: float,
                            qx: QxProvider) -> dict[int, dict[int, Stock]]:
     """Roll an age-indexed set of owner cohorts forward n_years. Each year every cohort
-    transitions and ages by one; the 100+ bucket is ABSORBING (spec §8, codex r5-F6) — the
+    transitions and ages by one; the 100+ bucket is ABSORBING (spec §8, cross-model review r5-F6) — the
     age-99 age-ins AND the surviving prior 100+ stock BOTH land in age 100 and ACCUMULATE
     (never overwritten or reinitialized), each decremented exactly once. NEW entrants enter
     EXACTLY ONCE at BAND_ENTRY_AGE (spec §5 stock-flow discipline). Returns {year: {age: Stock}}.

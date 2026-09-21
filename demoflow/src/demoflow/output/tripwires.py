@@ -37,7 +37,7 @@ class SourceKind(str, Enum):
     OPERATOR_SUPPLIED = "operator_supplied"
 
 
-class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (codex r6-F4)
+class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (cross-model review r6-F4)
     STALE = "stale"
     SOURCE_UNAVAILABLE = "source_unavailable"
     OPERATOR_INPUT_MISSING = "operator_input_missing"
@@ -46,11 +46,11 @@ class Reason(str, Enum):   # CLOSED machine-token enum — no free-text (codex r
     FUTURE_AS_OF = "future_as_of"
     MISSING_INDICATOR = "missing_indicator"
     DUPLICATE_INDICATOR = "duplicate_indicator"
-    # codex r10: `empty_registry` is NOT a per-indicator reason — an empty baseline is a RUN-level
+    # cross-model review r10: `empty_registry` is NOT a per-indicator reason — an empty baseline is a RUN-level
     # terminal error (check_registry raises; NO artifact is emitted; the run exits nonzero).
 
 
-# CODE-owned registry (spec §7c, codex r7-F1): indicator -> its DECLARED source string. The
+# CODE-owned registry (spec §7c, cross-model review r7-F1): indicator -> its DECLARED source string. The
 # emitted record's `source` must equal this exactly (no smuggled content). REQUIRED_INDICATORS
 # derives from it — one source of truth, NOT in the baseline file it validates.
 SOURCE_REGISTRY = {
@@ -63,7 +63,7 @@ SOURCE_REGISTRY = {
 }
 REQUIRED_INDICATORS = frozenset(SOURCE_REGISTRY)
 
-# UNKNOWN-branch nullability (codex r7-F2/r8-F2): current_value + as_of are NULL exactly for these
+# UNKNOWN-branch nullability (cross-model review r7-F2/r8-F2): current_value + as_of are NULL exactly for these
 # reasons (no honest measurement; a non_finite raw value goes to the run log, never the JSON).
 #
 # `DUPLICATE_INDICATOR` BELONGS HERE FOR THE SAME REASON THE OTHER FOUR DO, and its absence was a
@@ -234,13 +234,13 @@ def check_registry(indicators: list[str]) -> list[TripwireResult]:
 
     TWO RUN-LEVEL TERMINALS, both raising rather than returning a record, and for the same
     reason: the per-indicator reason enum is spec-closed and carries no token for either.
-    An EMPTY registry has nothing to attach an UNKNOWN to (codex r10). An UNREGISTERED key
+    An EMPTY registry has nothing to attach an UNKNOWN to (cross-model review r10). An UNREGISTERED key
     is not a failing indicator at all — spec §7c asks for exact-key EQUALITY against the
     code-owned set, and `required - set(indicators)` is one-directional, so an extra key
     rode through as "complete" and, if OK, carried the run to exit 0."""
     out: list[TripwireResult] = []
     if not indicators:
-        # RUN-level terminal (codex r10): no artifact emitted; the run exits nonzero.
+        # RUN-level terminal (cross-model review r10): no artifact emitted; the run exits nonzero.
         raise LoaderError("empty tripwire registry — NO artifact emitted, run exits nonzero")
     unregistered = sorted(set(indicators) - REQUIRED_INDICATORS)
     if unregistered:

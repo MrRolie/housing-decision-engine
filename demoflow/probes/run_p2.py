@@ -18,7 +18,7 @@ FILTER PREDICATE (two axes only — every other dimension, all 15 age bands and
 all 4 tenure columns are RETAINED):
   1. GEO in the 7 wholly-Québec geographies: the Québec province total + all 6
      wholly-Québec CMAs. Seven and not three because HORS_RMR = province NET OF
-     ALL Québec CMAs (spec:499, spec:550; codex r4-F2 / r1-F8) — netting only
+     ALL Québec CMAs (spec:499, spec:550; cross-model review r4-F2 / r1-F8) — netting only
      Montréal+Québec would wrongly fold the other four QC CMAs into the residual.
   2. Statistics (3C) == "Number of private households". The other two members
      are confidence-interval bounds; nothing downstream consumes them.
@@ -464,7 +464,7 @@ def main() -> None:
             "",
             "### Why 7 geographies and not 3",
             "",
-            "`HORS_RMR` = province net of **ALL** Québec CMAs (spec:499, spec:550; codex "
+            "`HORS_RMR` = province net of **ALL** Québec CMAs (spec:499, spec:550; cross-model review "
             "r4-F2 / r1-F8). Netting only Montréal+Québec would wrongly fold the other "
             "four wholly-Québec CMAs into the residual.",
             "",
@@ -483,7 +483,7 @@ def main() -> None:
             "",
             "## 4. What HORS_RMR actually denotes here (spec:552-554)",
             "",
-            "**CA caveat (codex r5-F7):** a published `non-CMA/CA` row would EXCLUDE "
+            "**CA caveat (cross-model review r5-F7):** a published `non-CMA/CA` row would EXCLUDE "
             "Census Agglomerations while province-minus-CMAs INCLUDES them. This table "
             "publishes **no** such row. Computed from the metadata member "
             f"(`{meta_member}`), the Geography dimension has "

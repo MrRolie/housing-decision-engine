@@ -4,7 +4,7 @@ live service actually returns.
 
 THE QUESTION, precisely: does a free StatCan cube publish, at CMA granularity,
 both rates the cohort initialization needs — `living_alone` AND `couple_share`
-— broken out by age AND by sex? Spec §5 needs SEX-SPECIFIC rates (codex
+— broken out by age AND by sex? Spec §5 needs SEX-SPECIFIC rates (cross-model review
 r3-F1/r4-F1: a pooled couple rate is not sex-conserving), and spec §11.3 gives
 `couple_share` NO invented default: cross-tab, or a cited province-level value,
 or initialization RAISES.
@@ -763,7 +763,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             "  returned non-suppressed values for all 7 wholly-Québec geographies at 75-84 and 85+",
             "  for both Men+ and Women+. Both required rates come from this ONE table.",
             "",
-            "- PER-INPUT fallbacks (codex r4-F6 — the living-alone fallback CANNOT supply "
+            "- PER-INPUT fallbacks (cross-model review r4-F6 — the living-alone fallback CANNOT supply "
             "couple_share):",
             f"  * `living_alone` -> spec's named fallback is the ISQ vitrine "
             f"{VITRINE_POINT:.2f} (65+, QC), widened band "
@@ -800,7 +800,7 @@ def main() -> None:  # noqa: C901 - a probe: linear narrative beats decompositio
             "  NOT FOUND at CMA granularity. The catalogue sweep and every candidate above are",
             "  the full record of what was tried.",
             "",
-            "- PER-INPUT fallbacks (codex r4-F6 — the living-alone fallback CANNOT supply "
+            "- PER-INPUT fallbacks (cross-model review r4-F6 — the living-alone fallback CANNOT supply "
             "couple_share):",
             f"  * `living_alone` -> vitrine {VITRINE_POINT:.2f} (65+, QC), widened band "
             f"[{VITRINE_BAND[0]}, {VITRINE_BAND[1]}] PER-SEX, `borrowed_prior`",

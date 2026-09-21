@@ -1,4 +1,4 @@
-"""Demand side (spec §6, codex r2-F2/r4-F5/r6-F1/r6-F2/r7-F7/r10-F4).
+"""Demand side (spec §6, cross-model review r2-F2/r4-F5/r6-F1/r6-F2/r7-F7/r10-F4).
 
 Native formation = GROSS under-75 cohort-followed headship gains only (75+ dynamics belong
 to S — structural D/S disjointness at the age-75 boundary, without which a 75+ headship
@@ -24,7 +24,7 @@ package take three different operands and every mix-up is invisible in the numbe
   * `ownership_by_age(a)` and `p_imm` are HOUSEHOLD-denominated (owner-maintainer households
     / private households), so both legs convert to households FIRST — natively via headship,
     on the arrival leg via the immigrant headship rate. Persons never multiply a household
-    rate directly (codex r2-F2); that is the units defect the dimensional test pins.
+    rate directly (cross-model review r2-F2); that is the units defect the dimensional test pins.
 
 VINTAGE: this module is pure arithmetic over plain dicts and holds no provenance itself. A
 production caller loads its rate surfaces through `census.load_ownership_rates` /
@@ -50,7 +50,7 @@ import math
 from demoflow.errors import LoaderError
 from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 
-AGE_MIN = 18        # household-formation floor (codex r7-F7 — a−1 must never leave the domain)
+AGE_MIN = 18        # household-formation floor (cross-model review r7-F7 — a−1 must never leave the domain)
 AGE_BOUNDARY = 75
 
 # `ownership(a)` is UNDEFINED below age 25 BECAUSE THE DERIVATION SPEC STARTS AT 25, not
@@ -168,7 +168,7 @@ AGE_BOUNDARY = 75
 #
 # The a_min term still earns its place independently of all of the above: it exists so a_min
 # entrants form against a zero prior stock BY EQUATION instead of against H(17) by array
-# wraparound (codex r7-F7). A supplied sub-floor rate is still used, so an extended curve is
+# wraparound (cross-model review r7-F7). A supplied sub-floor rate is still used, so an extended curve is
 # never swallowed by this convention.
 OWNERSHIP_LATTICE_FLOOR = 25
 
@@ -246,7 +246,7 @@ def _ownership(ownership_by_age: dict[int, float], age: int) -> float:
 def native_formation(resident_pop_t: dict[int, float], resident_pop_tm1: dict[int, float],
                      headship_by_age: dict[int, float], ownership_by_age: dict[int, float]) -> float:
     """D_native = max(0, H_res(18,t))×ownership(18)  +  Σ_{19≤a<75} max(0, H_res(a,t) −
-    H_res(a−1,t−1))×ownership(a)  (codex r10 — the explicit a_min=18 boundary term is INCLUDED;
+    H_res(a−1,t−1))×ownership(a)  (cross-model review r10 — the explicit a_min=18 boundary term is INCLUDED;
     the earlier strict `a_min < a < 75` form wrongly dropped it). At a_min entrants form against
     ZERO prior stock, by equation, never by array wraparound (r7-F7). `resident_pop_*` is
     P_resident (§6 operand binding) — never total ISQ pop, and this module has no code path to
@@ -267,7 +267,7 @@ def native_formation(resident_pop_t: dict[int, float], resident_pop_tm1: dict[in
 
     P_resident(a) ≥ 0 IS NOT CHECKED HERE, AND NOT PER CELL ANYWHERE — it holds by COMPOSITION,
     and the sentence that stood in this docstring pointed at a check no code performs at this
-    operand's granularity (codex r12-F1). It read "P_resident ≥ 0 belongs UPSTREAM, asserted per
+    operand's granularity (cross-model review r12-F1). It read "P_resident ≥ 0 belongs UPSTREAM, asserted per
     cell before any consumer: `demand/i2.py`'s `assert_p_resident_nonneg` ... not re-checked here
     because the spec assigns the check upstream" — which is spec §6's own "asserted per cell",
     and it is false in the sense this function depends on: that assertion takes a SCALAR, has ONE
@@ -323,7 +323,7 @@ def immigrant_households(arrival_persons: float, immigrant_headship_rate: float)
 
 
 def p_imm(p_nonimm: float, ratio: float) -> float:
-    """p_imm(a) = p_nonimm(a) × ratio, asserted ∈ [0,1] (codex r4-F5 — never a bare ratio).
+    """p_imm(a) = p_nonimm(a) × ratio, asserted ∈ [0,1] (cross-model review r4-F5 — never a bare ratio).
 
     `p_nonimm` MUST ARRIVE CONVERTED, and this function cannot check it (amendment #24(A)). The
     ownership cube the wired caller reads has no immigrant dimension, so the rate it serves is
@@ -334,7 +334,7 @@ def p_imm(p_nonimm: float, ratio: float) -> float:
 
     THE PRODUCT STILL BINDS, and it is not the only thing that binds: each operand is asserted
     in its OWN units FIRST. `p_nonimm` is a fraction; `ratio` is nonneg-finite and may validly
-    exceed 1 (immigrants can out-own non-immigrants in a cell — codex r7-F8, measured at 1.033
+    exceed 1 (immigrants can out-own non-immigrants in a cell — cross-model review r7-F8, measured at 1.033
     in New Brunswick), which is why only the product carries the [0,1] rule.
 
     The earlier docstring claimed the product's [0,1] assertion alone stopped any negative or
@@ -364,7 +364,7 @@ def immigrant_formation(arrival_persons: float, immigrant_headship_rate: float,
                         p_nonimm: float, ratio: float) -> float:
     """Arriving PERSONS -> immigrant HOUSEHOLDS -> immigrant owner-household demand.
 
-    The intermediate step is the whole point (codex r2-F2): without it a person count
+    The intermediate step is the whole point (cross-model review r2-F2): without it a person count
     multiplies a household-denominated propensity and household size vanishes from the model.
     """
     return immigrant_households(arrival_persons, immigrant_headship_rate) * p_imm(p_nonimm, ratio)
