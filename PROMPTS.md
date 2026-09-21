@@ -130,9 +130,13 @@ uv run hde examples/basic_config.yaml --json          # the full result document
   stay, downsize, or sell and rent?", this tool cannot take your situation yet. Everything
   below is a refinement inside the rent-versus-buy frame; this one says who the frame leaves
   out.
-- **Mortgage renewal risk.** The quoted rate is held for the whole horizon; a design
-  exists but is not built. When rates rise, this biases the answer toward buying. Ask the
-  "what if rates are 6%" follow-up to see the exposure.
+- **Mortgage renewal risk, as a distribution.** You can now state a renewal path —
+  the term's length and the rate at each renewal — and the engine re-amortizes what is
+  left at each one, so the payment steps and the answer prices it. What it cannot do is
+  put a DISTRIBUTION around that path: the ladder you state is one scenario, not a
+  forecast, and nothing in the engine anchors a forward rate. State no path and the
+  quoted rate is held for the whole amortization, which biases the answer toward buying
+  when rates rise; the run says so itself. Sweep the renewal rate to see the exposure.
 - **Property tax outside Laval, Montréal, Québec City, Ottawa and Toronto.** Gatineau has
   no registered source (it taxes by neighbourhood unit, so no city-wide rate exists); any
   figure used there is a labelled placeholder until you supply your bill.
