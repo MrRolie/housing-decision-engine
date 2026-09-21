@@ -1,5 +1,11 @@
 # Housing Decision Engine — Roadmap
 
+> **This file is the dated RECORD of what happened. Nothing in it is a to-do.**
+> Open work, ranked, lives in one place: [`docs/BOARD.md`](../BOARD.md). The backlog
+> sections below are kept because they carry the reasoning behind decisions that landed;
+> where an item is still open, the board is the home and this is the history.
+
+
 ## Status
 
 **Overall:** S1–S4b complete; the 2026-09-01 readiness polish (anchors registry with verified citations, one decisiveness rule across every surface, `--json` provenance, a truthful `--print-schema`, the figure glossary, the clone-and-ask user flow; MCP server removed) is on branch `feat/readiness-polish`, followed by four rounds of user-model evaluation (trial runs on the models users will have — Sonnet/Opus — each critiqued) whose fixes landed 2026-09-02: a mortgage means nominal mode (defaults compose with inflation; a real-mode mortgage with an income warns), the verdict carries the Monte Carlo mean and the story headline says when it disagrees, a demographic prior runs in nominal mode, the report prints year-1 cash beside the PV view, sweeps track Monte Carlo mean flips and name their decisiveness rule. Round-four reviewer scores 18 / 18 / 20 out of 25 with every verdict correct for the facts. Next: PR + merge; then the deferred items in `docs/plans/2026-09-01-readiness-polish.md` (mypy ruling, the demoflow emitter citation path E.5).

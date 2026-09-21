@@ -132,11 +132,14 @@ full-suite invocation.
 - **Anchors doctrine** — `src/hde/anchors.py` is the single source of truth for every bias-critical engine default (the rates, thresholds and shock hyperparameters that shape a verdict; structural knobs such as `num_sims` and the zero vols are not anchored, by design). An uncited entry is a defect (`AnchorError` at import); re-anchoring requires a `replaces` note; a live URL requires `retrieved_on`. `tests/test_anchors.py` is generative: every anchor is wired to a dataclass default or declared consumed elsewhere, and every key the assumptions echo can emit resolves to an anchor. Examples cite sources inline or mark values `illustrative`; the `defaults_applied` echo carries citation tags; `--print-anchors` and the `assumptions` JSON block expose the full records.
 - **One verdict** — `models.compute_verdict` (MC probability floor 0.65, else 5% tie band; both anchored) is consumed by the story headline, the text report and `--json`. No surface computes its own margin.
 
-## Roadmap
+## Where work lives
 
-Active roadmap: `docs/roadmaps/2026-06-07_housing-decision-engine.md`
+- **Open work, ranked:** `docs/BOARD.md` — the only home for threads in flight. If it is
+  not on the board, nobody is working on it.
+- **What happened, dated:** `docs/roadmaps/2026-06-07_housing-decision-engine.md` — the
+  record, including the reasoning behind decisions that landed. Not a to-do list.
 
-Sessions:
+Sessions delivered:
 - S1 ✅ Repo foundation (2026-06-07, PR #2)
 - S2 ✅ MCP server — 6 tools (2026-06-08, PR #2); removed 2026-09-01, superseded by CLI + skill
 - S3 ✅ 3-way comparison + income model (2026-06-08, PR #3)
