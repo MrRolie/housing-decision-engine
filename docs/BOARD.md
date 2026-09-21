@@ -32,17 +32,19 @@ below that compares risks needs a rate path to compare against.
 
 ## 2. Name the unknown that changes the verdict
 
-**open** · cheapest honest win on the current tip
+**designed** · design: `docs/specs/2026-09-21-unpriced-dimensions.md` · builds after item 1
 
 The engine says a great deal about what it does not KNOW: a figure with no source, an
 estimate the assistant chose, decisiveness resting on inputs the user never stated. It says
 nothing about what it cannot SEE. Renewal risk is not an input a user forgot to supply, it
 is a dimension the model lacks, so no warning fires and the answer reads as complete.
 
-Build: a line in the read-back that names the unmodelled dimensions which could move THIS
-verdict, and says which way. Not modelling every uncertainty. Naming it. "This answer holds
-your rate for the full term; a Canadian five-year term does not, and the gap between rent
-and buy here is smaller than that unknown."
+Build: one line in the warnings channel, after the verdict, naming the single dimension this
+run does not price whose measured size exceeds the verdict's own margin — and printing
+NOTHING when nothing qualifies. The size is solved, never stressed: the engine may choose
+which input moves, never by how much, so the figure is a property of the user's own config.
+"Renewing 0.44 points higher flips the verdict; 1 point higher costs $14,900 against a
+$6,517 margin."
 
 *Why second:* every other item on this board changes the engine and helps the next user.
 This one makes the answers already being given more honest, and it is the smallest thing
