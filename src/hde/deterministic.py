@@ -595,12 +595,27 @@ def _annual_costs_for_option(
     params,
     sim: SimulationParams,
     econ: EconomicParams,
+    rent_reset_year: Optional[int] = None,
 ) -> List[float]:
     """
     Un-discounted annual housing cost by year, used for affordability ratios.
 
     Note: these are nominal/undiscounted cash outflows (not PVs); they are
     divided by the year's income to form an affordability ratio.
+
+    `rent_reset_year` is the year a tenancy ends on one Monte Carlo path, from
+    `rent.reset_hazard`. From that year on the ratio is computed against the
+    MARKET rent rather than this household's. It is None for the deterministic
+    report, which draws nothing, and for every path of a run that does not wire
+    the channel.
+
+    Why it has to be here: this function is the one home for the affordability
+    cost convention — year 1 carries no escalation, unlike the PV engine's
+    series — so a reset applied anywhere else would drift from it. Before
+    2026-09-21 the affordability channel read a single cost array for the whole
+    run while income varied per path, which made `prob_rent_exceeds` report
+    **0.0** on a config where the reset pushed the rent burden from 23.8% to
+    70.3% of income against a 32% threshold on 998 of 1,000 paths.
     """
     # Compute the level mortgage payment once (0 if all_cash or no mortgage block)
     mort_payment = 0.0
@@ -644,7 +659,17 @@ def _annual_costs_for_option(
             maint_rate = _maintenance_rate_for_year(params, year)
             costs.append(house_val * maint_rate + ev_cost + other_cost + mort_t)
         elif option_type == "rent":
-            base = params.monthly_rent * 12 * ((1 + _g(params.rent_escalation_rate)) ** t)
+            # Both tracks escalate from the same base year, exactly as the two
+            # tracks in `monte_carlo._pv_reset_series` do: a reset in year 8
+            # lands on year 8's market rent, not today's figure.
+            if (rent_reset_year is not None and year >= rent_reset_year
+                    and params.reset_to_monthly_rent is not None):
+                # The market track, at the market's own rate — see
+                # `monte_carlo._pv_reset_series` for why the two differ.
+                base = (params.reset_to_monthly_rent * 12
+                        * ((1 + _g(params.reset_market_escalation_rate)) ** t))
+            else:
+                base = params.monthly_rent * 12 * ((1 + _g(params.rent_escalation_rate)) ** t)
             costs.append(base + ev_cost + other_cost)
     return costs
 

@@ -502,6 +502,16 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                 "engine will not guess it; it is the honest place for a "
                                 "sitting tenant far below market to state their exposure",
                          "rent: requires reset_to_monthly_rent — both keys or neither"),
+        "reset_market_escalation_rate": (False, "annual growth of the MARKET rent, AS QUOTED — "
+                                          "not the rate your own lease renews at. DEFAULT "
+                                          "1.0% real (FP Canada 2026 shelter projection): a "
+                                          "protected tenant renews near 0.0% real (Québec TAL "
+                                          "base rate; landlords pass through only ~21% of "
+                                          "market moves at renewal), so if the market track "
+                                          "used your own rate the engine would tell you market "
+                                          "rents are frozen for the whole horizon and erase the "
+                                          "exposure this channel exists to show",
+                                   "rent: accepted only with reset_hazard — both keys or neither"),
         "reset_to_monthly_rent": (False, "what a COMPARABLE UNIT asks per month TODAY. The "
                                          "engine carries it forward under the same escalation "
                                          "your own rent is carrying, so a reset in year 8 lands "
@@ -564,7 +574,11 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                       "things and setting one is not setting the other. No "
                                       "anchor ships: a defensible figure needs a published "
                                       "Canadian price series with a stated window, so whatever "
-                                      "you put here is your figure and the read-back says so"),
+                                      "you put here is your figure and the read-back says so. "
+                                      "Under shock_model: normal the multiplier is clipped at "
+                                      "zero, so a large vol can drive a value track to exactly "
+                                      "$0 and it stays there for the rest of the run; the "
+                                      "default lognormal model cannot do that"),
         "investment_return_vol": (False, "ANNUAL volatility of the renter's gross return "
                                            "(one mean-preserving shock per year on 1 + r, so "
                                            "capital can end below principal): 0.10 ≈ a 60/40 "

@@ -380,9 +380,21 @@ class RentParams:
     reset_hazard: float = 0.0
     # The monthly asking rent of a comparable unit TODAY. When the reset fires
     # in year k the tenant moves onto the market track, which carries this
-    # figure forward under the same escalation their own rent was carrying —
-    # a reset in year 8 lands on year 8's market rent, not today's.
+    # figure forward to year k — a reset in year 8 lands on year 8's market
+    # rent, not today's.
     reset_to_monthly_rent: Optional[float] = None
+    # The rate the MARKET track grows at, which is not the rate the tenant's
+    # own rent grows at. The engine's own anchor says so: `rent_escalation_rate`
+    # defaults to the FP Canada shelter projection (1.0% real), and its
+    # rationale records that a Québec continuing tenant renews at the TAL base
+    # rate — the 3-year CPI average, ≈ 0.0% real — because landlords pass
+    # through only ~21% of market movements at renewal. So a sitting tenant
+    # correctly sets their own escalation near zero, and escalating the market
+    # track at that same rate would say market rents are frozen for the whole
+    # horizon. That understates exactly the exposure this channel exists to
+    # price. Defaults to the anchored shelter-projection figure, which is a
+    # cited market rate rather than the user's protected one.
+    reset_market_escalation_rate: float = ANCHORS["rent.rent_escalation_rate"].value
 
 
 @dataclass

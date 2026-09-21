@@ -1,9 +1,10 @@
 """Parts B and C of docs/specs/2026-09-21-one-world-simulation.md.
 
 **Part B — dispersion on the value track.** Every cost in the model had a
-volatility parameter and the home's value had none, so the largest single term
-in an owned option's total (terminal equity, −$218,959 of $518,779 in the
-shipped showcase) was the one term with no spread. `severity_vol` is the crash
+volatility parameter and the home's value had none, so the largest UNCERTAIN
+term in an owned option's total (terminal equity, −$218,959 of $518,779 in the
+shipped showcase, behind only the $480,000 paid at year 0, which is certain)
+was the one with no spread. `severity_vol` is the crash
 channel's magnitude, not an everyday spread. `simulation.value_growth_vol`
 supplies the everyday one, from a draw the condo and the house SHARE, because
 a path has one housing market.
@@ -19,6 +20,7 @@ Both are opt-in with no default and no anchor. The absence invariant therefore
 binds: a spec that wires neither must be byte-identical, Monte Carlo included.
 """
 
+import copy
 import dataclasses
 import pathlib
 
@@ -34,7 +36,12 @@ from hde.models import (
     RentParams,
     SimulationParams,
 )
-from hde.monte_carlo import _pv_reset_series, _sample_reset_year, run_monte_carlo
+from hde.monte_carlo import (
+    _pv_escalating_series,
+    _pv_reset_series,
+    _sample_reset_year,
+    run_monte_carlo,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 EXAMPLES = sorted((REPO_ROOT / "examples").glob("*.yaml"))
@@ -64,13 +71,81 @@ def _spec(*, value_growth_vol=0.0, reset_hazard=0.0, reset_to=None,
 # ---------------------------------------------------------------------------
 
 class TestValueDispersion:
-    def test_absent_key_is_a_single_path_run(self):
-        """The whole absence invariant in one line: with no volatility wired
-        anywhere, every path is identical. If value dispersion leaked a draw
-        when its key is absent, this spread would be non-zero."""
+    def test_absent_key_leaves_every_path_identical(self):
+        """With no volatility wired anywhere, every path is the same path.
+
+        NOTE ON WHAT THIS DOES NOT SHOW. An earlier version of this test
+        claimed that a leaked draw would make the spread non-zero. That was
+        false: with every volatility at zero nothing downstream READS a draw,
+        so a channel could consume one and every path would still be
+        identical. The stream claim needs a test that looks at the generator,
+        which is `test_no_channel_consumes_a_draw_while_switched_off` below.
+        This one checks only what its name says.
+        """
         result = run_monte_carlo(_spec())
         for pvs in (result.condo.pvs, result.house.pvs, result.rent.pvs):
             assert len(set(np.asarray(pvs).tolist())) == 1
+
+    def test_no_channel_consumes_a_draw_while_switched_off(self):
+        """The absence invariant AT THE GENERATOR, which is where it lives.
+
+        Every shipped example depends on this: a channel that consumed a draw
+        while off would shift every later draw and move numbers in configs
+        that never asked for the feature. Comparing the bit generator's state
+        is the only assertion that fails on a leak, because a leaked draw is
+        invisible in the output whenever nothing reads it.
+        """
+        from hde.monte_carlo import WorldDraws, _draw_path_world
+
+        econ = EconomicParams(mode="real", inflation_rate=0.02, inflation_vol=0.0)
+        rng = np.random.default_rng(3)
+        before = rng.bit_generator.state["state"]["state"]
+        _draw_path_world(rng, econ, 25, WorldDraws())
+        assert rng.bit_generator.state["state"]["state"] == before, (
+            "a world with every channel off consumed a draw"
+        )
+
+        # And each channel, switched on, must consume: a guard that always
+        # passes would also pass on an engine that had stopped drawing.
+        for draws in (WorldDraws(crash=True),
+                      WorldDraws(drift_bands=(2030, 2035)),
+                      WorldDraws(value_vol=0.05)):
+            rng = np.random.default_rng(3)
+            start = rng.bit_generator.state["state"]["state"]
+            _draw_path_world(rng, econ, 25, draws)
+            assert rng.bit_generator.state["state"]["state"] != start, draws
+
+    def test_a_price_shock_at_zero_hazard_draws_nothing(self):
+        """The crash gate reads `annual_hazard > 0`, not "a price_shock block
+        exists". A spec that spells out `annual_hazard: 0` must keep the exact
+        stream it had, so its numbers cannot move.
+
+        Loosening that gate to `shock is not None` left the whole suite green
+        before this test existed (measured 2026-09-21, 1,401 passing), which is
+        what a gate with no failure state looks like.
+        """
+        base = {
+            "years": 15, "discount_rate": 0.03,
+            "condo": {"initial_value": 400_000, "monthly_fee": 350, "all_cash": True},
+            "rent": {"monthly_rent": 1_500},
+            # something must actually draw, or every arrangement gives the same
+            # answer and this test could not fail either.
+            "economic": {"inflation_vol": 0.02, "mode": "nominal", "inflation_rate": 0.02},
+            "simulation": {"num_sims": 120, "rent_escalation_vol": 0.05},
+        }
+        without = run_monte_carlo(load_config_dict(copy.deepcopy(base)))
+        with_zero = copy.deepcopy(base)
+        with_zero["condo"]["price_shock"] = {"annual_hazard": 0.0, "severity_mean": 0.2}
+        zeroed = run_monte_carlo(load_config_dict(with_zero))
+        assert np.array_equal(np.asarray(without.condo.pvs), np.asarray(zeroed.condo.pvs))
+        assert np.array_equal(np.asarray(without.rent.pvs), np.asarray(zeroed.rent.pvs))
+
+        # A LIVE hazard must move them, or the equality above would hold for
+        # the trivial reason that the shock never does anything.
+        live = copy.deepcopy(base)
+        live["condo"]["price_shock"] = {"annual_hazard": 0.10, "severity_mean": 0.2}
+        moved = run_monte_carlo(load_config_dict(live))
+        assert not np.array_equal(np.asarray(without.condo.pvs), np.asarray(moved.condo.pvs))
 
     def test_setting_the_key_spreads_both_owned_totals(self):
         result = run_monte_carlo(_spec(value_growth_vol=0.08))
@@ -144,12 +219,41 @@ class TestLeaseReset:
     def test_resetting_to_your_own_rent_costs_nothing(self):
         """The cleanest statement of what the channel means. A tenant who
         already pays market rent has no exposure, so the reset must be a
-        no-op for any reset year."""
+        no-op for any reset year.
+
+        The reference is `_pv_escalating_series`, the function this one
+        generalises — NOT another call to `_pv_reset_series`. An earlier
+        version took its baseline from `_pv_reset_series(..., reset_year=12)`
+        and then compared reset year 12 against it, so one of its three cases
+        compared the function to itself and none of them checked the
+        equivalence the docstring claims.
+        """
         rates = [0.01] * 12
-        plain = _pv_reset_series(24_000, 24_000, rates, 0.03, 12, 12)
-        for reset_year in (1, 5, 12):
-            assert _pv_reset_series(24_000, 24_000, rates, 0.03, 12, reset_year) == \
-                pytest.approx(plain)
+        reference = _pv_escalating_series(24_000, rates, 0.03, 12)
+        for reset_year in (1, 5, 12, 13):
+            assert _pv_reset_series(24_000, 24_000, rates, rates, 0.03, 12,
+                                    reset_year) == pytest.approx(reference), reset_year
+
+    def test_a_reset_to_a_different_rent_is_not_a_no_op(self):
+        """Guards the test above: if `_pv_reset_series` ignored the market
+        figure entirely it would equal the reference for every input, and the
+        no-op test would pass for the wrong reason."""
+        rates = [0.01] * 12
+        reference = _pv_escalating_series(24_000, rates, 0.03, 12)
+        higher = _pv_reset_series(24_000, 30_000, rates, rates, 0.03, 12, 5)
+        assert higher > reference
+
+    def test_the_market_track_carries_its_own_rate(self):
+        """The rate a protected lease renews at is NOT the rate the market
+        runs at — the engine's own `rent.rent_escalation_rate` anchor records
+        that Québec continuing tenants renew near 0.0% real while the shelter
+        projection is 1.0% real. A tenant who states their protected rate must
+        not thereby freeze the market."""
+        own = [0.0] * 12          # a protected lease
+        market = [0.02] * 12      # the market it would reset to
+        frozen = _pv_reset_series(24_000, 30_000, own, own, 0.03, 12, 5)
+        moving = _pv_reset_series(24_000, 30_000, own, market, 0.03, 12, 5)
+        assert moving > frozen, "the market track ignored its own rate"
 
     def test_the_market_track_escalates_so_a_later_reset_costs_more_per_year(self):
         """A reset in year 8 must land on year 8's market rent, not today's.
@@ -159,9 +263,9 @@ class TestLeaseReset:
         rates = [0.03] * 10
         # One-year horizon ending exactly at the reset year isolates the
         # amount the tenant pays in that first reset year.
-        year_1 = _pv_reset_series(24_000, 30_000, rates, 0.0, 1, 1)
-        year_5_pv = _pv_reset_series(24_000, 30_000, rates, 0.0, 5, 5)
-        year_4_pv = _pv_reset_series(24_000, 30_000, rates, 0.0, 4, 5)
+        year_1 = _pv_reset_series(24_000, 30_000, rates, rates, 0.0, 1, 1)
+        year_5_pv = _pv_reset_series(24_000, 30_000, rates, rates, 0.0, 5, 5)
+        year_4_pv = _pv_reset_series(24_000, 30_000, rates, rates, 0.0, 4, 5)
         year_5_amount = year_5_pv - year_4_pv
         assert year_1 == pytest.approx(30_000 * 1.03)
         assert year_5_amount == pytest.approx(30_000 * 1.03 ** 5)
@@ -182,6 +286,85 @@ class TestLeaseReset:
         exposed = run_monte_carlo(_spec(reset_hazard=0.08, reset_to=3_000))
         distinct = len(set(np.asarray(exposed.rent.pvs).tolist()))
         assert distinct > 5, f"only {distinct} distinct renter totals"
+
+    def test_the_market_rate_defaults_to_the_anchor_not_to_the_tenants_rate(self):
+        """The default is a CITED market figure, not the user's own lease rate
+        and not an invention. Pins the anchor identity, so a future change to
+        either has to be deliberate."""
+        from hde.anchors import ANCHORS
+
+        # 2.1% AS QUOTED is how a protected Québec tenant states their lease:
+        # the TAL base rate is the CPI average, so it deflates to 0.0% real.
+        spec = load_config_dict({
+            "years": 10, "discount_rate": 0.03,
+            "economic": {"inflation_rate": 0.021},
+            "rent": {"monthly_rent": 1_150, "rent_escalation_rate": 0.021,
+                     "reset_hazard": 0.06, "reset_to_monthly_rent": 2_100},
+        })
+        assert spec.rent.rent_escalation_rate == pytest.approx(0.0, abs=1e-9)
+        # The market track is untouched by that: it holds the anchored figure.
+        assert spec.rent.reset_market_escalation_rate == \
+            ANCHORS["rent.rent_escalation_rate"].value
+        assert spec.rent.reset_market_escalation_rate > spec.rent.rent_escalation_rate
+
+    def test_a_protected_tenants_exposure_is_not_erased_by_their_own_rate(self):
+        """The measurement that justifies the separate rate.
+
+        A Montréal tenant on a protected lease correctly states 0.0% real
+        escalation. Under one shared rate the market track froze with them, so
+        the engine priced a reset to a rent that never grew. Measured over
+        25 years and 4,000 paths: the renter's mean PV came out $23,105 lower
+        and P(condo cheapest) read 0.715 instead of 0.742 — the engine
+        understating the exposure of the exact household the channel exists
+        for. Pins the DIRECTION, not the figures.
+        """
+        import dataclasses as dc
+
+        spec = load_config_dict({
+            "years": 25, "discount_rate": 0.03,
+            "economic": {"inflation_rate": 0.021},
+            "condo": {"initial_value": 450_000, "monthly_fee": 420, "all_cash": True},
+            "rent": {"monthly_rent": 1_150, "rent_escalation_rate": 0.021,
+                     "reset_hazard": 0.06, "reset_to_monthly_rent": 2_100},
+            "simulation": {"num_sims": 800},
+        })
+        market_moves = float(np.mean(run_monte_carlo(spec).rent.pvs))
+        frozen = dc.replace(spec, rent=dc.replace(
+            spec.rent, reset_market_escalation_rate=spec.rent.rent_escalation_rate))
+        market_frozen = float(np.mean(run_monte_carlo(frozen).rent.pvs))
+        assert market_moves > market_frozen, (market_moves, market_frozen)
+
+    def test_the_defaulted_market_rate_is_reported_with_its_source(self):
+        """A number the user never stated that the verdict rests on has to name
+        where it came from — and must NOT be named on a run that never uses
+        it, which would be a citation for a figure nothing reads."""
+        wired = load_config_dict({
+            "years": 10, "discount_rate": 0.03,
+            "rent": {"monthly_rent": 1_150, "reset_hazard": 0.06,
+                     "reset_to_monthly_rent": 2_100},
+        })
+        assert "rent.reset_market_escalation_rate" in wired.defaults_applied
+
+        stated = load_config_dict({
+            "years": 10, "discount_rate": 0.03,
+            "rent": {"monthly_rent": 1_150, "reset_hazard": 0.06,
+                     "reset_to_monthly_rent": 2_100,
+                     "reset_market_escalation_rate": 0.03},
+        })
+        assert "rent.reset_market_escalation_rate" not in stated.defaults_applied
+
+        off = load_config_dict({
+            "years": 10, "discount_rate": 0.03,
+            "rent": {"monthly_rent": 1_150},
+        })
+        assert "rent.reset_market_escalation_rate" not in off.defaults_applied
+
+    def test_a_market_rate_with_no_hazard_refuses(self):
+        with pytest.raises(ConfigValidationError, match="would be ignored"):
+            load_config_dict({
+                "years": 10, "discount_rate": 0.03,
+                "rent": {"monthly_rent": 2_000, "reset_market_escalation_rate": 0.02},
+            })
 
     def test_hazard_without_a_market_rent_refuses(self):
         with pytest.raises(ConfigValidationError, match="will not guess"):

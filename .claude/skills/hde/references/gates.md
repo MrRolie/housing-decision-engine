@@ -158,7 +158,13 @@ the owned side's crash: the annual probability the tenancy ends and rent steps
 to the market track. Both keys or neither — the engine refuses one alone. The
 market rent is a fact the household HAS, so ask them ("what does a comparable
 unit in your building ask?") rather than estimating it; the hazard is a fact
-nobody has, so it stays theirs to state. This is the knob for a long-tenure
+nobody has, so it stays theirs to state. Their own rent and the market rent
+then grow at SEPARATE rates: a protected tenant states
+`rent.rent_escalation_rate` near inflation (Québec's TAL base rate is the CPI
+average, so 0.0% real), while `rent.reset_market_escalation_rate` defaults to
+the anchored shelter projection — do NOT set the second equal to the first, or
+the run says market rents are frozen and erases the exposure you wired the
+channel to show. This is the knob for a long-tenure
 tenant far below market: without it their rent can only drift, which reads as
 safer than a long tenancy is, and that bias points at buying looking worse
 than it is.

@@ -167,8 +167,8 @@ So this line refuses its direction and says what is absent:
 ```
 [warning] condo: unpriced — every cost in this run varies across the 5,000 futures and the
 home's value does not; it follows one path, your 2.0%/yr, plus the crash you set. Terminal
-equity is -$218,959 of this option's $518,779, so the largest single term is the one with no
-spread. How often prices alone would change the answer is not in this run, and P(cheapest)
+equity is -$218,959 of this option's $518,779, so the largest figure that turns on something
+nobody knows is the one with no spread. How often prices alone would change the answer is not in this run, and P(cheapest)
 below reads narrower than the truth because of it. Set simulation.value_growth_vol to price
 it — the engine anchors no figure for it, so the number would be yours.
 ```
@@ -215,15 +215,16 @@ cost input carried a volatility — `condo_fee_vol`, `house_maintenance_vol`,
 `rent_escalation_vol`, `other_cost_vol`, `inflation_vol`, `investment_return_vol` — and the
 home's value carried none; `severity_vol` was the crash channel and `magnitude_vol` events. So
 the engine modelled dispersion on every cost and none on the asset, while the asset drives the
-largest single term in an owned option's total: in the shipped showcase the condo's terminal
-equity is -$218,959 against a $518,779 total.
+largest UNCERTAIN term in an owned option's total: in the shipped showcase the condo's terminal
+equity is -$218,959 against a $518,779 total, second in magnitude only to the $480,000 paid at
+year 0 — which is certain, and therefore not where dispersion belongs.
 
 **Amended 2026-09-21, and the amendment sharpens the case rather than closing it.**
 `simulation.value_growth_vol` now exists, so the MECHANISM is there. But it ships with no
 default and no anchor, because a defensible figure needs a published Canadian price series
 with a stated window and nobody has cited one here. So the state of affairs this section
 describes is unchanged for every run that does not set the key, which is every run today
-including all seven shipped examples: the dispersion of the biggest term is still not modelled,
+including all seven shipped examples: the dispersion of the biggest unknown is still not modelled,
 and it still feeds the decisiveness rule.
 
 What changed is WHAT THIS LINE MUST SAY. It can no longer say the engine cannot represent the

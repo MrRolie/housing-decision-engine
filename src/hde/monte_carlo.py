@@ -106,6 +106,26 @@ class PathWorld:
     # Ordinary year-to-year variation in home value (simulation.value_growth_vol).
     # Empty when that key is 0.
     z_value: Tuple[float, ...] = ()
+    # Whether `z_inflation` is a real draw or a constant zero. It decides
+    # whether a `corr_inflation_*` key means anything: see `corr`.
+    inflation_is_stochastic: bool = False
+
+    def corr(self, rho: float) -> float:
+        """`rho` as the shocks should actually use it.
+
+        `_correlated_z` composes `rho * base_z + sqrt(1 - rho**2) * eps`, which
+        is a unit normal ONLY when `base_z` is one. With `inflation_vol` at 0
+        the inflation z is the constant 0.0, so the formula returns
+        `sqrt(1 - rho**2) * eps` — a normal SHRUNK by that factor. A user who
+        set `corr_inflation_house: 0.9` expecting a correlation got their
+        maintenance shock damped by 56% instead (std 1.000 -> 0.436, measured
+        2026-09-21 over 20,000 draws), and the schema note has always promised
+        the opposite: "inert unless economic.inflation_vol > 0".
+
+        There is nothing to correlate with when inflation has no variance, so
+        the correlation is dropped and the shock keeps its full width.
+        """
+        return rho if self.inflation_is_stochastic else 0.0
 
     def crash_draw(self, year: int) -> Tuple[float, float]:
         """(uniform, severity z) for `year`.
@@ -220,7 +240,7 @@ def _draw_path_world(
 
     return PathWorld(
         tuple(factors), tuple(zs), tuple(crash_u), tuple(crash_z), drift,
-        tuple(z_value),
+        tuple(z_value), econ.inflation_vol > 0,
     )
 
 
@@ -264,6 +284,7 @@ def _pv_reset_series(
     own_annual: float,
     market_annual: float,
     growth_rates: Sequence[float],
+    market_growth_rates: Sequence[float],
     discount_rate: float,
     n_years: int,
     reset_year: int,
@@ -271,14 +292,22 @@ def _pv_reset_series(
     """PV of rent that runs on the tenant's own figure until `reset_year` and
     on the market figure from that year on.
 
-    Two tracks escalate side by side under the SAME year-indexed rates: the
-    rent this household pays, and what a comparable unit asks. The tenant
-    moves from the first to the second in the year the tenancy ends, so a
-    reset in year 8 lands on year 8's market rent rather than on today's
-    figure — the market does not wait for the lease.
+    Two tracks escalate side by side, EACH AT ITS OWN RATE: the rent this
+    household pays, and what a comparable unit asks. The tenant moves from the
+    first to the second in the year the tenancy ends, so a reset in year 8
+    lands on year 8's market rent rather than on today's figure — the market
+    does not wait for the lease.
+
+    The two rates have to be separate, and the engine's own anchor is why. A
+    sitting tenant under Québec's continuing-lease protection renews near 0.0%
+    real, and `rent.rent_escalation_rate`'s rationale records that landlords
+    pass through only ~21% of market movements at renewal. So a tenant who
+    correctly states their own escalation near zero would, under one shared
+    rate, be told market rents are frozen for the whole horizon — which erases
+    precisely the exposure this channel was built to show.
 
     Both tracks use the convention of `_pv_escalating_series`: year 1 already
-    carries one year of escalation. So with `market_annual == own_annual` this
+    carries one year of escalation. So with equal figures AND equal rates this
     reproduces that function's series for any reset year, which is the
     cleanest statement of what a reset to your own rent costs: nothing.
     """
@@ -289,7 +318,7 @@ def _pv_reset_series(
     market = market_annual
     for year in range(1, n_years + 1):
         own *= (1 + growth_rates[year - 1])
-        market *= (1 + growth_rates[year - 1])
+        market *= (1 + market_growth_rates[year - 1])
         pv += pv_single(market if year >= reset_year else own, discount_rate, year)
     return pv
 
@@ -406,8 +435,11 @@ def _apply_value_dispersion(value_tracks, vol: float, z: float, model: str):
     """Ordinary year-to-year variation in the home's value.
 
     The crash channel is a rare large drawdown; this is the everyday movement
-    that sat at exactly zero while every cost in the model had a spread —
-    terminal equity being the largest single term in an owned option's total
+    that sat at exactly zero while every cost in the model had a spread.
+    Terminal equity is the largest term in an owned option's total that depends
+    on an UNKNOWN: -$218,959 of the shipped showcase's $518,779, second in
+    magnitude only to the $480,000 paid at year 0, which is certain. So the
+    biggest uncertain term was the one term with no dispersion
     (docs/specs/2026-09-21-one-world-simulation.md §1.B).
 
     `z` is the world's, shared with every other owned option on the path, so
@@ -621,7 +653,7 @@ def _simulate_condo_pv_once(
         # Condo fee with escalation and volatility
         fee_growth = _effective_growth_rate(fee_growth_base, inflation_factor, econ)
         fee_amount *= (1 + fee_growth)
-        z_fee = _correlated_z(z_inf, sim.corr_inflation_condo, rng)
+        z_fee = _correlated_z(z_inf, world.corr(sim.corr_inflation_condo), rng)
         fee_amount *= _shock_multiplier(sim.condo_fee_vol, z_fee, sim.shock_model)
         pv += pv_single(fee_amount, r, year)
 
@@ -635,7 +667,7 @@ def _simulate_condo_pv_once(
         for idx, rec_cost in enumerate(condo.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
             other_amounts[idx] *= (1 + growth)
-            z_other = _correlated_z(z_inf, sim.corr_inflation_other, rng)
+            z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), rng)
             other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
 
@@ -644,7 +676,7 @@ def _simulate_condo_pv_once(
             if event_years[event.name] is None:
                 continue
             if event_years[event.name] == year:
-                z_event = _correlated_z(z_inf, sim.corr_inflation_event_cost, rng)
+                z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), rng)
                 event_cost = _sample_event_cost(event, z_event)
                 covered = min(reserve_balance, event_cost)
                 reserve_balance -= covered
@@ -729,7 +761,7 @@ def _simulate_house_pv_once(
 
         maintenance_rate = _maintenance_rate_for_year(house, year)
         maint_t = maintenance_rate * house_value
-        z_house = _correlated_z(z_inf, sim.corr_inflation_house, rng)
+        z_house = _correlated_z(z_inf, world.corr(sim.corr_inflation_house), rng)
         maint_t *= _shock_multiplier(sim.house_maintenance_vol, z_house, sim.shock_model)
         pv += pv_single(maint_t, r, year)
 
@@ -737,7 +769,7 @@ def _simulate_house_pv_once(
         for idx, rec_cost in enumerate(house.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
             other_amounts[idx] *= (1 + growth)
-            z_other = _correlated_z(z_inf, sim.corr_inflation_other, rng)
+            z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), rng)
             other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
 
@@ -746,7 +778,7 @@ def _simulate_house_pv_once(
             if event_years[event.name] is None:
                 continue
             if event_years[event.name] == year:
-                z_event = _correlated_z(z_inf, sim.corr_inflation_event_cost, rng)
+                z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), rng)
                 event_cost = _sample_event_cost(event, z_event)
                 pv += pv_single(event_cost, r, year)
 
@@ -768,6 +800,7 @@ def _simulate_rent_pv_once(
     world: PathWorld,
     rng: np.random.Generator,
     tax: Optional[TaxParams] = None,
+    reset_year: Optional[int] = None,
 ) -> float:
     """
     Run one simulation of rent PV with randomness.
@@ -778,8 +811,10 @@ def _simulate_rent_pv_once(
     - Other recurring cost volatility (if sim.other_cost_vol > 0)
     - Investment-return shock on the invested down payment
       (if sim.investment_return_vol > 0)
-    - A lease reset: with probability `rent.reset_hazard` each year the tenancy
-      ends and rent steps onto the market track (if the channel is wired)
+    - A lease reset: `reset_year` is the year the tenancy ends on this path, or
+      None. It is drawn by the CALLER rather than here, because the
+      affordability channel has to price the same reset on the same path — a
+      second draw would give one path two different tenancies.
 
     Inflation comes from `world`, the same economy the owned options are priced
     in. Until 2026-09-21 this function composed with the fixed scalar
@@ -805,20 +840,21 @@ def _simulate_rent_pv_once(
         for factor in world.inflation_factors
     ]
 
-    # The tenancy's own hazard, drawn AFTER the escalation shock so a spec
-    # that wires no reset keeps the draw order it had. Nothing is consumed at
-    # a hazard of zero, which is every spec shipped before 2026-09-21.
-    reset_year = _sample_reset_year(rent.reset_hazard, sim.years, rng)
-
     annual_rent = rent.monthly_rent * 12
     if reset_year is None:
         rent_pv = _pv_escalating_series(annual_rent, esc_rates, dr, sim.years)
     else:
         # Config validation pairs the two keys, so a live hazard always has a
         # market figure to reset to.
+        # The market track composes with the SAME world (so a high-inflation
+        # year lifts both tracks) but carries its own real rate.
+        market_rates = [
+            _effective_growth_rate(rent.reset_market_escalation_rate, factor, econ)
+            for factor in world.inflation_factors
+        ]
         rent_pv = _pv_reset_series(
-            annual_rent, rent.reset_to_monthly_rent * 12, esc_rates, dr,
-            sim.years, reset_year,
+            annual_rent, rent.reset_to_monthly_rent * 12, esc_rates, market_rates,
+            dr, sim.years, reset_year,
         )
 
     # Events (same pattern as condo/house: None-guarded, correlated z draw
@@ -831,7 +867,7 @@ def _simulate_rent_pv_once(
         if year is None:
             continue
         z_event = _correlated_z(
-            world.z_inflation[year - 1], sim.corr_inflation_event_cost, rng
+            world.z_inflation[year - 1], world.corr(sim.corr_inflation_event_cost), rng
         )
         event_cost = _sample_event_cost(event, z_event)
         events_pv += pv_single(event_cost, dr, year)
@@ -1000,9 +1036,13 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
         - Only options present in the spec are simulated.
         - RNG is seeded with sim.random_seed for reproducibility.
         - Per-iteration draw order is world -> condo -> house -> rent -> income.
-          The world consumes no draws when `inflation_vol` is 0, so every run
-          without inflation uncertainty keeps the stream it had before the
-          world existed.
+          The world consumes no draws for a channel the spec does not wire, so
+          a run that wires none of them keeps the stream it had before the
+          world existed. `inflation_vol` is only one of four such channels: the
+          crash uniforms, the demographic scenario and the value-dispersion z
+          are also drawn there and also gated, so a spec WITH a prior or a live
+          price_shock does consume world draws even at `inflation_vol` 0 — the
+          shipped showcase is exactly that case.
         - Every option on one iteration is priced in the SAME world: the
           inflation path, the housing market's crash draws and the path's
           demographic scenario are drawn once into a `PathWorld` and handed to
@@ -1026,6 +1066,19 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
         _require_valued_growth(spec.condo.value_growth_rate, "condo")
     if spec.house is not None:
         _require_valued_growth(spec.house.value_growth_rate, "house")
+
+    # The lease-reset pair travels together. Config validation already refuses
+    # one without the other, and this covers the direct-construction path the
+    # config never sees — the same reason `_require_valued_growth` is repeated
+    # here. Without it a hazard with no market figure reaches `_pv_reset_series`
+    # and dies on `None * 12`, which tells the caller nothing.
+    if (spec.rent is not None and spec.rent.reset_hazard > 0
+            and spec.rent.reset_to_monthly_rent is None):
+        raise ValueError(
+            "rent.reset_hazard is set but rent.reset_to_monthly_rent is None: "
+            "the engine will not guess what a comparable unit asks. State the "
+            "monthly market rent, or leave reset_hazard at 0."
+        )
 
     # S4b: nominal-mode refusal + ScenarioPrior load/validation (fail-loud).
     prior = _load_prior_if_any(spec)
@@ -1071,10 +1124,31 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     # What the world must draw per path: read once from the spec, not per path.
     world_draws = _world_draws(spec, (condo_prior_rows, house_prior_rows))
 
+    # The affordability channel reads an UNDISCOUNTED cost array per option and
+    # compares it against a per-path income. A lease reset changes that array,
+    # so when the channel is wired the arrays are precomputed once per possible
+    # reset year and indexed per path. Without this the affordability report
+    # read one array for the whole run and said `prob_rent_exceeds: 0.0` on a
+    # config whose reset pushed the burden from 23.8% to 70.3% of income on 998
+    # of 1,000 paths — a probability of zero for something close to certain.
+    afford_rent_by_reset: dict = {}
+    if (spec.income is not None and spec.rent is not None
+            and spec.rent.reset_hazard > 0):
+        from .deterministic import _annual_costs_for_option as _costs
+        for k in range(1, sim.years + 1):
+            afford_rent_by_reset[k] = _costs("rent", spec.rent, sim, econ,
+                                             rent_reset_year=k)
+
     for i in range(n):
         # ONE economy and ONE housing market per iteration, drawn before any
         # option is priced.
         world = _draw_path_world(rng, econ, sim.years, world_draws)
+        # The tenancy's own hazard: a HOUSEHOLD event, so it is drawn here
+        # rather than in the world, but drawn ONCE per path — the PV leg and
+        # the affordability leg must price the same tenancy. Consumes nothing
+        # at a hazard of zero, which is every spec shipped before 2026-09-21.
+        reset_year = (_sample_reset_year(spec.rent.reset_hazard, sim.years, rng)
+                      if spec.rent is not None else None)
         if spec.condo is not None:
             condo_pvs[i] = _simulate_condo_pv_once(
                 spec.condo, sim, econ, world, rng,
@@ -1090,11 +1164,16 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
                 hbp_repayment_pv=house_hbp,
             )
         if spec.rent is not None:
-            rent_pvs[i] = _simulate_rent_pv_once(spec.rent, sim, econ, world, rng, spec.tax)
+            rent_pvs[i] = _simulate_rent_pv_once(
+                spec.rent, sim, econ, world, rng, spec.tax, reset_year=reset_year)
         if spec.income is not None:
+            rent_costs_this_path = (
+                afford_rent_by_reset.get(reset_year, afford_rent_costs)
+                if reset_year is not None else afford_rent_costs
+            )
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,
-                afford_condo_costs, afford_house_costs, afford_rent_costs,
+                afford_condo_costs, afford_house_costs, rent_costs_this_path,
                 rng,
             )
             if afford_condo_flags is not None:

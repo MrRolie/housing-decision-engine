@@ -18,6 +18,7 @@ import pytest
 
 from hde.config import (
     ConfigValidationError,
+    _SECTION_KEYS,
     load_config_dict,
     single_path_run,
     uncertainty_source_warnings,
@@ -26,7 +27,12 @@ from hde.deterministic import compute_deterministic
 from hde.models import compute_verdict
 from hde.monte_carlo import run_monte_carlo
 from hde.serialization import assumptions_to_dict, format_assumptions
-from hde.sources import attributable_keys, format_source_value, uncertainty_keys
+from hde.sources import (
+    MONEY_LEAVES,
+    attributable_keys,
+    format_source_value,
+    uncertainty_keys,
+)
 
 # Uncertainty ON (investment_return_vol), so Monte Carlo decides the verdict.
 BASE = {
@@ -304,6 +310,50 @@ class TestUncertaintyWarning:
 # ---------------------------------------------------------------------------
 # 5. The uncertainty-input set is the engine's own definition
 # ---------------------------------------------------------------------------
+
+class TestMoneyLeavesIsComplete:
+    """`MONEY_LEAVES` is the one answer to "is this key money?", read by the
+    read-back's formatter, by `--sweep` and by `--break-even`. Nothing pinned
+    its roster, so a new dollar key joined the schema and printed as a bare
+    number: `reset_to_monthly_rent=2,100` sat on a line beside
+    `reset_hazard=6.0%`, and only the rate said what it was (2026-09-21).
+
+    The roster is restated here deliberately. Two statements of one truth are
+    a defect only when nothing happens on disagreement; here the disagreement
+    fails this test, which is the alarmed-instrument form.
+    """
+
+    EXPECTED = {
+        # per-year and one-off dollar figures
+        "initial_value", "down_payment", "cash_available", "purchase_costs",
+        "financed_purchase_costs", "invested_down_payment", "annual_income",
+        "reserve_initial_balance", "annual_amount", "base_cost",
+        "tfsa", "rrsp", "fhsa", "taxable", "balance", "annual_contribution",
+        "hbp_withdrawal",
+        # figures the user states per MONTH
+        "monthly_rent", "monthly_fee", "reset_to_monthly_rent",
+    }
+
+    def test_the_roster_is_exactly_what_the_engine_treats_as_money(self):
+        assert MONEY_LEAVES == self.EXPECTED, MONEY_LEAVES ^ self.EXPECTED
+
+    def test_every_money_leaf_is_a_real_config_key(self):
+        """A stale entry is as bad as a missing one: it would silently do
+        nothing while reading as coverage."""
+        accepted = set()
+        for keys in _SECTION_KEYS.values():
+            accepted |= set(keys)
+        # leaves that live inside list entries or nested blocks rather than a
+        # section's top level, so they never appear in _SECTION_KEYS
+        nested = {"annual_amount", "base_cost", "balance", "annual_contribution",
+                  "tfsa", "rrsp", "taxable"}
+        for leaf in MONEY_LEAVES:
+            assert leaf in accepted or leaf in nested, leaf
+
+    def test_a_monthly_figure_prints_with_its_unit(self):
+        assert format_source_value("reset_to_monthly_rent", 2_100) == "$2,100/mo"
+        assert format_source_value("monthly_rent", 1_800) == "$1,800/mo"
+
 
 class TestUncertaintyKeysMirrorSinglePath:
     """Whatever `uncertainty_keys` names must be exactly what stops

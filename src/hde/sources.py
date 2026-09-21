@@ -164,7 +164,11 @@ def raw_value(data: Dict[str, Any], dotted: str) -> Any:
 # Presentation: the config's own units
 # ---------------------------------------------------------------------------
 
-_MONTHLY_MONEY = frozenset({"monthly_rent", "monthly_fee"})
+# Dollar figures the user states PER MONTH. `reset_to_monthly_rent` joined
+# 2026-09-21: without it the read-back printed a bare `2,100` immediately
+# beside `reset_hazard=6.0%`, so the one number on the line that is money did
+# not say so while the one that is a rate did.
+_MONTHLY_MONEY = frozenset({"monthly_rent", "monthly_fee", "reset_to_monthly_rent"})
 _MONEY = frozenset({
     "initial_value", "down_payment", "cash_available", "purchase_costs",
     "financed_purchase_costs", "invested_down_payment", "annual_income",

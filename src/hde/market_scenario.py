@@ -180,15 +180,51 @@ class LoadedScenarioPrior:
     data_vintage: Dict[str, object] = field(default_factory=dict)
 
     def rows_for_dwelling(self, dwelling_type: str) -> Dict[Tuple[int, str], ScenarioPriorRow]:
+        """The rows this dwelling reads, REFUSING when the prior covers none.
+
+        A prior may declare rows per dwelling (`condo` / `house`) or once for
+        both (`all`); v0 emits `all`. An exact match wins, `all` is the
+        fallback, and a prior that offers NEITHER for the dwelling asked for
+        cannot price it.
+
+        This raises rather than returning `{}` because of what the empty dict
+        did downstream (measured 2026-09-21). A condo-only spec pointed at a
+        prior declaring only `house` rows produced a run whose Monte Carlo mean
+        was BIT-IDENTICAL to the same spec with the prior block deleted —
+        178,981.61742665715 both ways — while the report still rendered the
+        prior's name, its sha256, its ISQ edition and its thirteen source keys,
+        and a warning affirmatively told the user the demographic drift was the
+        run's only stochastic channel. The cited anchor contributed exactly
+        nothing and the answer said it contributed everything.
+
+        The geography dimension one field over has always refused this way
+        ("requested geography ... matches no row"). This makes the dwelling
+        dimension keep the same contract, which is also what the file's own
+        loader implies: it enforces a complete horizon x scenario grid per
+        DECLARED dwelling but never checks that the dwelling a run asks for is
+        among them.
+        """
         exact = {
             (h, s): row for (d, h, s), row in self.rows.items()
             if d == dwelling_type
         }
         if exact:
             return exact
-        return {  # v0 emits 'all': both dwelling options consume those rows
+        fallback = {  # v0 emits 'all': both dwelling options consume those rows
             (h, s): row for (d, h, s), row in self.rows.items() if d == "all"
         }
+        if fallback:
+            return fallback
+        declared = sorted({d for (d, _, _) in self.rows})
+        raise ScenarioPriorError(
+            f"the demographic prior declares no rows for {dwelling_type!r} and no "
+            f"'all' rows to fall back on; dwelling types present: {declared}. "
+            f"A prior that cannot price this option would leave the run with no "
+            f"drift at all while the report still cited it, so the engine refuses "
+            f"rather than reporting a figure its named source did not produce. "
+            f"Use a prior that covers {dwelling_type!r}, or drop the "
+            f"market_scenario block."
+        )
 
     # ---- provenance, rendered ONLY from what the file carries (E.1–E.3) ----
 

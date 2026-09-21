@@ -149,7 +149,9 @@ uv run hde examples/basic_config.yaml --json          # the full result document
   what a comparable unit asks and how likely the tenancy is to end, and the engine prices the
   reset. It will not guess the probability: nobody possesses that number. Leave it off and
   renting is modelled as a smooth drift for the whole horizon, which reads as safer than a
-  long tenancy actually is.
+  long tenancy actually is. When you do state it, your own rent and the market rent grow at
+  separate rates, because a protected lease renews near inflation while the market does not.
+  The market's rate defaults to the published shelter projection and the run names it.
 - **Property tax outside Laval, Montréal, Québec City, Ottawa and Toronto.** Gatineau has
   no registered source (it taxes by neighbourhood unit, so no city-wide rate exists); any
   figure used there is a labelled placeholder until you supply your bill.

@@ -104,7 +104,8 @@ class TestRequiredFlagsAreTrue:
         # (2026-09-21): a hazard with no market rent has nothing to reset to,
         # and a market rent with no hazard is a figure the engine would
         # silently ignore, so each key requires the other.
-        reset = {"reset_hazard", "reset_to_monthly_rent"}
+        reset = {"reset_hazard", "reset_to_monthly_rent",
+                 "reset_market_escalation_rate"}
         # tax.marginal_rate is the other conditional: typed, or resolved from
         # income + a QC/ON province — its sentence is its own (2026-09-05).
         assert {k for _, k in CONDITIONAL} == capital | renewal | reset | {"marginal_rate"}
@@ -116,8 +117,13 @@ class TestRequiredFlagsAreTrue:
                 assert "travel together" in SCHEMA[section][key]["required_if"]
                 assert (renewal - {key}).pop() in SCHEMA[section][key]["required_if"]
             elif key in reset:
+                # Each member names the pairing rule; the two that carry the
+                # channel also name each other. `reset_market_escalation_rate`
+                # is accepted only alongside reset_hazard but has a DEFAULT, so
+                # it names the gate rather than a partner.
                 assert "both keys or neither" in SCHEMA[section][key]["required_if"]
-                assert (reset - {key}).pop() in SCHEMA[section][key]["required_if"]
+                assert "reset_hazard" in SCHEMA[section][key]["required_if"] or \
+                    key == "reset_hazard"
             else:
                 assert "income.annual_income" in SCHEMA[section][key]["required_if"]
 

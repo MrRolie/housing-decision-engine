@@ -126,7 +126,7 @@ _HOUSE_KEYS = frozenset({
 _RENT_KEYS = frozenset({
     "monthly_rent", "rent_escalation_rate", "invested_down_payment",
     "investment_return_rate", "events", "other_recurring_costs",
-    "reset_hazard", "reset_to_monthly_rent",
+    "reset_hazard", "reset_to_monthly_rent", "reset_market_escalation_rate",
 })
 _ECONOMIC_KEYS = frozenset({"mode", "inflation_rate", "inflation_vol"})
 _INCOME_KEYS = frozenset({
@@ -342,6 +342,16 @@ def _defaults_applied(data: Dict[str, Any]) -> List[str]:
                 for sub in ("severity_mean", "severity_vol"):
                     if sub not in shock:
                         applied.append(f"{section}.price_shock.{sub}")
+        # The lease reset's MARKET growth rate, same shape: defaulted to the
+        # shelter-projection anchor only when the channel is wired. Reporting
+        # it on every run without a reset would name a figure nothing reads,
+        # and NOT reporting it when the channel is live would leave the user's
+        # answer resting on a market growth rate they never saw.
+        if section == "rent" and isinstance(block, dict):
+            hazard = block.get("reset_hazard")
+            if (isinstance(hazard, (int, float)) and not isinstance(hazard, bool)
+                    and hazard > 0 and "reset_market_escalation_rate" not in block):
+                applied.append("rent.reset_market_escalation_rate")
     # A capital the tax block derived from its shares is neither a default nor
     # a stated value (2026-09-08): the source echo carries it as derived.
     if derives_renter_capital(data) and "rent.invested_down_payment" in applied:
@@ -1770,6 +1780,11 @@ def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter,
             "engine will not guess what a comparable unit asks. State the monthly "
             "market rent, or remove reset_hazard."
         )
+    if "reset_market_escalation_rate" in data and reset_hazard <= 0:
+        raise ConfigValidationError(
+            "rent.reset_market_escalation_rate is set but rent.reset_hazard is 0, so "
+            "there is no market track for it to grow and the figure would be ignored."
+        )
     if reset_to is not None and reset_hazard <= 0:
         raise ConfigValidationError(
             "rent.reset_to_monthly_rent is set but rent.reset_hazard is 0, so the "
@@ -1797,6 +1812,9 @@ def _parse_rent(data: Dict[str, Any], years: int, conv: RateConverter,
         other_recurring_costs=other,
         reset_hazard=reset_hazard,
         reset_to_monthly_rent=None if reset_to is None else float(reset_to),
+        reset_market_escalation_rate=conv.real(
+            data, "reset_market_escalation_rate", "rent.reset_market_escalation_rate",
+            ANCHORS["rent.rent_escalation_rate"].value),
     )
 
 

@@ -121,6 +121,12 @@ _ECHO_ALIASES: Dict[str, str] = {
     "house.price_shock.severity_mean": "price_shock.severity_mean",
     "condo.price_shock.severity_vol": "price_shock.severity_vol",
     "house.price_shock.severity_vol": "price_shock.severity_vol",
+    # The market track a lease reset lands on grows at the SHELTER PROJECTION,
+    # which is the same published figure `rent.rent_escalation_rate` defaults
+    # to — so the citation is that anchor's, and the two keys cannot drift
+    # apart. They are separate KEYS because they describe different things: the
+    # tenant's own protected renewal versus the market they would re-enter.
+    "rent.reset_market_escalation_rate": "rent.rent_escalation_rate",
 }
 
 

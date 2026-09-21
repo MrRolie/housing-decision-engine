@@ -270,6 +270,7 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 | `simulation.value_growth_vol` | 0.0 | — |
 | `rent.reset_hazard` | 0.0 | — |
 | `rent.reset_to_monthly_rent` | none | — |
+| `rent.reset_market_escalation_rate` | 0.01 | FP Canada 2026 PAG |
 | `simulation.corr_inflation_house` | 0.0 | — |
 | `simulation.corr_inflation_condo` | 0.0 | — |
 | `simulation.corr_inflation_other` | 0.0 | — |

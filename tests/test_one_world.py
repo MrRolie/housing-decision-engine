@@ -341,3 +341,48 @@ def test_sharing_the_market_raises_the_condo_house_correlation():
     # far tighter than either leg, which is what a positive covariance means.
     spread_ratio = float(np.std(c - h)) / float(np.std(c))
     assert spread_ratio < 0.3, f"std(condo − house) is {spread_ratio:.2f} of std(condo)"
+
+
+def test_a_correlation_key_is_inert_without_inflation_volatility():
+    """`corr_inflation_*` is documented as "inert unless
+    economic.inflation_vol > 0". Before 2026-09-21 it was not: with no
+    inflation volatility the inflation z is the constant 0.0, so
+    `_correlated_z` returned `sqrt(1 - rho**2) * eps` — a unit normal SHRUNK by
+    that factor. A user who set 0.9 expecting a correlation got their shock
+    damped by 56% (std 1.000 -> 0.436 over 20,000 draws) and nothing said so.
+
+    Measured through the engine rather than the helper, because the helper is
+    correct in isolation: its premise is that `base_z` is a unit normal, and
+    what broke was the caller handing it a constant.
+    """
+    def spread(rho: float) -> float:
+        spec = ComparisonSpec(
+            simulation=SimulationParams(
+                years=15, discount_rate=0.03, num_sims=600, random_seed=4,
+                condo_fee_vol=0.30, corr_inflation_condo=rho),
+            economic=EconomicParams(mode="real", inflation_rate=0.02, inflation_vol=0.0),
+            condo=CondoParams(initial_value=400_000, monthly_fee=400, all_cash=True),
+        )
+        return float(np.std(np.asarray(run_monte_carlo(spec).condo.pvs)))
+
+    flat, correlated = spread(0.0), spread(0.9)
+    assert flat > 0, "the fee volatility must actually produce a spread"
+    assert correlated == pytest.approx(flat, rel=0.01), (
+        f"rho damped the shock: {correlated:,.0f} vs {flat:,.0f}"
+    )
+
+
+def test_a_correlation_key_still_bites_when_inflation_is_live():
+    """The guard on the test above: made inert unconditionally, the key would
+    stop working in the case it exists for."""
+    def spread(rho: float) -> float:
+        spec = ComparisonSpec(
+            simulation=SimulationParams(
+                years=15, discount_rate=0.03, num_sims=600, random_seed=4,
+                condo_fee_vol=0.30, corr_inflation_condo=rho),
+            economic=EconomicParams(mode="nominal", inflation_rate=0.02, inflation_vol=0.03),
+            condo=CondoParams(initial_value=400_000, monthly_fee=400, all_cash=True),
+        )
+        return float(np.std(np.asarray(run_monte_carlo(spec).condo.pvs)))
+
+    assert spread(0.9) != pytest.approx(spread(0.0), rel=0.01)

@@ -55,8 +55,14 @@ no factor.
 **B. Every cost has dispersion; the asset has none.** `condo_fee_vol`, `house_maintenance_vol`,
 `rent_escalation_vol`, `other_cost_vol`, `inflation_vol` and `investment_return_vol` all exist.
 The home's value has no dispersion parameter. `severity_vol` is the crash channel's magnitude,
-not a spread. Terminal equity is the largest single term in an owned option's total — in the
-shipped showcase, −$218,959 of $518,779 — so the biggest term is the one with no spread.
+not a spread.
+
+Stated precisely, because the loose version is wrong: in the shipped showcase's condo
+breakdown the largest term by magnitude is `downpayment_pv` at $480,000, and that figure is
+CERTAIN — it is the price the household pays at year 0. Terminal equity, −$218,959 of the
+$518,779 total, is second in magnitude and FIRST among the terms that depend on something
+nobody knows. So the engine put a spread on every cost and left the largest unknown without
+one.
 
 **C. The owner gets a tail and the renter does not.** The owned side has a discrete price-shock
 channel with a hazard. The rent side can only drift smoothly. So the model hands the owner a
@@ -178,7 +184,15 @@ resets to a stated market level.
 
 `rent.reset_hazard` (annual probability) and `rent.reset_to_monthly_rent` (the market figure it
 resets to), both opt-in, neither defaulted. When the reset fires in a path, rent steps to the
-market figure and escalates from there. Drawn inside the shared world.
+market track and escalates from there.
+
+**Drawn per path but NOT in the shared world** — this spec's first draft said "inside the
+shared world", which contradicts §2's table and is wrong for a reason worth keeping: a tenancy
+ending is a HOUSEHOLD event, not a market one. The crash is shared because one city has one
+housing market; a lease does not end because the market moved. It is drawn once per path in
+`run_monte_carlo` rather than inside the rent simulator, though, because the PV leg and the
+AFFORDABILITY leg must price the same tenancy — two draws would give one path two different
+tenancies, and the affordability report would contradict the verdict.
 
 **Why this is the honest shape.** The engine must not guess either number. A household knows
 roughly what a comparable unit asks, which makes the market rent a fact the user possesses —
@@ -193,12 +207,26 @@ the user would believe their exposure had been priced. So both raise, and each m
 what to do.
 
 **The reset lands on the market's rent for that year, not today's.** Two tracks escalate side
-by side under the same year-indexed rates — what this household pays, and what a comparable
-unit asks — and the tenant moves from the first to the second in the year the tenancy ends. A
-reset in year 8 lands on year 8's asking rent. Stepping to today's figure eight years later
-would understate the exposure, and the whole point of the channel is that the exposure is real.
-The degenerate case is the cleanest statement of the mechanism: reset to your own rent and it
-costs nothing, for any reset year.
+by side — what this household pays, and what a comparable unit asks — and the tenant moves from
+the first to the second in the year the tenancy ends. A reset in year 8 lands on year 8's
+asking rent. Stepping to today's figure eight years later would understate the exposure, and
+the whole point of the channel is that the exposure is real. The degenerate case is the
+cleanest statement of the mechanism: reset to your own rent, at the same rate, and it costs
+nothing for any reset year.
+
+**The two tracks grow at DIFFERENT rates, and the engine's own anchor is the reason.**
+`rent.rent_escalation_rate` defaults to the FP Canada shelter projection, 1.0% real, and its
+rationale records that a Québec continuing tenant renews at the TAL base rate — the three-year
+CPI average, ≈ 0.0% real — because landlords pass through only about 21% of market movements at
+renewal. So the household this channel exists for correctly states their own escalation near
+zero. Under one shared rate that would freeze the MARKET too, and the engine would price a
+reset to a rent that never grew.
+
+`rent.reset_market_escalation_rate` carries the market's own rate, defaulting to that same
+anchor, which is a cited market figure rather than the user's protected one or an invention.
+Measured on a 25-year Montréal run at 4,000 paths: sharing the rate understated the renter's
+mean present value by $23,105 and read P(condo cheapest) as 0.715 instead of 0.742. The channel
+built to show a tenant's exposure was erasing it.
 
 **The asymmetry this closes** is worth stating in the spec because it is the point: an engine
 that models a crash for the owner and nothing for the renter is not neutral between them.
@@ -209,7 +237,14 @@ that models a crash for the owner and nothing for the renter is not neutral betw
 |---|---|---|---|
 | A. one world | YES — the showcase only; six of seven examples byte-identical | none | n/a by design |
 | B. value dispersion | no, until a user sets the key | 1 | holds |
-| C. reset hazard | no, until a user sets the keys | 2 | holds |
+| C. reset hazard | no, until a user sets the keys | 3 | holds |
+
+Part C's third key is `reset_market_escalation_rate`, which has a default and so is accepted
+only alongside the other two. The reset also reaches the AFFORDABILITY channel: that report
+compares an undiscounted cost array against a per-path income, so the array has to know the
+path's reset year or it reports a ratio the verdict does not share. Without that threading it
+said `prob_rent_exceeds: 0.0` on a config whose reset pushed the burden from 23.8% to 70.3% of
+income on 998 of 1,000 paths.
 
 Part A shipped first as the inflation path alone. The crash and the population scenario landed
 with B and C once building them revealed they were still per-option.

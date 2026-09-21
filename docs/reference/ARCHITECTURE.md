@@ -463,15 +463,20 @@ path, which the report stamps "not a forecast"):
   track is multiplied by `shock(value_growth_vol)` under `shock_model`, from a `z` shared by
   every owned option, so the condo and the house move together. Applied to the same tracks as
   the crash and BEFORE it: everyday movement first, the rare drawdown on top. Default 0, which
-  leaves terminal equity — the largest single term in an owned option's total — with no
-  spread; no anchor ships, because a defensible figure needs a published Canadian price series
+  leaves terminal equity — the largest term in an owned option's total that depends on an
+  unknown — with no spread; no anchor ships, because a defensible figure needs a published Canadian price series
   with a stated window.
 - **Lease reset (only with `rent.reset_hazard`).** Each year, with probability `reset_hazard`,
   the tenancy ends; the first such year switches rent from the household's own escalating
-  track to a market track that carried `reset_to_monthly_rent` forward under the same
-  escalation, so a reset in year 8 lands on year 8's asking rent. Drawn PER OPTION, not in the
-  world: a tenancy ending is a household event, unlike the crash, which is the market. Both
-  keys are required together and neither is anchored. This is the renter's side of the owned
+  track to a market track that carried `reset_to_monthly_rent` forward at
+  `reset_market_escalation_rate`, so a reset in year 8 lands on year 8's asking rent. The two
+  tracks grow at DIFFERENT rates by design: a protected tenant renews near 0.0% real while the
+  market runs at the shelter projection, and one shared rate would freeze the market alongside
+  the lease. Drawn once per path in `run_monte_carlo` — not in the world, because a tenancy
+  ending is a household event rather than a market one, but not inside the rent simulator
+  either, because the affordability channel has to price the SAME tenancy on that path. The
+  hazard and the market rent are required together and neither is anchored; the market's growth
+  rate defaults to the `rent.rent_escalation_rate` anchor. This is the renter's side of the owned
   options' tail — without it the model gives the owner a crash and the renter nothing.
 
 ### Affordability — `affordability` (deterministic) and `affordability_mc`

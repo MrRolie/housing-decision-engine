@@ -59,9 +59,10 @@ the other two.
 **a. Every cost has dispersion; the asset has none.** `condo_fee_vol`,
 `house_maintenance_vol`, `rent_escalation_vol`, `other_cost_vol`, `inflation_vol`,
 `investment_return_vol` all exist. The home's value has no dispersion parameter at all — the
-crash channel is a jump, not a spread. Meanwhile terminal equity is the largest single term in
-an owned option's total: -$218,959 of $518,779 in the shipped showcase. The biggest term is
-the one with no spread, and it feeds the decisiveness rule.
+crash channel is a jump, not a spread. Meanwhile terminal equity is the largest UNCERTAIN term
+in an owned option's total: -$218,959 of $518,779 in the shipped showcase, behind only the
+$480,000 paid at year 0, which is certain. The biggest unknown is the one with no spread, and
+it feeds the decisiveness rule.
 
 **b. The three options are not compared in the same future.** Within one iteration, the condo
 draws its own inflation path and the house draws a separate, unrelated one; rent draws none at
@@ -195,6 +196,13 @@ hosted. Parked deliberately, not forgotten.
   says `source: none`.
 - Whether the 200-word quick-sense cap should rise, now that disclosures are ranked and
   never dropped.
+- The per-year market block is written twice, once in the condo simulator and once in the
+  house one. They are not identical — the house carries a second value track and a year-1
+  maintenance lag — so extracting them may cost more clarity than it saves. Worth one attempt
+  and a look at the result.
+- Under `shock_model: normal` a shock multiplier is clipped at zero, so a large volatility can
+  drive a value track to exactly $0 where it stays for the rest of the run. The schema note
+  now says so; whether the engine should refuse the combination instead is open.
 
 ## 11. Measure the engine again
 
@@ -223,20 +231,43 @@ itself against a committed figure.
 *Why now:* it is the cheapest of the open items and it is what makes items 3 and 4 defensible
 later. A variance decomposition nobody can regress is a study, not a product feature.
 
-## 13. Price and income still move independently
+## 13. What still moves independently, and shouldn't
 
-**open** · needs a calibrated figure, not a default
+**open** · needs calibrated figures, not defaults
 
-A leveraged owner's bad income year cannot coincide with their bad price year: the crash draw
-and the income channel share nothing. Sharing a draw was free for the market channels because
-a crash IS the market, and the coupling needed no parameter. This one is different — it needs
-an actual correlation between house prices and household income, which needs calibrating
-against published series, which means it must not ship as an invented rho.
+Three draws remain unrelated to everything else on their path. Sharing a draw was free for the
+market channels because a crash IS the market and the coupling needed no parameter. Each of
+these needs an actual number, so none may ship as an invented rho.
 
-*Why now:* it is the last place where the phrase "the same future" is not yet literally true,
-and item 4's variance decomposition will be read as though it were. Rank it below 12 because
-it changes a number rather than a claim, and below 6 because the calibration is an anchor
-problem first.
+- **Price and income.** A leveraged owner's bad income year cannot coincide with their bad
+  price year: the crash draw and the income channel share nothing.
+- **The renter's portfolio and the economy.** `investment_return_vol` shocks the renter's
+  capital from its own draw, so the owner-vs-renter axis is still in the zero-covariance
+  regime that Part A removed from the owner-vs-owner axis. A 60/40 portfolio and a housing
+  market do not move independently, and the comparison the verdict rests on is between those
+  two sides.
+- **The demographic prior and rent.** The prior moves the owned options' value track and
+  reaches the rent side not at all, although population pressure is a rent story as much as a
+  price one. Whether that is a modelling gap or a disclosure gap is the first question.
+
+*Why now:* these are the last places where "the same future" is not yet literally true, and
+item 4's variance decomposition will be read as though it were. Below 12 because they change
+numbers rather than claims, and below 6 because each calibration is an anchor problem first.
+
+## 14. One key, three meanings
+
+**open** · cheap, and it makes a schema note true
+
+`simulation.other_cost_vol` is applied three different ways: per year per cost on the condo and
+house paths, and once per path as a level shock on the rent path. One key, three semantics, and
+the schema note describes only the first — so it is false for the rent side, which is the side
+a reader checking the renter's exposure would look at.
+
+Decide which meaning is right, make the key mean it everywhere, and if the rent side genuinely
+needs a level shock rather than an annual one, that is a second key with its own name.
+
+*Why now:* it is a false sentence in a surface the honesty contract governs, and the fix is an
+afternoon. Ranked here rather than higher because no verdict has been shown to turn on it.
 
 ---
 
