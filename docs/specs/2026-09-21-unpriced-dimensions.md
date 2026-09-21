@@ -277,9 +277,15 @@ floor leg binds only below a 3.25% contract rate. The spread lands on the as-quo
 `mortgage_rate_compounding` then converts, so it must never be added to an effective-annual
 figure.
 
-**What it buys on the verdict line:** the common case becomes ONE deterministic load carrying a
-citation instead of ninety loads carrying none. The threshold solve of §2 remains the primary
-form; this is the cheap cited point beside it.
+**Where it must NOT go: the marker row beside a solved threshold.** The markers flanking a
+threshold are all rates that were or could be charged, so a reader scans the row on one axis.
+A qualifying rate is a TEST threshold, not a price, and a fourth figure in a row of prices gets
+read as a price whatever the label says. The posted anchor passes that test and this does not.
+
+**Where it goes instead:** inside the affordability clause. The break-even read-back already
+attaches one to every threshold entry (`_affordability_at`, `quoted_points`,
+`_affordability_clause`, all at HEAD), and there the sentence and the quantity agree. So it can
+ride the renewal line after all, in the clause rather than the row.
 
 **What it buys on the affordability line, which is better:** there the citation is exactly on
 label, because the affordability channel already runs a cost-over-income test and the
