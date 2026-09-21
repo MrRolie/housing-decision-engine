@@ -48,10 +48,13 @@ against zero.
 
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a
-first-class output, not a one-off study.
+first-class output, not a one-off study, and state the conditions under which the verdict
+reverses.
 
 *Why now:* this is the question the product exists to answer, and the finding a reader
-would cite.
+would cite. It is also the first thing the engine will have said that nobody else is
+saying: the rent-versus-buy literature is shaped by a 30-year fixed rate, under which
+renewal risk does not exist.
 
 ## 4. Anchors that survive their author
 
