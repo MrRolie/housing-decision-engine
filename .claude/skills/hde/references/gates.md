@@ -165,9 +165,17 @@ report.
 
 Every answer names what was left out (renewal risk, a financed insurance
 premium, rent control, taxes on the investment return, a probabilistic exit)
-with the direction of bias. With a mortgage, renewal risk is always on the
-list (the quoted rate is held for the whole amortization — biases toward
-buying when rates are rising), and so is any default the engine warned on (a
+with the direction of bias. With a mortgage and NO renewal path stated,
+renewal risk is on the list — the engine warns it itself (the quoted rate is
+held for the whole amortization, which biases toward buying when rates are
+rising), and the warning is the wording to carry. Once the config states
+`mortgage_renewal_years` + `mortgage_renewal_rates` the risk is PRICED and
+that sentence becomes false: name instead the one path the run holds, with no
+distribution around it, and read back the engine's `renewals:` line. Read that
+line before writing either sentence — it says how many renewals fell inside
+the horizon, and a renewal past the horizon is priced by nothing, which the
+engine warns about separately. Any default the engine warned on stays on the
+list too (a
 1% real rent escalation defaulted for a Québec continuing lease biases toward
 buying); "no chance you move early" biases toward buying too (an early exit
 pays the selling cost sooner); the renter's investment return is shown

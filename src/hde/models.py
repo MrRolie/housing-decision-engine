@@ -179,6 +179,19 @@ class CondoParams:
     first_time_buyer: bool = False
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
+    # --- The renewal ladder (slice 1, docs/specs/2026-09-03-mortgage-renewal-risk.md) ---
+    # The RATE contract's length in years — the Canadian "term", not
+    # `mortgage_term_years`, which is the amortization. None keeps today's
+    # behaviour: one rate held for the whole amortization, and a warning says so.
+    mortgage_renewal_years: Optional[int] = None
+    # The EFFECTIVE annual rate charged at each renewal, in order. The user's
+    # own figures: there is no anchor and no forward curve behind them, and a
+    # short list carries its LAST rate forward.
+    mortgage_renewal_rates: Optional[List[float]] = None
+    # Those rates as the config quoted them, before the compounding conversion
+    # `mortgage_rate` gets — a renewal rate is the same class of contract rate,
+    # so it is converted the same way and the read-back shows both figures.
+    mortgage_renewal_rates_quoted: Optional[List[float]] = None
 
 
 @dataclass
@@ -246,6 +259,19 @@ class HouseParams:
     first_time_buyer: bool = False
     # --- S4b Slot 3: price-drawdown channel (default None = off) ---
     price_shock: Optional[PriceShockParams] = None
+    # --- The renewal ladder (slice 1, docs/specs/2026-09-03-mortgage-renewal-risk.md) ---
+    # The RATE contract's length in years — the Canadian "term", not
+    # `mortgage_term_years`, which is the amortization. None keeps today's
+    # behaviour: one rate held for the whole amortization, and a warning says so.
+    mortgage_renewal_years: Optional[int] = None
+    # The EFFECTIVE annual rate charged at each renewal, in order. The user's
+    # own figures: there is no anchor and no forward curve behind them, and a
+    # short list carries its LAST rate forward.
+    mortgage_renewal_rates: Optional[List[float]] = None
+    # Those rates as the config quoted them, before the compounding conversion
+    # `mortgage_rate` gets — a renewal rate is the same class of contract rate,
+    # so it is converted the same way and the read-back shows both figures.
+    mortgage_renewal_rates_quoted: Optional[List[float]] = None
 
 
 @dataclass

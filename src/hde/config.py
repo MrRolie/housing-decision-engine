@@ -58,7 +58,9 @@ from .tax_treatment import (
     resolve as resolve_tax,
     tfsa_room_warning,
 )
-from .deterministic import renter_terminal_for
+from .deterministic import (
+    mortgage_leg_pv, renewals_priced_inside, renter_terminal_for,
+)
 from .models import (
     ComparisonDeterministicResult,
     compute_verdict,
@@ -106,7 +108,7 @@ _CONDO_KEYS = frozenset({
     "reserve_growth_rate", "initial_value", "purchase_costs", "purchase_costs_rate",
     "financed_purchase_costs", "value_growth_rate", "property_tax_rate",
     "down_payment", "cash_available", "mortgage_rate", "mortgage_rate_compounding",
-    "mortgage_term_years", "all_cash",
+    "mortgage_term_years", "mortgage_renewal_years", "mortgage_renewal_rates", "all_cash",
     "selling_cost_rate", "price_shock", "mortgage_insurance", "province",
     "land_transfer_tax", "municipality", "first_time_buyer",
 })
@@ -114,7 +116,8 @@ _HOUSE_KEYS = frozenset({
     "initial_value", "purchase_costs", "purchase_costs_rate", "financed_purchase_costs",
     "value_growth_rate", "annual_maintenance_rate", "property_tax_rate", "events",
     "other_recurring_costs", "maintenance_curve", "down_payment", "cash_available",
-    "mortgage_rate", "mortgage_rate_compounding", "mortgage_term_years", "all_cash",
+    "mortgage_rate", "mortgage_rate_compounding", "mortgage_term_years",
+    "mortgage_renewal_years", "mortgage_renewal_rates", "all_cash",
     "selling_cost_rate",
     "price_shock", "mortgage_insurance", "province",
     "land_transfer_tax", "municipality", "first_time_buyer",
@@ -392,8 +395,15 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 continue
             loan = opt.initial_value - opt.down_payment + opt.financed_purchase_costs
             pay = mortgage_payment(loan, opt.mortgage_rate, opt.mortgage_term_years)
+            # With a renewal PRICED inside the horizon the payment steps, so
+            # "the level payment" would name a figure the run does not hold: it
+            # is the year-1 one. A ladder the horizon never reaches holds one
+            # payment like any single-rate mortgage (2026-09-21).
+            quoted_payment = ("the year-1 payment"
+                              if renewals_priced_inside(opt, spec.simulation.years)
+                              else "the level payment")
             warns.append(
-                f"affordability: {name} ratios use the level payment at the REAL mortgage_rate "
+                f"affordability: {name} ratios use {quoted_payment} at the REAL mortgage_rate "
                 f"{opt.mortgage_rate:.2%} (${pay:,.0f}/yr); the lender collects the payment at the "
                 f"quoted NOMINAL rate — higher whenever the rate entered here is a real rate — and can "
                 f"breach the threshold where this does not; run mode: nominal with the quoted rate "
@@ -744,6 +754,119 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
             f"({school.value:.5%} of assessed value) on top of the municipal rate; add it "
             f"or list it as not modelled (toward buying)"
         )
+
+    # Renewal risk (slice 1, docs/specs/2026-09-03-mortgage-renewal-risk.md §6).
+    # The engine priced one rate for a whole amortization; a Canadian fixed term
+    # is at most five years, so a 25-year amortization resets four times and the
+    # reset is the largest risk the buy side carries.
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if (opt is None or opt.all_cash or opt.mortgage_rate is None
+                or opt.mortgage_term_years is None):
+            continue
+        if opt.mortgage_renewal_years is None:
+            if opt.mortgage_term_years <= 5:
+                # A five-year term covers an amortization this short outright,
+                # so "the rate resets at every renewal" would name a reset this
+                # mortgage never has — and the remedy it prescribes would then
+                # be refused as inert (2026-09-21).
+                # At a one-year amortization no shorter term exists, so the
+                # remedy below would be unsatisfiable: say the mortgage cannot
+                # renew instead of prescribing a term the loader refuses.
+                remedy = (
+                    f"set mortgage_renewal_years (under {opt.mortgage_term_years}) + "
+                    f"mortgage_renewal_rates to price a renewal path (the engine anchors "
+                    f"no renewal rate — the path is yours to state)"
+                    if opt.mortgage_term_years >= 2 else
+                    "no term shorter than a year exists, so this mortgage cannot renew "
+                    "at all and there is nothing here to price"
+                )
+                warns.append(
+                    f"{name}: renewal risk is not modelled — mortgage_rate "
+                    f"{opt.mortgage_rate:.2%} is held for the whole "
+                    f"{opt.mortgage_term_years}-year amortization; a 5-year Canadian fixed "
+                    f"term covers it with no renewal at all, but any shorter term resets "
+                    f"the rate before the loan is paid off; {remedy}"
+                )
+            else:
+                warns.append(
+                    f"{name}: renewal risk is not modelled — mortgage_rate "
+                    f"{opt.mortgage_rate:.2%} is held for the whole "
+                    f"{opt.mortgage_term_years}-year amortization, but a Canadian fixed term "
+                    f"runs at most 5 years and the rate resets at every renewal; set "
+                    f"mortgage_renewal_years + mortgage_renewal_rates to price a renewal path "
+                    f"(the engine anchors no renewal rate — the path is yours to state)"
+                )
+            continue
+        if opt.mortgage_renewal_years >= opt.mortgage_term_years:
+            warns.append(
+                f"{name}.mortgage_renewal_years={opt.mortgage_renewal_years} is at or past "
+                f"the {opt.mortgage_term_years}-year amortization — the mortgage never "
+                f"renews inside its own life, so mortgage_renewal_rates are inert and the "
+                f"run prices mortgage_rate {opt.mortgage_rate:.2%} for the whole term"
+            )
+            continue
+        horizon = spec.simulation.years
+        if renewals_priced_inside(opt, horizon) == 0:
+            # `_financing_pv` stops at the first segment past the horizon, so a
+            # ladder that starts after it reaches no PV, no balance and no
+            # verdict. Declaring the keys must not buy silence from the
+            # not-modelled warning above (2026-09-21).
+            first = opt.mortgage_renewal_years + 1
+            warns.append(
+                f"{name}: the stated renewal ladder prices nothing in this run — the "
+                f"first renewal falls at year {first}, past the {horizon}-year horizon, "
+                f"so the verdict holds mortgage_rate {opt.mortgage_rate:.2%} for its whole "
+                f"length and renewal risk is still not modelled (toward buying while rates "
+                f"rise); run at least {first} years to price the renewal path"
+            )
+            continue
+        # The list means one rate per RENEWAL: the engine prepends mortgage_rate
+        # for the opening term, so entry 1 prices the FIRST RENEWAL. Read as one
+        # rate per five-year BLOCK — the other natural reading of "a list in
+        # order" — the same figures would mean the whole path one term earlier.
+        # Where the two readings give DIFFERENT counts the loader refuses; where
+        # they coincide (a horizon that is a whole number of terms and shorter
+        # than the amortization) nothing catches it, and the tell is that entry 1
+        # repeats mortgage_rate, so the first renewal steps by nothing.
+        #
+        # Deliberately reads the DECLARED list, not the priced schedule: the
+        # subject IS the gap between what was typed and how it was read. The
+        # engine cannot tell the readings apart, so it discloses rather than
+        # resolves — and never refuses, because holding the contract rate
+        # through the first renewal is a real thing to model (2026-09-21).
+        rates = opt.mortgage_renewal_rates or []
+        if rates and abs(rates[0] - opt.mortgage_rate) <= 1e-12:
+            first_renewal = opt.mortgage_renewal_years + 1
+            warns.append(
+                f"{name}.mortgage_renewal_rates opens at {rates[0]:.2%}, the same figure as "
+                f"mortgage_rate: the engine reads this list as ONE RATE PER RENEWAL, so that "
+                f"entry prices year {first_renewal} and the opening term runs at mortgage_rate "
+                f"on its own — the first renewal therefore steps by nothing. Read as one rate "
+                f"per {opt.mortgage_renewal_years}-year BLOCK, the other natural reading, the "
+                f"same list would put that figure on year 1 and every later one a term earlier "
+                f"than it lands here. Both are legitimate and the engine cannot tell them "
+                f"apart: check the '{name} renewals:' line against the path you meant"
+            )
+        if opt.down_payment is None:
+            continue
+        # The bias this warning exists to name is an economic one, so it is
+        # measured on what the run PRICED, not on the declared rate list: a
+        # rate past the last renewal, or past the horizon, reaches no payment,
+        # and a short list's last entry carries forward over renewals nobody
+        # typed. Reading the list let either silence the warning (2026-09-21).
+        dr = spec.simulation.discount_rate
+        laddered_pv = mortgage_leg_pv(opt, dr, horizon)
+        flat_pv = mortgage_leg_pv(opt, dr, horizon, laddered=False)
+        cheaper = round(flat_pv - laddered_pv)
+        if cheaper >= 1:
+            warns.append(
+                f"{name}: the stated renewal path prices the mortgage ${cheaper:,.0f} "
+                f"below its contract rate mortgage_rate {opt.mortgage_rate:.2%} held "
+                f"throughout (PV ${laddered_pv:,.0f} against ${flat_pv:,.0f} over the "
+                f"{horizon}-year horizon) — a renewal path that costs less than the "
+                f"contract biases the verdict toward buying; state the renewal path you "
+                f"want stressed, not the one you hope for"
+            )
 
     # The POSTED rate is a list price (2026-09-04): the registry's own entry
     # says contracted rates run lower. A mortgage_rate that IS the posted
@@ -1328,6 +1451,82 @@ def _mortgage_rate(data: Dict[str, Any], name: str) -> Tuple[Optional[float], st
     return quoted, compounding, effective_mortgage_rate(quoted, compounding)
 
 
+def _mortgage_renewal(
+    data: Dict[str, Any], name: str, compounding: str,
+) -> Tuple[Optional[int], Optional[List[float]], Optional[List[float]]]:
+    """(the rate contract's length, the EFFECTIVE annual rate per renewal, the
+    rates as quoted) for one owned option — the renewal ladder, slice 1.
+
+    A scalar applies to every renewal; a list is read in order and its last
+    entry carries forward. Both keys travel together: the engine has no
+    defensible renewal rate of its own and will not invent one, and a rate with
+    no term has nothing to apply over — either alone is refused.
+
+    A renewal rate is a quoted contract rate of `mortgage_rate`'s class (spec
+    §5), so it takes the SAME compounding conversion and never meets inflation:
+    the same typed figure in the two fields means the same rate.
+    """
+    has_years = "mortgage_renewal_years" in data
+    has_rates = "mortgage_renewal_rates" in data
+    if not has_years and not has_rates:
+        return None, None, None
+    if has_years and not has_rates:
+        raise ConfigValidationError(
+            f"{name}.mortgage_renewal_years={data['mortgage_renewal_years']} is set without "
+            f"{name}.mortgage_renewal_rates — no renewal rate is anchored or forecast by this "
+            f"engine, so state the rate you want priced at renewal (one figure for every "
+            f"renewal, or a list in order)")
+    if has_rates and not has_years:
+        raise ConfigValidationError(
+            f"{name}.mortgage_renewal_rates is set without {name}.mortgage_renewal_years — "
+            f"the rates have no term to apply over; state the RATE contract's length in years "
+            f"(a Canadian fixed term is at most 5), not the amortization "
+            f"({name}.mortgage_term_years)")
+
+    years = int(data["mortgage_renewal_years"])
+    if years <= 0:
+        raise ConfigValidationError(
+            f"{name}.mortgage_renewal_years must be > 0, got {years}")
+
+    raw = data["mortgage_renewal_rates"]
+    if isinstance(raw, (list, tuple)):
+        quoted = [float(r) for r in raw]
+    else:
+        quoted = [float(raw)]
+    if not quoted:
+        raise ConfigValidationError(
+            f"{name}.mortgage_renewal_rates is an empty list — state at least one rate "
+            f"(one figure applies to every renewal), or remove both renewal keys")
+    for rate in quoted:
+        if rate < 0:
+            raise ConfigValidationError(
+                f"{name}.mortgage_renewal_rates must be >= 0, got {rate}")
+
+    # More rates than the mortgage has renewals: the schedule reads them by
+    # index and simply stops, so the surplus entries would price NOTHING and
+    # nothing downstream would say so. A stated figure the run discards in
+    # silence is the honesty contract running backwards, and the engine cannot
+    # tell which reading the user meant — one rate per renewal, or one per
+    # five-year block counting the opening term — so it refuses (2026-09-21).
+    amortization = data.get("mortgage_term_years")
+    if amortization is not None:
+        amortization = int(amortization)
+        if amortization > 0:
+            segments = -(-amortization // years)          # ceil, as the schedule counts
+            renewals = segments - 1
+            if renewals >= 1 and len(quoted) > renewals:
+                dropped = ", ".join(f"{r:.2%}" for r in quoted[renewals:])
+                raise ConfigValidationError(
+                    f"{name}.mortgage_renewal_rates has {len(quoted)} rates but the "
+                    f"{amortization}-year amortization renews {renewals} times on a "
+                    f"{years}-year term — {dropped} would be priced nowhere. The FIRST "
+                    f"entry is the rate at the FIRST RENEWAL (year {years + 1}); the "
+                    f"opening term runs at {name}.mortgage_rate and is not in this list. "
+                    f"State one rate per renewal ({renewals}), a shorter list whose last "
+                    f"entry carries forward, or one figure for every renewal")
+    return years, [effective_mortgage_rate(r, compounding) for r in quoted], quoted
+
+
 def _day_one_additions(data: Dict[str, Any], name: str, tax: Optional[TaxParams]) -> Tuple[bool, float]:
     """(first_time_buyer, what the `tax:` block adds to this option's day-one
     cash — the FHSA refunds and the HBP withdrawal, for a first-time buyer)."""
@@ -1358,6 +1557,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
     value_growth_rate = conv.real(condo_data, "value_growth_rate", "condo.value_growth_rate",
                                   ANCHORS["condo.value_growth_rate"].value)
     mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(condo_data, "condo")
+    (renewal_years, renewal_rates,
+     renewal_rates_quoted) = _mortgage_renewal(condo_data, "condo", mortgage_rate_compounding)
     property_tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -1396,6 +1597,9 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
         mortgage_rate=mortgage_rate, mortgage_rate_quoted=mortgage_rate_quoted,
         mortgage_rate_compounding=mortgage_rate_compounding,
         mortgage_term_years=(None if "mortgage_term_years" not in condo_data else int(condo_data["mortgage_term_years"])),
+        mortgage_renewal_years=renewal_years,
+        mortgage_renewal_rates=renewal_rates,
+        mortgage_renewal_rates_quoted=renewal_rates_quoted,
         all_cash=_parse_bool(condo_data.get("all_cash", False), "condo.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(condo_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
@@ -1443,6 +1647,8 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
     value_growth_rate = conv.real(house_data, "value_growth_rate", "house.value_growth_rate",
                                   ANCHORS["house.value_growth_rate"].value)
     mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(house_data, "house")
+    (renewal_years, renewal_rates,
+     renewal_rates_quoted) = _mortgage_renewal(house_data, "house", mortgage_rate_compounding)
     property_tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -1473,6 +1679,9 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
         mortgage_rate=mortgage_rate, mortgage_rate_quoted=mortgage_rate_quoted,
         mortgage_rate_compounding=mortgage_rate_compounding,
         mortgage_term_years=(None if "mortgage_term_years" not in house_data else int(house_data["mortgage_term_years"])),
+        mortgage_renewal_years=renewal_years,
+        mortgage_renewal_rates=renewal_rates,
+        mortgage_renewal_rates_quoted=renewal_rates_quoted,
         all_cash=_parse_bool(house_data.get("all_cash", False), "house.all_cash"),
         # WOWA 2026: seller-side commissions ≈ 4–5% + notary ⇒ 5% all-in
         selling_cost_rate=float(house_data.get("selling_cost_rate", ANCHORS["condo.house.selling_cost_rate"].value)),
@@ -1790,6 +1999,21 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
                 warnings.append(_capital_bound_message(name, opt))
             elif opt.mortgage_rate < 0 or opt.mortgage_term_years <= 0:
                 warnings.append(f"{name}: mortgage_rate >= 0 and mortgage_term_years > 0 required")
+        # The renewal ladder needs something to renew: an all-cash purchase has
+        # no rate contract at all, and a half-declared mortgage block has no
+        # opening balance to re-amortize.
+        if opt.mortgage_renewal_years is not None:
+            if opt.all_cash:
+                warnings.append(
+                    f"{name}: mortgage_renewal_years={opt.mortgage_renewal_years} is set with "
+                    f"all_cash: true — an all-cash purchase has no rate contract to renew; "
+                    f"declare exactly one")
+            elif (opt.down_payment is None or opt.mortgage_rate is None
+                  or opt.mortgage_term_years is None):
+                warnings.append(
+                    f"{name}: mortgage_renewal_years={opt.mortgage_renewal_years} needs a "
+                    f"mortgage block to renew (down_payment OR cash_available, plus "
+                    f"mortgage_rate + mortgage_term_years)")
         if not (0 <= opt.selling_cost_rate < 1):
             warnings.append(f"{name}: selling_cost_rate must be in [0, 1)")
 

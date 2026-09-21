@@ -43,7 +43,9 @@ from .sources import SourceEcho, source_echo_to_dict, source_lines
 from .tax_treatment import (
     fhsa_clause, financing_additions, hbp_line, tax_line, tax_summary_line, tax_to_dict,
 )
-from .deterministic import hbp_leg_for, renter_terminal_for
+from .deterministic import (
+    hbp_leg_for, renewal_segments_for, renewals_priced_inside, renter_terminal_for,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +407,113 @@ def mortgage_rate_clauses(spec: ComparisonSpec) -> List[str]:
     return clauses
 
 
+def renewal_line(name: str, opt, spec: ComparisonSpec) -> Optional[str]:
+    """The `{name} renewals:` assumptions line: the rate contract's length, a
+    row per segment (start year, the rate the payment uses, the payment), what
+    the horizon actually reached, and the first PRICED renewal's step in
+    dollars and percent.
+
+    A segment starting past the analysis horizon reaches no payment, no balance
+    and no PV — `_financing_pv` stops there — so it is marked as not priced
+    rather than printed as a fact of this run (2026-09-21).
+
+    The engine anchors no renewal rate and forecasts none, so the line closes
+    by naming WHOSE scenario the rates are, from the source echo: a figure the
+    assistant chose must never be read back to the user as their own.
+    """
+    segments = renewal_segments_for(opt)
+    if not segments:
+        return None
+    horizon = spec.simulation.years
+    renewals = len(segments) - 1
+    priced = sum(1 for s in segments[1:] if s.start_year <= horizon)
+    header = (
+        f"{name} renewals: {opt.mortgage_renewal_years}-year term, "
+        f"{renewals} renewal{'' if renewals == 1 else 's'} over the "
+        f"{opt.mortgage_term_years}-year amortization"
+    )
+    if priced < renewals:
+        header += f", {priced} of {renewals} inside the {horizon}-year horizon"
+    parts = [header]
+    for s in segments:
+        row = f"year {s.start_year} {s.rate:.3%} ${s.payment:,.0f}/yr"
+        if s.start_year > horizon:
+            row += " (not priced — past the horizon)"
+        parts.append(row)
+    if priced:
+        first, second = segments[0], segments[1]
+        step = second.payment - first.payment
+        pct = step / first.payment if first.payment else 0.0
+        sign = "+" if step >= 0 else "-"
+        parts.append(
+            f"first renewal at year {second.start_year}: {sign}${abs(step):,.0f}/yr "
+            f"({pct:+.1%})")
+    elif renewals:
+        parts.append(
+            f"no renewal falls inside the {horizon}-year horizon — this run prices "
+            f"mortgage_rate {segments[0].rate:.3%} throughout")
+    # The conversion, when there was one: the same compounding `mortgage_rate`
+    # gets, so the same typed figure means the same rate in both fields.
+    quoted = opt.mortgage_renewal_rates_quoted or []
+    if any(abs(q - e) > 1e-12
+           for q, e in zip(quoted, opt.mortgage_renewal_rates or [])):
+        parts.append(
+            "rates as quoted (semi-annual) "
+            + ", ".join(f"{q:.2%}" for q in quoted) + " = "
+            + ", ".join(f"{e:.3%}" for e in opt.mortgage_renewal_rates)
+            + " effective annual")
+    parts.append(renewal_source_clause(name, spec))
+    return " · ".join(parts)
+
+
+def renewal_source_clause(name: str, spec: ComparisonSpec) -> str:
+    """Whose renewal path this is, from the source echo — never a claim the
+    echo contradicts two lines away (2026-09-21)."""
+    tail = "not a forecast — the engine anchors no renewal rate"
+    echo = spec.sources
+    source = echo.classify(f"{name}.mortgage_renewal_rates") if echo is not None else None
+    if source == "user":
+        return f"your stated scenario, {tail}"
+    if source == "assistant":
+        return f"the ASSISTANT's stated scenario and not yours, {tail}"
+    return (f"a stated scenario, {tail}, and the read-back cannot tell whose "
+            f"figure it is")
+
+
+def mortgage_renewals_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
+    """`assumptions.mortgage_renewals`: the ladder each owned option declared,
+    segment by segment, from the engine's own schedule. Empty without one.
+
+    `rates`/`rates_quoted` are the CONFIG's own echo — the renewal rates as
+    typed, without the in-force contract rate `segments[0]` runs at — so the
+    two lists are offset by one and a consumer reads the priced path off
+    `segments`. Each segment carries `priced`: False once its `start_year`
+    passes the analysis horizon, where the run values nothing (2026-09-21).
+    """
+    out: List[Dict[str, Any]] = []
+    horizon = spec.simulation.years
+    for name in _OWNED:
+        opt = getattr(spec, name)
+        segments = renewal_segments_for(opt) if opt is not None else None
+        if not segments:
+            continue
+        out.append({
+            "option": name,
+            "renewal_years": opt.mortgage_renewal_years,
+            "rates_quoted": opt.mortgage_renewal_rates_quoted,
+            "rates": opt.mortgage_renewal_rates,
+            "compounding": opt.mortgage_rate_compounding,
+            "renewals_priced": sum(1 for s in segments[1:] if s.start_year <= horizon),
+            "segments": [
+                {"start_year": s.start_year, "end_year": s.end_year, "rate": s.rate,
+                 "payment": s.payment, "opening_balance": s.opening_balance,
+                 "priced": s.start_year <= horizon}
+                for s in segments
+            ],
+        })
+    return out
+
+
 def mortgage_rates_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
     """`assumptions.mortgage_rates`: one `{option, quoted, compounding,
     effective}` per owned option whose `mortgage_rate` the config typed."""
@@ -659,6 +768,14 @@ def format_assumptions(
             + (f" · {fhsa_clause(spec.tax)}"
                if spec.tax is not None and spec.tax.fhsa is not None and opt.first_time_buyer else "")
         )
+    # The renewal ladder, one line per owned option that declared one: the
+    # payment steps the engine priced, from the schedule it priced them with.
+    for name, opt in (("condo", spec.condo), ("house", spec.house)):
+        if opt is None:
+            continue
+        line = renewal_line(name, opt, spec)
+        if line is not None:
+            lines.append(line)
     # The Home Buyers' Plan repayment leg, one line per first-time purchase
     # (2026-09-05): the withdrawal, the schedule, the RRSP it rebuilds, the net.
     for name in _OWNED:
@@ -700,11 +817,22 @@ def format_assumptions(
             spec.tax, terminal, r_inv, spec.simulation.years, spec.simulation.discount_rate,
             spec.economic.mode, pi, owned=any(o is not None for o in (spec.condo, spec.house)),
         ))
+    # "level annual payment" is true of a single-rate mortgage and false beside
+    # a `renewals:` line quoting five different payments; the clause is added
+    # only when a ladder priced the run.
+    # Gated on a renewal this run PRICED, not on the keys being present: an
+    # inert ladder (one segment) and one whose first renewal falls past the
+    # horizon both hold a level payment, and the clause would contradict the
+    # `renewals:` line right above it (2026-09-21).
+    laddered = any(renewals_priced_inside(opt, spec.simulation.years)
+                   for opt in (spec.condo, spec.house) if opt is not None)
+    renewal_clause = (", re-solved over the remaining amortization at each renewal"
+                      if laddered else "")
     lines.append(
         "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and "
         "other costs escalate before year 1, maintenance from year 1 · mortgage = level "
-        "annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 "
-        "(docs/reference/ARCHITECTURE.md figure glossary)"
+        f"annual payment at an effective annual rate{renewal_clause} · $/mo equivalent at "
+        "(1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)"
     )
     if prior is not None:
         constants_as_of = prior.data_vintage.get("constants_as_of")
@@ -796,6 +924,9 @@ def assumptions_to_dict(
         "converted_rates": converted_rates_to_list(spec),
         # A typed mortgage rate, as quoted and as the payment uses it (2026-09-08).
         "mortgage_rates": mortgage_rates_to_list(spec),
+        # The renewal ladder each owned option declared (slice 1, 2026-09-21):
+        # the user's own scenario, with no anchor behind it.
+        "mortgage_renewals": mortgage_renewals_to_list(spec),
         "lines": format_assumptions(spec, prior, raw),
         "defaults_applied": entries,
         # Jurisdiction figures the USER supplied that a published source agrees
@@ -1121,6 +1252,11 @@ def _read_back_sections(
                  if spec.economic.mode == "nominal" else [], []),
         ("decisiveness", decisive, decisive),
         ("financing", _option_lines(echo, "financing:"), []),
+        # The renewal ladder (slice 1, 2026-09-21): a laddered run's payments
+        # step, and the path that stepped them is a SCENARIO the user stated,
+        # not a figure the engine anchored. An answer that carries the verdict
+        # without it never names what produced the verdict.
+        ("renewals", _option_lines(echo, "renewals:"), []),
         ("purchase costs", _option_lines(echo, "purchase costs:"), []),
         # The tax treatment of the two sides' money (2026-09-05): the `tax:`
         # line and each first-time purchase's `hbp:` line — the rate the run

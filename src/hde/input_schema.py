@@ -132,6 +132,35 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                              "or 'effective_annual' (the figure is already the effective "
                                              "annual rate and is used as typed)"),
         "mortgage_term_years": (False, "amortization term in years","owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_renewal_years": (False, "the RATE contract's length in years — the "
+                                          "Canadian \"term\", at most 5 on a fixed rate, NOT "
+                                          "mortgage_term_years (the amortization). With it the "
+                                          "engine re-amortizes the remaining balance over the "
+                                          "REMAINING amortization at each renewal: the payment "
+                                          "steps, the affordability ratio steps with it, and the "
+                                          "read-back prints the schedule. Omitted, one rate is "
+                                          "held for the whole amortization and a warning says "
+                                          "renewal risk is not modelled",
+                                          "requires mortgage_renewal_rates — the two renewal keys "
+                                          "travel together"),
+        "mortgage_renewal_rates": (False, "the rate charged at each renewal, decimal: ONE figure "
+                                         "applied to every renewal, or a list in order whose LAST "
+                                         "entry carries forward. Quoted exactly like mortgage_rate "
+                                         "and converted the same way by mortgage_rate_compounding. "
+                                         "NO DEFAULT AND NO ANCHOR: no defensible forward rate path "
+                                         "exists, so this is a scenario you state, never a forecast "
+                                         "the engine makes — bracket it with `--sweep "
+                                         "house.mortgage_renewal_rates=0.03:0.08:6` (each grid "
+                                         "point replaces the whole path with one flat figure, and "
+                                         "the run says so). ONE RATE PER RENEWAL: a 25-year "
+                                         "amortization on a 5-year term renews FOUR times and the "
+                                         "first entry is the rate at the FIRST renewal, not the "
+                                         "opening term — more rates than renewals is refused, "
+                                         "naming both counts. A renewal past simulation.years is "
+                                         "priced by nothing, and the run warns rather than "
+                                         "reporting it as a step it took",
+                                         "requires mortgage_renewal_years — the two renewal keys "
+                                         "travel together"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026); "
@@ -295,6 +324,35 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                              "or 'effective_annual' (the figure is already the effective "
                                              "annual rate and is used as typed)"),
         "mortgage_term_years": (False, "amortization term in years","owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
+        "mortgage_renewal_years": (False, "the RATE contract's length in years — the "
+                                          "Canadian \"term\", at most 5 on a fixed rate, NOT "
+                                          "mortgage_term_years (the amortization). With it the "
+                                          "engine re-amortizes the remaining balance over the "
+                                          "REMAINING amortization at each renewal: the payment "
+                                          "steps, the affordability ratio steps with it, and the "
+                                          "read-back prints the schedule. Omitted, one rate is "
+                                          "held for the whole amortization and a warning says "
+                                          "renewal risk is not modelled",
+                                          "requires mortgage_renewal_rates — the two renewal keys "
+                                          "travel together"),
+        "mortgage_renewal_rates": (False, "the rate charged at each renewal, decimal: ONE figure "
+                                         "applied to every renewal, or a list in order whose LAST "
+                                         "entry carries forward. Quoted exactly like mortgage_rate "
+                                         "and converted the same way by mortgage_rate_compounding. "
+                                         "NO DEFAULT AND NO ANCHOR: no defensible forward rate path "
+                                         "exists, so this is a scenario you state, never a forecast "
+                                         "the engine makes — bracket it with `--sweep "
+                                         "house.mortgage_renewal_rates=0.03:0.08:6` (each grid "
+                                         "point replaces the whole path with one flat figure, and "
+                                         "the run says so). ONE RATE PER RENEWAL: a 25-year "
+                                         "amortization on a 5-year term renews FOUR times and the "
+                                         "first entry is the rate at the FIRST renewal, not the "
+                                         "opening term — more rates than renewals is refused, "
+                                         "naming both counts. A renewal past simulation.years is "
+                                         "priced by nothing, and the run warns rather than "
+                                         "reporting it as a step it took",
+                                         "requires mortgage_renewal_years — the two renewal keys "
+                                         "travel together"),
         "all_cash": (False, "true = the whole price is paid at purchase, no financing", "owned option: declare all_cash: true OR the full mortgage block (down_payment OR cash_available, plus mortgage_rate + mortgage_term_years) — the two are exclusive"),
         "selling_cost_rate": (False, "fraction at sale; DEFAULT 0.05 — seller-side "
                                        "commissions 4–5% + notary (WOWA 2026)"),

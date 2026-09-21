@@ -27,6 +27,7 @@ from .sources import MONEY_LEAVES, option_lines, split_line_key
 INT_KEYS = frozenset({
     "years", "simulation.years", "simulation.num_sims", "simulation.random_seed",
     "condo.mortgage_term_years", "house.mortgage_term_years",
+    "condo.mortgage_renewal_years", "house.mortgage_renewal_years",
     "tax.fhsa.years_until_purchase",
 })
 # Keys that live at the YAML top level even when addressed through simulation.*
@@ -113,6 +114,32 @@ def price_scan_note(raw: Dict[str, Any], key: str) -> Optional[str]:
         f"${float(block['initial_value']):,.0f}, this understates owner costs above it "
         f"(favours buying) and overstates them below (favours renting); use "
         f"property_tax_rate / purchase_costs_rate to scale them"
+    )
+
+
+def flattened_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
+    """The coherence note for a sweep or break-even over a key the config
+    states as a PATH — a renewal ladder.
+
+    `with_value` sets one YAML leaf, so every grid point replaces the whole
+    stated path with ONE figure applied at every renewal. The threshold that
+    comes back is that flat rate, not the rate at the next renewal, and the
+    config's own base case is not a point on the grid. Reported for the same
+    reason `price_scan_note` is: the answer quotes a schedule no grid point
+    priced (2026-09-21).
+    """
+    base = base_value(raw, key)
+    if not isinstance(base, list) or len(base) < 2:
+        return None
+    if not all(isinstance(item, (int, float)) and not isinstance(item, bool)
+               for item in base):
+        return None
+    stated = ", ".join(_fmt_value(key, float(item)) for item in base)
+    return (
+        f"the config states {key} as a path ({stated}); every grid point replaces the "
+        f"whole path with ONE figure applied at each renewal, so the threshold reported "
+        f"is a flat renewal rate rather than the rate at the next renewal, and the stated "
+        f"path is not a point on this grid"
     )
 
 
@@ -208,15 +235,34 @@ def one_sided_sweep_warning(raw: Dict[str, Any], key: str, values: List[Any]) ->
     if not isinstance(sources, dict) or sources.get(".".join(parts)) != "assistant":
         return None
     base = base_value(raw, key)
-    if not isinstance(base, (int, float)) or isinstance(base, bool) or not values:
+    if not values or isinstance(base, bool):
         return None
-    if all(v > base for v in values):
+    if isinstance(base, (int, float)):
+        low = high = float(base)
+        shown = _fmt_value(key, base if key in INT_KEYS else float(base))  # as the grid prints
+    elif (isinstance(base, list) and base and all(
+            isinstance(item, (int, float)) and not isinstance(item, bool)
+            for item in base)):
+        # A list placeholder — a renewal ladder — has no single figure to sit
+        # above or below, so the grid is read against its whole span. Returning
+        # None here instead left the guard silently absent on the one documented
+        # sweepable key whose form is a list (2026-09-21).
+        low, high = float(min(base)), float(max(base))
+        shown = ", ".join(_fmt_value(key, float(item)) for item in base)
+    elif base is None:
+        return None
+    else:
+        # A surface that cannot evaluate its own condition says so rather than
+        # returning the quiet that means "both directions tested".
+        return (f"sweep of {key}: the placeholder the config states is not a number, so "
+                f"whether this grid tests both directions of the guess could not be "
+                f"evaluated — check it by hand")
+    if all(v > high for v in values):
         side = "ABOVE"
-    elif all(v < base for v in values):
+    elif all(v < low for v in values):
         side = "BELOW"
     else:
         return None
-    shown = _fmt_value(key, base if key in INT_KEYS else float(base))  # as the grid prints
     return (f"sweep of {key} covers only values {side} the placeholder "
             f"{shown}; the other direction is untested")
 
@@ -391,7 +437,8 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                            "real_equivalent_inflation": pi,
                            "flips": flips, "mc_mean_flips": mc_mean_flips,
                            "mc_majority_flips": track_flips(rows, "mc_best")}
-    note = join_notes(collapse, price_scan_note(raw, key))
+    note = join_notes(collapse, price_scan_note(raw, key),
+                      flattened_path_note(raw, key))
     if note:
         out["note"] = note
     return out

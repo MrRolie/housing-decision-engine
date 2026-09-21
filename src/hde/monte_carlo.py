@@ -355,11 +355,15 @@ def _simulate_condo_pv_once(
                 net_cost = event_cost - covered
                 pv += pv_single(net_cost, r, year)
 
-    from .deterministic import _financing_pv
+    # The financing leg is DETERMINISTIC on every path (spec §2): the renewal
+    # ladder rides along with it, or the central case and the paths would
+    # disagree on an input neither of them draws.
+    from .deterministic import _financing_pv, renewal_args_for
     dp_pv, mort_pv, term_eq_pv = _financing_pv(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
         terminal_value, r, sim.years, condo.financed_purchase_costs,
+        **renewal_args_for(condo),
     )
     # The HBP repayment leg is a constant (priced at the renter's unshocked
     # return), added on every path exactly as the deterministic engine adds it.
@@ -438,11 +442,12 @@ def _simulate_house_pv_once(
                 event_cost = _sample_event_cost(event, z_event)
                 pv += pv_single(event_cost, r, year)
 
-    from .deterministic import _financing_pv
+    from .deterministic import _financing_pv, renewal_args_for
     dp_pv, mort_pv, term_eq_pv = _financing_pv(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
         terminal_value, r, sim.years, house.financed_purchase_costs,
+        **renewal_args_for(house),
     )
     pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs + hbp_repayment_pv
     return pv

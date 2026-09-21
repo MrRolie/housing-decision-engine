@@ -274,6 +274,17 @@ figure and is re-fetched, not indexed, for 2027.
   mortgage-insurance premium rides in the loan, never in year-0 cash). A Canadian posted rate compounds
   semi-annually with monthly payments — convert first: `r_eff = (1 + r_posted/2)^2 − 1`
   (≈ 1.7% difference on the annual outlay at 5%).
+- **A renewal ladder re-solves that payment at every renewal** (2026-09-21,
+  `pv.renewal_schedule`). With `mortgage_renewal_years` `T_r` and
+  `mortgage_renewal_rates`, the mortgage runs a sequence of rate contracts:
+  segment `k` spans years `kT_r + 1 … min((k+1)T_r, T)` and exists only while
+  `kT_r < T` strictly, its payment re-amortizing the REMAINING balance over the
+  REMAINING amortization at that segment's rate,
+  `M_k = mortgage_payment(B_k, r_k, T − kT_r)` and
+  `B_{k+1} = outstanding_balance(B_k, r_k, T − kT_r, len_k, M_k)`. A rate list
+  shorter than the renewal count carries its LAST entry forward; a longer one is
+  refused at load. With no renewal keys the single-rate arithmetic below runs
+  unchanged, line for line.
 - **The land-transfer tax is derived in the loader** (`land_transfer_tax.py`,
   key `land_transfer_tax: auto | none | {brackets, first_time_buyer_rebate}`,
   with `municipality` and `first_time_buyer`). The duty is CASH at closing, so
@@ -340,8 +351,8 @@ the exact breakdown / JSON keys.
 | `reserve_pv` (condo) | reserve-fund coverage of events, as a NEGATIVE offset | balance evolves yearly `B ← B(1 + r_res,eff) + 12·fee_t · reserve_contribution_rate`; at an event `covered = min(B, cost)`, `reserve_pv −= covered · (1 + dr)^-year` |
 | `purchase_costs_pv` | closing costs paid at purchase (land-transfer tax, notary, inspection, a cash-paid mortgage-insurance premium) | `purchase_costs`, year 0, undiscounted; excluded from the affordability ratio |
 | `downpayment_pv` | capital paid at year 0 | `initial_value` when `all_cash`, else `down_payment`; undiscounted |
-| `mortgage_pv` | PV of the level annual payments | `M · [1 − (1 + dr)^−n] / dr`, `n = min(N, mortgage_term_years)`; 0 when `all_cash` |
-| `terminal_equity_pv` | the end-of-horizon equity credit (NEGATIVE = reduces cost) | `−[V_N (1 − selling_cost_rate) − B_N] · (1 + dr)^-N`, `V_N = V0 (1 + g_eff)^N`, `B_N = L(1 + r)^N − M[(1 + r)^N − 1]/r` (0 once `N ≥ T`) |
+| `mortgage_pv` | PV of the mortgage payments | single rate: `M · [1 − (1 + dr)^−n] / dr`, `n = min(N, mortgage_term_years)`. Under a renewal ladder: `Σ_k pv_single(pv_annuity(M_k, dr, len_k), dr, start_k − 1)` over the segments starting at or before `N`, the last one truncated at `N` (`len_k = min(end_k, N) − start_k + 1`); a segment starting past `N` is valued at nothing. 0 when `all_cash` |
+| `terminal_equity_pv` | the end-of-horizon equity credit (NEGATIVE = reduces cost) | `−[V_N (1 − selling_cost_rate) − B_N] · (1 + dr)^-N`, `V_N = V0 (1 + g_eff)^N`, `B_N = L(1 + r)^N − M[(1 + r)^N − 1]/r` (0 once `N ≥ T`); under a renewal ladder `B_N` comes from the SEGMENT holding `N` — the same closed form applied to that segment's own `opening_balance`, `rate` and `payment` over its own remaining amortization (`pv.balance_at`) |
 | `hbp_repayment_pv` | the Home Buyers' Plan repayment leg of a first-time purchase under a `tax:` block (0 without one; the text report prints it only when non-zero) | tranches `H/Y` due at `t_j = g + j − 1` (`g` = `hbp.repayment_grace_years`, `Y` = `hbp.repayment_years`), `τ_j = min(t_j, N)`; fixed nominal dollars, deflated in real mode: `Σ_j out_j (1 + dr)^-τ_j − [Σ_j out_j (1 + r_inv)^(N − τ_j)] (1 + dr)^-N` — outlays against the RRSP they rebuild, credited at N at the renter's return, sheltered; 0 when `r_inv = dr`. The withdrawal itself is in `downpayment_pv` (docs/specs/2026-09-05-tax-treatment.md) |
 | `total_pv` | net cost of the option | sum of that option's breakdown |
 
@@ -432,7 +443,7 @@ Present only with an `income` block.
 |---|---|---|
 | `annual_incomes` | income by year | `income_1 = annual_income`; each later year `× (1 + g_eff)` with `income_growth_rate` the spec's REAL figure (a typed rate is as quoted and converted at load like every cost rate, so income and costs share one convention; inflation-composed in nominal mode, like the cost numerator); a `pay_drop_events` entry multiplies income by `magnitude` in its year and the cut persists |
 | `threshold` | the ratio that counts as a breach | `affordability_threshold` (default anchored, 0.32) |
-| `ratios` | year-t housing cost ÷ year-t income | numerator = UNDISCOUNTED year-t outlay: fees `12·fee(1 + e_eff)^(t−1)` or maintenance `rate(t)·V0(1 + g_eff)^(t−1)` or rent `12·rent(1 + e_eff)^(t−1)`, plus the mortgage payment while `t ≤ term`, events in their year, other costs `(1 + e_eff)^(t−1)`. Note the exponent: the affordability numerator escalates from year 2, one year later than the PV engine's fee/rent convention — a documented divergence, not a rounding difference |
+| `ratios` | year-t housing cost ÷ year-t income | numerator = UNDISCOUNTED year-t outlay: fees `12·fee(1 + e_eff)^(t−1)` or maintenance `rate(t)·V0(1 + g_eff)^(t−1)` or rent `12·rent(1 + e_eff)^(t−1)`, plus the mortgage payment while `t ≤ term`, events in their year, other costs `(1 + e_eff)^(t−1)`. Under a renewal ladder the mortgage term is the payment of the SEGMENT holding year `t` (`pv.payment_in_year`), so the ratio STEPS at every renewal rather than holding one figure. Note the exponent: the affordability numerator escalates from year 2, one year later than the PV engine's fee/rent convention — a documented divergence, not a rounding difference |
 | `years_exceeding` | years whose ratio exceeds the threshold | `[t : ratio_t > threshold]` |
 | `prob_condo_exceeds` / `prob_house_exceeds` / `prob_rent_exceeds` | Monte Carlo breach probability | share of paths on which ANY year's ratio exceeds the threshold, using the path's stochastic income (pay-drop `year_jitter_std`, `magnitude_vol` with the retained fraction clamped to `[0.01, 1]`) against the deterministic cost trajectory |
 
@@ -621,6 +632,7 @@ and `sources` — the source-class echo.
 | `quoted` | the figure exactly as the config typed it | — |
 | `effective` | the rate the run uses, in the run's own terms | real mode: `(1 + quoted)/(1 + inflation_rate) − 1`, the spec's stored figure; nominal mode: the quoted figure itself — the spec stores its deflated real form and `_effective_growth_rate` composes it back, `(1 + r_real)(1 + π) − 1 = quoted` |
 | `mortgage_rates` | every typed `mortgage_rate`, as quoted and as the level payment uses it (2026-09-08) | one `{option, quoted, compounding, effective}` per owned option that typed a rate; `effective = (1 + quoted/2)^2 − 1` under `mortgage_rate_compounding: semi_annual` (the default), `= quoted` under `effective_annual`; never touched by `inflation_rate` in either mode |
+| `mortgage_renewals` | the renewal ladder each owned option declared (2026-09-21) | one `{option, renewal_years, rates_quoted, rates, compounding, renewals_priced, segments}` per laddered option; `segments` a `{start_year, end_year, rate, payment, opening_balance, priced}` row per rate contract from the engine's own schedule, `priced` False once `start_year` passes `simulation.years`, where the run values nothing. `rates`/`rates_quoted` are the CONFIG's echo — the renewal rates as typed, WITHOUT the in-force `mortgage_rate` that `segments[0]` runs at, so the two lists are offset by one. No anchor stands behind any of it |
 
 **Source classes (`sources`).** `defaults_applied` answers "what did the engine
 fill in?"; the source echo answers the other half, "who stated the rest?". The

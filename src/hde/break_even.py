@@ -27,6 +27,7 @@ from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_yea
                               calendar_year_for_sim_year)
 from .sources import MONEY_LEAVES
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
+                    flattened_path_note,
                     join_notes, load_at, point_label, price_scan_note,
                     real_equivalent_inflation, with_value)
 
@@ -389,9 +390,20 @@ def solve_break_even(
         elif base is not None and field in _MONEY_KEYS:
             lo, hi = MONEY_BRACKET[0] * float(base), MONEY_BRACKET[1] * float(base)
         else:
+            if base is None:
+                why = "the key is not in the YAML"
+            elif field.endswith(("_rate", "_rates")):
+                # A rate IS in the YAML and still has no default bracket — the
+                # old sentence said "only money and rate inputs get a default
+                # bracket" while refusing a rate input, leaving the user who
+                # followed the schema's own suggestion with nothing to do next
+                # (2026-09-21).
+                why = (f"no range is anchored for {field} — the engine forecasts no renewal "
+                       f"path and defaults none, so the bracket is yours to state")
+            else:
+                why = "only money and rate inputs get a default bracket"
             raise ValueError(
-                f"--break-even {key}: give the bracket as {key}=lo:hi "
-                f"({'the key is not in the YAML' if base is None else 'only money and rate inputs get a default bracket'})"
+                f"--break-even {key}: give the bracket as {key}=lo:hi ({why})"
             )
     refused: List[Tuple[float, str]] = []
 
@@ -434,6 +446,7 @@ def solve_break_even(
         prior_band_note(key, *horizon_drift(raw, key, prior), core["break_evens"]),
         cliff_note(raw, key, core["break_evens"]),
         price_scan_note(raw, key),
+        flattened_path_note(raw, key),
     )
     if note:
         out["note"] = note

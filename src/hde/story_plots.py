@@ -48,6 +48,8 @@ from .deterministic import (
     _effective_growth_rate,
     _event_year_deterministic,
     _financing_pv,
+    renewal_args_for,
+    renewal_segments_for,
     _maintenance_rate_for_year,
     compute_deterministic,
 )
@@ -67,7 +69,7 @@ from .models import (
     HouseParams,
     RentParams,
 )
-from .pv import mortgage_payment, pv_single
+from .pv import mortgage_payment, payment_in_year, pv_single
 from .serialization import growth_label, rate_label
 
 # ---------------------------------------------------------------------------
@@ -247,13 +249,18 @@ def _cumulative_cost_curves(
             params.initial_value, params.down_payment, params.mortgage_rate,
             params.mortgage_term_years, params.all_cash, params.selling_cost_rate,
             value_n, dr, n, params.financed_purchase_costs,
+            **renewal_args_for(params),
         )
         flows: Dict[int, float] = {0: dp_pv + params.purchase_costs}
         if not params.all_cash:
             loan = params.initial_value - params.down_payment + params.financed_purchase_costs
+            # The paid curve kinks at each renewal because the payment does
+            # (spec §8); the engine's own schedule supplies it.
+            segments = renewal_segments_for(params)
             payment = mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
             for y in range(1, min(n, params.mortgage_term_years) + 1):
-                flows[y] = flows.get(y, 0.0) + payment
+                flows[y] = flows.get(y, 0.0) + (
+                    payment_in_year(segments, y) if segments is not None else payment)
         # Terminal equity credit lands at year N; keep PV-exact by lifting the
         # already-discounted credit back to a year-N flow (discounted once below).
         credits: Dict[int, float] = {n: term_eq_pv * ((1 + dr) ** n)}

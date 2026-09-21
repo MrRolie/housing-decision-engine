@@ -198,6 +198,14 @@ def format_source_value(key: str, value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, list):
+        # A list of RATES is the figure the user typed, and echoing it as a
+        # count tells them nothing about the numbers the verdict turned on
+        # (2026-09-21). A list of records — events, cost lines — keeps the
+        # count, which is what reads well for a list nobody typed as one value.
+        if _is_rate_leaf(leaf) and value and all(
+                isinstance(item, (int, float)) and not isinstance(item, bool)
+                for item in value):
+            return ", ".join(_percent(float(item)) for item in value)
         return f"{len(value)} entry" if len(value) == 1 else f"{len(value)} entries"
     if isinstance(value, str):
         return repr(value)
@@ -209,9 +217,19 @@ def format_source_value(key: str, value: Any) -> str:
         return f"${value:,.0f}"
     if leaf in _COUNTS or leaf.endswith(("_year", "_years")):
         return _number(value)
-    if leaf.endswith(("_rate", "_vol", "_hazard", "_threshold")) or leaf in _FRACTIONS:
+    if _is_rate_leaf(leaf):
         return _percent(value)
     return _number(value)
+
+
+# `_rates` as well as `_rate`: a renewal ladder is typed in the same units as
+# every other rate, and a bare `0.065` beside `mortgage_rate=4.4%` on the same
+# line reads as 0.065% or as dollars (2026-09-21).
+_RATE_SUFFIXES = ("_rate", "_rates", "_vol", "_hazard", "_threshold")
+
+
+def _is_rate_leaf(leaf: str) -> bool:
+    return leaf.endswith(_RATE_SUFFIXES) or leaf in _FRACTIONS
 
 
 def _percent(value: float) -> str:

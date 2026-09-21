@@ -52,7 +52,10 @@ After the checklist in SKILL.md, the prose, in this order:
    Montréal's first-time-buyer programme exists and is unsourced here; "there
    is no rebate" would be false.
 8. **Not modelled:** each item with its direction of bias ("renewal risk —
-   biases toward buying").
+   biases toward buying"), taking the wording from the engine's own warning.
+   With a renewal path stated the item moves out of this section: renewal risk
+   is priced, as ONE scenario with no distribution around it, and the
+   `renewals:` line goes into the assumptions instead.
 9. **Where the story is** (`scenarios/<slug>/STORY.md` and the act PNGs) and
    the one next step (usually: a real listing's tax bill and closing costs
    replace the estimates).

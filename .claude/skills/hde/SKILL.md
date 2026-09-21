@@ -157,7 +157,8 @@ required key with the exact message — show it.
    and the `expected appreciation` term with the engine's label (at 0% real
    growth that is inflation, not real gain).
 8. **"Not modelled" is mandatory,** every item with its direction of bias:
-   renewal risk with any mortgage (toward buying), early exit (toward buying),
+   renewal risk unless a path is stated (toward buying; stated, it is priced),
+   early exit (toward buying),
    tax as the engine states it — its `no tax: block` warning quoted when the
    savings' location went unanswered — every default the engine warned on
    (with its bias), every dollar input a coherence note held fixed along a

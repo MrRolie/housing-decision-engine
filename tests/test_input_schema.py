@@ -96,13 +96,20 @@ class TestRequiredFlagsAreTrue:
         # nets purchase_costs into the down payment), so it carries the same
         # conditional sentence rather than a bare note.
         capital = {"all_cash", "down_payment", "cash_available", "mortgage_rate", "mortgage_term_years"}
+        # The renewal ladder is the third conditional class (slice 1,
+        # 2026-09-21): each of the two keys requires the other, because a term
+        # with no rate has nothing to renew at and no rate is anchored.
+        renewal = {"mortgage_renewal_years", "mortgage_renewal_rates"}
         # tax.marginal_rate is the other conditional: typed, or resolved from
         # income + a QC/ON province — its sentence is its own (2026-09-05).
-        assert {k for _, k in CONDITIONAL} == capital | {"marginal_rate"}
+        assert {k for _, k in CONDITIONAL} == capital | renewal | {"marginal_rate"}
         for section, key in CONDITIONAL:
             assert not SCHEMA[section][key]["required"], (section, key)
             if key in capital:
                 assert "declare all_cash: true OR" in SCHEMA[section][key]["required_if"]
+            elif key in renewal:
+                assert "travel together" in SCHEMA[section][key]["required_if"]
+                assert (renewal - {key}).pop() in SCHEMA[section][key]["required_if"]
             else:
                 assert "income.annual_income" in SCHEMA[section][key]["required_if"]
 

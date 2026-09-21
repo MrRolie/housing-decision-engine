@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict
 
 from .config import single_path_run
+from .deterministic import renewal_segments_for
 from .market_scenario import LoadedScenarioPrior
 from .models import (
     ComparisonDeterministicResult,
@@ -49,6 +50,37 @@ class StoryPackage(TypedDict):
     act_images: List[Path]
     report: Path
     story: Path
+
+
+def _renewal_steps(spec: ComparisonSpec) -> List[Tuple[str, int, float, float]]:
+    """(option, year, $ change, % change) at the first renewal each owned
+    option PRICES, earliest first — empty when no option runs a ladder the
+    horizon reaches.
+
+    Reads the engine's own schedule, the same one the curve and the read-back
+    line are built from, and drops any step past `simulation.years`, where
+    `_financing_pv` values nothing and the plot stops: the sentence cannot
+    quote a step the picture does not show. Every laddered option is returned,
+    not the first one found, or the reader sees a kink on the other curve with
+    nothing naming it (2026-09-21).
+    """
+    steps: List[Tuple[str, int, float, float]] = []
+    horizon = spec.simulation.years
+    for name in ("condo", "house"):
+        segments = renewal_segments_for(getattr(spec, name))
+        if not segments or len(segments) < 2:
+            continue
+        first, second = segments[0], segments[1]
+        if second.start_year > horizon:
+            continue
+        change = second.payment - first.payment
+        steps.append((name, second.start_year, change,
+                      change / first.payment if first.payment else 0.0))
+    # Chronological, so "the first renewal" is the first kink the plot draws;
+    # a tie goes to the larger step, then to the option order, so the sentence
+    # is stable across runs.
+    steps.sort(key=lambda step: (step[1], -abs(step[2]), step[0]))
+    return steps
 
 
 def _act_sentences(
@@ -90,6 +122,15 @@ def _act_sentences(
             f"{OPTION_DISPLAY[leader]} costs less out of pocket every single "
             f"year — the ranking never flips (before the end-of-horizon equity "
             f"credit, which decides the verdict)."
+        )
+    # A laddered mortgage kinks the paid curve at every renewal; the sentence
+    # says where the first kink is and what it costs, or the reader sees a step
+    # in the picture with nothing naming it (spec §8).
+    for index, (name, year, amount, fraction) in enumerate(_renewal_steps(spec)):
+        which = "the first renewal" if index == 0 else "its own first renewal"
+        race_sentence += (
+            f" The {name} payment steps in year {year}, {which}: "
+            f"{'+' if amount >= 0 else '-'}${abs(amount):,.0f}/yr ({fraction:+.1%})."
         )
     acts.append(("act2_the_race", "The race", race_sentence))
 

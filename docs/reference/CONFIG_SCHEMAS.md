@@ -554,4 +554,22 @@ The config loader validates:
     an unknown line name is refused naming the lines that exist, and a name two
     lines share cannot be declared
 
+12. `mortgage_renewal_years` and `mortgage_renewal_rates` travel together —
+    either alone is refused, because no renewal rate is anchored or forecast
+    (a term with nothing to renew at) and a rate needs a term to apply over.
+    `mortgage_renewal_years > 0`, every rate `>= 0`, and the rate list must not
+    be empty; both keys are refused on an `all_cash` option or without a full
+    mortgage block. A renewal term at or past `mortgage_term_years` loads and
+    warns that it is inert. MORE RATES THAN RENEWALS IS REFUSED: a 25-year
+    amortization on a 5-year term renews four times, so a fifth rate would be
+    priced nowhere; the refusal names the count typed, the count the ladder
+    has, the entries that would vanish, and the off-by-one it invites — the
+    first entry is the rate at the FIRST RENEWAL, not the opening term, which
+    runs at `mortgage_rate` and is not in the list. A shorter list is accepted
+    and carries its last entry forward. The block reading counted over the
+    amortization always types exactly one figure too many, so the refusal
+    catches it; counted over a horizon that is a whole number of terms the
+    two counts coincide and nothing refuses, so a WARNING names both
+    readings whenever the first declared rate repeats `mortgage_rate`
+
 Validation failures raise `ConfigValidationError` with descriptive messages.

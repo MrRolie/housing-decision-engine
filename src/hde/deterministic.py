@@ -6,7 +6,7 @@ ownership costs using deterministic (fixed) parameters, without
 any randomness or Monte Carlo simulation.
 """
 
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .models import (
     CondoParams,
@@ -27,12 +27,16 @@ from .models import (
     RENT_BREAKDOWN_KEYS,
 )
 from .pv import (
+    RenewalSegment,
     pv_single,
     pv_annuity,
     pv_growth_annuity,
     pv_recurring_with_escalation,
     mortgage_payment,
     outstanding_balance,
+    balance_at,
+    payment_in_year,
+    renewal_schedule,
 )
 from .tax_treatment import HbpLeg, RenterTerminal, TaxParams, hbp_repayment_leg, renter_terminal
 
@@ -105,12 +109,22 @@ def _financing_pv(
     dr: float,
     n_years: int,
     financed_purchase_costs: float = 0.0,
+    renewal_years: Optional[int] = None,
+    renewal_rates: Optional[List[float]] = None,
 ) -> Tuple[float, float, float]:
     """
     (downpayment_pv, mortgage_pv, terminal_equity_pv) for an owned option.
     financed_purchase_costs (a financed mortgage-insurance premium) is added to
     the loan principal: it raises the level payment and the outstanding balance,
     never year-0 cash.
+
+    With `renewal_years` + `renewal_rates` the loan runs the renewal ladder
+    (slice 1, docs/specs/2026-09-03-mortgage-renewal-risk.md): the payment is
+    re-solved over the remaining amortization at each renewal, so mortgage_pv is
+    the sum of the segments' annuities and balance_N comes from the segment
+    holding N. Without them the single-rate arithmetic runs unchanged, line for
+    line — the ladder is a branch, never a rewrite of the path everyone else is
+    already on.
 
     Fail-loud (strategic Mod 5): direct-construction callers that declare neither
     all_cash nor a complete mortgage block raise here, not compute silent garbage.
@@ -121,6 +135,18 @@ def _financing_pv(
         raise ValueError(
             "owned option requires all_cash=True OR a full mortgage block "
             "(down_payment + mortgage_rate + mortgage_term_years)"
+        )
+    # Half a ladder prices nothing: a term with no rate has no figure to renew
+    # at (none is anchored), a rate with no term has no year to renew in.
+    if (renewal_years is None) != (renewal_rates is None):
+        raise ValueError(
+            "the renewal ladder needs both renewal_years and renewal_rates, got "
+            f"renewal_years={renewal_years}, renewal_rates={renewal_rates}"
+        )
+    if renewal_years is not None and all_cash:
+        raise ValueError(
+            "an all_cash option has no rate contract to renew (renewal_years="
+            f"{renewal_years})"
         )
     if all_cash:
         downpayment_pv = initial_value
@@ -140,14 +166,94 @@ def _financing_pv(
             raise ValueError(f"owned option mortgage_term_years must be > 0, got {mortgage_term_years}")
         downpayment_pv = down_payment
         loan = initial_value - down_payment + financed_purchase_costs
-        payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
-        mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
-        balance_N = outstanding_balance(
-            loan, mortgage_rate, mortgage_term_years, n_years, payment
-        )
+        if renewal_years is None:
+            payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
+            mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
+            balance_N = outstanding_balance(
+                loan, mortgage_rate, mortgage_term_years, n_years, payment
+            )
+        else:
+            # Each segment's payments are an annuity valued at the segment's
+            # own start and discounted back from there; the horizon truncates
+            # the last segment it reaches, exactly as min(N, A) did.
+            segments = renewal_schedule(
+                loan, [mortgage_rate, *renewal_rates], renewal_years, mortgage_term_years
+            )
+            mortgage_pv = 0.0
+            for segment in segments:
+                if segment.start_year > n_years:
+                    break
+                paid_years = min(segment.end_year, n_years) - segment.start_year + 1
+                mortgage_pv += pv_single(
+                    pv_annuity(segment.payment, dr, paid_years), dr, segment.start_year - 1
+                )
+            balance_N = balance_at(segments, mortgage_term_years, loan, n_years)
     equity_N = value_N * (1 - selling_cost_rate) - balance_N
     terminal_equity_pv = -pv_single(equity_N, dr, n_years)
     return downpayment_pv, mortgage_pv, terminal_equity_pv
+
+
+def renewal_segments_for(params) -> Optional[List["RenewalSegment"]]:
+    """
+    The renewal ladder for one owned option, or None when it declared no
+    renewal term (today's single-rate mortgage) or has no mortgage to renew.
+
+    The ONE builder every consumer reads, so the affordability ratio, the story
+    curve and the PV leg cannot drift apart by re-deriving it.
+    """
+    if getattr(params, "mortgage_renewal_years", None) is None:
+        return None
+    if getattr(params, "all_cash", False):
+        return None
+    if (params.down_payment is None or params.mortgage_rate is None
+            or params.mortgage_term_years is None):
+        return None
+    loan = params.initial_value - params.down_payment + params.financed_purchase_costs
+    return renewal_schedule(
+        loan, [params.mortgage_rate, *params.mortgage_renewal_rates],
+        params.mortgage_renewal_years, params.mortgage_term_years,
+    )
+
+
+def mortgage_leg_pv(params, dr: float, n_years: int, laddered: bool = True) -> float:
+    """The PV of one owned option's mortgage payments, by exactly the call the
+    verdict made — `laddered=False` prices `mortgage_rate` throughout instead.
+
+    A surface comparing the two reads the engine's own arithmetic rather than
+    re-deriving it, so the comparison cannot drift from the figure it describes.
+    """
+    return _financing_pv(
+        params.initial_value, params.down_payment, params.mortgage_rate,
+        params.mortgage_term_years, params.all_cash, params.selling_cost_rate,
+        0.0, dr, n_years, params.financed_purchase_costs,
+        **(renewal_args_for(params) if laddered else {}),
+    )[1]
+
+
+def renewals_priced_inside(params, n_years: int) -> int:
+    """How many of an option's renewals this run actually PRICES.
+
+    `_financing_pv` stops at the first segment starting past the horizon, so a
+    renewal beyond `n_years` reaches no payment, no balance and no PV. This is
+    the ONE answer to "did the ladder reach this run", so no surface can report
+    a step the verdict never saw (2026-09-21).
+    """
+    segments = renewal_segments_for(params)
+    if not segments:
+        return 0
+    return sum(1 for segment in segments[1:] if segment.start_year <= n_years)
+
+
+def renewal_args_for(params) -> Dict[str, Any]:
+    """`_financing_pv`'s two renewal keywords for one owned option — empty when
+    it declared no renewal term, so the single-rate path is reached by exactly
+    the call it always was."""
+    if getattr(params, "mortgage_renewal_years", None) is None:
+        return {}
+    if getattr(params, "all_cash", False):
+        return {}
+    return {"renewal_years": params.mortgage_renewal_years,
+            "renewal_rates": params.mortgage_renewal_rates}
 
 
 def _maintenance_rate_for_year(house: HouseParams, year: int) -> float:
@@ -301,6 +407,7 @@ def _compute_condo_option(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
         value_N, discount_rate, sim.years, condo.financed_purchase_costs,
+        **renewal_args_for(condo),
     )
     total_pv = (fee_pv + events_pv + other_pv + reserve_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
@@ -379,6 +486,7 @@ def _compute_house_option(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
         value_N, discount_rate, sim.years, house.financed_purchase_costs,
+        **renewal_args_for(house),
     )
     total_pv = (maintenance_pv + events_pv + other_pv
                 + downpayment_pv + mortgage_pv + terminal_equity_pv
@@ -497,6 +605,7 @@ def _annual_costs_for_option(
     # Compute the level mortgage payment once (0 if all_cash or no mortgage block)
     mort_payment = 0.0
     mort_term = 0
+    segments = None
     if option_type in ("house", "condo") and not getattr(params, "all_cash", False):
         if (params.down_payment is not None and params.mortgage_rate is not None
                 and params.mortgage_term_years is not None):
@@ -504,6 +613,9 @@ def _annual_costs_for_option(
             loan = params.initial_value - params.down_payment + params.financed_purchase_costs
             mort_payment = _mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
             mort_term = params.mortgage_term_years
+            # A renewal ladder steps the payment; the affordability ratio steps
+            # with it (spec §4). No ladder, no change to the line below.
+            segments = renewal_segments_for(params)
 
     # Nominal mode composes inflation into every escalation, exactly as the PV
     # engine does (readiness plan D.6 — `econ` was accepted and ignored here,
@@ -514,7 +626,8 @@ def _annual_costs_for_option(
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
-        mort_t = mort_payment if year <= mort_term else 0.0
+        mort_t = (payment_in_year(segments, year) if segments is not None
+                  else (mort_payment if year <= mort_term else 0.0))
         ev_cost = sum(
             ev.base_cost for ev in params.events
             if _event_year_deterministic(ev, sim.years) == year

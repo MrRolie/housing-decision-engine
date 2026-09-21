@@ -6,7 +6,7 @@ various cash flow patterns. All functions are deterministic and have
 no side effects.
 """
 
-from typing import Dict
+from typing import Dict, List, NamedTuple, Sequence
 
 
 def pv_single(cost: float, rate: float, year: int) -> float:
@@ -185,6 +185,111 @@ def outstanding_balance(
     if rate == 0:
         return max(0.0, principal - payment * year)
     return principal * (1 + rate) ** year - payment * ((1 + rate) ** year - 1) / rate
+
+
+class RenewalSegment(NamedTuple):
+    """One rate contract inside a mortgage's life: the years it spans, the rate
+    it charges, the payment re-solved at its start, and the balance it opens
+    with. `end_year` is carried so no consumer re-derives where a segment ends.
+    """
+    start_year: int        # first year the payment is made (1 = one year from now)
+    rate: float            # the EFFECTIVE annual rate for this contract
+    payment: float         # level annual payment, re-solved over what is left
+    opening_balance: float # balance the segment starts with
+    end_year: int          # last year the payment is made (inclusive)
+
+    @property
+    def years(self) -> int:
+        """How many payments this segment makes."""
+        return self.end_year - self.start_year + 1
+
+
+def renewal_schedule(
+    loan: float,
+    rates: Sequence[float],
+    renewal_years: int,
+    amortization_years: int,
+) -> List[RenewalSegment]:
+    """
+    The ladder of rate contracts a mortgage passes through: a Canadian
+    five-year fixed on a 25-year amortization renews four times, and at each
+    renewal the REMAINING balance is re-amortized over the REMAINING
+    amortization at the new rate.
+
+    `rates` is the per-segment rate list in order, starting with the contract
+    rate in force today; a shorter list carries its LAST rate forward, so a
+    single entry prices every renewal at that rate.
+
+    Segment k spans years kT+1 … min((k+1)T, A) and exists only while kT < A
+    strictly, so an amortization that ends exactly on a renewal boundary does
+    not open an empty contract behind it.
+
+        M_k = mortgage_payment(B_k, r_k, A − kT)
+        B_{k+1} = outstanding_balance(B_k, r_k, A − kT, len_k, M_k)
+
+    Refuses rather than computing silent garbage: an empty rate list, a
+    non-positive term or amortization, a negative rate.
+    """
+    if renewal_years <= 0:
+        raise ValueError(f"renewal_years must be positive, got {renewal_years}")
+    if amortization_years <= 0:
+        raise ValueError(f"amortization_years must be positive, got {amortization_years}")
+    if not rates:
+        raise ValueError("renewal_schedule needs at least one rate, got an empty list")
+    for rate in rates:
+        if rate < 0:
+            raise ValueError(f"every renewal rate must be >= 0, got {rate}")
+
+    segments: List[RenewalSegment] = []
+    balance = loan
+    start = 0  # years elapsed before this segment
+    index = 0
+    while start < amortization_years:
+        remaining = amortization_years - start
+        rate = rates[index] if index < len(rates) else rates[-1]
+        payment = mortgage_payment(balance, rate, remaining)
+        length = min(renewal_years, remaining)
+        segments.append(RenewalSegment(
+            start_year=start + 1, rate=rate, payment=payment,
+            opening_balance=balance, end_year=start + length,
+        ))
+        # Remaining amortization and years INTO the segment: passing the whole
+        # amortization or the absolute year would trip outstanding_balance's
+        # `year >= term_years` branch and zero the balance early.
+        balance = outstanding_balance(balance, rate, remaining, length, payment)
+        start += length
+        index += 1
+    return segments
+
+
+def balance_at(segments: Sequence[RenewalSegment], amortization_years: int,
+               loan: float, year: int) -> float:
+    """
+    Outstanding balance at the END of `year` on a laddered mortgage: zero at or
+    past the amortization, the loan itself at or before year 0, otherwise from
+    the one segment that holds the year — the same closed form the single-rate
+    path uses, applied to that segment's own contract.
+    """
+    if year <= 0:
+        return loan
+    if year >= amortization_years:
+        return 0.0
+    for segment in segments:
+        if segment.start_year <= year <= segment.end_year:
+            elapsed = segment.start_year - 1
+            return outstanding_balance(
+                segment.opening_balance, segment.rate,
+                amortization_years - elapsed, year - elapsed, segment.payment,
+            )
+    return 0.0
+
+
+def payment_in_year(segments: Sequence[RenewalSegment], year: int) -> float:
+    """The level payment due in `year`, 0 once the mortgage is amortized."""
+    for segment in segments:
+        if segment.start_year <= year <= segment.end_year:
+            return segment.payment
+    return 0.0
 
 
 def pv_to_monthly_savings(pv: float, rate: float, n_years: int) -> float:

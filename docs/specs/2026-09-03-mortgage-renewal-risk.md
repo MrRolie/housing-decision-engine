@@ -30,7 +30,7 @@ buyer carries; today it cannot reach the answer at all. Not the refinancing/vari
 | Key | Section | Note |
 |---|---|---|
 | `mortgage_renewal_years` | condo, house | int: the RATE contract's length — the Canadian "term", not `mortgage_term_years` (the amortization). Absent ⇒ today's numbers plus a warning. |
-| `mortgage_renewal_rates` | condo, house | float **or** list of effective-annual rates in order; a scalar applies to every renewal, a short list carries its last forward. `required_if` `mortgage_renewal_years` is present. |
+| `mortgage_renewal_rates` | condo, house | float **or** list of effective-annual rates in order; a scalar applies to every renewal, a short list carries its last forward, and a list LONGER than the ladder's renewal count is refused (2026-09-21) — the surplus entries would be priced nowhere, and the natural off-by-one is one rate per five-year BLOCK when the first entry is the rate at the first RENEWAL. `required_if` `mortgage_renewal_years` is present. |
 | `simulation.renewal_rate_vol` | simulation | float: rate-points σ per renewal (slice 2). |
 
 No default, **no `ANCHORS` entry**: no defensible forward path exists, and inventing one
@@ -73,13 +73,30 @@ real-mode warning must name the payment it quotes (now "the year-1 payment").
 - **Assumptions** (`serialization.format_assumptions`): a `{name} renewals:` line — term
   length, a row per segment (start year, rate, payment), and the first renewal's payment
   change in dollars and percent.
-- **Provenance:** `--print-anchors` unchanged. Every renewal rate is the user's own figure —
-  a scenario, not a forecast; where the assistant supplies one, the honesty contract's
-  "no source for" line carries it.
+- **Provenance:** `--print-anchors` unchanged. Every renewal rate is a STATED figure — a
+  scenario, not a forecast — and the `renewals:` line names whose from the source echo
+  (2026-09-21): the user's own only where `sources:` declares the key `user`, the
+  assistant's where it declares `assistant`, and otherwise the line says the read-back
+  cannot tell whose it is, rather than overriding the echo's own sentence.
 - **Warnings** (`config.coherence_warnings`): no `mortgage_renewal_years` on a mortgage block
   — renewal risk not modelled, the rate held for the whole amortization though a Canadian
   fixed term is at most five years; renewal rates below `mortgage_rate` — biases the verdict
-  toward buying; a renewal term at or past the amortization — inert.
+  toward buying; a renewal term at or past the amortization — inert. A FOURTH condition
+  (2026-09-21): a ladder whose first renewal falls past `simulation.years` prices nothing,
+  so declaring the keys must NOT silence the not-modelled warning — it is replaced by one
+  naming the first renewal's year and the horizon. The bias warning is measured on the PV
+  of the ladder the run PRICED against the same mortgage held at `mortgage_rate`, not on
+  the declared rate list: carry-forward and the horizon both make the declared list a
+  different path from the priced one, and reading it let a rate the run never reached
+  silence a true warning. Every surface that prints the ladder — the `renewals:` line,
+  `assumptions.mortgage_renewals`, the `conventions:` clause, the real-mode affordability
+  clause and the Act 2 sentence — marks or drops what the horizon did not reach.
+  A FIFTH (2026-09-21) names the LIST's own ambiguity: one rate per renewal is what the
+  engine reads, one rate per five-year block is the other natural reading, and where the
+  two give the same count (a horizon that is a whole number of terms, shorter than the
+  amortization) nothing refuses. The tell is a first entry repeating `mortgage_rate`,
+  which makes the first renewal step by nothing. Warned, never refused: holding the
+  contract rate through the first renewal is a real thing to model.
   `config.affordability_warnings` already reports post-renewal breaches.
 
 ## 7. `--sweep` and `--break-even`
@@ -106,7 +123,19 @@ widens when the channel lands; no new act.
 - Absence invariant: with no renewal key, totals, breakdowns and plot bytes are unchanged
   (`tests/test_deterministic.py`, `tests/test_story_plots.py`; byte-stability, `CLAUDE.md`).
 - Refusals: renewal keys without a mortgage block, `mortgage_renewal_years <= 0`, a negative
-  rate.
+  rate, an empty rate list, either renewal key alone, and (2026-09-21) MORE RATES THAN THE
+  LADDER RENEWS — the refusal names the count typed, the count the ladder has and the
+  entries that would be dropped.
+- Horizon (2026-09-21): a run whose horizon ends before the first renewal, asserting the
+  warning that says the ladder priced nothing; a horizon landing INSIDE a segment rather
+  than on a boundary, asserting the equal-rate identity and the year-by-year oracle there —
+  every laddered case at `years: 20` with a 5-year term lands on a boundary, so the
+  truncation arm went unexercised.
+- Two invariants that a wrong payment must not slip past (2026-09-21): the zero-at-`A`
+  check steps the LAST year by hand, because `outstanding_balance` returns 0 for any year
+  at or past its term; the principal sum accumulates from an independent loop, because
+  re-calling `outstanding_balance` telescopes by construction. The absence invariant is
+  pinned to totals captured from the PRE-CHANGE engine, not to a second run of this one.
 
 ## 10. Smallest shippable slice
 
