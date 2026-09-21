@@ -13,22 +13,17 @@ Each item: **what**, *why now*, and what it unblocks. Status is `open`, `doing` 
 
 ## 1. Rate risk over the horizon — the renewal a Canadian mortgage actually has
 
-**doing** · blocks: 3, 4 · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
+**slice 1 LANDED 2026-09-21** · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
 
-Today a mortgage carries ONE rate for the whole amortization. That is a US 30-year fixed.
-A Canadian household signs a 5-year term against a 25-year amortization and re-prices four
-times before the horizon ends. The engine is silent on the single largest buy-side risk in
-the market it models, and every verdict it has ever produced assumes that risk away.
+Slice 1 ships: term and amortization separated, the payment re-solving at each renewal off a
+user-stated path, the affordability ratio stepping with it, and no anchored renewal rate. Left
+for slice 2, with the calibrated process of §11: drawing the renewal rate rather than stating
+it, which arrives with item 3.
 
-Build, slice 1: `mortgage_renewal_years` joins `mortgage_term_years`, which keeps its
-meaning as the amortization so no shipped config changes meaning silently. The payment
-re-solves over the REMAINING amortization at each renewal off a rate the user states. A
-renewal is an assumptions line with its new payment and the step in dollars, because a user
-who learns this at renewal instead of at decision time has been failed. Slice 2 draws the
-rate from a calibrated process and arrives with item 2.
-
-*Why now:* it is the one modelling gap that can flip a shipped verdict, and everything
-below that compares risks needs a rate path to compare against.
+What remains here is the distribution. A stated ladder is one scenario the household chose;
+the engine anchors no forward rate and says so on every run that prices one. Drawing that rate
+from a calibrated process is slice 2 and belongs with item 3, because a rate distribution is
+only worth having beside a price distribution.
 
 ## 2. Name the unknown that changes the verdict
 
