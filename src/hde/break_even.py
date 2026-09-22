@@ -17,11 +17,24 @@ from __future__ import annotations
 
 import copy
 import math
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from .anchors import ANCHORS
-from .config import ConfigValidationError
+from .config import ConfigValidationError, load_config_dict, single_path_run
+from .decomposition import (BOUNDARY_FIELDS, CHANNELS, AxisReference, Boundary,
+                            EstimatedReversal, ExactReversal, RefusedBoundary,
+                            ReversalRegister, StructuralZero)
 from .deterministic import compute_deterministic
+from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, ComparisonSpec,
+                     MonteCarloOptionResult, Verdict, compute_verdict)
+# `_summarize_array` is the reversal register's, on purpose: the free curve has
+# to rebuild each option's summary from the shifted array, and `compute_verdict`
+# reads `summary.mean` for `mc_mean_best`. Reusing the base run's summary leaves
+# that figure stale and the free curve then disagrees with a true re-simulation
+# at the same value (spec §6, T11).
+from .monte_carlo import _summarize_array, run_monte_carlo
 from .rates import RateConventionError, compose, deflate, resolve_convention
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
@@ -1156,3 +1169,803 @@ def format_break_even(result: Dict[str, Any]) -> str:
         for row in across["rows"]:
             lines.append(f"    {across_row_sentence(key, skey, row, band, pi=across.get('real_equivalent_inflation'))}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# The reversal register (board item 4,
+# docs/specs/2026-09-22-which-risk-decides-it.md §6)
+#
+# The half of "which risk decides it" that no decomposition of drawn channels
+# can answer. For each input the config STATES that carries no distribution in
+# this run, it answers one question — how far would this one input have to
+# move, holding everything else, before the verdict names a different winner.
+#
+# EXACT AND ESTIMATED, in `decomposition`'s sense, split on whether the
+# EXACTNESS GATE licensed the key's shift, not on which verdict field moved:
+# a licensed key's boundaries are all exact, confirmed by re-simulation, and
+# live in `ExactReversal`; slice 1 REFUSES an unlicensed key rather than
+# estimating it (§6), so `EstimatedReversal` stays empty on a correct engine.
+# All four of `BOUNDARY_FIELDS` are answered on every row, and a kind this
+# solver cannot reach comes back as a `RefusedBoundary` naming why (§0.1
+# ruling 4) — an absent row and a refused row are different claims.
+#
+# ONE PROPERTY THE CONTRACT DOES NOT CARRY, measured here so a later reader
+# is not surprised by it: on tests/fixtures/uncertainty_surface.yaml the
+# `best` and `runner_up` boundaries are identical to seven digits at seeds 42,
+# 7, 1234, 99 and 2026, while the `mc_best` boundary moves across
+# 2.698%–2.805% over those same five seeds. Two are properties of the config;
+# one is a property of this run's 2,000 futures. `Boundary` gives all three
+# the same shape, so nothing downstream can tell them apart — the deterministic
+# pair is recoverable from `deterministic_boundaries`, which reads no path.
+#
+# Why the register exists at all: `mortgage_renewal_rates` is a path the user
+# states, not a distribution, so its variance is zero BY CONSTRUCTION and any
+# variance table prints it as a dash. A reader sees six rows carrying numbers
+# and one carrying dashes and concludes renewal was weighed and found
+# irrelevant. Measured on the fixture the opposite is true: the verdict's own
+# winner flips from rent to the house at a flat renewal rate of 1.6052%, inside
+# the bracket the engine already uses for a contract rate.
+# ---------------------------------------------------------------------------
+
+# The financing-leg keys, per owned option. Candidates are inputs the config
+# STATES that carry no distribution and move an owned option's deterministic
+# PV; a sizing key of a drawn channel (`*_vol`, a hazard, a correlation) is
+# never one, by construction rather than by omission — `compute_deterministic`
+# reads no dispersion input, so a deterministic curve over a vol key is a flat
+# line, and a flat line under this heading would print "this risk does not
+# affect the verdict" about every risk (spec §6).
+REVERSAL_LEAVES: Tuple[str, ...] = ("mortgage_renewal_rates", "mortgage_rate")
+
+# The exactness gate's tolerance, as a multiple of the option's own PV standard
+# deviation. NOT a tuned threshold, and the measurement is what says so: on the
+# fixture the worst per-path deviation is 9.5e-16 of sd for both financing keys
+# against 2.7 and 2.9 for `house.value_growth_rate` and `rent.monthly_rent` —
+# fifteen orders of magnitude, so every figure in that gap licenses and refuses
+# exactly the same keys.
+REVERSAL_GATE_TOLERANCE = 1e-9
+
+# `BOUNDARY_FIELDS` split by HOW each one is located. The deterministic pair
+# comes off `solve_crossings`, reads no path, and is the same figure at any
+# `num_sims`; the futures pair is a step function of the axis found on the free
+# curve. Both kinds land in the same `ExactReversal.boundaries` tuple, because
+# `decomposition`'s exact/estimated axis is the GATE's, not this one — see the
+# section header.
+_DETERMINISTIC_FIELDS: Tuple[str, ...] = ("best", "runner_up")
+_FUTURES_FIELDS: Tuple[str, ...] = ("mc_best", "decisive")
+
+# How finely a futures field's bracket is scanned before an edge is bisected.
+# A deterministic field needs no scan (its crossing is solved), but `mc_best`
+# and `decisive` are STEP functions of the axis with no sign to bracket, so their
+# edges are found by scan-then-bisect and a flip lying entirely inside one
+# scan cell is not seen. The count is reported with every futures row so that
+# resolution is the reader's to judge: at 65 points a cell is 1/64 of the
+# bracket, 0.14 points of rate on the contract bracket, against the 0.24
+# points that separate the fixture's own two futures-side boundaries.
+REVERSAL_SCAN_POINTS = 65
+
+# The anchors that sit on a mortgage-rate axis — the published figures a reader
+# can put beside a guess. Named here rather than in a formatter so the axis and
+# the anchors on it have one home. A posted rate is a LIST PRICE that brackets a
+# guess from above; it is never a ceiling on a future renewal.
+_RATE_AXIS_ANCHORS: Tuple[str, ...] = (
+    "mortgage_rate.contracted_5y_uninsured",
+    "mortgage_rate.contracted_5y_insured",
+    "mortgage_rate.posted_5y",
+)
+
+
+def reversal_bracket(key: str) -> Optional[Tuple[float, float]]:
+    """The bracket a reversal row searches — the key's own `RATE_BRACKETS`
+    entry, or None for a key with no default range. A key with no range is not
+    a candidate: a bracket the register invented would be a width nobody
+    stated, and §6's whole claim for this register is that it carries no such
+    width anywhere."""
+    return RATE_BRACKETS.get(key.rsplit(".", 1)[-1])
+
+
+def reversal_candidates(raw: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """`[(key, option)]` — the financing-leg keys this config states, in the
+    engine's own option order.
+
+    A key the config does not state is not a candidate and never reaches the
+    admission measurement. That is what excludes an ALL-CASH option, and the
+    measurement could not have done it: measured on the fixture's `condo`, the
+    loader refuses `condo.mortgage_rate` outright (`all_cash: true is set
+    together with mortgage fields`) and refuses `condo.mortgage_renewal_rates`
+    for want of a renewal term — so probing either would report a loader
+    refusal as though it were a measured absence of effect.
+    """
+    out: List[Tuple[str, str]] = []
+    for option in ("condo", "house"):
+        if not isinstance(raw.get(option), dict):
+            continue
+        for leaf in REVERSAL_LEAVES:
+            key = f"{option}.{leaf}"
+            if base_value(raw, key) is not None and reversal_bracket(key) is not None:
+                out.append((key, option))
+    return out
+
+
+def reversal_admission(
+    raw: Dict[str, Any], key: str, hi: float,
+    *, base: Optional[ComparisonDeterministicResult] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """`(admitted, record)` — the admission test, which is a MEASUREMENT and
+    not a list (spec §6): one `load_at` + `compute_deterministic` at the far
+    end of the key's bracket, and the key is admitted only if some option's
+    deterministic PV moves.
+
+    A key that moves nothing is not printed as a flat curve; it is not a
+    candidate. The screen still has work to do on a key the config states — a
+    renewal term at or past the amortization makes the ladder inert, which the
+    loader warns about and prices as stated — so it is kept even though
+    `reversal_candidates` has already dropped the unstated keys.
+    """
+    base = base if base is not None else compute_deterministic(load_config_dict(raw))
+    options = _priced_options(raw)
+    try:
+        probe = compute_deterministic(load_at(raw, key, hi))
+    except (ConfigValidationError, ValueError, RateConventionError) as e:
+        return False, {"probe": hi, "moves": [], "deltas": {},
+                       "why": (f"the loader refuses {_fmt_value(key, hi)} — "
+                               f"{str(e).strip().splitlines()[-1].strip()}")}
+    deltas = {
+        option: getattr(probe, option).total_pv - getattr(base, option).total_pv
+        for option in options
+        if getattr(probe, option, None) is not None and getattr(base, option, None) is not None
+    }
+    moves = [option for option, delta in deltas.items() if delta != 0.0]
+    if not moves:
+        return False, {
+            "probe": hi, "moves": [], "deltas": deltas,
+            "why": (f"no option's present value moves at {_fmt_value(key, hi)}, the far end "
+                    f"of its bracket — the config states it and this run prices nothing by it"),
+        }
+    return True, {"probe": hi, "moves": moves,
+                  "deltas": {option: deltas[option] for option in moves}, "why": None}
+
+
+def reversal_gate(
+    raw: Dict[str, Any], key: str, probe: float,
+    *, paths: int = 200,
+    simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult] = run_monte_carlo,
+) -> Dict[str, Any]:
+    """The exactness test that licenses the free curve (spec §6), run on
+    `m = min(paths, num_sims)` paths. Two clauses, BOTH required:
+
+    (a) every option the key does not name is **bit-identical** — which is what
+        catches a key that moves the draw stream rather than the cash flows.
+        Measured: `rent.reset_hazard` names `rent` and moves the condo's and
+        the house's arrays too, because `_sample_reset_year` returns early
+        inside its own year loop, so the draw COUNT depends on the outcome.
+    (b) the option the key does name moves by **one constant on every path**:
+        `max |Δ_i − mean Δ| ≤ REVERSAL_GATE_TOLERANCE · sd(PV)`.
+
+    An exactness test, not a tolerance — see `REVERSAL_GATE_TOLERANCE`. The
+    mechanism behind the licence is readable rather than lucky: `_financing_pv`
+    is one terminal call and `equity_N = value_N·(1−s) − balance_N` has no
+    clamp, so `balance_N` separates additively from the path-dependent value.
+    """
+    option = key.split(".", 1)[0]
+    spec = load_config_dict(raw)
+    m = max(1, min(int(paths), int(spec.simulation.num_sims)))
+    base = simulate(load_at(raw, "simulation.num_sims", m))
+    at = simulate(load_at(with_value(raw, "simulation.num_sims", m), key, probe))
+    record: Dict[str, Any] = {
+        "paths": m, "probe": probe, "names": option,
+        "tolerance": REVERSAL_GATE_TOLERANCE,
+        "others_bit_identical": True, "moved_others": [],
+        "worst_deviation_over_sd": None, "licensed": False, "why": None,
+    }
+    for name in _priced_options(raw):
+        before, after = getattr(base, name, None), getattr(at, name, None)
+        if before is None or after is None:
+            continue
+        if name == option:
+            delta = after.pvs - before.pvs
+            sd = float(np.std(before.pvs))
+            worst = float(np.max(np.abs(delta - float(np.mean(delta)))))
+            record["worst_deviation_over_sd"] = (
+                worst / sd if sd > 0 else (0.0 if worst == 0.0 else math.inf))
+        elif not np.array_equal(before.pvs, after.pvs):
+            record["others_bit_identical"] = False
+            record["moved_others"].append(name)
+    deviation = record["worst_deviation_over_sd"]
+    if not record["others_bit_identical"]:
+        record["why"] = (
+            f"moving {key} moves {', '.join(record['moved_others'])} too, and this key names "
+            f"neither — it changes the draw stream, so no curve over it is free")
+    elif deviation is None:
+        record["why"] = f"{option} is not priced in this run, so its shift cannot be measured"
+    elif deviation > REVERSAL_GATE_TOLERANCE:
+        record["why"] = (
+            f"moving {key} shifts {option} by a DIFFERENT amount on different paths (worst "
+            f"{deviation:.2e} of its own sd, against {REVERSAL_GATE_TOLERANCE:.0e}) — the "
+            f"futures at another value have to be re-simulated, not shifted")
+    else:
+        record["licensed"] = True
+    return record
+
+
+def _cheapest_probabilities(
+    arrays: Dict[str, Any], options: Sequence[str],
+) -> Dict[str, Optional[float]]:
+    """`P(option cheapest)` from per-option PV arrays, by the SAME rule
+    `run_monte_carlo` uses — `argmin` over the options stacked in the engine's
+    own order — so a free curve's probability and a re-simulation's are the
+    same statistic and can be compared for exact equality."""
+    present = [o for o in options if o in arrays]
+    out: Dict[str, Optional[float]] = {o: None for o in ("condo", "house", "rent")}
+    if len(present) < 2:
+        return out
+    winners = np.argmin(np.stack([arrays[o] for o in present], axis=0), axis=0)
+    for index, name in enumerate(present):
+        out[name] = float(np.mean(winners == index))
+    return out
+
+
+def _free_curve(
+    raw: Dict[str, Any], key: str, options: Sequence[str],
+    det_base: ComparisonDeterministicResult, mc_base: ComparisonMonteCarloResult,
+    *, single_path: bool,
+) -> Callable[[float], Tuple[Verdict, Dict[str, Optional[float]]]]:
+    """`v -> (verdict, probabilities)` at no simulation cost, for a key the
+    exactness gate licensed.
+
+    Each option's PV array is shifted by its own DETERMINISTIC delta, each
+    summary is rebuilt from the shifted array, and the whole thing goes to
+    `models.compute_verdict` — the engine's own rule. Nothing here computes a
+    verdict, a state or a probability by arithmetic of its own.
+
+    `affordability_mc` is dropped rather than carried forward: the financing
+    leg moves an owner's annual cost, so the base run's breach probabilities
+    are NOT the ones that hold at this value and nothing may read them as if
+    they were. `compute_verdict` does not read them.
+    """
+    base_pv = {o: getattr(det_base, o).total_pv for o in options}
+    base_arr = {o: getattr(mc_base, o).pvs for o in options}
+    cache: Dict[float, Tuple[Verdict, Dict[str, Optional[float]]]] = {}
+
+    def at(value: float) -> Tuple[Verdict, Dict[str, Optional[float]]]:
+        v = float(value)
+        if v not in cache:
+            spec = load_at(raw, key, v)
+            det = compute_deterministic(spec)
+            arrays = {o: base_arr[o] + (getattr(det, o).total_pv - base_pv[o]) for o in options}
+            probs = _cheapest_probabilities(arrays, options)
+            mc = ComparisonMonteCarloResult(
+                **{o: (MonteCarloOptionResult(pvs=arrays[o],
+                                              summary=_summarize_array(arrays[o]))
+                       if o in arrays else None)
+                   for o in ("condo", "house", "rent")},
+                prob_condo_cheapest=probs["condo"], prob_house_cheapest=probs["house"],
+                prob_rent_cheapest=probs["rent"],
+                affordability_mc=None, market_scenario=mc_base.market_scenario)
+            cache[v] = (compute_verdict(det, mc, years=spec.simulation.years,
+                                        discount_rate=spec.simulation.discount_rate,
+                                        single_path=single_path), probs)
+        return cache[v]
+
+    return at
+
+
+def _matching_runs(values: Sequence[Any], target: Any) -> List[List[int]]:
+    """The maximal contiguous index runs of `values` equal to `target`."""
+    runs: List[List[int]] = []
+    current: List[int] = []
+    for index, value in enumerate(values):
+        if value == target:
+            current.append(index)
+        elif current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+    return runs
+
+
+def _region_boundaries(
+    key: str, field: str, says_now: Any, region_values: Sequence[Any],
+    region_span: Sequence[Tuple[float, float]],
+    edge_at: Callable[[int, int], Optional[float]],
+    bracket: Tuple[float, float],
+) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """The boundaries of the region(s) in which `field` still says what this
+    run says — plus the one anomaly this can produce.
+
+    There is no base POINT on the axis to measure a distance from when the
+    config states the input as a path. What is well defined, and what the
+    output prints, is the edge of the region whose answer matches the run's:
+    *the winner changes from rent to the house at 1.61%* means `best` is `rent`
+    above that value and `house` below it. `([], record)` comes back when the
+    run's own answer appears nowhere on the axis — reported, never dropped.
+    """
+    runs = _matching_runs(region_values, says_now)
+    if not runs:
+        return [], {
+            "attribute": field, "says_now": says_now, "bracket": list(bracket),
+            "why": (f"{field} says {says_now!r} in this run and says so nowhere in "
+                    f"{_fmt_value(key, bracket[0])}–{_fmt_value(key, bracket[1])}, so no "
+                    f"distance along this axis is a distance from what the run says"),
+        }
+    if len(runs) == 1 and len(runs[0]) == len(region_values):
+        return [], None                       # unchanged across the whole bracket
+    out: List[Dict[str, Any]] = []
+    for run in runs:
+        first, last = run[0], run[-1]
+        low = edge_at(first, -1) if first > 0 else None
+        high = edge_at(last, +1) if last < len(region_values) - 1 else None
+        holds = [low if low is not None else region_span[first][0],
+                 high if high is not None else region_span[last][1]]
+        if low is not None:
+            out.append({"attribute": field, "from": says_now, "to": region_values[first - 1],
+                        "value": low, "direction": "below", "holds": holds})
+        if high is not None:
+            out.append({"attribute": field, "from": says_now, "to": region_values[last + 1],
+                        "value": high, "direction": "above", "holds": holds})
+    return out, None
+
+
+def _ranking_at(raw: Dict[str, Any], key: str, value: float) -> Dict[str, Any]:
+    """`{best, runner_up}` at one value of the axis, read off `compute_verdict`
+    rather than a sort written here — the ranking rule has one home."""
+    spec = load_at(raw, key, value)
+    verdict = compute_verdict(compute_deterministic(spec), None,
+                              years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate, single_path=True)
+    return {"best": verdict.best, "runner_up": verdict.runner_up}
+
+
+def deterministic_boundaries(
+    raw: Dict[str, Any], key: str, lo: float, hi: float,
+    *, base: Optional[ComparisonDeterministicResult] = None, iterations: int = 60,
+) -> Dict[str, Any]:
+    """Every value in `[lo, hi]` at which the DETERMINISTIC verdict stops
+    saying what this config's own run says — the half of the reversal register
+    that carries no sample in it anywhere, and the half the deterministic
+    renewal-flip line of `2026-09-21-unpriced-dimensions.md` slice 2 calls.
+
+    ONE SOLVER, TWO CONSUMERS (seat ruling, mechanism): every value reported
+    here is `solve_crossings`' own figure on the relevant pair, so the number
+    this prints and the number `--break-even` prints on that pair are the same
+    number BY CONSTRUCTION rather than by a test comparing two bisections.
+    `--break-even` itself refuses a three-option config; its solver takes a
+    pair and a `totals_at` callable and is the one home for this truth.
+    """
+    spec = load_config_dict(raw)
+    options = _priced_options(raw)
+    refused: List[Dict[str, Any]] = []
+    crossings: List[Dict[str, Any]] = []
+    for index, a in enumerate(options):
+        for b in options[index + 1:]:
+            def totals_at(v: float, a: str = a, b: str = b) -> Optional[Tuple[float, float]]:
+                try:
+                    det = compute_deterministic(load_at(raw, key, v))
+                except (ConfigValidationError, ValueError, RateConventionError):
+                    return None
+                return getattr(det, a).total_pv, getattr(det, b).total_pv
+            declined: List[Tuple[float, str]] = []
+            try:
+                solved = solve_crossings(key, (a, b), lo, hi, totals_at,
+                                         is_int=key in INT_KEYS, iterations=iterations,
+                                         refused=declined)
+            except ValueError as e:
+                refused.append({"pair": [a, b], "why": str(e).strip().splitlines()[-1].strip()})
+                continue
+            for entry in solved["break_evens"]:
+                crossings.append({"pair": [a, b], **entry})
+    crossings.sort(key=lambda c: c["value"])
+    edges = [c["value"] for c in crossings]
+    span = [(x0, x1) for x0, x1 in zip([lo] + edges, edges + [hi])]
+    ranks = [_ranking_at(raw, key, 0.5 * (x0 + x1)) for x0, x1 in span]
+    # What the RUN says, from its own deterministic result rather than from any
+    # point of the axis — the stated input may be a path, which is not on it.
+    base = base if base is not None else compute_deterministic(spec)
+    stated = compute_verdict(base, None, years=spec.simulation.years,
+                             discount_rate=spec.simulation.discount_rate, single_path=True)
+
+    out: Dict[str, Any] = {
+        "key": key, "bracket": [lo, hi], "options": options, "crossings": crossings,
+        "regions": [{"from": x0, "to": x1, **rank} for (x0, x1), rank in zip(span, ranks)],
+        "boundaries": [], "unchanged": [], "anomalies": [], "refused": refused,
+    }
+    for field in _DETERMINISTIC_FIELDS:
+        found, anomaly = _region_boundaries(
+            key, field, getattr(stated, field), [rank[field] for rank in ranks], span,
+            lambda i, step: edges[i - 1] if step < 0 else edges[i], (lo, hi))
+        if anomaly is not None:
+            out["anomalies"].append(anomaly)
+        elif not found:
+            out["unchanged"].append({"attribute": field, "value": getattr(stated, field),
+                                     "bracket": [lo, hi]})
+        else:
+            for entry in found:
+                crossing = next((c for c in crossings if c["value"] == entry["value"]), None)
+                # No `exactness` field: the LIST is the home of that
+                # classification (see `reversal_register`), and a boundary
+                # carrying its own label could be quoted out of the list that
+                # gives it meaning.
+                out["boundaries"].append({
+                    **entry, "method": "break_even.solve_crossings",
+                    "pair": crossing["pair"] if crossing else None, "crossing": crossing})
+    out["boundaries"].sort(key=lambda b: b["value"])
+    return out
+
+
+def _step_edge(
+    attribute: Callable[[float], Any], says_now: Any, x_matching: float, x_other: float,
+    *, iterations: int = 90,
+) -> float:
+    """The extreme value at which `attribute` still equals `says_now`, bisected
+    between a value that matches and one that does not.
+
+    Not `solve_crossings`' bisection and deliberately not folded into it: that
+    one brackets a SIGN CHANGE of a continuous gap and reports the value where
+    the gap is zero. `mc_best` and `decisive` are step functions of a discrete
+    attribute — there is no gap and no sign — so what is bracketed is a change
+    of VALUE and what is returned is the last value on the run's own side of
+    the step, which is where the confirming re-simulation has to be run.
+    """
+    lo, hi = x_other, x_matching
+    for _ in range(iterations):
+        mid = 0.5 * (lo + hi)
+        if attribute(mid) == says_now:
+            hi = mid
+        else:
+            lo = mid
+        if abs(hi - lo) < 1e-12 * max(1.0, abs(hi)):
+            break
+    return hi
+
+
+def _identification(
+    field: str, boundary: Dict[str, Any], probs: Dict[str, Dict[str, Optional[float]]],
+    best: Optional[str], paths: int,
+) -> Dict[str, Any]:
+    """Whether a futures boundary is identified INSIDE Monte Carlo noise
+    (spec §6, refusal i): the bracket-wide `|ΔP|` of each probability the
+    boundary turns on, against `2·SE` at the boundary itself, where
+    `SE = sqrt(p(1−p)/N)`.
+
+    `SE` is taken at the boundary rather than at either end on purpose: that is
+    where the two probabilities meet, so it is where the standard error is
+    largest and the test is at its strictest.
+    """
+    if field == "mc_best":
+        watched = [o for o in (boundary["from"], boundary["to"]) if isinstance(o, str)]
+    else:
+        watched = [best] if best else []
+    rows = []
+    for option in watched:
+        p_lo, p_hi = probs["lo"].get(option), probs["hi"].get(option)
+        p_at = probs["at"].get(option)
+        if p_lo is None or p_hi is None or p_at is None:
+            continue
+        rows.append({"option": option, "delta_p": abs(p_hi - p_lo),
+                     "two_se": 2.0 * math.sqrt(max(p_at * (1.0 - p_at), 0.0) / paths)})
+    if not rows:
+        return {"identified": False, "paths": paths, "watched": [],
+                "why": "no probability is attached to this boundary, so it cannot be identified"}
+    worst = min(row["delta_p"] for row in rows)
+    noise = max(row["two_se"] for row in rows)
+    record = {"identified": worst > noise, "paths": paths, "watched": rows,
+              "delta_p": worst, "two_se": noise, "why": None}
+    if not record["identified"]:
+        record["why"] = (
+            f"across the bracket the probabilities this boundary turns on move by "
+            f"{worst:.4f}, inside the {noise:.4f} that {paths} paths cannot resolve — the "
+            f"boundary is not identified and is not reported")
+    return record
+
+
+def _futures_field_boundaries(
+    raw: Dict[str, Any], key: str, field: str, free: Callable[[float], Any],
+    stated: Verdict, lo: float, hi: float, *, scan_points: int,
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """`([boundary, ...], None)` or `([], reason)` for one FUTURES field.
+
+    `mc_best` and `decisive` are step functions of the axis with no sign to
+    bracket, so the bracket is scanned and each edge of the run that matches
+    what this run says is bisected. A flip lying entirely inside one scan cell
+    is not seen, which is why `scan_points` rides with every row.
+    """
+    xs = [lo + (hi - lo) * i / (scan_points - 1) for i in range(scan_points)]
+    values = [getattr(free(x)[0], field) for x in xs]
+    groups: List[Tuple[int, int, Any]] = []
+    start = 0
+    for i in range(1, len(values) + 1):
+        if i == len(values) or values[i] != values[start]:
+            groups.append((start, i - 1, values[start]))
+            start = i
+    span = [(xs[a], xs[b]) for a, b, _ in groups]
+
+    def edge_at(index: int, step: int) -> float:
+        a, b, _ = groups[index]
+        inside = xs[a] if step < 0 else xs[b]
+        outside = xs[groups[index - 1][1]] if step < 0 else xs[groups[index + 1][0]]
+        return _step_edge(lambda v: getattr(free(v)[0], field),
+                          getattr(stated, field), inside, outside)
+
+    found, anomaly = _region_boundaries(
+        key, field, getattr(stated, field), [g[2] for g in groups], span, edge_at, (lo, hi))
+    if anomaly is not None:
+        return [], anomaly["why"] + f" (scanned at {scan_points} points)"
+    if not found:
+        return [], (f"{field} says {getattr(stated, field)!r} at every one of {scan_points} "
+                    f"points across {_fmt_value(key, lo)}–{_fmt_value(key, hi)}, so no "
+                    f"boundary of it lies in the range this axis searches")
+    return found, None
+
+
+def _probability_pairs(probs: Dict[str, Optional[float]]) -> Tuple[Tuple[str, float], ...]:
+    """Option→P(cheapest) as ordered pairs, in the engine's own option order —
+    the shape `decomposition.Boundary` takes, so the frozen row is frozen all
+    the way down."""
+    return tuple((name, probs[name]) for name in ("condo", "house", "rent")
+                 if probs.get(name) is not None)
+
+
+# The label each candidate leaf prints under "NOT DRAWN IN THIS RUN" (§7). Two
+# entries rather than a derivation because the renewal row's wording is the
+# spec's own and the two rows are not the same claim: one is a schedule the
+# user invented, the other a contract they signed.
+_STATED_PATH_LABELS: Dict[str, str] = {
+    "mortgage_renewal_rates": "your renewal rate",
+    "mortgage_rate": "your contract rate",
+}
+
+
+def _stated_path_zero(raw: Dict[str, Any], key: str, option: str) -> StructuralZero:
+    """The §3.5 `stated_path` row for one financing key: zero spread BY
+    CONSTRUCTION, never a dash. `reversal_key` joins it to the reversal row
+    that carries its solved rates, which is the whole reason the row is worth
+    printing — a reader who sees a dash concludes renewal was weighed and found
+    irrelevant."""
+    leaf = key.rsplit(".", 1)[-1]
+    value = base_value(raw, key)
+    formatted = (", ".join(_fmt_value(key, float(v)) for v in value)
+                 if isinstance(value, list) else _fmt_value(key, float(value)))
+    # One reason per kind of key, not the ladder's reason pasted onto both. The
+    # forward-rate clause is TRUE of a renewal path and beside the point on a
+    # rate already contracted for the opening term, and a sentence that is true
+    # of the row it was written for is exactly what a category-general branch
+    # loses first (2026-09-22, the same find as the bracket refusal above).
+    if isinstance(value, list):
+        reason = (f"{key} is a path you stated, not a distribution — the engine anchors no "
+                  f"forward rate and draws none, so {option}'s renewals carry no spread here "
+                  f"at all. They carry a solved distance instead")
+    else:
+        reason = (f"{key} is one rate you stated, held for the opening term — no draw in this "
+                  f"engine touches it, so {option}'s financing carries no spread here at all. "
+                  f"It carries a solved distance instead")
+    return StructuralZero(
+        kind="stated_path", label=_STATED_PATH_LABELS.get(leaf, key),
+        keys=(key,), reason=reason,
+        stated_formatted=formatted, reversal_key=key)
+
+
+def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[StructuralZero]:
+    """§3.5's other two kinds, both resolved from the spec and costing no
+    evaluation. They live in the reversal register by ruling (§0.1 item 5),
+    because §7 renders them in the same section as the stated-path rows."""
+    out: List[StructuralZero] = []
+    if spec.income is not None and raw.get("income", {}).get("pay_drop_events"):
+        out.append(StructuralZero(
+            kind="no_pv_reach", label="your income", keys=("income.pay_drop_events",),
+            reason=("income.pay_drop_events moves the affordability report, not either "
+                    "option's present value, so it cannot move this margin")))
+    corr_keys = ("corr_inflation_condo", "corr_inflation_house",
+                 "corr_inflation_other", "corr_inflation_event_cost")
+    if (spec.economic.mode == "real" and spec.economic.inflation_vol > 0
+            and all(float(getattr(spec.simulation, name, 0.0) or 0.0) == 0.0
+                    for name in corr_keys)):
+        economy = next(c for c in CHANNELS if c.key == "economy")
+        out.append(StructuralZero(
+            kind="dead_draw", label=economy.label,
+            keys=("economic.inflation_vol",) + tuple(f"simulation.{n}" for n in corr_keys),
+            reason=("in REAL mode `_effective_growth_rate` discards the inflation factor by "
+                    "construction, and every corr_inflation_* is 0, so this channel draws "
+                    "every year and reaches no cash flow — detected from the config, with no "
+                    "evaluation spent on it. A measured 0.00 here would read as 'inflation "
+                    "does not matter', which is not what is true"),
+            channel_id=economy.id))
+    return out
+
+
+# Every `RATE_BRACKETS` entry is a span the assistant chose — the module's own
+# comment says so — and §6's correction is why the class is PRINTED: adding the
+# renewal entry converted an honest refusal into an answer, which is a stronger
+# act than replacing a silent default.
+BRACKET_SOURCE = "assistant"
+
+
+def reversal_register(
+    raw: Dict[str, Any],
+    det: ComparisonDeterministicResult,
+    mc: Optional[ComparisonMonteCarloResult],
+    *,
+    gate_paths: int = 200,
+    scan_points: int = REVERSAL_SCAN_POINTS,
+    simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult] = run_monte_carlo,
+    iterations: int = 60,
+) -> ReversalRegister:
+    """THE REVERSAL REGISTER — what would have to change for the verdict to
+    change, for each input in scope that this config STATES.
+
+    `det` and `mc` are THIS RUN's own results for `raw`, so a caller and the
+    register cannot disagree about the base case. `simulate` is the seam the
+    confirming re-simulation runs through: a test perturbs it and watches a
+    boundary refuse, without which "confirmed on the fixture" would be a check
+    that cannot fail.
+
+    ALL FOUR of `decomposition.BOUNDARY_FIELDS` are answered on every row, and
+    a kind this solver cannot reach on this config comes back as a
+    `RefusedBoundary` naming why (§0.1 ruling 4). An absent row and a refused
+    row are different claims and a reader cannot tell them apart.
+
+    RETURNS AN EMPTY REGISTER, and that is data rather than an error, when the
+    block itself refuses: fewer than two options priced (`single_option`), or
+    no futures at all (`no_futures` — `--no-monte-carlo`, or a single-path
+    run). `decomposition.REFUSAL_CODES` is where those live and the assembler
+    carries them; this function has no field for a block-level refusal and
+    invents none.
+
+    On no futures the DETERMINISTIC half is genuinely still available — a
+    crossing reads no path — and `decomposition.Boundary` requires both a
+    curve and a confirming set of probabilities, so it cannot express one.
+    `deterministic_boundaries` is the surface that answers there, and it is the
+    one the unpriced-dimensions renewal-flip line calls.
+    """
+    spec = load_config_dict(raw)
+    options = _priced_options(raw)
+    if len(options) < 2 or mc is None or single_path_run(spec):
+        return ReversalRegister(exact=(), estimated=(), structural_zeros=())
+
+    paths = int(spec.simulation.num_sims)
+    stated = compute_verdict(det, mc, years=spec.simulation.years,
+                             discount_rate=spec.simulation.discount_rate, single_path=False)
+    exact: List[ExactReversal] = []
+    estimated: List[EstimatedReversal] = []
+    zeros: List[StructuralZero] = []
+
+    for key, option in reversal_candidates(raw):
+        lo, hi = reversal_bracket(key)
+        admitted, _ = reversal_admission(raw, key, hi, base=det)
+        if not admitted:
+            # §6: a key that moves nothing is not printed as a flat curve; it
+            # is not a candidate. Absence is the ruled answer here, not a
+            # refusal — the flat curve is what must never appear.
+            continue
+        gate = reversal_gate(raw, key, hi, paths=gate_paths, simulate=simulate)
+        common = {
+            "key": key, "option": option,
+            # The STATED value, never flattened: the schedule is what the axis
+            # replaces, so one figure here would erase the trap.
+            "stated_formatted": _stated_formatted(raw, key),
+            "bracket_low": lo, "bracket_high": hi, "bracket_source": BRACKET_SOURCE,
+            "max_path_deviation_over_sd": gate["worst_deviation_over_sd"],
+            "references": _axis_references(key),
+            "path_note": flattened_path_note(raw, key),
+        }
+        if not gate["licensed"]:
+            # Unreachable for a financing-leg key on a correct engine —
+            # `_financing_pv` shifts every path by one constant — so arriving
+            # here means the licence evidence failed and the row exists to say
+            # so by name rather than vanish. Slice 1 refuses rather than
+            # estimating (§6), so the row carries no boundary at all.
+            estimated.append(EstimatedReversal(
+                **{k: v for k, v in common.items() if k != "references"},
+                references=common["references"],
+                boundaries=(),
+                refused_boundaries=tuple(
+                    RefusedBoundary(verdict_field=field, reason=gate["why"])
+                    for field in BOUNDARY_FIELDS)))
+            continue
+        boundaries, refused = _confirmed_boundaries(
+            raw, key, options, det, mc, stated, lo, hi, paths=paths,
+            scan_points=scan_points, simulate=simulate, iterations=iterations)
+        exact.append(ExactReversal(
+            **common, probe_paths=gate["paths"],
+            boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
+        zeros.append(_stated_path_zero(raw, key, option))
+
+    zeros.extend(_other_structural_zeros(raw, spec))
+    return ReversalRegister(exact=tuple(exact), estimated=tuple(estimated),
+                            structural_zeros=tuple(zeros))
+
+
+def _stated_formatted(raw: Dict[str, Any], key: str) -> str:
+    value = base_value(raw, key)
+    if isinstance(value, list):
+        return ", ".join(_fmt_value(key, float(item)) for item in value)
+    return _fmt_value(key, float(value))
+
+
+def _axis_references(key: str) -> Tuple[AxisReference, ...]:
+    """The published figures that sit on this axis, so a solved rate has
+    something cited to be read against."""
+    if key.rsplit(".", 1)[-1] not in ("mortgage_rate", "mortgage_renewal_rates"):
+        return ()
+    out: List[AxisReference] = []
+    for name in _RATE_AXIS_ANCHORS:
+        anchor = ANCHORS.get(name)
+        if anchor is None:
+            continue
+        out.append(AxisReference(
+            label=name.rsplit(".", 1)[-1].replace("_", " "), value=anchor.value,
+            formatted=_fmt_value(key, float(anchor.value)), anchor=name,
+            note=("a list price, to bracket a guess from above — never a ceiling on a "
+                  "renewal years from now" if name.endswith("posted_5y") else None)))
+    return tuple(out)
+
+
+def _confirmed_boundaries(
+    raw: Dict[str, Any], key: str, options: Sequence[str],
+    det: ComparisonDeterministicResult, mc: ComparisonMonteCarloResult,
+    stated: Verdict, lo: float, hi: float, *,
+    paths: int, scan_points: int,
+    simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult], iterations: int,
+) -> Tuple[List[Boundary], List[RefusedBoundary]]:
+    """Every one of `BOUNDARY_FIELDS` answered: a `Boundary` where one exists
+    and was confirmed, a `RefusedBoundary` naming why everywhere else.
+
+    Each reported boundary is confirmed by ONE FULL RE-SIMULATION at the solved
+    value, compared against the free curve's own probabilities at that same
+    value. A boundary of a futures field is additionally required to be
+    identified outside Monte Carlo noise before it is confirmed at all —
+    re-simulating an unidentified boundary would dress noise in a measurement.
+    """
+    free = _free_curve(raw, key, options, det, mc, single_path=False)
+    solved = deterministic_boundaries(raw, key, lo, hi, base=det, iterations=iterations)
+    per_field: Dict[str, Tuple[List[Dict[str, Any]], Optional[str]]] = {}
+    for field in _DETERMINISTIC_FIELDS:
+        found = [b for b in solved["boundaries"] if b["attribute"] == field]
+        if found:
+            per_field[field] = (found, None)
+        else:
+            anomaly = next((a for a in solved["anomalies"] if a["attribute"] == field), None)
+            unchanged = next((u for u in solved["unchanged"] if u["attribute"] == field), None)
+            per_field[field] = ([], anomaly["why"] if anomaly is not None else (
+                f"{field} is {unchanged['value']!r} at every point of "
+                f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}, so no boundary of it lies in "
+                f"the range this axis searches"
+                if unchanged is not None else
+                "no pair of options crosses in this bracket, so no boundary exists to solve"))
+    for field in _FUTURES_FIELDS:
+        per_field[field] = _futures_field_boundaries(
+            raw, key, field, free, stated, lo, hi, scan_points=scan_points)
+
+    reported: List[Boundary] = []
+    refused: List[RefusedBoundary] = []
+    for field in BOUNDARY_FIELDS:
+        found, reason = per_field.get(field, ([], "this field was not solved for"))
+        if reason is not None:
+            refused.append(RefusedBoundary(verdict_field=field, reason=reason))
+            continue
+        for entry in found:
+            value = entry["value"]
+            curve = free(value)[1]
+            if field in _FUTURES_FIELDS:
+                identified = _identification(
+                    field, entry,
+                    {"lo": free(lo)[1], "hi": free(hi)[1], "at": curve}, stated.best, paths)
+                if not identified["identified"]:
+                    refused.append(RefusedBoundary(verdict_field=field,
+                                                   reason=identified["why"]))
+                    continue
+            confirming = simulate(load_at(raw, key, value))
+            confirmed = {name: getattr(confirming, f"prob_{name}_cheapest")
+                         for name in ("condo", "house", "rent")}
+            if confirmed != curve:
+                refused.append(RefusedBoundary(verdict_field=field, reason=(
+                    f"the re-simulation at {_fmt_value(key, value)} disagrees with the free "
+                    f"curve (free {curve}, re-simulated {confirmed}) — the shift this boundary "
+                    f"rests on is not exact after all, so it is withheld")))
+                continue
+            reported.append(Boundary(
+                verdict_field=field, value=value,
+                was=str(entry["from"]), becomes=str(entry["to"]),
+                curve_probabilities=_probability_pairs(curve),
+                confirming_probabilities=_probability_pairs(confirmed)))
+    reported.sort(key=lambda b: (BOUNDARY_FIELDS.index(b.verdict_field), b.value))
+    return reported, refused
