@@ -126,7 +126,7 @@ item rather than a quiet default.
 
 ## 4. Which risk actually decides it
 
-**open, UNBLOCKED** · 1 and 3 have both landed
+**doing** · designed 2026-09-22, all forks ruled · spec `docs/specs/2026-09-22-which-risk-decides-it.md`
 
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a
