@@ -14,7 +14,10 @@ One economy per path: the inflation path is drawn ONCE per iteration as a
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import (
+    Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Protocol,
+    Sequence, Tuple, Union,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -47,6 +50,200 @@ from .market_scenario import (
 from .pv import pv_single, pv_recurring_with_escalation
 from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 
+# ---------------------------------------------------------------------------
+# The channel seam (docs/specs/2026-09-22-which-risk-decides-it.md 3.1-3.4)
+# ---------------------------------------------------------------------------
+# Seven channels partition this module's PRIMITIVE DRAWS rather than its config
+# keys. That is what makes the independence a decomposition assumes the
+# independence the engine actually has: `_correlated_z` composes independent
+# primitives into correlated shocks, so grouping by config key would import the
+# dependence back. Their ids are fixed by the spec's 3.1, which is their home --
+# 0 economy, 1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio --
+# and they appear at the draw sites below as integer literals, so no table
+# anywhere can renumber a committed measurement out from under itself.
+#
+# Id 7 is the household's income trajectory, and it is NOT a channel. Its draws
+# reach a boolean affordability flag and never a PV (3.5), so it can carry no
+# spread and move no level. It needs a stream only because it consumes draws,
+# and it must never share one with a channel that does reach a PV.
+#
+# The renter is TWO channels. `_simulate_rent_pv_once` has five draw sites and
+# exactly one of them, the per-year `z_inv`, is channel 6; the other four, plus
+# the tenancy's `reset_year`, are channel 5. Measured for 3.1: lumped, the
+# renter reads 0.809 of the spread and names nothing a household can act on;
+# split, the portfolio carries 0.877 of the spread while moving the expected
+# margin by an amount that does not resolve, and the shelter channel carries
+# 0.100 of it while moving the margin by +$125,074. One is pure risk, the other
+# an omitted cost, and a table that adds them together is not worth printing.
+
+# A channel's stream source: the generator its draw sites read, or a factory
+# from path index to that generator, which is what per-path addressing needs.
+StreamSource = Union[np.random.Generator, Callable[[int], np.random.Generator]]
+
+
+class Streams(Protocol):
+    """Channel id -> that channel's stream source. A plain dict satisfies it."""
+
+    def __getitem__(self, channel_id: int) -> StreamSource:
+        ...  # pragma: no cover - structural
+
+
+def channel_stream(
+    seed: int, matrix_id: int, channel_id: int, path_index: int
+) -> np.random.Generator:
+    """The generator one channel's draw sites read on ONE path (spec 3.2).
+
+    ADDRESSED, never positionally spawned: the stream is a pure function of
+    (matrix, channel, path). So path i's draws cannot depend on what path i - 1
+    drew, adding an eighth channel cannot move channels 0-6, and a config with a
+    different set of live channels gets the same draws for the ones it shares.
+
+    The per-path key is REQUIRED, not preferred, and this is the trap it closes.
+    `_sample_event_year_hazard` and `_sample_reset_year` both return early inside
+    their year loop, so their draw COUNT is a function of the outcome they
+    produce. One long stream per channel would therefore make path i's starting
+    offset depend on path i - 1's outcome: re-draw one channel to measure it and
+    every later path in that channel shifts, the pick-freeze pairs stop being
+    pairs, and the answer comes out wrong with nothing in the output to see it
+    by. Keyed per path, that property is structural rather than a coupling
+    nobody has introduced yet.
+    """
+    return np.random.default_rng(
+        np.random.SeedSequence(
+            entropy=seed, spawn_key=(matrix_id, channel_id, path_index)
+        )
+    )
+
+
+class _AddressedStreams:
+    """`channel_stream` in the shape `run_monte_carlo` takes.
+
+    Total over ids by construction, so id 7 resolves like any channel and a
+    caller cannot leave a draw site this run reaches unbound.
+    """
+
+    __slots__ = ("_seed", "_matrix", "_swapped")
+
+    def __init__(self, seed: int, matrix: int, swapped: Dict[int, int]) -> None:
+        self._seed = seed
+        self._matrix = matrix
+        self._swapped = swapped
+
+    def __getitem__(self, channel_id: int) -> StreamSource:
+        matrix = self._swapped.get(channel_id, self._matrix)
+        seed = self._seed
+        return lambda path_index: channel_stream(
+            seed, matrix, channel_id, path_index
+        )
+
+
+def addressed_streams(
+    seed: int,
+    matrix_id: int = 0,
+    swapped: Optional[Mapping[int, int]] = None,
+) -> _AddressedStreams:
+    """The spec's 3.2 binding: every channel taken from matrix `matrix_id`,
+    except the ids `swapped` names, which come from the matrix it maps them to.
+
+    So the two independent draws of the full channel set are
+    `addressed_streams(seed, 0)` and `addressed_streams(seed, 1)`, and the
+    pick-freeze matrix that differs from the first in channel c alone is
+    `addressed_streams(seed, 0, {c: 1})`.
+    """
+    return _AddressedStreams(int(seed), int(matrix_id), dict(swapped or {}))
+
+
+class _Binding:
+    """Which generator each draw site on ONE path reads, and which channels are
+    frozen at the value `compute_deterministic` uses (spec 3.4).
+
+    A draw site asks for its own channel by id and is handed nothing else. So a
+    site that reads the wrong channel moves the wrong generator's state, which is
+    visible even on a config where it changes no number -- the failure an
+    output-level assertion cannot see.
+    """
+
+    __slots__ = ("frozen",)
+
+    frozen: FrozenSet[int]
+
+    def gen(self, channel_id: int) -> np.random.Generator:
+        raise NotImplementedError  # pragma: no cover - abstract
+
+    def frozen_at(self, channel_id: int) -> bool:
+        return channel_id in self.frozen
+
+
+class _OneStream(_Binding):
+    """The legacy binding: EVERY channel maps to the same generator object.
+
+    This is what `streams=None` builds, and it is why there is exactly one draw
+    path through this module rather than two. The draw sites read their own
+    channel's generator; with every channel bound to one generator they consume
+    it in the order they always have, so a shipped run's stream is byte-identical
+    to the one it consumed before the seam existed.
+    """
+
+    __slots__ = ("_rng",)
+
+    def __init__(
+        self, rng: np.random.Generator, frozen: FrozenSet[int] = frozenset()
+    ) -> None:
+        self._rng = rng
+        self.frozen = frozen
+
+    def gen(self, channel_id: int) -> np.random.Generator:
+        return self._rng
+
+
+class _AddressedBinding(_Binding):
+    """One path's generators, resolved from a `streams` mapping on first ask.
+
+    Resolved ONCE per channel per path and cached: a draw site that re-derived
+    its own generator mid-path would restart that channel's stream and read the
+    same draws twice.
+    """
+
+    __slots__ = ("_sources", "_path", "_cache")
+
+    def __init__(
+        self, sources: Streams, path_index: int, frozen: FrozenSet[int]
+    ) -> None:
+        self._sources = sources
+        self._path = path_index
+        self._cache: Dict[int, np.random.Generator] = {}
+        self.frozen = frozen
+
+    def gen(self, channel_id: int) -> np.random.Generator:
+        got = self._cache.get(channel_id)
+        if got is None:
+            try:
+                source = self._sources[channel_id]
+            except KeyError:
+                raise ValueError(
+                    "streams binds no stream for channel %d, and a draw site on "
+                    "this run reads it. Every id the run reaches needs one "
+                    "(0 economy, 1 market, 2 population, 3 condo, 4 house, "
+                    "5 shelter, 6 portfolio, 7 income); `addressed_streams` "
+                    "binds them all." % channel_id
+                ) from None
+            got = source(self._path) if callable(source) else source
+            self._cache[channel_id] = got
+        return got
+
+
+def _as_binding(rng: Union[np.random.Generator, _Binding]) -> _Binding:
+    """Read a bare generator as the legacy binding.
+
+    Every draw helper and simulator below keeps `rng` in its signature and takes
+    either shape: a bare `np.random.Generator` means one stream for every channel
+    and nothing frozen, which is what a direct caller passes and what
+    `streams=None` builds.
+    """
+    if isinstance(rng, _Binding):
+        return rng
+    return _OneStream(rng)
+
 
 def _effective_growth_rate(base_rate: float, inflation_factor: float, econ: EconomicParams) -> float:
     """
@@ -58,16 +255,24 @@ def _effective_growth_rate(base_rate: float, inflation_factor: float, econ: Econ
 
 
 def _draw_inflation_factor(
-    rng: np.random.Generator,
+    rng: Optional[np.random.Generator],
     econ: EconomicParams,
+    frozen: bool = False,
 ) -> tuple[float, float]:
     """
     Draw an annual inflation factor and return (factor, z_inflation).
     Factor multiplies cash-flow escalation; z is used for correlated shocks.
+
+    `frozen` is the economy channel pinned to what `compute_deterministic` does
+    with inflation (spec 3.4): the base factor, a z of exactly 0.0, and NO draw
+    -- which is what `inflation_vol = 0` already does, so the freeze reproduces
+    the central case's treatment instead of approximating it. `rng` may then be
+    None, because nothing reads it.
     """
     base = 1.0 + (econ.inflation_rate if econ.mode == "nominal" else 0.0)
-    if econ.inflation_vol <= 0:
+    if frozen or econ.inflation_vol <= 0:
         return base, 0.0
+    assert rng is not None
     z = float(rng.normal())
     factor = float(base * np.exp(econ.inflation_vol * z - 0.5 * econ.inflation_vol ** 2))
     return factor, z
@@ -189,7 +394,7 @@ def _world_draws(spec: ComparisonSpec, prior_rows_by_option) -> WorldDraws:
 
 
 def _draw_path_world(
-    rng: np.random.Generator,
+    rng: Union[np.random.Generator, "_Binding"],
     econ: EconomicParams,
     years: int,
     draws: WorldDraws = WorldDraws(),
@@ -205,11 +410,18 @@ def _draw_path_world(
     that wires inflation uncertainty and nothing else keeps the stream it had
     when the world held only inflation.
     """
+    b = _as_binding(rng)
+    economy_frozen = b.frozen_at(0)
+    # The one place the economy's liveness is decided: a frozen channel and a
+    # zero vol both mean no draw and a z of 0.0, and both make every
+    # `corr_inflation_*` key inert through `PathWorld.corr` below.
+    inflation_draws = econ.inflation_vol > 0 and not economy_frozen
     n = max(0, years)
     factors: List[float] = []
     zs: List[float] = []
+    g_economy = b.gen(0) if inflation_draws else None
     for _ in range(n):
-        factor, z = _draw_inflation_factor(rng, econ)
+        factor, z = _draw_inflation_factor(g_economy, econ, economy_frozen)
         factors.append(factor)
         zs.append(z)
 
@@ -225,22 +437,30 @@ def _draw_path_world(
     crash_u: List[float] = []
     crash_z: List[float] = []
     if draws.crash:
+        g_market = b.gen(1)
         for _ in range(n):
-            crash_u.append(float(rng.random()))
-            crash_z.append(float(rng.normal()))
+            crash_u.append(float(g_market.random()))
+            crash_z.append(float(g_market.normal()))
 
     drift: Optional[Tuple[str, Dict[int, float]]] = None
     if draws.drift_bands:
-        scenario = SCENARIOS[int(rng.integers(0, len(SCENARIOS)))]
-        drift = (scenario, {h: float(rng.normal()) for h in draws.drift_bands})
+        g_population = b.gen(2)
+        scenario = SCENARIOS[int(g_population.integers(0, len(SCENARIOS)))]
+        drift = (scenario,
+                 {h: float(g_population.normal()) for h in draws.drift_bands})
 
     z_value: List[float] = []
     if draws.value_vol > 0:
-        z_value = [float(rng.normal()) for _ in range(n)]
+        # The value z is the MARKET's, the same channel as the crash: one
+        # housing market, so one channel, and within a path the same generator
+        # object -- the crash draws above and these consume one stream in this
+        # order.
+        g_value = b.gen(1)
+        z_value = [float(g_value.normal()) for _ in range(n)]
 
     return PathWorld(
         tuple(factors), tuple(zs), tuple(crash_u), tuple(crash_z), drift,
-        tuple(z_value), econ.inflation_vol > 0,
+        tuple(z_value), inflation_draws,
     )
 
 
@@ -595,7 +815,7 @@ def _simulate_condo_pv_once(
     sim: SimulationParams,
     econ: EconomicParams,
     world: PathWorld,
-    rng: np.random.Generator,
+    rng: Union[np.random.Generator, "_Binding"],
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
@@ -614,6 +834,16 @@ def _simulate_condo_pv_once(
     The inflation path comes from `world`, shared with every other option on
     this path; this function draws no inflation of its own.
     """
+    b = _as_binding(rng)
+    frozen = b.frozen_at(3)
+    g = b.gen(3) if not frozen else None
+    # Value dispersion and the crash are the MARKET's draws, not the condo's, so
+    # channel 1 owns their freeze: a multiplier of exactly 1.0 and never
+    # `exp(-vol**2 / 2)`, and `_apply_price_shock` not reached at all (spec 3.4).
+    value_vol = 0.0 if b.frozen_at(1) else sim.value_growth_vol
+    if b.frozen_at(1):
+        shock = None
+
     pv = 0.0
     r = sim.discount_rate
 
@@ -626,8 +856,15 @@ def _simulate_condo_pv_once(
 
     other_amounts = [c.annual_amount for c in condo.other_recurring_costs]
 
-    # Precompute event years
-    event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in condo.events}
+    # Precompute event years. Frozen, they are `compute_deterministic`'s own
+    # placement -- the CLAMPED expected year, so a config that sets min_year or
+    # max_year still reproduces the central case -- and no draw is taken.
+    if frozen:
+        from .deterministic import _event_year_deterministic
+        event_years = {event.name: _event_year_deterministic(event, sim.years)
+                       for event in condo.events}
+    else:
+        event_years = {event.name: _sample_event_year(event, sim.years, g) for event in condo.events}
 
     drift_context = _drift_context(prior_rows, world)
 
@@ -640,10 +877,14 @@ def _simulate_condo_pv_once(
         # two are different channels, and the crash is a shock to the value
         # the market had reached this year.
         terminal_value, = _apply_value_dispersion(
-            [terminal_value], sim.value_growth_vol, world.value_z(year), sim.shock_model)
+            [terminal_value], value_vol, world.value_z(year), sim.shock_model)
         if shock is not None:
             tilt = 1.0
-            if prior_rows is not None:
+            # `drift_context is None` beside wired prior rows is what a FROZEN
+            # population channel looks like (spec 3.4 pins the tilt at 1.0);
+            # before the freeze existed the pair was unreachable and this read
+            # `drift_context[0]` unguarded.
+            if prior_rows is not None and drift_context is not None:
                 horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
                 tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
             crash_u, crash_z = world.crash_draw(year)
@@ -653,8 +894,9 @@ def _simulate_condo_pv_once(
         # Condo fee with escalation and volatility
         fee_growth = _effective_growth_rate(fee_growth_base, inflation_factor, econ)
         fee_amount *= (1 + fee_growth)
-        z_fee = _correlated_z(z_inf, world.corr(sim.corr_inflation_condo), rng)
-        fee_amount *= _shock_multiplier(sim.condo_fee_vol, z_fee, sim.shock_model)
+        if not frozen:
+            z_fee = _correlated_z(z_inf, world.corr(sim.corr_inflation_condo), g)
+            fee_amount *= _shock_multiplier(sim.condo_fee_vol, z_fee, sim.shock_model)
         pv += pv_single(fee_amount, r, year)
 
         # Reserves
@@ -667,8 +909,11 @@ def _simulate_condo_pv_once(
         for idx, rec_cost in enumerate(condo.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
             other_amounts[idx] *= (1 + growth)
-            z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), rng)
-            other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
+            # `other_cost_vol` is one global key, but the LINE it multiplies
+            # belongs to an option, so this shock is the condo's channel.
+            if not frozen:
+                z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), g)
+                other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
 
         # Events
@@ -676,8 +921,11 @@ def _simulate_condo_pv_once(
             if event_years[event.name] is None:
                 continue
             if event_years[event.name] == year:
-                z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), rng)
-                event_cost = _sample_event_cost(event, z_event)
+                if frozen:
+                    event_cost = event.base_cost
+                else:
+                    z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), g)
+                    event_cost = _sample_event_cost(event, z_event)
                 covered = min(reserve_balance, event_cost)
                 reserve_balance -= covered
                 net_cost = event_cost - covered
@@ -704,7 +952,7 @@ def _simulate_house_pv_once(
     sim: SimulationParams,
     econ: EconomicParams,
     world: PathWorld,
-    rng: np.random.Generator,
+    rng: Union[np.random.Generator, "_Binding"],
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
@@ -722,6 +970,14 @@ def _simulate_house_pv_once(
     The inflation path comes from `world`, shared with every other option on
     this path; this function draws no inflation of its own.
     """
+    b = _as_binding(rng)
+    frozen = b.frozen_at(4)
+    g = b.gen(4) if not frozen else None
+    # Channel 1 again: the house reads the same market draws the condo does.
+    value_vol = 0.0 if b.frozen_at(1) else sim.value_growth_vol
+    if b.frozen_at(1):
+        shock = None
+
     pv = 0.0
     r = sim.discount_rate
 
@@ -730,7 +986,12 @@ def _simulate_house_pv_once(
     terminal_value = house.initial_value
 
     other_amounts = [c.annual_amount for c in house.other_recurring_costs]
-    event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in house.events}
+    if frozen:
+        from .deterministic import _event_year_deterministic
+        event_years = {event.name: _event_year_deterministic(event, sim.years)
+                       for event in house.events}
+    else:
+        event_years = {event.name: _sample_event_year(event, sim.years, g) for event in house.events}
 
     drift_context = _drift_context(prior_rows, world)
 
@@ -747,12 +1008,14 @@ def _simulate_house_pv_once(
         # Both tracks are the same asset, so both take the same move — the
         # treatment `_apply_price_shock` has always given them.
         house_value, terminal_value = _apply_value_dispersion(
-            [house_value, terminal_value], sim.value_growth_vol,
+            [house_value, terminal_value], value_vol,
             world.value_z(year), sim.shock_model)
 
         if shock is not None:
             tilt = 1.0
-            if prior_rows is not None:
+            # See the condo's copy: a frozen population channel is what makes
+            # `drift_context is None` reachable beside wired prior rows.
+            if prior_rows is not None and drift_context is not None:
                 horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
                 tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
             crash_u, crash_z = world.crash_draw(year)
@@ -761,16 +1024,18 @@ def _simulate_house_pv_once(
 
         maintenance_rate = _maintenance_rate_for_year(house, year)
         maint_t = maintenance_rate * house_value
-        z_house = _correlated_z(z_inf, world.corr(sim.corr_inflation_house), rng)
-        maint_t *= _shock_multiplier(sim.house_maintenance_vol, z_house, sim.shock_model)
+        if not frozen:
+            z_house = _correlated_z(z_inf, world.corr(sim.corr_inflation_house), g)
+            maint_t *= _shock_multiplier(sim.house_maintenance_vol, z_house, sim.shock_model)
         pv += pv_single(maint_t, r, year)
 
         # Other recurring costs with volatility
         for idx, rec_cost in enumerate(house.other_recurring_costs):
             growth = _effective_growth_rate(rec_cost.escalation_rate, inflation_factor, econ)
             other_amounts[idx] *= (1 + growth)
-            z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), rng)
-            other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
+            if not frozen:
+                z_other = _correlated_z(z_inf, world.corr(sim.corr_inflation_other), g)
+                other_amounts[idx] *= _shock_multiplier(sim.other_cost_vol, z_other, sim.shock_model)
             pv += pv_single(other_amounts[idx], r, year)
 
         # Events
@@ -778,8 +1043,11 @@ def _simulate_house_pv_once(
             if event_years[event.name] is None:
                 continue
             if event_years[event.name] == year:
-                z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), rng)
-                event_cost = _sample_event_cost(event, z_event)
+                if frozen:
+                    event_cost = event.base_cost
+                else:
+                    z_event = _correlated_z(z_inf, world.corr(sim.corr_inflation_event_cost), g)
+                    event_cost = _sample_event_cost(event, z_event)
                 pv += pv_single(event_cost, r, year)
 
     from .deterministic import _financing_pv, renewal_args_for
@@ -798,7 +1066,7 @@ def _simulate_rent_pv_once(
     sim: SimulationParams,
     econ: EconomicParams,
     world: PathWorld,
-    rng: np.random.Generator,
+    rng: Union[np.random.Generator, "_Binding"],
     tax: Optional[TaxParams] = None,
     reset_year: Optional[int] = None,
 ) -> float:
@@ -828,13 +1096,32 @@ def _simulate_rent_pv_once(
     Discounting uses `sim.discount_rate` directly, matching the condo/house
     simulators and the deterministic rent model.
     """
+    # THE RENTER SPLIT (spec 3.1). Five draw sites, and exactly one of them --
+    # the per-year `z_inv` on the invested capital -- is the portfolio channel.
+    # The other four, and the `reset_year` the caller draws, are shelter: the
+    # escalation shock, the renter's event years, their event-cost shocks and
+    # their other-cost shocks. Lumped, the two answer with one number that names
+    # nothing a household can act on; split, one row is pure risk and the other
+    # is a cost the central case omits.
+    b = _as_binding(rng)
+    shelter_frozen = b.frozen_at(5)
+    portfolio_frozen = b.frozen_at(6)
+    g_shelter = b.gen(5) if not shelter_frozen else None
+    # Frozen shelter is the tenancy `compute_deterministic` prices: one that
+    # never ends inside the horizon, so the own-rent track runs the whole way.
+    if shelter_frozen:
+        reset_year = None
+    esc_vol = 0.0 if shelter_frozen else sim.rent_escalation_vol
+    other_vol = 0.0 if shelter_frozen else sim.other_cost_vol
+    inv_vol = 0.0 if portfolio_frozen else sim.investment_return_vol
+
     dr = sim.discount_rate
 
     # One path-level escalation shock, scaling the composed rate exactly as it
     # did when that rate was a single scalar for the whole horizon.
-    if sim.rent_escalation_vol > 0:
-        z_esc = float(rng.normal())
-        esc_shock = _shock_multiplier(sim.rent_escalation_vol, z_esc, sim.shock_model)
+    if esc_vol > 0:
+        z_esc = float(g_shelter.normal())
+        esc_shock = _shock_multiplier(esc_vol, z_esc, sim.shock_model)
     else:
         esc_shock = 1.0
     esc_rates = [
@@ -863,15 +1150,24 @@ def _simulate_rent_pv_once(
     # against the world's z for the year the event lands in — before the world
     # this passed a hardcoded 0.0, because the renter had no z of their own).
     events_pv = 0.0
-    event_years = {event.name: _sample_event_year(event, sim.years, rng) for event in rent.events}
+    if shelter_frozen:
+        from .deterministic import _event_year_deterministic
+        event_years = {event.name: _event_year_deterministic(event, sim.years)
+                       for event in rent.events}
+    else:
+        event_years = {event.name: _sample_event_year(event, sim.years, g_shelter) for event in rent.events}
     for event in rent.events:
         year = event_years[event.name]
         if year is None:
             continue
-        z_event = _correlated_z(
-            world.z_inflation[year - 1], world.corr(sim.corr_inflation_event_cost), rng
-        )
-        event_cost = _sample_event_cost(event, z_event)
+        if shelter_frozen:
+            event_cost = event.base_cost
+        else:
+            z_event = _correlated_z(
+                world.z_inflation[year - 1], world.corr(sim.corr_inflation_event_cost),
+                g_shelter,
+            )
+            event_cost = _sample_event_cost(event, z_event)
         events_pv += pv_single(event_cost, dr, year)
 
     # Other recurring costs, optionally shocked — the SAME arithmetic the condo
@@ -896,17 +1192,17 @@ def _simulate_rent_pv_once(
             _effective_growth_rate(cost.escalation_rate, factor, econ)
             for factor in world.inflation_factors
         ]
-        if sim.other_cost_vol > 0:
+        if other_vol > 0:
             amount = cost.annual_amount
             for year in range(1, sim.years + 1):
                 amount *= (1 + esc_series[year - 1])
                 z_other = _correlated_z(
                     world.z_inflation[year - 1],
                     world.corr(sim.corr_inflation_other),
-                    rng,
+                    g_shelter,
                 )
                 amount *= _shock_multiplier(
-                    sim.other_cost_vol, z_other, sim.shock_model)
+                    other_vol, z_other, sim.shock_model)
                 other_pv += pv_single(amount, dr, year)
         else:
             # Switched off, the channel consumes NO draw and keeps the closed
@@ -941,10 +1237,14 @@ def _simulate_rent_pv_once(
         # never reaches a growth rate, so no stochastic figure belongs there.
         growth = 1.0
         taxed = 1.0
-        if sim.investment_return_vol > 0:
+        if inv_vol > 0:
+            # The ONE draw site in this function that is not the shelter's: the
+            # renter's capital is a portfolio, and a household can act on its
+            # risk in a way it cannot act on a landlord's.
+            g_portfolio = b.gen(6)
             for t in range(sim.years):
-                z_inv = float(rng.normal())
-                gross = (1 + inv_rates[t]) * _shock_multiplier(sim.investment_return_vol, z_inv, sim.shock_model)
+                z_inv = float(g_portfolio.normal())
+                gross = (1 + inv_rates[t]) * _shock_multiplier(inv_vol, z_inv, sim.shock_model)
                 growth *= gross
                 if tax is not None:
                     taxed *= after_tax_factor(gross, econ.mode, econ.inflation_rate,
@@ -977,7 +1277,7 @@ def _compute_income_affordability_once(
     condo_annual_costs: List[float],
     house_annual_costs: List[float],
     rent_annual_costs: List[float],
-    rng: np.random.Generator,
+    rng: Union[np.random.Generator, "_Binding"],
 ) -> dict:
     """
     For one MC path, draw a stochastic income trajectory and report, per option,
@@ -988,6 +1288,11 @@ def _compute_income_affordability_once(
     options (pay-drop timing/magnitude are common to the household, not the
     housing choice).
     """
+    # Id 7, and it is not a channel: everything drawn here reaches a boolean
+    # and never a PV, so it can carry no spread and move no level (spec 3.5).
+    # It gets a stream of its own only so that it cannot take draws from one
+    # that does reach a PV.
+    g = _as_binding(rng).gen(7)
     threshold = income.affordability_threshold
     growth = income.income_growth_rate
     if econ.mode == "nominal":  # REAL input, composed like the cost numerator
@@ -999,7 +1304,7 @@ def _compute_income_affordability_once(
     event_years: dict = {}
     for event in income.pay_drop_events:
         if event.year_jitter_std > 0:
-            ev_year = max(1, min(sim.years, round(event.year + rng.normal(0, event.year_jitter_std))))
+            ev_year = max(1, min(sim.years, round(event.year + g.normal(0, event.year_jitter_std))))
         else:
             ev_year = event.year
         event_years[id(event)] = ev_year
@@ -1012,7 +1317,7 @@ def _compute_income_affordability_once(
         for event in income.pay_drop_events:
             if event_years[id(event)] == year:
                 if event.magnitude_vol > 0:
-                    mag = event.magnitude * float(np.exp(rng.normal(0, event.magnitude_vol)))
+                    mag = event.magnitude * float(np.exp(g.normal(0, event.magnitude_vol)))
                     # A pay-drop event is a CUT by definition: the retained
                     # fraction is clamped to [0.01, 1.0] — the floor keeps a
                     # 99% cut as the worst representable outcome, the ceiling
@@ -1041,7 +1346,12 @@ def _compute_income_affordability_once(
     return result
 
 
-def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
+def run_monte_carlo(
+    spec: ComparisonSpec,
+    streams: Optional[Streams] = None,
+    *,
+    freeze: Iterable[int] = (),
+) -> ComparisonMonteCarloResult:
     """
     Run Monte Carlo simulation for all options present in the spec.
 
@@ -1054,6 +1364,23 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     Args:
         spec: ComparisonSpec bundling simulation/economic params and the
             present option parameters (condo/house/rent/income).
+        streams: which generator each channel's draw sites read, by channel id
+            (see the channel seam at the top of this module). Default None is
+            THE legacy binding: every channel on the same generator object,
+            `np.random.default_rng(sim.random_seed)`, consumed in the order the
+            draw sites have always consumed it. So a run that does not ask for a
+            decomposition takes not one extra draw and not one extra branch, and
+            `tests/fixtures/uncertainty_surface_mc_golden.json` is the proof.
+            A value may be a generator or a factory from path index to one;
+            `addressed_streams` builds the per-path-keyed binding of spec 3.2.
+        freeze: channel ids pinned to the value `compute_deterministic` uses,
+            drawing nothing (spec 3.4). With every channel frozen every path
+            prices the central case, which is the identity the level register
+            rests on. A PARTIAL freeze is only paired against an unfrozen run
+            when `streams` addresses each channel separately: under the legacy
+            binding the channels share one stream, so removing one channel's
+            draws shifts what every later draw site reads. The level register
+            passes `addressed_streams`; that is why.
 
     Returns:
         ComparisonMonteCarloResult with per-option results, ranking
@@ -1084,6 +1411,16 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     sim = spec.simulation
     econ = spec.economic
 
+    frozen = frozenset(int(c) for c in freeze)
+    outside = sorted(c for c in frozen if not 0 <= c <= 6)
+    if outside:
+        raise ValueError(
+            "freeze names %s, which is no channel: the ids are 0 economy, "
+            "1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio. "
+            "Id 7 is the income trajectory and is not freezable -- it reaches no "
+            "PV, so freezing it could change no figure." % (outside,)
+        )
+
     # Reject impossible appreciation once per run: the per-sim loops compound
     # terminal_value by (1 + value_growth_rate) year-by-year, which flips sign by
     # year parity when value_growth_rate <= -1 (mirrors the deterministic guard;
@@ -1113,7 +1450,15 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
     house_prior_rows = prior.rows_for_dwelling("house") if prior is not None and spec.house is not None else None
     provenance = prior.provenance_block() if prior is not None else None
 
-    rng = np.random.default_rng(sim.random_seed)
+    # THE draw path, and there is exactly one of it.
+    if streams is None:
+        _legacy: _Binding = _OneStream(np.random.default_rng(sim.random_seed), frozen)
+
+        def _bind(path_index: int) -> _Binding:
+            return _legacy
+    else:
+        def _bind(path_index: int) -> _Binding:
+            return _AddressedBinding(streams, path_index, frozen)
 
     # The HBP repayment leg per owned option — a constant on every path.
     from .deterministic import hbp_repayment_pv_for
@@ -1150,6 +1495,16 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
 
     # What the world must draw per path: read once from the spec, not per path.
     world_draws = _world_draws(spec, (condo_prior_rows, house_prior_rows))
+    if frozen:
+        # A frozen world channel draws nothing, which is exactly the shape
+        # `_world_draws` already has for a channel the spec does not wire. The
+        # multipliers those draws would have fed are pinned to 1.0 inside the
+        # simulators, never to `exp(-vol**2 / 2)`.
+        world_draws = WorldDraws(
+            crash=world_draws.crash and 1 not in frozen,
+            drift_bands=() if 2 in frozen else world_draws.drift_bands,
+            value_vol=0.0 if 1 in frozen else world_draws.value_vol,
+        )
 
     # The affordability channel reads an UNDISCOUNTED cost array per option and
     # compares it against a per-path income. A lease reset changes that array,
@@ -1167,32 +1522,43 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
                                              rent_reset_year=k)
 
     for i in range(n):
+        # This path's generators, resolved once and handed to every draw site in
+        # it. Under the legacy binding it is one object reused for every path;
+        # addressed, it is keyed per path, so path i's draws are a pure function
+        # of i and nothing a channel does on one path can shift another.
+        binding = _bind(i)
         # ONE economy and ONE housing market per iteration, drawn before any
         # option is priced.
-        world = _draw_path_world(rng, econ, sim.years, world_draws)
+        world = _draw_path_world(binding, econ, sim.years, world_draws)
         # The tenancy's own hazard: a HOUSEHOLD event, so it is drawn here
         # rather than in the world, but drawn ONCE per path — the PV leg and
         # the affordability leg must price the same tenancy. Consumes nothing
-        # at a hazard of zero, which is every spec shipped before 2026-09-21.
-        reset_year = (_sample_reset_year(spec.rent.reset_hazard, sim.years, rng)
-                      if spec.rent is not None else None)
+        # at a hazard of zero, which is every spec shipped before 2026-09-21,
+        # and nothing with the shelter channel frozen. This is one of the two
+        # draw sites whose COUNT depends on its own outcome, and the reason the
+        # addressed binding is keyed per path.
+        reset_year = None
+        if (spec.rent is not None and spec.rent.reset_hazard > 0
+                and not binding.frozen_at(5)):
+            reset_year = _sample_reset_year(
+                spec.rent.reset_hazard, sim.years, binding.gen(5))
         if spec.condo is not None:
             condo_pvs[i] = _simulate_condo_pv_once(
-                spec.condo, sim, econ, world, rng,
+                spec.condo, sim, econ, world, binding,
                 prior_rows=condo_prior_rows,
                 shock=spec.condo.price_shock,
                 hbp_repayment_pv=condo_hbp,
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
-                spec.house, sim, econ, world, rng,
+                spec.house, sim, econ, world, binding,
                 prior_rows=house_prior_rows,
                 shock=spec.house.price_shock,
                 hbp_repayment_pv=house_hbp,
             )
         if spec.rent is not None:
             rent_pvs[i] = _simulate_rent_pv_once(
-                spec.rent, sim, econ, world, rng, spec.tax, reset_year=reset_year)
+                spec.rent, sim, econ, world, binding, spec.tax, reset_year=reset_year)
         if spec.income is not None:
             rent_costs_this_path = (
                 afford_rent_by_reset.get(reset_year, afford_rent_costs)
@@ -1201,7 +1567,7 @@ def run_monte_carlo(spec: ComparisonSpec) -> ComparisonMonteCarloResult:
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,
                 afford_condo_costs, afford_house_costs, rent_costs_this_path,
-                rng,
+                binding,
             )
             if afford_condo_flags is not None:
                 afford_condo_flags[i] = flags.get("condo", False)
