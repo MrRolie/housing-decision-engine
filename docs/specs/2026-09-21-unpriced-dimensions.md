@@ -286,10 +286,41 @@ Refusal is the correct organ for a dimension whose bite is unbounded. An uncompu
 more dangerous than a computable one — the person gets a full page of internally consistent
 numbers answering a question they did not ask, and no line at the bottom undoes a page of them.
 
-**The obvious shortcut is already visible.** An assistant that types the tenure itself to clear
-the gate is caught by machinery that exists: `sources:` classes every input, so an
-assistant-supplied tenure surfaces in the read-back as an `assistant-typed:` entry, in BOTH
-blocks, where the user can see that nobody asked them. No new mechanism.
+**The obvious shortcut is already visible** — this was the claim, and it is WRONG. It read:
+"An assistant that types the tenure itself to clear the gate is caught by machinery that
+exists: `sources:` classes every input, so an assistant-supplied tenure surfaces in the
+read-back as an `assistant-typed:` entry, in BOTH blocks, where the user can see that nobody
+asked them. No new mechanism."
+
+**Corrected 2026-09-21, measured.** The key does surface. It does not surface as
+`assistant-typed:`.
+
+Declaring a key in `sources:` is OPTIONAL, and the party the rule polices is the party who
+decides whether to declare. Omit the line and the key lands under `unattributed:` instead — and
+`unattributed:` is where the STRUCTURAL keys live, the ones no one would think to declare. A run
+that states income but never classes it prints:
+
+```
+assistant-typed: discount_rate=4.2%, condo.value_growth_rate=4.2%
+unattributed: years=10, province='QC', economic.mode='nominal',
+              economic.inflation_rate=2.1%, income.annual_income=$94,000
+```
+
+The invented income sits in a comma-separated list beside `years=10` and `province='QC'`, read
+as the same class of thing, and the run exits 0 with nothing else said. An omission is
+therefore CHEAPER than a declaration for anyone who would rather not own a figure, which
+inverts what the mechanism is for.
+
+One case IS handled well and is worth keeping: a config with NO `sources:` block at all prints
+`sources: none declared — the read-back cannot tell the user's numbers from the assistant's`.
+The hole is the PARTIAL block, which reads as diligence.
+
+So §10's refusal stands — the organ is right, and a dimension with an unbounded bite must
+REFUSE rather than disclose. What does not stand is "no new mechanism". Something has to
+distinguish "nobody declares this key" from "the party who should have declared it did not",
+and today one list holds both. Whether that is a third class, a warning when a partial block
+omits a key the verdict reads, or a rule that a declared block must be complete, is open and
+belongs on the board rather than in this paragraph.
 
 The ladder in §3 gains a state at the top: **refused**, then not priced with no input, then not
 priced with the input unfilled, then priced.

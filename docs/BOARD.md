@@ -371,6 +371,60 @@ are the same false-sentence class item 14 just closed, and the first is a live d
 
 ---
 
+## 16. A partial `sources:` block reads as diligence
+
+**open** · found by round 12, measured · the honesty machinery's own blind spot
+
+`sources:` classes every input as the user's, the assistant's, or an anchor's, and the
+read-back prints the classes. Declaring a key is OPTIONAL, and the party the rule polices
+decides whether to declare. Omit a line and the key lands under `unattributed:` — which is
+where the STRUCTURAL keys live, the ones nobody would think to declare. A run that states an
+income the assistant invented and never classes it prints that income beside `years=10` and
+`province='QC'`, in one comma-separated list, and exits 0 with nothing further said.
+
+So an omission is CHEAPER than a declaration for anyone who would rather not own a figure,
+which inverts what the mechanism is for. A config with NO block at all is handled well — it
+says `sources: none declared` plainly. The hole is the PARTIAL block, which reads as diligence.
+
+The fix is not obvious and is the reason this is an item rather than a patch. Candidates: a
+third class distinguishing "nobody declares this" from "the party who should have did not"; a
+warning when a partial block omits a key the verdict reads; or a rule that a declared block
+must be complete. The last is the strictest and would refuse configs that are honest today.
+
+*Why now:* this defeats, quietly, the mechanism the whole honesty contract rests on, and it
+was found only because someone ran the engine as a user rather than reading it. It also
+retires a claim in `docs/specs/2026-09-21-unpriced-dimensions.md` §10 that the shortcut was
+already caught; that paragraph is corrected with the measurement.
+
+## 17. The renter cannot be charged anything on day one
+
+**open** · structural, measured on the existing-owner cohort
+
+`rent` has no year-0 cost channel at all. There is no `purchase_costs` sibling, and an event is
+refused below year 1 (`Event '...' has expected_year < 1`). So moving costs on the day of the
+move, a lease-break penalty, and the selling cost of a home being left are all inexpressible.
+
+Measured on a household that already owns, which is where it bites hardest. A Laval bungalow
+worth $610,000 against a $212,000 balance: the 5% cost of selling to become a renter is
+$30,500, and it has no home. Charged through the only workaround the schema allows — a year-1
+event, which also discounts it to $28,993 — the margin moves from $31,776 to $58,180. The
+engine tells the household staying wins by $31,776 when on their own numbers it is $58,180,
+nearly double.
+
+A correction that does NOT work, recorded because it is the intuitive one and it makes things
+worse: shrinking `rent.invested_down_payment` from gross equity to net proceeds expresses only
+$2,598 of the $30,500, because the renter's capital is charged at year 0 and credited at the
+horizon and is therefore near PV-neutral by construction. Applied ALONE it moves the answer
+FURTHER from the truth than doing nothing. Only a cost line carries the full weight, and there
+is no cost line.
+
+Shape of the fix: a `rent.purchase_costs` sibling, or admitting `expected_year: 0`. The
+refusal message names its constraint precisely, so the year-1 floor is deliberate rather than
+accidental — read why before relaxing it.
+
+*Why now:* it is the smallest piece of item 5 that can ship without the existing-owner frame,
+and it is the largest single numerical distortion round 12 found.
+
 ## Settled — do not reopen
 
 Rate convention (sticker rates in, converted once), the three-state verdict, the short
