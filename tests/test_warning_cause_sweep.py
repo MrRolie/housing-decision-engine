@@ -30,6 +30,21 @@ NON-FINDINGS, so the next sweep does not re-derive them:
 * `one-sided uncertainty` (whichever side is alone stochastic) and the renewal
   `not modelled` warning at a term of five years or less — both already fork
   their message on the branch, and their tests pin both forks.
+* `asymmetric tails` — `any(price_shock)` over the two owned options, and the
+  message says "an owned option carries a price_shock channel", true whichever
+  one has it; its remedy binds either way.
+* The per-option loops — the real-mode mortgage/affordability line (which forks
+  the payment it quotes), the `tax: like-for-like` ask (which forks on whether
+  the config typed `cash_available` or `down_payment`), the school-tax line, the
+  four renewal-ladder warnings and the under-20% insured line — each fires once
+  per option and names that option, so no branch speaks for another.
+* `unpriced.qualifying_rate_line` and `straight_switch_clause` — both fork on
+  `insured`, and their own comments record that the unforked sentence would be
+  false. The `time_anchor_violations` pair, `validity_warnings`,
+  `tfsa_room_warning` and the units tripwires each have one cause and one
+  message.
+* `sweep.one_sided_sweep_warning` — three branches (ABOVE, BELOW, and a
+  placeholder it cannot compare at all), each with its own sentence.
 """
 
 from hde.config import (affordability_warnings, coherence_warnings,
