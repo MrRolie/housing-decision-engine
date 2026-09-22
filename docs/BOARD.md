@@ -41,10 +41,27 @@ federal government's, so a citation to one is not a citation to the other. Silen
 and tested: no income block, no financed option, or no rate on the quoted axis, and nothing
 prints.
 
+**Corrected 2026-09-21, and the correction is the interesting part.** The line stated an
+ORIGINATION test in the engine's own voice with a citation attached. On a run that also
+prices a renewal that reads as a standing verdict on the household, and since 2024-11-21 it
+is not one — OSFI no longer prescribes the rate for an uninsured straight switch at renewal.
+The line now names which transaction its figures describe, in 39 words, and refuses rather
+than explains: an exemption from OSFI's prescribed rate is not an exemption from being
+assessed, and the engine cannot see which case the household is in, because a straight
+switch is defined by the amount carried over and the amortization kept, which no config
+states. The insured branch reports an absent source instead of borrowing the other branch's
+relief: this engine's insured loan is high-ratio, and the federal removal of 2024-12-16 is
+written for a prior low-ratio loan. **THE LINE CITES, THE ANCHORS RECITE** — the effective
+dates, the three conditions and the B-20 mechanism all left the line and are stored verbatim
+on the two anchors, one `--print-anchors` away. The first draft of the clause took the line
+to 205 words, longer than a version already rejected for length; that is where the rule came
+from.
+
 Left for slice 2: the renewal dimension in state two, which needs item 1's ladder; then the
 tenure field and its refusal (§10), which is independent of both and is the largest single
-gain in who the tool serves honestly. §15's straight-switch exemption — the one qualifier on
-the list that runs in the user's favour — rides the affordability line once renewal lands.
+gain in who the tool serves honestly. §15's straight-switch exemption is no longer waiting on
+renewal for its SCOPE clause — that shipped above — but the exemption as a priced effect on
+the affordability line still rides item 1's ladder.
 
 The engine says a great deal about what it does not KNOW: a figure with no source, an
 estimate the assistant chose, decisiveness resting on inputs the user never stated. It says
