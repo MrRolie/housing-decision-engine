@@ -533,13 +533,35 @@ The week bought correctness and maintainability. The week before moved a househo
 P(condo cheapest) from 0.0% to 19.8%. **Rank by encounter rate, not by severity**, is the
 lesson, and this list is ordered that way.
 
-1. **The capital-spread warning describes one of its two causes.** 4 of 4 households. Its guard
-   is a disjunction — the rates differ, OR a `tax:` block's drag moves a dollar — and its
-   sentence only ever describes the first. Reproduced at the seat: *"earns 5.2% … vs
-   discount_rate 5.2% — net capital term $6,978 … set investment_return_rate = discount_rate
-   for a neutral comparison or keep the spread deliberately."* There is no spread and the
-   remedy is a no-op; the term is tax drag. On one household it is 96% of the margin and the
-   difference between a tie and a decisive call. **In flight.**
+1. **The capital-spread warning describes one of its two causes. LANDED 2026-09-21, and the
+   seat's own diagnosis of it was wrong in a way worth recording.** Its guard is a disjunction
+   — the rates differ, OR a `tax:` block's drag moves a dollar — and its sentence only ever
+   described the first. 4 of 4 households met it; on one it is 96% of the margin and the
+   difference between a tie and a decisive call.
+
+   The seat reproduced *"earns 5.2% … vs discount_rate 5.2% — net capital term $6,978 … set
+   investment_return_rate = discount_rate"* and concluded the rates were equal, the remedy a
+   no-op and the term entirely tax drag. **All three were wrong.** Measured: the rates differ
+   by 3.70 basis points — 5.200% against 5.163%, the engine's 3% real default composed with
+   2.1% inflation — so that config is the BOTH state, and the rate remedy moves 3.9% of the
+   term rather than none of it.
+
+   **What made it read as a no-op was a second, separate defect: `rate_label` rounds to one
+   decimal, so two different figures both render "5.2%".** The sentence displayed two equal
+   numbers and claimed a spread between them. That is the falsehood actually on the screen, and
+   it is a display defect rather than a missing fork — a reader cannot audit a figure the
+   formatter has rounded into agreement with its neighbour. The line now spells out the first
+   decimal that separates them: *"vs discount_rate 5.2% (the two round alike: 5.200% against
+   5.163%)"*.
+
+   Both defects were real and both are fixed. The lesson is narrower than the fix: **a
+   reproduction shows you what the screen says, not why it says it.** The seat diagnosed the
+   cause from the rendered string and got the cause wrong while correctly identifying that the
+   string was false.
+
+   A third correction from the same builder: `tax.renter_capital` is only a PARTIAL remedy. On
+   that household the FHSA rollover haircut is 80% of the term and moves only with
+   `tax.retirement_marginal_rate`. The fixed sentence names two legs with two levers.
 2. **The threshold seed describes a purchase the household cannot make.** Operator ruled
    2026-09-21: seed ABOVE the insurance line, not below. See the convergence note below.
 3. **The no-crossing branch drops affordability entirely.** A sweep the lane forbids finds max
@@ -574,8 +596,31 @@ lane seeds a price BELOW the 20%-down ceiling. `PROMPTS.md` advertises that hous
 One design choice generating three defects means the sibling sweep here is the seed rule
 itself, not the three lines. Operator ruling: seed above the line.
 
-**One skill defect survives, and it is the only "the assistant should have said X" in the
-round.** Nothing in `SKILL.md` or its seven references routes a reader to `PROMPTS.md`'s limits
+**The category sweep found EIGHT reachable-and-false warnings, not one, and one of them was in
+the skill rather than the engine.** The sweep was the more valuable half of that fix, as
+briefed. Beyond the capital term and the rounding: the affordability warning's RENT row claimed
+a GDS shape with maintenance in the numerator and CMHC's 39% cap, to a tenant who has no
+mortgage and faces no lender test; the owned-down ask said *"owned options put $150,000 down"*
+on a $50k and a $100k option, a sum no option puts down; the decisiveness line said *"the user
+did not state"* of a figure the user typed but never declared, inferring an answer from silence;
+the firing gate could print *"net capital term $0 … set investment_return_rate =
+discount_rate"*; a zero-growth warning printed *"=0.0%"* to a household that had typed 2.1%; and
+the tax-only lead said the tax was *charged* where drag goes negative on a negative return,
+contradicting its own leg. All fixed.
+
+**The eighth was one layer up, in the instruction that drives every answer.**
+`.claude/skills/hde/references/gates.md` told the assistant *"When the return equals the
+discount rate the capital term nets to zero in PV"* — false under a `tax:` block, which is the
+same defect as the engine's, in the document that tells Claude what to say about it. An engine
+fix alone would have left the wrong sentence being spoken.
+
+Thirteen non-findings are recorded in `tests/test_warning_cause_sweep.py`'s module docstring, so
+the next sweep starts where this one stopped. Two test-reach limits were reported rather than
+hidden: the spread-plus-tax identity test pins the invariant in `tax_treatment.py` and cannot
+fail on any `config.py` mutation, and two mutations bite only on the FHSA fixtures.
+
+**One skill defect from round 12 survives, and it is the only "the assistant should have said X"
+in that round.** Nothing in `SKILL.md` or its seven references routes a reader to `PROMPTS.md`'s limits
 inventory — one grep hit across all of them, and it is about a long-tenure tenant. It cannot
 move into the engine: a complete static inventory printed every run is the degeneration §5
 forbids by name, and §8 assigns that inventory to a document. Only a skill can route a reader
