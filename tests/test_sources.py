@@ -250,13 +250,24 @@ class TestUncertaintyWarning:
         assert verdict.rule == "mc_floor"
         warns = uncertainty_source_warnings(spec, det, verdict)
         assert len(warns) == 1
-        assert warns[0].startswith("decisiveness rests on uncertainty inputs the user did not state:")
+        # An UNATTRIBUTED figure is one no sources: entry claims. The user may
+        # well have typed it, so the headline says what is known — nobody's
+        # name is on it — rather than reading the silence as an answer
+        # (2026-09-21; "silence is reported, never inferred").
+        assert warns[0].startswith(
+            "decisiveness rests on uncertainty inputs no sources: entry attributes — typed "
+            "in the config with nobody's name on them, so the engine cannot say whose "
+            "figures they are:")
+        assert "the user did not state" not in warns[0]
         assert "simulation.investment_return_vol=10.0% (unattributed)" in warns[0]
 
     def test_names_an_assistant_typed_input_as_assistant(self):
         spec, det, verdict = run(cfg({"simulation.investment_return_vol": "assistant"}))
         warns = uncertainty_source_warnings(spec, det, verdict)
         assert "simulation.investment_return_vol=10.0% (assistant)" in warns[0]
+        # the assistant chose it, so here the user really did not state it
+        assert warns[0].startswith(
+            "decisiveness rests on uncertainty inputs the user did not state:")
 
     def test_carries_the_deterministic_line(self):
         spec, det, verdict = run(cfg())

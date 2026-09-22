@@ -517,20 +517,30 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
     # An all-cash purchase puts the WHOLE price down — the case with the most
     # unmodeled renter capital (readiness plan B.5; the old sum read
     # down_payment, which is None for all_cash, so the warning never fired).
-    owned_down = sum(
-        (o.initial_value if o.all_cash else (o.down_payment or 0.0))
-        for o in (spec.condo, spec.house) if o is not None
-    )
+    owned_downs = [
+        (name, (o.initial_value if o.all_cash else (o.down_payment or 0.0)))
+        for name, o in (("condo", spec.condo), ("house", spec.house)) if o is not None
+    ]
+    owned_down = sum(down for _, down in owned_downs)
     if (
         owned_down > 0
         and spec.rent is not None
         and spec.rent.invested_down_payment == 0
     ):
+        # Each option's OWN figure, not the sum (2026-09-21): on a 3-way run the
+        # sum is a number no option puts down and no renter should invest — the
+        # like-for-like capital is ONE option's, the one being weighed.
+        # `tests/fixtures/uncertainty_surface.yaml` records the same tension
+        # from the other side.
+        stated = [(name, down) for name, down in owned_downs if down > 0]
+        figures = " and ".join(f"${down:,.0f} ({name})" for name, down in stated)
+        which = (" — a single figure cannot match both, so the option you are weighing "
+                 "sets it" if len(stated) > 1 else "")
         warns.append(
-            f"owned options put ${owned_down:,.0f} down but "
+            f"owned options put {figures} down but "
             f"rent.invested_down_payment=0 — the renter's equivalent capital is assumed to earn "
             f"exactly the discount rate (net present value 0); set invested_down_payment + "
-            f"investment_return_rate to model a different return"
+            f"investment_return_rate to model a different return{which}"
         )
     # The other half of that sentence (review F1, 2026-09-02): with capital
     # stated, the verdict-moving residual is D·[1 − ((1+r_inv)/(1+dr))^N] —
@@ -705,8 +715,15 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 f"understated, which biases the verdict {TOWARD_BUYING}"
             )
         if opt.value_growth_rate == 0:
+            # The figure the USER typed, beside the engine's real zero: a quote
+            # equal to inflation_rate deflates to EXACTLY 0% real, and this
+            # sentence then named a rate nobody entered and asked for a view
+            # that had been stated (2026-09-21). An omitted key has no quote
+            # behind it and still reads "0.0%".
             warns.append(
-                f"{name}.value_growth_rate=0.0% — no appreciation modelled ({NEUTRAL}); "
+                f"{name}.value_growth_rate="
+                f"{rate_label(spec, f'{name}.value_growth_rate', opt.value_growth_rate)}"
+                f" — no appreciation modelled ({NEUTRAL}); "
                 f"the verdict is sensitive to it: state a view or bracket it "
                 f"(a market_scenario prior adds drift in the Monte Carlo only)"
             )
@@ -1069,11 +1086,25 @@ def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
         ("house", rpt.house_ratios, rpt.years_house_exceeds),
     ):
         if ratios and exceeds:
+            # The numerator differs by option and so does the RULE behind the
+            # threshold. A tenant carries no mortgage, no maintenance and no
+            # lender test at all, and naming CMHC's GDS cap on that row told a
+            # renter a qualifying rule applies to them (2026-09-21). The rent
+            # numerator is rent plus the renter's own recurring costs and
+            # events — `_annual_costs_for_option`, which never reads a
+            # maintenance rate or a mortgage payment for it.
+            if name == "rent":
+                shape = ("rent plus the renter's own recurring costs over income, with no "
+                         "mortgage and no maintenance in it: a tenant faces no lender test, "
+                         "so this threshold is a budget line and not a qualifying rule")
+            else:
+                shape = ("GDS-shaped ratio (housing cost incl. maintenance over income, no "
+                         "other debts): CMHC's cap for that shape is 39% GDS, not the "
+                         "44% TDS")
             warns.append(
                 f"affordability: {name} housing cost exceeds {rpt.threshold:.0%} of income "
-                f"in years {exceeds} (max {max(ratios):.1%}) — GDS-shaped ratio (housing cost "
-                f"incl. maintenance over income, no other debts): CMHC's cap for that shape is "
-                f"39% GDS, not the 44% TDS [income.affordability_threshold]"
+                f"in years {exceeds} (max {max(ratios):.1%}) — {shape} "
+                f"[income.affordability_threshold]"
             )
     return warns
 
@@ -1095,6 +1126,12 @@ def uncertainty_source_warnings(
     the deterministic line alone says: in three of five evaluation answers the
     decision was called "too close to call" on volatility the user never
     stated, while the deterministic margin was decisive.
+
+    The headline forks on WHICH of those two classes fired (2026-09-21). An
+    UNATTRIBUTED input is one no `sources:` entry claims — typed in the config
+    with nobody's name on it — and "the user did not state" read that silence
+    as an answer, which is the one inference the source echo exists to refuse
+    ("silence is reported, never inferred", `sources`).
     """
     if verdict is None or verdict.rule != "mc_floor":
         return []
@@ -1113,8 +1150,18 @@ def uncertainty_source_warnings(
         + f" ({e.source})"
         for e in unstated
     )
+    classes = {e.source for e in unstated}
+    if classes == {"assistant"}:
+        lead = "uncertainty inputs the user did not state"
+    elif classes == {"unattributed"}:
+        lead = ("uncertainty inputs no sources: entry attributes — typed in the config "
+                "with nobody's name on them, so the engine cannot say whose figures "
+                "they are")
+    else:
+        lead = ("uncertainty inputs the assistant typed or that no sources: entry "
+                "attributes")
     return [
-        f"decisiveness rests on uncertainty inputs the user did not state: {named} — "
+        f"decisiveness rests on {lead}: {named} — "
         f"the deterministic line alone says {det_only.best} by "
         f"${det_only.margin_pv:,.0f} ({det_only.margin_frac:.1%} of its PV — "
         f"{'' if det_only.decisive else 'not '}decisive under the {band:.0%} band)"

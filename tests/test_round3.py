@@ -350,7 +350,14 @@ class TestRoundFiveWarningsAndNotes:
         spec = load_config_dict(_base(income={"annual_income": 40_000}))
         det = compute_deterministic(spec)
         warns = affordability_warnings(det)
-        assert warns and "GDS-shaped" in warns[0] and "39% GDS" in warns[0] and "44% TDS" in warns[0]
+        owned = [w for w in warns if w.startswith("affordability: condo")]
+        assert owned and "GDS-shaped" in owned[0] and "39% GDS" in owned[0] and "44% TDS" in owned[0]
+        # A tenant carries no mortgage, no maintenance and no lender test, so
+        # the GDS cap is not theirs to be measured against (2026-09-21).
+        rent = [w for w in warns if w.startswith("affordability: rent")]
+        assert rent and "GDS" not in rent[0] and "CMHC" not in rent[0]
+        assert ("a tenant faces no lender test, so this threshold is a budget line and not "
+                "a qualifying rule") in rent[0]
 
     def test_schema_states_the_prior_base_convention_and_the_shipped_geographies(self):
         import json
