@@ -59,6 +59,8 @@ reading the prose.** A field either exists or it does not, and that question can
 vaguely.
 
 **1. The level register computes its own baseline, and the block says which sample it is.**
+*(Amended by item 19: the equality below is bit-exact across paths with a ULP budget on the
+margin, not bit-exact on the margin.)*
 The register's freeze comparisons are PAIRED against `A`, so its baseline must be `f(A[:m])`
 computed from `A`, never borrowed from `verdict`. And `verdict.prob_best` comes from the LEGACY
 binding — one generator, the shipped stream — while `A` is spawn-keyed, so the two are different
@@ -200,6 +202,49 @@ source, which breaches the correction at the end of §6: a bracket that converts
 refusal into an answer must show the reader the range it chose and whose figure it is. (c) §6
 licenses `<opt>.mortgage_rate` for slice 1 and measures it; §7 renders no row for it. All three
 are the formatter's to fix.
+
+**19. "BIT FOR BIT" IS FALSE OF THE MARGIN, and §3.4 asserted it in the same sentence as the
+figure that disproves it.** §3.4 says the all-frozen `f` equals `verdict.margin_pv` "bit for
+bit" and, in the same breath, "max deviation 5.8e-11". Both cannot be true. Measured by the
+track that built the seam: the deviation is 5.821e-11, **exactly 1 ULP of the $476,086 house
+total** and 16 ULP of the $31,349 margin, and it is structural — the simulators compound the
+value track year by year while `deterministic.py` takes `(1 + g) ** years`. The renter, whose
+frozen legs collapse to the same closed forms, IS exact to the bit.
+
+The instrument is therefore: bit-equality ACROSS PATHS, which is what a missed draw site
+actually breaks, PLUS a ULP budget scaled to the totals subtracted. Chasing bit-exactness on
+the margin would mean changing how the deterministic side compounds, which is a different
+feature and a worse trade. The frozen `f` measured 31348.656074629107 against this document's
+31348.656075 — its own figure to the last printed digit, which is the evidence that the
+assembly is right and the CLAIM was wrong.
+
+**20. A partial freeze under the legacy binding REFUSES.** It was shipped permitted and
+documented in a docstring; that is reversed. A partial freeze with `streams=None` runs, returns
+a plausible answer, and is wrong as a paired comparison — the exact shape this repo treats as
+the cardinal failure, and its silent form. A docstring is read by whoever is already suspicious,
+and a caller reaching for a partial freeze under the legacy binding is by definition not.
+`freeze=()` stays legal and the ALL-frozen case stays legal, because no draw is taken at all and
+the binding cannot matter; the states in between refuse, by name.
+
+**21. Income is channel id 7, outside the seven.** §3.1 says income is not a channel and income
+still draws. It binds to 7, never shared with a channel that reaches a PV, refused by name in
+`freeze`, and a hand-built binding missing an id the run reaches RAISES naming the channel
+rather than falling back quietly.
+
+**22. §3.6 LIVENESS IS NOT "DOES THE CHANNEL DRAW", and the arithmetic in that section is
+wrong.** With every volatility in a spec set to zero, three streams still move: the cost shocks
+are drawn and THEN multiplied by a zero vol rather than skipped, and all three options'
+event-cost draws are unconditional. So any priced option with a cost line consumes draws in its
+channel while moving no number. **A channel that draws is not a channel that moves a number.**
+Liveness is computed from what REACHES A CASH FLOW. It belongs beside `_world_draws`, which
+already reads the spec once for exactly this kind of question, and it is the assembler's to
+build.
+
+This one is worth pausing on, because it is the mirror image of the failure §3.2 is built
+against. There, a leaked draw is invisible in the output, so the test must assert on generator
+state. Here, a consumed draw is visible in the state and means nothing, so the liveness count
+must NOT be taken from the state. The same instrument answers one question and lies about the
+other.
 
 ---
 
