@@ -151,6 +151,24 @@ Their question is not rent or buy, it is stay, downsize, or sell and rent.
 Build: an existing-mortgage starting state, and the owned option able to begin mid-life.
 Much of the machinery exists; the renewal schedule from item 1 is most of the hard part.
 
+**One piece of it measured, 2026-09-21, because a measurement beats an adjective.** For an
+existing owner the alternative is not "rent instead of buying", it is SELL AND THEN RENT — and
+selling costs money on the day they do it. The engine charges `selling_cost_rate` once, at the
+HORIZON, on the owned side only (`_financing_pv`: `equity_N = value_N * (1 - selling_cost_rate)
+- balance_N`). There is no field anywhere for a cost the RENT option incurs at year 0: `rent`
+has no `purchase_costs` sibling, and an event is refused below year 1.
+
+On a Laval bungalow worth $610,000 against a $212,000 balance, the 5% cost of selling is
+$30,500. Charged as a year-1 event — the only workaround the schema allows, and nothing tells a
+user to build it — the margin moves from $85,669 to $114,939. That is **34% of the margin the
+engine reports without it**, on a verdict it reports as decisive.
+
+A first correction was tried and was WRONG, which is worth recording: crediting the renter with
+gross equity rather than net proceeds moves the margin by only $2,939, because the renter's
+capital is charged at year 0 and credited at the horizon and therefore nearly PV-neutral by
+construction. The gap is not in the capital figure. It is that the engine prices the cost of
+BECOMING an owner and has no way to price the cost of CEASING to be one.
+
 *Why here and not higher:* items 1, 3 and 4 are on a clock that this one is not. That is a
 scheduling reason, not a judgment that this matters less. It is the largest hole in who the
 tool serves, and the ranking is worth re-arguing.
