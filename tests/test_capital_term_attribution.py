@@ -241,6 +241,23 @@ class TestSilence:
         assert not [w for w in coherence_warnings(spec)
                     if w.startswith("rent: invested capital") and "vs discount_rate" in w]
 
+    def test_a_rate_difference_too_small_to_be_a_dollar_says_nothing(self):
+        """The fixture that separates the two gates. A tenth of a nanopoint
+        clears the old 1e-12 test on the RATES and is worth $0.00006 on
+        $60,000 over ten years, so the old guard fired and printed "net
+        capital term $0 credited to the renter" with a remedy attached. The
+        gate is the dollars, so this is silent."""
+        doc = cfg(discount_rate=0.051, rent={"investment_return_rate": 0.0510000001})
+        spec = load_config_dict(doc)
+        r_inv = (1 + spec.rent.investment_return_rate) * (1 + PI) - 1
+        # the rates DO differ by more than the tolerance the old guard used
+        assert abs(r_inv - spec.simulation.discount_rate) > 1e-12
+        terminal = renter_terminal_for(spec)
+        disc = (1 + spec.simulation.discount_rate) ** spec.simulation.years
+        assert abs(terminal.capital - terminal.value / disc) < 0.5
+        assert not [w for w in coherence_warnings(spec)
+                    if w.startswith("rent: invested capital") and "vs discount_rate" in w]
+
     def test_no_renter_capital_no_sentence(self):
         doc = cfg(rent={"invested_down_payment": 0})
         spec = load_config_dict(doc)

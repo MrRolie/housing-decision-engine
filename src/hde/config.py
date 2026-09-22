@@ -603,9 +603,14 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
                 # The rates carry none of the term, so the rate remedy is a
                 # no-op and the sentence says so: the levers are the ones each
                 # leg names.
+                # `charged` is a sign word and the drag turns negative on a
+                # negative return (the after-tax factor then beats the gross
+                # one), so it forks with the component like every other one
+                # here.
                 tail = ("the rate spread carries none of it, so setting "
                         "investment_return_rate = discount_rate changes nothing here — the "
-                        "whole term is the tax the engine charged"
+                        f"whole term is the tax the engine "
+                        f"{'charged' if tax_pv > 0 else 'credited back'}"
                         + (f": {' and '.join(legs)}" if legs else ""))
             elif not tax_named:
                 tail = ("set investment_return_rate = discount_rate for a neutral comparison "
