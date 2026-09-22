@@ -308,6 +308,110 @@ class Anchor:
 # stored values against it (tests/test_unpriced.py).
 MQR_RULE = "The greater of the mortgage contract rate plus 2% or 5.25%."
 
+# THE SCOPE LIMIT ON THAT RULE, from the SAME OSFI page, and its only home.
+# `MQR_RULE` says what the test is; this says one transaction the test is not
+# prescribed for. The two live together because a rule and the boundary of the
+# rule are one truth: split across two registry rows they could drift, and the
+# run would state a test that no longer reaches the household it is shown to.
+#
+# It is NOT a separate anchor row for a second reason, recorded so a later
+# reader does not "fix" it: `Anchor` refuses a sourced entry with no figure
+# (`value=None` is legal only for `kind="unsourced"`, which MEANS no source),
+# and this is a rule, not a number — a row for it would have to invent one.
+# The registry's own two-authority form (below) is the precedent: a second
+# published authority rides inside `source` with its own date and URL.
+MQR_STRAIGHT_SWITCH = (
+    "when a borrower switches their uninsured mortgage from one federally "
+    "regulated lender to another with no increase to: the amortization period, "
+    "nor the loan amount.")
+
+# The two effective dates, one home each, read by the registry entries below
+# AND by the line in `unpriced` — so the date a household is told and the date
+# the registry stores cannot disagree. ISO here; each source's own spelling of
+# the same day is quoted verbatim in the entries and pinned by a test.
+MQR_STRAIGHT_SWITCH_EFFECTIVE = "2024-11-21"      # OSFI, UNINSURED straight switches
+MQR_INSURED_SWITCH_EFFECTIVE = "2024-12-16"       # Finance Canada, LOW-RATIO insured
+
+# What the uninsured exemption does NOT relieve, verbatim, because the whole
+# way to get this wrong in the generous direction is to read "exempt from the
+# prescribed MQR" as "not tested".
+MQR_B20_STILL_APPLIES = (
+    "When considering an uninsured straight switch application, an institution "
+    "should assess the loan like any other new origination and should continue "
+    "to apply principles of sound residential mortgage underwriting set out in "
+    "Guideline B-20.")
+
+# The straight-switch paragraph both legs carry, built once so the two entries
+# cannot state different scope for the same rule.
+_MQR_SWITCH_SOURCE = (
+    "; SCOPE, from the same page and effective "
+    + MQR_STRAIGHT_SWITCH_EFFECTIVE + " — lenders are not expected to apply the "
+    "MQR to uninsured mortgage straight switches at renewal, « "
+    + MQR_STRAIGHT_SWITCH + " » (the page also states « Guideline B-20 sets the "
+    "expectation that lenders apply the MQR to most newly underwritten "
+    "residential mortgagors »); announced by OSFI, « OSFI exempts uninsured "
+    "mortgage straight switches from the prescribed MQR and implements "
+    "portfolio LTI limits », November 21, 2024 "
+    "(osfi-bsif.gc.ca/en/guidance/guidance-library/osfi-exempts-uninsured-"
+    "mortgage-straight-switches-prescribed-mqr-implements-portfolio-lti-limits)"
+    " — « OSFI will no longer prescribe the minimum qualifying rate (MQR) that "
+    "it expects federally regulated financial institutions to apply when "
+    "uninsured mortgage borrowers switch to a new institution at renewal », a "
+    "straight switch being « An existing stand-alone uninsured mortgage; from "
+    "one federally regulated financial institution to another; with no "
+    "increases in the remaining contractual mortgage amortization period or "
+    "the loan amount » — AND NOT A RELIEF FROM UNDERWRITING: « "
+    + MQR_B20_STILL_APPLIES + " », with the backgrounder (« Backgrounder: "
+    "Minimum Qualifying Rate (MQR) », November 21, 2024, "
+    "osfi-bsif.gc.ca/en/news/backgrounder-minimum-qualifying-rate-mqr) adding "
+    "« Lenders should continue to consider current and future conditions as "
+    "they determine qualifying rates »"
+    "; and, on the INSURED side, a SEPARATE and NARROWER measure — Department "
+    "of Finance Canada, « “Straight Switches” and portfolio insurance », "
+    "December 16, 2024 (canada.ca/en/department-finance/news/2024/12/straight-"
+    "switches-and-portfolio-insurance.html), effective "
+    + MQR_INSURED_SWITCH_EFFECTIVE + ": « This measure will remove the minimum "
+    "qualifying rate requirement for low-ratio (i.e., loan-to-value up to 80 "
+    "per cent) renewals », conditional on « The borrower's mortgage was "
+    "originated at a federally regulated financial institution and previously "
+    "assessed against the minimum qualifying rate », « The borrower will renew "
+    "their mortgage with a new lender at renewal », « The borrower has "
+    "maintained the existing contractual amortization schedule » and « The "
+    "borrower's unpaid principal balance may be increased by $3,000 to cover "
+    "related transaction costs such as penalties or fees. Equity take out is "
+    "not permitted » — enacted as SOR/2025-55, Regulations Amending the "
+    "Insurable Housing Loan Regulations and the Eligible Mortgage Loan "
+    "Regulations (Canada Gazette Part II, 2025-03-12), whose carve-out applies "
+    "only where « the loan is for the discharge of the outstanding balance of "
+    "a prior low ratio loan »")
+
+# The scope paragraph for the rationales, built once for the same reason.
+_MQR_SWITCH_RATIONALE = (
+    "SCOPE IN TIME AND TRANSACTION — the rule is an ORIGINATION test and since "
+    + MQR_STRAIGHT_SWITCH_EFFECTIVE + " it is not prescribed for one renewal "
+    "transaction. OSFI no longer prescribes the MQR for an UNINSURED STRAIGHT "
+    "SWITCH: a move to another federally regulated lender with no increase to "
+    "the loan amount or the remaining amortization (quoted in `source`). THREE "
+    "THINGS THIS ENGINE MAY NEVER SAY OFF IT. (1) Whether a given household's "
+    "renewal IS a straight switch is a fact about their actual transaction — "
+    "the amount taken and the amortization kept — that no config states and no "
+    "run can observe, so the surface names the exemption as a case it does not "
+    "price and never claims it for the user; told they are exempt when they "
+    "are not, they meet the refusal at the branch. (2) The relief is from "
+    "OSFI's PRESCRIBED rate, not from being assessed: OSFI still expects the "
+    "loan assessed « like any other new origination » under Guideline B-20, "
+    "with the lender setting its own qualifying rate. (3) THE INSURED SIDE IS "
+    "NOT THE SAME MEASURE. The federal removal is dated "
+    + MQR_INSURED_SWITCH_EFFECTIVE + ", not "
+    + MQR_STRAIGHT_SWITCH_EFFECTIVE + ", and by its own words covers the "
+    "renewal of a prior LOW-RATIO loan (loan-to-value up to 80 per cent). This "
+    "engine derives `mortgage_insurance.required` only above that line "
+    "(`mortgage_insurance.INSURED_LTV_THRESHOLD`), so its insured case is "
+    "HIGH-RATIO and the low-ratio measure does not reach it; no primary source "
+    "was found either way for a high-ratio insured switch, and an absent "
+    "source is reported, never inferred."
+)
+
 
 ANCHORS: Dict[str, Anchor] = {
     # --- Re-anchored defaults (values changed; old defaults were uncited) ---
@@ -1242,7 +1346,8 @@ ANCHORS: Dict[str, Anchor] = {
                "mortgages, subject to review and periodic adjustment, which will "
                "be the greater of the borrower's mortgage contract rate plus 2 "
                "per cent, or 5.25 per cent », « This will apply to insured "
-               "mortgages approved on June 1, 2021, or later »",
+               "mortgages approved on June 1, 2021, or later »"
+               + _MQR_SWITCH_SOURCE,
 
         url="https://www.osfi-bsif.gc.ca/en/supervision/financial-institutions/banks/minimum-qualifying-rate-uninsured-mortgages",
         quoted="« " + MQR_RULE + " » / « The buffer: Currently set at 2% »",
@@ -1268,6 +1373,7 @@ ANCHORS: Dict[str, Anchor] = {
             "without the other — which is why a citation to one must never "
             "be passed off as a citation to the other. The line that "
             "applies this pair names which case the run is in. "
+            + _MQR_SWITCH_RATIONALE + " "
             "The engine applies the "
             "pair to ONE DISCLOSURE — the affordability ratio recomputed at the "
             "rate a lender would test, printed beside the ratio the run itself "
@@ -1310,7 +1416,8 @@ ANCHORS: Dict[str, Anchor] = {
                "mortgages, subject to review and periodic adjustment, which will "
                "be the greater of the borrower's mortgage contract rate plus 2 "
                "per cent, or 5.25 per cent », « This will apply to insured "
-               "mortgages approved on June 1, 2021, or later »",
+               "mortgages approved on June 1, 2021, or later »"
+               + _MQR_SWITCH_SOURCE,
 
         url="https://www.osfi-bsif.gc.ca/en/supervision/financial-institutions/banks/minimum-qualifying-rate-uninsured-mortgages",
         quoted="« " + MQR_RULE + " » / « The floor: Currently set at 5.25% »",
@@ -1346,7 +1453,8 @@ ANCHORS: Dict[str, Anchor] = {
             "today BY DECISION, not by identity, and either could move "
             "without the other — which is why a citation to one must never "
             "be passed off as a citation to the other. The line that "
-            "applies this pair names which case the run is in."
+            "applies this pair names which case the run is in. "
+            + _MQR_SWITCH_RATIONALE
         ),
         band=(0.0525, 0.0525),
         short_cite="OSFI MQR floor",

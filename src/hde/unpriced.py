@@ -32,6 +32,18 @@ value moves with them, no verdict reads them. Spec §2 — the
 engine may choose the SHAPE of a counterfactual, never its MAGNITUDE; this
 magnitude is a citation, not a convention the engine imported.
 
+AND IT IS A TEST ON ONE TRANSACTION, WHICH THE LINE MUST NAME. The minimum
+qualifying rate is an ORIGINATION test. Every owned option in this engine
+starts at a purchase, so on a run that prices only that purchase the sentence
+is exactly true; on a run that ALSO prices a renewal it read as a standing
+verdict on the household, and since 2024-11-21 that is false — OSFI no longer
+prescribes the rate for an uninsured straight switch at renewal. So the line
+says which transaction its figures describe and names the exemption as a case
+it does not price, never as one it claims for the user. The whole argument,
+including why the insured branch reports an absent source instead of borrowing
+the other branch's exemption, is in `straight_switch_clause` and in the scope
+paragraph both anchors carry.
+
 AND IT IS NOT A LENDER'S ANSWER. `income.affordability_threshold`'s own
 rationale records that this engine's numerator is BROADER than the gross debt
 service a lender measures — full condo fees, maintenance, stochastic events.
@@ -93,6 +105,14 @@ class QualifyingLoad:
     # the same today by decision, not by identity — so the line has to say
     # which authority applies to THIS loan.
     insured: bool
+    # The year of the first renewal THIS RUN PRICES, or None when it prices
+    # none. It answers WHICH TRANSACTION the figures above describe, which the
+    # line was silently getting wrong: the minimum qualifying rate is an
+    # ORIGINATION test, so on a run that also prices a renewal the same
+    # sentence read as a standing verdict on the household. Read from
+    # `renewals_priced_inside`, the one answer to "did the ladder reach this
+    # run", so this can never name a step the verdict never saw.
+    first_renewal_year: Optional[int] = None
 
     @property
     def lift(self) -> float:
@@ -142,11 +162,13 @@ def qualifying_loads(
     # direction vocabulary above. Keeping these inside the call keeps this
     # module's import surface to `anchors` + `rates`.
     from .config import ConfigValidationError
-    from .deterministic import compute_deterministic
+    from .deterministic import (
+        compute_deterministic, renewal_segments_for, renewals_priced_inside)
     from .sweep import load_at
 
     if raw is None:
         return []
+    horizon = spec.simulation.years
     out: List[QualifyingLoad] = []
     for option in _OWNED:
         opt = getattr(spec, option, None)
@@ -168,6 +190,16 @@ def qualifying_loads(
         loaded = _ratios_for(stressed, option)
         if loaded is None:
             continue
+        # WHICH TRANSACTION the figures describe. Gated on the renewals this
+        # run actually PRICES, not on the ladder being stated: a first renewal
+        # past the horizon reaches no payment and no PV (its own coherence
+        # warning says so), and naming that year here would report a step the
+        # verdict never saw. Segment start years are non-decreasing, so a
+        # positive count means `segments[1]` is the priced one.
+        first_renewal_year: Optional[int] = None
+        if renewals_priced_inside(opt, horizon) > 0:
+            segments = renewal_segments_for(opt)
+            first_renewal_year = segments[1].start_year
         out.append(QualifyingLoad(
             option=option,
             contract_quoted=opt.mortgage_rate_quoted,
@@ -179,6 +211,7 @@ def qualifying_loads(
             qualifying_ratio_year1=loaded[0],
             insured=bool(getattr(getattr(opt, "mortgage_insurance", None),
                                  "required", False)),
+            first_renewal_year=first_renewal_year,
         ))
     # Spec §4, promotion: the bigger measured load leads. These lines' size is
     # in points of income, not present value, so the verdict's margin — which
@@ -189,6 +222,89 @@ def qualifying_loads(
 
 def _rate(value: float) -> str:
     return f"{value:.2%}"
+
+
+def straight_switch_clause(load: QualifyingLoad) -> str:
+    """WHICH TRANSACTION the qualifying-rate figures price — empty when this
+    run prices no renewal, which is most runs (spec §5: the addition must be
+    able to come out silent, or it is a disclaimer riding on a measurement).
+
+    THE DEFECT THIS FIXES (2026-09-21). The minimum qualifying rate is an
+    ORIGINATION test and the line stated it in the engine's own voice as "the
+    minimum qualifying rate a lender would test you at", with a citation
+    attached. On a run that also prices a renewal that reads as a standing
+    verdict on the household — and since 2024-11-21 it is not one, because
+    OSFI no longer prescribes the MQR for an uninsured STRAIGHT SWITCH at
+    renewal. The reader most likely to meet the sentence is the household
+    already frightened by a payment jump, which is the first user this tool
+    was written for (README, `docs/BOARD.md` item 5).
+
+    WHAT THIS MAY NEVER SAY, and it is the whole difficulty (spec §15, and the
+    scope paragraph on both anchors). A straight switch is defined by facts
+    about the household's ACTUAL transaction — the amount carried over and the
+    amortization kept — which no config states and no run observes. Taking
+    money out or restretching the amortization puts them back inside the test.
+    So the clause names the exemption as a case the run DOES NOT PRICE and
+    never claims it for the user: told they are exempt when they are not, they
+    meet a refusal at the branch, which is worse than the sentence it replaced.
+
+    Two further things it must carry, both from the sources rather than from
+    judgment:
+
+    - the relief is from OSFI's PRESCRIBED rate, not from being assessed —
+      OSFI still expects the loan assessed "like any other new origination"
+      under Guideline B-20, with the new lender setting its own qualifying
+      rate. Dropping that turns a scope limit into a promise;
+    - the insured side is a DIFFERENT measure. `insured` here means the loader
+      derived mortgage insurance, which happens only above the 80% line, so
+      this engine's insured loan is HIGH-RATIO — and the federal removal
+      (2024-12-16) is written for the renewal of a prior LOW-RATIO loan. No
+      primary source was found either way for a high-ratio insured switch, so
+      the branch reports the absence instead of borrowing the other branch's
+      exemption.
+
+    THE LINE CITES, THE ANCHORS RECITE (operator ruling, standing, 2026-09-21;
+    ruled once before the same day when a guillemet quotation of the MQR
+    sentence was cut from the line and the legs cited instead). The first draft
+    of this clause ran 78 words and took the line to 205 — longer than a
+    version already rejected for length. It taught the rule: the effective
+    date, the three conditions of a straight switch, the B-20 mechanism. All of
+    that is stored VERBATIM on `qualifying_rate.buffer` and
+    `qualifying_rate.floor` and is one `--print-anchors` away, and none of it
+    is the clause's job. The clause's job is to stop a reader concluding
+    something false, in about forty words: which transaction the figure tests,
+    that an exemption is not exemption from a lender's test, and that this run
+    cannot see which case the household is in. The line rides verbatim into the
+    read-back, and the reader it exists for is a household already frightened
+    by a payment jump — a clause they do not finish protects nobody.
+    """
+    if load.first_renewal_year is None:
+        return ""
+    # The run-specific quantity, and the reason this is a measurement: the year
+    # comes from this config's own ladder, and the sentence differs with it.
+    head = (
+        f" The figure tests the year-0 purchase, not the renewal this run prices "
+        f"at year {load.first_renewal_year}:"
+    )
+    if load.insured:
+        # The absence, reported. Not "you are tested" and not "you are exempt":
+        # the low-ratio measure does not reach a loan that starts above the
+        # line, and nothing else registered here does either.
+        return head + (
+            " the insured straight-switch removal is written for low-ratio loans and this "
+            "one starts above that line, so no source here says it reaches you "
+            "[qualifying_rate.buffer, qualifying_rate.floor]."
+        )
+    # Both hedges in one clause, refusing rather than explaining: PRESCRIBED
+    # rate versus a lender's test is the whole difference between a scope limit
+    # and a promise, and "cannot see whether yours is one" is the sentence that
+    # keeps the exemption from being claimed for a household whose transaction
+    # the engine cannot observe.
+    return head + (
+        " a straight switch is outside OSFI's prescribed rate, not outside a lender's "
+        "test, and this run cannot see whether yours is one "
+        "[qualifying_rate.buffer, qualifying_rate.floor]."
+    )
 
 
 def qualifying_rate_line(load: QualifyingLoad) -> str:
@@ -223,7 +339,13 @@ def qualifying_rate_line(load: QualifyingLoad) -> str:
         f"{_rate(load.contract_quoted)}), year-1 housing cost runs {loaded:.1f}% of income "
         f"against this run's own {own:.1f}% — {loaded - own:.1f} points the run does not "
         f"show, {TOWARD_BUYING}. Your loan is {'insured' if load.insured else 'uninsured'}, "
-        f"so that rate is {whose} [qualifying_rate.buffer, qualifying_rate.floor]. Both "
+        f"so that rate is {whose} [qualifying_rate.buffer, qualifying_rate.floor]."
+        # WHICH TRANSACTION, when this run prices one — between whose rule it
+        # is and what the ratio is not, so the reader meets the scope of the
+        # test before the scope of the numerator. Empty on a run that prices
+        # no renewal, which leaves the sentence exactly as it shipped.
+        f"{straight_switch_clause(load)}"
+        f" Both "
         f"ratios are the engine's own measure, broader than the gross debt service a lender "
         f"uses [income.affordability_threshold], so this run cannot say how a lender would "
         f"rule on you."
@@ -254,5 +376,6 @@ __all__ = [
     "qualifying_loads",
     "qualifying_rate_line",
     "qualifying_rate_quoted",
+    "straight_switch_clause",
     "unpriced_warnings",
 ]

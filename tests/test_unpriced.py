@@ -23,7 +23,15 @@ import sys
 
 import pytest
 
-from hde.anchors import ANCHORS, MQR_RULE, is_reference
+from hde.anchors import (
+    ANCHORS,
+    MQR_B20_STILL_APPLIES,
+    MQR_INSURED_SWITCH_EFFECTIVE,
+    MQR_RULE,
+    MQR_STRAIGHT_SWITCH,
+    MQR_STRAIGHT_SWITCH_EFFECTIVE,
+    is_reference,
+)
 from hde.cli import main as cli_main
 from hde.config import coherence_warnings, load_config_dict
 from hde.deterministic import compute_deterministic
@@ -81,6 +89,19 @@ def cfg(
         if pay_drop_events:
             block["pay_drop_events"] = pay_drop_events
         data["income"] = block
+    return data
+
+
+def ladder_cfg(*, years=10, renewal_years=5, insured=False, rates=(0.06,), **kw):
+    """The printing config with a renewal ladder stated on the house.
+
+    `renewal_years` and `years` are what move the clause: a renewal inside the
+    horizon is a transaction this run PRICES, and one past it is not.
+    """
+    data = insured_cfg(**kw) if insured else cfg(**kw)
+    data["house"]["mortgage_renewal_years"] = renewal_years
+    data["house"]["mortgage_renewal_rates"] = list(rates)
+    data["years"] = years
     return data
 
 
@@ -359,7 +380,15 @@ class TestWhatItMayNeverSay:
         for rate in (0.03, 0.045, 0.05, 0.08):
             for down in (120_000, 200_000):
                 out += lines(cfg(mortgage_rate=rate, down_payment=down))
-        assert len(out) == 8
+        # The corpus MUST reach the straight-switch clause, or every scan in
+        # this class stops at the sentence that shipped and the longest, most
+        # dangerous half of the line is guarded by nothing (2026-09-21).
+        out += lines(ladder_cfg(mortgage_rate=0.045))
+        out += lines(ladder_cfg(mortgage_rate=0.045, renewal_years=3))
+        out += lines(ladder_cfg(insured=True))
+        assert len(out) == 11
+        assert sum("straight switch" in l or "low-ratio" in l for l in out) == 3, \
+            "the corpus must exercise BOTH clause branches and the silent case"
         return out
 
     def test_no_line_ever_rules_on_whether_a_lender_would_lend(self):
@@ -556,3 +585,305 @@ class TestItReachesTheSurfaces:
         doc = json.loads(out.out)
         assert not [w for w in doc["warnings"] if "unpriced" in w]
         assert not [w for w in doc["assumptions"]["read_back"] if "unpriced" in w]
+
+
+# ---------------------------------------------------------------------------
+# §15: WHICH TRANSACTION the qualifying rate tests, and the exemption the run
+# names without ever claiming it.
+#
+# The minimum qualifying rate is an ORIGINATION test. The line stated it as
+# "the minimum qualifying rate a lender would test you at" on runs that also
+# price a renewal, which since 2024-11-21 is false for an uninsured straight
+# switch — and the reader it misleads is the household already facing a
+# payment jump (README, docs/BOARD.md item 5).
+#
+# EVERY ASSERTION BELOW IS ON THE RENDERED LINE AGAINST A LITERAL SPELLED OUT
+# HERE, never against a module constant: a rewrite that keeps the constant and
+# drops the words from the output must fail. And every one checks BOTH what
+# must be there and what must NOT — because the way to get this wrong is the
+# generous direction, where a household told they are exempt walks into a
+# refusal at the branch.
+# ---------------------------------------------------------------------------
+
+class TestWhichTransactionItPrices:
+
+    # What no line may say, however the clause is rewritten: a claim that THIS
+    # household is out of the test. The run cannot see the two facts that
+    # decide it — the amount carried over and the amortization kept.
+    NEVER = (
+        "you are exempt", "you're exempt", "you would be exempt", "are exempt",
+        "you qualify at your contract", "no stress test", "will not be tested",
+        "you will not be tested", "no test applies", "do not need to requalify",
+        "don't need to requalify", "no longer tested", "you are not tested",
+        "this test does not apply to you", "so you are fine",
+    )
+
+    def test_a_run_that_prices_a_renewal_says_which_transaction_the_figure_tests(self):
+        """The defect, in one assertion. The figures are the ORIGINATION test;
+        the run also prices a renewal at year 6, and the line must say so and
+        name the year THIS config produced."""
+        line = lines(ladder_cfg())[0]
+        assert ("The figure tests the year-0 purchase, not the renewal this run prices "
+                "at year 6:") in line, line
+
+    def test_the_uninsured_clause_names_the_transaction_the_rule_stops_at(self):
+        """THE LINE CITES, THE ANCHORS RECITE (operator ruling 2026-09-21). The
+        effective date, the three conditions of a straight switch and the B-20
+        mechanism are stored verbatim on the two legs the clause cites, and
+        `TestTheStraightSwitchRegistry` is what keeps them there. What the LINE
+        owes is the name of the transaction the rule stops at — without it the
+        reader has no term to look up and no way to tell their own case."""
+        line = lines(ladder_cfg())[0]
+        assert "a straight switch is outside OSFI's prescribed rate" in line, line
+        # and the clause stays a clause: the rule is not recited back
+        assert "2024-11-21" not in line, line
+        assert "Guideline B-20" not in line, line
+        assert "amortization" not in line, line
+
+    def test_the_uninsured_clause_refuses_to_claim_the_exemption_for_the_user(self):
+        """THE CLAUSE THIS FEATURE EXISTS FOR. Strip it and what is left is a
+        published exemption printed in the engine's own voice at a household
+        whose transaction the engine cannot see — the generous failure, which
+        is worse than the sentence it replaced."""
+        line = lines(ladder_cfg())[0]
+        assert "and this run cannot see whether yours is one" in line, line
+
+    def test_the_uninsured_clause_says_the_relief_is_not_relief_from_underwriting(self):
+        """OSFI stopped PRESCRIBING the rate; it still expects the loan
+        assessed « like any other new origination » under B-20, with the lender
+        setting its own qualifying rate. Drop this and a scope limit reads as a
+        promise that nobody will test them."""
+        line = lines(ladder_cfg())[0]
+        assert "outside OSFI's prescribed rate, not outside a lender's test" in line, line
+
+    def test_an_insured_run_is_not_handed_the_uninsured_exemption(self):
+        """`insured` here means the loader derived mortgage insurance, which
+        happens only above the 80% line — so this engine's insured loan is
+        HIGH-RATIO, and the federal removal (2024-12-16) is written for the
+        renewal of a prior LOW-RATIO loan. The branch reports the absent source
+        rather than borrowing OSFI's exemption, which governs a loan this one
+        is not."""
+        [load] = loads(ladder_cfg(insured=True))
+        assert load.insured is True
+        line = lines(ladder_cfg(insured=True))[0]
+        assert "the insured straight-switch removal is written for low-ratio loans and " \
+               "this one starts above that line, so no source here says it reaches you" \
+               in line, line
+        # and NOT the other branch's words, whose exemption is a claim about a
+        # loan class this one is not in
+        assert "outside OSFI's prescribed rate" not in line, line
+        assert "a straight switch is outside" not in line, line
+
+    def test_an_uninsured_run_is_not_handed_the_insured_measure(self):
+        line = lines(ladder_cfg())[0]
+        assert "low-ratio" not in line, line
+        assert "insured straight-switch removal" not in line, line
+        assert "federal government" not in line, line
+
+    def test_no_line_ever_tells_the_household_it_is_out_of_the_test(self):
+        """Over the whole corpus, both branches and the silent case."""
+        corpus = (lines(ladder_cfg()) + lines(ladder_cfg(insured=True))
+                  + lines(ladder_cfg(renewal_years=3)) + lines(cfg())
+                  + lines(insured_cfg()))
+        assert len(corpus) == 5
+        for line in corpus:
+            low = line.lower()
+            for phrase in self.NEVER:
+                assert phrase not in low, (phrase, line)
+
+    def test_a_run_with_no_renewal_says_nothing_about_switches(self):
+        """The guard, spec §5: the same feature must be able to print NOTHING.
+        A clause that cannot come out silent is a disclaimer riding on a
+        measurement, and every shipped example is in that silent state."""
+        for line in (lines(cfg())[0], lines(insured_cfg())[0]):
+            assert "straight switch" not in line, line
+            assert "straight-switch" not in line, line
+            assert "low-ratio" not in line, line
+            assert "The figure tests the year-0 purchase" not in line, line
+            assert "cannot see whether yours is one" not in line, line
+            assert "no source here says it reaches you" not in line, line
+
+    def test_two_configs_differing_only_in_the_ladder_one_speaks_one_is_silent(self):
+        """The minimal pair: identical but for the two renewal keys."""
+        plain, laddered = cfg(), ladder_cfg()
+        assert {k: v for k, v in laddered["house"].items()
+                if k not in ("mortgage_renewal_years", "mortgage_renewal_rates")} \
+            == plain["house"], "the pair must differ in the ladder alone"
+        assert "straight switch" not in lines(plain)[0]
+        assert "straight switch" in lines(laddered)[0]
+
+    def test_a_renewal_past_the_horizon_is_not_a_transaction_this_run_prices(self):
+        """`renewals_priced_inside` is the one answer to "did the ladder reach
+        this run". A first renewal at year 6 in a 4-year run reaches no payment
+        and no PV, so naming it here would report a step the verdict never saw
+        — and the clause would become text, since a stated ladder alone would
+        print it."""
+        [load] = loads(ladder_cfg(years=4, renewal_years=5))
+        assert load.first_renewal_year is None
+        line = lines(ladder_cfg(years=4, renewal_years=5))[0]
+        assert "straight switch" not in line, line
+        assert "year 6" not in line, line
+        # the printing half of the pair, one key apart: the same ladder inside
+        # a 10-year horizon does speak
+        assert "at year 6" in lines(ladder_cfg(years=10, renewal_years=5))[0]
+
+    def test_the_year_named_is_this_config_s_own(self):
+        """Spec §4's admission rule, applied to the clause: two configs
+        differing ONLY in the renewal term print different years. If the clause
+        ever hardcodes one, these two are identical and this says so."""
+        three, five = ladder_cfg(renewal_years=3), ladder_cfg(renewal_years=5)
+        assert {k: v for k, v in three["house"].items() if k != "mortgage_renewal_years"} \
+            == {k: v for k, v in five["house"].items() if k != "mortgage_renewal_years"}
+        [a], [b] = loads(three), loads(five)
+        assert (a.first_renewal_year, b.first_renewal_year) == (4, 6)
+        assert "at year 4:" in lines(three)[0], lines(three)[0]
+        assert "at year 6:" in lines(five)[0], lines(five)[0]
+        assert lines(three)[0] != lines(five)[0]
+
+    def test_the_clause_does_not_disturb_the_sentence_it_rides_on(self):
+        """The line's own contract still holds with the clause in: the closing
+        refusal, the numerator gap, the direction, and the year-1 figures are
+        the ones a laddered run computed."""
+        [load] = loads(ladder_cfg())
+        line = lines(ladder_cfg())[0]
+        assert "so this run cannot say how a lender would rule on you" in line, line
+        assert "broader than the gross debt service a lender uses" in line, line
+        assert "[income.affordability_threshold]" in line, line
+        assert TOWARD_BUYING in line, line
+        assert f"{100 * load.qualifying_ratio_year1:.1f}%" in line, line
+        assert f"{100 * load.own_ratio_year1:.1f}%" in line, line
+
+    def test_the_clause_cites_the_anchors_that_hold_its_source(self):
+        """The exemption is a claim about the world, so the clause carries the
+        pair a reader can look up with `--print-anchors` — where the sentence,
+        the two dates and the B-20 caveat are stored verbatim. Asserted on the
+        clause's own half of the line, so the citation that was already there
+        before the clause cannot stand in for it."""
+        for line in (lines(ladder_cfg())[0], lines(ladder_cfg(insured=True))[0]):
+            _head, marker, tail = line.partition("The figure tests the year-0 purchase")
+            assert marker, line
+            assert "[qualifying_rate.buffer, qualifying_rate.floor]" in tail, line
+
+    def test_the_clause_reaches_every_surface_the_channel_owns(self, tmp_path, monkeypatch,
+                                                               capsys):
+        """A clause that lands only on stderr is not in the answer the
+        assistant reads back."""
+        import json
+
+        import yaml
+        path = tmp_path / "c.yaml"
+        path.write_text(yaml.safe_dump(ladder_cfg()), encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hde", str(path), "--no-monte-carlo", "--json"])
+        assert cli_main() == 0
+        out = capsys.readouterr()
+        needle = "a straight switch is outside OSFI's prescribed rate"
+        assert needle in out.err, out.err
+        doc = json.loads(out.out)
+        for key in ("read_back", "read_back_short"):
+            assert [w for w in doc["assumptions"][key] if needle in w], key
+        assert [w for w in doc["warnings"] if needle in w]
+
+
+# ---------------------------------------------------------------------------
+# The exemption's source, stored verbatim, and the line's paraphrase pinned
+# against it — the same alarm `test_the_stored_figures_are_the_ones_the_printed
+# _rule_states` puts on the rule's two values.
+# ---------------------------------------------------------------------------
+
+class TestTheStraightSwitchRegistry:
+    LEGS = ("qualifying_rate.buffer", "qualifying_rate.floor")
+
+    def test_both_legs_store_osfi_s_own_definition_of_a_straight_switch(self):
+        """Spelled out here, not imported, so an edit to the stored sentence
+        lands on this assertion and the editor has to go back to the source."""
+        assert MQR_STRAIGHT_SWITCH == (
+            "when a borrower switches their uninsured mortgage from one federally "
+            "regulated lender to another with no increase to: the amortization period, "
+            "nor the loan amount.")
+        for name in self.LEGS:
+            assert MQR_STRAIGHT_SWITCH in ANCHORS[name].source, name
+
+    def test_both_legs_store_what_the_exemption_does_not_relieve(self):
+        assert MQR_B20_STILL_APPLIES == (
+            "When considering an uninsured straight switch application, an institution "
+            "should assess the loan like any other new origination and should continue "
+            "to apply principles of sound residential mortgage underwriting set out in "
+            "Guideline B-20.")
+        for name in self.LEGS:
+            assert MQR_B20_STILL_APPLIES in ANCHORS[name].source, name
+            assert ("Lenders should continue to consider current and future conditions "
+                    "as they determine qualifying rates") in ANCHORS[name].source, name
+
+    def test_the_stored_rule_carries_the_three_facts_the_line_sends_readers_to(self):
+        """The line names the transaction and cites the legs; the conditions
+        that DEFINE that transaction live here, and this is what keeps them.
+        If OSFI ever allowed a longer amortization or a bigger loan, the stored
+        sentence changes and this assertion is where that surfaces — the line
+        would then be sending readers to a rule it no longer describes."""
+        for phrase in ("the amortization period", "the loan amount",
+                       "from one federally regulated lender to another"):
+            assert phrase in MQR_STRAIGHT_SWITCH, phrase
+        # the one word the line and the registry must share, or the citation
+        # leads nowhere a reader can follow
+        assert "straight switch" in lines(ladder_cfg())[0]
+        for name in self.LEGS:
+            assert "straight switch" in ANCHORS[name].source, name
+
+    def test_both_legs_carry_the_two_effective_dates_in_the_sources_own_words(self):
+        """One home for each date: the ISO constant the line prints and the
+        spelling the source uses must be the same day."""
+        import datetime
+        assert MQR_STRAIGHT_SWITCH_EFFECTIVE == "2024-11-21"
+        assert MQR_INSURED_SWITCH_EFFECTIVE == "2024-12-16"
+        for iso, spelled in ((MQR_STRAIGHT_SWITCH_EFFECTIVE, "November 21, 2024"),
+                             (MQR_INSURED_SWITCH_EFFECTIVE, "December 16, 2024")):
+            date = datetime.date.fromisoformat(iso)
+            assert date.strftime("%B %-d, %Y") == spelled, (iso, spelled)
+            for name in self.LEGS:
+                assert spelled in ANCHORS[name].source, (name, spelled)
+
+    def test_both_legs_carry_the_announcement_and_the_insured_measure_by_url(self):
+        for name in self.LEGS:
+            source = ANCHORS[name].source
+            assert ("osfi-bsif.gc.ca/en/guidance/guidance-library/osfi-exempts-uninsured-"
+                    "mortgage-straight-switches-prescribed-mqr-implements-portfolio-lti-"
+                    "limits") in source, name
+            assert ("canada.ca/en/department-finance/news/2024/12/straight-switches-and-"
+                    "portfolio-insurance.html") in source, name
+            assert "SOR/2025-55" in source, name
+
+    def test_the_insured_measure_is_stored_with_its_own_narrower_scope(self):
+        """The failure this guards is passing the low-ratio measure off as an
+        insured borrower's exemption — the same mistake the two-authorities
+        rationale already guards for the formula."""
+        for name in self.LEGS:
+            source = ANCHORS[name].source
+            assert ("This measure will remove the minimum qualifying rate requirement for "
+                    "low-ratio (i.e., loan-to-value up to 80 per cent) renewals") \
+                in source, name
+            assert ("the loan is for the discharge of the outstanding balance of a prior "
+                    "low ratio loan") in source, name
+            assert "Equity take out is not permitted" in source, name
+            rationale = ANCHORS[name].rationale
+            assert "HIGH-RATIO" in rationale, name
+            assert "no primary source was found either way" in rationale, name
+
+    def test_the_rationale_records_what_the_engine_may_never_say_off_the_rule(self):
+        for name in self.LEGS:
+            rationale = ANCHORS[name].rationale
+            assert "never claims it for the user" in rationale, name
+            assert "not from being assessed" in rationale, name
+
+    def test_the_exemption_moved_no_value_and_added_no_default(self):
+        """A scope limit on a test threshold, applied to ONE DISCLOSURE. If it
+        ever reached a present value or a default, the line would be pricing
+        the thing it says it does not price."""
+        assert ANCHORS["qualifying_rate.buffer"].value == 0.02
+        assert ANCHORS["qualifying_rate.floor"].value == 0.0525
+        data = ladder_cfg()
+        spec = load_config_dict(data)
+        det = compute_deterministic(spec)
+        before = det.house.total_pv
+        assert qualifying_loads(spec, det, data), "the channel did not run"
+        assert not [k for k in spec.defaults_applied if "qualifying" in k]
+        assert compute_deterministic(load_config_dict(data)).house.total_pv == before

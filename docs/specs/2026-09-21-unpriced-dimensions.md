@@ -407,6 +407,54 @@ household qualifies at their contract rate. It belongs as a qualifier on the aff
 line, not the verdict line, because it changes whether the stress binds and moves no present
 value. Its wording branches on the insured tier, which `sweep.insured_of` already derives.
 
+**SHIPPED 2026-09-21, and the paragraph above was wrong in three ways the primary sources
+settle. It is left standing because the corrections are the design.** The deferral reason
+recorded against it — "needs board item 1's ladder" — is also dead: item 1 landed, and the
+clause is gated on the renewals a run actually PRICES (`renewals_priced_inside`), which is
+what keeps it a measurement rather than a disclaimer.
+
+1. **"Exempt from the qualifying rate" is too strong.** OSFI « will no longer prescribe the
+   minimum qualifying rate (MQR) that it expects federally regulated financial institutions
+   to apply when uninsured mortgage borrowers switch to a new institution at renewal » — and
+   in the same breath, « When considering an uninsured straight switch application, an
+   institution should assess the loan like any other new origination and should continue to
+   apply principles of sound residential mortgage underwriting set out in Guideline B-20 »,
+   with lenders continuing « to consider current and future conditions as they determine
+   qualifying rates ». The relief is from OSFI's PRESCRIBED figure, not from being tested, so
+   "the household qualifies at their contract rate" does not follow.
+2. **The insured tier is a different measure with a different date and a narrower scope**, not
+   a rewording of the same one. Finance Canada's removal is effective 2024-12-16 and covers
+   « low-ratio (i.e., loan-to-value up to 80 per cent) renewals » (SOR/2025-55: only where
+   « the loan is for the discharge of the outstanding balance of a prior low ratio loan »).
+   This engine derives `mortgage_insurance.required` only ABOVE that line, so its insured case
+   is high-ratio and the measure does not reach it. No primary source was found either way for
+   a high-ratio insured switch, so that branch reports the absence.
+3. **Good news is not the same as news the engine may deliver.** Whether a household's renewal
+   is a straight switch turns on the amount they carry over and the amortization they keep —
+   facts about their actual transaction that no config states. So the channel names the
+   exemption as a case it does not price and never claims it for the user. Told they are
+   exempt when they are not, they meet a refusal at the branch, which is worse than the
+   origination-test sentence this replaced. The design requirement in the last paragraph of
+   this section still holds; it is a requirement on what the channel may CARRY, never a licence
+   to resolve an unobservable fact in the user's favour.
+
+All three corrections are stored on `qualifying_rate.buffer` and `qualifying_rate.floor` —
+verbatim in `source`, argued in `rationale` — because the exemption is the scope of the rule
+those two entries state, and a rule and its boundary that live apart can drift apart.
+
+**THE LINE CITES, THE ANCHORS RECITE** — operator ruling the same day, standing, and the
+reason the clause is forty words rather than seventy-eight. It was ruled once already on this
+line, when a guillemet quotation of the MQR sentence was cut and the two legs cited instead;
+the first draft of this clause broke it again in a new costume, teaching the effective date,
+the three conditions of a straight switch and the B-20 mechanism, and taking the line to 205
+words — longer than a version already rejected at 193. The line rides VERBATIM into the
+read-back and the household it exists for is one already frightened by a payment jump: a
+clause they do not finish protects nobody, so length is a correctness property here, not
+taste. What the line owes is the NAME of the transaction (so the reader has a term to look up
+and a case to check themselves), the refusal, and the citation. Everything that teaches the
+rule belongs in the registry, where `--print-anchors` reaches it and where the tests pinning
+the verbatim quotes keep it honest.
+
 It is the most valuable entry on the list, and not because of renewal. It tells a household
 that a lever exists in their favour. That is what makes the channel credible rather than
 decorative, and it should be treated as a design requirement: **a channel that can only deliver
