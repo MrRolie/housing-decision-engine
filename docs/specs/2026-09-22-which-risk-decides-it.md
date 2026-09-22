@@ -484,8 +484,24 @@ free 0.1915 / 0.5185 / 0.2900, re-simulated 0.1915 / 0.5185 / 0.2900 — identic
 - the verdict's own winner flips from rent to the house at a flat renewal rate of **1.6052%**;
 - the runner-up swaps from condo to house at **2.9549%**;
 - the majority swaps from condo to house at **2.7164%**;
-- and `RATE_BRACKETS` needs a `mortgage_renewal_rates` entry — it has none today, so the
-  bracket a sweep of it uses is borrowed silently from `mortgage_rate`.
+- and `RATE_BRACKETS` needs a `mortgage_renewal_rates` entry — it has none today.
+
+**CORRECTED 2026-09-21, by the builder, against the code.** The clause above originally read
+"so the bracket a sweep of it uses is borrowed silently from `mortgage_rate`". That is false.
+`RATE_BRACKETS` is keyed by the LEAF, so `mortgage_renewal_rates` gets no bracket at all and
+`solve_break_even` REFUSES with a named reason (`break_even.py:401`) — the engine was already
+honest here and the spec accused it of a silent borrow it does not perform. The entry is still
+needed, but it converts an honest refusal into an answer, which is a higher bar than replacing
+a silent default: the bracket's width is assistant-chosen, so it must be PRINTED, as
+`break_even.py:67` already requires of every bracket.
+
+And the refusal branch that sentence pointed at carries a defect of its own, found the same
+way. It is category-general — twelve rate-shaped leaves still reach it — and its message is
+instance-specific: it tells the user *"the engine forecasts no renewal path and defaults
+none"* whatever key they asked about, so `--break-even economic.inflation_rate` is answered
+with a sentence about renewal. A fix written for renewal leaked its instance's prose into the
+shared branch, and adding this entry makes it strictly wrong for all twelve, because the one
+key the sentence was about is the one key leaving the branch. Track C owns the repair.
 
 ---
 
