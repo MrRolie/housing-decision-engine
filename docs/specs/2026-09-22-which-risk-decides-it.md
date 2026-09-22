@@ -387,14 +387,23 @@ figure the assistant chose, not by you.* At 10,000 paths, where `ΣS_c` resolves
 sum. On a config where every width is the user's or an anchor's, the clause does not print at
 all.
 
-**The fork this leaves open is real and is put to the operator in §13**: label the ranking, or
-refuse to rank when the top width is assistant-chosen. This spec takes **label**, on the repo's
-own precedent — `break_even.RATE_BRACKETS` is an unanchored convention the engine prints on
-every solve, permitted because the crossing it bounds is a property of the user's config, and an
-index here is likewise solved from the user's own config. Refusing would delete the only thing
-the feature can say on nearly every config shipped today. The countervailing view is not weak:
-on the fixture *"your portfolio, 0.88"* is entirely a consequence of an assistant typing `0.10`
-into `investment_return_vol`, and a labelled finding is still a finding a reader will quote.
+**5. The level register is BOUND to the spread table, structurally** *(operator ruling
+2026-09-22, superseding this section's earlier "label" default)*. The fork this section left
+open was: label the ranking, or refuse to rank when the top width is assistant-chosen. The
+answer was neither. The ranking prints — a refusal would delete the only thing this feature can
+say on nearly every config shipped today, and the index is solved from the user's own config
+the way `break_even.RATE_BRACKETS` already is. But the spread table may not be emitted without
+the level register beside it, and this is a property of the CODE, not a convention a formatter
+is trusted to honour: one function emits both registers or neither, and a caller cannot reach
+the spread rows alone. Mechanisms 1–4 above all stand and are all still required.
+
+The reason is measured, in §0: the spread table's top row on this repo's own fixture is the
+renter's portfolio at 0.88 of the scatter, and freezing it moves the decision by −$2,200, while
+the tenancy at 0.10 of the scatter moves it by +$127,876 — 58x. The countervailing view was not
+weak, and it is exactly what the binding answers: on the fixture *"your portfolio, 0.88"* is
+entirely a consequence of an assistant typing `0.10` into `investment_return_vol`, and a
+labelled finding is still a finding a reader will quote. A label can be lost in a copy-paste.
+The row that corrects it cannot be, if the code will not emit one without the other.
 
 **And the honest limit, recorded rather than argued away:** §6's register is the part of this
 feature that does not have this problem at all, because a stated input's reversal distance is
@@ -822,8 +831,11 @@ names, seven integer ids) is fixed as data. That table is a decision, not work.
   / `flattened_path_note`, plus the `RATE_BRACKETS` entry and the exactness gate. Depends on none
   of A or B.
 - **D — the formatter, the `--json` block, the `PROMPTS.md` silence sentence, the skill's two
-  lines.** Blocked only on the operator's answer to fork 1 in §13, because that fork decides what
-  the leading sentence is allowed to claim. Do not let anyone write the sentence first.
+  lines.** Was blocked on fork 1; that fork is ruled (§13) and D starts with the others. The
+  ruling is a constraint on D's shape, not only on its wording: the function that renders the
+  spread rows renders the level register too, and there is no caller-reachable path to one
+  without the other. A test asserts that, by calling the narrowest public entry point the
+  formatter exposes and finding both registers in what comes back.
 
 A and B meet at the index table's shape; C and D meet at the block.
 
