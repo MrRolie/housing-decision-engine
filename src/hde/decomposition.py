@@ -602,13 +602,75 @@ class AxisReference:
 
 
 @dataclass(frozen=True)
-class Boundary:
-    """A verdict change solved EXACTLY, and confirmed by re-simulation.
+class SolvedBoundary:
+    """A crossing solved on the DETERMINISTIC verdict — `best`, `runner_up`.
 
-    `curve_probabilities` come from the free curve, `confirming_probabilities`
-    from one full re-simulation at the solved value; the row refuses when they
-    differ (§6, test T11). Both are option→P(cheapest) pairs rather than a
-    mapping, so the frozen row is frozen all the way down.
+    A property of the user's config, not of the sample: measured identical to
+    SEVEN DIGITS at seeds 42, 7, 1234, 99 and 2026 (§0.1 item 24). It carries
+    no path count and no seed because its value depends on neither, and it
+    prints at four decimals (`1.6052%`) for the same reason.
+
+    `confirming_probabilities` may be EMPTY: two of the boundaries read no path
+    at all, and the old single type's required probability fields are what made
+    `--no-monte-carlo` hand back an empty reversal register. MEASURED, no
+    shipped producer emits an empty one — every boundary is either confirmed or
+    comes back as a `RefusedBoundary` — and item 25 then made the path-free
+    route unreachable from `--decompose` anyway, since §8 refusal 2 fires
+    before any register is built. So the TYPE permits a state no producer
+    reaches today; that is recorded rather than hidden, and it is the seat's to
+    retract, not a renderer's to assume away.
+    """
+
+    verdict_field: str
+    value: float
+    was: str
+    becomes: str
+    confirming_probabilities: Tuple[Tuple[str, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class SampledBoundary:
+    """A crossing BISECTED on the Monte Carlo curve — `mc_best`, `decisive`.
+
+    A property of the sample as much as of the config: the same `mc_best`
+    boundary moved 2.698% → 2.805% across five seeds and 2.6923% → 2.8104%
+    across `num_sims` 500–4000, so it carries `curve_paths` and `seed`, which
+    are what its value depends on, and prints at two decimals (`2.72%`) with a
+    clause naming both.
+
+    IT SHARES NO BASE CLASS AND NO FIELD SET WITH `SolvedBoundary` (§0.1 item
+    24). One type for both was this feature's cardinal error committed by its
+    own contract: nothing downstream could tell a property of the config from a
+    property of the sample, and a reader met "your verdict flips at 2.716%" in
+    the same typography as an exact figure. `curve_paths` is deliberately not
+    `paths`, which would collide with `LevelRegister.paths` and
+    `Decomposition.paths`.
+
+    THIS IS A DIFFERENT AXIS FROM `ExactReversal` vs `EstimatedReversal`. That
+    gate splits ACROSS KEYS on whether the free-curve licence holds; this
+    splits WITHIN ONE KEY, one level below where the gate operates. A licensed
+    key carries both kinds at once.
+    """
+
+    verdict_field: str
+    value: float
+    was: str
+    becomes: str
+    curve_probabilities: Tuple[Tuple[str, float], ...]
+    confirming_probabilities: Tuple[Tuple[str, float], ...]
+    curve_paths: int
+    seed: int
+
+
+@dataclass(frozen=True)
+class Boundary:
+    """SUPERSEDED by `SolvedBoundary` and `SampledBoundary` (§0.1 item 24).
+
+    Kept only because the landed reversal solver in `break_even.py` still
+    constructs it, and deleting it here would break a track mid-flight. It is
+    the exact shape item 24 names as the defect — one type for a solved figure
+    and a sampled one — so nothing new may be built against it, and the
+    migration of that producer is owed. When it lands, this class goes.
     """
 
     verdict_field: str
@@ -665,7 +727,12 @@ class ExactReversal:
     bracket_source: str
     probe_paths: int
     max_path_deviation_over_sd: float
-    boundaries: Tuple[Boundary, ...]
+    # A licensed key carries BOTH kinds at once: `best` and `runner_up` are
+    # solved on the deterministic verdict, `mc_best` and `decisive` bisected on
+    # the Monte Carlo curve (§0.1 item 24). This annotation is the ruled
+    # contract; `break_even.py`'s landed solver still emits the superseded
+    # `Boundary` and its migration is owed.
+    boundaries: Tuple[Union[SolvedBoundary, SampledBoundary], ...]
     refused_boundaries: Tuple[RefusedBoundary, ...]
     references: Tuple[AxisReference, ...]
     path_note: Optional[str] = None

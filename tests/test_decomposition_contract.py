@@ -116,4 +116,11 @@ class TestTheBinding:
         exact, estimated = _fields(dc.ExactReversal), _fields(dc.EstimatedReversal)
         assert exact != estimated
         assert "probe_paths" in exact and "probe_paths" not in estimated
-        assert dc.Boundary is not dc.EstimatedBoundary
+
+    def test_a_solved_crossing_and_a_sampled_one_are_not_one_type(self):
+        # §0.1 item 24: one type for both was the cardinal error, because
+        # nothing downstream could tell a config property from a sample one.
+        assert dc.SolvedBoundary.__mro__[1:] == dc.SampledBoundary.__mro__[1:] == (object,)
+        solved, sampled = _fields(dc.SolvedBoundary), _fields(dc.SampledBoundary)
+        assert {"curve_paths", "seed"} <= sampled
+        assert not {"curve_paths", "seed"} & solved
