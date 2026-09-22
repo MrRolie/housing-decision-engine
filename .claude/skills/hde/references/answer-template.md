@@ -34,11 +34,14 @@ After the checklist in SKILL.md, the prose, in this order:
    nominal-mode run when there is a mortgage: the max ratio WITH THE YEAR it
    falls in (it is one year's peak, never "every year" — the breach years are
    the separate count) and the breach years,
-   quoting the engine's affordability warning (it names the 32% guideline,
-   the 39% GDS cap and the 44% TDS cap — the ratio is GDS-shaped, so never
-   compare it to the TDS cap unless other debts were asked, and never soften
-   "exceeds" to "not a breach" without naming which threshold each refers
-   to).
+   quoting the engine's affordability warning (on an OWNED option it names the
+   32% guideline, the 39% GDS cap and the 44% TDS cap — that ratio is
+   GDS-shaped, so never compare it to the TDS cap unless other debts were
+   asked, and never soften "exceeds" to "not a breach" without naming which
+   threshold each refers to). On the RENT row there is no GDS at all: a tenant
+   carries no mortgage and faces no lender test, and the engine's own rent-row
+   warning says the threshold is a budget line — never quote a GDS or CMHC cap
+   at a renter.
 7. **No source for:** every figure you had to estimate because neither the
    user nor the anchor registry had it (an Ottawa tax rate, an insurance
    quote, a purchase-cost rate, an Ontario land-transfer tax) — said plainly,

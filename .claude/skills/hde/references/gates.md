@@ -84,10 +84,14 @@ engine charges it at year 0 and credits its terminal value, mirroring the
 buyer. Omitted with a `tax.renter_capital` block, the engine DERIVES it from
 that block's piles — read the derived figure back and check it against the
 buyer's year-0 cash; omitted with no block, the renter earns exactly the
-discount rate — say so if you do. When the return equals the discount rate the capital term nets to
-zero in PV (the breakdown shows +D and −D): never describe the renter's
-capital as a drag or an advantage; a spread is the engine's capital-spread
-warning, and only that warning says which way it cuts.
+discount rate — say so if you do. With NO `tax:` block, a return equal to the
+discount rate nets the capital term to zero in PV (the breakdown shows +D and
+−D). Under a `tax:` block it does NOT: the tax the engine charges on the
+taxable share, and the FHSA rollover haircut, survive equal rates, so the term
+stands and setting the two rates equal would not move it. Never describe the
+renter's capital as a drag or an advantage; the engine's capital-spread warning
+is what says which way it cuts, WHICH cause carries the dollars, and which
+input moves that cause — quote its own attribution rather than inferring one.
 
 ## 5. A range is two configs
 

@@ -528,7 +528,13 @@ rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open
 — haircut 36.12% retirement marginal rate (= current, default) on $50,979 at
 year 10 = $18,412 (PV $11,130) charged to rent [tax.retirement_marginal_rate]`.
 The capital-spread warning reads the same terminal value and adds `(after tax on
-the taxable share: blended 4.88%)`. Refusals, each naming the fix: no rate typed
+the taxable share: blended 4.88%)`. It also attributes its net capital term to
+the cause that carries the dollars: with the two rates equal the whole term is
+this tax, the warning says setting `investment_return_rate = discount_rate`
+changes nothing, and it splits the term into the taxable share's drag (lever
+`tax.renter_capital`) and the FHSA rollover haircut (lever
+`tax.retirement_marginal_rate`); with a spread as well, both causes are named
+with their own figures, because fixing one moves only its own share. Refusals, each naming the fix: no rate typed
 and none resolvable; `marginal_rate` outside [0, 1); shares not summing to the
 renter's capital (both figures printed); `renter_capital.fhsa` beside `tax.fhsa`;
 `renter_capital`, `fhsa` or `hbp_withdrawal` without a `rent:` block; `fhsa` /
