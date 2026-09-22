@@ -14,16 +14,20 @@ that only wants numbers.
 from __future__ import annotations
 
 import dataclasses
+import datetime
 from importlib import metadata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .anchors import (
     ANCHORS,
+    REFRESH_PROCEDURE,
+    REFRESH_SOURCES,
     _ECHO_ALIASES,
     Anchor,
     match_reference,
     match_reference_sum,
     nearest_reference,
+    refresh_group_members,
     short_cite,
 )
 from .market_scenario import LoadedScenarioPrior
@@ -89,6 +93,63 @@ def anchor_to_dict(anchor: Anchor) -> Dict[str, Any]:
 def anchors_to_dict() -> Dict[str, Dict[str, Any]]:
     """The whole registry — what `hde --print-anchors` prints."""
     return {name: anchor_to_dict(anchor) for name, anchor in ANCHORS.items()}
+
+
+def refresh_plan(as_of: datetime.date) -> Dict[str, Any]:
+    """The refresh work order — what `hde --refresh-plan` prints (board item 6,
+    2026-09-22).
+
+    One entry per publishing release that has a dated anchor, ranked by how
+    soon its earliest figure stops being the figure. Each carries the release's
+    own record (who publishes it, what the next edition is called, where it
+    appears, when it was last checked and what was found) and the FULL anchor
+    record of every member — `anchor_to_dict`, the same shape `--print-anchors`
+    prints, never a second one.
+
+    Members are split into `dated` and `undated_siblings` because the split is
+    the thing a refresher must not get wrong: a rate carries no validity date
+    because its source names no change to it, but it comes off the same page
+    and is re-read in the same pass.
+
+    Nothing here is stored twice. `days_remaining` and `lapsed` are derived
+    from each anchor's own `valid_until` against `as_of`; `where_to_look`
+    resolves the release's empty `url` to the URLs its dated anchors already
+    cite, which is what an empty `url` MEANS.
+    """
+    groups = []
+    for key, source in REFRESH_SOURCES.items():
+        members = refresh_group_members(key)
+        dated = [ANCHORS[n] for n in members if ANCHORS[n].valid_until]
+        if not dated:
+            continue
+        earliest = min(a.valid_until for a in dated)
+        expiry = datetime.date.fromisoformat(earliest)
+        where = ([source.url] if source.url.strip()
+                 else list(dict.fromkeys(a.url for a in dated if a.url)))
+        groups.append({
+            "group": key,
+            "publisher": source.publisher,
+            "edition": source.edition,
+            "url": source.url,
+            "where_to_look": where,
+            "checked_on": source.checked_on,
+            "found": source.found,
+            "successor_published": source.successor_published,
+            "valid_until": earliest,
+            "days_remaining": (expiry - as_of).days,
+            "lapsed": as_of > expiry,
+            "dated": [anchor_to_dict(a) for a in dated],
+            "undated_siblings": [anchor_to_dict(ANCHORS[n]) for n in members
+                                 if not ANCHORS[n].valid_until],
+        })
+    groups.sort(key=lambda g: (g["valid_until"], g["group"]))
+    return {
+        "as_of": as_of.isoformat(),
+        "procedure": list(REFRESH_PROCEDURE),
+        "dated_anchors": sum(len(g["dated"]) for g in groups),
+        "lapsed_anchors": sum(len(g["dated"]) for g in groups if g["lapsed"]),
+        "groups": groups,
+    }
 
 
 # ---------------------------------------------------------------------------

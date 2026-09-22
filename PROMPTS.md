@@ -113,6 +113,7 @@ The engine is a command-line tool and everything above is available directly:
 uv run hde examples/basic_config.yaml                 # a worked scenario
 uv run hde --print-schema                             # every input, what is required, every note
 uv run hde --print-anchors                            # where every default comes from, with dates
+uv run hde --refresh-plan                             # which figures expire, what to re-read, and where
 uv run hde examples/mortgage_house_vs_rent.yaml --break-even rent.monthly_rent
 uv run hde examples/basic_config.yaml --read-back     # only the lines an honest answer must carry
 uv run hde examples/basic_config.yaml --read-back short   # the gist: warnings, sources, decisiveness
@@ -179,4 +180,7 @@ not depend on your run, and it is the one to read before you ask.
 - **Tax, legal or mortgage advice.** The engine compares present-value costs under stated
   assumptions. Every published figure it uses carries its source and date
   (`uv run hde --print-anchors`); where a source has a scheduled change (Québec's
-  insurance-premium tax rises after 2026-12-31), the entry says so.
+  insurance-premium tax rises after 2026-12-31), the entry says so, and
+  `uv run hde --refresh-plan` is the work order for replacing it — including, for each
+  source, the date someone last checked it and what it showed. No figure is carried
+  forward silently and none is estimated.

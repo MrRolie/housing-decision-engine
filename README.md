@@ -58,8 +58,17 @@ Without Claude:
 uv run hde examples/basic_config.yaml   # a worked scenario
 uv run hde --print-schema               # every input and what is required
 uv run hde --print-anchors              # where every default comes from
+uv run hde --refresh-plan               # which figures expire, what to re-read, and where
 uv run hde examples/mortgage_house_vs_rent.yaml --break-even rent.monthly_rent   # the rent at which renting and buying tie
 ```
+
+Some figures — the income-tax brackets, the basic personal amounts, the TFSA limits,
+Québec's tax on mortgage-insurance premiums — stop being the figure on a date their
+own source states. `--refresh-plan` is the work order for replacing them: grouped by
+the release that publishes each one, ranked by how soon it lapses, with the figure as
+its source printed it, where the next edition appears, when that source was last
+checked and what was found. It exits non-zero once a figure has actually lapsed. The
+engine never carries a figure forward silently and never estimates the next one.
 
 ## The showcase
 

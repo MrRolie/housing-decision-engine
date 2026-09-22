@@ -179,6 +179,16 @@ class Anchor:
     # `retrieved_on` is the date to review by. A run that uses the anchor
     # after this date is warned once per anchor (config.validity_warnings).
     valid_until: str = ""
+    # Which PUBLISHING RELEASE prints this figure — the key of a
+    # `REFRESH_SOURCES` record (board item 6, 2026-09-22). Not a URL and not a
+    # date: those are this anchor's own `url` and `valid_until`. It exists so
+    # the figures that come off ONE release (the five federal bracket ceilings
+    # and the federal basic personal amount are one CRA release, not six
+    # independent facts) can be refreshed together, and so a dated figure can
+    # say who will publish its replacement. REQUIRED wherever `valid_until` is
+    # set; optional elsewhere, and set on the undated siblings a refresher
+    # re-reads off the same page.
+    refresh_group: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or "." not in self.name or not self.name.strip():
@@ -271,6 +281,30 @@ class Anchor:
                     f"anchor {self.name!r}: valid_until {self.valid_until!r} is not a "
                     f"calendar date ({exc})"
                 ) from exc
+            # A `valid_until` is a promise that this figure WILL be replaced.
+            # Three things must therefore be on the record, or the promise is
+            # one only its author can keep (board item 6, 2026-09-22):
+            #   - who publishes the replacement (`refresh_group`);
+            #   - how this source printed the figure (`quoted`), so the next
+            #     edition can be diffed against it rather than retyped from
+            #     memory;
+            #   - what the figure is a rate or an amount OF (`unit`), because a
+            #     replacement read off the wrong base is the registry's oldest
+            #     failure mode.
+            if not self.refresh_group.strip():
+                raise AnchorError(
+                    f"anchor {self.name!r}: valid_until {self.valid_until} with no "
+                    f"refresh_group — a figure that says it will be replaced must "
+                    f"name the release that publishes the replacement"
+                )
+            for field_name in ("quoted", "unit"):
+                if not getattr(self, field_name).strip():
+                    raise AnchorError(
+                        f"anchor {self.name!r}: valid_until {self.valid_until} with no "
+                        f"{field_name} — a figure due to be replaced must carry the "
+                        f"figure as its source prints it and the base it is stated on, "
+                        f"or the next edition cannot be checked against it"
+                    )
         for entry in self.restatements:
             if (not isinstance(entry, tuple) or len(entry) != 2
                     or not isinstance(entry[1], str) or not entry[1].strip()):
@@ -299,6 +333,162 @@ class Anchor:
         if self.value is None:
             return ()
         return (self.value,) + tuple(v for v, _ in self.restatements)
+
+
+@dataclass(frozen=True)
+class RefreshSource:
+    """One publishing RELEASE the registry depends on, and the record of
+    someone looking at it (board item 6, 2026-09-22).
+
+    A dated anchor knows when its figure stops being the figure. It does not
+    know who publishes the next one, where that appears, or whether anybody has
+    checked. This record holds those, once per release rather than once per
+    figure, because a refresh is a release-sized act: the four federal bracket
+    ceilings and the federal basic personal amount all arrive in one CRA
+    indexation adjustment, and refreshing one of them alone is the defect.
+
+    It deliberately does NOT list its members: they are derived from
+    `Anchor.refresh_group`, so an anchor joins a release by saying so and
+    membership has exactly one home.
+
+    `checked_on` + `found` are the state that keeps a lapsing figure from
+    reading as neglect. "The CRA indexation page prints 2023-2026 and no 2027
+    column, checked 2026-09-21" is a completed piece of work; an undated
+    silence is not. They record what the SOURCE showed, never what the checker
+    expects it to show later.
+
+    `successor_published` is the only stored status, and it carries the one
+    distinction a refresher acts on: go and fetch, versus the next figure is
+    already stated by this anchor's own source and applies on its own date.
+    Everything else a status might say — lapsed, in force, how long is left —
+    is derived from `Anchor.valid_until` against a run date, and is stored
+    nowhere.
+    """
+
+    key: str
+    publisher: str
+    # What the next edition is CALLED, in the publisher's own words, so a
+    # refresher knows what they are looking for rather than only where.
+    edition: str
+    # Where the next edition appears. Empty means the same URL its anchors
+    # already cite — true wherever a page is republished in place (the CRA
+    # indexation adjustment gains a 2027 column on the page the 2026 figures
+    # were read from). Set it where the next edition lands somewhere new: the
+    # Québec parameters PDF changes filename every year.
+    url: str = ""
+    # ISO date someone last opened the source, and what it showed that day.
+    checked_on: str = ""
+    found: str = ""
+    # The source already states the figure that takes effect after the anchors'
+    # validity date (an enacted rate step, not a forecast). The figure itself
+    # lives in the anchor's own source, band and rationale — a copy here would
+    # be a second home with no alarm between them.
+    successor_published: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name in ("key", "publisher", "edition", "checked_on", "found"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise AnchorError(
+                    f"refresh source {self.key!r}: empty {field_name} — a refresh "
+                    f"record that cannot say who publishes what, or when it was "
+                    f"last looked at and what was there, is not a record"
+                )
+        if not _ISO_DATE.fullmatch(self.checked_on):
+            raise AnchorError(
+                f"refresh source {self.key!r}: checked_on must be an ISO date "
+                f"(YYYY-MM-DD), got {self.checked_on!r}"
+            )
+        try:
+            datetime.date.fromisoformat(self.checked_on)
+        except ValueError as exc:
+            raise AnchorError(
+                f"refresh source {self.key!r}: checked_on {self.checked_on!r} is not "
+                f"a calendar date ({exc})"
+            ) from exc
+
+
+# How a refresh is DONE, stated once and printed by `hde --refresh-plan`.
+#
+# It lives here rather than in docs/specs/ because the person doing the refresh
+# in 2027 will have the CLI and may not have the build record (artifact
+# boundary, clause 1 and clause 4). docs/specs/2026-09-22-anchor-refresh-path.md
+# describes these steps; this tuple IS them.
+REFRESH_PROCEDURE: Tuple[str, ...] = (
+    "1. Open the group's `url` (or, when it is empty, the `url` of the anchors "
+    "themselves) and find the edition named in `edition`. Read the figures off "
+    "the publisher's own page. A figure quoted by a third party is a citation "
+    "to that third party, and a figure you computed from an indexation factor "
+    "is not a citation at all.",
+    "2. If the edition is not out yet, change NO value. Update the group's "
+    "`checked_on` and `found` to say what the page showed on the day you "
+    "looked, and stop. A figure that lapses loudly is correct; a figure "
+    "carried forward quietly is not.",
+    "3. If it is out, refresh EVERY anchor in the group — the undated siblings "
+    "too, which come off the same page — in one edit. Move `value`, `as_of`, "
+    "`quoted`, `retrieved_on` and `valid_until` together, and set `replaces` to "
+    "(the old value, why it changed).",
+    "4. In `replaces`, say which kind of change it was. A new edition of an "
+    "annually indexed figure is a SCHEDULED replacement, not a correction: "
+    "`replaces=(58523.0, \"scheduled 2027 indexation, not a correction: $58,523 "
+    "was the correct 2026 ceiling\")`. `restatements` is for the same figure in "
+    "another convention and is never where a new year's figure goes.",
+    "5. Leave `valid_until` empty only if the new edition's source states no "
+    "date on which the figure changes. A 'review by' guess is not a validity "
+    "date; `retrieved_on` is the date to review by.",
+    "6. Run `uv run --extra dev python -m pytest -q`. A value moved without its "
+    "quote, a vintage moved without its validity date, or one sibling moved "
+    "without the rest each turn the suite red by name.",
+)
+
+
+# ---------------------------------------------------------------------------
+# The edition each publishing release is currently read from (board item 6,
+# 2026-09-22): `(as_of, retrieved_on, valid_until)`, keyed by refresh group.
+#
+# Keyed by RELEASE because a release is the unit a refresh moves. Before this,
+# five releases shared `_TAX_RETRIEVED` and four shared `_TAX_YEAR_END`, so the
+# refresh this registry tells a stranger to perform could not be performed: the
+# CRA publishes its indexation in November and Revenu Québec its parameters in
+# December, and a refresher updating the federal figures had to move a constant
+# that also stamped Québec's and Ontario's — silently restating four other
+# releases as read on a day nobody read them. No test could have caught it,
+# because each release stayed internally coherent while three of them lied.
+#
+# One row per release, and a refresh edits exactly the row it read.
+# `hbp.repayment_grace_years` is why the third element is applied only to a
+# release's DATED members: its two siblings carry no validity date.
+# ---------------------------------------------------------------------------
+_RELEASE_EDITION: Dict[str, Tuple[str, str, str]] = {
+    "cra.federal_indexation":             ("2026", "2026-09-05", "2026-12-31"),
+    "cra.ontario_parameters":             ("2026", "2026-09-05", "2026-12-31"),
+    "revenu_quebec.personal_parameters":  ("2026", "2026-09-05", "2026-12-31"),
+    "cra.tfsa_limit":                     ("2026", "2026-09-05", "2026-12-31"),
+    "cra.home_buyers_plan":               ("2026", "2026-09-05", "2028-12-31"),
+    "revenu_quebec.insurance_premium_tax": ("2026", "2026-09-03", "2026-12-31"),
+}
+
+
+def _edition(group: str, *, dated: bool) -> Dict[str, str]:
+    """The provenance an anchor inherits from its release: vintage, retrieval
+    date, the release it belongs to, and — for a member whose source states
+    when its figure changes — that date. Spread into the constructor
+    (`**_edition(...)`), so no anchor in a release can carry a date of its own."""
+    try:
+        as_of, retrieved_on, valid_until = _RELEASE_EDITION[group]
+    except KeyError:
+        raise AnchorError(
+            f"release {group!r} has no row in _RELEASE_EDITION — every release an "
+            f"anchor names must declare the edition it is currently read from, "
+            f"(as_of, retrieved_on, valid_until), so a refresh edits one row and "
+            f"moves exactly the figures that came off that page"
+        ) from None
+    return {
+        "as_of": as_of,
+        "retrieved_on": retrieved_on,
+        "valid_until": valid_until if dated else "",
+        "refresh_group": group,
+    }
 
 
 # The minimum qualifying rate's rule, VERBATIM from OSFI, and its only home:
@@ -1624,7 +1814,6 @@ ANCHORS["mortgage_insurance.amortization_surcharge"] = Anchor(
 ANCHORS["mortgage_insurance.premium_tax_rate.qc"] = Anchor(
     name="mortgage_insurance.premium_tax_rate.qc",
     value=0.09,
-    as_of="2026",
     source=(
         "Revenu Québec, 'Harmonization of the insurance premiums tax rate with "
         "the QST rate' (tax news, 2026-04-09), enacting Bill 99 (2025, c. 27): "
@@ -1647,8 +1836,12 @@ ANCHORS["mortgage_insurance.premium_tax_rate.qc"] = Anchor(
     ),
     band=(0.09, 0.09975),
     short_cite="Revenu Québec IPT",
-    retrieved_on="2026-09-03",
-    valid_until="2026-12-31",
+    quoted=("October 28, 2025, marked the enactment of Bill 99 providing for the "
+            "increase, effective January 1st, 2027, in the Québec insurance premium "
+            "tax (IPT) rate on Québec taxable insurance premiums from 9% to 9.975%"),
+    unit=("fraction of the mortgage-insurance premium, paid in cash at closing "
+          "(the tax cannot be added to the loan amount)"),
+    **_edition("revenu_quebec.insurance_premium_tax", dated=True),
 )
 
 ANCHORS["mortgage_insurance.premium_tax_rate.on"] = Anchor(
@@ -2077,6 +2270,12 @@ ANCHORS["land_transfer_tax.montreal.first_time_buyer_rebate"] = Anchor(
 # must be re-fetched for a 2027 tax year.
 # ---------------------------------------------------------------------------
 
+# The 2026-09-05 provenance pass. Read ONLY by entries that belong to no
+# publishing release — the Québec abatement, the capital-gains inclusion rate,
+# the principal-residence exemption and the FHSA limits, none of which is
+# annually indexed and none of which carries a validity date. Everything that
+# DOES belong to a release takes its dates from `_RELEASE_EDITION` below, so a
+# refresher never edits a knob shared with a release they did not read.
 _TAX_RETRIEVED = "2026-09-05"
 _TAX_OPT_IN = (
     "Applied to nothing by default: the engine charges no income tax and "
@@ -2086,11 +2285,13 @@ _TAX_OPT_IN = (
 # The thresholds and amounts below are 2026 figures of annually indexed
 # schedules — the CRA table prints them under 'Indexation increase 2.0 %',
 # Revenu Québec under 'the taxable income thresholds and constants ... have
-# been indexed' — so each is valid through the last day of 2026 and a run past
-# that date is told to re-read the source. The RATES in the same tables carry
-# no date: Revenu Québec states 'the income tax rates remain unchanged', and
-# no source says a rate changes.
-_TAX_YEAR_END = "2026-12-31"
+# been indexed' — so each is valid through the last day of its tax year and a
+# run past that date is told to re-read the source. That date is now its
+# RELEASE's (`_RELEASE_EDITION`), not a constant shared across releases: the
+# CRA and Revenu Québec publish in different months, and one shared date meant
+# refreshing either one restated the other. The RATES in the same tables carry
+# no date at all: Revenu Québec states 'the income tax rates remain unchanged',
+# and no source says a rate changes.
 _INDEXED_2026 = (
     "A 2026 figure of an annually indexed schedule (CRA 'Indexation increase "
     "2.0 %'; Revenu Québec 'indexed'): valid through 2026-12-31, after which "
@@ -2195,6 +2396,16 @@ TAX_BRACKET_SCHEDULES = {
                _CEILING_UNIT, _ON_BRACKETS, "CRA 2026 Ontario rates"),
 }
 _TAX_PROVINCE = {"tax.federal": "", "tax.qc": "qc", "tax.on": "on"}
+# Which release republishes each schedule. The ceilings are indexed annually and
+# dated; the RATES on the same table are not (Revenu Québec: the thresholds are
+# indexed "whereas the income tax rates remain unchanged"), but they come off
+# the same page and a refresher re-reads them in the same pass, so they carry
+# the group too.
+_TAX_REFRESH_GROUP = {
+    "tax.federal": "cra.federal_indexation",
+    "tax.qc": "revenu_quebec.personal_parameters",
+    "tax.on": "cra.ontario_parameters",
+}
 
 for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.items():
     for _k, (_ceiling, _rate, _quoted) in enumerate(_rows, start=1):
@@ -2202,7 +2413,6 @@ for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.
             ANCHORS[f"{_jur}.bracket_{_k}_ceiling"] = Anchor(
                 name=f"{_jur}.bracket_{_k}_ceiling",
                 value=_ceiling,
-                as_of="2026",
                 source=_source,
                 url=_url,
                 rationale=(
@@ -2218,15 +2428,13 @@ for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.
                 quoted=_quoted,
                 unit=_unit,
                 province=_TAX_PROVINCE[_jur],
-                retrieved_on=_TAX_RETRIEVED,
-                valid_until=_TAX_YEAR_END,
+                **_edition(_TAX_REFRESH_GROUP[_jur], dated=True),
             )
         _span = ("with no ceiling" if _ceiling is None
                  else f"up to and including ${_ceiling:,.0f}")
         ANCHORS[f"{_jur}.bracket_{_k}_rate"] = Anchor(
             name=f"{_jur}.bracket_{_k}_rate",
             value=_rate,
-            as_of="2026",
             source=_source,
             url=_url,
             rationale=(
@@ -2241,7 +2449,7 @@ for _jur, (_label, _url, _source, _unit, _rows, _cite) in TAX_BRACKET_SCHEDULES.
             quoted=_quoted,
             unit=_RATE_UNIT,
             province=_TAX_PROVINCE[_jur],
-            retrieved_on=_TAX_RETRIEVED,
+            **_edition(_TAX_REFRESH_GROUP[_jur], dated=False),
         )
 
 # (threshold of basic Ontario tax, fraction of the excess added as surtax)
@@ -2255,7 +2463,6 @@ for _k, ((_threshold, _fraction), _quoted) in enumerate(
     ANCHORS[f"tax.on.surtax_{_k}_threshold"] = Anchor(
         name=f"tax.on.surtax_{_k}_threshold",
         value=_threshold,
-        as_of="2026",
         source=_ON_SURTAX_SOURCE,
         url=_T4032_ON_URL,
         rationale=(
@@ -2275,13 +2482,11 @@ for _k, ((_threshold, _fraction), _quoted) in enumerate(
         unit=("dollars of basic Ontario tax payable (Ontario tax on taxable income "
               "less non-refundable credits) above which the tier applies"),
         province="on",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition(_TAX_REFRESH_GROUP["tax.on"], dated=True),
     )
     ANCHORS[f"tax.on.surtax_{_k}_rate"] = Anchor(
         name=f"tax.on.surtax_{_k}_rate",
         value=_fraction,
-        as_of="2026",
         source=_ON_SURTAX_SOURCE,
         url=_T4032_ON_URL,
         rationale=(
@@ -2296,14 +2501,13 @@ for _k, ((_threshold, _fraction), _quoted) in enumerate(
         quoted=_quoted,
         unit="fraction of basic Ontario tax above the tier's threshold, added to it",
         province="on",
-        retrieved_on=_TAX_RETRIEVED,
+        **_edition(_TAX_REFRESH_GROUP["tax.on"], dated=False),
     )
 
 ANCHORS.update({
     "tax.federal.basic_personal_amount": Anchor(
         name="tax.federal.basic_personal_amount",
         value=16_452.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, 'Indexation adjustment for personal income tax "
             "and benefit amounts', 2026 column quoted as published: basic personal "
@@ -2326,13 +2530,11 @@ ANCHORS.update({
         short_cite="CRA 2026 indexation",
         quoted="$16,452 (maximum for lower-income individuals); $14,829 (base amount for higher-income individuals)",
         unit="dollars of the federal non-refundable credit base; the credit is 14% of it",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition(_TAX_REFRESH_GROUP["tax.federal"], dated=True),
     ),
     "tax.qc.basic_personal_amount": Anchor(
         name="tax.qc.basic_personal_amount",
         value=18_952.0,
-        as_of="2026",
         source=_QC_RATES_SOURCE,
         url=_QC_RATES_URL,
         rationale=(
@@ -2345,13 +2547,11 @@ ANCHORS.update({
         quoted="Basic personal amount $18,952",
         unit="dollars of the Québec non-refundable credit base; the credit is 14% of it",
         province="qc",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition(_TAX_REFRESH_GROUP["tax.qc"], dated=True),
     ),
     "tax.on.basic_personal_amount": Anchor(
         name="tax.on.basic_personal_amount",
         value=12_989.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, T4032-ON(E) Rev. 26, 'Payroll Deductions Tables "
             "— Ontario', 'Effective January 1, 2026', quoted as published: 'For "
@@ -2371,8 +2571,7 @@ ANCHORS.update({
         quoted="For 2026, the Ontario non‑refundable basic personal tax credit is $12,989.",
         unit="dollars of the Ontario non-refundable credit base; the credit is 5.05% of it",
         province="on",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition(_TAX_REFRESH_GROUP["tax.on"], dated=True),
     ),
     "tax.federal.quebec_abatement": Anchor(
         name="tax.federal.quebec_abatement",
@@ -2559,7 +2758,6 @@ ANCHORS.update({
     "hbp.withdrawal_limit": Anchor(
         name="hbp.withdrawal_limit",
         value=60_000.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, 'What is the Home Buyers' Plan (HBP)?', quoted "
             "as published: 'Currently, the HBP withdrawal limit is $60,000.'; "
@@ -2576,12 +2774,11 @@ ANCHORS.update({
         short_cite="CRA HBP",
         quoted="Currently, the HBP withdrawal limit is $60,000.",
         unit="dollars per person withdrawable from RRSPs under the HBP",
-        retrieved_on=_TAX_RETRIEVED,
+        **_edition("cra.home_buyers_plan", dated=False),
     ),
     "hbp.repayment_years": Anchor(
         name="hbp.repayment_years",
         value=15.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, 'How to repay the funds withdrawn from RRSP(s) "
             "under the Home Buyers' Plan (HBP)', quoted as published: 'You have up "
@@ -2601,12 +2798,11 @@ ANCHORS.update({
         short_cite="CRA HBP",
         quoted="You have up to 15 years to repay",
         unit="years of the HBP repayment period",
-        retrieved_on=_TAX_RETRIEVED,
+        **_edition("cra.home_buyers_plan", dated=False),
     ),
     "hbp.repayment_grace_years": Anchor(
         name="hbp.repayment_grace_years",
         value=5.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, 'What is the Home Buyers' Plan (HBP)?', quoted "
             "as published: 'the temporary repayment relief to defer the start of "
@@ -2634,13 +2830,11 @@ ANCHORS.update({
         short_cite="CRA HBP",
         quoted="if you made your first withdrawal in 2026, your first year of repayment will be 2031",
         unit="years from the withdrawal year to the first repayment year (first repayment year − withdrawal year)",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until="2028-12-31",
+        **_edition("cra.home_buyers_plan", dated=True),
     ),
     "tfsa.annual_limit": Anchor(
         name="tfsa.annual_limit",
         value=7_000.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, 'Calculate your contribution room' (TFSA), "
             "quoted as published: 'The TFSA dollar limit for 2026 is $7,000'. The "
@@ -2661,13 +2855,11 @@ ANCHORS.update({
         short_cite="CRA TFSA",
         quoted="The TFSA dollar limit for 2026 is $7,000",
         unit="dollars of new TFSA contribution room per calendar year",
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition("cra.tfsa_limit", dated=True),
     ),
     "tfsa.cumulative_room_since_2009": Anchor(
         name="tfsa.cumulative_room_since_2009",
         value=109_000.0,
-        as_of="2026",
         source=(
             "Canada Revenue Agency, guide RC4466 'Tax-Free Savings Account (TFSA), "
             "Guide for Individuals', table 'Annual TFSA dollar limit' quoted as "
@@ -2695,8 +2887,7 @@ ANCHORS.update({
                 "$7,000; 2026: $7,000"),
         unit=("dollars of total TFSA room through 2026 for a person eligible every year "
               "since 2009 who never contributed"),
-        retrieved_on=_TAX_RETRIEVED,
-        valid_until=_TAX_YEAR_END,
+        **_edition("cra.tfsa_limit", dated=True),
     ),
 })
 
@@ -2879,3 +3070,165 @@ def short_cite(name: str) -> str:
     if anchor is None:
         return ""
     return f"ref: {anchor.short_cite}" if anchor.kind == "reference" else anchor.short_cite
+
+
+# ---------------------------------------------------------------------------
+# The refresh path (board item 6, 2026-09-22)
+#
+# One record per PUBLISHING RELEASE the dated anchors depend on. Members are
+# derived from `Anchor.refresh_group`, never listed here — membership has one
+# home, and it is the anchor.
+#
+# `checked_on` / `found` say when someone last opened the source and what it
+# showed. They are updated by the refresh itself (step 2 of REFRESH_PROCEDURE),
+# so a figure that lapses without a replacement carries the evidence that
+# somebody looked rather than an undated silence.
+# ---------------------------------------------------------------------------
+
+REFRESH_SOURCES: Dict[str, RefreshSource] = {
+    "cra.federal_indexation": RefreshSource(
+        key="cra.federal_indexation",
+        publisher="Canada Revenue Agency",
+        edition=(
+            "the next year's column of 'Indexation adjustment for personal income "
+            "tax and benefit amounts', and the matching year of 'Current year tax "
+            "rates and income brackets'. The indexation factor for a year is "
+            "normally announced in November of the preceding year"
+        ),
+        url="",   # both pages are republished in place; the anchors carry them
+        checked_on="2026-09-21",
+        found=(
+            "no 2027 figures. The indexation page prints columns 2023, 2024, 2025 "
+            "and 2026 only, and 'Indexation increase per year' ends at 2.0% (2026); "
+            "the rates page reads 'For income earned in: 2026' and offers no 2027 "
+            "selection. The 2027 thresholds are not published by any authority, and "
+            "this repo does not compute an indexation factor of its own"
+        ),
+    ),
+    "cra.ontario_parameters": RefreshSource(
+        key="cra.ontario_parameters",
+        publisher="Canada Revenue Agency (the federal administrator of Ontario's parameters)",
+        edition=(
+            "T4032-ON 'Payroll Deductions Tables — Ontario' for the next year, which "
+            "prints the brackets, the basic personal amount and the two surtax "
+            "tiers together, with the Ontario row of 'Current year tax rates and "
+            "income brackets' as the second reading. The T4032 edition effective "
+            "1 January is normally posted the preceding December"
+        ),
+        url="",
+        checked_on="2026-09-21",
+        found=(
+            "no 2027 edition. The live T4032-ON page reads 'Effective January 1, "
+            "2026', is dated 2025-12-17, states 'For 2026, the Ontario "
+            "non-refundable basic personal tax credit is $12,989.' and links no "
+            "2027 table. Retrieval note carried over from 2026-09-05: the Ontario "
+            "Ministry of Finance personal-income-tax page was unreachable (HTTP 404 "
+            "on both known paths) and the province's open-data rates file carried "
+            "2025 only, so the CRA table remains the source of record"
+        ),
+    ),
+    "revenu_quebec.personal_parameters": RefreshSource(
+        key="revenu_quebec.personal_parameters",
+        publisher="Revenu Québec, corroborated by Ministère des Finances du Québec",
+        edition=(
+            "TP-1015.F-V for the next year ('Formulas to Calculate Source Deductions "
+            "and Contributions'), whose filename carries the year — "
+            "TP-1015.F-V(2027-01).pdf — corroborated by Finances Québec 'Parameters "
+            "of the Personal Income Tax System', AUTEN_IncomeTax<year>.pdf. The "
+            "indexation rate is normally announced in November of the preceding year"
+        ),
+        url="https://www.revenuquebec.ca/en/online-services/forms-and-publications/current-details/tp-1015.f/",
+        checked_on="2026-09-21",
+        found=(
+            "no 2027 edition. TP-1015.F-V(2027-01).pdf returns HTTP 410, and both "
+            "Finances Québec 2027 parameter files — AUTEN_IncomeTax2027.pdf and "
+            "AUTFR_RegimeImpot2027.pdf — return HTTP 404. The `url` above answers "
+            "HTTP 403 to an automated fetch and is opened in a browser: "
+            "revenuquebec.ca refuses bots on its HTML pages (the same refusal "
+            "recorded on 2026-09-05) while serving the PDF to a direct download, "
+            "so the PDF filename pattern is the reliable check"
+        ),
+    ),
+    "cra.tfsa_limit": RefreshSource(
+        key="cra.tfsa_limit",
+        publisher="Canada Revenue Agency",
+        edition=(
+            "the next year's TFSA dollar limit on 'Calculate your contribution room', "
+            "with guide RC4466's 'Annual TFSA dollar limit' table for the cumulative "
+            "figure. RC4466: 'The TFSA annual room limit will be indexed to inflation "
+            "and rounded to the nearest $500.' The limit is normally announced in "
+            "November of the preceding year"
+        ),
+        url="",
+        checked_on="2026-09-21",
+        found=(
+            "no 2027 limit. 'Calculate your contribution room' still reads 'The "
+            "TFSA dollar limit for 2026 is $7,000' and states no 2027 figure; "
+            "guide RC4466 was reachable and prints the same table. The CRA "
+            "announces the following year's limit in November. Press reporting "
+            "projects $7,500 for 2027 from CPI published so far; a third party's "
+            "projection is not the publisher's figure and does not go in the "
+            "registry. When it is announced, tfsa.cumulative_room_since_2009 grows "
+            "by exactly the new annual limit and its quoted table gains the year"
+        ),
+    ),
+    "cra.home_buyers_plan": RefreshSource(
+        key="cra.home_buyers_plan",
+        publisher="Canada Revenue Agency",
+        edition=(
+            "'What is the Home Buyers' Plan (HBP)?' and 'How to repay the funds "
+            "withdrawn from RRSP(s) under the HBP', re-read for whether the "
+            "temporary repayment relief for first withdrawals between 2026-01-01 and "
+            "2028-12-31 is extended again, allowed to expire (the grace reverts to "
+            "the standard 2 years), or the $60,000 limit moves"
+        ),
+        url="",
+        checked_on="2026-09-21",
+        found=(
+            "unchanged, and no extension announced. 'What is the Home Buyers' Plan "
+            "(HBP)?' still reads 'Currently, the HBP withdrawal limit is $60,000.', "
+            "still limits the temporary repayment relief to a first withdrawal "
+            "'between January 1, 2026, and December 31, 2028', and still gives "
+            "2031 as the first repayment year for a 2026 withdrawal. This is the "
+            "one dated anchor in the registry that does not lapse this year; it is "
+            "on the work order so the release is recorded rather than remembered"
+        ),
+    ),
+    "revenu_quebec.insurance_premium_tax": RefreshSource(
+        key="revenu_quebec.insurance_premium_tax",
+        publisher="Revenu Québec / Assemblée nationale du Québec",
+        edition=(
+            "none to wait for — Bill 99 (2025, c. 27) is enacted and the successor "
+            "rate applies to premiums paid after 2026-12-31. Revenu Québec's IPT "
+            "page is the confirmation to read on the day, not a new publication"
+        ),
+        url="",
+        checked_on="2026-09-21",
+        found=(
+            "the successor figure is published and already on this anchor's record: "
+            "'October 28, 2025, marked the enactment of Bill 99 providing for the "
+            "increase, effective January 1st, 2027, in the Québec insurance premium "
+            "tax (IPT) rate on Québec taxable insurance premiums from 9% to 9.975%'. "
+            "The value is NOT changed today: 9% is the correct rate for a premium "
+            "paid on or before 2026-12-31, and the engine holds one figure. This is "
+            "a known edit on a known date, not a fetch"
+        ),
+        successor_published=True,
+    ),
+}
+
+
+def refresh_group_members(key: str) -> Tuple[str, ...]:
+    """Every anchor naming `key` as the release that publishes it, in registry
+    order. Derived, never stored: `Anchor.refresh_group` is membership's one
+    home."""
+    return tuple(name for name, anchor in ANCHORS.items() if anchor.refresh_group == key)
+
+
+def dated_anchors() -> Tuple[str, ...]:
+    """Every anchor whose source says when its figure stops being the figure,
+    earliest validity date first, then by name."""
+    return tuple(sorted(
+        (n for n, a in ANCHORS.items() if a.valid_until),
+        key=lambda n: (ANCHORS[n].valid_until, n),
+    ))

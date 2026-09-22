@@ -214,3 +214,26 @@ absent from the world: the engine reports "no rebate anchored", and the answer
 says the same ("no source in the registry for a Montréal first-time-buyer
 rebate — check the city's own page before relying on it"). The programme may
 well exist; what the run can prove is only that nothing here priced it.
+
+## 9. A figure past its validity date
+
+Some anchored figures stop being the figure on a date their own source states —
+the income-tax bracket ceilings, the basic personal amounts, the TFSA limits,
+Québec's tax on mortgage-insurance premiums. A run that uses one past that date
+carries a `[warning]` naming the anchor, the date and the source to re-read.
+
+Carry that warning as written, and say which way the stale figure moves the
+verdict. Then do the thing the warning cannot: run
+`uv run hde --refresh-plan`. It prints the work order — the release that
+publishes the replacement, where the next edition appears, the figure as the
+source printed it, and the date someone last checked that source together with
+what they found. Where the record says a successor is already published, the
+replacement figure is in the anchor's own `source` and `band`, and the refresh
+is a known edit rather than a search.
+
+Two things are never acceptable here. Do not carry a lapsed figure forward as
+though it still held, and do not estimate the new one — not from an indexation
+factor, not from a press projection, not from the old figure. A registry entry
+holds a published figure or it expires loudly; "the 2026 bracket is stale and
+the 2027 one is not published yet" is a complete, honest answer, and the plan's
+`found` line is the evidence for it.

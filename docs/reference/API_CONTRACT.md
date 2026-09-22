@@ -175,7 +175,9 @@ uv run hde --print-anchors
 The registry (`src/hde/anchors.py`): for every engine default its `value`,
 `as_of`, `source`, `url`, `rationale`, `band`, `short_cite`, `quoted`, `unit`,
 `province`, `retrieved_on`, `kind` (`cited` / `reference` / `neutral` /
-`derivation` / `unsourced`), `restatements`, `replaces` and `valid_until` —
+`derivation` / `unsourced`), `restatements`, `replaces`, `refresh_group` (which
+publishing release prints the figure — see `--refresh-plan` below; empty on
+anything undated) and `valid_until` —
 the ISO date through which the source says this is the figure, set only where
 the source states when it changes (the Québec tax on insurance premiums steps
 to 9.975% for premiums paid after 2026-12-31; the 2026 bracket ceilings, basic
@@ -184,6 +186,51 @@ indexed 2026 figures; the Home Buyers' Plan grace window ends 2028-12-31),
 empty everywhere else. `retrieved_on` is the date to review by; `valid_until`
 is the date the figure stops being the figure, and a run that uses the anchor
 past it gets the validity `[warning]` above.
+
+## The refresh work order
+
+```bash
+uv run hde --refresh-plan [--refresh-plan-as-of YYYY-MM-DD]
+```
+
+The other half of `valid_until` (board item 6, 2026-09-22): the warning says a
+figure went stale, this says how to replace it. One JSON document, no config
+needed.
+
+Top level: `as_of` (the date it measures against — today unless
+`--refresh-plan-as-of` says otherwise, and the only clock this surface reads),
+`procedure` (`anchors.REFRESH_PROCEDURE`, the steps of a correct refresh — its
+one home, because a refresher in 2027 has the CLI and may not have
+`docs/specs/`), `dated_anchors`, `lapsed_anchors`, and `groups`.
+
+One `groups` entry per publishing RELEASE that has a dated anchor, ranked by
+earliest `valid_until` then key:
+
+| field | meaning |
+|---|---|
+| `group` | the release key, matching each member's `refresh_group` |
+| `publisher` | who publishes the next edition |
+| `edition` | what the next edition is called, in the publisher's own words |
+| `url` | where it appears; `""` means the page its anchors already cite |
+| `where_to_look` | `url` resolved — the derived list actually to open |
+| `checked_on` / `found` | when someone last opened the source and what it showed that day. This is how "nobody has published it yet" is stated: dated and evidenced, so it cannot read as neglect |
+| `successor_published` | the source already states the figure that takes effect after the validity date — go apply it on the date rather than going to fetch. The figure itself stays in the anchor's own `source`, `band` and `rationale`; it is not copied here |
+| `valid_until` / `days_remaining` / `lapsed` | derived from the members' own dates against `as_of`; stored nowhere |
+| `dated` | full `anchor_to_dict` records of the members that carry a validity date |
+| `undated_siblings` | full records of the members that do not — a rate whose source names no change to it, which a refresher nonetheless re-reads off the same page |
+
+**Exit code: 3 once any figure has lapsed**, 0 otherwise, 1 on a malformed
+`--refresh-plan-as-of`. A registry stating figures their own sources say have
+changed is a surface that cannot verify, so it refuses; a figure still in force
+is information, not a failure.
+
+A refresh moves `value`, `as_of`, `quoted`, `retrieved_on` and `valid_until`
+together across EVERY member of the release and records `replaces` — where a new
+edition of an indexed figure is a *scheduled* replacement, not a correction.
+`restatements` is the same figure in another convention and is never where a new
+year's figure goes. `tests/test_anchor_refresh.py` turns red on a value moved
+without its quote, a vintage moved without its validity date, or one sibling
+moved without the rest.
 
 The registry also carries **reference tables** — keys
 `property_tax.<municipality>`, `school_tax.<province>`,

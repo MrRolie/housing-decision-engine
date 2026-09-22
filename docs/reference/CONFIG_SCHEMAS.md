@@ -281,7 +281,9 @@ The default shock model is **lognormal** (see `_shock_multiplier` in
 
 Every row with a Source is a registered anchor in `src/hde/anchors.py` (value, as_of,
 source, url, rationale, band, retrieved_on, kind, and valid_until where the source
-states when the figure changes); `uv run hde --print-anchors` prints them. `ref:` marks a source that informs the value without stating it; `neutral,
+states when the figure changes — with refresh_group naming the release that will
+publish the replacement, and `uv run hde --refresh-plan` printing the work order for
+doing so); `uv run hde --print-anchors` prints them. `ref:` marks a source that informs the value without stating it; `neutral,
 uncited` is a deliberate zero the engine will not invent a value for (the assumptions
 echo warns when `house.annual_maintenance_rate` is omitted). Rows marked "—" are
 structural or presentation defaults with no evidentiary content. This table is pinned

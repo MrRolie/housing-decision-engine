@@ -115,6 +115,26 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--refresh-plan",
+        action="store_true",
+        help="Print the refresh work order for every anchor whose source says "
+             "when its figure changes: grouped by the release that publishes it, "
+             "ranked by how soon it lapses, with the figure as quoted, the "
+             "publisher and edition to look for, where to look, when the source "
+             "was last checked and what was found — plus the steps of a correct "
+             "refresh. Exits 3 if any figure has already lapsed",
+    )
+
+    parser.add_argument(
+        "--refresh-plan-as-of",
+        type=str,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Date --refresh-plan measures against (default: today). The only "
+             "clock that surface reads",
+    )
+
+    parser.add_argument(
         "--story",
         type=str,
         default=None,
@@ -158,9 +178,36 @@ def main() -> int:
         print(_json.dumps(anchors_to_dict(), indent=2, ensure_ascii=False))
         return 0
 
+    if args.refresh_plan:
+        import datetime as _dt
+        import json as _json
+        from .serialization import refresh_plan
+        if args.refresh_plan_as_of is None:
+            as_of = _dt.date.today()
+        else:
+            try:
+                as_of = _dt.date.fromisoformat(args.refresh_plan_as_of)
+            except ValueError:
+                print(f"Error: --refresh-plan-as-of must be an ISO date "
+                      f"(YYYY-MM-DD), got {args.refresh_plan_as_of!r}", file=sys.stderr)
+                return 1
+        plan = refresh_plan(as_of)
+        print(_json.dumps(plan, indent=2, ensure_ascii=False))
+        # A figure that has lapsed is a registry the engine can no longer stand
+        # behind, so the surface REFUSES rather than reporting success. A figure
+        # still in force is information: a gate that went red for the three
+        # months before an edition is published, with nothing to fetch, would be
+        # a red that means nothing.
+        if plan["lapsed_anchors"]:
+            print(f"REFUSING: {plan['lapsed_anchors']} anchored figure(s) are past "
+                  f"their validity date as of {plan['as_of']} — the registry states "
+                  f"figures their own sources say have changed.", file=sys.stderr)
+            return 3
+        return 0
+
     if args.config is None:
-        print("Error: config path required (or use --print-schema / --print-anchors)",
-              file=sys.stderr)
+        print("Error: config path required (or use --print-schema / --print-anchors "
+              "/ --refresh-plan)", file=sys.stderr)
         return 1
 
     # Validate config path

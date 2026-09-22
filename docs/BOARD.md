@@ -175,18 +175,70 @@ tool serves, and the ranking is worth re-arguing.
 
 ## 6. Anchors that survive their author
 
-**open** · artifact boundary, clause 3
+**LANDED 2026-09-22** · artifact boundary, clause 3 · design:
+`docs/specs/2026-09-22-anchor-refresh-path.md`
 
-Twenty anchors carry a validity date and warn once it passes. Nothing in the repo can
+Twenty anchors carry a validity date and warn once it passes. Nothing in the repo could
 refresh them. Every figure was fetched by hand from a session, so in January the engine
 degrades to a wall of warnings and only the author can repair it. A product whose numbers
 decay to unusable without one specific person is a habitat wearing a product's clothes.
 
-Build: a refresh path in the repo, fetching from the sources the anchors already name,
-with the run refusing to silently substitute.
+**What landed.** Not nineteen new numbers — **zero of the nineteen values change today**,
+and that is the finding, not a shortfall. Canadian tax parameters for a year are published
+once the indexation factor is known: November for the CRA and Finances Québec, December
+for the T4032 tables. Checked 2026-09-21 against every primary source: the CRA indexation
+page prints no 2027 column, the rates page reads "For income earned in: 2026", T4032-ON is
+the 2025-12-17 edition, both Finances Québec 2027 parameter PDFs are 404 and
+TP-1015.F-V(2027-01) is 410, and the 2027 TFSA limit is a press projection rather than the
+CRA's figure. Computing an indexation factor here would be an estimate wearing a citation's
+clothes. The one exception is Québec's insurance-premium tax: Bill 99 is enacted and the
+2027 rate is 9.975%, which the registry has carried in the anchor's band and rationale
+since 2026-09-03. It does not change the value, because 9% is still correct for a premium
+paid on or before 2026-12-31 — a known edit on a known date, not a fetch.
 
-*Why now:* the first anchors expire 2026-12-31. It is the last resident-builder assumption
-left after the 2026-09-20 pass.
+What DID land is the path. `Anchor.refresh_group` names the publishing RELEASE behind each
+figure, and `__post_init__` now refuses a dated anchor without one, or without `quoted` and
+`unit` — a promise that a figure will be replaced is unkeepable if nobody can say who
+publishes the replacement or how this source printed it.
+
+Grouping them exposed a defect that would have made the whole thing ornamental: five
+releases shared the constant `_TAX_RETRIEVED` and four shared `_TAX_YEAR_END`, with
+`as_of="2026"` a literal inside a generator that runs for all three jurisdictions. The CRA
+publishes in November and Revenu Québec in December, so a refresher updating the federal
+figures had to move a constant that also stamped Québec's and Ontario's — leaving the
+registry asserting Québec's 2026 brackets were the 2027 brackets, read on a day nobody read
+them. No guard could catch it: each release stayed internally coherent while three of them
+lied. `_RELEASE_EDITION` now holds one `(as_of, retrieved_on, valid_until)` row per release
+and every grouped anchor spreads `**_edition(group, dated=…)`, so a refresh edits exactly
+the row it read; `_TAX_YEAR_END` is deleted and `_TAX_RETRIEVED` survives only for the seven
+entries in no release at all. The refactor moved no figure, date or citation — all 117
+anchor records are byte-identical before and after, which is how it was checked. It is the
+repo's own "sweep the siblings of any single-instance fix", one level up.
+
+`REFRESH_SOURCES` holds six
+release records (publisher, the edition to look for, where it appears, **when it was last
+checked and what was found**) and derives its members from the anchors, so membership has
+one home. The check record is what stops a lapsing figure reading as neglect: "the CRA
+indexation page prints 2023–2026 and no 2027 column, checked 2026-09-21" is completed work.
+`hde --refresh-plan` prints the work order — grouped by release, ranked by how soon a
+figure lapses, with every member's full anchor record, the resolved URL, the check, and the
+steps of a correct refresh — and exits 3 once anything has actually lapsed, 0 while a
+figure is merely approaching its date.
+
+Verification is the half that matters: `tests/test_anchor_refresh.py` turns red on a value
+retyped with its citation left stale, a vintage moved to the new year with `valid_until`
+left behind, and one sibling refreshed while the rest of its release stays at the old
+edition. Each was run against its own mutation first. The sibling check is honest about its
+reach — `test_tax_anchors.py`'s literal pins already catch a partial edit today, and the
+relational check is what survives those literals being updated on the 2027 pass, which a
+mutation demonstrates: with the literals updated exactly as a refresher must, it is the
+only test that fires.
+
+*What it leaves:* nothing in this repo RUNS the plan on a schedule, because the repo has no
+CI at all. The alarms that fire unprompted are unchanged in kind — the suite reddens the
+day after a figure lapses, and a run that used one warns. What changed is that both now
+have a work order behind them that a stranger can execute. Standing up a scheduler is a
+delivery decision and belongs with item 9.
 
 ## 7. What the owner never gets back
 

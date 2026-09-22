@@ -62,8 +62,15 @@ DATED = {
 
 
 def _anchor(**over):
+    # `quoted`, `unit` and `refresh_group` are carried because a DATED anchor
+    # owes all three since 2026-09-22 (board item 6): a figure that says it will
+    # be replaced must show how its source printed it, what base it is stated
+    # on, and who publishes the replacement. They are inert on the undated
+    # cases below. The rule itself is pinned in tests/test_anchor_refresh.py.
     base = dict(name="x.y", value=0.1, as_of="2026", source="s", url="u",
-                rationale="r", band=(0.0, 1.0), short_cite="c")
+                rationale="r", band=(0.0, 1.0), short_cite="c",
+                quoted="0.1 as printed", unit="fraction of something",
+                refresh_group="some.release")
     base.update(over)
     return Anchor(**base)
 
@@ -279,7 +286,13 @@ class TestWarning:
 
     def test_an_applied_default_past_its_date_warns(self, monkeypatch):
         anchor = ANCHORS["rent.investment_return_rate"]
-        monkeypatch.setitem(ANCHORS, anchor.name, dataclasses.replace(anchor, valid_until="2026-06-30"))
+        # Dating an anchor that was not dated means owing what a dated anchor
+        # owes (board item 6): the quote, the base, and the release that
+        # publishes the replacement.
+        monkeypatch.setitem(ANCHORS, anchor.name, dataclasses.replace(
+            anchor, valid_until="2026-06-30", refresh_group="fp_canada.pag",
+            quoted="60/40 balanced portfolio ≈ 3.0% real",
+            unit="fraction of invested capital per year, real"))
         spec = load_config_dict(_plain())
         assert "rent.investment_return_rate" in spec.defaults_applied
         lines = validity_warnings(spec, datetime.date(2026, 9, 8))
