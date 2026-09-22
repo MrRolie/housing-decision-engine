@@ -692,16 +692,65 @@ class TestSweepAndBreakEven:
         raw = _house(mortgage_renewal_years=5, mortgage_renewal_rates=0.06)
         assert flattened_path_note(raw, "house.mortgage_renewal_rates") is None
 
-    def test_the_bracket_refusal_names_the_real_reason(self):
-        """The key IS in the YAML and IS a rate, so "only money and rate inputs
-        get a default bracket" contradicted itself (2026-09-21)."""
-        from hde.break_even import solve_break_even
+    def test_the_ladder_solves_on_the_contract_rates_own_bracket(self):
+        """Board item 4 §6: the renewal ladder is the one stated input whose
+        reversal distance the engine can solve, so it gets a default bracket —
+        the CONTRACT rate's, read from that entry rather than restated, since
+        config types a renewal rate as a quoted rate of `mortgage_rate`'s class.
+
+        Until 2026-09-22 this key had no bracket at all and refused. The
+        refusal it used to raise is now the twelve-leaf guard below."""
+        from hde.break_even import RATE_BRACKETS, format_break_even, solve_break_even
+        out = solve_break_even(self._raw(), "house.mortgage_renewal_rates", None, None)
+        assert out["bracket"] == list(RATE_BRACKETS["mortgage_rate"])
+        # The bracket a solve chose is always printed — an assistant-chosen
+        # span that answers where a refusal used to stand has to be visible,
+        # or it is a silent convention.
+        assert "bracket 1.00%–10.00%" in format_break_even(out)
+        # ...and the flattening is named, because the stated path is not a
+        # point on the axis the bracket searches.
+        assert "ONE figure applied at each renewal" in out["note"]
+
+    # Every rate-shaped leaf the engine states no span for. Twelve remain once
+    # `mortgage_renewal_rates` takes the contract rate's bracket; the branch
+    # serves all of them and its sentence must be true of each. Parametrized
+    # rather than instanced because the 2026-09-21 fix wrote renewal prose into
+    # a category-general branch and told `economic.inflation_rate` that "the
+    # engine forecasts no renewal path" — and the one key that sentence WAS
+    # about is the one key that just left the branch (2026-09-22).
+    UNBRACKETED_RATE_LEAVES = [
+        "condo.fee_escalation_rate", "condo.reserve_contribution_rate",
+        "condo.reserve_growth_rate", "condo.property_tax_rate",
+        "condo.purchase_costs_rate", "condo.selling_cost_rate",
+        "rent.investment_return_rate", "rent.reset_market_escalation_rate",
+        "economic.inflation_rate", "income.income_growth_rate",
+        "tax.marginal_rate", "tax.retirement_marginal_rate",
+    ]
+
+    def _two_priced_options_stating(self, key, value=0.02):
+        """A raw config with EXACTLY two priced options, one of them the key's
+        own when the key names an option — the bracket branch is reached only
+        past the option-count check, and adding a third block would refuse
+        for the wrong reason."""
+        from hde.sweep import with_value
+        cfg = self._raw()
+        if key.startswith("condo."):
+            cfg = {k: v for k, v in cfg.items() if k != "house"}
+            cfg["condo"] = {"initial_value": 400_000, "all_cash": True,
+                            "monthly_fee": 400, "value_growth_rate": 0.02}
+        return with_value(cfg, key, value)
+
+    @pytest.mark.parametrize("key", UNBRACKETED_RATE_LEAVES)
+    def test_an_unbracketed_rate_leaf_is_refused_in_terms_true_of_itself(self, key):
+        from hde.break_even import RATE_BRACKETS, solve_break_even
+        assert key.rsplit(".", 1)[-1] not in RATE_BRACKETS      # else the case is vacuous
         with pytest.raises(ValueError) as raised:
-            solve_break_even(self._raw(), "house.mortgage_renewal_rates", None, None)
+            solve_break_even(self._two_priced_options_stating(key), key, None, None)
         message = str(raised.value)
-        assert "only money and rate inputs" not in message
-        assert "no range is anchored for mortgage_renewal_rates" in message
-        assert "house.mortgage_renewal_rates=lo:hi" in message
+        assert "only money and rate inputs" not in message      # the 2026-09-21 find
+        assert "renewal" not in message                         # the 2026-09-22 find
+        assert "no default search range" in message
+        assert f"{key}=lo:hi" in message
 
 
 class TestWarnings:

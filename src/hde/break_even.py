@@ -48,6 +48,11 @@ _MONEY_KEYS = MONEY_LEAVES
 # cannot cross).
 _FLOOR_AT_ZERO_LEAVES = frozenset({
     "property_tax_rate", "purchase_costs_rate", "annual_maintenance_rate", "mortgage_rate",
+    # A renewal rate sits here for the same reason `mortgage_rate` does, and it
+    # was missing: the loader refuses a negative one outright
+    # (`mortgage_renewal_rates must be >= 0`), so a widen hint that offered one
+    # would name a bracket no point of which loads (2026-09-22).
+    "mortgage_renewal_rates",
     "selling_cost_rate", "reserve_contribution_rate", "marginal_rate",
     "retirement_marginal_rate", "affordability_threshold",
 })
@@ -72,6 +77,17 @@ RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
     "mortgage_rate": (0.01, 0.10),             # as quoted (semi-annual by default), two decades of Canadian rates
     "discount_rate": (0.0, 0.08),              # the loader refuses outside [0, 15%]
 }
+# The renewal ladder searches the CONTRACT rate's own bracket, read from that
+# entry rather than restated: config.py types a renewal rate as "a quoted
+# contract rate of `mortgage_rate`'s class" and converts both through
+# `mortgage_rate_compounding`, so the two cannot plausibly want different
+# ranges and widening one must widen the other (2026-09-22, board item 4 §6).
+# Before this entry the leaf had NO bracket — `RATE_BRACKETS` is keyed by the
+# leaf — so `--break-even <opt>.mortgage_renewal_rates` refused rather than
+# borrowing one. The bracket is assistant-chosen like every other entry here
+# and is printed on every solve, which is the only thing that keeps it a
+# declared convention rather than a silent one.
+RATE_BRACKETS["mortgage_renewal_rates"] = RATE_BRACKETS["mortgage_rate"]
 
 
 def parse_break_even(arg: str) -> Tuple[str, Optional[float], Optional[float]]:
@@ -398,8 +414,19 @@ def solve_break_even(
                 # bracket" while refusing a rate input, leaving the user who
                 # followed the schema's own suggestion with nothing to do next
                 # (2026-09-21).
-                why = (f"no range is anchored for {field} — the engine forecasts no renewal "
-                       f"path and defaults none, so the bracket is yours to state")
+                #
+                # The sentence itself is the second half of that fix and it was
+                # wrong: written for the renewal ladder, it told every one of
+                # the twelve rate leaves that still land here that "the engine
+                # forecasts no renewal path" — true, and nothing to do with
+                # `economic.inflation_rate`. Now it names the refused key's own
+                # situation in the branch's own terms, and the one key the old
+                # prose WAS about has a bracket and no longer reaches here
+                # (2026-09-22). Note the distinction the sentence has to keep:
+                # `property_tax_rate` has anchored VALUES and still no range.
+                why = (f"{field} has no default search range — an anchored value is not a "
+                       f"range, and this engine states a plausible span for only a few rate "
+                       f"leaves, so the bracket to search is yours")
             else:
                 why = "only money and rate inputs get a default bracket"
             raise ValueError(
