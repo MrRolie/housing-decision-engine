@@ -49,6 +49,77 @@ options.
 That is the argument for the three registers below, and it is why the obvious build is the
 dangerous one.
 
+## 0.1 Rulings on what the contract builder found, 2026-09-21
+
+Typing the exchanged types found nine places where this document contradicts itself or prints a
+figure with no field behind it. Every one is ruled here, in one place, so no builder has to
+decide. Two were corrections to the document and are applied in §7 and §13 above; the rest are
+below. The finding pattern is worth naming: **all nine came from writing the types, not from
+reading the prose.** A field either exists or it does not, and that question cannot be answered
+vaguely.
+
+**1. The level register computes its own baseline, and the block says which sample it is.**
+The register's freeze comparisons are PAIRED against `A`, so its baseline must be `f(A[:m])`
+computed from `A`, never borrowed from `verdict`. And `verdict.prob_best` comes from the LEGACY
+binding — one generator, the shipped stream — while `A` is spawn-keyed, so the two are different
+samples of the same quantity and will differ by sampling noise. `futures_margin` and
+`prob_best_base` therefore STAY, as the decomposition's own figures, labelled as such. This is
+not a second home for one truth: it is two estimates from two named samples, and their
+difference is information about the estimator. §2's bit-exact equality of `P(f > 0)` and
+`verdict.prob_best` is a claim about the LEGACY binding only, and §2 is amended to say so.
+
+**2. The gap figure is a subtraction, never a stored number.** §7's level closing printed a gap
+that disagreed with the two figures printed beside it by $2,333. Render it as the difference of
+those two, so they cannot disagree again. The same rule covers §7's `0.34` where the header
+prints `0.3350`: one rounding, applied at the formatter, of one stored figure.
+
+**3. The 10,000-path parenthetical is DROPPED.** §7 printed a ΣS at a second sample size. No
+section licenses computing the decomposition twice, and at ~13x the shipped default that is
+~26x. Track D removes the sentence. If the interaction question is worth a second sample later,
+it arrives as its own ruled feature, not as a parenthetical.
+
+**4. Four boundary kinds, not three.** §6's bullet list enumerates `best`, `mc_best`,
+`decisive`; its own measured results carry `best` (1.6052%), `runner_up` (2.9549%) and
+`mc_best` (2.7164%). `runner_up` was in the output and not the enumeration; `decisive` was in
+the enumeration with nothing measured. All four are real questions, so `BOUNDARY_FIELDS` carries
+four, and a kind the solver cannot reach on a given config REFUSES by name rather than being
+silently absent — which is what `RefusedBoundary` is for.
+
+**5. The structural zeros live inside the reversal register.** §7 renders a fourth section,
+"NOT DRAWN IN THIS RUN", which the stated `spread`/`level`/`reversal` triple has no home for.
+It goes in `reversal`, because §3.5's renewal row carries a number that comes from §6 and the
+two render together. The contract builder chose this; it is now ruled rather than assumed.
+
+**6. §4's provenance cell stands, and §7's draft is in breach of it.** The `economy` row must
+list the `corr_inflation_*` keys AND the option vols they pull from, because which vols are
+pulled depends on which rho is non-zero. Those cannot be static sizing keys; they arrive as
+extra width entries from the track that reads the config. §7's draft lists only the corr keys
+and is wrong. Track D fixes the draft.
+
+**7. `P(f > 0) == 1` refuses the SPREAD register, and the level and reversal registers still
+print.** With no sign variation the shares are undefined, so the spread register carries a
+named refusal rather than empty rows. The binding in §5 runs one way — the spread may not print
+without the level — so a refused spread beside a printed level is permitted and is the honest
+shape.
+
+**8. Two shelter-freeze figures, two methods, both real.** +$127,876 (§0, §5, §13) and
++$125,074 (§1, §3.4, §7) are not a disagreement to resolve by picking one. The first is the
+seat's probe, which DELETED the lease-reset pair from the config — the only way this engine
+allows the channel off, since it refuses a zeroed hazard beside a stated market rent — and so
+also removes the market-escalation default. The second is the freeze mask, which suppresses the
+draw and leaves the config alone. **The freeze-mask figure is what the register prints**, because
+that is what the register does; the deletion probe is a config counterfactual and is labelled as
+one wherever it appears. Same for the share: 0.10 is the measurement, and §1's "7.7%" and §7's
+"8%" are roundings of it that should not have been typed as separate figures.
+
+**9. Both of the contract builder's deviations are accepted.** The `TYPE_CHECKING` import of
+`models.Verdict` is an import statement with zero runtime coupling, and the alternative — copying
+the verdict's scalars — is a second home for the verdict's truth. `bracket_source` on both
+reversal types is required by the correction at the end of §6: a bracket that converts an honest
+refusal into an answer must show the reader the range it chose and whose figure it is.
+
+---
+
 ## 1. Why
 
 The engine already says, on every run, that its verdict rests on uncertainty inputs the user
@@ -567,7 +638,12 @@ which risk decides it — 2,000 futures, seven channels live
 
   the central case says rent by $31,349; the futures say -$67,194. Freezing all seven channels
   reproduces the central case exactly, and these seven shifts account for $98,114 of that
-  $100,876 gap.
+  $98,543 gap.
+  [ARITHMETIC CORRECTED 2026-09-21: this draft read "$100,876 gap". 31,349 - (-67,194) is
+  98,543; $100,876 implies a futures mean of -$69,527, a SECOND estimate of E[f] inside one
+  block. A builder renders this figure as the SUBTRACTION of the two printed beside it, never
+  as a stored third number, so the two can never disagree again. Caught by the contract
+  builder.]
   READ THIS COLUMN AS: a cost the central case leaves out, not as a risk. Your lease ending is
   8% of the spread and four times the margin in level — it is why the central case and the
   futures name different winners. Your portfolio is 88% of the spread and moves the margin by
@@ -886,16 +962,12 @@ that channel prints a dash in any variance table because its spread is identical
 Shipping the spread table without it would ship the half that can mislead and hold back the half
 that cannot.
 
-1. **Label the ranking, or refuse to rank, when every live width is assistant-chosen?** This spec
-   takes **label** (§5), on the `RATE_BRACKETS` precedent. The countervailing view is stated in
-   §5 and is not weak. This fork blocks track D.
-2. **Opt-in `--decompose`, or automatic on qualifying runs?** This spec takes **opt-in**, on
-   measured cost (~13x at the shipped default, §9). The board says *"first-class output, not a one-off study"*, and a
-   flag is one reading of that. Automatic would need either a much cheaper spread register or a
-   default `--decompose=N` well below `num_sims`.
-3. **Is slice 1 right to carry the reversal register?** It roughly doubles slice 1. The argument
-   for is §1's third wrong outcome; the argument against is that `--sweep` already finds a
-   majority flip between grid points and a user who asks gets it today.
+**The pre-ruling text that stood here has been deleted, deliberately.** It said *"this spec
+takes label (§5)"* and *"this fork blocks track D"*, both now false, and it was the passage a
+later reader would have quoted against the binding above. The arguments for the rejected sides
+survive in the three paragraphs above and in §5 and §15; what is gone is only the statement of
+a default that no longer holds. Caught by the contract builder (2026-09-21), reading the
+section against the code it was about to type.
 
 ---
 
