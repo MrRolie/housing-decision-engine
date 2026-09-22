@@ -46,7 +46,9 @@ ORIGINATION test in the engine's own voice with a citation attached. On a run th
 prices a renewal that reads as a standing verdict on the household, and since 2024-11-21 it
 is not one — OSFI no longer prescribes the rate for an uninsured straight switch at renewal.
 The line now names which transaction its figures describe, in 39 words, and refuses rather
-than explains: an exemption from OSFI's prescribed rate is not an exemption from being
+than explains — **and it is 43% longer for it: 89 words to 128 on a run with a ladder**, a
+cost recorded here rather than argued away, because the households that meet the clause are
+exactly the ones with a renewal to worry about: an exemption from OSFI's prescribed rate is not an exemption from being
 assessed, and the engine cannot see which case the household is in, because a straight
 switch is defined by the amount carried over and the amortization kept, which no config
 states. The insured branch reports an absent source instead of borrowing the other branch's
@@ -55,7 +57,12 @@ written for a prior low-ratio loan. **THE LINE CITES, THE ANCHORS RECITE** — t
 dates, the three conditions and the B-20 mechanism all left the line and are stored verbatim
 on the two anchors, one `--print-anchors` away. The first draft of the clause took the line
 to 205 words, longer than a version already rejected for length; that is where the rule came
-from.
+from. **The 89→128 growth is still a finding against this line, not a settled cost.** §4 and
+§5 of the spec already warn that a line whose varying part is one figure inside a fixed
+sentence drifts toward boilerplate and takes the genuinely run-specific warnings down with
+it, and this line's invariant fraction is now the highest on the board. The rule that
+produced the cut — the line cites, the anchors recite — may have one more level to run: the
+fixed scaffolding belongs in the anchors and only the figures belong in the line.
 
 Left for slice 2: the renewal dimension in state two, which needs item 1's ladder; then the
 tenure field and its refusal (§10), which is independent of both and is the largest single
