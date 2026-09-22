@@ -13,6 +13,11 @@ Design: `docs/specs/2026-09-22-which-risk-decides-it.md`, section 3.3 (the
 estimators, the bootstrap, the flip column), 3.4 (the level arithmetic) and 4
 (the interaction residual and the branch on which it refuses to print).
 
+ONE AMENDMENT TO SECTION 3.3, ruled in section 0.1 item 13 and carried here:
+the first-order numerator's `f(B)` is CENTRED by its own sample mean. Section
+3.3's formula block still prints the uncentred form; the ruling supersedes it
+and says why in measured terms. `first_order_indices` carries the derivation.
+
 THE THREE TABLES, named once:
 
     f_a    `f` on draw set A                                  shape (n,)
@@ -152,9 +157,9 @@ def _variance_of_f(f_a: Array) -> float:
 
 
 def first_order_indices(f_a: object, f_b: object, f_ab: object) -> Array:
-    """S_c for every channel — the Saltelli 2010 estimator of section 3.3.
+    """S_c for every channel — the Saltelli 2010 estimator, CENTRED.
 
-        S_c = mean( f(B) * (f(A_B^(c)) - f(A)) ) / Var(f(A))
+        S_c = mean( (f(B) - mean f(B)) * (f(A_B^(c)) - f(A)) ) / Var(f(A))
 
     Reads: if you learned channel `c`'s realization exactly and nothing else,
     the spread's variance would fall by this fraction. It is NOT how often the
@@ -165,13 +170,23 @@ def first_order_indices(f_a: object, f_b: object, f_ab: object) -> Array:
     Var(E[f | X_c]). Written with `f(A)` there, the estimator returns the
     NEGATIVE of the index on an additive model.
 
+    WHY f(B) IS CENTRED (design section 0.1 item 13, ruled 2026-09-22, a change
+    to the mechanism taken on measured grounds): uncentred, the numerator
+    carries an `E[f] * mean(f(A_B) - f(A))` term which is zero in expectation
+    and noisy in sample, so the estimator's error grows with `|E f| / sd(f)` —
+    about 1% at this target's measured 0.23, 1.17x at one sigma and 2.1x at
+    three. Three sigma is a DECISIVE run, so the attribution was worst exactly
+    where the engine tells a household the answer is settled. Subtracting f(B)'s
+    own sample mean removes the term and is identical in expectation, because
+    `f(A_B^(c)) - f(A)` is itself mean-zero.
+
     Returns one value per channel, as measured — outside [0, 1] when the
     estimator's own noise puts it there. Never clamped.
     """
     a, b = _matched(f_a, f_b)
     ab = _channel_table("the f(A_B) table", f_ab, a.size)
     variance = _variance_of_f(a)
-    numerator: Array = np.mean(b * (ab - a), axis=1)
+    numerator: Array = np.mean((b - np.mean(b)) * (ab - a), axis=1)
     return numerator / variance
 
 
@@ -328,9 +343,15 @@ def bootstrap_spread_intervals(
                 "Too few futures to interval this decomposition."
             )
         sign_a_r = np.sign(a_r)
+        # Centred per RESAMPLE, by that resample's own mean: the bootstrap
+        # applies the whole estimator to each resample, the way `var_r` is
+        # recomputed rather than held at the full sample's value.
+        b_r_centred = b_r - np.mean(b_r, axis=1, keepdims=True)
         for channel in range(n_channels):
             ab_r = ab[channel][rows]
-            first_order[start:stop, channel] = np.mean(b_r * (ab_r - a_r), axis=1) / var_r
+            first_order[start:stop, channel] = (
+                np.mean(b_r_centred * (ab_r - a_r), axis=1) / var_r
+            )
             total_order[start:stop, channel] = np.mean((a_r - ab_r) ** 2, axis=1) / (2.0 * var_r)
             flips[start:stop, channel] = np.mean(np.sign(ab_r) != sign_a_r, axis=1)
 
