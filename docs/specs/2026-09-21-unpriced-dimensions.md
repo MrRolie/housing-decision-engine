@@ -99,6 +99,40 @@ figure inside a fixed sentence is nearer to boilerplate than "run-specific" sugg
 and the ordering contain that. Nothing in this design proves it solved, and a future round that
 measures block words per shape should look here first.
 
+**MEASURED 2026-09-21, and the answer is worse than this paragraph guessed.** The
+qualifying-rate line is 834 characters. Between two different households on the SAME branch —
+both uninsured, both with a renewal ladder, one at $610k in Laval and one at $400k in
+Gatineau — **820 of those 834 characters are identical, character for character: 98.3%
+invariant.** Across branches (uninsured versus insured) it is 85.3%. Fourteen characters
+distinguish two entirely different households: five figures — the qualifying rate, the
+contract rate, the two ratios, the point difference — and a renewal year. It is now the
+longest single warning in the block.
+
+**And the obvious fix is the wrong lever.** The seat proposed moving the fixed scaffolding
+into the anchors, on the reasoning that produced the line-cites-anchors-recite rule. That
+relocates where the text is STORED and changes nothing at the reader, who still receives 834
+characters. §4's guard is on variance and §5's is on the ability to print nothing; neither is
+about storage.
+
+**The lever is CONDITIONALITY, not prose-versus-data.** Sort the clauses by whether their
+truth depends on this run:
+
+- *"Both ratios are the engine's own measure, broader than the gross debt service a lender
+  uses … so this run cannot say how a lender would rule on you"* is true on EVERY run that
+  prints this line. It is a property of the engine, not of the household, and it is already
+  `income.affordability_threshold`'s own recorded rationale. It belongs cited once, not
+  restated per run.
+- The straight-switch clause is two fixed strings selected by tier: it varies ACROSS runs,
+  not WITH them.
+- Genuinely run-specific: five figures and the renewal year.
+
+So demote what is unconditionally true whenever the line fires; keep what turns on this run.
+That is the line-cites-anchors-recite rule applied one level out, with conditionality as the
+criterion rather than prose. **Two hard constraints on how far it can go:** §5 requires the
+line to remain able to print NOTHING, and §6 requires the subject restated in the line
+because other warning passes sit between it and its referent. It cannot reduce to bare
+figures.
+
 ## 5. The guard
 
 **The line prints a number solved from this run, and the same feature must be able to print
