@@ -284,6 +284,57 @@ misleads on another**. §3.2: generator state catches a leaked draw. §3.6: the 
 nothing about whether a channel moves a number. Here: one boundary type carries a solved figure
 and a sampled one. Worth watching for a fourth.
 
+**25. A PATH-FREE RUN REFUSES THE WHOLE BLOCK, and the reversal register's no-futures branch is
+deliberately UNREACHED from `--decompose`.** §0.1 item 24 fixed `--no-monte-carlo` returning an
+empty reversal register, and the seat then ruled that a gate measured on a path-free run must
+disclose the paths it consumed. Both were rulings about a case §8 refusal 2 already prevents
+from ever reaching a renderer: on `--no-monte-carlo` the block refuses with `no_futures` BEFORE
+any register is built. The seat ruled on the case without checking whether the surface could
+reach it; the formatter track found the collision.
+
+**The refusal stands and the block stays futures-only.** §1 already says this block is not a
+replacement for `--sweep` or `--break-even`, which own the user-driven versions of §6, and a
+refusal that NAMES the route to the identical figure is not a refusal to answer — by the
+one-solver-two-consumers ruling it is the same number by construction, not two bisections that
+agree. `--decompose` means split the futures, and its other two registers are quantities OVER
+futures that cannot exist without them; a reversal-only block under that flag is a different
+feature wearing this one's name. The alternative would have grown two refusal variants onto the
+contract so that one register could appear in a surface whose siblings cannot run there —
+accretion with a good motive.
+
+`reversal_register`'s no-futures behaviour is KEPT as the library shape rather than replaced by
+a refusal, because `deterministic_boundaries` is reached on that route by the renewal-flip line
+of `2026-09-21-unpriced-dimensions.md` slice 2, which needs no futures at all. **This paragraph
+exists so that the unreached branch is not read later as an oversight and "fixed" by wiring the
+block into a path-free run.** An unreached branch with a recorded reason is not dead code; an
+unreached branch with no reason invites someone to reach it. The disclosure ruling survives only
+as a conditional: if a surface ever does print a gate figure measured on a run the user asked to
+be path-free, it says so.
+
+The route sentence is the assembler's `reason`, printed verbatim by the formatter. The party that
+declines owns the sentence saying why; a renderer appending its own route would be a second
+author of one truth.
+
+**26. TWO KINDS OF ALWAYS-TRUE CLAUSE, and the conditionality rule as written would demote the
+wrong one.** The rule from `2026-09-21-unpriced-dimensions.md` §4 says demote what is
+unconditionally true whenever the block fires. Applied naively it would cut
+`sweep.flattened_path_note` — 136 characters, always printed, the single largest invariant item
+in the measured residue of this block. It must not be cut, and the reason generalises:
+
+- The clause demoted from the qualifying-rate line was about **the engine's measure in general**
+  — that both ratios are broader than a lender's gross debt service. A reader learns that once
+  and carries it to every run. It belongs cited once.
+- `flattened_path_note` tells the reader **how to read the figures printed beside it** — that
+  every grid point replaced their whole stated path with one flat rate, so their own
+  4.60/5.00/4.80/4.40 is not a point on that line. A reader who misses it misreads the numbers
+  in front of them, not the engine in general.
+
+**Demote what a reader can learn once about the engine; keep inline what tells them how to read
+the figures beside it.** Measured invariant fraction of this block between two different
+seven-channel households: 0.49–0.51 with a 20-character run floor, against the sibling line's
+0.983 — and of the invariant half, 0.25 is fixed vocabulary (headings, column headers, channel
+labels, key names, citations) which is a floor, not fat.
+
 ---
 
 ## 1. Why
