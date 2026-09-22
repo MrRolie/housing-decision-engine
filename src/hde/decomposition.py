@@ -1,11 +1,18 @@
 """Which risk decides it — the three registers, as TYPES ONLY.
 
 Design: `docs/specs/2026-09-22-which-risk-decides-it.md`. This module is the
-contract four parallel tracks (spec §12) build against, and the only file they
-share. It holds the seven-channel table and the shape of every object those
-tracks hand each other. It computes NOTHING: no statistic, no draw, no
-sentence. Arithmetic in this file is a defect — it belongs in the track that
-owns it.
+contract five parallel tracks build against (spec §12's four, plus the
+assembler §0.1 item 17 found missing from it), and the only file they share. It
+holds the seven-channel table and the shape of every object those tracks hand
+each other. It computes NOTHING: no statistic, no draw, no sentence. Arithmetic
+in this file is a defect — it belongs in the track that owns it.
+
+WHO BUILDS A `Decomposition`: the assembler, at
+`hde/decomposition_run.py :: decompose(spec, *, det, mc, verdict, raw, prior)`
+(§0.1 item 17). Every §8 refusal is ITS judgment, because it is the thing that
+sees the data; the formatter RENDERS refusals and never decides them. The one
+refusal the CLI owns is the seam being absent, which exits 1 with a named
+error rather than printing nothing.
 
 WHAT THE THREE REGISTERS ARE, because they answer different questions and a
 reader who conflates two of them is the failure this feature exists to prevent
@@ -185,6 +192,18 @@ CHANNELS: Tuple[Channel, ...] = (
 )
 
 
+# Income's stream id, OUTSIDE the seven (§3.5.2, §0.1 item 21). It draws —
+# `pay_drop_events` carries a timing and a severity draw — and reaches no
+# present value, so it is a structural zero and never a row in any register. It
+# still needs an id, because the streams binding must hand it a generator never
+# shared with a channel that reaches a PV. It is refused by name in `freeze`,
+# and a hand-built binding missing an id the run reaches RAISES naming the
+# channel rather than falling back quietly. It is deliberately NOT in
+# `CHANNELS`: that tuple is the decomposition's partition, not the stream
+# roster, and `channel(INCOME_STREAM_ID)` therefore raises.
+INCOME_STREAM_ID: int = 7
+
+
 def channel(channel_id: int) -> Channel:
     """The channel with this fixed id. Ids are positions: `CHANNELS[i].id == i`."""
     if not 0 <= channel_id < len(CHANNELS):
@@ -211,9 +230,15 @@ class Interval:
     On every share and on ΣS_c it comes from the 300-resample bootstrap over
     path indices (§3.3), whose generator is seeded from the run's seed and a
     fixed salt — never from the run's own stream, so it consumes no draw and
-    reproduces across processes (test T15). On `EstimatedBoundary.value_ci` it
-    is instead where a re-simulated curve locates a crossing, which is a
-    different mechanism carrying the same shape.
+    reproduces across processes (test T15). Its BOUNDS depend on that salt and
+    on the resample count and will not reproduce across either; the point
+    estimates never touch the bootstrap and are bit-identical across salts
+    (§0.1 item 15). NOBODY TUNES THE SALT to match a figure in the design
+    document, every interval printed in §7 is re-taken once the streams land,
+    and §10's assertions stay inequalities with margin for that reason.
+
+    On `EstimatedBoundary.value_ci` it is instead where a re-simulated curve
+    locates a crossing — a different mechanism carrying the same shape.
     """
 
     low: float
@@ -247,10 +272,20 @@ class Width:
 class ResolvedShares:
     """A channel's two Sobol shares, both inside [0, 1] at this sample size.
 
-    `alone` is Saltelli 2010's first-order index: if you learned this channel's
+    `alone` is Saltelli 2010's first-order index, CENTRED (§0.1 item 13): the
+    published numerator carries an `E[f]·mean(f_AB − f_A)` term, zero in
+    expectation and noisy in sample, whose error grows with |E f| / sd(f) and
+    reaches 2.1x at 3σ — which is a DECISIVE run, so the case where the engine
+    calls the answer settled is the case where the attribution behind it is
+    worst. Centring the numerator's `f(B)` by its sample mean removes the term
+    and is identical in expectation. Read: if you learned this channel's
     realization exactly and nothing else, the spread's variance would fall by
     that fraction. `with_interaction` is Jansen 1999's total index. Neither is
     how often the channel changes the answer — that is `SpreadRow.flip`.
+
+    Both denominators are `Var(f(A))` alone, never the pooled A∪B variance
+    (§0.1 item 14): pooling tightens ΣS and could make §4's refusal branch
+    unreachable, which deletes a refusal rather than changing a decimal.
     """
 
     alone: float
@@ -345,9 +380,15 @@ class RefusedInteraction:
     Measured on the fixture at its committed 2,000 paths: 1.164 [1.042, 1.310].
     The line says the shares add to more than the whole, that this is estimator
     noise and not a finding, and that interaction is not measurable at this
-    sample size. There is deliberately no `residual` attribute: the refusal is
-    unreachable if ΣS is clamped to 1 (test T5), and unprintable-by-accident if
-    the field does not exist.
+    sample size. There is deliberately no `residual` attribute: clamping ΣS to
+    1 would make the refusal unreachable, and a field that does not exist
+    cannot be printed by accident.
+
+    THIS IS THE BRANCH THE FIXTURE TAKES AT BOTH COMMITTED PATH COUNTS (§0.1
+    item 12). §4 claimed 10,000 paths resolve it; measured, its own figure
+    there is 1.023 [0.969, 1.091], which includes 1 and refuses too. The RULE
+    stands and §4's example claim was deleted — a rule that bends to make its
+    own example work is not a rule.
     """
 
     first_order_sum: float
@@ -380,6 +421,39 @@ class SpreadRegister:
     leading_channel_id: Optional[int]
     superlative_licensed: bool
     check_first: Optional[Width]
+
+
+# The spread register's OWN refusals, which suppress it and leave the level and
+# reversal registers printing. §5's binding runs one way — the spread may not
+# print without the level — so a refused spread beside a printed level is
+# permitted, and is the honest shape (§0.1 item 7).
+SPREAD_REFUSAL_CODES: Tuple[str, ...] = (
+    "no_sign_variation",   # P(f > 0) == 1: every future agrees with the central case
+)
+
+
+@dataclass(frozen=True)
+class RefusedSpread:
+    """The spread register declining to print, in the spread register's slot.
+
+    §8's "prints, but with no shares" state. A NAMED refusal rather than a
+    `SpreadRegister` with `rows=()`, because empty rows beside printed level
+    rows leave the reader — and the formatter — to infer why (§0.1 item 7).
+
+    ON THE REASON, because the ruling's own wording will mislead whoever
+    writes it: item 7 says "the shares are undefined", and that is false as
+    arithmetic. With `Var(f) > 0` the centred Saltelli and Jansen indices are
+    perfectly well defined when `f` never changes sign. What degenerates is
+    the FLIP column, identically 0 for every channel, since no re-draw moves a
+    future across a boundary no future is near. The honest sentence is that
+    the block has nothing to apportion IN DECISION SPACE — not that the
+    arithmetic failed. (`Var(f) == 0` is the genuinely undefined case; it is
+    §8 refusal 5 and suppresses the whole block through
+    `DecompositionRefusal`.)
+    """
+
+    code: str
+    reason: str
 
 
 # ---------------------------------------------------------------------------
@@ -434,22 +508,43 @@ class LevelRegister:
     default): a paired mean needs far fewer paths than a variance ratio, so it
     is generally not the spread register's count.
 
-    `futures_margin` and `prob_best_base` are measured ON THAT SAMPLE and are
-    therefore NOT the header's `Decomposition.mean_margin` nor
-    `verdict.prob_best`. They are separate estimates of the same quantities and
-    the formatter must read them from here, or the block prints two figures for
-    one truth without saying so. UNRULED, and the seat owes an answer: §3.4 has
-    the unfrozen channels reading "their own unchanged A stream", which would
-    make these identical to the header's whenever `paths == self.paths`, while
-    §7's draft has them differ ($31,349 − (−$67,194) is $98,543, not the
-    $100,876 gap it prints). If the register reprices A[:m] rather than drawing
-    its own sample, these two fields collapse into the header's and should go.
+    `futures_margin` and `prob_best_base` are `f(A[:m])`'s own mean and sign
+    rate, computed FROM `A` because the freeze comparisons are paired against
+    `A` and a borrowed baseline would unpair them. They STAY as the
+    decomposition's own figures (§0.1 item 1) and are NOT
+    `Decomposition.mean_margin` nor `verdict.prob_best`: the verdict comes from
+    the LEGACY binding — one generator, the shipped stream — while `A` is
+    spawn-keyed, so those are two estimates of one quantity from two named
+    samples. Their difference is information about the estimator, not a second
+    home for one truth. §2's bit-exact `P(f > 0) == verdict.prob_best` is a
+    claim about the legacy binding only.
 
-    `all_frozen_margin` and `all_frozen_max_deviation` are the identity that
-    makes this register a fact rather than a claim: with EVERY channel frozen
-    the margin equals `verdict.margin_pv` on every path (measured 31348.656075,
-    max deviation 5.8e-11). A mask that misses a draw site fails it; a mask
-    that reaches another channel's site fails it (test T2).
+    THE GAP IS A SUBTRACTION, NEVER A STORED NUMBER (§0.1 item 2): §7's draft
+    printed a gap that disagreed with the two figures beside it by $2,333, so
+    it renders as `all_frozen_margin − futures_margin` and cannot disagree
+    again. `accounted_for` is stored because summing it would mean reaching
+    into `provisional_delta`; the gap needs no such reach.
+
+    `all_frozen_margin` and the two deviation fields are the identity that
+    makes this register a fact rather than a claim — but NOT the identity §3.4
+    claimed. "BIT FOR BIT" IS FALSE OF THE MARGIN, and §3.4 asserted it in the
+    same sentence as the figure that disproves it (§0.1 item 19): the deviation
+    is 5.821e-11, exactly 1 ULP of the $476,086 house total and 16 ULP of the
+    $31,349 margin, and it is STRUCTURAL — the simulators compound the value
+    track year by year while `deterministic.py` takes `(1 + g) ** years`. The
+    renter, whose frozen legs collapse to the same closed forms, IS exact to
+    the bit. So the instrument is two things, and they are two fields:
+
+      - `all_frozen_path_spread` — the max deviation ACROSS PATHS, exactly 0.0
+        when the mask is right. This is what a missed draw site actually
+        breaks, and it is the sharp half;
+      - `all_frozen_deviation` — that one value against `verdict.margin_pv`,
+        held to a ULP budget scaled to the totals subtracted, never to zero.
+
+    A mask that misses a draw site fails the first; so does a mask that reaches
+    another channel's site (test T2). Chasing bit-exactness on the margin would
+    mean changing how the deterministic side compounds, which is a different
+    feature and a worse trade.
 
     `accounted_for` is the sum of ALL rows' shifts, the indistinguishable ones
     included, against the gap `all_frozen_margin − futures_margin`. It is
@@ -468,7 +563,8 @@ class LevelRegister:
     prob_best_base: float
     futures_margin: float
     all_frozen_margin: float
-    all_frozen_max_deviation: float
+    all_frozen_path_spread: float
+    all_frozen_deviation: float
     accounted_for: float
     leading_channel_id: Optional[int]
 
@@ -655,6 +751,12 @@ class ReversalRegister:
     the three may be empty on a config that states no qualifying input, and an
     empty tuple is data — it says the engine found no candidate, never that
     none exists.
+
+    `structural_zeros` lives HERE, and §7's fourth section ("NOT DRAWN IN THIS
+    RUN") renders from it, because §3.5's renewal row carries a number that
+    comes from §6 and the two render together. The stated `spread`/`level`/
+    `reversal` triple had no home for that section; this placement is ruled,
+    not assumed (§0.1 item 5).
     """
 
     exact: Tuple[ExactReversal, ...]
@@ -680,11 +782,16 @@ REFUSAL_CODES: Tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class DecompositionRefusal:
-    """The block declining to print, with its own reason (§8).
+    """The WHOLE block declining to print, with its own reason (§8).
 
     A refusal is not silence and not an empty block: it says which condition
     fired. `channel_id` is set by `one_channel`, which NAMES the channel
-    carrying all of the run's spread and prints no numbers.
+    carrying all of the run's spread and prints no numbers. Decided by the
+    ASSEMBLER, which is the thing that sees the data, and merely rendered by
+    the formatter (§0.1 item 17).
+
+    For the case where only the SPREAD register refuses, see `RefusedSpread` —
+    that one leaves the level and reversal registers printing.
     """
 
     code: str
@@ -698,7 +805,10 @@ class Decomposition:
 
     `spread`, `level` and `reversal` carry no defaults, so there is no
     "spread-only" `Decomposition` to construct (§5 mechanism 5). That is the
-    type's half of the binding; track D's renderer completes it.
+    type's half of the binding; track D's renderer completes it. The binding
+    runs ONE WAY, which is why `spread` may be a `RefusedSpread`: a refused
+    spread beside a printed level is permitted and honest, a printed spread
+    beside no level is not (§0.1 item 7).
 
     `verdict` is the run's own `models.Verdict` object, held rather than copied:
     every probability and every state in this block comes back from
@@ -711,8 +821,17 @@ class Decomposition:
     ratio that leads the block: a share of a spread means nothing until the
     reader knows how wide that spread is against the answer.
 
-    `live_channel_ids` are the channels that consume at least one draw on this
-    spec, computed from the spec the way `_world_draws` computes the world's.
+    `live_channel_ids` are the channels that REACH A CASH FLOW on this spec —
+    NOT the channels that draw (§0.1 item 22, correcting §3.6). With every
+    volatility zeroed, three streams still move: the cost shocks are drawn and
+    THEN multiplied by a zero vol rather than skipped, and all three options'
+    event-cost draws are unconditional, so any priced option with a cost line
+    consumes draws in its channel while moving no number. A channel that draws
+    is not a channel that moves a number, so this count may NOT be taken from
+    generator state — the mirror image of §3.2, where a leaked draw is
+    invisible in the output and only generator state can catch it. The same
+    instrument answers one question and lies about the other. The assembler
+    computes it from the spec, beside `_world_draws`.
     """
 
     paths: int
@@ -720,7 +839,7 @@ class Decomposition:
     verdict: "Verdict"
     mean_margin: float
     sd_margin: float
-    spread: SpreadRegister
+    spread: Union[SpreadRegister, RefusedSpread]
     level: LevelRegister
     reversal: ReversalRegister
 

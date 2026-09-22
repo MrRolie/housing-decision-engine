@@ -1,15 +1,13 @@
-"""The decomposition contract — the one file four parallel tracks share.
+"""The decomposition contract — the one file five parallel tracks share.
 
-Nothing here tests what a frozen dataclass gives for free. Four decisions a
-later edit could silently reverse: the channel ids are FIXED INTEGERS in fixed
-slots, checked ACROSS PROCESSES at different hash seeds — a table derived from a
-set is stable within one process and moves only between them, and an id is an
-input to the stream key, so moving one changes every drawn number in a run (spec
-§3.1, §3.2); an unresolved figure and a resolved one share no attribute name, so
-a formatter cannot print the first as though it resolved (§4, §7 rule 6); the
-spread register cannot be constructed without the level register beside it (§5
-mechanism 5, operator ruling 2026-09-22); and the two reversal kinds are not
-interchangeable (§0, §6).
+Nothing here tests what a frozen dataclass gives for free. It guards: the
+channel ids are FIXED INTEGERS in fixed slots, checked ACROSS PROCESSES at two
+hash seeds, since a set-derived table moves only between processes and an id
+feeds the stream key (§3.1, §3.2); a resolved figure and an unresolved one
+share no attribute name, so a formatter cannot print the second as though it
+resolved (§4, §7 rule 6); and the spread register cannot be built without its
+level register, a refused spread is NAMED rather than empty, and the two
+reversal kinds are not interchangeable (§5 mechanism 5, §0.1 item 7, §6).
 """
 import dataclasses
 import os
@@ -48,13 +46,10 @@ class TestTheChannelTable:
             assert dc.channel(slot) is entry
             assert dc.channel_by_key(entry.key) is entry
 
-    def test_lookups_refuse_rather_than_wrap(self):
-        with pytest.raises(KeyError):
-            dc.channel(-1)          # would silently return the last channel
-        with pytest.raises(KeyError):
-            dc.channel(len(dc.CHANNELS))
-        with pytest.raises(KeyError):
-            dc.channel_by_key("renter")
+    @pytest.mark.parametrize("bad", [-1, len(dc.CHANNELS), dc.INCOME_STREAM_ID])
+    def test_lookups_refuse_rather_than_wrap(self, bad):
+        with pytest.raises(KeyError):   # -1 would return the last channel, and
+            dc.channel(bad)             # income is a stream id, not a channel
 
     def test_the_table_is_immutable(self):
         assert isinstance(dc.CHANNELS, tuple)
@@ -71,8 +66,7 @@ class TestTheChannelTable:
         assert seen[0] == seen[1] == str([tuple(row) for row in EXPECTED])
 
     def test_every_channel_names_the_keys_that_size_it(self):
-        # §5 mechanism 1 computes the provenance column from these and nothing
-        # else; an empty tuple prints a row with no source class on it.
+        # §5 mechanism 1 builds the provenance column from these alone.
         for entry in dc.CHANNELS:
             assert entry.sizing_keys
             assert all("." in key for key in entry.sizing_keys)
@@ -110,6 +104,12 @@ class TestTheBinding:
             and f.default_factory is dataclasses.MISSING
         }
         assert {"spread", "level", "reversal"} <= required
+
+    def test_a_refused_spread_is_named_and_carries_no_rows(self):
+        # §0.1 item 7: a refused spread beside a printed level is the honest
+        # shape, and `rows=()` is exactly what that ruling rejects.
+        assert _fields(dc.RefusedSpread) == {"code", "reason"}
+        assert "no_sign_variation" in dc.SPREAD_REFUSAL_CODES
 
     def test_the_two_reversal_kinds_are_not_interchangeable(self):
         assert dc.ExactReversal.__mro__[1:] == dc.EstimatedReversal.__mro__[1:] == (object,)
