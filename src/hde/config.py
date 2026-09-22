@@ -364,6 +364,31 @@ def _defaults_applied(data: Dict[str, Any]) -> List[str]:
     return applied
 
 
+def _rate_gap_clause(r_inv: float, dr: float) -> str:
+    """Two rates spelled to the first decimal that tells them APART.
+
+    `rate_label` rounds to one decimal, so 5.200% and 5.163% both render
+    "5.2%" — and the capital-term sentence then showed two equal figures and
+    named a spread between them (2026-09-21). The default discount rate
+    composes to 5.163% in nominal mode, so every household typing a 5.2%
+    return landed here. Empty when no precision separates them, which cannot
+    happen while a spread of at least fifty cents is being claimed.
+    """
+    for places in range(3, 10):
+        if f"{r_inv:.{places}%}" != f"{dr:.{places}%}":
+            return f" (the two round alike: {r_inv:.{places}%} against {dr:.{places}%})"
+    return ""
+
+
+def _capital_leg(pv: float, noun: str, lever: str) -> str:
+    """One leg of the renter's tax component with the key that moves IT — the
+    taxable share's drag and the FHSA rollover haircut answer to different
+    inputs, so a reader who moves the first must not be told the second will
+    follow."""
+    back = "" if pv > 0 else " credited back, not charged"
+    return f"${abs(pv):,.0f} of {noun}{back} (lever: {lever})"
+
+
 def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = None) -> List[str]:
     """
     Coherence warnings (audit U2): assumptions that parse fine but smell wrong.
@@ -513,6 +538,15 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
     # Under a `tax:` block (2026-09-05) the terminal value is the after-tax one
     # the engine credits (`renter_terminal_for`, the one computation every
     # surface reads), and the sentence names the blended rate it implies.
+    #
+    # WHICH of the two causes fired decides the whole tail (2026-09-21). The
+    # guard is a disjunction and one sentence served both branches: a household
+    # whose rates were already equal was told to set them equal, on a term that
+    # reached 96% of a served verdict's margin. The split is read off the ONE
+    # terminal value rather than recomputed — the spread component is the term
+    # the renter would carry at an UNTAXED return, and the tax component is the
+    # remainder, identically the drag and the rollover haircut the same record
+    # already carries. Each state names a lever that moves ITS OWN share.
     if spec.rent is not None and spec.rent.invested_down_payment > 0:
         r_inv = spec.rent.investment_return_rate
         if spec.economic.mode == "nominal":
@@ -520,23 +554,63 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
         dr, n_years, capital = spec.simulation.discount_rate, spec.simulation.years, spec.rent.invested_down_payment
         terminal = renter_terminal_for(spec)
         taxed = spec.tax is not None and spec.tax.renter_capital is not None
-        net = terminal.capital - terminal.value / (1 + dr) ** n_years
-        # A fully sheltered renter at the discount rate has nothing to warn on:
-        # the taxed case fires only when the drag moves a dollar.
-        if abs(r_inv - dr) > 1e-12 or (taxed and abs(net) >= 0.5):
-            side = "charged to" if net > 0 else "credited to"
+        discounted = (1 + dr) ** n_years
+        net = terminal.capital - terminal.value / discounted
+        spread = terminal.capital - terminal.untaxed_value / discounted
+        tax_pv = net - spread
+        legs = [_capital_leg(pv, noun, lever) for pv, noun, lever in (
+            (terminal.drag / discounted, "drag on the taxable share", "tax.renter_capital"),
+            (terminal.haircut / discounted, "FHSA rollover haircut",
+             "tax.retirement_marginal_rate"))
+            if abs(pv) >= 0.5]
+        # A dollar gate per CAUSE, not a rate one: the sentence claims dollars,
+        # and under the as-quoted convention a typed rate deflated to real and
+        # recomposed to nominal differs from the figure typed by about 1e-16 —
+        # enough to clear a 1e-12 rate test and buy a "net capital term $0"
+        # line with a remedy attached. A fully sheltered renter at the discount
+        # rate still has nothing to warn on.
+        spread_named = abs(spread) >= 0.5
+        tax_named = taxed and abs(tax_pv) >= 0.5
+        if spread_named or tax_named:
             # The blended rate is what the whole capital earned after every tax
             # the engine applied — the FHSA rollover haircut included, when
             # there is one, and the clause says so.
             rollover = " and the FHSA rollover" if terminal.haircut else ""
             after_tax = (f" (after tax on the taxable share{rollover}: blended {terminal.blended_rate:.2%})"
                          if taxed else "")
+            r_txt = rate_label(spec, 'rent.investment_return_rate', r_inv)
+            dr_txt = rate_label(spec, 'discount_rate', dr)
+            gap = (_rate_gap_clause(r_inv, dr)
+                   if spread_named and r_txt == dr_txt else "")
+            if abs(net) < 0.5:
+                # The two causes all but cancel; naming a side on a sub-dollar
+                # net would pick one arbitrarily.
+                net_clause = "net capital term under $1 either way"
+            else:
+                side = "charged to" if net > 0 else "credited to"
+                net_clause = f"net capital term ${abs(net):,.0f} {side} the renter"
+            if not spread_named:
+                # The rates carry none of the term, so the rate remedy is a
+                # no-op and the sentence says so: the levers are the ones each
+                # leg names.
+                tail = ("the rate spread carries none of it, so setting "
+                        "investment_return_rate = discount_rate changes nothing here — the "
+                        "whole term is the tax the engine charged"
+                        + (f": {' and '.join(legs)}" if legs else ""))
+            elif not tax_named:
+                tail = ("set investment_return_rate = discount_rate for a neutral comparison "
+                        "or keep the spread deliberately")
+            else:
+                tail = (f"two causes, and fixing one moves only its own share: "
+                        f"${abs(spread):,.0f} {'charged' if spread > 0 else 'credited'} by the "
+                        f"spread between the two rates, which investment_return_rate = "
+                        f"discount_rate removes, and ${abs(tax_pv):,.0f} "
+                        f"{'charged' if tax_pv > 0 else 'credited'} by the tax the engine "
+                        f"applied" + (f" — {' and '.join(legs)}" if legs else ""))
             warns.append(
                 f"rent: invested capital ${terminal.capital:,.0f} earns "
-                f"{rate_label(spec, 'rent.investment_return_rate', r_inv)}{after_tax} vs discount_rate "
-                f"{rate_label(spec, 'discount_rate', dr)} — "
-                f"net capital term ${abs(net):,.0f} {side} the renter over {n_years} years; set "
-                f"investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately"
+                f"{r_txt}{after_tax} vs discount_rate {dr_txt}{gap} — "
+                f"{net_clause} over {n_years} years; {tail}"
             )
         # No `tax:` block (2026-09-05): the renter's return is untaxed and the
         # owner's gain is exempt either way, so the omission leans toward
