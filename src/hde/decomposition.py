@@ -268,6 +268,14 @@ class UnresolvedShares:
     ("not resolved at 2,000 futures (-0.001 [-0.002, 0.001])"), never clamped
     and never dropped. They are named `provisional_*` so that no formatter can
     read a resolved figure off an unresolved row by attribute name.
+    
+    ONE ROW STATE FROM TWO FIGURE VERDICTS (seat ruling 2026-09-21, §0.1
+    item 11): a row is unresolved if EITHER figure is unresolved. The rule was
+    unstated and the assembly was about to have to invent it. Conservative is
+    correct here for the same reason the register refuses at all — the
+    alternative prints one resolved figure beside one that is noise and leaves
+    the reader to notice, which is the failure this whole feature exists to
+    stop. It also matches §7's own house row.
     """
 
     provisional_alone: float
@@ -289,11 +297,21 @@ class SpreadRow:
     unresolved row, so it sits outside `shares` — it is the only column that
     speaks in decision space, and on the fixture's portfolio the two numbers a
     reader will otherwise conflate are 0.88 and 0.41.
+
+    `flip_ci` carries its bootstrap interval (seat ruling 2026-09-21, §0.1
+    item 10). §3.3 says 95% intervals on EVERY figure; §7's draft prints no
+    interval on this column, and the draft loses. The reason this column in
+    particular may not be printed bare is the reason it exists: it is the one
+    figure here stated in decision space, so a reader takes it as the answer
+    to "how often does this change my mind" — and a point estimate with no
+    width, standing where every neighbouring figure carries one, reads as the
+    most certain number in the table when it is not.
     """
 
     channel_id: int
     shares: Shares
     flip: float
+    flip_ci: Interval
     widths: Tuple[Width, ...]
 
 

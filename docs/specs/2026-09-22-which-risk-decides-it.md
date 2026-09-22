@@ -118,6 +118,56 @@ the verdict's scalars — is a second home for the verdict's truth. `bracket_sou
 reversal types is required by the correction at the end of §6: a bracket that converts an honest
 refusal into an answer must show the reader the range it chose and whose figure it is.
 
+**10. The flip column carries its interval, and §7's draft loses.** §3.3 says 95% intervals on
+EVERY figure; §7's draft prints none on the flip column. `SpreadRow.flip_ci` is added. The
+reason this column in particular may not be printed bare is the reason it exists: it is the one
+figure in the table stated in decision space, so a reader takes it as the answer to "how often
+does this change my mind" — and a point estimate with no width, standing where every
+neighbouring figure carries one, reads as the most certain number in the table when it is not.
+
+**11. A row is unresolved if EITHER of its two figures is unresolved.** The rule was unstated
+and the assembly was about to have to invent it. Conservative is correct here for the same
+reason the register refuses at all: the alternative prints one resolved figure beside one that
+is noise and leaves the reader to notice. It also matches §7's own house row.
+
+**12. §4's ΣS rule is kept and §4's own claim about it is deleted.** §4 says the residual prints
+only when the interval lies entirely below 1, and then claims both branches are reachable on
+this fixture, with T5 asserting the 10,000-path case takes the numeric branch. Measured by the
+track that built the estimator: §4's own 10,000-path figure is 1.023 [0.969, 1.091], which
+includes 1 and therefore REFUSES. So the residual refuses at both committed path counts and the
+"both branches reachable on one fixture" sentence is false. The RULE stands — it is the refusal
+this whole feature is built to be capable of, and a rule that bends to make its own example
+work is not a rule. The sentence and T5 go. §0.1 item 3 already dropped the 10,000-path
+parenthetical from the output; this removes the last thing that depended on it.
+
+**13. The estimator is centred, which is a change to the mechanism and is taken on measured
+grounds.** Saltelli 2010 is confirmed the right choice — the alternative (Janon/Monod 2014) is
+~10x more accurate on a dominant channel but 2x worse on small ones and, decisively, gives ΣS
+three times the spread because each channel gets its own denominator, so the quantity §4
+branches on stops being a coherent sum. But the estimator as published is NOT invariant to its
+target's own mean: the numerator carries an `E[f]·mean(f_AB − f_A)` term, zero in expectation
+and noisy in sample, and the error grows with `|E f| / sd(f)` — about 1% at this fixture's
+measured 0.23, 1.17x at 1σ, **2.1x at 3σ**. That last case is a DECISIVE run, which is exactly
+when a reader is told the answer is settled. Centring the numerator's `f(B)` by its sample mean
+removes the term, is identical in expectation, and costs one subtraction. Taken.
+
+**14. Four silent resolutions, now named, one of them load-bearing.**
+`SeedSequence(seed, <salt>)` as §3.3 writes it is a `TypeError` — `spawn_key` is keyword-only —
+and is read as `spawn_key=(salt,)`, matching §3.2's idiom. `Var(f(A))` is the population
+variance (ddof=0), matching the 1/N numerators. `np.sign(0) == 0`, so a future sitting exactly
+at zero counts as flipped against any nonzero. And the load-bearing one: **the denominator is
+`Var(f(A))` alone, never the pooled A∪B variance** some implementations use — pooling tightens
+ΣS and could make §4's refusal branch unreachable, which would silently delete the refusal
+rather than change a decimal.
+
+**15. The published interval bounds will not reproduce, and that is not a bug.** Point estimates
+never touch the bootstrap; bounds depend on the salt and the resample count. Measured: point
+estimates bit-identical across salts while the dominant share's bounds move 0.707→0.717 and
+0.867→0.881, and the sum's high bound 1.147→1.174; the resample count moves them too.
+**Nobody tunes the salt to match a figure in this document.** Every interval printed in §7 is
+re-taken once the streams land, and §10's assertions stay inequalities with margin rather than
+equalities to a bound.
+
 ---
 
 ## 1. Why
