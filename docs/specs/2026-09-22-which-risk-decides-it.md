@@ -21,7 +21,7 @@ has none. So no ordering. But the rows group by whether the engine computed a di
 or estimated it — a fact about the MODEL, not a judgment about the world, so it costs no
 honesty and the reader supplies the ordering from what he knows about his own life.
 
-**A `--reversal` flag, not an always-on line.** Nothing changes for a run that does not ask, and
+**A flag you ask for, not an always-on line — the flag is `--decompose`.** Nothing changes for a run that does not ask, and
 it stays out of the warnings channel that `2026-09-21-unpriced-dimensions.md` slice 2 owns.
 
 **One solver, two consumers** (seat ruling, mechanism). The deterministic renewal-flip figure in
@@ -167,6 +167,39 @@ estimates bit-identical across salts while the dominant share's bounds move 0.70
 **Nobody tunes the salt to match a figure in this document.** Every interval printed in §7 is
 re-taken once the streams land, and §10's assertions stay inequalities with margin rather than
 equalities to a bound.
+
+**16. The flag is `--decompose`, and the two `--reversal` mentions were residue.** §0 and §13
+said `--reversal`; §7, §8, §9, §12 and the JSON key say `--decompose`. The operator's ruling was
+*a flag you ask for rather than an always-on line* — the NAME was never the operator's call, and
+the earlier name dates from when the ruling was about the reversal half alone. The feature is one
+block with three registers, so it is one flag. Two flags for one block would be the worse
+outcome. `--decompose=N` belongs to the assembler, since N is a sample-size override consumed at
+compute time.
+
+**17. THE ASSEMBLER WAS MISSING FROM §12, which is a planning error in this document.** §12 names
+four tracks: the streams seam (no user-visible output), the pure estimator math, the reversal
+solver, and the formatter. Nothing assembles a `DecompositionOutcome` from a spec. Found by the
+formatter track, which needed something to render. The seam is
+`hde/decomposition_run.py :: decompose(spec, *, det, mc, verdict, raw, prior) -> DecompositionOutcome`,
+named by that track and ruled here, and it is **track E**.
+
+Two consequences. The CLI's lazy import of that seam must REFUSE cleanly when it is absent —
+exit 1, named error, no traceback — and that refusal ships rather than being a stopgap, because
+a flag that silently prints nothing when half the feature is unbuilt is the cheap all-clear this
+repo treats as the cardinal failure. And **§8's refusals belong to the assembler, not the
+formatter**: they are judgments about the data (`P(f>0) == 1`, an unresolved sum, a structural
+zero) and the assembler is what sees the data. The formatter RENDERS refusals; it does not
+decide them. The one refusal the CLI owns is the missing seam.
+
+**18. Three more §7-draft defects, and the first is the draft committing this feature's own
+cardinal error.** (a) The draft files the house's costs under "indistinguishable from zero at
+2,000 futures" at −$886 ± $179. That is 4.95 SE, and §3.4's rule three sections above is
+|Δ| > 2·SE, so the row is RESOLVED. The draft printed a real effect as noise — the exact failure
+the level register exists to prevent. (b) The renewal row prints no bracket and no bracket
+source, which breaches the correction at the end of §6: a bracket that converts an honest
+refusal into an answer must show the reader the range it chose and whose figure it is. (c) §6
+licenses `<opt>.mortgage_rate` for slice 1 and measures it; §7 renders no row for it. All three
+are the formatter's to fix.
 
 ---
 
@@ -1000,7 +1033,7 @@ that matters least. Binding the two means the correction cannot be lost in a cop
 a label can be. §5's "label" default is superseded; its provenance mechanisms 1–4 all stand and
 are still required.
 
-**Fork 2 — opt-in or automatic.** RULED before this spec was written: a `--reversal` flag. The
+**Fork 2 — opt-in or automatic.** RULED before this spec was written: a flag you ask for. The
 spec's own reasoning from measured cost agrees.
 
 **Fork 3 — does slice 1 carry the reversal register, roughly doubling it?** RULED: YES. Two
