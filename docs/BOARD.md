@@ -501,6 +501,81 @@ accidental — read why before relaxing it.
 *Why now:* it is the smallest piece of item 5 that can ship without the existing-owner frame,
 and it is the largest single numerical distortion round 12 found.
 
+## Round 12 — what a user actually meets, ranked by encounter rate (2026-09-21)
+
+Round 12 ran the engine as four households rather than reading the diff, and its headline is
+the one worth keeping in view: **this week's work changed nothing a user would notice.** Five
+configs run on last week's tip and on this week's; no number moved anywhere — not a verdict, a
+margin, a probability, a threshold, a ratio or a cash line. The entire delta was one clause on
+one warning, firing only where a run carries both an income block and a stated renewal ladder.
+The week bought correctness and maintainability. The week before moved a household's
+P(condo cheapest) from 0.0% to 19.8%. **Rank by encounter rate, not by severity**, is the
+lesson, and this list is ordered that way.
+
+1. **The capital-spread warning describes one of its two causes.** 4 of 4 households. Its guard
+   is a disjunction — the rates differ, OR a `tax:` block's drag moves a dollar — and its
+   sentence only ever describes the first. Reproduced at the seat: *"earns 5.2% … vs
+   discount_rate 5.2% — net capital term $6,978 … set investment_return_rate = discount_rate
+   for a neutral comparison or keep the spread deliberately."* There is no spread and the
+   remedy is a no-op; the term is tax drag. On one household it is 96% of the margin and the
+   difference between a tie and a decisive call. **In flight.**
+2. **The threshold seed describes a purchase the household cannot make.** Operator ruled
+   2026-09-21: seed ABOVE the insurance line, not below. See the convergence note below.
+3. **The no-crossing branch drops affordability entirely.** A sweep the lane forbids finds max
+   ratio 44.6% at the top of the searched range on $54,000 of income — past CMHC's 39% GDS cap
+   — while the run prints one ratio, 17.1%, at the seed. Two instances in two lanes. Not a
+   skill defect: `quick-sense.md` and `threshold-lane.md` both withhold the price sweep here,
+   so the disclosure cannot depend on the assistant running a forbidden command.
+4. **Neither side's p95 reaches the verbatim channel.** 23 block lines, zero hits for `p95` or
+   `P(condo cheapest)`. "Smallest worst case" is one of the three criteria the intake asks for
+   by name. The block already carries two report sections, so adding the percentiles is
+   consistent rather than novel.
+5. **`rent` has no year-0 cost channel** — item 17. Largest magnitude in the round: reports
+   House by $31,776, correctly encoded House by $58,180. Understates staying's advantage by
+   $26,404, **83% of the margin it prints.**
+6. **The Québec school-tax warning cannot be cleared on a price threshold.** Every Québec
+   property outside three cities. Each refusal is individually correct; together they leave no
+   path, while `translation.md` says to prefer the rate forms on any price threshold.
+7. **A false `--print-schema` note on `rent.reset_to_monthly_rent`** — it claims the reset
+   carries the tenant's own escalation; the code uses `reset_market_escalation_rate`, whose own
+   note says the opposite. Typing them equal moves the answer, which it could not if the note
+   were true.
+8. **"Asymmetric tails" is gated on `investment_return_vol == 0`** — a smooth annual vol, not a
+   tail. A renter with a return vol but no lease-reset channel meets an owned side with a
+   discrete crash and gets no warning. Worth P(condo cheapest) 14.1% → 19.8%.
+9. **"purchase_costs not modelled … biases toward buying" is false for an existing owner** —
+   disclaimed cohort, closes when §10's tenure refusal ships.
+
+**The convergence, which is the thing to act on before any individual fix.** Items 2 and 3 and
+the missing financing leg all land on the SAME household — the one whose cash is under 20% of
+the prices they are considering — and all three descend from one decision, that the threshold
+lane seeds a price BELOW the 20%-down ceiling. `PROMPTS.md` advertises that household by name.
+One design choice generating three defects means the sibling sweep here is the seed rule
+itself, not the three lines. Operator ruling: seed above the line.
+
+**One skill defect survives, and it is the only "the assistant should have said X" in the
+round.** Nothing in `SKILL.md` or its seven references routes a reader to `PROMPTS.md`'s limits
+inventory — one grep hit across all of them, and it is about a long-tenure tenant. It cannot
+move into the engine: a complete static inventory printed every run is the degeneration §5
+forbids by name, and §8 assigns that inventory to a document. Only a skill can route a reader
+to a document.
+
+**Four non-findings, recorded so the next sweep does not re-find them.** The one-world sibling
+sweep was already complete (both reset keys and `value_growth_vol` are in the unstated-
+uncertainty detector). The read-back drops no warning — five of five present verbatim; its gap
+is a missing SECTION, not leakage. Quick-sense's one-horizon rule cost nothing on the household
+that tempted breaking it. And the anchor staleness warning is a real code path, not prose.
+Four absence claims checked, three came back present — consistent with the 79%-false figure
+this repo measured for absence-hunting sweeps, and the reason the round ran greps and ablations
+rather than reporting what it did not see.
+
+**One withdrawn finding, recorded as withdrawn.** Round 12 had reported gate 4's like-for-like
+rule as a small real defect. Correcting the renter's capital in isolation moves the margin
+$2,599 the WRONG way; it is a tax-drag residual, not a measure of anything. A near-null
+mis-read as small-but-real.
+
+---
+
 ## Settled — do not reopen
 
 Rate convention (sticker rates in, converted once), the three-state verdict, the short

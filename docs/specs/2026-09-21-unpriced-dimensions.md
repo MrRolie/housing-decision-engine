@@ -356,6 +356,19 @@ and today one list holds both. Whether that is a third class, a warning when a p
 omits a key the verdict reads, or a rule that a declared block must be complete, is open and
 belongs on the board rather than in this paragraph.
 
+**And one requirement on the tenure key specifically, added 2026-09-21 after round 12 argued
+it.** Whatever the general fix turns out to be, the tenure key cannot wait for it, for a
+reason the general case does not have: every other disclosure in this block reaches the reader
+AFTER the verdict is already in their hands, and §10's own argument two paragraphs up is that
+a missed cohort question does not degrade an answer, it invalidates all of it. A disclosure
+that arrives after an invalidated page has not done its job. So the tenure key REFUSES an
+`unattributed` source class, and an assistant-typed tenure RAISES rather than echoing. That is
+the "new mechanism" the withdrawn claim said was unnecessary, and it is small: two conditions
+on one key, at the gate rather than in the read-back. Round 12's third argument is the
+load-bearing one — `assistant-typed:` is the single line in the block with no cap, no ordering
+and no promotion rule, and the seed-price enumeration shows it is ALREADY carrying a buried
+disclosure, so a second one joins a comma-separated list of a dozen calibration choices.
+
 The ladder in §3 gains a state at the top: **refused**, then not priced with no input, then not
 priced with the input unfilled, then priced.
 
