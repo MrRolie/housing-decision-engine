@@ -250,6 +250,38 @@ class TestLegacyBinding:
         with pytest.raises(ValueError, match="no channel"):
             run_monte_carlo(_one_live_channel_spec(num_sims=2), freeze=bad)
 
+    @pytest.mark.parametrize("partial", ([5], [0, 1], [1, 2, 3, 4, 5, 6],
+                                         [0, 1, 2, 3, 4, 5]))
+    def test_a_partial_freeze_on_the_legacy_binding_refuses(self, partial):
+        """The states between "freeze nothing" and "freeze everything" are the
+        ones that would run and be wrong.
+
+        On one shared stream, a frozen channel's missing draws shift what every
+        later draw site reads, so the run is not paired with the unfrozen one
+        the level register subtracts it from. It would return a plausible
+        number and announce nothing, which is why this raises rather than
+        carrying a warning in a docstring: the caller who reaches for a partial
+        freeze is not the caller who was already suspicious.
+        """
+        with pytest.raises(ValueError, match="needs an addressed binding"):
+            run_monte_carlo(_one_live_channel_spec(num_sims=2), freeze=partial)
+
+    @pytest.mark.parametrize("allowed", ((), CHANNELS))
+    def test_the_two_freezes_that_need_no_binding_are_allowed(self, allowed):
+        """The boundary, from the other side: refusing these would refuse a
+        correct call. Freezing nothing removes no draw, and freezing all seven
+        takes no draw at all, so in both the legacy binding is exactly the
+        binding an addressed run would have used."""
+        mc = run_monte_carlo(_one_live_channel_spec(num_sims=4), freeze=allowed)
+        assert mc.condo is not None and mc.rent is not None
+
+    def test_a_partial_freeze_with_an_addressed_binding_is_fine(self):
+        """And the refusal is about the BINDING, not about partial freezing."""
+        spec = _one_live_channel_spec(num_sims=4)
+        mc = run_monte_carlo(spec, addressed_streams(spec.simulation.random_seed),
+                             freeze=[3])
+        assert mc.condo is not None
+
 
 # ---------------------------------------------------------------------------
 # 2. The all-frozen identity (spec §3.4, test plan T2)

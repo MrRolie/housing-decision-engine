@@ -1376,11 +1376,15 @@ def run_monte_carlo(
         freeze: channel ids pinned to the value `compute_deterministic` uses,
             drawing nothing (spec 3.4). With every channel frozen every path
             prices the central case, which is the identity the level register
-            rests on. A PARTIAL freeze is only paired against an unfrozen run
-            when `streams` addresses each channel separately: under the legacy
-            binding the channels share one stream, so removing one channel's
-            draws shifts what every later draw site reads. The level register
-            passes `addressed_streams`; that is why.
+            rests on. A PARTIAL freeze REFUSES without `streams`: under the
+            legacy binding every channel shares one stream, so removing one
+            channel's draws shifts what every later draw site reads and the run
+            is not paired with an unfrozen one. It would return a plausible
+            number, which is the reason it raises instead of being documented:
+            a caller reaching for a partial freeze is not the caller who reads
+            the warning. Two freezes need no binding and are allowed --
+            `freeze=()`, which removes nothing, and all seven channels, which
+            takes no draw at all, so the binding cannot matter.
 
     Returns:
         ComparisonMonteCarloResult with per-option results, ranking
@@ -1419,6 +1423,24 @@ def run_monte_carlo(
             "1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio. "
             "Id 7 is the income trajectory and is not freezable -- it reaches no "
             "PV, so freezing it could change no figure." % (outside,)
+        )
+    # A partial freeze on the legacy binding would RUN, and return a number
+    # nobody could tell was wrong: every channel is on one stream there, so
+    # dropping one channel's draws shifts what every later draw site reads, and
+    # the paired comparison the level register takes against an unfrozen run is
+    # no longer paired. The two ends are safe and stay allowed -- freezing
+    # nothing removes nothing, and freezing all seven takes no draw at all, so
+    # the binding cannot matter (measured: the all-frozen identity holds to the
+    # same 1 ULP under both bindings).
+    if streams is None and frozen and frozen != frozenset(range(7)):
+        raise ValueError(
+            "a partial freeze needs an addressed binding: freeze=%s with no "
+            "streams shares one generator across every channel, so removing "
+            "the frozen channel's draws shifts every later draw site and the "
+            "run is not paired with an unfrozen one. Pass "
+            "`addressed_streams(sim.random_seed)`. An empty freeze and a freeze "
+            "of all seven channels both take the legacy binding safely."
+            % (sorted(frozen),)
         )
 
     # Reject impossible appreciation once per run: the per-sim loops compound
