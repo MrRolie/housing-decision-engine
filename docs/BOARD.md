@@ -501,6 +501,27 @@ accidental — read why before relaxing it.
 *Why now:* it is the smallest piece of item 5 that can ship without the existing-owner frame,
 and it is the largest single numerical distortion round 12 found.
 
+## Item 4's control, and why the renewal finding is stronger than stated (2026-09-21)
+
+Measured by the reversal solver on `tests/fixtures/uncertainty_surface.yaml`, and not
+anticipated by the design: **`mortgage_rate` reverses no winner anywhere in [1%, 10%]**. The
+rate a household shops for, negotiates, and is told to compare lenders on cannot change which
+option wins, across the entire plausible bracket. Its runner-up boundary is at 1.9171% and its
+majority boundary at 1.5999%, both outside any real quote.
+
+The renewal rate flips the verdict at **1.6052%**, inside the bracket the engine already uses
+for a mortgage rate.
+
+The reason is structural: the opening term runs five of twenty-five years. The rate you can see
+is attached to a fifth of the debt; the rate nobody can see arrives for the other four fifths,
+and this engine anchors nothing for it and draws no distribution over it. So the finding is not
+"renewal risk is unpriced" — it is that **the priceable rate cannot decide this and the
+unpriceable one does**, and the rate-shopping advice households actually receive is aimed at the
+term that cannot move the answer. `mortgage_rate` is the control that makes the renewal figure
+mean something instead of being one number among many.
+
+---
+
 ## Round 12 — what a user actually meets, ranked by encounter rate (2026-09-21)
 
 Round 12 ran the engine as four households rather than reading the diff, and its headline is

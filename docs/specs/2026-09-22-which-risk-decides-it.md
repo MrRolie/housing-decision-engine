@@ -246,6 +246,44 @@ state. Here, a consumed draw is visible in the state and means nothing, so the l
 must NOT be taken from the state. The same instrument answers one question and lies about the
 other.
 
+**23. THE CONTROL, AND IT MAKES THE FINDING MUCH STRONGER THAN THIS DOCUMENT CLAIMED.**
+`<opt>.mortgage_rate` — the rate a household shops for, negotiates, and is told to compare
+lenders on — **reverses no winner anywhere in [1%, 10%]** on this fixture. Its runner-up
+boundary sits at 1.9171% and its `mc_best` at 1.5999%, both outside any plausible quote, and the
+verdict's own winner never changes across the entire bracket. Measured by the solver, not
+anticipated by this spec.
+
+The reason is structural and it is the whole point: the opening term runs five of twenty-five
+years. The rate you can see, negotiate and shop is attached to a fifth of the debt. The rate
+nobody can see — the one that arrives at renewal, which this engine anchors nothing for and
+draws no distribution over — flips the verdict at 1.6052%, inside the bracket the engine already
+uses for a mortgage rate.
+
+So the master's finding is not merely "renewal risk is unpriced". It is that **the priceable rate
+cannot decide this and the unpriceable one does**, and the rate-shopping advice a household
+actually receives is aimed at the term that cannot move the answer. `mortgage_rate` is the
+control that makes the renewal figure mean something rather than being one number among many.
+
+**24. A sampled boundary and a solved one had the same type, which is this feature's cardinal
+error committed by its own contract.** `best` and `runner_up` are solved on the deterministic
+verdict — measured identical to SEVEN DIGITS at seeds 42, 7, 1234, 99 and 2026, properties of
+the user's config. `mc_best` is bisected on the Monte Carlo curve and moved **2.698% → 2.805%**
+across those same five seeds. One `Boundary` type gave all three the same shape, so nothing
+downstream could distinguish a property of the config from a property of the sample, and a
+reader met "your verdict flips at 2.716%" in the same typography as an exact figure.
+
+§6's exactness gate splits exact from estimated ACROSS KEYS; these are two kinds WITHIN one key,
+one level below where the gate operates. Split into `SolvedBoundary` and `SampledBoundary`,
+sharing no base class and no field set, and the sampled one carries its path count and its seed
+because those are what its value depends on. A second consequence closes with it: the old type
+required probability fields, so `--no-monte-carlo` returned an EMPTY reversal register even
+though two of the boundaries read no path at all.
+
+This is the third appearance today of one shape — **an instrument that answers one question and
+misleads on another**. §3.2: generator state catches a leaked draw. §3.6: the same state says
+nothing about whether a channel moves a number. Here: one boundary type carries a solved figure
+and a sampled one. Worth watching for a fourth.
+
 ---
 
 ## 1. Why
