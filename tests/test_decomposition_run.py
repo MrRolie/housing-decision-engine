@@ -38,6 +38,7 @@ import yaml
 
 from hde.config import load_config, single_path_run
 from hde.decomposition import (
+    LEVEL_PATHS,
     REFUSAL_CODES,
     SPREAD_REFUSAL_CODES,
     Decomposition,
@@ -54,6 +55,7 @@ from hde.decomposition import (
     channel,
     channel_by_key,
 )
+from hde.decomposition_text import format_decomposition
 from hde.deterministic import compute_deterministic
 from hde.models import (
     ComparisonSpec,
@@ -67,12 +69,12 @@ from hde.models import (
     compute_verdict,
 )
 from hde.monte_carlo import _load_prior_if_any, addressed_streams, run_monte_carlo
+from hde.serialization import decomposition_to_dict
 
 import hde.decomposition_math as dm
 import hde.decomposition_run as dr
 from hde.decomposition_run import (
     EVALUATION_CEILING,
-    actual_evaluations,
     channels_that_draw,
     decompose,
     live_channels,
@@ -596,12 +598,18 @@ class TestRefusals:
         k = len(live_channels(spec))
         largest = dr.largest_affordable_paths(k)
         assert got.reason == (
-            f"this decomposition would price {planned_evaluations(1_000_000, k, 2000):,} "
-            f"futures (1,000,000 paths x {k + 2} matrices, plus 2,000 x {k} for the "
-            f"level register), above the ceiling of {EVALUATION_CEILING:,} "
+            "the spread and level registers would price up to "
+            f"{planned_evaluations(1_000_000, k, 2000):,} futures (1,000,000 paths x "
+            f"{k + 2} matrices, plus 2,000 x {k + 1} for the level register: one "
+            "freeze per live channel and one with all of them frozen), above the "
+            f"ceiling of {EVALUATION_CEILING:,} "
             "[assistant-chosen: no published figure sets it]. Run it at a smaller "
-            "sample of its own with --decompose=N: on this run the largest N under "
-            f"the ceiling is {largest}.")
+            "sample of its own with --decompose=N: on this run the largest N whose "
+            f"work stays within the ceiling is {largest}.")
+        # The figure the reason prints counts the all-frozen run: at 1,000,000
+        # paths and k live channels it is N·(k+2) + 2,000·(k+1), never the
+        # N·(k+2) + 2,000·k that left that run out.
+        assert planned_evaluations(1_000_000, k, 2000) == 1_000_000 * (k + 2) + 2000 * (k + 1)
         # No way out is offered that nothing implements.
         assert "channels to hold" not in got.reason
 
@@ -609,7 +617,9 @@ class TestRefusals:
     def test_the_n_the_budget_refusal_names_is_the_largest_the_gate_admits(self, k_live):
         """The figure the refusal prints is read off the gate's own cost
         model, so following it never meets the same refusal — and one more
-        path would.
+        path would. The cost model is what the module SPENDS
+        (`TestCost`), so the N it names also prices within the ceiling: the
+        N it named before, 26,222 at seven channels, priced 251,998.
         *Kills it:* a closed form that drifts from `planned_evaluations`."""
         largest = dr.largest_affordable_paths(k_live)
         assert largest >= dr.MIN_INTERVALLED_FUTURES
@@ -621,7 +631,7 @@ class TestRefusals:
         """Both sides of the boundary, without pricing either: the gate is a
         pure function of the figures it names."""
         live = tuple(range(7))
-        paths = (EVALUATION_CEILING - dr.DEFAULT_LEVEL_PATHS * 7) // 9
+        paths = (EVALUATION_CEILING - LEVEL_PATHS * 8) // 9
         assert planned_evaluations(paths, 7, dr._level_paths(paths)) <= EVALUATION_CEILING
         spec = _fixture_spec(num_sims=40)
         mc = run_monte_carlo(spec)
@@ -682,7 +692,10 @@ class TestEveryFutureAgrees:
         got = decompose(spec, paths=40, **_inputs(spec))
         assert isinstance(got, Decomposition)
         assert isinstance(got.spread, SpreadRegister)
-        assert got.spread.rows and got.spread.leading_channel_id is not None
+        assert got.spread.rows
+        # One of the two names the top row, whichever way it resolved.
+        assert (got.spread.leading_channel_id is None) != (
+            got.spread.unresolved_top_channel_id is None)
 
 
 # ---------------------------------------------------------------------------
@@ -874,14 +887,14 @@ class TestStructuralZeros:
 
 class TestCost:
 
-    def test_the_evaluation_count_is_the_all_frozen_run_above_the_spec_s_model(
-            self, monkeypatch):
-        """§9's formula omits the all-frozen run that §3.4 prices at `m` paths.
-
-        Pinned so the contradiction cannot be resolved silently in either
-        direction: the gate uses the ruled formula and the honest count carries
-        the extra run.
-        """
+    def test_the_gate_s_figure_is_what_the_module_prices(self, monkeypatch):
+        """ONE formula for the gate and for the count: §9's cost model left
+        out the all-frozen run that §3.4 prices at `m` paths, and the gate
+        measured that figure while the module spent `m` more — so the N the
+        budget refusal recommended priced above the ceiling it was chosen
+        under. The count here is taken by replacing the pricer, never read
+        off the formula it checks.
+        *Kills it:* dropping the all-frozen run from `planned_evaluations`."""
         spy = _Spy(monkeypatch)
         spec = _fixture_spec(num_sims=40)
         inputs = _inputs(spec)
@@ -889,13 +902,43 @@ class TestCost:
         got = decompose(spec, paths=40, **inputs)
         k = len(got.live_channel_ids)
         level = dr._level_paths(40)
-        assert spy.evaluations == actual_evaluations(40, k, level)
-        assert spy.evaluations == planned_evaluations(40, k, level) + level
+        assert isinstance(got.spread, SpreadRegister)
+        assert spy.evaluations == planned_evaluations(40, k, level)
         # And the runs themselves are the matrices §3.3 and §3.4 name.
         assert sum(1 for _, freeze in spy.runs if not freeze) == k + 2
         assert sum(1 for _, freeze in spy.runs if len(freeze) == 1) == k
         assert sum(1 for _, freeze in spy.runs
                    if len(freeze) == len(dr.ALL_CHANNEL_IDS)) == 1
+
+    def test_a_run_where_every_future_agrees_prices_what_the_formula_says(
+            self, monkeypatch):
+        """When every future names one winner the spread register prices `A`
+        alone (§0.1 item 7), and the same formula says so with
+        `spread_priced=False`. The gate cannot know that before it prices `A`,
+        so it takes the default — the most the module can spend — and its
+        figure is an upper bound here, which the refusal says ("up to").
+        *Kills it:* a formula that counts `B` and `A_B` on this run, or a gate
+        figure below what such a run spends."""
+        spec = _every_future_agrees_spec()
+        inputs = _inputs(spec)
+        spy = _Spy(monkeypatch)
+        got = decompose(spec, **inputs)
+        assert isinstance(got.spread, RefusedSpread)
+        n, k = spec.simulation.num_sims, len(got.live_channel_ids)
+        level = dr._level_paths(n)
+        assert spy.evaluations == planned_evaluations(n, k, level, spread_priced=False)
+        assert spy.evaluations == n + level * (k + 1)
+        assert spy.evaluations < planned_evaluations(n, k, level)
+
+    def test_the_n_the_refusal_names_on_the_fixture_prices_within_the_ceiling(self):
+        """The fixture's seven live channels, in figures: the refusal at
+        1,000,000 paths named N = 26,222, which priced 26,222 x 9 + 2,000 x 8 =
+        251,998 — above the 250,000 it was chosen under. The largest N is
+        26,000, and it prices exactly the ceiling.
+        *Kills it:* reading the N off a count that leaves out a run."""
+        assert dr.largest_affordable_paths(7) == 26_000
+        assert planned_evaluations(26_000, 7, dr._level_paths(26_000)) == 250_000
+        assert planned_evaluations(26_001, 7, dr._level_paths(26_001)) > 250_000
 
     def test_the_sample_size_override_is_the_sample_size(self, monkeypatch):
         spy = _Spy(monkeypatch)
@@ -1224,3 +1267,85 @@ class TestThePublishedFigures:
         assert "house.mortgage_renewal_rates" in keys
         zeros = {z.reversal_key for z in register.structural_zeros}
         assert "house.mortgage_renewal_rates" in zeros
+
+
+# ---------------------------------------------------------------------------
+# The top row of each register: decided once, here, and read by every surface
+# ---------------------------------------------------------------------------
+
+class TestTheTopRowIsDecidedOnce:
+    """Both registers name their top row by ONE rule (`_top_row`): the largest
+    POINT estimate over every row, resolved or not, which leads only if it
+    resolved. The formatter and the serializer read the result; neither
+    re-derives it, so the text and the JSON cannot disagree about it."""
+
+    @pytest.mark.parametrize("points, expected", [
+        # the largest resolved: it leads
+        ([(6, 0.88, True), (5, 0.10, True)], (6, None)),
+        # an unresolved row larger than every resolved one: nothing leads
+        ([(4, 0.01, True), (3, 1.07, False)], (None, 3)),
+        # an unresolved row SMALLER than the resolved leader takes nothing
+        ([(6, 0.88, True), (4, -0.001, False)], (6, None)),
+        # no row resolves: the largest is the unresolved top
+        ([(4, 90.0, False), (5, 1.0, False)], (None, 4)),
+        # a tie on the point goes to the first row in live-channel order
+        ([(3, 0.5, True), (4, 0.5, False)], (3, None)),
+        ([], (None, None)),
+    ], ids=["resolved-top", "unresolved-top", "small-unresolved",
+            "none-resolve", "tie", "empty"])
+    def test_the_rule(self, points, expected):
+        """*Kills it:* selecting over the resolved rows only (the second case
+        then promotes the 0.01), or suppressing the leader whenever any row is
+        unresolved (the third case then loses it)."""
+        assert dr._top_row(points) == expected
+
+    def test_an_unresolved_largest_share_leads_nothing_in_text_or_json(self):
+        """examples/rent_vs_condo_vs_house.yaml: the condo's costs carry a
+        provisional share above 1 that does not resolve, and the house's costs
+        resolve at about 0.01. The JSON named the house's costs as leading,
+        and its maintenance volatility as the figure to check first, while the
+        text said no channel leads. The register now carries the answer and
+        both surfaces print it.
+        *Kills it:* the old resolved-only selection."""
+        spec = load_config(str(EXAMPLES / "rent_vs_condo_vs_house.yaml"))
+        got = decompose(spec, **_inputs(spec))
+        assert isinstance(got.spread, SpreadRegister)
+        condo = channel_by_key("condo").id
+        top = next(r for r in got.spread.rows if r.channel_id == condo)
+        assert isinstance(top.shares, UnresolvedShares)
+        assert (got.spread.leading_channel_id, got.spread.unresolved_top_channel_id,
+                got.spread.superlative_licensed, got.spread.check_first) == (
+                    None, condo, False, None)
+        doc = decomposition_to_dict(got)["spread"]
+        assert (doc["leading_channel_id"], doc["unresolved_top_channel_id"],
+                doc["check_first"]) == (None, condo, None)
+        block = format_decomposition(got)
+        assert "the largest share is on the condo's costs" in block
+        assert "no channel leads this table" in block
+        assert "the figure to check first" not in block
+
+    def test_an_unresolved_largest_shift_is_the_one_the_closing_names(self):
+        """examples/basic_config.yaml, a tie: the house's costs resolve at
+        about +$252 and the condo's costs move the margin by about +$390
+        without resolving, taking P(house cheapest) out of the tie band. The
+        closing called the house's costs the largest single shift; the
+        register now names the condo's costs as its unresolved top.
+        *Kills it:* the old resolved-only selection."""
+        spec = load_config(str(EXAMPLES / "basic_config.yaml"))
+        got = decompose(spec, **_inputs(spec))
+        condo, house = channel_by_key("condo").id, channel_by_key("house").id
+        levels = {r.channel_id: r.level for r in got.level.rows}
+        assert isinstance(levels[house], ResolvedLevel)
+        assert isinstance(levels[condo], IndistinguishableLevel)
+        assert abs(levels[condo].provisional_delta) > abs(levels[house].delta)
+        assert (got.level.leading_channel_id,
+                got.level.unresolved_top_channel_id) == (None, condo)
+        doc = decomposition_to_dict(got)["level"]
+        assert (doc["leading_channel_id"], doc["unresolved_top_channel_id"]) == (
+            None, condo)
+        block = format_decomposition(got)
+        assert "the largest shift by point estimate, the condo's costs at +$" in block
+        assert "the largest single shift is the house's costs" not in block
+        # the register is at its cap, so no larger run is offered as a route
+        assert got.level.paths == LEVEL_PATHS
+        assert "so a larger run does not resolve it here" in block

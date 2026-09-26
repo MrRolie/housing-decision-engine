@@ -132,7 +132,8 @@ class TestTheBinding:
     def test_a_sampled_boundary_cannot_be_built_without_its_sample(self):
         """Asserted in BOTH directions: the full call builds, and dropping
         either the path count or the seed refuses."""
-        full = dict(verdict_field="mc_best", value=0.0271, was="condo", becomes="house",
+        full = dict(verdict_field="mc_best", value=0.0271, was="house", becomes="condo",
+                    further_changes=None,
                     curve_probabilities=(("condo", 0.44),),
                     confirming_probabilities=(("condo", 0.44),),
                     curve_paths=2000, seed=42)
@@ -147,8 +148,8 @@ class TestTheBinding:
         so its producer must state it. Asserted in BOTH directions: an explicit
         empty tuple builds, and leaving the field out refuses rather than
         defaulting the claim into existence."""
-        full = dict(verdict_field="best", value=0.016052, was="rent", becomes="house",
-                    confirming_probabilities=())
+        full = dict(verdict_field="best", value=0.016052, was="house", becomes="rent",
+                    further_changes=None, confirming_probabilities=())
         assert dc.SolvedBoundary(**full).confirming_probabilities == ()
         with pytest.raises(TypeError):
             dc.SolvedBoundary(**{k: v for k, v in full.items()
@@ -166,14 +167,15 @@ class TestABoundaryStatesBothSidesInWords:
 
     _BUILDS = {
         dc.SolvedBoundary: dict(verdict_field="best", value=0.016052,
-                                confirming_probabilities=()),
+                                further_changes=None, confirming_probabilities=()),
         dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674,
+                                 further_changes="above",
                                  curve_probabilities=(("house", 0.65),),
                                  confirming_probabilities=(("house", 0.65),),
                                  curve_paths=5000, seed=42),
         dc.EstimatedBoundary: dict(verdict_field="best", value=0.014,
                                    value_ci=dc.Interval(0.012, 0.016),
-                                   resimulation_paths=500),
+                                   further_changes=None, resimulation_paths=500),
     }
 
     @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
@@ -190,6 +192,106 @@ class TestABoundaryStatesBothSidesInWords:
         sides = {"was": "house", "becomes": "rent", side: value}
         with pytest.raises(TypeError, match="not words"):
             cls(**self._BUILDS[cls], **sides)
+
+
+class TestABoundarySaysWhetherTheRangeChangesAgain:
+    """`further_changes` — on every boundary kind — is None, "above" or
+    "below": whether the searched range changes AGAIN past the crossing, on
+    the side away from the run's own region, where no row reports it. A row
+    reports only the nearest edge (§6), so without it a reader takes `becomes`
+    to hold to the end of the bracket. It has no default: "nothing further" is
+    a claim its producer states."""
+
+    _BUILDS = TestABoundaryStatesBothSidesInWords._BUILDS
+
+    @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
+    @pytest.mark.parametrize("side", [None, "above", "below"])
+    def test_none_or_a_side_builds(self, cls, side):
+        """The legal calls, so the refusals below cannot pass by refusing
+        everything — and a guard widened to refuse a side fails here."""
+        fields = {**self._BUILDS[cls], "further_changes": side}
+        built = cls(**fields, was="house", becomes="rent")
+        assert built.further_changes == side
+
+    @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
+    @pytest.mark.parametrize("side", ["sideways", "Above", True, 1, ""])
+    def test_anything_else_refuses(self, cls, side):
+        """*Kills it:* deleting `_require_side`, which lets a value print as a
+        side no reader can place."""
+        fields = {**self._BUILDS[cls], "further_changes": side}
+        with pytest.raises(ValueError, match="further_changes"):
+            cls(**fields, was="house", becomes="rent")
+
+    @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
+    def test_it_has_no_default(self, cls):
+        fields = {k: v for k, v in self._BUILDS[cls].items() if k != "further_changes"}
+        with pytest.raises(TypeError):
+            cls(**fields, was="house", becomes="rent")
+
+
+class TestARegisterHasOneTopRow:
+    """The top row of a register, by point estimate, either LEADS (it resolved)
+    or is the UNRESOLVED TOP (it did not). Both at once would let the text name
+    one channel as leading while the JSON names another as the largest — the
+    disagreement the pair exists to end. And with no leading row there is no
+    superlative to license and no figure to check first."""
+
+    @staticmethod
+    def _spread(**over):
+        fields = dict(rows=(), interaction=dc.RefusedInteraction(
+                          first_order_sum=1.1, first_order_sum_ci=dc.Interval(1.0, 1.2)),
+                      leading_channel_id=6, unresolved_top_channel_id=None,
+                      superlative_licensed=False, check_first=None,
+                      unattributed_channel_ids=())
+        fields.update(over)
+        return dc.SpreadRegister(**fields)
+
+    @staticmethod
+    def _level(**over):
+        fields = dict(rows=(), paths=2000, prob_best_base=0.34, futures_margin=-1.0,
+                      all_frozen_margin=1.0, all_frozen_path_spread=0.0,
+                      all_frozen_deviation=0.0, accounted_for=2.0,
+                      leading_channel_id=5, unresolved_top_channel_id=None)
+        fields.update(over)
+        return dc.LevelRegister(**fields)
+
+    def test_the_legal_shapes_build(self):
+        """A leader; an unresolved top; a licensed leader with no figure to
+        check; a leader with a figure to check. A guard widened to refuse any
+        of them fails here."""
+        width = dc.Width(key="simulation.investment_return_vol", formatted="10%",
+                         source="assistant")
+        assert self._spread().leading_channel_id == 6
+        assert self._spread(leading_channel_id=None,
+                            unresolved_top_channel_id=3).unresolved_top_channel_id == 3
+        assert self._spread(superlative_licensed=True).superlative_licensed
+        assert self._spread(check_first=width).check_first == width
+        assert self._level().leading_channel_id == 5
+        assert self._level(leading_channel_id=None,
+                           unresolved_top_channel_id=3).unresolved_top_channel_id == 3
+
+    @pytest.mark.parametrize("build", ["_spread", "_level"])
+    def test_a_leader_and_an_unresolved_top_together_refuse(self, build):
+        """*Kills it:* deleting `_require_one_top`."""
+        with pytest.raises(ValueError, match="exactly one of the two"):
+            getattr(self, build)(leading_channel_id=4, unresolved_top_channel_id=3)
+
+    @pytest.mark.parametrize("over", [
+        dict(superlative_licensed=True),
+        dict(check_first=dc.Width(key="simulation.condo_fee_vol", formatted="10%",
+                                  source="assistant")),
+    ], ids=["superlative", "check_first"])
+    def test_no_leader_licenses_nothing(self, over):
+        """*Kills it:* deleting the no-leader guard, which let the JSON name a
+        figure to check first under a table the text says nothing leads."""
+        with pytest.raises(ValueError, match="no leading row"):
+            self._spread(leading_channel_id=None, unresolved_top_channel_id=3, **over)
+
+    @pytest.mark.parametrize("register", [dc.SpreadRegister, dc.LevelRegister])
+    def test_the_unresolved_top_has_no_default(self, register):
+        field = next(f for f in dataclasses.fields(register)
+                     if f.name == "unresolved_top_channel_id")
+        assert field.default is dataclasses.MISSING
 
 
 class TestAStatedValueSaysWhoseFigureItIs:

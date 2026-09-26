@@ -75,6 +75,7 @@ from .decomposition import (
     Decomposition,
     DecompositionOutcome,
     DecompositionRefusal,
+    LEVEL_PATHS,
     IndistinguishableLevel,
     Interaction,
     Interval,
@@ -103,10 +104,8 @@ __all__ = [
     "live_channels",
     "channels_that_draw",
     "planned_evaluations",
-    "actual_evaluations",
     "largest_affordable_paths",
     "identity_budget",
-    "DEFAULT_LEVEL_PATHS",
     "EVALUATION_CEILING",
     "OPTION_NAMES",
 ]
@@ -125,14 +124,10 @@ ALL_CHANNEL_IDS: Tuple[int, ...] = tuple(c.id for c in CHANNELS)
 MATRIX_A = 0
 MATRIX_B = 1
 
-# §9: the level register's own sample. A paired mean needs far fewer paths than
-# a variance ratio, so it does not follow `num_sims` upward.
-DEFAULT_LEVEL_PATHS = 2000
-
 # §8 refusal 6's ceiling, in model evaluations. THE SPEC NAMES NO FIGURE, so
 # this one is the assembler's and is assistant-chosen; the refusal prints it.
 # Derivation: the shipped `num_sims` default is 10,000, which at seven live
-# channels costs 10,000·9 + 2,000·7 = 104,000 evaluations — about 47 s at §9's
+# channels costs 10,000·9 + 2,000·8 = 106,000 evaluations — about 48 s at §9's
 # measured 454 µs/path. §9 calls that multiple "the common case and not a worst
 # case", so it may not refuse, and the ceiling clears it with headroom rather
 # than sitting on it. At 250,000 the gate fires around two minutes of work,
@@ -549,34 +544,37 @@ def channels_that_draw(spec, prior=None) -> Tuple[int, ...]:
 
 
 # ---------------------------------------------------------------------------
-# §9 — the cost model, stated as two figures that can disagree
+# §9 — the cost model: one formula, for the gate and for the count
 # ---------------------------------------------------------------------------
 
-def planned_evaluations(paths: int, k_live: int, level_paths: int) -> int:
-    """§8 refusal 6's figure, exactly as the spec writes it:
+def planned_evaluations(paths: int, k_live: int, level_paths: int, *,
+                        spread_priced: bool = True) -> int:
+    """The model evaluations this module spends — ONE formula, for the budget
+    gate and for the count a test takes of what was actually priced:
 
-        num_sims * (k_live + 2) + m * k_live
+        N * (k_live + 2)  +  m * (k_live + 1)
 
-    This is what the budget gate is measured against, because it is the formula
-    the ruling names. It is NOT what the module spends — see
-    `actual_evaluations`, and the report that goes with it.
+    The spread register prices `A`, `B` and one `A_B^(c)` per live channel at
+    N paths; the level register prices one freeze per live channel AND the
+    all-frozen run at `m`. §9's cost model wrote `m * k_live` and left the
+    all-frozen run out, though §3.4 prices it ("it costs one run of `m`
+    paths"); the gate once measured that figure while the module spent `m`
+    more, so the N it recommended as the largest under the ceiling priced
+    above the ceiling. One formula cannot disagree with itself.
+
+    `spread_priced=False` is the run where every future names one winner:
+    only `A` is priced for the spread register (§0.1 item 7 — no `B`, no
+    `A_B`). The gate cannot know that before it prices `A`, so it takes the
+    default, and its figure is the most the module can spend — which is why
+    the refusal says "up to". The reversal register's evaluations are
+    `break_even`'s, at the config's own `num_sims`, and are not counted here.
     """
-    return int(paths) * (int(k_live) + 2) + int(level_paths) * int(k_live)
-
-
-def actual_evaluations(paths: int, k_live: int, level_paths: int) -> int:
-    """What this module actually prices: §9's figure plus the all-frozen run.
-
-    §9's cost model omits it and §3.4 prices it — "this is the sharpest test in
-    the plan and it costs one run of `m` paths". Both statements are in the same
-    document; the run is real, so the honest count carries it and the gate uses
-    the ruled formula. Reported rather than reconciled.
-    """
-    return planned_evaluations(paths, k_live, level_paths) + int(level_paths)
+    spread = int(paths) * (int(k_live) + 2) if spread_priced else int(paths)
+    return spread + int(level_paths) * (int(k_live) + 1)
 
 
 def _level_paths(paths: int) -> int:
-    return max(2, min(int(paths), DEFAULT_LEVEL_PATHS))
+    return max(2, min(int(paths), LEVEL_PATHS))
 
 
 # ---------------------------------------------------------------------------
@@ -659,7 +657,8 @@ def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
             "tautology.",
             channel_id=only.id,
         )
-    work = planned_evaluations(paths, len(live), _level_paths(paths))
+    level_paths = _level_paths(paths)
+    work = planned_evaluations(paths, len(live), level_paths)
     if work > EVALUATION_CEILING:
         # ONE way out, and it is named with the figure that fits. An earlier
         # sentence also offered to "say which channels to hold"; no flag and no
@@ -669,13 +668,15 @@ def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
         # run from the one the user asked about.
         return _refuse(
             "budget",
-            f"this decomposition would price {work:,} futures "
+            f"the spread and level registers would price up to {work:,} futures "
             f"({paths:,} paths x {len(live) + 2} matrices, plus "
-            f"{_level_paths(paths):,} x {len(live)} for the level register), "
-            f"above the ceiling of {EVALUATION_CEILING:,} "
+            f"{level_paths:,} x {len(live) + 1} for the level register: one "
+            f"freeze per live channel and one with all of them frozen), above the "
+            f"ceiling of {EVALUATION_CEILING:,} "
             "[assistant-chosen: no published figure sets it]. "
             "Run it at a smaller sample of its own with --decompose=N: on this "
-            f"run the largest N under the ceiling is {largest_affordable_paths(len(live))}.",
+            "run the largest N whose work stays within the ceiling is "
+            f"{largest_affordable_paths(len(live))}.",
         )
     return None
 
@@ -684,7 +685,8 @@ def largest_affordable_paths(k_live: int) -> int:
     """The largest `--decompose=N` whose planned work clears
     `EVALUATION_CEILING` at `k_live` live channels — read off
     `planned_evaluations` itself, which is monotone in N, so the cost model
-    keeps one home and this can never name an N the gate would refuse."""
+    keeps one home and this can never name an N the gate would refuse, nor
+    one whose priced work exceeds the ceiling it was chosen under."""
     low, high = 0, EVALUATION_CEILING
     while low < high:
         mid = (low + high + 1) // 2
@@ -940,6 +942,46 @@ def _subset_first_order_interval(
     return _interval(bounds)
 
 
+def _share_point(shares: Shares) -> float:
+    """ONE row's first-order point estimate, resolved or not."""
+    if isinstance(shares, ResolvedShares):
+        return shares.alone
+    if isinstance(shares, UnresolvedShares):
+        return shares.provisional_alone
+    raise TypeError(f"a spread row carries a {type(shares).__name__}, which is "
+                    f"neither ResolvedShares nor UnresolvedShares")
+
+
+def _level_point(level: Level) -> float:
+    """ONE row's |shift| point estimate, resolved or not."""
+    if isinstance(level, ResolvedLevel):
+        return abs(level.delta)
+    if isinstance(level, IndistinguishableLevel):
+        return abs(level.provisional_delta)
+    raise TypeError(f"a level row carries a {type(level).__name__}, which is "
+                    f"neither ResolvedLevel nor IndistinguishableLevel")
+
+
+def _top_row(points: Sequence[Tuple[int, float, bool]]) -> Tuple[Optional[int], Optional[int]]:
+    """`(leading_channel_id, unresolved_top_channel_id)` from one register's
+    rows as `(channel_id, point estimate, resolved)` — the ONE rule both
+    registers name their top row by.
+
+    The top row is the largest POINT estimate over EVERY row, resolved or not.
+    It leads only if it resolved; otherwise it is the unresolved top and
+    nothing leads. The largest RESOLVED row is never promoted in its place: on
+    examples/basic_config.yaml that named the house's costs, at +$252, "the
+    largest single shift" beside the condo's costs at +$390 ± $273, and on
+    examples/rent_vs_condo_vs_house.yaml it handed the spread table's lead,
+    in the JSON, to a share of 0.01 beside an unresolved 1.07. A tie on the
+    point goes to the first row in live-channel order.
+    """
+    if not points:
+        return None, None
+    channel_id, _, resolved = max(points, key=lambda entry: entry[1])
+    return (channel_id, None) if resolved else (None, channel_id)
+
+
 def _spread_register(
     f_a: Array, f_b: Array, f_ab: Array, live: Tuple[int, ...],
     widths_by_channel: Dict[int, Tuple[Width, ...]], seed: int,
@@ -947,8 +989,8 @@ def _spread_register(
     """§3.3's table: two Sobol shares, the flip fraction, and §4's residual.
 
     Every figure comes from `decomposition_math`; the only judgments here are
-    which rows resolved, which row leads, and whether §5 mechanism 3's
-    superlative is licensed.
+    which rows resolved, which row is on top and whether it leads (`_top_row`),
+    and whether §5 mechanism 3's superlative is licensed.
 
     A ROW IS UNRESOLVED IF EITHER FIGURE IS (§0.1 item 11). Conservative is
     correct for the same reason the register refuses at all: the alternative
@@ -992,13 +1034,10 @@ def _spread_register(
             widths=widths,
         ))
 
-    leading: Optional[int] = None
-    leading_row: Optional[SpreadRow] = None
-    best_share = -np.inf
-    for row in rows:
-        if isinstance(row.shares, ResolvedShares) and row.shares.alone > best_share:
-            best_share = row.shares.alone
-            leading, leading_row = row.channel_id, row
+    leading, unresolved_top = _top_row([
+        (row.channel_id, _share_point(row.shares), isinstance(row.shares, ResolvedShares))
+        for row in rows])
+    leading_row = next((row for row in rows if row.channel_id == leading), None)
 
     total_first_order = dm.sum_first_order_shares(first)
     residual = dm.residual_interaction(total_first_order, sum_ci[0], sum_ci[1])
@@ -1037,6 +1076,7 @@ def _spread_register(
         if _has_unattributed_width(widths_by_channel.get(channel_id, ())))
     return SpreadRegister(rows=tuple(rows), interaction=interaction,
                           leading_channel_id=leading,
+                          unresolved_top_channel_id=unresolved_top,
                           superlative_licensed=licensed,
                           check_first=check_first,
                           unattributed_channel_ids=unattributed)
@@ -1118,12 +1158,9 @@ def _level_register(spec, verdict, best: str, f_a: Array, live: Tuple[int, ...],
     all_frozen = margin_per_path(
         _run(spec_at_m, MATRIX_A, freeze=ALL_CHANNEL_IDS), best)
 
-    leading: Optional[int] = None
-    largest = -np.inf
-    for row in rows:
-        if isinstance(row.level, ResolvedLevel) and abs(row.level.delta) > largest:
-            largest = abs(row.level.delta)
-            leading = row.channel_id
+    leading, unresolved_top = _top_row([
+        (row.channel_id, _level_point(row.level), isinstance(row.level, ResolvedLevel))
+        for row in rows])
 
     return LevelRegister(
         rows=tuple(rows),
@@ -1135,6 +1172,7 @@ def _level_register(spec, verdict, best: str, f_a: Array, live: Tuple[int, ...],
         all_frozen_deviation=float(abs(all_frozen[0] - verdict.margin_pv)),
         accounted_for=float(np.sum(deltas)),
         leading_channel_id=leading,
+        unresolved_top_channel_id=unresolved_top,
     )
 
 

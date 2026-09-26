@@ -1083,7 +1083,11 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
     return {
         "rows": [_spread_row_to_dict(row) for row in spread.rows],
         "interaction": interaction,
+        # The register's own top-row rule, read and never re-derived: the
+        # text block prints from these same two fields, so the JSON cannot
+        # name a leader the text says does not exist.
         "leading_channel_id": spread.leading_channel_id,
+        "unresolved_top_channel_id": spread.unresolved_top_channel_id,
         "superlative_licensed": spread.superlative_licensed,
         "check_first": (None if spread.check_first is None
                         else dataclasses.asdict(spread.check_first)),
@@ -1169,6 +1173,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "all_frozen_deviation": level.all_frozen_deviation,
             "accounted_for": level.accounted_for,
             "leading_channel_id": level.leading_channel_id,
+            "unresolved_top_channel_id": level.unresolved_top_channel_id,
         },
         # The two reversal kinds stay two lists, never one with a flag: the
         # split is a property of the model and the operator's ruling forbids

@@ -285,7 +285,7 @@ class TestTheTwoBoundaryKinds:
         would be typed as whichever kind the branch happened to be, and that is
         the one error no downstream reader could detect.
         """
-        entry = {"value": 0.0271, "was": "condo", "becomes": "house"}
+        entry = {"value": 0.0271, "was": "house", "becomes": "condo", "further": None}
         probs = {"condo": 0.44, "house": 0.51, "rent": None}
         kinds = {field: type(_typed_boundary(field, entry, curve=probs, confirmed=probs,
                                              curve_paths=1234, seed=7))
@@ -310,7 +310,8 @@ class TestTheTwoBoundaryKinds:
         # A `str()` in the router is what once printed "True to False".
         for field in BOUNDARY_FIELDS:
             with pytest.raises(TypeError, match="not words"):
-                _typed_boundary(field, {"value": 0.05, "was": True, "becomes": False},
+                _typed_boundary(field, {"value": 0.05, "was": True, "becomes": False,
+                                        "further": None},
                                 curve=probs, confirmed=probs, curve_paths=1234, seed=7)
 
     def test_the_two_field_lists_partition_the_four_kinds(self):
@@ -447,6 +448,70 @@ class TestEveryBoundaryReadsTheKeyUpward:
             ("decisive for house", "not decisive"),
             ("not decisive", "decisive for rent")]
         _assert_agrees_with_the_sweep(inside, CONTRACT, decisive)
+        # Both edges of this run's region are reported, so neither has a
+        # change beyond it that no row reports.
+        assert [b.further_changes for b in decisive] == [None, None]
+
+
+class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
+    """A row reports the NEAREST edge of the region in which the field says
+    what this run says (§6). On the two-option example `decisive` changes from
+    decisive for house to not decisive at ~6.74% and again, into decisive for
+    rent, near ~6.84%; the row printed only the first, and a reader took "not
+    decisive" to hold to the top of the bracket. `further_changes` says on
+    which side the searched range changes again where no row reports it —
+    checked against `--sweep`, never against the scan that produced it."""
+
+    def test_the_two_option_decisive_edge_says_the_range_changes_again_above(
+            self, two_option):
+        """*Kills it:* dropping the flag, or setting it on every edge."""
+        raw, register = two_option
+        row = _row(register, CONTRACT)
+        flags = {b.verdict_field: b.further_changes for b in row.boundaries}
+        assert flags == {"best": None, "runner_up": None, "mc_best": None,
+                         "decisive": "above"}
+        decisive = next(b for b in row.boundaries if b.verdict_field == "decisive")
+        # The change the flag reports is real: past the edge's own `becomes`,
+        # --sweep reads a third state inside the bracket.
+        top = run_sweep(raw, CONTRACT, [decisive.value + 0.005, row.bracket_high])["rows"]
+        seen = {_sweep_says(r, "decisive") for r in top}
+        assert seen - {decisive.becomes}, seen
+
+    def test_the_fixture_runner_up_edge_says_the_range_changes_again_below(
+            self, raw, register):
+        """The renewal row's runner-up changes from house to condo at 2.9549%;
+        below, where the winner is the house, the runner-up is not the house —
+        a change no row reports. And no other fixture boundary has one."""
+        flags = {(row.key, b.verdict_field): b.further_changes
+                 for row in register.exact for b in row.boundaries}
+        assert flags.pop((RENEWAL, "runner_up")) == "below"
+        assert set(flags.values()) == {None}
+        runner_up = next(b for b in _row(register, RENEWAL).boundaries
+                         if b.verdict_field == "runner_up")
+        low = run_sweep(raw, RENEWAL, [0.0101])["rows"][0]
+        assert _sweep_says(low, "runner_up") != runner_up.was
+
+    @pytest.mark.parametrize("values, says_now, expected", [
+        # a third state past the nearest edge: flagged on that side
+        (["A", "B", "C"], "A", [("above", "above")]),
+        (["C", "B", "A"], "A", [("below", "below")]),
+        # a return INTO the run's answer is the next region's own edge, and is
+        # reported, so it is no further change
+        (["A", "B", "A"], "A", [("above", None), ("below", None)]),
+        # repeated spans of one state are no change (the deterministic regions
+        # split at every pair's crossing, not only this field's)
+        (["B", "B", "A", "A"], "A", [("below", None)]),
+        (["A", "B"], "A", [("above", None)]),
+    ], ids=["third-above", "third-below", "return", "repeats", "two"])
+    def test_the_rule(self, values, says_now, expected):
+        """*Kills it:* counting a return into the run's answer, or a repeated
+        span, as a further change."""
+        span = [(float(i), float(i + 1)) for i in range(len(values))]
+        found, anomaly = be._region_boundaries(
+            "house.mortgage_rate", "best", says_now, values, span,
+            lambda i, step: float(i) if step < 0 else float(i + 1), (0.0, 1.0))
+        assert anomaly is None
+        assert [(b["direction"], b["further"]) for b in found] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -704,6 +769,23 @@ class TestTheExactnessGate:
         gate = reversal_gate(raw, CONTRACT, 0.10, paths=200)
         assert not gate["licensed"]
         assert "DIFFERENT amount on different paths" in gate["why"]
+        # ...and the reason a reader is shown says so in words: it printed
+        # "worst nan of its own sd".
+        assert ("(how far the shift varies across paths could not be measured)"
+                in gate["why"])
+        assert "nan" not in gate["why"].lower().split()
+
+    def test_a_finite_deviation_prints_as_a_multiple_of_the_s_d(self, raw, monkeypatch):
+        """The nearest legal call to the two above: a finite figure that fails
+        the tolerance prints as the multiple of the s.d. it is, against the
+        tolerance — words are for a figure that could not be measured, not for
+        every refusal.
+        *Kills it:* wording every refused figure as unmeasured."""
+        monkeypatch.setattr(be, "_shift_deviation_over_sd", lambda before, after: 2.7)
+        gate = reversal_gate(raw, CONTRACT, 0.10, paths=200)
+        assert not gate["licensed"]
+        assert "(worst 2.70e+00 of its own s.d., against 1e-09)" in gate["why"]
+        assert "could not be measured" not in gate["why"]
 
     def test_identical_paths_under_a_varying_shift_read_infinitely_far(self):
         """The s.d. half of the identical-paths guard. Every path of the
@@ -729,6 +811,10 @@ class TestTheExactnessGate:
             "whose np.std is rounding noise rather than zero")
         assert gate["worst_deviation_over_sd"] == math.inf
         assert not gate["licensed"]
+        # The reason a reader is shown: it printed "worst inf of its own sd".
+        assert ("(condo's own paths do not differ from each other, so how far the "
+                "shift varies could not be measured against their s.d.)") in gate["why"]
+        assert " inf " not in gate["why"]
 
     def test_a_key_that_moves_the_draw_stream_is_refused_by_clause_a(self, raw):
         """Clause (a), which nothing else catches: `rent.reset_hazard` names
@@ -911,6 +997,17 @@ class TestTheBracket:
         assert "never a ceiling" in refs["mortgage_rate.posted_5y"].note
         assert refs["mortgage_rate.contracted_5y_uninsured"].note is None
 
+    def test_the_renewal_clause_is_on_the_renewal_axis_only(self, register):
+        """"never a ceiling on a renewal years from now" is about a renewal. A
+        `mortgage_rate` row moves the rate priced from year 0, and on a run
+        with no renewal the clause named a renewal that run does not have —
+        so it is keyed on the axis, and the list-price clause stays on both.
+        *Kills it:* one note for every rate axis."""
+        contract = {r.anchor: r for r in _row(register, CONTRACT).references}
+        note = contract["mortgage_rate.posted_5y"].note
+        assert note == "a list price, to bracket a guess from above"
+        assert "renewal" not in note
+
 
 # ---------------------------------------------------------------------------
 # Admission — a measurement, and what it is allowed to exclude
@@ -970,7 +1067,8 @@ class TestTheStructuralZeros:
                  if z.kind == "stated_path"}
         assert set(zeros) == {RENEWAL, CONTRACT}
         renewal = zeros[RENEWAL]
-        assert renewal.label == "your renewal rate"
+        assert renewal.label == "the renewal rate"
+        assert zeros[CONTRACT].label == "the contract rate"
         assert renewal.stated_formatted == "4.60%, 5.00%, 4.80%, 4.40%"
         assert "not a distribution" in renewal.reason
         assert _row(register, renewal.reversal_key).boundaries
@@ -989,8 +1087,61 @@ class TestTheStructuralZeros:
         zero = [z for z in register.structural_zeros if z.kind == "no_pv_reach"]
         assert len(zero) == 1
         assert zero[0].keys == ("income.pay_drop_events",)
-        assert "not either option's present value" in zero[0].reason
+        # "any", not "either": this fixture prices THREE options.
+        assert "not any option's present value" in zero[0].reason
+        assert "either" not in zero[0].reason
         assert zero[0].channel_id is None
+
+    def test_the_contract_rate_is_held_for_what_the_run_prices(self, register):
+        """The fixture prices renewals (years 6, 11, 16 and 21 inside its
+        horizon), so its contract rate is held for the opening term — and only
+        a run that prices a renewal may say so."""
+        zeros = {z.reversal_key: z for z in register.structural_zeros
+                 if z.kind == "stated_path"}
+        assert "held for the opening term" in zeros[CONTRACT].reason
+        assert "amortization" not in zeros[CONTRACT].reason
+
+    def test_a_run_with_no_renewal_holds_the_rate_for_the_whole_amortization(self):
+        """examples/mortgage_house_vs_rent.yaml states no renewal, and its own
+        warning says "mortgage_rate 4.40% is held for the whole 25-year
+        amortization"; the structural-zero row said "held for the opening
+        term" on the same run. Keyed on `renewals_priced_inside`, the one
+        answer to "did the ladder reach this run".
+        *Kills it:* keying the clause on the key alone, or on a declared
+        ladder."""
+        raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
+        spec = load_config_dict(raw)
+        assert spec.house.mortgage_renewal_years is None
+        zero = be._stated_path_zero(raw, spec, CONTRACT, "house")
+        assert ("house.mortgage_rate is one rate this config states, held for the "
+                "whole 25-year amortization — no draw") in zero.reason
+        assert "opening term" not in zero.reason
+        assert zero.label == "the contract rate"
+        refs = {r.anchor: r for r in be._axis_references(CONTRACT)}
+        assert "renewal" not in refs["mortgage_rate.posted_5y"].note
+
+    def test_a_ladder_past_the_horizon_prices_no_renewal_and_says_so(self):
+        """A stated ladder whose first renewal falls past the horizon reaches
+        no payment and no PV (`renewals_priced_inside` is 0), so the rate is
+        held for every year the run prices — not for "the opening term", and
+        not for a whole amortization the config itself says renews. The same
+        config one year longer prices the first renewal, and the clause is the
+        opening term's again: the boundary is where the accessor puts it.
+        *Kills it:* reading the declared ladder instead of the priced one."""
+        raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
+        raw["house"]["mortgage_renewal_years"] = 5
+        raw["house"]["mortgage_renewal_rates"] = [0.05]
+
+        def reason(years):
+            doc = _set(raw, "years", years)
+            return be._stated_path_zero(doc, load_config_dict(doc), CONTRACT,
+                                        "house").reason
+
+        short = reason(5)
+        assert ("held for every year this run prices — the stated ladder's first "
+                "renewal, in year 6, falls past its 5-year horizon") in short
+        assert "opening term" not in short and "amortization" not in short
+        assert "held for the opening term" in reason(6)
 
     def test_the_real_mode_inflation_trap_is_a_named_zero_with_its_channel(self, raw):
         """A channel that draws every year and reaches nothing. Detected from
@@ -1009,6 +1160,11 @@ class TestTheStructuralZeros:
         assert dead[0].channel_id == 0 and dead[0].label == "the economy"
         assert "economic.inflation_vol" in dead[0].keys
         assert "reaches no cash flow" in dead[0].reason
+        # A household reads this reason: plain words, never a private name
+        # (it printed "`_effective_growth_rate`").
+        assert "_effective_growth_rate" not in dead[0].reason
+        assert "`" not in dead[0].reason
+        assert "this run is in real terms" in dead[0].reason
 
     def test_a_nominal_run_has_no_dead_draw_row(self, register):
         """The fixture is nominal with live correlations, so the channel is not

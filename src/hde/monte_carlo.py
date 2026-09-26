@@ -73,8 +73,9 @@ from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 # renter reads 0.809 of the spread and names nothing a household can act on;
 # split, the portfolio carries 0.877 of the spread while moving the expected
 # margin by an amount that does not resolve, and the shelter channel carries
-# 0.100 of it while moving the margin by +$125,074. One is pure risk, the other
-# an omitted cost, and a table that adds them together is not worth printing.
+# 0.100 of it while moving the margin by +$125,074. One carries the scatter with
+# no shift that resolves, the other is an omitted cost, and a table that adds
+# them together is not worth printing.
 
 # A channel's stream source: the generator its draw sites read, or a factory
 # from path index to that generator, which is what per-path addressing needs.
@@ -1101,8 +1102,8 @@ def _simulate_rent_pv_once(
     # The other four, and the `reset_year` the caller draws, are shelter: the
     # escalation shock, the renter's event years, their event-cost shocks and
     # their other-cost shocks. Lumped, the two answer with one number that names
-    # nothing a household can act on; split, one row is pure risk and the other
-    # is a cost the central case omits.
+    # nothing a household can act on; split, one row carries scatter with no
+    # shift that resolves and the other is a cost the central case omits.
     b = _as_binding(rng)
     shelter_frozen = b.frozen_at(5)
     portfolio_frozen = b.frozen_at(6)

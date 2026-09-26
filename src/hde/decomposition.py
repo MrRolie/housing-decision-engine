@@ -25,17 +25,21 @@ reader who conflates two of them is the failure this feature exists to prevent
     does not, as the freeze mask's paired shift (§3.4). NOT "what if this input
     were different": a cost the deterministic line omits;
   - the REVERSAL register — what would have to change for the verdict to
-    change, solved on inputs the user STATED and that carry no distribution
-    (§6). It is the half with no assistant-chosen width anywhere in it.
+    change, solved on inputs the CONFIG states, whoever typed them, and that
+    carry no distribution (§6). No width is drawn in it, but the bracket each
+    row is solved inside is assistant-chosen, and each row says so
+    (`ExactReversal.bracket_source`), as it says whose the stated value is.
 
 THE BINDING (spec §5 mechanism 5, operator ruling 2026-09-22, superseding that
 section's earlier "label" default). The spread register may NEVER be emitted
 without the level register beside it. On this repo's own flagship fixture the
-spread table's top row is the renter's portfolio at 0.88 of the scatter and
-freezing it moves the decision by −$2,200, while the tenancy at 0.10 of the
-scatter moves it by +$127,876 — 58x. A reader handed the spread table alone
-quotes the channel that matters least. A label can be lost in a copy-paste; a
-row the code will not emit without cannot be.
+level register (the freeze mask, 2,000 paths) prints the spread table's top
+row, the renter's portfolio at 0.88 of the scatter, as moving the margin by
+−$3,805 ± $5,385 — nothing that resolves — while the tenancy, at 0.10 of the
+scatter, moves it by +$125,074 ± $1,775. A reader handed the spread table alone
+quotes a channel whose shift this run cannot tell from zero and misses the one
+that moves the margin. A label can be lost in a copy-paste; a row the code will
+not emit without cannot be.
 
 Here that ruling is encoded as far as a dataclass reaches: `Decomposition`
 requires `spread`, `level` and `reversal` together, with no default on any of
@@ -173,7 +177,8 @@ CHANNELS: Tuple[Channel, ...] = (
     ),
     # The renter split is not deferrable (§3.1): lumped, the renter is one row
     # naming nothing a household can act on. Split, the level register
-    # separates them completely — one is pure risk, one is an omitted cost.
+    # separates them — one carries scatter with no shift that resolves, one is
+    # an omitted cost.
     Channel(
         id=5,
         key="shelter",
@@ -204,6 +209,15 @@ CHANNELS: Tuple[Channel, ...] = (
 # `CHANNELS`: that tuple is the decomposition's partition, not the stream
 # roster, and `channel(INCOME_STREAM_ID)` therefore raises.
 INCOME_STREAM_ID: int = 7
+
+
+# §9: the most paths the LEVEL register prices. A paired mean needs far fewer
+# paths than a variance ratio, so the register takes `min(N, LEVEL_PATHS)` of
+# the decomposition's N and does not follow it upward. Held here, beside the
+# types, because two pieces need it: the assembler sizes the register with it,
+# and the formatter must know it to say truthfully whether a larger run would
+# resolve a level row — past it, none does.
+LEVEL_PATHS: int = 2000
 
 
 def channel(channel_id: int) -> Channel:
@@ -245,6 +259,19 @@ class Interval:
 
     low: float
     high: float
+
+
+def _require_one_top(kind: str, leading: Optional[int],
+                     unresolved_top: Optional[int]) -> None:
+    """A register's top row is EITHER the leader (it resolved) OR the
+    unresolved top (it did not) — never both. Both set would let the text name
+    one channel as leading while the JSON names another as the largest, the
+    disagreement this pair of fields exists to end."""
+    if leading is not None and unresolved_top is not None:
+        raise ValueError(
+            f"{kind} names channel {leading} as leading AND channel {unresolved_top} "
+            f"as an unresolved top row: the top row by point estimate either "
+            f"resolved or did not, so exactly one of the two can be set")
 
 
 @dataclass(frozen=True)
@@ -329,8 +356,11 @@ class SpreadRow:
     """One channel's share of the decision margin's scatter.
 
     `flip` is a FRACTION OF FUTURES, not a share of the spread: re-drawing this
-    channel and nothing else, this fraction of futures changes sides on which
-    option is cheapest. It is never optional (§7 rule 4) and survives an
+    channel and nothing else, this fraction of futures changes the sign of the
+    margin `f` — whether `verdict.best`, the central case's winner, is cheapest
+    there. It is NOT the fraction whose cheapest option changes: a future that
+    moves from the condo to the house while `best` stays beaten keeps its sign
+    and is not counted. It is never optional (§7 rule 4) and survives an
     unresolved row, so it sits outside `shares` — it is the only column that
     speaks in decision space, and on the fixture's portfolio the two numbers a
     reader will otherwise conflate are 0.88 and 0.41.
@@ -405,18 +435,36 @@ Interaction = Union[ResolvedInteraction, RefusedInteraction]
 class SpreadRegister:
     """Where the decision margin's scatter comes from.
 
-    `leading_channel_id` is the resolved row with the largest `alone`, None
-    when no row resolves. Three sentences name it — §5 mechanism 3's gate, §7's
-    "on your portfolio the two are 0.88 and 41%", and the level register's
-    closing "your portfolio is 88% of the spread" — and it is carried so that
-    none of them has to branch on the `Shares` union to reach a point estimate.
+    WHICH ROW LEADS IS DECIDED HERE, ONCE, over the POINT estimates of EVERY
+    row — resolved or not — and the text and the JSON both read it. The top
+    row by first-order point estimate (`alone`, or `provisional_alone` on an
+    unresolved row) is exactly one of:
 
-    `superlative_licensed` is §5 mechanism 3's gate: true only when every width
-    of the leading row is user-stated or anchored, and only then may the block
-    write "X decides the spread of this answer". `check_first` is the figure
-    the ungated sentence names instead — the one number the ranking would move
-    on. Both are carried rather than re-derived by the formatter so that
-    flipping one `sources:` entry changes them, and a test can say so (T14).
+      - `leading_channel_id`, when that row RESOLVED. Three sentences name it
+        — §5 mechanism 3's gate, §7's "on your portfolio the two are 0.88 and
+        41%", and the level register's closing "your portfolio is 88% of the
+        spread" — and it is carried so that none of them has to branch on the
+        `Shares` union to reach a point estimate;
+      - `unresolved_top_channel_id`, when it did NOT. Then no channel leads:
+        `leading_channel_id` is None, the superlative is not licensed and there
+        is no figure to check first. The largest RESOLVED row is never promoted
+        in its place — on examples/rent_vs_condo_vs_house.yaml the condo's
+        costs carry a provisional 1.07 that did not resolve and the largest
+        resolved share is the house's costs at 0.01, so promoting it named, as
+        the table's leader and the figure to check first, a channel carrying a
+        hundredth of the spread. The text said "no channel leads" while the
+        JSON named that channel; the rule now has this one home.
+
+    Never both; both None only on a register with no rows, which the assembler
+    does not produce (a spread with nothing to show is `RefusedSpread`).
+
+    `superlative_licensed` is §5 mechanism 3's gate: true only when a row leads
+    and every width of it is user-stated or anchored, and only then may the
+    block write "X decides the spread of this answer". `check_first` is the
+    figure the ungated sentence names instead — the one number the ranking
+    would move on — and None when no row leads. Both are carried rather than
+    re-derived by the formatter so that flipping one `sources:` entry changes
+    them, and a test can say so (T14).
 
     `unattributed_channel_ids` are the rows, in row order, at least one of
     whose widths no `sources:` entry claims. They are NOT "the assistant chose":
@@ -432,9 +480,20 @@ class SpreadRegister:
     rows: Tuple[SpreadRow, ...]
     interaction: Interaction
     leading_channel_id: Optional[int]
+    unresolved_top_channel_id: Optional[int]
     superlative_licensed: bool
     check_first: Optional[Width]
     unattributed_channel_ids: Tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        _require_one_top("SpreadRegister", self.leading_channel_id,
+                         self.unresolved_top_channel_id)
+        if self.leading_channel_id is None and (
+                self.superlative_licensed or self.check_first is not None):
+            raise ValueError(
+                "SpreadRegister licenses a superlative or names a figure to check "
+                "first with no leading row: both are claims about the row that "
+                "leads, and when the top row did not resolve no row leads")
 
 
 # The spread register's OWN refusals, which suppress it and leave the level and
@@ -518,9 +577,9 @@ class LevelRow:
 class LevelRegister:
     """What the simulated futures price that the central case does not.
 
-    `paths` is this register's OWN sample (`m = min(num_sims, 2000)` by
-    default): a paired mean needs far fewer paths than a variance ratio, so it
-    is generally not the spread register's count.
+    `paths` is this register's OWN sample (`m = min(N, LEVEL_PATHS)`, N the
+    decomposition's path count): a paired mean needs far fewer paths than a
+    variance ratio, so it is generally not the spread register's count.
 
     `futures_margin` and `prob_best_base` are `f(A[:m])`'s own mean and sign
     rate, computed FROM `A` because the freeze comparisons are paired against
@@ -568,11 +627,23 @@ class LevelRegister:
     carried rather than summed by the formatter precisely because summing it
     would mean reaching into `provisional_delta`.
 
-    `leading_channel_id` is the resolved row with the largest |Δ| — the channel
-    the closing sentence names. None when no row resolves. WHICH sentence is
-    chosen is `verdict.state`'s business, never the sign of anything (§7 rule
-    2): a formatter with one branch prints a disagreement explanation on an
+    THE CLOSING'S CHANNEL IS DECIDED HERE, by the rule `SpreadRegister` uses:
+    the top row by |point shift| over EVERY row, resolved or not, is exactly
+    one of `leading_channel_id` (it resolved: the channel the closing sentence
+    names as the largest shift) or `unresolved_top_channel_id` (it did not:
+    the closing names it with its provisional figure and says it did not
+    resolve). A smaller resolved row is never promoted as the largest — on
+    examples/basic_config.yaml the house's costs resolve at +$252 while the
+    condo's costs move the margin by +$390 ± $273 and take P(house cheapest)
+    out of the tie band, and a closing that called the house's costs "the
+    largest single shift" was false. WHICH sentence is chosen is
+    `verdict.state`'s business, never the sign of anything (§7 rule 2): a
+    formatter with one branch prints a disagreement explanation on an
     agreement.
+
+    `paths` never exceeds `LEVEL_PATHS`: a larger run does not resolve a
+    row here once the register is at that count, so a sentence telling the
+    reader to raise the path count is true only below it.
     """
 
     rows: Tuple[LevelRow, ...]
@@ -584,6 +655,11 @@ class LevelRegister:
     all_frozen_deviation: float
     accounted_for: float
     leading_channel_id: Optional[int]
+    unresolved_top_channel_id: Optional[int]
+
+    def __post_init__(self) -> None:
+        _require_one_top("LevelRegister", self.leading_channel_id,
+                         self.unresolved_top_channel_id)
 
 
 # ---------------------------------------------------------------------------
@@ -595,12 +671,29 @@ class LevelRegister:
 # fixture) that its enumerating sentence omits.
 BOUNDARY_FIELDS: Tuple[str, ...] = ("best", "runner_up", "mc_best", "decisive")
 
-# §3.5's three kinds. `stated_path`: stated by the user, never drawn (the
-# renewal ladder) — its row carries numbers from §6, never a dash.
+# §3.5's three kinds. `stated_path`: stated in the config, whoever typed it,
+# and never drawn (the renewal ladder) — its row carries numbers from §6, never
+# a dash.
 # `no_pv_reach`: draws exist and reach no present value (the income block).
 # `dead_draw`: a CHANNEL that draws every year and reaches no cash flow (the
 # real-mode inflation trap), detected from the spec and costing no evaluation.
 STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "no_pv_reach", "dead_draw")
+
+
+# The sides of a crossing on which the scan can see the verdict change AGAIN.
+FURTHER_CHANGE_SIDES: Tuple[str, ...] = ("above", "below")
+
+
+def _require_side(kind: str, verdict_field: str, further_changes: object) -> None:
+    """`further_changes` is None or one of `FURTHER_CHANGE_SIDES` — the side of
+    the crossing, away from the region where the verdict says what this run
+    says, on which the searched range holds further changes this row does not
+    report. Anything else would print as a side the reader cannot place."""
+    if further_changes is not None and further_changes not in FURTHER_CHANGE_SIDES:
+        raise ValueError(
+            f"{kind}.further_changes for {verdict_field!r} is {further_changes!r}: "
+            f"it is None or one of {FURTHER_CHANGE_SIDES}, the side of the crossing "
+            f"on which the searched range changes again")
 
 
 def _require_words(kind: str, verdict_field: str, was: object, becomes: object) -> None:
@@ -626,7 +719,11 @@ class AxisReference:
     """A cited point on a reversal axis, to place the solved rate against.
 
     `note` carries what the citation does NOT license — a posted rate is a list
-    price bracketing a guess from above, never a ceiling on a 2031 renewal.
+    price bracketing a guess from above; on a renewal axis, and only there, it
+    is also never a ceiling on a renewal years from now. The renewal clause is
+    keyed on the AXIS: a `mortgage_rate` row moves a rate the run prices from
+    year 0, and on a run with no renewal the clause named a renewal the run
+    does not have.
     """
 
     label: str
@@ -640,7 +737,7 @@ class AxisReference:
 class SolvedBoundary:
     """A crossing solved on the DETERMINISTIC verdict — `best`, `runner_up`.
 
-    A property of the user's config, not of the sample: measured identical to
+    A property of the config, not of the sample: measured identical to
     SEVEN DIGITS at seeds 42, 7, 1234, 99 and 2026 (§0.1 item 24). It carries
     no path count and no seed because its value depends on neither, and it
     prints at four decimals (`1.6052%`) for the same reason.
@@ -662,16 +759,28 @@ class SolvedBoundary:
     says just above — whichever side of the crossing this run's own value sits
     on. So `--sweep` at a point either side prints `was` below and `becomes`
     above. Both are words (`_require_words`), never a raw value.
+
+    `further_changes` — on every boundary kind — says whether the searched
+    range holds MORE changes of this field beyond the crossing, on the side
+    away from the region where the verdict says what this run says, that no
+    row reports: "above", "below", or None when there are none. A row reports
+    the NEAREST edge of that region (§6); on examples/mortgage_house_vs_rent.
+    yaml `decisive` changes from decisive for house to not decisive at 6.74%
+    and again, into decisive for rent, near 6.84%, and a row printing only the
+    first let a reader take "not decisive" to hold to the top of the bracket.
+    It has NO DEFAULT: "nothing further" is a claim the producer states.
     """
 
     verdict_field: str
     value: float
     was: str
     becomes: str
+    further_changes: Optional[str]
     confirming_probabilities: Tuple[Tuple[str, float], ...]
 
     def __post_init__(self) -> None:
         _require_words("SolvedBoundary", self.verdict_field, self.was, self.becomes)
+        _require_side("SolvedBoundary", self.verdict_field, self.further_changes)
 
 
 @dataclass(frozen=True)
@@ -697,7 +806,8 @@ class SampledBoundary:
     splits WITHIN ONE KEY, one level below where the gate operates. A licensed
     key carries both kinds at once.
 
-    `was` / `becomes` read the key upward, as on `SolvedBoundary`. For
+    `was` / `becomes` read the key upward, and `further_changes` says what
+    it says, as on `SolvedBoundary`. For
     `decisive` they are one of "decisive for <option>" or "not decisive" —
     three states on a two-option axis, never a boolean: a boolean merges
     decisive for one option with decisive for the other, and a crossing from
@@ -709,6 +819,7 @@ class SampledBoundary:
     value: float
     was: str
     becomes: str
+    further_changes: Optional[str]
     curve_probabilities: Tuple[Tuple[str, float], ...]
     confirming_probabilities: Tuple[Tuple[str, float], ...]
     curve_paths: int
@@ -716,6 +827,7 @@ class SampledBoundary:
 
     def __post_init__(self) -> None:
         _require_words("SampledBoundary", self.verdict_field, self.was, self.becomes)
+        _require_side("SampledBoundary", self.verdict_field, self.further_changes)
 
 
 @dataclass(frozen=True)
@@ -801,7 +913,8 @@ class EstimatedBoundary:
     Deliberately neither of §6's two boundary kinds: there is no confirming
     re-simulation to compare against, because re-simulation is how the value
     was found, and no curve was bisected. The interval is the figure; the point
-    is where inside it the estimate landed.
+    is where inside it the estimate landed. `was`, `becomes` and
+    `further_changes` read as on `SolvedBoundary`.
     """
 
     verdict_field: str
@@ -809,10 +922,12 @@ class EstimatedBoundary:
     value_ci: Interval
     was: str
     becomes: str
+    further_changes: Optional[str]
     resimulation_paths: int
 
     def __post_init__(self) -> None:
         _require_words("EstimatedBoundary", self.verdict_field, self.was, self.becomes)
+        _require_side("EstimatedBoundary", self.verdict_field, self.further_changes)
 
 
 @dataclass(frozen=True)

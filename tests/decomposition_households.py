@@ -218,6 +218,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
             first_order_sum=1.164, first_order_sum_ci=Interval(1.042, 1.310),
         ),
         leading_channel_id=6,
+        unresolved_top_channel_id=None,
         superlative_licensed=False,
         check_first=_w("simulation.investment_return_vol", "10%", "assistant"),
         unattributed_channel_ids=(),
@@ -252,6 +253,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         all_frozen_path_spread=0.0, all_frozen_deviation=5.8e-11,
         accounted_for=98113.0,
         leading_channel_id=5,
+        unresolved_top_channel_id=None,
     )
     # The two reversal rows are the fixture's as `hde tests/fixtures/
     # uncertainty_surface.yaml --decompose` prints them at seed 42: the solved
@@ -262,16 +264,21 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
     # (`decomposition.SolvedBoundary`): `was` holds below the value, `becomes`
     # above it — so where this run's own value sits above a crossing, as the
     # stated 4.35%–5.00% sit above all of these, `becomes` is the run's state.
-    references = (
-        AxisReference(label="contracted 5y uninsured", value=0.0435, formatted="4.35%",
-                      anchor="mortgage_rate.contracted_5y_uninsured"),
-        AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
-                      anchor="mortgage_rate.contracted_5y_insured"),
-        AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
-                      anchor="mortgage_rate.posted_5y",
-                      note="a list price, to bracket a guess from above — never a "
-                           "ceiling on a renewal years from now"),
-    )
+    # The posted rate's renewal clause is keyed on the AXIS: it prints on the
+    # renewal row and not on the contract-rate row.
+    def references(posted_note):
+        return (
+            AxisReference(label="contracted 5y uninsured", value=0.0435,
+                          formatted="4.35%",
+                          anchor="mortgage_rate.contracted_5y_uninsured"),
+            AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
+                          anchor="mortgage_rate.contracted_5y_insured"),
+            AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
+                          anchor="mortgage_rate.posted_5y", note=posted_note),
+        )
+    renewal_references = references("a list price, to bracket a guess from above — "
+                                     "never a ceiling on a renewal years from now")
+    contract_references = references("a list price, to bracket a guess from above")
     no_decisive_crossing = RefusedBoundary(
         verdict_field="decisive",
         reason="decisive says 'not decisive' at every one of 65 points across "
@@ -296,12 +303,13 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         # a sample and carries the sample that produced it.
         boundaries=(
             SolvedBoundary(verdict_field="best", value=0.0160522601, was="house",
-                           becomes="rent",
+                           becomes="rent", further_changes=None,
                            confirming_probabilities=(("condo", 0.1915),
                                                      ("house", 0.5185),
                                                      ("rent", 0.2900))),
             SampledBoundary(verdict_field="mc_best", value=0.0271640308, was="house",
-                            becomes="condo", curve_paths=2000, seed=42,
+                            becomes="condo", further_changes=None,
+                            curve_paths=2000, seed=42,
                             curve_probabilities=(("condo", 0.3455),
                                                  ("house", 0.3455),
                                                  ("rent", 0.3090)),
@@ -309,13 +317,13 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                                       ("house", 0.3455),
                                                       ("rent", 0.3090))),
             SolvedBoundary(verdict_field="runner_up", value=0.0295494356, was="house",
-                           becomes="condo",
+                           becomes="condo", further_changes="below",
                            confirming_probabilities=(("condo", 0.3800),
                                                      ("house", 0.3100),
                                                      ("rent", 0.3100))),
         ),
         refused_boundaries=(no_decisive_crossing,),
-        references=references,
+        references=renewal_references,
         path_note="the config states house.mortgage_renewal_rates as a path (4.60%, "
                   "5.00%, 4.80%, 4.40%); every grid point replaces the whole path with "
                   "ONE figure applied at each renewal, so the threshold reported is a "
@@ -336,12 +344,13 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         max_path_deviation_over_sd=2.0e-15,
         boundaries=(
             SolvedBoundary(verdict_field="runner_up", value=0.0191713, was="house",
-                           becomes="condo",
+                           becomes="condo", further_changes=None,
                            confirming_probabilities=(("condo", 0.3800),
                                                      ("house", 0.3100),
                                                      ("rent", 0.3100))),
             SampledBoundary(verdict_field="mc_best", value=0.0159990, was="house",
-                            becomes="condo", curve_paths=2000, seed=42,
+                            becomes="condo", further_changes=None,
+                            curve_paths=2000, seed=42,
                             curve_probabilities=(("condo", 0.3455),
                                                  ("house", 0.3455),
                                                  ("rent", 0.3090)),
@@ -356,7 +365,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                    "searches"),
             no_decisive_crossing,
         ),
-        references=references,
+        references=contract_references,
     )
     reversal = ReversalRegister(
         exact=(renewal, contract_rate),
@@ -364,7 +373,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         structural_zeros=(
             StructuralZero(
                 kind="stated_path",
-                label="your renewal rate",
+                label="the renewal rate",
                 keys=("house.mortgage_renewal_rates",),
                 reason="house.mortgage_renewal_rates is a path this config states, not "
                        "a distribution — the engine anchors no forward rate and draws "
@@ -375,7 +384,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
             ),
             StructuralZero(
                 kind="stated_path",
-                label="your contract rate",
+                label="the contract rate",
                 keys=("house.mortgage_rate",),
                 reason="house.mortgage_rate is one rate this config states, held for "
                        "the opening term — no draw in this engine touches it, so "
@@ -389,7 +398,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 label="your income",
                 keys=("income.pay_drop_events",),
                 reason="income.pay_drop_events moves the affordability report, not "
-                       "either option's present value, so it cannot move this margin",
+                       "any option's present value, so it cannot move this margin",
             ),
         ),
     )
@@ -489,6 +498,7 @@ def seven_channel_other_household() -> Decomposition:
             residual=0.12, residual_ci=Interval(0.05, 0.19),
         ),
         leading_channel_id=1,
+        unresolved_top_channel_id=None,
         superlative_licensed=True,
         check_first=None,
         unattributed_channel_ids=(),
@@ -520,6 +530,7 @@ def seven_channel_other_household() -> Decomposition:
         all_frozen_path_spread=0.0, all_frozen_deviation=7.3e-11,
         accounted_for=-39480.0,
         leading_channel_id=1,
+        unresolved_top_channel_id=None,
     )
     reversal = ReversalRegister(
         exact=(
@@ -540,6 +551,7 @@ def seven_channel_other_household() -> Decomposition:
                 boundaries=(
                     SampledBoundary(verdict_field="mc_best", value=0.03841262,
                                     was="condo", becomes="rent",
+                                    further_changes=None,
                                     curve_paths=6000, seed=42,
                                     curve_probabilities=(("condo", 0.4510),
                                                          ("rent", 0.4505)),
@@ -547,6 +559,7 @@ def seven_channel_other_household() -> Decomposition:
                                                               ("rent", 0.4505))),
                     SampledBoundary(verdict_field="decisive", value=0.03120411,
                                     was="decisive for condo", becomes="not decisive",
+                                    further_changes=None,
                                     curve_paths=6000, seed=42,
                                     curve_probabilities=(("condo", 0.6520),
                                                          ("rent", 0.2610)),
@@ -554,6 +567,7 @@ def seven_channel_other_household() -> Decomposition:
                                                               ("rent", 0.2610))),
                     SolvedBoundary(verdict_field="runner_up", value=0.05004182,
                                    was="rent", becomes="house",
+                                   further_changes=None,
                                    confirming_probabilities=(("condo", 0.5910),
                                                              ("rent", 0.3020))),
                 ),
@@ -563,7 +577,7 @@ def seven_channel_other_household() -> Decomposition:
                                            "bracket"),
                 ),
                 references=(
-                    AxisReference(label="your contract", value=0.0401,
+                    AxisReference(label="contracted 5y insured", value=0.0401,
                                   formatted="4.01%",
                                   anchor="mortgage_rate.contracted_5y_insured"),
                 ),
@@ -595,7 +609,8 @@ def seven_channel_other_household() -> Decomposition:
                 boundaries=(
                     EstimatedBoundary(verdict_field="best", value=0.0442,
                                       value_ci=Interval(0.0419, 0.0468), was="condo",
-                                      becomes="house", resimulation_paths=3000),
+                                      becomes="house", further_changes=None,
+                                      resimulation_paths=3000),
                 ),
                 refused_boundaries=(),
                 references=(),
@@ -659,6 +674,7 @@ def two_channel_option_state() -> Decomposition:
             residual=0.03, residual_ci=Interval(0.01, 0.06),
         ),
         leading_channel_id=3,
+        unresolved_top_channel_id=None,
         superlative_licensed=True,
         check_first=None,
         unattributed_channel_ids=(),
@@ -677,6 +693,7 @@ def two_channel_option_state() -> Decomposition:
         all_frozen_path_spread=0.0, all_frozen_deviation=3.1e-11,
         accounted_for=6830.0,
         leading_channel_id=3,
+        unresolved_top_channel_id=None,
     )
     return Decomposition(
         paths=4000,

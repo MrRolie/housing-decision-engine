@@ -199,7 +199,7 @@ nothing to it. `code` is one of:
 | `single_option` | fewer than two options priced: no margin exists |
 | `one_channel` | exactly one channel reaches a cash flow; the refusal then also carries `channel_id`, `channel` and `label` naming it, and no figures |
 | `no_spread` | the margin is identical on every future, or no channel reaches a cash flow at all |
-| `budget` | the decomposition would price more than 250,000 model evaluations; the reason names the figure and the largest `--decompose N` that fits under the ceiling |
+| `budget` | the spread and level registers could price more than 250,000 model evaluations — `N × (k + 2)` for the spread register plus `m × (k + 1)` for the level register (one freeze per live channel and the all-frozen run), `k` the live channels and `m = min(N, 2,000)`; a run on which every future names one winner prices less, which the gate cannot know before it prices anything, so the reason says "up to". The reason names the figure and the largest `--decompose N` whose work stays within the ceiling. The reversal register's own evaluations run at the config's `num_sims` and are not in this count |
 | `freeze_leak` | with every channel frozen the paths still price different margins: a draw escaped the freeze mask, so no figure of the block can be vouched for and none is emitted |
 | `identity_failed` | with every channel frozen the paths agree, but the margin they price is further from `verdict.margin_pv` than 8 units in the last place of the largest option's present-value terms added by size: the freeze does not reproduce the central case, and both registers rest on it, so none is emitted |
 
@@ -208,8 +208,9 @@ nothing to it. `code` is one of:
 spread without the level register beside it. The verdict is not copied in: the
 document's top-level `verdict` is its one home.
 
-- `spread` — `rows`, `interaction`, `leading_channel_id`, `superlative_licensed`,
-  `check_first` and `unattributed_channel_ids`; OR, when every future names the same winner, a refusal in
+- `spread` — `rows`, `interaction`, `leading_channel_id`,
+  `unresolved_top_channel_id`, `superlative_licensed`, `check_first` and
+  `unattributed_channel_ids`; OR, when every future names the same winner, a refusal in
   the same slot with code `no_sign_variation` —
   `{"refusal": {"code": "no_sign_variation", "reason"}}` — and no `rows` key.
   The `level` and `reversal` registers are still present: nothing sits across
@@ -232,10 +233,13 @@ document's top-level `verdict` is its one home.
   - `widths[]` and `check_first`: `key`, `formatted`, `source` (`user`,
     `assistant`, `anchor` or `unattributed`), `anchor` and `note` (for the
     economy row, which option volatility a correlation pulls and by how much).
-    `leading_channel_id`, `superlative_licensed` and `check_first` are read
-    over the RESOLVED rows only; when an unresolved row carries the largest
-    point share, the text block names that row as not resolved and names no
-    channel as leading, no superlative and no figure to check first.
+    The TOP ROW is the largest first-order POINT estimate over every row,
+    resolved or not, and it is exactly one of `leading_channel_id` (it
+    resolved) or `unresolved_top_channel_id` (it did not) — the other is
+    `null`. With an unresolved top, no channel leads: `superlative_licensed`
+    is `false` and `check_first` is `null`, and the text block names that row
+    with its provisional figure as not resolved. A smaller resolved row is
+    never promoted to leader. The text block prints from these same fields.
   - `unattributed_channel_ids`: the live channels, in row order, with at least
     one width whose `source` is `unattributed` — typed in the config with no
     `sources:` entry claiming it. That is not the assistant's class: an
@@ -247,7 +251,14 @@ document's top-level `verdict` is its one home.
     `residual_ci`, `unstated_first_order_sum` and `unstated_first_order_sum_ci`.
 - `level` — `rows`, `paths`, `prob_best_base`, `futures_margin`,
   `all_frozen_margin`, `all_frozen_path_spread`, `all_frozen_deviation`,
-  `accounted_for` and `leading_channel_id`. Each row: `channel_id`, `channel`,
+  `accounted_for`, `leading_channel_id` and `unresolved_top_channel_id`: the
+  top row by the size of its POINT shift over every row is exactly one of the
+  two, by the spread register's rule — a resolved top is the channel the
+  closing sentence names as the largest shift, an unresolved one is named with
+  its provisional figure as not resolved, and a smaller resolved row is never
+  called the largest. `paths` is at most 2,000 whatever the decomposition's
+  own path count, so a larger run does not resolve a level row once the
+  register is there. Each row: `channel_id`, `channel`,
   `label`, `resolved`, `se`, `prob_best_frozen`, and `delta` (`resolved: true`,
   the shift exceeds 2·SE) or `provisional_delta` (`resolved: false`). The gap is
   not stored: it is `all_frozen_margin − futures_margin`.
@@ -268,17 +279,22 @@ document's top-level `verdict` is its one home.
     `references` and `path_note`.
   - An exact row's `boundaries[]` hold two kinds of crossing with no
     discriminator key: the FIELD SET is the discriminator. A solved crossing
-    carries `verdict_field`, `value`, `was`, `becomes` and
+    carries `verdict_field`, `value`, `was`, `becomes`, `further_changes` and
     `confirming_probabilities`; a sampled crossing carries the same plus
     `curve_probabilities`, `curve_paths` and `seed`. `verdict_field` is one of
     `best`, `runner_up`, `mc_best` or `decisive`; `was` and `becomes` are
     strings read UPWARD along the key — `was` is what the field says just
     below `value`, `becomes` just above — holding an option name, or for
     `decisive` one of `decisive for <option>` or `not decisive`; each
-    `*_probabilities` is a list of `[option, probability]` pairs.
+    `*_probabilities` is a list of `[option, probability]` pairs. A row
+    reports the NEAREST edge of the region in which the field says what this
+    run says; `further_changes` is `"above"` or `"below"` when the searched
+    range changes that field AGAIN past the crossing, on that side, where no
+    row reports it — `becomes` then does not hold to the end of the bracket —
+    and `null` when it does not.
   - `estimated[]`: the exact row's keys without `probe_paths`; its
-    `boundaries[]` carry `verdict_field`, `value`, `value_ci`, `was`, `becomes`
-    and `resimulation_paths`.
+    `boundaries[]` carry `verdict_field`, `value`, `value_ci`, `was`, `becomes`,
+    `further_changes` and `resimulation_paths`.
   - `refused_boundaries[]`: `verdict_field` and `reason` — a crossing kind that
     exists and is not printed, named rather than dropped. `references[]`:
     `label`, `value`, `formatted`, `anchor` and `note`.
@@ -294,16 +310,18 @@ sample, and must never be quoted as a property of the user's config.
 - Sample-dependent: `mean_margin` and `sd_margin`; every share, `flip` and
   interval in `spread`, and `first_order_sum` with its residual (the interval
   bounds also move with the bootstrap's resample count, so they do not
-  reproduce a published figure to the digit); both `leading_channel_id`s, and
-  with them `superlative_licensed` and `check_first`; every level row and
+  reproduce a published figure to the digit); both `leading_channel_id`s and
+  both `unresolved_top_channel_id`s, and with them `superlative_licensed` and
+  `check_first`; every level row and
   `prob_best_base`, `futures_margin` and `accounted_for`; a SAMPLED crossing's
-  `value` — it names its own `curve_paths` and `seed`, and the text prints it at
-  two decimals with a clause saying it moves with the seed; every
+  `value` and `further_changes` — it names its own `curve_paths` and `seed`, and
+  the text prints it at two decimals with a clause saying it moves with the
+  seed; every
   `confirming_probabilities` and `curve_probabilities`; an estimated crossing's
   `value` and `value_ci`; `max_path_deviation_over_sd`, measured on `probe_paths`
   paths.
 - Properties of the config: `live_channel_ids`; the widths and their source
-  classes; a SOLVED crossing's `value` (it reads no path — measured identical to
+  classes; a SOLVED crossing's `value` and `further_changes` (it reads no path — measured identical to
   seven digits across seeds, and printed at four decimals); the brackets and
   `references`; the structural zeros; and `all_frozen_margin`, the central case
   reached with every channel frozen.

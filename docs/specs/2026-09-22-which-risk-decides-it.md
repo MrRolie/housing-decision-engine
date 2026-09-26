@@ -335,6 +335,38 @@ seven-channel households: 0.49–0.51 with a 20-character run floor, against the
 0.983 — and of the invariant half, 0.25 is fixed vocabulary (headings, column headers, channel
 labels, key names, citations) which is a floor, not fat.
 
+**27. Five places where this document's own wording, applied as written, printed something that
+is not so — each fixed for its whole category, and each superseding the text it names.**
+
+- **The top row of BOTH registers is decided once, by the engine.** The top row is the largest
+  POINT estimate over every row, resolved or not; it leads only if it resolved, and otherwise it
+  is named as not resolved and nothing leads (`unresolved_top_channel_id` on both registers).
+  Read over resolved rows only, the level register's tie closing on `examples/basic_config.yaml`
+  called the house's costs, at +$252, "the largest single shift" beside the condo's costs at
+  +$390 ± $273; and the JSON named a leader the text said did not exist. §5 mechanism 3 and
+  §7's closings read this rule.
+- **The level register's route is not the spread register's.** It prices at most 2,000 futures
+  whatever the run's count (§9), so "raise simulation.num_sims" is true of an unresolved level
+  row only below that count; at it, the closing says a larger run does not resolve the row. And
+  the spread register's route names both ways in, `simulation.num_sims` or `--decompose=N`,
+  because raising the one the run did not use changes nothing.
+- **§9's cost model and §8 refusal 6's figure omit the all-frozen run §3.4 prices.** One formula
+  now serves the gate and the count, `N·(k+2) + m·(k+1)`: the gate measured the smaller figure,
+  so the N it named as the largest that fits priced above the ceiling (26,222 at seven
+  channels, 251,998 evaluations). A run on which every future names one winner prices less than
+  the gate can know in advance, so the refusal says "up to".
+- **§6 reports the nearest edge of the region the run's answer holds in**, and a reader took the
+  edge's new state to hold to the end of the bracket (`decisive` on
+  `examples/mortgage_house_vs_rent.yaml` changes again, into decisive for rent, near 6.84%).
+  Every boundary carries `further_changes`, the side on which the searched range changes that
+  field again where no row reports it.
+- **A clause true only of a run that prices a renewal printed on runs with none.** The contract
+  rate's structural zero said "held for the opening term" on `examples/mortgage_house_vs_rent.
+  yaml`, whose own warning says the rate is held for the whole 25-year amortization; it is now
+  keyed on `deterministic.renewals_priced_inside`. The posted rate's "never a ceiling on a
+  renewal years from now" is keyed on the renewal axis, which is admitted only when a renewal is
+  priced.
+
 ---
 
 ## 1. Why

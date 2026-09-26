@@ -27,7 +27,7 @@ from .decomposition import (BOUNDARY_FIELDS, CHANNELS, AxisReference,
                             EstimatedReversal, ExactReversal, RefusedBoundary,
                             ReversalRegister, SampledBoundary, SolvedBoundary,
                             StructuralZero)
-from .deterministic import compute_deterministic
+from .deterministic import compute_deterministic, renewals_priced_inside
 from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, ComparisonSpec,
                      MonteCarloOptionResult, Verdict, compute_verdict)
 # `_summarize_array` is the reversal register's, on purpose: the free curve has
@@ -1202,13 +1202,13 @@ def format_break_even(result: Dict[str, Any]) -> str:
 # no shared base class and no shared field set, so a formatter cannot print the
 # sampled figure in the typography of the exact one.
 #
-# Why the register exists at all: `mortgage_renewal_rates` is a path the user
+# Why the register exists at all: `mortgage_renewal_rates` is a path the config
 # states, not a distribution, so its variance is zero BY CONSTRUCTION and any
 # variance table prints it as a dash. A reader sees six rows carrying numbers
 # and one carrying dashes and concludes renewal was weighed and found
 # irrelevant. Measured on the fixture the opposite is true: the verdict's own
-# winner flips from rent to the house at a flat renewal rate of 1.6052%, inside
-# the bracket the engine already uses for a contract rate.
+# winner is the house below a flat renewal rate of 1.6052% and rent above it,
+# inside the bracket the engine already uses for a contract rate.
 # ---------------------------------------------------------------------------
 
 # The financing-leg keys, per owned option. Candidates are inputs the config
@@ -1365,6 +1365,21 @@ def _shift_deviation_over_sd(before: Any, after: Any) -> float:
     return worst / sd if sd > 0 else (0.0 if worst == 0.0 else math.inf)
 
 
+def _over_sd_words(deviation: float, option: str) -> str:
+    """Clause (b)'s figure as a reader is shown it. A finite figure prints as a
+    multiple of the option's s.d. against the tolerance; `inf` is a shift that
+    varies over paths with no spread of their own, and NaN a figure that could
+    not be measured — neither is a multiple of anything, and "worst inf of its
+    own sd" printed one as though it were."""
+    if math.isfinite(deviation):
+        return (f"worst {deviation:.2e} of its own s.d., against "
+                f"{REVERSAL_GATE_TOLERANCE:.0e}")
+    if math.isinf(deviation):
+        return (f"{option}'s own paths do not differ from each other, so how far the "
+                f"shift varies could not be measured against their s.d.")
+    return "how far the shift varies across paths could not be measured"
+
+
 def reversal_gate(
     raw: Dict[str, Any], key: str, probe: float,
     *, paths: int = 200,
@@ -1442,9 +1457,9 @@ def reversal_gate(
         record["why"] = f"{option} is not priced in this run, so its shift cannot be measured"
     elif not deviation <= REVERSAL_GATE_TOLERANCE:
         record["why"] = (
-            f"moving {key} shifts {option} by a DIFFERENT amount on different paths (worst "
-            f"{deviation:.2e} of its own sd, against {REVERSAL_GATE_TOLERANCE:.0e}) — the "
-            f"futures at another value have to be re-simulated, not shifted")
+            f"moving {key} shifts {option} by a DIFFERENT amount on different paths "
+            f"({_over_sd_words(deviation, option)}) — the futures at another value have "
+            f"to be re-simulated, not shifted")
     else:
         record["licensed"] = True
     return record
@@ -1583,6 +1598,16 @@ def _region_boundaries(
     `direction` still says which side of the run's region the edge bounds.
     `([], record)` comes back when the run's own answer appears nowhere on the
     axis — reported, never dropped.
+
+    ONLY THE NEAREST EDGE IS AN EDGE HERE (§6), so `further` says what lies
+    past it: the side ("above" or "below") on which the searched range changes
+    AGAIN before this run's answer returns, or None. A change back INTO the
+    run's answer is the next region's own edge and is reported; a change
+    between two other states is reported nowhere, and a reader handed only
+    the nearest edge takes its `becomes` to hold to the end of the bracket.
+    On examples/mortgage_house_vs_rent.yaml `decisive` changes from decisive
+    for house to not decisive at 6.74% and into decisive for rent near 6.84%:
+    only the first is an edge of the run's region, so it carries "above".
     """
     runs = _matching_runs(region_values, says_now)
     if not runs:
@@ -1594,21 +1619,32 @@ def _region_boundaries(
         }
     if len(runs) == 1 and len(runs[0]) == len(region_values):
         return [], None                       # unchanged across the whole bracket
+    def changes_again(start: int, stop: int) -> bool:
+        """Whether `region_values[start:stop]` — the stretch between this
+        run's edge and the next region of the run's own answer — holds more
+        than one state, i.e. a change no edge reports."""
+        stretch = region_values[start:stop]
+        return any(a != b for a, b in zip(stretch, stretch[1:]))
+
     out: List[Dict[str, Any]] = []
-    for run in runs:
+    for index, run in enumerate(runs):
         first, last = run[0], run[-1]
         low = edge_at(first, -1) if first > 0 else None
         high = edge_at(last, +1) if last < len(region_values) - 1 else None
         holds = [low if low is not None else region_span[first][0],
                  high if high is not None else region_span[last][1]]
         if low is not None:
+            floor = runs[index - 1][-1] + 1 if index > 0 else 0
             out.append({"attribute": field, "was": region_values[first - 1],
                         "becomes": says_now, "value": low, "direction": "below",
-                        "holds": holds})
+                        "holds": holds,
+                        "further": "below" if changes_again(floor, first) else None})
         if high is not None:
+            ceiling = runs[index + 1][0] if index + 1 < len(runs) else len(region_values)
             out.append({"attribute": field, "was": says_now,
                         "becomes": region_values[last + 1], "value": high,
-                        "direction": "above", "holds": holds})
+                        "direction": "above", "holds": holds,
+                        "further": "above" if changes_again(last + 1, ceiling) else None})
     return out, None
 
 
@@ -1838,7 +1874,8 @@ def _typed_boundary(
     # a boolean decisiveness into "True" and let it print, so the type's own
     # check is the one that has to see the raw value.
     common = {"verdict_field": field, "value": entry["value"],
-              "was": entry["was"], "becomes": entry["becomes"]}
+              "was": entry["was"], "becomes": entry["becomes"],
+              "further_changes": entry["further"]}
     if field in _DETERMINISTIC_FIELDS:
         return SolvedBoundary(
             **common,
@@ -1859,16 +1896,40 @@ def _typed_boundary(
 
 
 # The label each candidate leaf prints under "NOT DRAWN IN THIS RUN" (§7). Two
-# entries rather than a derivation because the renewal row's wording is the
-# spec's own and the two rows are not the same claim: one is a schedule the
-# user invented, the other a contract they signed.
+# entries rather than a derivation because the two rows are not the same claim:
+# one is a schedule of future rates, the other the rate on the mortgage as
+# quoted. NEUTRAL on whose figure it is — the row's next line says that from
+# `stated_source`, and "your renewal rate" headed a row whose next line said
+# the assistant typed it.
 _STATED_PATH_LABELS: Dict[str, str] = {
-    "mortgage_renewal_rates": "your renewal rate",
-    "mortgage_rate": "your contract rate",
+    "mortgage_renewal_rates": "the renewal rate",
+    "mortgage_rate": "the contract rate",
 }
 
 
-def _stated_path_zero(raw: Dict[str, Any], key: str, option: str) -> StructuralZero:
+def _rate_held_for(spec: ComparisonSpec, option: str) -> str:
+    """How long this run holds `<option>.mortgage_rate`, in words — keyed on
+    `deterministic.renewals_priced_inside`, the one answer to "did the ladder
+    reach this run", and never on whether renewal keys are merely declared.
+
+    "Held for the opening term" is true only when the run prices a renewal.
+    With none, the rate is held for the whole amortization — the same run's
+    own warning says so — or, when a ladder is stated but its first renewal
+    falls past the horizon, for every year this run prices."""
+    params = getattr(spec, option)
+    horizon = int(spec.simulation.years)
+    if renewals_priced_inside(params, horizon) > 0:
+        return "held for the opening term"
+    renewal_years = getattr(params, "mortgage_renewal_years", None)
+    if renewal_years is not None and renewal_years < params.mortgage_term_years:
+        return (f"held for every year this run prices — the stated ladder's first "
+                f"renewal, in year {renewal_years + 1}, falls past its {horizon}-year "
+                f"horizon")
+    return f"held for the whole {params.mortgage_term_years}-year amortization"
+
+
+def _stated_path_zero(raw: Dict[str, Any], spec: ComparisonSpec, key: str,
+                      option: str) -> StructuralZero:
     """The §3.5 `stated_path` row for one financing key: zero spread BY
     CONSTRUCTION, never a dash. `reversal_key` joins it to the reversal row
     that carries its solved rates, which is the whole reason the row is worth
@@ -1879,10 +1940,13 @@ def _stated_path_zero(raw: Dict[str, Any], key: str, option: str) -> StructuralZ
     formatted = (", ".join(_fmt_value(key, float(v)) for v in value)
                  if isinstance(value, list) else _fmt_value(key, float(value)))
     # One reason per kind of key, not the ladder's reason pasted onto both. The
-    # forward-rate clause is TRUE of a renewal path and beside the point on a
-    # rate already contracted for the opening term, and a sentence that is true
-    # of the row it was written for is exactly what a category-general branch
-    # loses first (2026-09-22, the same find as the bracket refusal above).
+    # forward-rate clause is TRUE of a renewal path and beside the point on the
+    # contract rate, and a sentence that is true of the row it was written for
+    # is exactly what a category-general branch loses first (2026-09-22, the
+    # same find as the bracket refusal above). How long the contract rate is
+    # held is `_rate_held_for`'s: "the opening term" printed on a run with no
+    # renewal, beside that run's own warning that the rate is held for the
+    # whole amortization.
     #
     # "This config states", never "you stated": the reason is printed whoever
     # typed the figure, and on the fixture the ladder is assistant-typed and the
@@ -1893,9 +1957,9 @@ def _stated_path_zero(raw: Dict[str, Any], key: str, option: str) -> StructuralZ
                   f"anchors no forward rate and draws none, so {option}'s renewals carry no "
                   f"spread here at all. They carry a solved distance instead")
     else:
-        reason = (f"{key} is one rate this config states, held for the opening term — no "
-                  f"draw in this engine touches it, so {option}'s financing carries no spread "
-                  f"here at all. It carries a solved distance instead")
+        reason = (f"{key} is one rate this config states, {_rate_held_for(spec, option)} "
+                  f"— no draw in this engine touches it, so {option}'s financing carries no "
+                  f"spread here at all. It carries a solved distance instead")
     return StructuralZero(
         kind="stated_path", label=_STATED_PATH_LABELS.get(leaf, key),
         keys=(key,), reason=reason,
@@ -1908,9 +1972,10 @@ def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[S
     because §7 renders them in the same section as the stated-path rows."""
     out: List[StructuralZero] = []
     if spec.income is not None and raw.get("income", {}).get("pay_drop_events"):
+        # "any", not "either": the run may price three options.
         out.append(StructuralZero(
             kind="no_pv_reach", label="your income", keys=("income.pay_drop_events",),
-            reason=("income.pay_drop_events moves the affordability report, not either "
+            reason=("income.pay_drop_events moves the affordability report, not any "
                     "option's present value, so it cannot move this margin")))
     corr_keys = ("corr_inflation_condo", "corr_inflation_house",
                  "corr_inflation_other", "corr_inflation_event_cost")
@@ -1921,11 +1986,12 @@ def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[S
         out.append(StructuralZero(
             kind="dead_draw", label=economy.label,
             keys=("economic.inflation_vol",) + tuple(f"simulation.{n}" for n in corr_keys),
-            reason=("in REAL mode `_effective_growth_rate` discards the inflation factor by "
-                    "construction, and every corr_inflation_* is 0, so this channel draws "
-                    "every year and reaches no cash flow — detected from the config, with no "
-                    "evaluation spent on it. A measured 0.00 here would read as 'inflation "
-                    "does not matter', which is not what is true"),
+            reason=("this run is in real terms, where every growth rate is used as the "
+                    "real rate it is and the inflation draw is not compounded into it, and "
+                    "every corr_inflation_* is 0, so this channel draws every year and "
+                    "reaches no cash flow — detected from the config, with no evaluation "
+                    "spent on it. A measured 0.00 here would read as 'inflation does not "
+                    "matter', which is not what is true"),
             channel_id=economy.id))
     return out
 
@@ -2058,7 +2124,7 @@ def reversal_register(
         exact.append(ExactReversal(
             **common, probe_paths=gate["paths"],
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
-        zeros.append(_stated_path_zero(raw, key, option))
+        zeros.append(_stated_path_zero(raw, spec, key, option))
 
     zeros.extend(_other_structural_zeros(raw, spec))
     return ReversalRegister(exact=tuple(exact), estimated=tuple(estimated),
@@ -2092,9 +2158,20 @@ def _stated_formatted(raw: Dict[str, Any], key: str) -> str:
 
 def _axis_references(key: str) -> Tuple[AxisReference, ...]:
     """The published figures that sit on this axis, so a solved rate has
-    something cited to be read against."""
-    if key.rsplit(".", 1)[-1] not in ("mortgage_rate", "mortgage_renewal_rates"):
+    something cited to be read against.
+
+    The posted rate's note says what it does not license, and its renewal
+    clause is keyed on the AXIS: on a `mortgage_renewal_rates` row — which is
+    admitted only when the run prices a renewal, because otherwise moving it
+    moves nothing — a posted rate is never a ceiling on a renewal years from
+    now. A `mortgage_rate` row moves the rate the run prices from year 0, and
+    there the clause named a renewal that a run with none does not have."""
+    leaf = key.rsplit(".", 1)[-1]
+    if leaf not in ("mortgage_rate", "mortgage_renewal_rates"):
         return ()
+    posted_note = ("a list price, to bracket a guess from above — never a ceiling on "
+                   "a renewal years from now" if leaf == "mortgage_renewal_rates" else
+                   "a list price, to bracket a guess from above")
     out: List[AxisReference] = []
     for name in _RATE_AXIS_ANCHORS:
         anchor = ANCHORS.get(name)
@@ -2103,8 +2180,7 @@ def _axis_references(key: str) -> Tuple[AxisReference, ...]:
         out.append(AxisReference(
             label=name.rsplit(".", 1)[-1].replace("_", " "), value=anchor.value,
             formatted=_fmt_value(key, float(anchor.value)), anchor=name,
-            note=("a list price, to bracket a guess from above — never a ceiling on a "
-                  "renewal years from now" if name.endswith("posted_5y") else None)))
+            note=posted_note if name.endswith("posted_5y") else None))
     return tuple(out)
 
 

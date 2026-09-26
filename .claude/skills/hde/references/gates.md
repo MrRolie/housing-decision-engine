@@ -246,11 +246,12 @@ the 2027 one is not published yet" is a complete, honest answer, and the plan's
 
 `--decompose` prints three registers, and the trap is the first one. On this
 repo's own flagship fixture the spread table's top row is the renter's
-portfolio at 0.88 of the scatter — and pricing that channel the way the central
-case prices it moves the decision by nothing that resolves, while the tenancy,
-at 0.10 of the same scatter, moves it by more than $125,000. Quote the top
-share alone and you have named the channel that matters least, by a factor of
-58.
+portfolio at 0.88 of the scatter — and in the level register, pricing that
+channel the way the central case prices it moves the margin by −$3,805 ± $5,385,
+nothing that resolves, while the tenancy, at 0.10 of the same scatter, moves it
+by +$125,074 ± $1,775. Quote the top share alone and you have named a channel
+whose shift that run cannot tell from zero, and missed the one that moves the
+margin.
 
 So: read the SPREAD table for where the uncertainty is, the LEVEL register for
 which channel the futures price that the best guess does not, and the NOT DRAWN
@@ -266,7 +267,16 @@ typed rather than measured. Say whose, as the block does: an `[unattributed]`
 width is one no `sources:` entry claims, so the run cannot say whose it is — it
 is never "a figure the assistant chose". When the largest share did not resolve,
 the block names no channel as leading and no figure to check first; carry that,
-and never promote the largest RESOLVED row in its place.
+and never promote the largest RESOLVED row in its place. The level register
+works the same way: when its largest shift did not resolve, the closing names
+that channel with its figure as not resolved, and a smaller resolved shift is
+never "the largest". Carry the route it prints as printed — the level register
+prices at most 2,000 futures, so past that a larger run does not resolve it.
+
+A crossing row reports the NEAREST edge of the range where the verdict says
+what this run says. When it adds "further changes lie above it inside the
+searched range", the new state does not hold to the end of the range — say so,
+and use `--sweep` on that key to show the user where it changes next.
 
 Silence and refusal are answers here too. `--decompose` prints nothing at all
 unless it is asked for, and when it is asked for it can still come back with a

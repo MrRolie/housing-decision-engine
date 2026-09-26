@@ -14,9 +14,11 @@ THE BINDING, and why this file has exactly one public function (§5 mechanism 5,
 operator ruling 2026-09-22; §7 formatter rule 1; test T7). The spread table may
 never be emitted without the level register beside it. On this repo's own
 flagship fixture the spread table's top row is the renter's portfolio at 0.88 of
-the scatter, and freezing it moves the decision by -$2,200, while the tenancy at
-0.10 of the scatter moves it by +$127,876 — 58x. A reader handed the spread
-table alone quotes the channel that matters least. `decomposition.py` encodes
+the scatter, and the level register prints its freeze as moving the margin by
+-$3,805 ± $5,385 — nothing that resolves — while the tenancy, at 0.10 of the
+scatter, moves it by +$125,074 ± $1,775. A reader handed the spread table alone
+quotes a channel whose shift this run cannot tell from zero and misses the one
+that moves the margin. `decomposition.py` encodes
 that as far as a dataclass reaches (no spread-only `Decomposition` can be
 constructed); this file completes it, and the completion is STRUCTURAL rather
 than a rule a later editor is trusted to remember:
@@ -63,6 +65,7 @@ from .decomposition import (
     ExactReversal,
     IndistinguishableLevel,
     Interval,
+    LEVEL_PATHS,
     LevelRow,
     RefusedBoundary,
     RefusedSpread,
@@ -102,6 +105,13 @@ _STATED_BY = {
 }
 
 _LABEL_W = 23
+
+# The route to a larger sample, for a SPREAD figure that did not resolve. Both
+# ways in, because the block's path count is `--decompose=N` when that was
+# passed and `simulation.num_sims` otherwise, and raising the one that was not
+# used changes nothing. The level register's route is not this one: it prices
+# at most `LEVEL_PATHS` whatever N is (`_level_route`).
+_MORE_FUTURES = "raise the path count (simulation.num_sims, or N in --decompose=N)"
 
 
 # ---------------------------------------------------------------------------
@@ -291,18 +301,15 @@ def _spread_sort_key(row: SpreadRow) -> Tuple[int, float]:
     return (1, -shares.provisional_alone)
 
 
-def _point_share(row: SpreadRow) -> float:
-    """ONE row's first-order point estimate, whether or not it resolved — the
-    figure the table's largest share is read off, so an unresolved row that
-    carries the most of the spread is never skipped for a smaller resolved
-    one. Dispatches on the type, as every reader of a share here does."""
-    shares = row.shares
-    if isinstance(shares, ResolvedShares):
-        return shares.alone
-    if isinstance(shares, UnresolvedShares):
-        return shares.provisional_alone
-    raise TypeError(f"a spread row carries a {type(shares).__name__}, which is not "
-                    f"a ResolvedShares or UnresolvedShares")
+def _level_route(paths: int) -> str:
+    """What a larger run would do for a level row that did not resolve — true
+    only below the register's cap: it prices `min(N, LEVEL_PATHS)` paths, so
+    past the cap no larger run adds one."""
+    if paths < LEVEL_PATHS:
+        return (f"{_MORE_FUTURES}; this register prices at most {LEVEL_PATHS:,} of "
+                f"them")
+    return (f"this register prices at most {LEVEL_PATHS:,} futures, so a larger run "
+            f"does not resolve it here")
 
 
 def _level_row_line(row: LevelRow) -> str:
@@ -368,7 +375,13 @@ def _confirmed_clause(pairs: Sequence[Tuple[str, float]], lead: str) -> str:
 
 
 def _crossing(boundary, where: str) -> str:
-    """"as it rises past <where>, <field> changes from <was> to <becomes>".
+    """"as it rises past <where>, <field> changes from <was> to <becomes>",
+    and when the searched range changes AGAIN past this crossing, a clause
+    saying so (`further_changes`): a row reports the nearest edge of the
+    region this run's answer holds in (§6), and without the clause a reader
+    takes `becomes` to hold to the end of the bracket — on
+    examples/mortgage_house_vs_rent.yaml "not decisive" from 6.74% read as
+    holding to 10% while `--sweep` shows decisive for rent from about 6.84%.
 
     EVERY boundary reads its key UPWARD (`decomposition.SolvedBoundary`):
     `was` is what the field says just below the value and `becomes` just
@@ -389,8 +402,12 @@ def _crossing(boundary, where: str) -> str:
                 f"{type(boundary).__name__}.{name} for {boundary.verdict_field!r} is "
                 f"{words!r} ({type(words).__name__}), not words: this block prints "
                 f"what the verdict reads on each side of a crossing, never a raw value")
+    side = boundary.further_changes
+    further = ("" if side is None else
+               f" (further changes lie {side} it inside the searched range; this row "
+               f"reports the nearest)")
     return (f"        as it rises past {where}, {label} changes from {boundary.was} "
-            f"to {boundary.becomes}")
+            f"to {boundary.becomes}{further}")
 
 
 def _solved_boundary_line(boundary: "SolvedBoundary") -> str:
@@ -526,10 +543,14 @@ def _gate_refusal_line(reversal: EstimatedReversal) -> str:
 
     Slice 1 estimates NOTHING (§6, §14): a refused key carries no boundary,
     so "the distance is estimated" would be false on every row the engine
-    produces today, and the line says what is true of the row in hand."""
+    produces today, and the line says what is true of the row in hand. A
+    figure that is not a finite number (or None) is WORDS — "could not be
+    measured" — never `nan`, `inf` or `None` printed as a measurement."""
     option = reversal.option
     deviation = reversal.max_path_deviation_over_sd
-    measured = ("" if deviation is None or not math.isfinite(deviation) else
+    measured = (f"; how far moving it shifts {option}'s present value differently "
+                f"across paths could not be measured"
+                if deviation is None or not math.isfinite(deviation) else
                 f"; moving it shifts {option}'s present value by amounts that differ "
                 f"across paths by up to {deviation:.1e} of its s.d.")
     then = ("each distance below is located by re-simulating, inside an interval"
@@ -664,10 +685,21 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # at all, so "that margin" had nothing to point back to.
     ratio = ("" if verdict.margin_pv == 0 else
              f" — {dec.sd_margin / abs(verdict.margin_pv):.1f}x the margin itself")
+    # The margin is the cheapest OTHER option's PV minus the winner's, so its
+    # sign says who is ahead — stated in words, because "averages -$69,527"
+    # left the reader to know the convention to know which side it favours.
+    if dec.mean_margin > 0:
+        side = (f" (above zero: on average {verdict.best} costs less than the "
+                f"cheapest other option)")
+    elif dec.mean_margin < 0:
+        side = (f" (below zero: on average {verdict.best} costs more than the "
+                f"cheapest other option)")
+    else:
+        side = ""
     lines.append(f"  the central case says {verdict.best} by "
                  f"{_money(verdict.margin_pv)}; across those {dec.paths:,} futures "
-                 f"that margin averages {_money(dec.mean_margin)} and scatters by "
-                 f"{_money(dec.sd_margin)} (1 s.d.){ratio}")
+                 f"that margin averages {_money(dec.mean_margin)}{side} and scatters "
+                 f"by {_money(dec.sd_margin)} (1 s.d.){ratio}")
 
     # --- THE SPREAD
     lines.append("")
@@ -733,28 +765,29 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                      else "reaching the whole inside its own interval")
             lines.append(f"  the first-order shares add to {total} — {where}, so "
                          f"interaction is not measurable at {dec.paths:,} futures: "
-                         f"estimator noise, not a finding; raise simulation.num_sims")
+                         f"estimator noise, not a finding; {_MORE_FUTURES}")
 
-        # WHO LEADS. `leading_channel_id` is the largest RESOLVED share, which
-        # is not the largest share: on examples/rent_vs_condo_vs_house.yaml
-        # the condo's costs carry a provisional 1.07 that did not resolve, and
-        # the resolved leader is the house's costs at 0.01. Naming that one
-        # would hand the superlative, and "the figure to check first", to a
-        # channel carrying a hundredth of the spread. So when the largest
-        # point share is an unresolved row, THAT row is named with its
-        # provisional figure and nothing is named as leading — here, in the
-        # provenance sentence below, and in the level register's closing.
-        top_row = max(spread.rows, key=_point_share)
-        if isinstance(top_row.shares, UnresolvedShares):
-            leader_id = None
+        # WHO LEADS is the register's, decided once in the assembler over the
+        # point estimates of every row (`SpreadRegister`): the top row either
+        # leads (`leading_channel_id`) or did not resolve
+        # (`unresolved_top_channel_id`), and then THAT row is named with its
+        # provisional figure and nothing leads — here, in the provenance
+        # sentence below, and in the JSON, which reads the same fields.
+        leader_id = spread.leading_channel_id
+        if spread.unresolved_top_channel_id is not None:
+            top_row = next(r for r in spread.rows
+                           if r.channel_id == spread.unresolved_top_channel_id)
             top = top_row.shares
+            if not isinstance(top, UnresolvedShares):
+                raise TypeError(
+                    f"the spread register names channel {top_row.channel_id} as its "
+                    f"unresolved top row, and that row's shares are a "
+                    f"{type(top).__name__}: a producer defect, not a sentence to print")
             lines.append(
                 f"  the largest share is on {channel(top_row.channel_id).label}: "
                 f"{_share(top.provisional_alone)} {_interval(top.provisional_alone_ci)} "
                 f"alone, not resolved at {dec.paths:,} futures — so no channel leads "
-                f"this table; raise simulation.num_sims")
-        else:
-            leader_id = spread.leading_channel_id
+                f"this table; {_MORE_FUTURES}")
         # The two columns a reader will otherwise conflate, printed with THIS
         # household's two figures and nothing else; what the columns MEAN is
         # cited once (see CONDITIONALITY above) rather than restated on every
@@ -818,10 +851,44 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # `verdict.state` and never by the sign of anything (§7 rule 2): a
     # formatter with one branch prints a disagreement explanation on an
     # agreement, which is §1's failure in miniature.
-    if level.leading_channel_id is None:
-        lines.append(f"  no channel's shift resolves at {level.paths:,} futures, so "
-                     f"this run cannot say which one the futures price and the "
-                     f"central case does not")
+    #
+    # WHICH channel it names is the register's (`LevelRegister`): the top row
+    # by |point shift| either leads or did not resolve. When it did not, THAT
+    # row is named with its provisional figure and the sentence says it did
+    # not resolve — never a smaller resolved row promoted as "the largest"
+    # (examples/basic_config.yaml: the house's costs at +$252 were called the
+    # largest single shift beside the condo's costs at +$390 ± $273).
+    if level.unresolved_top_channel_id is not None:
+        top_id = level.unresolved_top_channel_id
+        top_level = next(r.level for r in level.rows if r.channel_id == top_id)
+        if not isinstance(top_level, IndistinguishableLevel):
+            raise TypeError(
+                f"the level register names channel {top_id} as its unresolved top "
+                f"row, and that row is a {type(top_level).__name__}: a producer "
+                f"defect, not a sentence to print")
+        figure = (f"{channel(top_id).label} at {_shift(top_level.provisional_delta)} ± "
+                  f"${top_level.se:,.0f} (P({verdict.best} cheapest) -> "
+                  f"{_prob(top_level.prob_best_frozen)} priced the central case's way)")
+        if any(isinstance(r.level, ResolvedLevel) for r in level.rows):
+            head = (f"the largest shift by point estimate, {figure}, does not resolve "
+                    f"at {level.paths:,} futures")
+        else:
+            head = (f"no channel's shift resolves at {level.paths:,} futures, the "
+                    f"largest by point estimate included: {figure}")
+        if verdict.state == "tie":
+            text = (f"this run is too close to call as drawn, and {head} — so this run "
+                    f"cannot name the channel to check before trusting the tie")
+        elif verdict.state == "disagreement":
+            text = (f"{head} — so this run cannot say which channel puts the central "
+                    f"case and the futures on different winners")
+        else:
+            text = (f"{head} — so this run cannot say which one the futures price and "
+                    f"the central case does not")
+        lines.append(f"  {text}; {_level_route(level.paths)}")
+    elif level.leading_channel_id is None:
+        raise ValueError(
+            "the level register names neither a leading row nor an unresolved top "
+            "row; a register with rows has a top row, so this is a producer defect")
     else:
         mover = channel(level.leading_channel_id)
         mover_row = next(r for r in level.rows
@@ -887,6 +954,9 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         # nothing that resolves. Typed, not inferred — an `IndistinguishableLevel`.
         # Only a channel the block names as leading (`leader_id`) can be "the
         # spread's" here: a resolved row smaller than an unresolved one is not.
+        # It says what an unresolved shift licenses and no more: that this run
+        # cannot tell the shift from zero — never "pure risk, and not a cost the
+        # central case left out", which is a claim the shift is zero.
         if (ranked is not None and leader_id is not None
                 and leader_id != level.leading_channel_id):
             top = channel(leader_id)
@@ -900,9 +970,10 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                     f"  {top.label} {_verb(top.label, 'is', 'are')} "
                     f"{_share(top_shares.alone)} of that spread and "
                     f"{_verb(top.label, 'moves', 'move')} the margin by nothing that "
-                    f"resolves ({_shift(top_level.provisional_delta)} ± "
-                    f"${top_level.se:,.0f}) — pure risk, and not a cost the central "
-                    f"case left out"
+                    f"resolves at {level.paths:,} futures "
+                    f"({_shift(top_level.provisional_delta)} ± ${top_level.se:,.0f}): "
+                    f"{_verb(top.label, 'it widens', 'they widen')} the futures, and this "
+                    f"run cannot tell {_verb(top.label, 'its', 'their')} shift from zero"
                 )
 
     # --- THE REVERSAL REGISTER: structural zeros with the numbers they carry
@@ -961,7 +1032,8 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # check. Flipping one `sources:` entry changes this sentence (test T14).
     # A refused spread printed no ranking, so there is none to qualify, and a
     # table whose largest share did not resolve has no leader to license or to
-    # send the reader to a figure for (`leader_id`, WHO LEADS above).
+    # send the reader to a figure for: the register then carries neither a
+    # licence nor `check_first` (`SpreadRegister`), and this reads both.
     #
     # WHOSE the other widths are is counted by CLASS, never as one "guessed"
     # pile: an `assistant` width is a figure the assistant chose, an
@@ -989,7 +1061,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                            f"sized by a figure of source class {source}",
                            f"whose source class is {source}"))
         groups = [g for g in groups if g[1]]
-        if ranked.superlative_licensed and leader_id is not None:
+        if ranked.superlative_licensed:
             leader = channel(leader_id)
             lines.append("")
             lines.append(f"  {leader.label} {_verb(leader.label, 'decides', 'decide')} "
@@ -1004,7 +1076,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             counted = ", and ".join(f"{scope(count)} {words}"
                                     for _, count, words, _ in groups)
             whose = " or ".join(owner for _, _, _, owner in groups)
-            check = ("" if ranked.check_first is None or leader_id is None else
+            check = ("" if ranked.check_first is None else
                      f" — the figure to check first is {_width_cell(ranked.check_first)}")
             lines.append("")
             lines.append(f"  {counted}, so this ranking is a property of widths "
