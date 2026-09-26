@@ -1112,12 +1112,12 @@ class TestTheStructuralZeros:
         raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
         spec = load_config_dict(raw)
         assert spec.house.mortgage_renewal_years is None
-        zero = be._stated_path_zero(raw, spec, CONTRACT, "house")
+        zero = be._stated_path_zero(raw, spec, CONTRACT, "house", solved=True)
         assert ("house.mortgage_rate is one rate this config states, held for the "
-                "whole 25-year amortization — no draw") in zero.reason
+                "whole 25-year amortization, so") in zero.reason
         assert "opening term" not in zero.reason
         assert zero.label == "the contract rate"
-        refs = {r.anchor: r for r in be._axis_references(CONTRACT)}
+        refs = {r.anchor: r for r in be._axis_references(CONTRACT, "semi_annual")}
         assert "renewal" not in refs["mortgage_rate.posted_5y"].note
 
     def test_a_ladder_past_the_horizon_prices_no_renewal_and_says_so(self):
@@ -1135,7 +1135,7 @@ class TestTheStructuralZeros:
         def reason(years):
             doc = _set(raw, "years", years)
             return be._stated_path_zero(doc, load_config_dict(doc), CONTRACT,
-                                        "house").reason
+                                        "house", solved=True).reason
 
         short = reason(5)
         assert ("held for every year this run prices — the stated ladder's first "
@@ -1143,28 +1143,19 @@ class TestTheStructuralZeros:
         assert "opening term" not in short and "amortization" not in short
         assert "held for the opening term" in reason(6)
 
-    def test_the_real_mode_inflation_trap_is_a_named_zero_with_its_channel(self, raw):
-        """A channel that draws every year and reaches nothing. Detected from
-        the config, with no evaluation spent on it — a measured 0.00 in that row
-        would read as "inflation does not matter", which is not what is true."""
+    def test_the_register_names_no_dead_draw_row_of_its_own(self, raw):
+        """A channel that draws and reaches no cash flow is decided in ONE place,
+        the assembler's `_dead_draw_rows`, beside the liveness predicates. This
+        register once carried a second copy for the real-mode economy, keyed on
+        a narrower condition than the assembler's, so the two could word one
+        channel two ways. *Kills it:* restoring that copy."""
         real = copy.deepcopy(raw)
         real["economic"]["mode"] = "real"
         for name in ("condo", "house", "other", "event_cost"):
             real["simulation"][f"corr_inflation_{name}"] = 0.0
-        # Real mode takes real rates; the fixture's are sticker figures, and the
-        # magnitudes do not matter to a zero detected from the config's shape.
         spec = load_config_dict(real)
         register = reversal_register(real, compute_deterministic(spec), run_monte_carlo(spec))
-        dead = [z for z in register.structural_zeros if z.kind == "dead_draw"]
-        assert len(dead) == 1
-        assert dead[0].channel_id == 0 and dead[0].label == "the economy"
-        assert "economic.inflation_vol" in dead[0].keys
-        assert "reaches no cash flow" in dead[0].reason
-        # A household reads this reason: plain words, never a private name
-        # (it printed "`_effective_growth_rate`").
-        assert "_effective_growth_rate" not in dead[0].reason
-        assert "`" not in dead[0].reason
-        assert "this run is in real terms" in dead[0].reason
+        assert not [z for z in register.structural_zeros if z.kind == "dead_draw"]
 
     def test_a_nominal_run_has_no_dead_draw_row(self, register):
         """The fixture is nominal with live correlations, so the channel is not

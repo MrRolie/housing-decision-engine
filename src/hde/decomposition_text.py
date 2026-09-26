@@ -1,54 +1,37 @@
-"""Which risk decides it — the rendered block (spec §7).
+"""Which risk decides it — the rendered block.
 
-Design: `docs/specs/2026-09-22-which-risk-decides-it.md`. The types are
-`decomposition.py`; `decomposition_run.decompose` fills them from one spec,
-with the estimators in `decomposition_math` and the reversal solver in
-`break_even`; this module turns one `DecompositionOutcome` into the text a
-household reads, and
+`decomposition_run.decompose` fills the types in `decomposition.py`; this
+module turns one `DecompositionOutcome` into the text a household reads, and
 `serialization.decomposition_to_dict` turns the same object into the `--json`
 block. Nothing here computes a statistic: every figure printed is a field, or
-a subtraction/ratio OF fields performed where it is printed so that two
-printings cannot disagree (§0.1 ruling 2).
+a subtraction or sum of PRINTED figures performed where it is printed, so a
+reader adding up what the block shows lands on what it says.
 
-THE BINDING, and why this file has exactly one public function (§5 mechanism 5,
-operator ruling 2026-09-22; §7 formatter rule 1; test T7). The spread table may
-never be emitted without the level register beside it. On this repo's own
-flagship fixture the spread table's top row is the renter's portfolio at 0.88 of
-the scatter, and the level register prints its freeze as moving the margin by
--$3,805 ± $5,385 — nothing that resolves — while the tenancy, at 0.10 of the
-scatter, moves it by +$125,074 ± $1,775. A reader handed the spread table alone
-quotes a channel whose shift this run cannot tell from zero and misses the one
-that moves the margin. `decomposition.py` encodes
-that as far as a dataclass reaches (no spread-only `Decomposition` can be
-constructed); this file completes it, and the completion is STRUCTURAL rather
-than a rule a later editor is trusted to remember:
+THE BINDING, and why this file has exactly one public function. The spread
+table may never be emitted without the level register beside it: its top row
+can be a channel whose shift the same run cannot tell from zero, and a reader
+handed the spread table alone quotes it. `decomposition.py` encodes that as
+far as a dataclass reaches; this file completes it STRUCTURALLY:
 
-  - `__all__` names one function, and it is the only module-level callable that
-    takes a `Decomposition`;
-  - no function named for a register exists. The spread rows, the level rows
-    and the reversal rows are assembled in ONE function body, so there is no
-    callable anywhere in the process that returns the spread table. The body is
-    long for that reason and must stay that way: splitting out `_spread_block()`
-    would create the caller-reachable path the ruling forbids;
-  - the helpers below take one ROW, one `Width`, one interval — never a
-    register.
+  - `__all__` names one function, and it is the only module-level callable
+    that takes a `Decomposition`;
+  - no function named for a register exists, and only that function reads a
+    register's rows, so no callable in the process returns the spread table;
+  - the helpers take one row, one width, one interval, one list of widths —
+    never a register.
 
-CONDITIONALITY, not storage (operator instruction, 2026-09-22, measured on a
-sibling line the same week: 834 characters, 98.3% of them identical between two
-entirely different households). A clause that is true on every run which prints
-this block is a property of the ENGINE: it belongs cited once and must not be
-restated per run. So the column definitions — what "alone" means, why the flip
-column does not sum, that a share is never clamped — live in
-`docs/reference/ARCHITECTURE.md`'s figure glossary, which is already this
-repo's answer to "what is this number?", and the block cites them in one
-clause. What is printed per run is what turns on THIS household: its figures,
-its channel names, its keys and their source classes.
+ONE HOME FOR EACH CONDITION. A clause whose truth turns on the run is
+rendered from a field the assembler decided (who leads, which gaps resolve,
+why a register is empty), or from ONE helper here that every site calls
+(`_route` for "a larger run", `_provenance_lines` for whose inputs sized the
+table), so no second site can print a condition the first one fixed. What
+the columns MEAN is cited once per block (`GLOSSARY`), never restated per run.
 
-TWO STATES THAT ARE NOT NONE AND NOT ZERO. `ResolvedShares`/`UnresolvedShares`
-and `ResolvedLevel`/`IndistinguishableLevel` share no attribute name for their
-point estimate, so this module dispatches on the TYPE (`isinstance`) and never
-with `getattr` or a `try`: a figure that did not resolve renders as its own
-sentence with its own figures, and cannot be printed in a resolved column.
+TWO STATES THAT ARE NOT NONE AND NOT ZERO. Resolved and unresolved figures
+share no attribute name for their point estimate, so this module dispatches
+on the TYPE and never with `getattr` or a `try`: a figure that did not
+resolve renders as its own sentence and cannot be printed in a resolved
+column.
 """
 from __future__ import annotations
 
@@ -81,13 +64,14 @@ from .decomposition import (
     Width,
     channel,
 )
+from .decomposition_math import LEVEL_RESOLUTION_SIGMAS
 
 __all__ = ["format_decomposition"]
 
 # The one home for what the columns mean (see CONDITIONALITY above). Cited, not
 # restated: `serialization.py`'s monthly-equivalent line already cites this doc
 # the same way.
-GLOSSARY = "docs/reference/ARCHITECTURE.md figure glossary"
+GLOSSARY = "docs/reference/API_CONTRACT.md, the decomposition block"
 
 # The source classes a figure can carry (`sources.SourceEcho`'s own vocabulary:
 # user | assistant | unattributed | sweep | anchor), worded as the read-back of
@@ -106,12 +90,27 @@ _STATED_BY = {
 
 _LABEL_W = 23
 
-# The route to a larger sample, for a SPREAD figure that did not resolve. Both
-# ways in, because the block's path count is `--decompose=N` when that was
-# passed and `simulation.num_sims` otherwise, and raising the one that was not
-# used changes nothing. The level register's route is not this one: it prices
-# at most `LEVEL_PATHS` whatever N is (`_level_route`).
-_MORE_FUTURES = "raise the path count (simulation.num_sims, or N in --decompose=N)"
+
+def _route(paths: int, cap: int) -> str:
+    """The ONE route clause, for every figure that did not resolve: what a
+    larger run would do for a register that priced `paths` futures and can
+    price at most `cap` on this run.
+
+    Two caps bound a register, and `cap` is whichever binds: the evaluation
+    ceiling (`Decomposition.max_paths`, above which the block refuses) for the
+    spread register, and that or `LEVEL_PATHS` for the level register, which
+    prices `min(N, LEVEL_PATHS)`. Below the cap a larger run prices more of
+    them, named by both ways in (`--decompose=N` when that was passed,
+    `simulation.num_sims` otherwise — raising the one that was not used changes
+    nothing). AT the cap no larger run does: the budget refuses it, or the
+    level register prices the same count again — and at the N the budget
+    refusal itself recommends, "raise N" was an instruction this engine would
+    refuse."""
+    if paths < cap:
+        return (f"raise the path count (simulation.num_sims, or N in --decompose=N) — "
+                f"this register prices at most {cap:,} futures on this run")
+    return (f"this register prices at most {cap:,} futures on this run and is at that "
+            f"count, so no larger run resolves it here")
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +118,7 @@ _MORE_FUTURES = "raise the path count (simulation.num_sims, or N in --decompose=
 # ---------------------------------------------------------------------------
 
 def _money(value: float) -> str:
-    """A dollar figure with its natural sign: `$31,349`, `-$67,194`."""
+    """A dollar figure with its natural sign: `$N`, `-$N`."""
     return f"${value:,.0f}" if value >= 0 else f"-${-value:,.0f}"
 
 
@@ -132,20 +131,19 @@ def _faithful(value: float, places: int, scale: float = 1.0) -> str:
     """`value × scale` at `places` decimals, or at as many more as it takes for
     the printed figure not to say something the value does not.
 
-    Two things a rounding may never do, and they are one defect (§4: no share
-    is ever clamped into [0, 1], in either direction):
+    Two things a rounding may never do, and they are one defect (no share is
+    ever clamped into [0, 1], in either direction):
 
-      - print a figure that is not zero AS zero. `-0.0004` at two or three
-        places reads `-0.00` or `-0.000` — a measured nothing, the cheap
-        all-clear §4 refuses, in the costume of a rounding;
-      - print a figure outside [0, 1] inside it, or one inside it outside. An
-        unresolved share of `1.004` at two places reads `1.00`, "all of the
-        spread", on the very row that says it did not resolve BECAUSE it is
-        above one.
+      - print a figure that is not zero AS zero — a small negative share at two
+        or three places reads as a signed zero, a measured nothing, the cheap
+        all-clear in the costume of a rounding;
+      - print a figure outside [0, 1] inside it, or one inside it outside — an
+        unresolved share a hair above one reads as "all of the spread" on the row
+        that says it did not resolve BECAUSE it is above one.
 
-    So the decimals grow until neither happens. One rule for every share,
-    flip and probability, so one figure never prints at two roundings (§0.1
-    ruling 2). An exact zero is a zero and prints as one, without a sign.
+    So the decimals grow until neither happens. One rule for every share, flip
+    and probability, so one figure never prints at two roundings. An exact zero
+    is a zero and prints as one, without a sign.
     """
     number = float(value)
     if number == 0.0:
@@ -169,8 +167,9 @@ def _interval(interval: Interval) -> str:
 
 
 def _flip(value: float) -> str:
-    """A fraction of futures, one decimal: the measured 0.4% is not 0%, and one
-    future in 5,000 (0.02%) is not 0.0% either (`_faithful`)."""
+    """A fraction of futures, one decimal: a flip in a few futures out of
+    thousands is not zero, and does not print as one (`_faithful`).
+    """
     return f"{_faithful(value, 1, 100.0)}%"
 
 
@@ -194,6 +193,14 @@ def _prob(value: float) -> str:
     return _faithful(value, 2)
 
 
+def _ratio(value: float) -> str:
+    """The scatter against the margin: one decimal at or above one, and below one
+    at two or more (`_faithful`), because one decimal prints a ratio under a
+    tenth as a tenth.
+    """
+    return f"{value:.1f}" if value >= 1.0 else _faithful(value, 2)
+
+
 def _rate(value: float) -> str:
     return f"{value:.2%}"
 
@@ -201,14 +208,24 @@ def _rate(value: float) -> str:
 def _solved_rate(value: float) -> str:
     """A crossing solved on the DETERMINISTIC verdict, at four decimals.
 
-    The precision is the point, not decoration: the reversal solver measured
-    these identical to seven digits across five seeds, because they are
-    properties of the config as it stands, whoever typed its figures. A
-    sampled crossing prints at two decimals and says whose sample it is, so
-    the two never share a typography (§0.1 item 24; see
-    `_sampled_boundary_line`).
+    The precision is the point, not decoration: a solved crossing is a
+    property of the config as it stands, the same at any seed (pinned in
+    `tests/test_decomposition_contract_doc.py`, which figures move with the
+    sample). A sampled crossing prints at two decimals and says whose sample
+    it is, so the two never share a typography (see `_sampled_boundary_line`).
     """
     return f"{value:.4%}"
+
+
+def _sampled_rate(value: float) -> str:
+    """A crossing bisected on the futures, at two decimals ROUNDED DOWN.
+
+    Every crossing reads its key upward, so the figure printed is one at which
+    the field still says `was`, and the next figure up is past the crossing.
+    Rounded to the nearest instead, a crossing in the upper half of a
+    hundredth printed a rate at which `--sweep` already says `becomes`, under
+    a sentence saying the change happens as the key rises past it."""
+    return f"{math.floor(value * 10_000 + 1e-9) / 10_000:.2%}"
 
 
 def _deviation(value: float) -> str:
@@ -301,43 +318,106 @@ def _spread_sort_key(row: SpreadRow) -> Tuple[int, float]:
     return (1, -shares.provisional_alone)
 
 
-def _level_route(paths: int) -> str:
-    """What a larger run would do for a level row that did not resolve — true
-    only below the register's cap: it prices `min(N, LEVEL_PATHS)` paths, so
-    past the cap no larger run adds one."""
-    if paths < LEVEL_PATHS:
-        return (f"{_MORE_FUTURES}; this register prices at most {LEVEL_PATHS:,} of "
-                f"them")
-    return (f"this register prices at most {LEVEL_PATHS:,} futures, so a larger run "
-            f"does not resolve it here")
+def _dollars(value: float) -> float:
+    """A dollar figure AS PRINTED — rounded the way `_money` and `_shift` print
+    it. Any figure the block derives from printed dollars (the level gap, the
+    sum its shifts account for) is derived from these, so a reader adding up
+    the printed figures lands on the printed result (§0.1 ruling 2)."""
+    return float(f"{value:.0f}")
 
 
 def _level_row_line(row: LevelRow) -> str:
-    """A RESOLVED level row: `|Δ| > 2·SE` (§3.4). Read as a cost the central
-    case leaves out, which is what the register's own heading says."""
+    """A RESOLVED level row: its shift exceeds the resolution multiple of its
+    standard error. The `±` figure is ONE standard error, as the column header
+    says."""
     level = row.level
     assert isinstance(level, ResolvedLevel)   # the caller filed it by type
     label = channel(row.channel_id).label
     se = f"(± ${level.se:,.0f})"
-    return (f"  {label:<{_LABEL_W}} {_shift(level.delta):>10} {se:<12} "
+    return (f"  {label:<{_LABEL_W}} {_shift(level.delta):>10} {se:<19} "
             f"-> {_prob(level.prob_best_frozen)}")
 
 
 def _indistinguishable_cell(row: LevelRow) -> str:
-    """A channel whose freeze moves the margin by no more than 2·SE — a row a
-    reader must SEE rather than an absence: on this repo's fixture it is the
-    channel carrying 88% of the spread, and that is the whole finding."""
+    """A channel whose freeze moves the margin by no more than the resolution
+    multiple of its standard error — a row a reader must SEE rather than an
+    absence: it can be the channel carrying most of the spread, and that is the
+    finding.
+    """
     level = row.level
     assert isinstance(level, IndistinguishableLevel)
     return (f"{channel(row.channel_id).label} ({_shift(level.provisional_delta)} "
             f"± ${level.se:,.0f}, P -> {_prob(level.prob_best_frozen)})")
 
 
-def _level_sort_key(row: LevelRow) -> Tuple[int, float]:
-    level = row.level
+def _level_point_signed(level) -> float:
+    """ONE level row's point shift, with its sign, resolved or not — the
+    figure the row prints."""
     if isinstance(level, ResolvedLevel):
-        return (0, -abs(level.delta))
-    return (1, -abs(level.provisional_delta))
+        return level.delta
+    if isinstance(level, IndistinguishableLevel):
+        return level.provisional_delta
+    raise TypeError(f"a level row carries a {type(level).__name__}, which is "
+                    f"neither ResolvedLevel nor IndistinguishableLevel")
+
+
+# The words each source class is counted under in the provenance sentence, in
+# the order they are listed. The tag after each is the class exactly as every
+# width cell prints it, so a count can be checked against the tags above it.
+_CLASS_WORDS = (
+    ("assistant", "the assistant chose"),
+    ("unattributed", "that no sources: entry claims"),
+    ("user", "you stated"),
+    ("anchor", "anchor-sourced"),
+)
+
+
+def _provenance_lines(widths_by_row: Sequence[Sequence[Width]], licensed: bool,
+                      leader_label, check_first: Sequence[Width]) -> List[str]:
+    """The sentence under the tables about WHOSE inputs sized them, built from
+    the very widths the rows print (§0.1 item 34), so it cannot contradict a
+    tag printed above it: it counts the distinct inputs by the class each one's
+    tag names, says "entirely" only when none is the user's or an anchor's,
+    and names the leading row's own unstated inputs to check first — all of
+    them, since nothing measured an order among them.
+
+    A licensed superlative (§5 mechanism 3) replaces it: every width on the
+    leading row is the user's or an anchor's."""
+    if licensed:
+        return ["", f"  {leader_label} {_verb(leader_label, 'decides', 'decide')} the "
+                    f"spread of this answer, and every width behind that row is yours "
+                    f"or an anchor's"]
+    distinct = {}
+    for widths in widths_by_row:
+        for width in widths:
+            distinct.setdefault(width.key, width.source)
+    counts = {}
+    for source in distinct.values():
+        counts[source] = counts.get(source, 0) + 1
+    unstated = sum(n for source, n in counts.items() if source not in ("user", "anchor"))
+    if not unstated:
+        return []
+    named = [source for source, _ in _CLASS_WORDS]
+    words = dict(_CLASS_WORDS)
+    order = named + sorted(set(counts) - set(named))
+    parts = ", ".join(
+        f"{counts[source]} {words.get(source, 'of source class ' + source)} [{source}]"
+        for source in order if counts.get(source))
+    extent = "entirely" if unstated == len(distinct) else "partly"
+    check = ""
+    if check_first:
+        check = (f" — check first what sizes {leader_label}, the table's leading row: "
+                 + "; ".join(_width_cell(w) for w in check_first))
+    noun = "input" if len(distinct) == 1 else "inputs"
+    return ["", f"  the {len(distinct)} {noun} sizing the channels above: {parts} — so "
+                f"this ranking rests {extent} on inputs not marked as yours or an "
+                f"anchor's{check}"]
+
+
+def _level_sort_key(row: LevelRow) -> Tuple[int, float]:
+    """Resolved rows first, each group by the size of its printed shift."""
+    return (0 if isinstance(row.level, ResolvedLevel) else 1,
+            -abs(_level_point_signed(row.level)))
 
 
 # The four boundary kinds in words (§0.1 ruling 4 fixes the enumeration at
@@ -375,24 +455,21 @@ def _confirmed_clause(pairs: Sequence[Tuple[str, float]], lead: str) -> str:
 
 
 def _crossing(boundary, where: str) -> str:
-    """"as it rises past <where>, <field> changes from <was> to <becomes>",
-    and when the searched range changes AGAIN past this crossing, a clause
-    saying so (`further_changes`): a row reports the nearest edge of the
-    region this run's answer holds in (§6), and without the clause a reader
-    takes `becomes` to hold to the end of the bracket — on
-    examples/mortgage_house_vs_rent.yaml "not decisive" from 6.74% read as
-    holding to 10% while `--sweep` shows decisive for rent from about 6.84%.
+    """"as it rises past <where>, <field> changes from <was> to <becomes>", and,
+    when the searched range changes that field AGAIN on one side, a clause
+    saying so (`further_changes`): without it a reader takes the state past the
+    crossing to hold to the end of the bracket, which `--sweep` contradicted on
+    examples/mortgage_house_vs_rent.yaml.
 
-    EVERY boundary reads its key UPWARD (`decomposition.SolvedBoundary`):
-    `was` is what the field says just below the value and `becomes` just
-    above it, whichever side this run's own value sits on — so the sentence
-    names the direction, and `--sweep` at a point either side reads the same.
+    EVERY boundary reads its key UPWARD: `was` is what the field says just below
+    the value and `becomes` just above it, whichever side this run's own value
+    sits on — so the sentence names the direction, and `--sweep` at a point
+    either side reads the same.
 
-    `was` and `becomes` are the WORDS a household is shown. The contract's
-    types refuse anything else when a boundary is built; this line refuses it
-    again where it is printed, because what it guards is the printing: a
-    boolean that reached a household once read "changes from True to False",
-    once for a crossing out of decisiveness for the OTHER option (spec §6).
+    `was` and `becomes` are the WORDS a household is shown. The contract's types
+    refuse anything else when a boundary is built; this line refuses it again
+    where it is printed, because what it guards is the printing: a boolean that
+    reached a household once read "changes from True to False".
     """
     label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
     for name in ("was", "becomes"):
@@ -422,15 +499,15 @@ def _sampled_boundary_line(boundary: "SampledBoundary") -> str:
     """A crossing BISECTED ON THE MONTE CARLO CURVE, which is a property of a
     sample and not of the config.
 
-    Measured on this repo's fixture: the two solved crossings came out
-    identical to seven digits across five seeds, and this one moved 2.698% to
-    2.805% over the same five. A reader handed both in one typography is being
-    told a sample property is a config property — this feature's own cardinal
-    error, committed by its own output. Three things separate them here, so the
-    distinction survives losing any one: two decimals against four, this
-    clause, and the grouping the caller prints them under.
+    A solved crossing is the same figure at any seed and a sampled one moves
+    with it (both pinned in `tests/test_reversal_register.py`). A reader handed
+    both in one typography is being told a sample property is a config property
+    — this feature's own cardinal error, committed by its own output. Three
+    things separate them here, so the distinction survives losing any one: two
+    decimals against four, this clause, and the grouping the caller prints them
+    under.
     """
-    return (_crossing(boundary, _rate(boundary.value))
+    return (_crossing(boundary, _sampled_rate(boundary.value))
             + _confirmed_clause(boundary.confirming_probabilities,
                                 ", where the futures sit at ")
             + f" — bisected on {boundary.curve_paths:,} paths at seed {boundary.seed}, "
@@ -622,9 +699,27 @@ def _reversal_detail_lines(reversal) -> List[str]:
     return lines
 
 
+# What each structural-zero KIND says about drawing (§0.1 item 27, the second).
+# The section heading claims only what all three share — zero spread by
+# construction — because two of the three ARE drawn: a heading reading "not
+# drawn" sat over income, whose pay-drop events advance their own stream, and
+# over dead-draw rows that say in their own words that they draw. So each row
+# states its own fact, and an unknown kind raises rather than borrowing one.
+_DRAWN_FACT = {
+    "stated_path": "no draw touches it",
+    "no_pv_reach": "drawn, and reaching no option's present value",
+    "dead_draw": "drawn, and reaching no cash flow",
+}
+
+
 def _structural_zero_head(zero: StructuralZero) -> str:
+    if zero.kind not in _DRAWN_FACT:
+        raise ValueError(
+            f"a structural zero of kind {zero.kind!r} reached the formatter, which "
+            f"can say whether {sorted(_DRAWN_FACT)} are drawn and not this one")
     stated = "" if zero.stated_formatted is None else f" ({zero.stated_formatted})"
-    return f"  {zero.label} — {', '.join(zero.keys)}{stated}: {zero.reason}"
+    return (f"  {zero.label} — {', '.join(zero.keys)}{stated}, "
+            f"{_DRAWN_FACT[zero.kind]}: {zero.reason}")
 
 
 def _reversal_head(reversal) -> str:
@@ -684,7 +779,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # `verdict.reason` prints a probability against the floor and no margin
     # at all, so "that margin" had nothing to point back to.
     ratio = ("" if verdict.margin_pv == 0 else
-             f" — {dec.sd_margin / abs(verdict.margin_pv):.1f}x the margin itself")
+             f" — {_ratio(dec.sd_margin / abs(verdict.margin_pv))}x the margin itself")
     # The margin is the cheapest OTHER option's PV minus the winner's, so its
     # sign says who is ahead — stated in words, because "averages -$69,527"
     # left the reader to know the convention to know which side it favours.
@@ -696,10 +791,14 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 f"cheapest other option)")
     else:
         side = ""
+    # WHICH futures: the block draws its own sample (§0.1 item 1), and a
+    # reader who subtracts the run's Monte Carlo means above will not land on
+    # these figures, so the sentence says whose they are.
     lines.append(f"  the central case says {verdict.best} by "
-                 f"{_money(verdict.margin_pv)}; across those {dec.paths:,} futures "
-                 f"that margin averages {_money(dec.mean_margin)}{side} and scatters "
-                 f"by {_money(dec.sd_margin)} (1 s.d.){ratio}")
+                 f"{_money(verdict.margin_pv)}; across this block's own {dec.paths:,} "
+                 f"futures, not the run's Monte Carlo sample, that margin averages "
+                 f"{_money(dec.mean_margin)}{side} and scatters by "
+                 f"{_money(dec.sd_margin)} (1 s.d.){ratio}")
 
     # --- THE SPREAD
     lines.append("")
@@ -712,10 +811,10 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     ranked = None
     leader_id = None
     if isinstance(spread, RefusedSpread):
-        # §0.1 item 7: the spread register refused by name (`P(f > 0) == 1`)
-        # and the level and reversal registers still print below — the
-        # binding runs one way. The sentence is the assembler's, printed
-        # verbatim: it saw the data, and this module appends nothing to it.
+        # The spread register refused by name and the level and reversal
+        # registers still print below — the binding runs one way. The
+        # sentence is the assembler's, printed verbatim: it saw the data, and
+        # this module appends nothing to it.
         lines.append(f"  {spread.reason}")
     elif isinstance(spread, SpreadRegister):
         if not spread.rows:
@@ -728,6 +827,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 "register that declines to print arrives as RefusedSpread with "
                 "its reason, so this is a producer defect, not an empty table")
         ranked = spread
+        by_id = {row.channel_id: row for row in spread.rows}
         # The flip column counts futures in which re-drawing one channel moves
         # the sign of f — whether the CENTRAL CASE's winner is cheapest there
         # — not futures whose cheapest option changes: a future that goes from
@@ -744,9 +844,8 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             lines.extend(_spread_row_lines(row, dec.paths, columns))
 
         # The residual line is printed, never inferred, and takes the refusal
-        # branch when the CI permits (§4, §7 rule 5). `ResolvedInteraction` is
-        # the only branch carrying a residual at all, so the refusal cannot
-        # print one.
+        # branch when the CI permits. `ResolvedInteraction` is the only branch
+        # carrying a residual at all, so the refusal cannot print one.
         interaction = spread.interaction
         total = (f"{_share(interaction.first_order_sum)} "
                  f"{_interval(interaction.first_order_sum_ci)}")
@@ -761,11 +860,33 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                            f"entirely by figures the assistant chose")
             lines.append(clause)
         else:
-            where = ("above the whole" if interaction.first_order_sum > 1
-                     else "reaching the whole inside its own interval")
-            lines.append(f"  the first-order shares add to {total} — {where}, so "
-                         f"interaction is not measurable at {dec.paths:,} futures: "
-                         f"estimator noise, not a finding; {_MORE_FUTURES}")
+            # Two claims, each keyed on its own measurement (§0.1 item 28):
+            # the RESIDUAL is refused on the sum's interval, and interaction
+            # itself is "not measurable" only when no channel's own gap
+            # between its two columns resolves — the column headed "with
+            # interaction" measures it per channel, and a sentence keyed on
+            # the residual alone contradicted that column when a gap resolved.
+            where = ("above 1 across its whole interval, which is estimator noise: "
+                     "first-order shares cannot add to more than the whole"
+                     if interaction.first_order_sum_ci.low > 1 else
+                     "an interval that reaches 1")
+            head = (f"  the first-order shares add to {total} — {where}, so no "
+                    f"residual is printed")
+            interacting = [by_id[channel_id]
+                           for channel_id in spread.interaction_channel_ids]
+            if not interacting:
+                lines.append(
+                    f"{head}; no channel's with-interaction figure resolves above "
+                    f"its alone figure either, so interaction is not measurable at "
+                    f"{dec.paths:,} futures; {_route(dec.paths, dec.max_paths)}")
+            else:
+                named = "; ".join(
+                    f"{channel(row.channel_id).label} by "
+                    f"{_share(row.interaction_gap)} {_interval(row.interaction_gap_ci)}"
+                    for row in interacting)
+                lines.append(
+                    f"{head}; interaction does resolve, as a with-interaction figure "
+                    f"above its alone figure: {named}")
 
         # WHO LEADS is the register's, decided once in the assembler over the
         # point estimates of every row (`SpreadRegister`): the top row either
@@ -775,8 +896,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         # sentence below, and in the JSON, which reads the same fields.
         leader_id = spread.leading_channel_id
         if spread.unresolved_top_channel_id is not None:
-            top_row = next(r for r in spread.rows
-                           if r.channel_id == spread.unresolved_top_channel_id)
+            top_row = by_id[spread.unresolved_top_channel_id]
             top = top_row.shares
             if not isinstance(top, UnresolvedShares):
                 raise TypeError(
@@ -787,14 +907,14 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 f"  the largest share is on {channel(top_row.channel_id).label}: "
                 f"{_share(top.provisional_alone)} {_interval(top.provisional_alone_ci)} "
                 f"alone, not resolved at {dec.paths:,} futures — so no channel leads "
-                f"this table; {_MORE_FUTURES}")
+                f"this table; {_route(dec.paths, dec.max_paths)}")
         # The two columns a reader will otherwise conflate, printed with THIS
         # household's two figures and nothing else; what the columns MEAN is
         # cited once (see CONDITIONALITY above) rather than restated on every
         # run.
         if leader_id is not None:
             leader = channel(leader_id)
-            lead_row = next(r for r in spread.rows if r.channel_id == leader_id)
+            lead_row = by_id[leader_id]
             lead_shares = lead_row.shares
             if isinstance(lead_shares, ResolvedShares):
                 lines.append(
@@ -809,15 +929,15 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             f"a SpreadRegister nor a RefusedSpread")
 
     # --- THE LEVEL. Emitted by these same lines, unconditionally: there is no
-    # branch above that can skip it, which is the binding (§5 mechanism 5).
-    # Its baseline probability is printed ONCE, here, at one rounding of one
-    # stored figure (§0.1 ruling 2), and its own sample is named because
-    # `futures_margin`/`prob_best_base` are measured on THAT sample and are not
-    # the header's figures (§0.1 ruling 1).
+    # branch above that can skip it, which is the binding. Its baseline
+    # probability is printed ONCE, here, at one rounding of one stored figure,
+    # and its own sample is named because `futures_margin`/`prob_best_base`
+    # are measured on THAT sample and are not the header's figures.
+    level_cap = min(LEVEL_PATHS, dec.max_paths)
     lines.append("")
-    lines.append(f"  THE LEVEL — what {level.paths:,} futures price that the central "
-                 f"case does not: a cost it leaves out, not a risk")
-    lines.append(f"  {'channel':<{_LABEL_W}} {'the margin moves by':<23}"
+    lines.append(f"  THE LEVEL — what {level.paths:,} of these futures price that the "
+                 f"central case does not: a cost or saving it leaves out, not a risk")
+    lines.append(f"  {'channel':<{_LABEL_W}} {'the margin moves by (± 1 s.e.)':<30}"
                  f" P({verdict.best} cheapest), from "
                  f"{_prob(level.prob_best_base)}")
     # The level rows are filed by TYPE into two groups; a row of any other type
@@ -830,34 +950,33 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     for row in resolved_rows:
         lines.append(_level_row_line(row))
     if flat_rows:
-        lines.append(f"  indistinguishable from zero at {level.paths:,} futures: "
+        lines.append(f"  within {LEVEL_RESOLUTION_SIGMAS:g} s.e. of zero, so "
+                     f"indistinguishable from it at {level.paths:,} futures: "
                      + ", ".join(_indistinguishable_cell(r) for r in flat_rows))
 
-    # The gap is the SUBTRACTION of the two figures printed beside it, never a
-    # stored third number (§0.1 ruling 2): the draft this replaces printed a
-    # gap that disagreed with them by $2,333, which implied a second estimate
-    # of E[f] inside one block.
-    gap = level.all_frozen_margin - level.futures_margin
+    # The gap and the sum are taken over the PRINTED dollars, never over a
+    # stored third number and never over figures the reader cannot see:
+    # adding up what the block prints lands on what it says (§0.1 ruling 2).
+    frozen_printed = _dollars(level.all_frozen_margin)
+    futures_printed = _dollars(level.futures_margin)
+    shifts_printed = sum(_dollars(_level_point_signed(r.level)) for r in level.rows)
     lines.append(
         f"  on its own {level.paths:,} paths: the central case {verdict.best} by "
-        f"{_money(level.all_frozen_margin)}, the futures "
-        f"{_money(level.futures_margin)}, a {_money(gap)} gap of which these "
-        f"{len(level.rows)} shifts account for {_money(level.accounted_for)}; all "
-        f"{len(level.rows)} frozen reproduces the central case to "
-        f"{_deviation(level.all_frozen_deviation)}"
+        f"{_money(frozen_printed)}, the futures {_money(futures_printed)}, a "
+        f"{_money(frozen_printed - futures_printed)} gap of which these "
+        f"{len(level.rows)} shifts account for {_money(shifts_printed)}; every "
+        f"channel frozen reproduces the central case to within "
+        f"{_deviation(level.all_frozen_deviation)} dollars"
     )
 
     # The closing sentence has one branch per verdict STATE, chosen by
-    # `verdict.state` and never by the sign of anything (§7 rule 2): a
-    # formatter with one branch prints a disagreement explanation on an
-    # agreement, which is §1's failure in miniature.
+    # `verdict.state` and never by the sign of anything: a formatter with one
+    # branch prints a disagreement explanation on an agreement.
     #
     # WHICH channel it names is the register's (`LevelRegister`): the top row
     # by |point shift| either leads or did not resolve. When it did not, THAT
     # row is named with its provisional figure and the sentence says it did
-    # not resolve — never a smaller resolved row promoted as "the largest"
-    # (examples/basic_config.yaml: the house's costs at +$252 were called the
-    # largest single shift beside the condo's costs at +$390 ± $273).
+    # not resolve — never a smaller resolved row promoted as "the largest".
     if level.unresolved_top_channel_id is not None:
         top_id = level.unresolved_top_channel_id
         top_level = next(r.level for r in level.rows if r.channel_id == top_id)
@@ -876,15 +995,15 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             head = (f"no channel's shift resolves at {level.paths:,} futures, the "
                     f"largest by point estimate included: {figure}")
         if verdict.state == "tie":
-            text = (f"this run is too close to call as drawn, and {head} — so this run "
-                    f"cannot name the channel to check before trusting the tie")
+            text = (f"this run is too close to call as drawn, and {head} — so this "
+                    f"register cannot name a channel to check before trusting the tie")
         elif verdict.state == "disagreement":
             text = (f"{head} — so this run cannot say which channel puts the central "
                     f"case and the futures on different winners")
         else:
             text = (f"{head} — so this run cannot say which one the futures price and "
                     f"the central case does not")
-        lines.append(f"  {text}; {_level_route(level.paths)}")
+        lines.append(f"  {text}; {_route(level.paths, level_cap)}")
     elif level.leading_channel_id is None:
         raise ValueError(
             "the level register names neither a leading row nor an unresolved top "
@@ -976,15 +1095,13 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                     f"run cannot tell {_verb(top.label, 'its', 'their')} shift from zero"
                 )
 
-    # --- THE REVERSAL REGISTER: structural zeros with the numbers they carry
-    # (§0.1 ruling 5), then the rows grouped BY EXACTNESS — never ranked across
-    # that split (§0, operator ruling).
+    # --- THE REVERSAL REGISTER: structural zeros with the numbers they carry,
+    # then the rows grouped BY EXACTNESS — never ranked across that split.
     zero_keys = {z.reversal_key for z in reversal.structural_zeros
                  if z.reversal_key is not None}
     if reversal.structural_zeros:
         lines.append("")
-        lines.append("  NOT DRAWN IN THIS RUN — zero spread by construction, not by "
-                     "measurement")
+        lines.append("  ZERO SPREAD BY CONSTRUCTION, NOT BY MEASUREMENT")
         for zero in reversal.structural_zeros:
             lines.append(_structural_zero_head(zero))
             joined = next((r for r in reversal.exact if r.key == zero.reversal_key), None)
@@ -1013,73 +1130,25 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         for row in reversal.estimated:
             lines.append(_reversal_head(row))
             lines.extend(_reversal_detail_lines(row))
-    if not (reversal.exact or reversal.estimated or reversal.structural_zeros):
-        # An empty register is DATA: it says the engine found no candidate
-        # (§8's absence discipline), and rendering nothing at all would let a
-        # reader take the absence for the finding. WHY there is no candidate is
-        # the assembler's knowledge and the register carries no field for it,
-        # so this line does not guess at one.
+    if not (reversal.exact or reversal.estimated):
+        # No row carries a distance. WHAT was searched, and the route to what
+        # was not, is the producer's sentence (`no_distance_reason`), printed
+        # verbatim: it knows the candidate set and this module does not, and
+        # an empty section would let a reader take the absence for a finding.
         lines.append("")
-        lines.append("  NOTHING STATED IN THIS RUN CARRIES A REVERSAL DISTANCE the "
-                     "engine can solve — no candidate was found, which is not a "
-                     "finding that nothing would reverse the verdict")
+        lines.append(f"  WHAT WOULD HAVE TO CHANGE — {reversal.no_distance_reason}")
 
-    # --- §5 mechanism 3: the one sentence allowed to sit below the tables,
-    # because it is about the table as a whole rather than about any row in it
-    # (§7 rule 7). The superlative is GATED on provenance: when any width of
-    # the leading row is somebody's guess, the block may not write "X decides
-    # the spread of this answer" — it writes the share and names the figure to
-    # check. Flipping one `sources:` entry changes this sentence (test T14).
-    # A refused spread printed no ranking, so there is none to qualify, and a
-    # table whose largest share did not resolve has no leader to license or to
-    # send the reader to a figure for: the register then carries neither a
-    # licence nor `check_first` (`SpreadRegister`), and this reads both.
-    #
-    # WHOSE the other widths are is counted by CLASS, never as one "guessed"
-    # pile: an `assistant` width is a figure the assistant chose, an
-    # `unattributed` one is a figure no `sources:` entry claims, and on a
-    # config with no `sources:` block every width is the second — so a
-    # sentence calling them all "the assistant's" contradicted the `[...]`
-    # tag printed beside the very figure it named.
+    # --- The one sentence allowed to sit below the tables, because it is
+    # about the table as a whole rather than about any row in it. The
+    # superlative is GATED on provenance: when any width of the leading row is
+    # not the user's or an anchor's, the block may not write "X decides the
+    # spread of this answer" — it says whose figures sized the table and names
+    # the leading row's figures to check. A refused spread printed no ranking,
+    # so there is none to qualify.
     if ranked is not None:
-        rows = ranked.rows
-        total = len(rows)
-        unclaimed = set(ranked.unattributed_channel_ids)
-        groups = [
-            ("assistant",
-             sum(1 for r in rows if any(w.source == "assistant" for w in r.widths)),
-             "sized by a figure the assistant chose, not by you", "you did not state"),
-            ("unattributed", sum(1 for r in rows if r.channel_id in unclaimed),
-             "sized by a figure no sources: entry claims, typed with nobody's name "
-             "on it", "that nobody's name is on"),
-        ]
-        named = {"user", "anchor", "assistant", "unattributed"}
-        for source in sorted({w.source for r in rows for w in r.widths} - named):
-            groups.append((source,
-                           sum(1 for r in rows if any(w.source == source
-                                                      for w in r.widths)),
-                           f"sized by a figure of source class {source}",
-                           f"whose source class is {source}"))
-        groups = [g for g in groups if g[1]]
-        if ranked.superlative_licensed:
-            leader = channel(leader_id)
-            lines.append("")
-            lines.append(f"  {leader.label} {_verb(leader.label, 'decides', 'decide')} "
-                         f"the spread of this answer, and every width behind that row "
-                         f"is yours or an anchor's")
-        elif groups:
-            def scope(count: int) -> str:
-                if count == total:
-                    return "every channel above is"
-                return (f"{count} of the {total} channels above "
-                        f"{'is' if count == 1 else 'are'}")
-            counted = ", and ".join(f"{scope(count)} {words}"
-                                    for _, count, words, _ in groups)
-            whose = " or ".join(owner for _, _, _, owner in groups)
-            check = ("" if ranked.check_first is None else
-                     f" — the figure to check first is {_width_cell(ranked.check_first)}")
-            lines.append("")
-            lines.append(f"  {counted}, so this ranking is a property of widths "
-                         f"{whose}{check}")
+        lines.extend(_provenance_lines(
+            [row.widths for row in ranked.rows], ranked.superlative_licensed,
+            None if leader_id is None else channel(leader_id).label,
+            ranked.check_first))
 
     return "\n".join(lines)

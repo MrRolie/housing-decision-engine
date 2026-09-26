@@ -1,0 +1,46 @@
+# A config on which the `--decompose` spread register's residual RESOLVES.
+#
+# The decision margin is the cheapest OTHER option's present value minus the
+# winner's. Here rent wins, and the condo and the house cost the same in the
+# central case, each with its own cost shock: the margin is the MINIMUM of two
+# independently drawn costs, less rent. A minimum is not a sum, so neither
+# channel alone accounts for all of the scatter it shares with the other, the
+# first-order shares add to well under 1, and the interval on that sum lies
+# below 1 at this fixture's own 2,000 paths. No shipped example reaches that
+# branch at a path count the block's budget admits, which is why this file
+# exists: the sentence the block prints there is tested on a real run.
+#
+# Every figure is illustrative. It is a FIXTURE, not an example.
+years: 10
+discount_rate: 0.03
+economic:
+  mode: real
+  inflation_rate: 0.0
+condo:
+  initial_value: 400000
+  value_growth_rate: 0.0
+  all_cash: true
+  monthly_fee: 600
+  fee_escalation_rate: 0.0
+  purchase_costs: 0
+house:
+  initial_value: 400000
+  value_growth_rate: 0.0
+  all_cash: true
+  annual_maintenance_rate: 0.018
+  purchase_costs: 0
+rent:
+  monthly_rent: 1500
+  rent_escalation_rate: 0.0
+  invested_down_payment: 400000
+  investment_return_rate: 0.03
+simulation:
+  num_sims: 2000
+  random_seed: 42
+  condo_fee_vol: 0.15
+  house_maintenance_vol: 1.2
+sources:
+  years: assistant
+  discount_rate: assistant
+  simulation.condo_fee_vol: assistant
+  simulation.house_maintenance_vol: assistant

@@ -200,6 +200,12 @@ def main() -> int:
             args.decompose = int(token)
         elif args.config is None:
             args.config, args.decompose = token, _DECOMPOSE_AT_NUM_SIMS
+        elif re.fullmatch(r"[+-]?[0-9]+", str(args.config)):
+            # `--decompose config.yaml 300`: the count landed where the config
+            # goes. Naming the config as a bad count misdiagnoses it.
+            parser.error(f"argument --decompose: the path count goes right after the "
+                         f"flag — --decompose {args.config} {token}, or {token} "
+                         f"--decompose {args.config} — and {token!r} is in its place")
         else:
             parser.error(f"argument --decompose: invalid int value: {token!r}")
 

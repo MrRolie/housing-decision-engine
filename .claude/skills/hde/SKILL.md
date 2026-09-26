@@ -236,8 +236,8 @@ the READ-BACK block is outside both.
   it); act 5 only with `market_scenario:`; act 6 only with `rent` plus an
   owned option.
 - `--json`: `engine_version`, `warnings`, `assumptions`, `verdict`,
-  `deterministic`, `monte_carlo` present (`decomposition` only with
-  `--decompose`); every `assumptions.defaults_applied` entry carries an
+  `deterministic`, `monte_carlo` present, and `decomposition` when you passed
+  `--decompose`; every `assumptions.defaults_applied` entry carries an
   `anchor` with a `source`.
 
 ## Escalation

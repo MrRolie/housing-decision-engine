@@ -1059,6 +1059,10 @@ def _spread_row_to_dict(row: "SpreadRow") -> Dict[str, Any]:
     # neighbours that all carry an interval reads as the most certain of them.
     doc["flip_ci"] = dataclasses.asdict(row.flip_ci)
     doc["widths"] = [dataclasses.asdict(width) for width in row.widths]
+    # The channel's own measurement of interaction: `with_interaction − alone`
+    # on this row, and its interval from the same resamples.
+    doc["interaction_gap"] = row.interaction_gap
+    doc["interaction_gap_ci"] = dataclasses.asdict(row.interaction_gap_ci)
     return doc
 
 
@@ -1089,13 +1093,13 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
         "leading_channel_id": spread.leading_channel_id,
         "unresolved_top_channel_id": spread.unresolved_top_channel_id,
         "superlative_licensed": spread.superlative_licensed,
-        "check_first": (None if spread.check_first is None
-                        else dataclasses.asdict(spread.check_first)),
+        "check_first": [dataclasses.asdict(width) for width in spread.check_first],
         # The rows at least one of whose widths no `sources:` entry claims —
         # NOT "the assistant's", which is a different class. The text block
         # counts them apart, and a consumer reading only the JSON must be able
         # to as well.
         "unattributed_channel_ids": list(spread.unattributed_channel_ids),
+        "interaction_channel_ids": list(spread.interaction_channel_ids),
     }
 
 
@@ -1159,6 +1163,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
     level, reversal = outcome.level, outcome.reversal
     return _finite_or_null({
         "paths": outcome.paths,
+        "max_paths": outcome.max_paths,
         "live_channel_ids": list(outcome.live_channel_ids),
         "mean_margin": outcome.mean_margin,
         "sd_margin": outcome.sd_margin,
@@ -1183,6 +1188,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
             "structural_zeros": [dataclasses.asdict(zero)
                                  for zero in reversal.structural_zeros],
+            "no_distance_reason": reversal.no_distance_reason,
         },
     })
 

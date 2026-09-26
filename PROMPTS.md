@@ -101,12 +101,9 @@ form; the block still comes, because it is what lets you check the short answer.
 - *"At what price would this flip?"* or *"What rent would flip it?"*
 - *"Use my actual property-tax bill: $3,400."*
 - *"What did you assume for price growth, and what if it's zero?"*
-- *"Which of these risks actually decides it?"* — `--decompose` splits the spread of the
-  answer across the things the run treats as uncertain, says which of them the simulated
-  futures charge you for that the best guess does not, and solves what would have to change
-  for the verdict to flip; if it comes back naming one channel and no table, or saying there
-  was nothing to split, that IS the answer — this run had one source of spread, or none, and
-  not a table the engine decided against showing you.
+- *"Which of these risks actually decides it?"* — Claude adds `--decompose` and quotes the
+  block it prints as printed, refusals included; what each part of it can and cannot tell
+  you is in `docs/reference/API_CONTRACT.md` § The `decomposition` block.
 - *"Show me the story"* — six plots: the verdict, the cost race, uncertainty, home-value
   futures, the demographic signal, the break-even line.
 - *"Give me the run as JSON"* — the full result document, for your own tooling.

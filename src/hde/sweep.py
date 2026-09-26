@@ -127,12 +127,18 @@ def flattened_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
     config's own base case is not a point on the grid. Reported for the same
     reason `price_scan_note` is: the answer quotes a schedule no grid point
     priced (2026-09-21).
+
+    A path of one repeated rate IS one figure, and a grid point at that figure
+    prices it exactly, so it gets no note: "not a point on this grid" would be
+    false of it.
     """
     base = base_value(raw, key)
     if not isinstance(base, list) or len(base) < 2:
         return None
     if not all(isinstance(item, (int, float)) and not isinstance(item, bool)
                for item in base):
+        return None
+    if len({float(item) for item in base}) < 2:
         return None
     stated = ", ".join(_fmt_value(key, float(item)) for item in base)
     return (

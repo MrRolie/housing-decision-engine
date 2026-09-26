@@ -23,7 +23,7 @@ import numpy as np
 
 from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict, single_path_run
-from .decomposition import (BOUNDARY_FIELDS, CHANNELS, AxisReference,
+from .decomposition import (BOUNDARY_FIELDS, AxisReference,
                             EstimatedReversal, ExactReversal, RefusedBoundary,
                             ReversalRegister, SampledBoundary, SolvedBoundary,
                             StructuralZero)
@@ -36,7 +36,8 @@ from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, 
 # that figure stale and the free curve then disagrees with a true re-simulation
 # at the same value (spec §6, T11).
 from .monte_carlo import _summarize_array, run_monte_carlo
-from .rates import RateConventionError, compose, deflate, resolve_convention
+from .rates import (MORTGAGE_COMPOUNDING, RateConventionError, compose, deflate,
+                    effective_mortgage_rate, mortgage_compounding_of, resolve_convention)
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
 from .sources import MONEY_LEAVES
@@ -1265,6 +1266,12 @@ _RATE_AXIS_ANCHORS: Tuple[str, ...] = (
     "mortgage_rate.contracted_5y_insured",
     "mortgage_rate.posted_5y",
 )
+# How every one of those anchors is quoted — each record's `unit` says
+# semi-annually compounded, the Canadian convention. A reversal axis is quoted
+# the way its config quotes `mortgage_rate_compounding`, so a reference is put
+# on that axis through `rates.effective_mortgage_rate`, the engine's one
+# conversion, before it is printed beside a crossing on it.
+_RATE_AXIS_ANCHOR_COMPOUNDING = "semi_annual"
 
 
 def reversal_bracket(key: str) -> Optional[Tuple[float, float]]:
@@ -1454,7 +1461,12 @@ def reversal_gate(
             f"moving {key} moves {', '.join(record['moved_others'])} too, and this key names "
             f"neither — it changes the draw stream, so no curve over it is free")
     elif deviation is None:
-        record["why"] = f"{option} is not priced in this run, so its shift cannot be measured"
+        # The key's option is in the config (the loader prices every section it
+        # is given), so a run that returns no figures for it is a producer
+        # defect, not a sentence to print.
+        raise ValueError(
+            f"{option} is priced by this config and the run returned no present values "
+            f"for it, so the gate on {key} has nothing to measure")
     elif not deviation <= REVERSAL_GATE_TOLERANCE:
         record["why"] = (
             f"moving {key} shifts {option} by a DIFFERENT amount on different paths "
@@ -1895,7 +1907,7 @@ def _typed_boundary(
         f"claims it and nothing here can say whether its value reads a sample")
 
 
-# The label each candidate leaf prints under "NOT DRAWN IN THIS RUN" (§7). Two
+# The label each candidate leaf prints under in the zero-spread section. Two
 # entries rather than a derivation because the two rows are not the same claim:
 # one is a schedule of future rates, the other the rate on the mortgage as
 # quoted. NEUTRAL on whose figure it is — the row's next line says that from
@@ -1929,7 +1941,7 @@ def _rate_held_for(spec: ComparisonSpec, option: str) -> str:
 
 
 def _stated_path_zero(raw: Dict[str, Any], spec: ComparisonSpec, key: str,
-                      option: str) -> StructuralZero:
+                      option: str, *, solved: bool) -> StructuralZero:
     """The §3.5 `stated_path` row for one financing key: zero spread BY
     CONSTRUCTION, never a dash. `reversal_key` joins it to the reversal row
     that carries its solved rates, which is the whole reason the row is worth
@@ -1952,14 +1964,22 @@ def _stated_path_zero(raw: Dict[str, Any], spec: ComparisonSpec, key: str,
     # typed the figure, and on the fixture the ladder is assistant-typed and the
     # contract rate an anchor's, which the read-back of the same run says. WHOSE
     # figure it is travels as the joined row's `stated_source`.
+    # That no draw touches the key is the row's KIND, printed by the formatter
+    # for every `stated_path` row; the reason says what follows from it. What
+    # it carries INSTEAD is said only when it is so: `solved` is whether the
+    # joined row has a crossing solved on the central case, and without one
+    # the joined row's refused fields say, each, why none is.
     if isinstance(value, list):
-        reason = (f"{key} is a path this config states, not a distribution — the engine "
-                  f"anchors no forward rate and draws none, so {option}'s renewals carry no "
-                  f"spread here at all. They carry a solved distance instead")
+        head = (f"{key} is a path this config states, not a distribution — the engine "
+                f"anchors no forward rate, so {option}'s renewals carry no spread here "
+                f"at all")
     else:
-        reason = (f"{key} is one rate this config states, {_rate_held_for(spec, option)} "
-                  f"— no draw in this engine touches it, so {option}'s financing carries no "
-                  f"spread here at all. It carries a solved distance instead")
+        head = (f"{key} is one rate this config states, {_rate_held_for(spec, option)}, "
+                f"so {option}'s financing carries no spread here at all")
+    instead = ("They carry" if isinstance(value, list) else "It carries")
+    reason = (f"{head}. {instead} a solved distance instead" if solved else
+              f"{head}. No crossing of the central case's verdict on it is solved; the "
+              f"lines below say why, field by field")
     return StructuralZero(
         kind="stated_path", label=_STATED_PATH_LABELS.get(leaf, key),
         keys=(key,), reason=reason,
@@ -1967,9 +1987,11 @@ def _stated_path_zero(raw: Dict[str, Any], spec: ComparisonSpec, key: str,
 
 
 def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[StructuralZero]:
-    """§3.5's other two kinds, both resolved from the spec and costing no
-    evaluation. They live in the reversal register by ruling (§0.1 item 5),
-    because §7 renders them in the same section as the stated-path rows."""
+    """The `no_pv_reach` row, resolved from the config and costing no
+    evaluation. A channel that draws and reaches no cash flow is the other
+    kind the section prints; it is decided in ONE place,
+    `decomposition_run._dead_draw_rows`, beside the liveness predicates it
+    rests on, and the assembler adds it to this register."""
     out: List[StructuralZero] = []
     if spec.income is not None and raw.get("income", {}).get("pay_drop_events"):
         # "any", not "either": the run may price three options.
@@ -1977,22 +1999,6 @@ def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[S
             kind="no_pv_reach", label="your income", keys=("income.pay_drop_events",),
             reason=("income.pay_drop_events moves the affordability report, not any "
                     "option's present value, so it cannot move this margin")))
-    corr_keys = ("corr_inflation_condo", "corr_inflation_house",
-                 "corr_inflation_other", "corr_inflation_event_cost")
-    if (spec.economic.mode == "real" and spec.economic.inflation_vol > 0
-            and all(float(getattr(spec.simulation, name, 0.0) or 0.0) == 0.0
-                    for name in corr_keys)):
-        economy = next(c for c in CHANNELS if c.key == "economy")
-        out.append(StructuralZero(
-            kind="dead_draw", label=economy.label,
-            keys=("economic.inflation_vol",) + tuple(f"simulation.{n}" for n in corr_keys),
-            reason=("this run is in real terms, where every growth rate is used as the "
-                    "real rate it is and the inflation draw is not compounded into it, and "
-                    "every corr_inflation_* is 0, so this channel draws every year and "
-                    "reaches no cash flow — detected from the config, with no evaluation "
-                    "spent on it. A measured 0.00 here would read as 'inflation does not "
-                    "matter', which is not what is true"),
-            channel_id=economy.id))
     return out
 
 
@@ -2069,7 +2075,10 @@ def reversal_register(
     spec = load_config_dict(raw)
     options = _priced_options(raw)
     if len(options) < 2:
-        return ReversalRegister(exact=(), estimated=(), structural_zeros=())
+        return ReversalRegister(
+            exact=(), estimated=(), structural_zeros=(),
+            no_distance_reason=("fewer than two options are priced, so there is no "
+                                "verdict to reverse"))
 
     # One flag, read in both places that care: whether THIS run has futures for
     # a curve to be read off. A single-path run has an `mc` object and no
@@ -2083,14 +2092,19 @@ def reversal_register(
     exact: List[ExactReversal] = []
     estimated: List[EstimatedReversal] = []
     zeros: List[StructuralZero] = []
+    skipped: List[Tuple[str, bool]] = []
 
     for key, option in reversal_candidates(raw):
         lo, hi = reversal_bracket(key)
-        admitted, _ = reversal_admission(raw, key, hi, base=det)
+        admitted, record = reversal_admission(raw, key, hi, base=det)
         if not admitted:
             # §6: a key that moves nothing is not printed as a flat curve; it
             # is not a candidate. Absence is the ruled answer here, not a
-            # refusal — the flat curve is what must never appear.
+            # refusal — the flat curve is what must never appear. It is named
+            # in the empty register's reason, so "searched and inert" never
+            # reads as "not searched", and a key the loader refused at the far
+            # end is named as that, never as one that moved nothing.
+            skipped.append((key, bool(record["deltas"])))
             continue
         gate = reversal_gate(raw, key, hi, paths=gate_paths, simulate=simulate)
         common = {
@@ -2101,7 +2115,7 @@ def reversal_register(
             "stated_source": _stated_source(spec, key),
             "bracket_low": lo, "bracket_high": hi, "bracket_source": BRACKET_SOURCE,
             "max_path_deviation_over_sd": gate["worst_deviation_over_sd"],
-            "references": _axis_references(key),
+            "references": _axis_references(key, mortgage_compounding_of(raw[option])),
             "path_note": flattened_path_note(raw, key),
         }
         if not gate["licensed"]:
@@ -2124,11 +2138,15 @@ def reversal_register(
         exact.append(ExactReversal(
             **common, probe_paths=gate["paths"],
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
-        zeros.append(_stated_path_zero(raw, spec, key, option))
+        zeros.append(_stated_path_zero(
+            raw, spec, key, option,
+            solved=any(isinstance(b, SolvedBoundary) for b in boundaries)))
 
     zeros.extend(_other_structural_zeros(raw, spec))
-    return ReversalRegister(exact=tuple(exact), estimated=tuple(estimated),
-                            structural_zeros=tuple(zeros))
+    return ReversalRegister(
+        exact=tuple(exact), estimated=tuple(estimated), structural_zeros=tuple(zeros),
+        no_distance_reason=(None if (exact or estimated)
+                            else _no_distance_reason(options, skipped)))
 
 
 def _stated_source(spec: ComparisonSpec, key: str) -> str:
@@ -2156,9 +2174,17 @@ def _stated_formatted(raw: Dict[str, Any], key: str) -> str:
     return _fmt_value(key, float(value))
 
 
-def _axis_references(key: str) -> Tuple[AxisReference, ...]:
+def _axis_references(key: str, compounding: str) -> Tuple[AxisReference, ...]:
     """The published figures that sit on this axis, so a solved rate has
-    something cited to be read against.
+    something cited to be read against — expressed ON THE AXIS the crossings
+    are solved on, which is the key's own quoting convention (`compounding`,
+    the option's `mortgage_rate_compounding`).
+
+    Every anchor here is a semi-annual quote. On an `effective_annual` axis it
+    goes through `rates.effective_mortgage_rate`, the conversion the loader
+    applies to the config's own rate, and the note names the figure as
+    published; printed raw, a semi-annual quote beside effective-annual
+    crossings misstated every gap between them.
 
     The posted rate's note says what it does not license, and its renewal
     clause is keyed on the AXIS: on a `mortgage_renewal_rates` row — which is
@@ -2169,6 +2195,9 @@ def _axis_references(key: str) -> Tuple[AxisReference, ...]:
     leaf = key.rsplit(".", 1)[-1]
     if leaf not in ("mortgage_rate", "mortgage_renewal_rates"):
         return ()
+    if compounding not in MORTGAGE_COMPOUNDING:
+        raise ValueError(f"{key} is quoted {compounding!r}, which is none of "
+                         f"{MORTGAGE_COMPOUNDING}: no reference can be put on its axis")
     posted_note = ("a list price, to bracket a guess from above — never a ceiling on "
                    "a renewal years from now" if leaf == "mortgage_renewal_rates" else
                    "a list price, to bracket a guess from above")
@@ -2177,11 +2206,63 @@ def _axis_references(key: str) -> Tuple[AxisReference, ...]:
         anchor = ANCHORS.get(name)
         if anchor is None:
             continue
+        published = float(anchor.value)
+        if compounding == _RATE_AXIS_ANCHOR_COMPOUNDING:
+            on_axis, converted = published, None
+        else:
+            on_axis = effective_mortgage_rate(published, _RATE_AXIS_ANCHOR_COMPOUNDING)
+            converted = (f"published as {_fmt_value(key, published)} compounded "
+                         f"semi-annually")
+        notes = [n for n in (converted, posted_note if name.endswith("posted_5y")
+                             else None) if n is not None]
         out.append(AxisReference(
-            label=name.rsplit(".", 1)[-1].replace("_", " "), value=anchor.value,
-            formatted=_fmt_value(key, float(anchor.value)), anchor=name,
-            note=posted_note if name.endswith("posted_5y") else None))
+            label=name.rsplit(".", 1)[-1].replace("_", " "), value=on_axis,
+            formatted=_fmt_value(key, on_axis), anchor=name,
+            note="; ".join(notes) if notes else None))
     return tuple(out)
+
+
+def break_even_route(priced_count: int) -> str:
+    """The route to a solved crossing on a key the `--decompose` block does not
+    solve itself, worded for how many options this config prices — the ONE
+    home of that clause, for every sentence that names the route.
+
+    `--break-even` solves one pair of options at a time and refuses a config
+    pricing three ("needs exactly two priced options"), so on three the route
+    says a section has to be dropped first; with fewer than two there is no
+    verdict to reverse and no route is offered."""
+    if priced_count < 2:
+        raise ValueError(f"{priced_count} priced option(s): there is no verdict to "
+                         f"reverse, so no route to a crossing exists")
+    route = ("--break-even <key> solves the crossing on the central case with the "
+             "solver the --decompose reversal register uses")
+    if priced_count == 2:
+        return route
+    return (f"{route}, one pair of options at a time — on this {priced_count}-option "
+            f"config it needs one option's section dropped first")
+
+
+def _no_distance_reason(options: Sequence[str],
+                        skipped: Sequence[Tuple[str, bool]]) -> str:
+    """What an empty reversal register searched, and the route to what it did
+    not (§0.1 item 31): the candidate SET is what is empty, never the verdict's
+    reversibility. `skipped` are the candidate keys this config states that
+    were not admitted, each with whether the far end of its bracket was priced
+    (and moved no option's present value) or refused by the loader."""
+    leaves = " and ".join(REVERSAL_LEAVES)
+    if skipped:
+        found = "; ".join(
+            f"this config states {key}, and "
+            + ("moving it to the far end of the bracket moves no option's present value"
+               if priced else
+               "the loader refuses it at the far end of the bracket")
+            for key, priced in skipped)
+    else:
+        found = "this config states no such key"
+    return (f"no reversal distance is solved here: this block searches only a "
+            f"financed option's {leaves}, and {found}. That is the reach of this "
+            f"search, not a finding that nothing would reverse the verdict: for any "
+            f"other key this config states, {break_even_route(len(options))}.")
 
 
 def _unsolved_without_futures(field: str) -> str:
@@ -2246,14 +2327,19 @@ def _confirmed_boundaries(
         if found:
             per_field[field] = (found, None)
         else:
+            # `deterministic_boundaries` files a field with no boundary as an
+            # anomaly or as unchanged, never as neither, so one of the two is
+            # the reason and no third sentence is written for a case it cannot
+            # produce.
             anomaly = next((a for a in solved["anomalies"] if a["attribute"] == field), None)
-            unchanged = next((u for u in solved["unchanged"] if u["attribute"] == field), None)
-            per_field[field] = ([], anomaly["why"] if anomaly is not None else (
-                f"{field} is {unchanged['value']!r} at every point of "
-                f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}, so no boundary of it lies in "
-                f"the range this axis searches"
-                if unchanged is not None else
-                "no pair of options crosses in this bracket, so no boundary exists to solve"))
+            if anomaly is not None:
+                per_field[field] = ([], anomaly["why"])
+            else:
+                unchanged = [u for u in solved["unchanged"] if u["attribute"] == field][0]
+                per_field[field] = ([], (
+                    f"{field} is {unchanged['value']!r} at every point of "
+                    f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}, so no boundary of it "
+                    f"lies in the range this axis searches"))
     for field in _FUTURES_FIELDS:
         per_field[field] = ((
             _futures_field_boundaries(
@@ -2263,7 +2349,7 @@ def _confirmed_boundaries(
     reported: List[Union[SolvedBoundary, SampledBoundary]] = []
     refused: List[RefusedBoundary] = []
     for field in BOUNDARY_FIELDS:
-        found, reason = per_field.get(field, ([], "this field was not solved for"))
+        found, reason = per_field[field]
         if reason is not None:
             refused.append(RefusedBoundary(verdict_field=field, reason=reason))
             continue

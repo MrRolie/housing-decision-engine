@@ -1,0 +1,256 @@
+"""Real `--decompose` runs, priced once per test session and shared.
+
+The block's sentence tests (`test_decomposition_sentences.py`) and its
+contract tests (`test_decomposition_contract_doc.py`) read the same runs; each
+run is the CLI's own output — `--json` and text — for one config, plus what
+the test needs to re-derive a figure from the matrices behind it.
+"""
+from __future__ import annotations
+
+import contextlib
+import copy
+import functools
+import io
+import json
+import pathlib
+import sys
+import tempfile
+
+import numpy as np
+import yaml
+
+from hde import decomposition_run as dr
+from hde.cli import main as cli_main
+from hde.config import load_config_dict
+from hde.deterministic import compute_deterministic
+from hde.models import compute_verdict
+from hde.monte_carlo import run_monte_carlo
+
+REPO = pathlib.Path(__file__).resolve().parents[1]
+CONTRACT = REPO / "docs" / "reference" / "API_CONTRACT.md"
+FIXTURE = REPO / "tests" / "fixtures" / "uncertainty_surface.yaml"
+MIN_INTERACTION = REPO / "tests" / "fixtures" / "min_interaction.yaml"
+EXAMPLES = REPO / "examples"
+MORTGAGE = EXAMPLES / "mortgage_house_vs_rent.yaml"
+SHOWCASE = EXAMPLES / "showcase_demographic_prior.yaml"
+ADVANCED = EXAMPLES / "advanced_config.yaml"
+THREE = EXAMPLES / "rent_vs_condo_vs_house.yaml"
+INCOME = EXAMPLES / "income_shock.yaml"
+MONTREAL = EXAMPLES / "first_time_buyer_montreal.yaml"
+
+# Every future names another option than the central case's winner: rent wins
+# the central case on its starting rent, and a near-certain reset to a much
+# higher one puts the condo in front on every path (P(f > 0) is exactly 0).
+ALL_OTHER = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200, "events": [],
+              "other_recurring_costs": [{"name": "property_tax", "annual_amount": 2600,
+                                         "escalation_rate": 0.0}]},
+    "rent": {"monthly_rent": 1150, "rent_escalation_rate": 0.0, "reset_hazard": 0.9,
+             "reset_to_monthly_rent": 2500, "invested_down_payment": 355200,
+             "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 2000, "random_seed": 42, "condo_fee_vol": 0.02,
+                   "rent_escalation_vol": 0.01},
+}
+# One priced option.
+CONDO_ONLY = {k: copy.deepcopy(ALL_OTHER[k]) for k in ("years", "discount_rate",
+                                                        "economic", "condo")}
+CONDO_ONLY["simulation"] = {"num_sims": 2000, "random_seed": 42, "condo_fee_vol": 0.05}
+# Futures exist, and no channel reaches a cash flow: real mode discards the
+# inflation draw and every correlation is off, so the one channel that draws
+# moves nothing.
+NO_REACH = {k: copy.deepcopy(ALL_OTHER[k]) for k in ("years", "discount_rate", "condo")}
+NO_REACH["economic"] = {"mode": "real", "inflation_rate": 0.0, "inflation_vol": 0.02}
+NO_REACH["rent"] = {"monthly_rent": 1150, "rent_escalation_rate": 0.0,
+                    "invested_down_payment": 355200, "investment_return_rate": 0.03}
+NO_REACH["simulation"] = {"num_sims": 2000, "random_seed": 42}
+# Two channels that draw and reach no cash flow beside two that do: the
+# economy in real terms with one correlation ON and no shock behind it (no
+# house is priced), and the housing market with a crash hazard of severity 0
+# and no value volatility.
+DEAD = copy.deepcopy(ALL_OTHER)
+DEAD["economic"] = {"mode": "real", "inflation_rate": 0.0, "inflation_vol": 0.01}
+DEAD["rent"].update({"reset_hazard": 0.05, "reset_to_monthly_rent": 1500})
+DEAD["condo"]["price_shock"] = {"annual_hazard": 0.05, "severity_mean": 0.0,
+                                "severity_vol": 0.1}
+DEAD["simulation"].update({"condo_fee_vol": 0.10, "value_growth_vol": 0.0,
+                           "corr_inflation_house": 0.5})
+# A financed condo far enough ahead that no crossing of the central case's
+# verdict lies anywhere in its contract rate's bracket.
+FAR = copy.deepcopy(ALL_OTHER)
+del FAR["condo"]["all_cash"]
+FAR["condo"].update({"down_payment": 100000, "mortgage_rate": 0.045,
+                     "mortgage_term_years": 25})
+FAR["rent"].update({"monthly_rent": 4000, "reset_hazard": 0.0,
+                    "rent_escalation_rate": 0.02})
+del FAR["rent"]["reset_to_monthly_rent"]
+FAR["simulation"]["rent_escalation_vol"] = 0.05
+# A financed condo with nothing borrowed: its contract rate is stated and moves
+# no present value, so the reversal register searches it and finds it inert.
+INERT = copy.deepcopy(ALL_OTHER)
+del INERT["condo"]["all_cash"]
+INERT["condo"].update({"down_payment": 350000, "mortgage_rate": 0.045,
+                       "mortgage_term_years": 25})
+# The same financed condo nearer rent, with the renter's portfolio drawn: the
+# central case's winner holds across the contract rate's whole bracket and its
+# decisiveness does not, so the only crossing on the row is bisected.
+SAMPLED_ONLY = copy.deepcopy(FAR)
+SAMPLED_ONLY["rent"]["monthly_rent"] = 2400
+SAMPLED_ONLY["simulation"].update({"rent_escalation_vol": 0.10,
+                                   "investment_return_vol": 0.12})
+# basic_config with a cheaper condo and a quieter fee: too close to call, and
+# the largest shift (the house's costs) resolves.
+TIE = yaml.safe_load((EXAMPLES / "basic_config.yaml").read_text(encoding="utf-8"))
+TIE["condo"]["monthly_fee"] = 432
+TIE["simulation"]["condo_fee_vol"] = 0.03
+# min_interaction.yaml with both widths declared the user's: the superlative
+# is licensed.
+LICENSED = yaml.safe_load(MIN_INTERACTION.read_text(encoding="utf-8"))
+LICENSED["sources"] = {"simulation.condo_fee_vol": "user",
+                       "simulation.house_maintenance_vol": "user"}
+# basic_config with the leading row's volatility declared the user's and its
+# event list left undeclared: a leading row sized by both kinds of input, so
+# what to check first is some of its widths and not all of them.
+MIXED = yaml.safe_load((EXAMPLES / "basic_config.yaml").read_text(encoding="utf-8"))
+MIXED["sources"] = {"simulation.condo_fee_vol": "user"}
+
+
+# ---------------------------------------------------------------------------
+# Instruments
+# ---------------------------------------------------------------------------
+
+def _cli(*argv):
+    """`hde <argv>` in this process: (exit code, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    saved = sys.argv
+    sys.argv = ["hde", *map(str, argv)]
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli_main()
+    finally:
+        sys.argv = saved
+    return code, out.getvalue(), err.getvalue()
+
+
+def _strict(text):
+    def refuse(token):
+        raise ValueError(f"non-finite token {token!r} in the document")
+    return json.loads(text, parse_constant=refuse)
+
+
+def _block_text(out):
+    lines = out.splitlines()
+    start = next(i for i, line in enumerate(lines)
+                 if "which risk decides it" in line or "all of this run's spread" in line)
+    return "\n".join(lines[start:])
+
+
+def _sweep_states(path, key, values, futures):
+    """What `--sweep <key>=<values>` says at each value, field by field, in
+    the words a boundary uses; `futures` runs the sweep with Monte Carlo."""
+    argv = [path, "--sweep", f"{key}=" + ",".join(f"{v:.10f}" for v in values), "--json"]
+    if not futures:
+        argv.insert(1, "--no-monte-carlo")
+    code, out, _ = _cli(*argv)
+    assert code == 0
+    rows = _strict(out)["sweeps"][0]["rows"]
+    return [{"best": r["best"], "runner_up": r["runner_up"], "mc_best": r["mc_best"],
+             "decisive": f"decisive for {r['best']}" if r["decisive"] else "not decisive"}
+            for r in rows]
+
+
+class Run:
+    """One config run twice through the CLI — `--json` and text — with the
+    raw mapping and the inputs the assembler was handed, for re-derivation."""
+
+    def __init__(self, source, *extra):
+        """`source` is a config file, run as it is, or a mapping, written to
+        a file of its own first."""
+        self.source = source
+        self.raw = (_load(source) if isinstance(source, pathlib.Path)
+                    else copy.deepcopy(source))
+        self.extra = extra
+        self._path = None
+
+    def materialise(self, directory):
+        if isinstance(self.source, pathlib.Path):
+            path = self.source
+        else:
+            directory.mkdir(parents=True, exist_ok=True)
+            path = directory / "config.yaml"
+            path.write_text(yaml.safe_dump(self.raw, sort_keys=False), encoding="utf-8")
+        self._path = path
+        code, out, _ = _cli(path, "--decompose", *self.extra, "--json")
+        assert code == 0, out
+        self.doc = _strict(out)
+        self.block = self.doc["decomposition"]
+        code, out, _ = _cli(path, "--decompose", *self.extra, "-q")
+        assert code == 0
+        self.text = _block_text(out)
+        self.spec = load_config_dict(self.raw)
+        return self
+
+    @property
+    def path(self):
+        return self._path
+
+    def inputs(self):
+        spec = self.spec
+        det = compute_deterministic(spec)
+        mc = run_monte_carlo(spec)
+        verdict = compute_verdict(det, mc, years=spec.simulation.years,
+                                  discount_rate=spec.simulation.discount_rate)
+        return det, mc, verdict
+
+    def paths(self):
+        return int(self.block["paths"])
+
+    def f_a(self):
+        best = self.doc["verdict"]["best"]
+        spec = dr._spec_at(self.spec, self.paths())
+        return dr.margin_per_path(dr._run(spec, dr.MATRIX_A), best)
+
+
+def _load(path):
+    return yaml.safe_load(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+# The runs every sentence and contract test reads: name -> (config, extra flags).
+CORPUS = {
+    "fixture": (FIXTURE, "300"),
+    "mortgage": (MORTGAGE, "200"),
+    "showcase": (SHOWCASE, "2000"),
+    "min": (MIN_INTERACTION,),
+    "advanced": (ADVANCED, "400"),
+    "three": (THREE, "300"),
+    "all_other": (ALL_OTHER, "400"),
+    "basic": (EXAMPLES / "basic_config.yaml", "300"),
+    "dead": (DEAD, "300"),
+    "far": (FAR, "200"),
+    "inert": (INERT, "200"),
+    # At the level register's own cap: a tie, and an option state, whose
+    # largest shift does not resolve there.
+    "basic_2000": (EXAMPLES / "basic_config.yaml", "2000"),
+    "three_2000": (THREE, "2000"),
+    "sampled_only": (SAMPLED_ONLY, "200"),
+    "tie": (TIE, "2000"),
+    "licensed": (LICENSED,),
+    "mixed": (MIXED, "300"),
+}
+
+
+# Where a mapping-sourced run writes its config; removed when the process ends.
+_SCRATCH = tempfile.TemporaryDirectory(prefix="hde-decompose-runs-")
+
+
+@functools.lru_cache(maxsize=None)
+def run(name: str) -> "Run":
+    """One corpus run, priced on first use and kept for the session."""
+    source, *extra = CORPUS[name]
+    return Run(source, *extra).materialise(pathlib.Path(_SCRATCH.name) / name)
+
+
+def corpus():
+    return {name: run(name) for name in CORPUS}

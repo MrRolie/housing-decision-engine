@@ -242,49 +242,21 @@ holds a published figure or it expires loudly; "the 2026 bracket is stale and
 the 2027 one is not published yet" is a complete, honest answer, and the plan's
 `found` line is the evidence for it.
 
-## 10. A share of the spread is not the risk that decides it
+## 10. `--decompose`: carry the block's own sentences
 
-`--decompose` prints three registers, and the trap is the first one. On this
-repo's own flagship fixture the spread table's top row is the renter's
-portfolio at 0.88 of the scatter — and in the level register, pricing that
-channel the way the central case prices it moves the margin by −$3,805 ± $5,385,
-nothing that resolves, while the tenancy, at 0.10 of the same scatter, moves it
-by +$125,074 ± $1,775. Quote the top share alone and you have named a channel
-whose shift that run cannot tell from zero, and missed the one that moves the
-margin.
+Each sentence the block prints is true of the run it came from, under a
+condition the engine checked on that run. A paraphrase keeps the words and
+drops the condition, so:
 
-So: read the SPREAD table for where the uncertainty is, the LEVEL register for
-which channel the futures price that the best guess does not, and the NOT DRAWN
-rows for what would have to change to reverse the verdict — and never quote one
-without the one under it. The engine will not print the spread table without
-the level register beside it; an answer that carries one and drops the other
-undoes that on the way out. Three more rules, each of which the block itself
-obeys: a share is never called importance or a contribution to the answer; a
-row that reads `not resolved` is quoted as not resolved, with its figures, and
-never rounded to zero; and the trailing line naming the figure to check first
-is part of the answer, because every width in that table is a number somebody
-typed rather than measured. Say whose, as the block does: an `[unattributed]`
-width is one no `sources:` entry claims, so the run cannot say whose it is — it
-is never "a figure the assistant chose". When the largest share did not resolve,
-the block names no channel as leading and no figure to check first; carry that,
-and never promote the largest RESOLVED row in its place. The level register
-works the same way: when its largest shift did not resolve, the closing names
-that channel with its figure as not resolved, and a smaller resolved shift is
-never "the largest". Carry the route it prints as printed — the level register
-prices at most 2,000 futures, so past that a larger run does not resolve it.
-
-A crossing row reports the NEAREST edge of the range where the verdict says
-what this run says. When it adds "further changes lie above it inside the
-searched range", the new state does not hold to the end of the range — say so,
-and use `--sweep` on that key to show the user where it changes next.
-
-Silence and refusal are answers here too. `--decompose` prints nothing at all
-unless it is asked for, and when it is asked for it can still come back with a
-named refusal instead of a table — one live channel ("there is nothing to
-split"), no futures, one priced option, no spread in the decision at all. Carry
-that sentence as the finding it is; it says the run had no split to make, never
-that the risks were weighed and found not to matter. When every future names
-the same winner, only the spread table refuses and the level register still
-prints under it: quote the level, and the refusal as the reason there is no
-share. A path-free run's refusal names `--break-even` and `--sweep` — follow
-that route rather than rerunning the block.
+- Quote the block's lines as printed, with their figures and their `[...]`
+  tags. What a field, a refusal or a route means is in
+  `docs/reference/API_CONTRACT.md` § The `decomposition` block; read it there,
+  never restate it from memory.
+- Never quote a share from THE SPREAD without the closing line of THE LEVEL
+  beside it, and never call a share "importance" or a "contribution to the
+  answer".
+- Quote a `not resolved` row as not resolved, with its figures.
+- A refusal, of the whole block or of the spread alone, is that run's finding:
+  quote its sentence, and follow the route it names when it names one.
+- Carry the closing line about whose inputs sized the table, and the inputs it
+  says to check first, with their tags.

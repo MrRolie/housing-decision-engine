@@ -687,6 +687,16 @@ class TestSweepAndBreakEven:
         assert "ONE figure applied at each renewal" in note
         assert "not a point on this grid" in note
 
+    def test_a_path_of_one_repeated_rate_gets_no_flattening_note(self):
+        """A ladder of one rate repeated is one flat figure, which a grid point
+        prices exactly: "the stated path is not a point on this grid" would be
+        false of it. *Kills it:* dropping the distinct-rate check."""
+        from hde.sweep import flattened_path_note
+        raw = self._raw()
+        stated = raw["house"]["mortgage_renewal_rates"]
+        raw["house"]["mortgage_renewal_rates"] = [stated[0]] * len(stated)
+        assert flattened_path_note(raw, "house.mortgage_renewal_rates") is None
+
     def test_a_scalar_base_gets_no_flattening_note(self):
         from hde.sweep import flattened_path_note
         raw = _house(mortgage_renewal_years=5, mortgage_renewal_rates=0.06)

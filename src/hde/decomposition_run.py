@@ -1,63 +1,47 @@
 """Which risk decides it — THE ASSEMBLER (spec §0.1 item 17).
 
-Design: `docs/specs/2026-09-22-which-risk-decides-it.md`. §12 names four pieces
-and none of them turns a spec into the object the other three feed: the streams
-seam produces no user-visible output, the estimator module takes arrays and
-returns floats, the reversal solver answers about stated inputs, and the
-formatter renders a `Decomposition` somebody else has to build. This module is
-that somebody. Its whole surface is
+It turns one spec into the `DecompositionOutcome` the other pieces exchange:
+the estimators (`decomposition_math`) take arrays, the reversal solver
+(`break_even`) answers about stated inputs, and the formatter
+(`decomposition_text`) renders what this module builds. Its surface is
 
     decompose(spec, *, det, mc, verdict, raw, prior) -> DecompositionOutcome
 
 plus the two predicates the block's cost and its refusals turn on
-(`live_channels`, `channels_that_draw`) and §2's margin (`margin_per_path`).
+(`live_channels`, `channels_that_draw`), the margin (`margin_per_path`) and
+the one cost model (`planned_evaluations`, `largest_affordable_paths`). What
+each refusal and figure means is `docs/reference/API_CONTRACT.md`'s.
 
 WHAT IT DOES, in the order it does it, because the order is the cost model:
 
-  1. the §8 refusals that cost nothing — no futures, one option, one live
-     channel, no spread, the budget gate, and too few futures to interval.
-     Each is a judgment about the DATA and so belongs here rather than in the
-     formatter (§0.1 item 17): the formatter renders a refusal, it does not
-     decide one. Every one of them fires before a single path is priced.
-  2. the spread register: `A`, `B` and one `A_B^(c)` per live channel, addressed
-     per path (§3.2), through the estimators in `decomposition_math` — or, when
-     every future in `A` names the same winner, a `RefusedSpread` and no `B`
-     at all (§0.1 item 7).
-  3. the level register: the freeze mask, paired against `A`'s own first `m`
-     paths, plus the all-frozen run that makes the register a fact. When that
-     run's paths disagree with each other the whole block refuses
-     (`freeze_leak`), and when they agree on a margin further from the central
-     case's than `decomposition_math.identity_ulp_budget` allows it refuses too
-     (`identity_failed`): a register whose identity failed does not print as
-     though it held, and neither does anything else built on the freeze.
-  4. the reversal register: `break_even.reversal_register`'s solved rows and
+  1. the refusals decidable from the spec and the flags — no futures, one
+     option, no live channel or one, the budget gate, too few futures to
+     interval. They fire before a single path is priced;
+  2. the `A` matrix, and the two refusals only it can decide: no spread at
+     all, and every future on one side of the line, which refuses the spread
+     register alone and prices no `B`;
+  3. otherwise `B` and one `A_B^(c)` per live channel, addressed per path;
+  4. the level register — the freeze mask, paired against `A`'s own first
+     paths — and the all-frozen run whose identity, failing, refuses the whole
+     block (`freeze_leak`, `identity_failed`);
+  5. the reversal register: `break_even.reversal_register`'s rows and
      structural zeros, plus the dead-draw rows only this module can see.
 
-TWO THINGS THIS MODULE IS CAREFUL NOT TO BE.
+Every refusal is a judgment about the DATA and so is this module's; the
+formatter renders a refusal and never decides one.
 
-It is not a second verdict: every probability it reports is a frequency of
-`f`'s own sign on paths it priced, and `verdict` is carried through untouched
-(§1). And it is not a second home for the estimators: no index, no interval, no
-standard error and no resolution rule is computed here. When this module needs
-a figure it calls `decomposition_math` for it, including inside the one place
-it resamples by hand (§5 mechanism 4's subset sum, which the public bootstrap
-does not expose).
+TWO THINGS THIS MODULE IS CAREFUL NOT TO BE. It is not a second verdict:
+every probability it reports is a frequency of `f`'s own sign on paths it
+priced, and `verdict` is carried through untouched. And it is not a second
+home for the estimators: no index, interval, standard error or resolution
+rule is computed here.
 
-THE LIVENESS RULE, which is the finding this module owes the spec (§3.6, ruled
-§0.1 item 22). A channel is live when at least one of its draw sites REACHES A
-CASH FLOW — never when it merely consumes a draw. The two questions have
-different answers on real configs: with every volatility in a spec at zero the
-condo's fee shock, the house's maintenance shock, both options' other-cost
-shocks and all three options' event-cost shocks are still drawn and then
-multiplied by a volatility of zero, so three generators advance while no number
-moves (pinned, on a live config, by
-`tests/test_channel_streams.py::test_the_base_spec_touches_exactly_three_streams`).
-A "does it draw" rule would print a three-row table of channels that move
-nothing, cost three matrices to do it, and on a two-option config would read
-1.00 against a channel with no effect — the tautology §8 refusal 4 exists to
-prevent. So `live_channels` reads the spec for what reaches a cash flow, and
-`channels_that_draw` reads it for what advances a generator; the difference is
-§3.5's third structural zero, and it is reported rather than hidden.
+THE LIVENESS RULE (§3.6, ruled §0.1 item 22). A channel is live when at least
+one of its draw sites REACHES A CASH FLOW — never when it merely consumes a
+draw. The two questions have different answers on real configs (pinned at
+the generator in `tests/test_channel_streams.py`), so `live_channels` reads the
+spec for what reaches a cash flow and `channels_that_draw` for what advances a
+generator; the difference is reported as a structural zero, never hidden.
 """
 from __future__ import annotations
 
@@ -125,16 +109,13 @@ MATRIX_A = 0
 MATRIX_B = 1
 
 # §8 refusal 6's ceiling, in model evaluations. THE SPEC NAMES NO FIGURE, so
-# this one is the assembler's and is assistant-chosen; the refusal prints it.
-# Derivation: the shipped `num_sims` default is 10,000, which at seven live
-# channels costs 10,000·9 + 2,000·8 = 106,000 evaluations — about 48 s at §9's
-# measured 454 µs/path. §9 calls that multiple "the common case and not a worst
-# case", so it may not refuse, and the ceiling clears it with headroom rather
-# than sitting on it. At 250,000 the gate fires around two minutes of work,
-# which is the point at which a run wants to be asked for rather than waited
-# on. It is a gate on WORK, never a cap on `k_live`: a cap at seven under a
-# seven-channel taxonomy could never fire, which is the defect shape this repo
-# names by hand.
+# this one is the engine's own and the refusal says so. Derivation: the shipped
+# `num_sims` default at seven live channels must not refuse — §9 calls it "the
+# common case and not a worst case" — so the ceiling clears it with headroom,
+# and fires around the point where a run wants to be asked for rather than
+# waited on (`planned_evaluations` prices both; §9 has the per-path timing).
+# It is a gate on WORK, never a cap on `k_live`: a cap at seven under a
+# seven-channel taxonomy could never fire.
 EVALUATION_CEILING = 250_000
 
 # The smallest sample this block will interval, DERIVED rather than chosen. A
@@ -159,17 +140,14 @@ MIN_INTERVALLED_FUTURES = 40
 # ---------------------------------------------------------------------------
 
 def margin_per_path(mc, best: str) -> Array:
-    """`f`, the decision margin, priced on every path (spec §2):
+    """`f`, the decision margin, priced on every path:
 
         f(w) = min over the other priced options of PV_o(w) - PV_best(w)
 
     where `best` is `verdict.best`, the DETERMINISTIC winner — never the
-    majority, and never recomputed here.
-
-    The `min` is what keeps the third option inside the target: the pairwise
-    `PV[best] - PV[runner_up]` drops it, and on the design's own fixture the
-    house is cheapest on 9.45% of futures, so a pairwise target would delete
-    the house's channels from the table with no row saying so (§2 property 3).
+    majority, and never recomputed here. The `min` keeps a third option inside
+    the target, where a pairwise gap would delete its channels from the table
+    with no row saying so.
 
     This is the one home for the formula. A caller that wants `f` on a
     `ComparisonMonteCarloResult` calls this; it never restates the subtraction.
@@ -351,16 +329,12 @@ def _inflation_reaches_a_cash_flow(spec) -> bool:
     """§3.5's third structural zero, decided from the spec.
 
     In NOMINAL mode the inflation factor composes into every growth rate the
-    model has — value growth, fees, maintenance, other costs, rent escalation,
-    the renter's return — so a priced option is enough.
-
-    In REAL mode `_effective_growth_rate` DISCARDS the factor by construction,
-    and the inflation z reaches a cash flow only through a non-zero
-    `corr_inflation_*` whose own shock multiplier is live. With every
-    correlation at zero the channel draws one z per year and moves nothing:
-    measured on `advanced_config.yaml` forced to real mode, `sd(condo PV)` and
-    `P(condo cheapest)` are identical at `inflation_vol` 0.001, 0.010 and 0.300.
-    A measured 0.00 in that row would read as "inflation does not matter".
+    model has, so a priced option is enough. In REAL mode
+    `_effective_growth_rate` DISCARDS the factor by construction, and the
+    inflation draw reaches a cash flow only through a non-zero
+    `corr_inflation_*` whose own shock is live; with every correlation off the
+    channel draws every year and moves nothing, whatever its volatility (pinned
+    in `tests/test_channel_streams.py::TestDeadChannelExactness`).
     """
     sim = spec.simulation
     if spec.economic.mode == "nominal":
@@ -554,20 +528,18 @@ def planned_evaluations(paths: int, k_live: int, level_paths: int, *,
 
         N * (k_live + 2)  +  m * (k_live + 1)
 
-    The spread register prices `A`, `B` and one `A_B^(c)` per live channel at
-    N paths; the level register prices one freeze per live channel AND the
-    all-frozen run at `m`. §9's cost model wrote `m * k_live` and left the
-    all-frozen run out, though §3.4 prices it ("it costs one run of `m`
-    paths"); the gate once measured that figure while the module spent `m`
-    more, so the N it recommended as the largest under the ceiling priced
-    above the ceiling. One formula cannot disagree with itself.
+    The spread register prices `A`, `B` and one `A_B^(c)` per live channel at N
+    paths; the level register prices one freeze per live channel AND the
+    all-frozen run at `m`. A cost model that left the all-frozen run out once
+    recommended an N that priced above the ceiling it was chosen under; one
+    formula cannot disagree with itself.
 
-    `spread_priced=False` is the run where every future names one winner:
-    only `A` is priced for the spread register (§0.1 item 7 — no `B`, no
-    `A_B`). The gate cannot know that before it prices `A`, so it takes the
-    default, and its figure is the most the module can spend — which is why
-    the refusal says "up to". The reversal register's evaluations are
-    `break_even`'s, at the config's own `num_sims`, and are not counted here.
+    `spread_priced=False` is the run where every future lies on one side of the
+    line: only `A` is priced for the spread register. The gate cannot know that
+    before it prices `A`, so it takes the default, and its figure is the most the
+    module can spend — which is why the refusal says "up to". The reversal
+    register's evaluations are `break_even`'s, at the config's own `num_sims`,
+    and are not counted here.
     """
     spread = int(paths) * (int(k_live) + 2) if spread_priced else int(paths)
     return spread + int(level_paths) * (int(k_live) + 1)
@@ -580,6 +552,11 @@ def _level_paths(paths: int) -> int:
 # ---------------------------------------------------------------------------
 # §8 — the refusals, which are judgments about the data
 # ---------------------------------------------------------------------------
+
+def _joined(labels: Sequence[str]) -> str:
+    """`a`, `a and b`, `a, b and c`."""
+    return labels[0] if len(labels) == 1 else f"{', '.join(labels[:-1])} and {labels[-1]}"
+
 
 def _refuse(code: str, reason: str, channel_id: Optional[int] = None) -> DecompositionRefusal:
     return DecompositionRefusal(code=code, reason=reason, channel_id=channel_id)
@@ -601,28 +578,21 @@ def _no_futures_reason(spec) -> str:
     on any config. With fewer than two options priced there is no verdict to
     reverse, and no route is offered.
     """
+    from .break_even import break_even_route
     head = ("there are no futures to decompose: this run priced the central "
             "case only (--no-monte-carlo, or every uncertainty input is off). "
             "The deterministic line is the whole answer here.")
     priced = _priced(spec)
     if len(priced) < 2:
         return head
-    if len(priced) == 2:
-        return (f"{head} What would have to change for that answer to change "
-                "needs no futures: --break-even <key> solves the crossing on the "
-                "central case with the solver this block's reversal register "
-                "uses, and --sweep <key>=<values> prints the verdict at each point "
-                "of a grid.")
     return (f"{head} What would have to change for that answer to change needs no "
-            "futures: --sweep <key>=<values> prints the verdict at each point of a "
-            "grid and says where the cheapest option flips, and --break-even <key> "
-            "solves the crossing exactly with the solver this block's reversal "
-            "register uses — one pair of options at a time, so on this "
-            "three-option config it needs one option's section dropped first.")
+            f"futures: {break_even_route(len(priced))}, and --sweep <key>=<values> "
+            "prints the verdict at each point of a grid.")
 
 
 def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
-                            paths: int) -> Optional[DecompositionRefusal]:
+                            paths: int, *,
+                            drawing: Tuple[int, ...]) -> Optional[DecompositionRefusal]:
     """Every §8 refusal that can be decided without pricing a path.
 
     Order matters and is the order of the questions: are there futures at all,
@@ -640,21 +610,23 @@ def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
             "and there is nothing to decompose.",
         )
     if len(live) == 0:
+        labels = [channel(c).label for c in drawing]
+        drawn = ("no channel draws on this run either" if not labels else
+                 f"{_joined(labels)} {'draws' if len(labels) == 1 else 'draw'} on "
+                 "every path all the same, and no draw reaches a cash flow")
         return _refuse(
             "no_spread",
             "no channel on this run reaches a cash flow, so every future "
-            "prices the same margin and there is no spread to apportion. "
-            "Generators do advance on this config — the cost shocks are drawn "
-            "and then multiplied by a volatility of zero — which is why this "
-            "is a refusal and not an empty table.",
+            "prices the same margin and there is no spread to apportion: "
+            f"{drawn}, which is why this is a refusal and not an empty table.",
         )
     if len(live) == 1:
         only = channel(live[0])
         return _refuse(
             "one_channel",
-            f"one channel carries all of this run's spread: {only.label}. "
-            "There is nothing to split, and a table would read 1.00 and be a "
-            "tautology.",
+            "no other channel's draws reach a cash flow on this run, so there is "
+            f"nothing to split: a table would give {only.label} the whole spread "
+            "by construction, not by measurement.",
             channel_id=only.id,
         )
     level_paths = _level_paths(paths)
@@ -666,17 +638,18 @@ def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
         # widths in the config — is refused outright for the tenancy (a zeroed
         # reset hazard beside a stated market rent) and decomposes a different
         # run from the one the user asked about.
+        largest = largest_affordable_paths(len(live))
         return _refuse(
             "budget",
-            f"the spread and level registers would price up to {work:,} futures "
-            f"({paths:,} paths x {len(live) + 2} matrices, plus "
+            f"the spread and level registers would run up to {work:,} path "
+            f"evaluations ({paths:,} paths x {len(live) + 2} matrices, plus "
             f"{level_paths:,} x {len(live) + 1} for the level register: one "
-            f"freeze per live channel and one with all of them frozen), above the "
-            f"ceiling of {EVALUATION_CEILING:,} "
-            "[assistant-chosen: no published figure sets it]. "
+            f"freeze per live channel and one with all of them frozen), above this "
+            f"engine's ceiling of {EVALUATION_CEILING:,} [set in the engine, not by "
+            "a published figure and not in your config]. "
             "Run it at a smaller sample of its own with --decompose=N: on this "
-            "run the largest N whose work stays within the ceiling is "
-            f"{largest_affordable_paths(len(live))}.",
+            f"run the largest N whose work stays within the ceiling is {largest:,} "
+            f"(--decompose={largest}).",
         )
     return None
 
@@ -786,11 +759,12 @@ def _has_unattributed_width(widths: Sequence[Width]) -> bool:
     return any(w.source == "unattributed" for w in widths)
 
 
-def _first_unstated(widths: Sequence[Width]) -> Optional[Width]:
-    for w in widths:
-        if w.source not in _USER_CLASSES:
-            return w
-    return None
+def _unstated_widths(widths: Sequence[Width]) -> Tuple[Width, ...]:
+    """Every width on a row that is neither the user's nor an anchor's, in the
+    row's own order. ALL of them, never the first: nothing measures which of a
+    row's widths moves its share most, so naming one of several as the figure
+    to check first would claim a priority no run computed."""
+    return tuple(w for w in widths if w.source not in _USER_CLASSES)
 
 
 # ---------------------------------------------------------------------------
@@ -801,11 +775,11 @@ def _dead_draw_reason(spec, channel_id: int) -> str:
     """Why this channel's draws reach no cash flow, in the words of the spec."""
     if channel_id == 0:
         return (
-            "in real terms the engine uses your rates as typed, so the "
-            "inflation draw reaches a cash flow only through a "
-            "corr_inflation_* key with a live shock behind it. Every one of "
-            "them is off here, so the channel draws one figure per year and "
-            "moves nothing."
+            "this run is in real terms, where the inflation draw is compounded "
+            "into no growth rate and reaches a cash flow only through a "
+            "corr_inflation_* key that is not 0 and pulls on a cost shock that "
+            "moves a cash flow; no corr_inflation_* key on this config does "
+            "both, so the channel draws one figure per year and moves nothing."
         )
     if channel_id == 1:
         return (
@@ -813,47 +787,32 @@ def _dead_draw_reason(spec, channel_id: int) -> str:
             "value dispersion is at zero volatility and no priced owner has a "
             "crash hazard that can move a value."
         )
-    if channel_id == 2:
-        return (
-            "the population scenario is drawn but no priced owned option reads "
-            "a prior row, so the demographic drift reaches no cash flow."
-        )
     if channel_id in (3, 4, 5):
         return (
-            "this option's cost shocks are drawn and then multiplied by a "
-            "volatility of zero rather than skipped, so the channel consumes "
-            "draws while moving no number. A channel that draws is not a "
-            "channel that moves a number."
+            "this channel's draws are taken on every path, and on this config each "
+            "one either scales a figure that is zero (a volatility, a cost or a "
+            "rate) or settles something that comes out the same on every path (an "
+            "event's year or whether it happens), so none of them moves a cash flow."
         )
-    return (
-        "the channel's draw sites are reached and every figure they feed is "
-        "multiplied by zero, so nothing they produce reaches a cash flow."
-    )
+    # The population and the portfolio draw exactly when they reach a cash flow
+    # on any run that prices an owned option, which every run pricing two
+    # options does: a dead-draw row for either is a producer defect, and no
+    # sentence is written for a case the engine cannot produce.
+    raise ValueError(
+        f"channel {channel_id} ({channel(channel_id).label}) draws exactly when it "
+        f"reaches a cash flow on a run pricing two options, so a dead-draw row for "
+        f"it is a producer defect")
 
 
-def _dead_draw_rows(spec, raw, live: Tuple[int, ...], drawing: Tuple[int, ...],
-                    already_named: Sequence[int]) -> List[StructuralZero]:
-    """§3.5's third kind, enumerated over the CATEGORY rather than one instance.
-
-    The reversal register (`break_even.reversal_register`) detects the
-    real-mode inflation trap from the config, which is the instance §3.5
-    names. It is not the only one: any
-    channel that draws and reaches no cash flow is the same structural zero,
-    and on a spec with every volatility at zero that is the condo's, the
-    house's and the renter's cost shocks — three channels, pinned at the
-    bit-generator state by
-    `tests/test_channel_streams.py::test_the_base_spec_touches_exactly_three_streams`.
-    A rule written for inflation alone would ship two thirds of its own defect.
-
-    `already_named` is the channel ids the reversal register has already
-    claimed, so one channel cannot get two rows. The draws-versus-reaches
-    predicates live in this module, so if these rows ever move into
-    `_other_structural_zeros` beside the instance they generalise, they come
-    with `channels_that_draw` and `live_channels` as their evidence.
-    """
+def _dead_draw_rows(spec, raw, live: Tuple[int, ...],
+                    drawing: Tuple[int, ...]) -> List[StructuralZero]:
+    """The `dead_draw` rows: every channel that draws on this spec and reaches
+    no cash flow, enumerated over the CATEGORY — the economy in real terms and
+    the cost channels at zero volatility alike — and decided here, the one
+    place that holds both predicates (`channels_that_draw`, `live_channels`)."""
     rows: List[StructuralZero] = []
     for channel_id in drawing:
-        if channel_id in live or channel_id in already_named:
+        if channel_id in live:
             continue
         entry = channel(channel_id)
         widths = _widths_for(spec, raw, entry)
@@ -885,21 +844,19 @@ def _reversal_register(spec, raw, det, mc, live: Tuple[int, ...],
     this module can see and no solved rows — an empty tuple that says the
     assembler found no candidate, never that none exists.
     """
-    already: List[int] = []
-    register = ReversalRegister(exact=(), estimated=(), structural_zeros=())
+    register = ReversalRegister(
+        exact=(), estimated=(), structural_zeros=(),
+        no_distance_reason=("no reversal distance is solved here: this block was "
+                            "handed no config mapping, so it had no stated key to "
+                            "search"))
     if raw is not None:
         from .break_even import reversal_register as solve_reversal_register
         register = solve_reversal_register(raw, det, mc)
-        already = [z.channel_id for z in register.structural_zeros
-                   if z.channel_id is not None]
-    extra = _dead_draw_rows(spec, raw, live, drawing, already)
+    extra = _dead_draw_rows(spec, raw, live, drawing)
     if not extra:
         return register
-    return ReversalRegister(
-        exact=register.exact,
-        estimated=register.estimated,
-        structural_zeros=register.structural_zeros + tuple(extra),
-    )
+    return dataclasses.replace(
+        register, structural_zeros=register.structural_zeros + tuple(extra))
 
 
 # ---------------------------------------------------------------------------
@@ -921,14 +878,12 @@ def _subset_first_order_interval(
     it: that function intervals every channel and the total, and a sum over a
     subset is neither. So the resample table is rebuilt from
     `bootstrap_path_indices` — the same table, from the same seed and the same
-    fixed salt, which is why it is public — and every resample's shares come
-    from `first_order_indices` itself rather than from a second copy of
-    Saltelli's numerator here. The estimator keeps one home; only the summing
-    is local.
+    fixed salt — and every resample's shares come from `first_order_indices`
+    itself rather than from a second copy of Saltelli's numerator here. The
+    estimator keeps one home; only the summing is local.
 
-    The percentile convention mirrors `bootstrap_spread_intervals`: bounds at
-    50 ± 50·confidence, written that way there so the default lands on exactly
-    2.5 and 97.5 instead of on 2.500000000000002.
+    The percentile convention mirrors `decomposition_math`'s, `50 ± 50·confidence`,
+    so the default lands exactly on its two percentiles.
     """
     table = dm.bootstrap_path_indices(f_a.size, n_resamples, seed)
     chosen = list(positions)
@@ -968,13 +923,13 @@ def _top_row(points: Sequence[Tuple[int, float, bool]]) -> Tuple[Optional[int], 
     registers name their top row by.
 
     The top row is the largest POINT estimate over EVERY row, resolved or not.
-    It leads only if it resolved; otherwise it is the unresolved top and
-    nothing leads. The largest RESOLVED row is never promoted in its place: on
-    examples/basic_config.yaml that named the house's costs, at +$252, "the
-    largest single shift" beside the condo's costs at +$390 ± $273, and on
-    examples/rent_vs_condo_vs_house.yaml it handed the spread table's lead,
-    in the JSON, to a share of 0.01 beside an unresolved 1.07. A tie on the
-    point goes to the first row in live-channel order.
+    It leads only if it resolved; otherwise it is the unresolved top and nothing
+    leads. The largest RESOLVED row is never promoted in its place: that named a
+    smaller shift "the largest" on examples/basic_config.yaml and handed the
+    spread table's lead, in the JSON, to a sliver of the spread on
+    examples/rent_vs_condo_vs_house.yaml. A tie on the point goes to the first
+    row in live-channel order. The callers hand it each row's point through
+    `_share_point` and `_level_point`, the level's taken in SIZE.
     """
     if not points:
         return None, None
@@ -986,27 +941,29 @@ def _spread_register(
     f_a: Array, f_b: Array, f_ab: Array, live: Tuple[int, ...],
     widths_by_channel: Dict[int, Tuple[Width, ...]], seed: int,
 ) -> SpreadRegister:
-    """§3.3's table: two Sobol shares, the flip fraction, and §4's residual.
+    """The spread register: two Sobol shares, the flip fraction and the gap
+    between the shares per channel, and the interaction residual.
 
     Every figure comes from `decomposition_math`; the only judgments here are
     which rows resolved, which row is on top and whether it leads (`_top_row`),
-    and whether §5 mechanism 3's superlative is licensed.
+    which rows' gaps resolved, and whether the superlative is licensed.
 
     A ROW IS UNRESOLVED IF EITHER FIGURE IS (§0.1 item 11). Conservative is
     correct for the same reason the register refuses at all: the alternative
     prints one resolved figure beside one that is noise and leaves the reader
     to notice.
 
-    Never called on the one case §8 admits where the block prints and the
-    shares do not — `P(f > 0) == 1`, every future naming the same winner. That
-    case is `_no_sign_variation` below, a named refusal in this register's
-    slot, and it prices no `B` matrix: nothing measured there would be printed.
+    Never called when every future lies on one side of the line: that case is
+    `_no_sign_variation`, a named refusal in this register's slot, and it prices
+    no `B` matrix, since nothing measured there would be printed.
     """
     first = dm.first_order_indices(f_a, f_b, f_ab)
     total = dm.total_order_indices(f_a, f_ab)
     flip = dm.sign_flip_fraction_of_futures(f_a, f_ab)
+    gaps = dm.interaction_gaps(f_a, f_b, f_ab)
     first_ci, total_ci, flip_ci, sum_ci = dm.bootstrap_spread_intervals(
         f_a, f_b, f_ab, seed=seed)
+    gap_ci = dm.bootstrap_interaction_gap_intervals(f_a, f_b, f_ab, seed=seed)
 
     rows: List[SpreadRow] = []
     for position, channel_id in enumerate(live):
@@ -1032,6 +989,8 @@ def _spread_register(
             flip=float(flip[position]),
             flip_ci=_interval(flip_ci[position]),
             widths=widths,
+            interaction_gap=float(gaps[position]),
+            interaction_gap_ci=_interval(gap_ci[position]),
         ))
 
     leading, unresolved_top = _top_row([
@@ -1069,37 +1028,56 @@ def _spread_register(
         )
 
     licensed = leading_row is not None and _all_widths_stated_by_user(leading_row.widths)
-    check_first = None if licensed or leading_row is None else _first_unstated(
+    check_first = () if licensed or leading_row is None else _unstated_widths(
         leading_row.widths)
     unattributed = tuple(
         channel_id for channel_id in live
         if _has_unattributed_width(widths_by_channel.get(channel_id, ())))
+    interacting = tuple(
+        row.channel_id for row in rows
+        if dm.interaction_is_resolved(row.interaction_gap_ci.low))
     return SpreadRegister(rows=tuple(rows), interaction=interaction,
                           leading_channel_id=leading,
                           unresolved_top_channel_id=unresolved_top,
                           superlative_licensed=licensed,
                           check_first=check_first,
-                          unattributed_channel_ids=unattributed)
+                          unattributed_channel_ids=unattributed,
+                          interaction_channel_ids=interacting)
 
 
-def _no_sign_variation(best: str, futures: int) -> RefusedSpread:
-    """§0.1 item 7: every future names the same winner, so the SPREAD register
-    refuses by name and the level and reversal registers still print.
+def _one_side_of_the_line(best_cheapest: float) -> bool:
+    """§0.1 items 7 and 29: the spread register refuses when `f` never changes
+    sign — `P(f > 0)` of exactly 0 or exactly 1, on either side. Then no
+    re-draw moves a future across a line no future is near, and the flip
+    column would read zero on every row. The ONE home of that condition."""
+    return best_cheapest in (0.0, 1.0)
+
+
+def _no_sign_variation(best: str, futures: int, best_cheapest: float) -> RefusedSpread:
+    """The spread register's refusal in its own slot, worded for the side the
+    futures are on; the level and reversal registers still print.
 
     A named refusal rather than `SpreadRegister(rows=())`: empty rows beside
     printed level rows leave the reader, and the formatter, to infer why. The
-    sentence is worded the way `RefusedSpread` says it must be. The shares are
-    NOT undefined — with `Var(f) > 0` the centred indices are well defined when
-    `f` never changes sign — so the sentence says what is true: nothing sits
-    across the line in decision space, so there is nothing there to split.
+    shares are NOT undefined — with `Var(f) > 0` the centred indices are well
+    defined when `f` never changes sign — so the sentence says what is true:
+    no future sits across the line, so there is nothing there to split.
     """
+    if not _one_side_of_the_line(best_cheapest):
+        raise ValueError(
+            f"P({best} cheapest) is {best_cheapest!r} on this sample, so futures sit on "
+            f"both sides of the line and the spread register has shares to print")
+    where = (f"{best} is cheapest in all {futures:,} of these futures"
+             if best_cheapest == 1.0 else
+             f"{best}, the central case's winner, is cheapest in none of these "
+             f"{futures:,} futures")
     return RefusedSpread(
         code="no_sign_variation",
-        reason=(f"no share is apportioned: {best} is cheapest in all "
-                f"{futures:,} of these futures, so none sits across the line for "
-                "a channel to have moved it there — there is nothing to split in "
-                "decision space. The shares themselves are defined; they would "
-                "rank the scatter of a margin that never changes the answer."),
+        reason=(f"no share is apportioned: {where}, so every future sits on the same "
+                f"side of the line the flip column counts — whether {best} is "
+                "cheapest — and no channel moved one across it: there is nothing to "
+                "split in decision space. The shares themselves are defined; they "
+                "would rank the scatter of a margin whose sign never changes."),
     )
 
 
@@ -1180,19 +1158,15 @@ def _freeze_leak(level: LevelRegister) -> DecompositionRefusal:
     """The level register's identity failed, so the whole block refuses.
 
     With EVERY channel frozen, every path must price one and the same margin:
-    `all_frozen_path_spread` is exactly 0.0 on a correct engine (§0.1 item 19),
-    and anything else means a draw site escaped the freeze mask. Then each
-    frozen run differs from `A` in more than the channel it froze, every shift
-    in the register is measured against a baseline that is not the central
-    case, and the sentence "all N frozen reproduces the central case" would be
-    printed over a run where it did not. The spread cannot print without the
-    level (§5 mechanism 5), so nothing prints — a named refusal, never a
-    register that reads as though the identity held.
+    `all_frozen_path_spread` is exactly zero on a correct engine, and anything
+    else means a draw site escaped the freeze mask. Then each frozen run differs
+    from `A` in more than the channel it froze, every shift is measured against a
+    baseline that is not the central case, and "reproduces the central case"
+    would be printed over a run where it did not. The spread cannot print
+    without the level, so nothing prints.
 
     `all_frozen_deviation` is NOT gated here but by `_identity_failed`: it is
-    held to a ULP budget scaled to the totals subtracted, never to zero,
-    because the simulators compound year by year while the central case takes
-    `(1 + g) ** years`.
+    held to a ULP budget scaled to the totals subtracted, never to zero.
     """
     return _refuse(
         "freeze_leak",
@@ -1211,12 +1185,13 @@ def identity_budget(det, verdict) -> float:
     summed from — each priced option's breakdown terms added by size (its
     `total_pv` is their sum), that total itself, and the verdict's margin.
 
-    The TERMS and not the total, because the rounding lives in them: an
-    all-cash pair whose totals net ~$400k of equity against costs to $23,170
-    measured a deviation of 32 ulps of that total and ONE ulp of its terms.
-    Scaled by the total, the gate refused that legal run. The budget's rule
-    has its one home in `decomposition_math`; which figures it is taken over
-    has its one home here, and the tests import both."""
+    The TERMS and not the total, because the rounding lives in them: a pair
+    whose small totals net large terms measures many units of its total and one
+    of its terms, and a budget scaled by the total refused that legal run
+    (pinned in `tests/test_decomposition_run.py::TestTheIdentityIsGated`). The
+    budget's rule has its one home in `decomposition_math`; which figures it is
+    taken over has its one home here, and the tests import both.
+    """
     figures: List[float] = [abs(verdict.margin_pv)]
     for option in (det.condo, det.house, det.rent):
         if option is not None:
@@ -1311,7 +1286,8 @@ def decompose(spec, *, det, mc, verdict, raw=None, prior=None,
     live = live_channels(spec, prior)
     drawing = channels_that_draw(spec, prior)
 
-    refusal = _refusal_before_pricing(spec, mc, verdict, live, requested)
+    refusal = _refusal_before_pricing(spec, mc, verdict, live, requested,
+                                      drawing=drawing)
     if refusal is not None:
         return refusal
     if requested < MIN_INTERVALLED_FUTURES:
@@ -1347,8 +1323,9 @@ def decompose(spec, *, det, mc, verdict, raw=None, prior=None,
         )
 
     spread: Union[SpreadRegister, RefusedSpread]
-    if float(np.mean(f_a > 0.0)) == 1.0:
-        spread = _no_sign_variation(best, int(f_a.size))
+    best_cheapest = float(np.mean(f_a > 0.0))
+    if _one_side_of_the_line(best_cheapest):
+        spread = _no_sign_variation(best, int(f_a.size), best_cheapest)
     else:
         f_b = margin_per_path(_run(spec_at_paths, MATRIX_B), best)
         f_ab = np.empty((len(live), f_a.size), dtype=np.float64)
@@ -1376,6 +1353,7 @@ def decompose(spec, *, det, mc, verdict, raw=None, prior=None,
 
     return Decomposition(
         paths=int(f_a.size),
+        max_paths=largest_affordable_paths(len(live)),
         live_channel_ids=live,
         verdict=verdict,
         mean_margin=float(np.mean(f_a)),

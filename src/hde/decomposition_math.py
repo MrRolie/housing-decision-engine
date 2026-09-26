@@ -1,22 +1,16 @@
-"""
-The decomposition's arithmetic: the Sobol' index estimators, the sign-flip
+"""The decomposition's arithmetic: the Sobol' index estimators, the sign-flip
 column, the bootstrap that puts an interval on each figure, and the level
 register's paired statistics.
 
 Pure numpy. This module imports nothing from the engine — no spec, no config,
 no simulation, no result type. It takes arrays of the decision margin `f`
 evaluated on matched sets of futures and returns plain floats, tuples and
-arrays. The dataclasses the decomposition block exchanges live in
-`decomposition.py`, so each of those truths keeps one home.
+arrays. Each function's docstring carries its own formula; what the figures
+mean to a reader of the block is `docs/reference/API_CONTRACT.md`'s.
 
-Design: `docs/specs/2026-09-22-which-risk-decides-it.md`, section 3.3 (the
-estimators, the bootstrap, the flip column), 3.4 (the level arithmetic) and 4
-(the interaction residual and the branch on which it refuses to print).
-
-ONE AMENDMENT TO SECTION 3.3, ruled in section 0.1 item 13 and carried here:
-the first-order numerator's `f(B)` is CENTRED by its own sample mean. Section
-3.3's formula block still prints the uncentred form; the ruling supersedes it
-and says why in measured terms. `first_order_indices` carries the derivation.
+ONE AMENDMENT TO THE DESIGN RECORD'S FORMULA BLOCK, ruled in its section 0.1
+item 13 and carried here: the first-order numerator's `f(B)` is CENTRED by
+its own sample mean. `first_order_indices` carries the derivation.
 
 THE THREE TABLES, named once:
 
@@ -29,19 +23,15 @@ Every function here is a statement about those tables and nothing else: it
 cannot know which channel is which, and it never decides what prints.
 
 TWO KINDS OF NUMBER, and conflating them is this feature's headline failure:
+a SHARE OF THE SPREAD's variance (`first_order_indices`,
+`total_order_indices`), and a FRACTION OF FUTURES that change sides
+(`sign_flip_fraction_of_futures`), which is not a share of anything and which
+nothing here sums.
 
-  * a SHARE OF THE SPREAD's variance — `first_order_indices`,
-    `total_order_indices`. Shares sum toward 1 across channels, and
-    `sum_first_order_shares` is the only function here that adds anything up.
-  * a FRACTION OF FUTURES that change sides — `sign_flip_fraction_of_futures`.
-    It is not a share of anything. It sums to nothing, no function here sums
-    it, and on the design's own fixture the same channel reads 0.88 as a share
-    and 41% as a flip fraction.
-
-NOTHING IS EVER CLAMPED. A first-order estimate below 0 or above 1 is returned
-as measured; `share_is_resolved` says it does not resolve, and the caller
-prints that rather than a tidy 0.00. A clamp is the cheap all-clear in this
-feature's costume.
+NOTHING IS EVER CLAMPED. An estimate outside [0, 1] is returned as measured;
+`share_is_resolved` says it does not resolve, and the caller prints that
+rather than a tidy zero. A clamp is the cheap all-clear in this feature's
+costume.
 """
 
 from __future__ import annotations
@@ -64,6 +54,9 @@ __all__ = [
     "share_is_resolved",
     "bootstrap_path_indices",
     "bootstrap_spread_intervals",
+    "interaction_gaps",
+    "bootstrap_interaction_gap_intervals",
+    "interaction_is_resolved",
     "residual_interaction",
     "level_shift",
     "level_shifts",
@@ -99,14 +92,12 @@ LEVEL_RESOLUTION_SIGMAS = 2.0
 # every path prices is held to the central case's own within this many units in
 # the last place of the magnitude the margin is summed from — never to zero.
 # The simulators compound the value year by year while the central case takes
-# `(1 + g) ** years`, and on the design's fixture that difference measured
-# exactly ONE ulp of the $476,086 house total (5.821e-11). Measured on every
-# shipped example and on an all-cash pair whose $23,170 totals net about $400k
-# of equity against costs, it is at most 1.5 ulps of the terms summed by
-# magnitude — and 32 ulps of that pair's NET total, which is why the caller
-# passes the terms' magnitude and not the total. Eight leaves room without
-# admitting any figure a person could see: at a million dollars of terms it is
-# under a millionth of a cent.
+# `(1 + g) ** years`. Measured on every shipped example and on an all-cash pair
+# whose small totals net large terms, the difference is a unit or two of the
+# terms summed by magnitude and many units of that pair's NET total, which is
+# why the caller passes the terms' magnitude and not the total (both pinned in
+# `tests/test_decomposition_run.py::TestTheIdentityIsGated`). Eight leaves room
+# without admitting any figure a person could see.
 IDENTITY_ULPS = 8.0
 
 # Resample work is done in blocks of at most this many floats so that a large
@@ -187,15 +178,13 @@ def first_order_indices(f_a: object, f_b: object, f_ab: object) -> Array:
     Var(E[f | X_c]). Written with `f(A)` there, the estimator returns the
     NEGATIVE of the index on an additive model.
 
-    WHY f(B) IS CENTRED (design section 0.1 item 13, ruled 2026-09-22, a change
-    to the mechanism taken on measured grounds): uncentred, the numerator
-    carries an `E[f] * mean(f(A_B) - f(A))` term which is zero in expectation
-    and noisy in sample, so the estimator's error grows with `|E f| / sd(f)` —
-    about 1% at this target's measured 0.23, 1.17x at one sigma and 2.1x at
-    three. Three sigma is a DECISIVE run, so the attribution was worst exactly
-    where the engine tells a household the answer is settled. Subtracting f(B)'s
-    own sample mean removes the term and is identical in expectation, because
-    `f(A_B^(c)) - f(A)` is itself mean-zero.
+    WHY f(B) IS CENTRED (design record section 0.1 item 13, a change to the
+    mechanism taken on measured grounds): uncentred, the numerator carries an
+    `E[f] * mean(f(A_B) - f(A))` term which is zero in expectation and noisy in
+    sample, so the estimator's error grows with `|E f| / sd(f)` — largest on a
+    DECISIVE run, exactly where the engine tells a household the answer is
+    settled. Subtracting f(B)'s own sample mean removes the term and is
+    identical in expectation, because `f(A_B^(c)) - f(A)` is itself mean-zero.
 
     Returns one value per channel, as measured — outside [0, 1] when the
     estimator's own noise puts it there. Never clamped.
@@ -330,15 +319,55 @@ def bootstrap_spread_intervals(
     it fixed would understate every width.
 
     Costs no model evaluation. A channel that consumes no draw has an interval of
-    exactly [0.0, 0.0] on all three figures, because every resample of an
-    identical table gives exactly 0.
+    exactly zero width at zero on all three figures, because every resample of
+    an identical table gives exactly zero.
     """
     a, b = _matched(f_a, f_b)
     ab = _channel_table("the f(A_B) table", f_ab, a.size)
     _variance_of_f(a)
+    low_q, high_q = _percentile_bounds(confidence)
+    first_order, total_order, flips = _resampled_figures(a, b, ab, seed, n_resamples)
+
+    sums = first_order.sum(axis=1)
+    sum_bounds = np.percentile(sums, [low_q, high_q])
+    return (
+        _interval_per_channel(first_order, low_q, high_q),
+        _interval_per_channel(total_order, low_q, high_q),
+        _interval_per_channel(flips, low_q, high_q),
+        (float(sum_bounds[0]), float(sum_bounds[1])),
+    )
+
+
+def _percentile_bounds(confidence: float) -> Tuple[float, float]:
+    """The two percentiles a `confidence` interval cuts at.
+
+    Written as `50 ± 50·confidence` so the default lands exactly on its two
+    percentiles: the obvious `100 * (1 - confidence) / 2` lands one unit in the
+    last place off, which shifts the interpolated bound and makes a published
+    figure depend on an arithmetic accident rather than on the confidence level.
+    """
     if not 0.0 < float(confidence) < 1.0:
         raise ValueError(f"confidence must lie strictly inside (0, 1); got {confidence!r}")
+    half_width = 50.0 * float(confidence)
+    return 50.0 - half_width, 50.0 + half_width
 
+
+def _interval_per_channel(samples: Array, low_q: float, high_q: float) -> Array:
+    bounds = np.percentile(samples, [low_q, high_q], axis=0)
+    stacked: Array = np.column_stack((bounds[0], bounds[1]))
+    return stacked
+
+
+def _resampled_figures(
+    a: Array, b: Array, ab: Array, seed: int, n_resamples: int,
+) -> Tuple[Array, Array, Array]:
+    """`(first_order, total_order, flips)`, each `(n_resamples, k)`: the three
+    per-channel estimators applied to every resample of the path index table.
+
+    The ONE place the bootstrap applies an estimator, so every interval in the
+    spread register — a share, a flip, their sum, and the gap between a
+    channel's two shares — is read off the same resamples of the same futures.
+    """
     n_futures = a.size
     n_channels = ab.shape[0]
     indices = bootstrap_path_indices(n_futures, n_resamples, seed)
@@ -371,28 +400,54 @@ def bootstrap_spread_intervals(
             )
             total_order[start:stop, channel] = np.mean((a_r - ab_r) ** 2, axis=1) / (2.0 * var_r)
             flips[start:stop, channel] = np.mean(np.sign(ab_r) != sign_a_r, axis=1)
+    return first_order, total_order, flips
 
-    # Written so that the default lands on exactly 2.5 and 97.5: the obvious
-    # `100 * (1 - confidence) / 2` evaluates to 2.500000000000002, which shifts
-    # the interpolated bound by an ULP and makes a published figure depend on an
-    # arithmetic accident rather than on the confidence level.
-    half_width = 50.0 * float(confidence)
-    low_q = 50.0 - half_width
-    high_q = 50.0 + half_width
 
-    def interval_per_channel(samples: Array) -> Array:
-        bounds = np.percentile(samples, [low_q, high_q], axis=0)
-        stacked: Array = np.column_stack((bounds[0], bounds[1]))
-        return stacked
+def interaction_gaps(f_a: object, f_b: object, f_ab: object) -> Array:
+    """`S_Tc - S_c` for every channel: the part of a channel's total index that
+    is not first order — what that channel does JOINTLY with the others.
 
-    sums = first_order.sum(axis=1)
-    sum_bounds = np.percentile(sums, [low_q, high_q])
-    return (
-        interval_per_channel(first_order),
-        interval_per_channel(total_order),
-        interval_per_channel(flips),
-        (float(sum_bounds[0]), float(sum_bounds[1])),
-    )
+    Section 4 names this, per channel, as the measurement of model
+    non-linearity. It is the difference of the two estimators above and
+    nothing else, so a gap read off the printed columns is this figure."""
+    return total_order_indices(f_a, f_ab) - first_order_indices(f_a, f_b, f_ab)
+
+
+def bootstrap_interaction_gap_intervals(
+    f_a: object,
+    f_b: object,
+    f_ab: object,
+    *,
+    seed: int,
+    n_resamples: int = DEFAULT_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> Array:
+    """`(k, 2)` percentile intervals on each channel's `S_Tc - S_c`.
+
+    Read off the SAME resample table as `bootstrap_spread_intervals` (same
+    seed, same salt, same path indices), so the gap is paired inside every
+    resample: both of a channel's indices are re-estimated on one resample and
+    subtracted there. That pairing is what the interval is for — the two
+    columns' own intervals overlap on a gap that resolves. It costs no model
+    evaluation.
+    """
+    a, b = _matched(f_a, f_b)
+    ab = _channel_table("the f(A_B) table", f_ab, a.size)
+    _variance_of_f(a)
+    low_q, high_q = _percentile_bounds(confidence)
+    first_order, total_order, _flips = _resampled_figures(a, b, ab, seed, n_resamples)
+    return _interval_per_channel(total_order - first_order, low_q, high_q)
+
+
+def interaction_is_resolved(gap_low: float) -> bool:
+    """A channel's interaction resolves when its `S_Tc - S_c` interval lies
+    entirely ABOVE zero.
+
+    Only above: a total index is never below its own first-order index in
+    truth (the total contains the first order), so an interval lying below
+    zero is estimator noise, not interaction of either sign, and an interval
+    that reaches zero cannot tell interaction from none."""
+    return bool(float(gap_low) > 0.0)
 
 
 def residual_interaction(
@@ -432,7 +487,7 @@ def level_shift(f_base: object, f_frozen: object) -> Tuple[float, float]:
     difference — what the futures price that the central case does not.
 
     The standard error is taken on the DIFFERENCE, not on the two samples: the
-    pairing is what makes a $125,074 shift readable against a $286,506 spread.
+    pairing is what makes a shift readable against a spread many times its size.
     An unpaired error on the same tables is larger by orders of magnitude and
     would report every channel as unresolved.
     """

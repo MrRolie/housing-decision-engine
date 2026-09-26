@@ -241,8 +241,8 @@ class TestARegisterHasOneTopRow:
         fields = dict(rows=(), interaction=dc.RefusedInteraction(
                           first_order_sum=1.1, first_order_sum_ci=dc.Interval(1.0, 1.2)),
                       leading_channel_id=6, unresolved_top_channel_id=None,
-                      superlative_licensed=False, check_first=None,
-                      unattributed_channel_ids=())
+                      superlative_licensed=False, check_first=(),
+                      unattributed_channel_ids=(), interaction_channel_ids=())
         fields.update(over)
         return dc.SpreadRegister(**fields)
 
@@ -265,7 +265,7 @@ class TestARegisterHasOneTopRow:
         assert self._spread(leading_channel_id=None,
                             unresolved_top_channel_id=3).unresolved_top_channel_id == 3
         assert self._spread(superlative_licensed=True).superlative_licensed
-        assert self._spread(check_first=width).check_first == width
+        assert self._spread(check_first=(width,)).check_first == (width,)
         assert self._level().leading_channel_id == 5
         assert self._level(leading_channel_id=None,
                            unresolved_top_channel_id=3).unresolved_top_channel_id == 3
@@ -278,8 +278,8 @@ class TestARegisterHasOneTopRow:
 
     @pytest.mark.parametrize("over", [
         dict(superlative_licensed=True),
-        dict(check_first=dc.Width(key="simulation.condo_fee_vol", formatted="10%",
-                                  source="assistant")),
+        dict(check_first=(dc.Width(key="simulation.condo_fee_vol", formatted="10%",
+                                   source="assistant"),)),
     ], ids=["superlative", "check_first"])
     def test_no_leader_licenses_nothing(self, over):
         """*Kills it:* deleting the no-leader guard, which let the JSON name a
@@ -322,3 +322,51 @@ class TestAStatedValueSaysWhoseFigureItIs:
             field = next(f for f in dataclasses.fields(cls) if f.name == "stated_source")
             assert field.default is dataclasses.MISSING
             assert field.default_factory is dataclasses.MISSING
+
+
+class TestAnEmptyRegisterSaysWhatItSearched:
+    """`no_distance_reason` is set exactly when no row carries a distance: an
+    empty register with no reason leaves the reader to take the absence for a
+    finding, and a reason beside rows explains an emptiness that is not there.
+    *Kills it:* deleting the guard, or widening it to refuse a legal register."""
+
+    _ROW = TestAStatedValueSaysWhoseFigureItIs._EXACT
+
+    def test_the_legal_shapes_build(self):
+        dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                            no_distance_reason="nothing was searched")
+        dc.ReversalRegister(exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
+                            estimated=(), structural_zeros=(), no_distance_reason=None)
+
+    def test_an_empty_register_without_a_reason_refuses(self):
+        with pytest.raises(ValueError, match="no_distance_reason"):
+            dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                                no_distance_reason=None)
+
+    def test_a_reason_beside_rows_refuses(self):
+        with pytest.raises(ValueError, match="no_distance_reason"):
+            dc.ReversalRegister(
+                exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
+                estimated=(), structural_zeros=(), no_distance_reason="none searched")
+
+
+class TestABlockPricesNoMoreThanTheBudgetAdmits:
+    """`paths` lies in (0, max_paths]: the budget gate refuses any count above
+    `max_paths`, so a block past it is a producer defect, and the route clause
+    that reads `max_paths` as "the most this register prices on this run"
+    would be false over it.
+    *Kills it:* deleting the guard, or widening it to refuse the cap itself."""
+
+    @staticmethod
+    def _build(paths, max_paths):
+        from tests.decomposition_households import two_channel_option_state
+        return dataclasses.replace(two_channel_option_state(), paths=paths,
+                                   max_paths=max_paths)
+
+    def test_the_cap_itself_builds(self):
+        assert self._build(4000, 4000).paths == 4000
+
+    @pytest.mark.parametrize("paths, max_paths", [(4001, 4000), (0, 4000)])
+    def test_outside_the_range_refuses(self, paths, max_paths):
+        with pytest.raises(ValueError, match="largest affordable"):
+            self._build(paths, max_paths)

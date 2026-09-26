@@ -28,8 +28,8 @@ household's own value is on), and a `decisive` crossing names its states in
 `break_even.decisive_state`'s words — "decisive for <option>" or "not
 decisive" — never a boolean.
 """
+from hde import decomposition as _contract
 from hde.decomposition import (
-    Decomposition,
     EstimatedBoundary,
     EstimatedReversal,
     ExactReversal,
@@ -42,21 +42,83 @@ from hde.decomposition import (
     ResolvedInteraction,
     ResolvedLevel,
     ResolvedShares,
-    ReversalRegister,
     SampledBoundary,
     SolvedBoundary,
-    SpreadRegister,
-    SpreadRow,
     StructuralZero,
     UnresolvedShares,
     Width,
     AxisReference,
 )
+from hde.decomposition_run import _dead_draw_reason, largest_affordable_paths
 from hde.models import Verdict
 
 
 def _w(key, formatted, source, anchor=None, note=None):
     return Width(key=key, formatted=formatted, source=source, anchor=anchor, note=note)
+
+
+# The contract's four containers, built through factories that FILL the fields
+# a household here does not state. Each filled value is derived from the
+# household's own figures or is an interval that decides nothing, so the
+# households keep saying only what their figures say.
+
+def SpreadRow(*, shares, interaction_gap=None, interaction_gap_ci=None, **fields):
+    """A row whose interaction gap is its own two shares' difference unless
+    stated, with an interval straddling zero unless stated (`# filled`): a
+    household that means a gap to resolve says so with its own interval."""
+    if isinstance(shares, ResolvedShares):
+        alone, together = shares.alone, shares.with_interaction
+    else:
+        alone, together = shares.provisional_alone, shares.provisional_with_interaction
+    gap = together - alone if interaction_gap is None else interaction_gap
+    if interaction_gap_ci is None:
+        interaction_gap_ci = Interval(min(gap, 0.0) - 0.01, max(gap, 0.0) + 0.01)
+    return _contract.SpreadRow(shares=shares, interaction_gap=gap,
+                               interaction_gap_ci=interaction_gap_ci, **fields)
+
+
+def SpreadRegister(*, check_first=(), interaction_channel_ids=None, **fields):
+    """`check_first` as the tuple the contract carries (one width may be given
+    bare); `interaction_channel_ids` read off the rows' own gap intervals, the
+    way the assembler reads them, unless stated."""
+    if isinstance(check_first, Width):
+        check_first = (check_first,)
+    elif check_first is None:
+        check_first = ()
+    if interaction_channel_ids is None:
+        interaction_channel_ids = tuple(
+            row.channel_id for row in fields["rows"]
+            if row.interaction_gap_ci.low > 0.0)
+    return _contract.SpreadRegister(check_first=tuple(check_first),
+                                    interaction_channel_ids=interaction_channel_ids,
+                                    **fields)
+
+
+# The empty register's sentence as the engine writes it for a two-option config
+# with no financing key (`break_even._no_distance_reason`), copied as data.
+NO_DISTANCE_TWO_OPTIONS = (
+    "no reversal distance is solved here: this block searches only a financed "
+    "option's mortgage_renewal_rates and mortgage_rate, and this config states no "
+    "such key. That is the reach of this search, not a finding that nothing would "
+    "reverse the verdict: for any other key this config states, --break-even <key> "
+    "solves the crossing on the central case with the solver the --decompose "
+    "reversal register uses.")
+
+
+def ReversalRegister(*, no_distance_reason=None, **fields):
+    """An empty register says what it searched: filled with the engine's own
+    two-option sentence when the household states none."""
+    if no_distance_reason is None and not (fields["exact"] or fields["estimated"]):
+        no_distance_reason = NO_DISTANCE_TWO_OPTIONS
+    return _contract.ReversalRegister(no_distance_reason=no_distance_reason, **fields)
+
+
+def Decomposition(*, max_paths=None, **fields):
+    """The block, with the largest path count the budget admits at its live
+    channel count read from the assembler's own cost model unless stated."""
+    if max_paths is None:
+        max_paths = largest_affordable_paths(len(fields["live_channel_ids"]))
+    return _contract.Decomposition(max_paths=max_paths, **fields)
 
 
 # The verdict of the fixture run, as `models.compute_verdict` produces it. The
@@ -376,9 +438,9 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 label="the renewal rate",
                 keys=("house.mortgage_renewal_rates",),
                 reason="house.mortgage_renewal_rates is a path this config states, not "
-                       "a distribution — the engine anchors no forward rate and draws "
-                       "none, so house's renewals carry no spread here at all. They "
-                       "carry a solved distance instead",
+                       "a distribution — the engine anchors no forward rate, so house's "
+                       "renewals carry no spread here at all. They carry a solved "
+                       "distance instead",
                 stated_formatted="4.60%, 5.00%, 4.80%, 4.40%",
                 reversal_key="house.mortgage_renewal_rates",
             ),
@@ -387,9 +449,8 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 label="the contract rate",
                 keys=("house.mortgage_rate",),
                 reason="house.mortgage_rate is one rate this config states, held for "
-                       "the opening term — no draw in this engine touches it, so "
-                       "house's financing carries no spread here at all. It carries a "
-                       "solved distance instead",
+                       "the opening term, so house's financing carries no spread here "
+                       "at all. It carries a solved distance instead",
                 stated_formatted="4.35%",
                 reversal_key="house.mortgage_rate",
             ),
@@ -616,14 +677,16 @@ def seven_channel_other_household() -> Decomposition:
                 references=(),
             ),
         ),
+        # Every channel is live in this household, so its structural zero is
+        # the kind that names no channel: the income block, in the engine's
+        # own words (`break_even._other_structural_zeros`).
         structural_zeros=(
             StructuralZero(
-                kind="dead_draw",
-                label="the economy",
-                keys=("economic.inflation_vol", "simulation.corr_inflation_condo"),
-                reason="this run is in real terms and every inflation correlation is "
-                       "zero, so the draw happens every year and reaches no cash flow",
-                channel_id=0,
+                kind="no_pv_reach",
+                label="your income",
+                keys=("income.pay_drop_events",),
+                reason="income.pay_drop_events moves the affordability report, not any "
+                       "option's present value, so it cannot move this margin",
             ),
         ),
     )
@@ -642,7 +705,7 @@ def seven_channel_other_household() -> Decomposition:
 def two_channel_option_state() -> Decomposition:
     """A second household, sharing nothing with the first: two live channels, a
     decisive `option` verdict, the condo winning, widths the USER stated, the
-    superlative licensed, no structural zero and no reversal row.
+    superlative licensed, one dead-draw structural zero and no reversal row.
 
     Every figure here is invented for the formatter's other branches — it is
     the control in the invariant-fraction measurement, not a measurement.
@@ -703,5 +766,16 @@ def two_channel_option_state() -> Decomposition:
         sd_margin=96420.0,
         spread=spread,
         level=level,
-        reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=()),
+        # The renter's channel draws here (a moving event) and reaches no cash
+        # flow, so it is a dead-draw row and not a live one; its reason is the
+        # assembler's own sentence for a cost channel.
+        reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=(
+            StructuralZero(
+                kind="dead_draw",
+                label="your tenancy",
+                keys=("rent.events",),
+                reason=_dead_draw_reason(None, 5),
+                channel_id=5,
+            ),
+        )),
     )
