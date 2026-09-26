@@ -169,11 +169,22 @@ Every figure's formula: `docs/reference/ARCHITECTURE.md` § Figure glossary.
 
 ## The `decomposition` block (`--decompose`)
 
-Present only when `--decompose` (or `--decompose N`, a path count for the
-decomposition alone) is passed; without the flag the key is absent from the
-document, not `null`. Design: `docs/specs/2026-09-22-which-risk-decides-it.md`;
-what each figure means: `docs/reference/ARCHITECTURE.md` § Figure glossary,
-"Which risk decides it". The block has exactly two shapes.
+Present only when `--decompose` (or `--decompose N` / `--decompose=N`, a path
+count for the decomposition alone; the flag goes before or after the config) is
+passed; without the flag the key is absent from the document, not `null`.
+`--decompose` with `--read-back` refuses before anything is priced (exit 1):
+the read-back does not carry the block. Design:
+`docs/specs/2026-09-22-which-risk-decides-it.md`; what each figure means:
+`docs/reference/ARCHITECTURE.md` § Figure glossary, "Which risk decides it".
+The block has exactly two shapes.
+
+Every number in the block is a finite number or `null`. A figure that is not a
+finite number is emitted as `null`, never as the bare `NaN` or `Infinity`
+tokens strict JSON parsers reject. The one field known to take it is
+`max_path_deviation_over_sd` on an `estimated[]` row: the exactness gate
+records no finite figure when a present value it compares is not a finite
+number, or when a shift varies over paths that have no spread of their own,
+and that row's `refused_boundaries` carry the gate's reason.
 
 **A whole-block refusal** is one key, `refusal`, holding `code` and `reason` —
 `{"refusal": {"code", "reason"}}` — with NO register keys beside it — an empty register there would read as "nothing to report"
@@ -197,8 +208,8 @@ nothing to it. `code` is one of:
 spread without the level register beside it. The verdict is not copied in: the
 document's top-level `verdict` is its one home.
 
-- `spread` — `rows`, `interaction`, `leading_channel_id`, `superlative_licensed`
-  and `check_first`; OR, when every future names the same winner, a refusal in
+- `spread` — `rows`, `interaction`, `leading_channel_id`, `superlative_licensed`,
+  `check_first` and `unattributed_channel_ids`; OR, when every future names the same winner, a refusal in
   the same slot with code `no_sign_variation` —
   `{"refusal": {"code": "no_sign_variation", "reason"}}` — and no `rows` key.
   The `level` and `reversal` registers are still present: nothing sits across
@@ -211,12 +222,26 @@ document's top-level `verdict` is its one home.
     `provisional_with_interaction`, `provisional_with_interaction_ci`
     (`resolved: false`) — never both, so reading `alone` on an unresolved row
     is a missing key, not a number. A row is unresolved when either share's
-    interval leaves [0, 1].
+    POINT estimate lies outside [0, 1] — a share of less than nothing or more
+    than all of the spread, which is estimator noise. The interval does not
+    decide it: a resolved share's printed interval may reach below 0 (the
+    fixture's economy row, `0.01 [-0.001, 0.01]`), because a small share whose
+    interval touches zero is a real small share, printed with its interval.
   - Every interval is `{low, high}` — `low` and `high` — at 95%, and is never
     clamped into [0, 1].
   - `widths[]` and `check_first`: `key`, `formatted`, `source` (`user`,
     `assistant`, `anchor` or `unattributed`), `anchor` and `note` (for the
     economy row, which option volatility a correlation pulls and by how much).
+    `leading_channel_id`, `superlative_licensed` and `check_first` are read
+    over the RESOLVED rows only; when an unresolved row carries the largest
+    point share, the text block names that row as not resolved and names no
+    channel as leading, no superlative and no figure to check first.
+  - `unattributed_channel_ids`: the live channels, in row order, with at least
+    one width whose `source` is `unattributed` — typed in the config with no
+    `sources:` entry claiming it. That is not the assistant's class: an
+    `unattributed` figure is one nobody's name is on, and it is never counted
+    in `unstated_first_order_sum`, which is the rows whose widths are ALL
+    `assistant`.
   - `interaction`: `resolved`, `first_order_sum`, `first_order_sum_ci`; on the
     resolved branch only (the sum's interval entirely below 1), `residual`,
     `residual_ci`, `unstated_first_order_sum` and `unstated_first_order_sum_ci`.

@@ -50,6 +50,7 @@ sentence with its own figures, and cannot be printed in a resolved column.
 """
 from __future__ import annotations
 
+import math
 from typing import List, Sequence, Tuple
 
 from .decomposition import (
@@ -58,6 +59,7 @@ from .decomposition import (
     DecompositionOutcome,
     DecompositionRefusal,
     EstimatedBoundary,
+    EstimatedReversal,
     ExactReversal,
     IndistinguishableLevel,
     Interval,
@@ -72,6 +74,7 @@ from .decomposition import (
     SpreadRegister,
     SpreadRow,
     StructuralZero,
+    UnresolvedShares,
     Width,
     channel,
 )
@@ -83,12 +86,20 @@ __all__ = ["format_decomposition"]
 # the same way.
 GLOSSARY = "docs/reference/ARCHITECTURE.md figure glossary"
 
-# The source classes that are NOT somebody's guess (`sources.SourceEcho`'s own
-# vocabulary: user | assistant | unattributed | sweep | anchor). §5 mechanism 3
-# licenses the superlative only when every width of the leading row is one of
-# these; `superlative_licensed` is carried on the register, and this tuple is
-# used only to word §5 mechanism 4's clause about the table as a whole.
-_SOURCED = ("user", "anchor")
+# The source classes a figure can carry (`sources.SourceEcho`'s own vocabulary:
+# user | assistant | unattributed | sweep | anchor), worded as the read-back of
+# the same run words them. `unattributed` is NOT "the assistant chose": it is a
+# figure no `sources:` entry claims, typed with nobody's name on it, and
+# reading that silence as the assistant's answer is the one inference the
+# source echo exists to refuse (`config`'s decisiveness warning says the same).
+# So the two are never counted, or worded, as one class here. §5 mechanism
+# 3's gate itself is `superlative_licensed`, carried on the register.
+_STATED_BY = {
+    "user": "you stated this {what}",
+    "assistant": "the assistant typed this {what}, not you",
+    "anchor": "this {what} is anchor-sourced",
+    "unattributed": "no sources: entry says who typed this {what}",
+}
 
 _LABEL_W = 23
 
@@ -107,15 +118,40 @@ def _shift(value: float) -> str:
     return f"+${value:,.0f}" if value >= 0 else f"-${-value:,.0f}"
 
 
-def _share(value: float) -> str:
-    """A Sobol share: two decimals, or three when two would round it to zero.
+def _faithful(value: float, places: int, scale: float = 1.0) -> str:
+    """`value × scale` at `places` decimals, or at as many more as it takes for
+    the printed figure not to say something the value does not.
 
-    One rule, so one figure never prints at two roundings (§0.1 ruling 2), and
-    a share that is small but not zero never renders AS zero — the measured
-    `-0.001` reading `-0.00` would be the clamp this feature refuses (§4). An
-    exact zero is a zero and prints as one.
+    Two things a rounding may never do, and they are one defect (§4: no share
+    is ever clamped into [0, 1], in either direction):
+
+      - print a figure that is not zero AS zero. `-0.0004` at two or three
+        places reads `-0.00` or `-0.000` — a measured nothing, the cheap
+        all-clear §4 refuses, in the costume of a rounding;
+      - print a figure outside [0, 1] inside it, or one inside it outside. An
+        unresolved share of `1.004` at two places reads `1.00`, "all of the
+        spread", on the very row that says it did not resolve BECAUSE it is
+        above one.
+
+    So the decimals grow until neither happens. One rule for every share,
+    flip and probability, so one figure never prints at two roundings (§0.1
+    ruling 2). An exact zero is a zero and prints as one, without a sign.
     """
-    return f"{value:.2f}" if value == 0 or abs(value) >= 0.005 else f"{value:.3f}"
+    number = float(value)
+    if number == 0.0:
+        return f"{0.0:.{places}f}"
+    inside = 0.0 <= number <= 1.0
+    for extra in range(10):
+        text = f"{number * scale:.{places + extra}f}"
+        shown = float(text) / scale
+        if shown != 0.0 and (0.0 <= shown <= 1.0) == inside:
+            return text
+    return repr(number * scale)
+
+
+def _share(value: float) -> str:
+    """A Sobol share: two decimals, or more where two would lie (`_faithful`)."""
+    return _faithful(value, 2)
 
 
 def _interval(interval: Interval) -> str:
@@ -123,8 +159,9 @@ def _interval(interval: Interval) -> str:
 
 
 def _flip(value: float) -> str:
-    """A fraction of futures, one decimal: the measured 0.4% is not 0%."""
-    return f"{value:.1%}"
+    """A fraction of futures, one decimal: the measured 0.4% is not 0%, and one
+    future in 5,000 (0.02%) is not 0.0% either (`_faithful`)."""
+    return f"{_faithful(value, 1, 100.0)}%"
 
 
 def _flip_cell(value: float, interval: Interval) -> str:
@@ -137,13 +174,14 @@ def _flip_cell(value: float, interval: Interval) -> str:
     most certain number in the table. The bracket takes its unit from the
     point estimate it follows rather than repeating it twice more.
     """
-    return (f"{_flip(value)} [{interval.low * 100:.1f}, "
-            f"{interval.high * 100:.1f}]")
+    return (f"{_flip(value)} [{_faithful(interval.low, 1, 100.0)}, "
+            f"{_faithful(interval.high, 1, 100.0)}]")
 
 
 def _prob(value: float) -> str:
-    """A probability, two decimals — the block's only rounding of one."""
-    return f"{value:.2f}"
+    """A probability, two decimals — the block's only rounding of one, and
+    never `0.00` for a probability that is not zero (`_faithful`)."""
+    return _faithful(value, 2)
 
 
 def _rate(value: float) -> str:
@@ -155,15 +193,32 @@ def _solved_rate(value: float) -> str:
 
     The precision is the point, not decoration: the reversal solver measured
     these identical to seven digits across five seeds, because they are
-    properties of the config the user stated. A sampled crossing prints at two
-    decimals and says whose sample it is, so the two never share a typography
-    (§0.1 item 24; see `_sampled_boundary_line`).
+    properties of the config as it stands, whoever typed its figures. A
+    sampled crossing prints at two decimals and says whose sample it is, so
+    the two never share a typography (§0.1 item 24; see
+    `_sampled_boundary_line`).
     """
     return f"{value:.4%}"
 
 
 def _deviation(value: float) -> str:
+    """A measured deviation, for the two lines that print a PASSING gate's
+    figure. Both gates fail closed on a figure that is not a finite number,
+    so one reaching this line is a producer defect, and it raises rather than
+    printing `nan` or `inf` as though that had been measured."""
+    if value is None or not math.isfinite(value):
+        raise ValueError(
+            f"a deviation of {value!r} reached a line that prints a gate's passing "
+            f"figure; a gate that meets a figure that is not a finite number "
+            f"refuses, so this is a producer defect, not a measurement")
     return f"{value:.1e}"
+
+
+def _verb(label: str, singular: str, plural: str) -> str:
+    """The verb a channel's printed label takes: "the condo's costs carry",
+    "the economy carries". Every label in `decomposition.CHANNELS` that ends
+    in `s` is a plural noun phrase ("… costs"), and none of the others is."""
+    return plural if label.endswith("s") else singular
 
 
 # ---------------------------------------------------------------------------
@@ -189,24 +244,33 @@ def _widths_line(widths: Sequence[Width]) -> str:
     return "      sized by " + "; ".join(_width_cell(w) for w in widths)
 
 
-def _spread_row_lines(row: SpreadRow, paths: int) -> List[str]:
+def _spread_cells(row: SpreadRow) -> Tuple[str, str, str]:
+    """ONE row's three table cells — alone, with interaction, flip — so the
+    caller can size the columns to the widest cell rather than let a figure
+    printed at more decimals push its row out of line."""
+    shares = row.shares
+    flip = _flip_cell(row.flip, row.flip_ci)
+    if isinstance(shares, ResolvedShares):
+        return (f"{_share(shares.alone)} {_interval(shares.alone_ci)}",
+                f"{_share(shares.with_interaction)} "
+                f"{_interval(shares.with_interaction_ci)}",
+                flip)
+    return ("not resolved", "not resolved", flip)
+
+
+def _spread_row_lines(row: SpreadRow, paths: int,
+                      columns: Tuple[int, int, int]) -> List[str]:
     label = channel(row.channel_id).label
     shares = row.shares
-    lines: List[str] = []
-    if isinstance(shares, ResolvedShares):
-        alone = f"{_share(shares.alone)} {_interval(shares.alone_ci)}"
-        both = (f"{_share(shares.with_interaction)} "
-                f"{_interval(shares.with_interaction_ci)}")
-        lines.append(f"  {label:<{_LABEL_W}} {alone:<19} {both:<19} "
-                     f"{_flip_cell(row.flip, row.flip_ci):>19}")
-    else:
-        # Not resolved at this sample size: the estimates are KEPT and printed,
-        # in their own words and on their own line, and there is no attribute
-        # on this object that could put them in a resolved column (§4, §7 rule
-        # 6). The flip column survives an unresolved row (§7 rule 4).
-        lines.append(f"  {label:<{_LABEL_W}} {'not resolved':<19} "
-                     f"{'not resolved':<19} "
-                     f"{_flip_cell(row.flip, row.flip_ci):>19}")
+    alone, both, flip = _spread_cells(row)
+    alone_w, both_w, flip_w = columns
+    # Not resolved at this sample size: the estimates are KEPT and printed, in
+    # their own words and on their own line, and there is no attribute on
+    # that object that could put them in a resolved column (§4, §7 rule 6).
+    # The flip column survives an unresolved row (§7 rule 4).
+    lines: List[str] = [f"  {label:<{_LABEL_W}} {alone:<{alone_w}} {both:<{both_w}} "
+                        f"{flip:>{flip_w}}"]
+    if not isinstance(shares, ResolvedShares):
         lines.append(
             f"      {_share(shares.provisional_alone)} "
             f"{_interval(shares.provisional_alone_ci)} alone and "
@@ -225,6 +289,20 @@ def _spread_sort_key(row: SpreadRow) -> Tuple[int, float]:
     if isinstance(shares, ResolvedShares):
         return (0, -shares.alone)
     return (1, -shares.provisional_alone)
+
+
+def _point_share(row: SpreadRow) -> float:
+    """ONE row's first-order point estimate, whether or not it resolved — the
+    figure the table's largest share is read off, so an unresolved row that
+    carries the most of the spread is never skipped for a smaller resolved
+    one. Dispatches on the type, as every reader of a share here does."""
+    shares = row.shares
+    if isinstance(shares, ResolvedShares):
+        return shares.alone
+    if isinstance(shares, UnresolvedShares):
+        return shares.provisional_alone
+    raise TypeError(f"a spread row carries a {type(shares).__name__}, which is not "
+                    f"a ResolvedShares or UnresolvedShares")
 
 
 def _level_row_line(row: LevelRow) -> str:
@@ -289,13 +367,38 @@ def _confirmed_clause(pairs: Sequence[Tuple[str, float]], lead: str) -> str:
     return "" if not pairs else f"{lead}{_probabilities(pairs)}"
 
 
+def _crossing(boundary, where: str) -> str:
+    """"as it rises past <where>, <field> changes from <was> to <becomes>".
+
+    EVERY boundary reads its key UPWARD (`decomposition.SolvedBoundary`):
+    `was` is what the field says just below the value and `becomes` just
+    above it, whichever side this run's own value sits on — so the sentence
+    names the direction, and `--sweep` at a point either side reads the same.
+
+    `was` and `becomes` are the WORDS a household is shown. The contract's
+    types refuse anything else when a boundary is built; this line refuses it
+    again where it is printed, because what it guards is the printing: a
+    boolean that reached a household once read "changes from True to False",
+    once for a crossing out of decisiveness for the OTHER option (spec §6).
+    """
+    label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
+    for name in ("was", "becomes"):
+        words = getattr(boundary, name)
+        if not isinstance(words, str) or not words.strip():
+            raise TypeError(
+                f"{type(boundary).__name__}.{name} for {boundary.verdict_field!r} is "
+                f"{words!r} ({type(words).__name__}), not words: this block prints "
+                f"what the verdict reads on each side of a crossing, never a raw value")
+    return (f"        as it rises past {where}, {label} changes from {boundary.was} "
+            f"to {boundary.becomes}")
+
+
 def _solved_boundary_line(boundary: "SolvedBoundary") -> str:
     """A crossing solved on the DETERMINISTIC verdict: a property of the config
-    the user stated, which is why it prints at four decimals."""
-    label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
-    return (f"        {label} changes from {boundary.was} to {boundary.becomes} at "
-            f"{_solved_rate(boundary.value)}"
-            f"{_confirmed_clause(boundary.confirming_probabilities, ' — re-simulated there: ')}")
+    as it stands, which is why it prints at four decimals."""
+    return (_crossing(boundary, _solved_rate(boundary.value))
+            + _confirmed_clause(boundary.confirming_probabilities,
+                                " — re-simulated there: "))
 
 
 def _sampled_boundary_line(boundary: "SampledBoundary") -> str:
@@ -310,28 +413,43 @@ def _sampled_boundary_line(boundary: "SampledBoundary") -> str:
     distinction survives losing any one: two decimals against four, this
     clause, and the grouping the caller prints them under.
     """
-    label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
-    return (f"        {label} changes from {boundary.was} to {boundary.becomes} at "
-            f"{_rate(boundary.value)}"
-            f"{_confirmed_clause(boundary.confirming_probabilities, ', where the futures sit at ')}"
-            f" — bisected on {boundary.curve_paths:,} paths at seed {boundary.seed}, "
-            f"so it moves with the seed")
+    return (_crossing(boundary, _rate(boundary.value))
+            + _confirmed_clause(boundary.confirming_probabilities,
+                                ", where the futures sit at ")
+            + f" — bisected on {boundary.curve_paths:,} paths at seed {boundary.seed}, "
+              f"so the crossing moves with the seed")
 
 
 def _estimated_boundary_line(boundary: EstimatedBoundary) -> str:
-    label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
-    return (f"        {label} changes from {boundary.was} to {boundary.becomes} at "
-            f"{_rate(boundary.value)}, inside "
-            f"{_rate(boundary.value_ci.low)}–{_rate(boundary.value_ci.high)} on "
-            f"{boundary.resimulation_paths:,} re-simulated paths")
+    where = (f"{_rate(boundary.value)} (inside {_rate(boundary.value_ci.low)}–"
+             f"{_rate(boundary.value_ci.high)} on {boundary.resimulation_paths:,} "
+             f"re-simulated paths)")
+    return _crossing(boundary, where)
 
 
-def _refused_boundary_line(refused: RefusedBoundary) -> str:
-    """A boundary that exists on the curve and is not printed (§8 refusal 7),
+def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
+    """Boundaries that exist on the curve and are not printed (§8 refusal 7),
     recorded rather than dropped: a boundary that vanishes with no row is an
-    absence a reader reads as "nothing here"."""
-    label = _BOUNDARY_LABEL.get(refused.verdict_field, refused.verdict_field)
-    return f"      no boundary printed for {label} — {refused.reason}"
+    absence a reader reads as "nothing here".
+
+    One line per REASON, naming every field it refuses: a key the exactness
+    gate refused carries the gate's one sentence on all four fields, and
+    printing it four times reads as four findings where there is one."""
+    reasons: List[str] = []
+    fields: dict = {}
+    for item in refused:
+        if item.reason not in fields:
+            reasons.append(item.reason)
+            fields[item.reason] = []
+        fields[item.reason].append(
+            _BOUNDARY_LABEL.get(item.verdict_field, item.verdict_field))
+    lines: List[str] = []
+    for reason in reasons:
+        labels = fields[reason]
+        named = (labels[0] if len(labels) == 1
+                 else f"{', '.join(labels[:-1])} or {labels[-1]}")
+        lines.append(f"      no boundary printed for {named} — {reason}")
+    return lines
 
 
 def _reference_clause(reference) -> str:
@@ -368,12 +486,66 @@ def _require_types(items: Sequence[object], allowed: Tuple[type, ...],
                 f"it as one of them or drop it as though it were absent")
 
 
+def _stated_by_line(reversal) -> str:
+    """WHOSE figure the stated value is, from `stated_source` — the class the
+    read-back of the same run prints for that key (`sources.SourceEcho`), in
+    that read-back's words. "You stated" only when the class is `user`: the
+    fixture's renewal ladder is the assistant's and its contract rate an
+    anchor's, and a row saying "your own figures" there contradicts the
+    read-back two screens down. Every crossing below is solved on the config
+    as it stands, WHOEVER typed it, so the row says whose it is instead."""
+    what = "path" if reversal.path_note is not None else "value"
+    source = reversal.stated_source
+    words = _STATED_BY.get(source, "this {what}'s source class is " + str(source))
+    return f"      {words.format(what=what)} [{source}]"
+
+
+def _licence_line(reversal: ExactReversal) -> str:
+    """The exactness gate's evidence, as a property of the KEY's shift — the
+    licence for reading this axis off the run's own futures shifted rather than
+    re-drawn (§6). It prints BEFORE the crossings: printed after a sampled one
+    it read as a precision claim about that crossing, which is a property of a
+    sample and carries its own clause saying so."""
+    return (f"      re-priced exactly: moving this key shifts {reversal.option}'s present "
+            f"value by the same amount on every path (to within "
+            f"{_deviation(reversal.max_path_deviation_over_sd)} of its s.d., over "
+            f"{reversal.probe_paths:,} probe paths) and leaves every other option's "
+            f"untouched")
+
+
+def _gate_refusal_line(reversal: EstimatedReversal) -> str:
+    """The exactness gate's refusal, and what follows from it on THIS row.
+
+    The measured figure prints only when it is a finite number: the gate
+    refuses a present value that is not one (the figure is then NaN), and a
+    shift that varies over paths with no spread of their own measures `inf`,
+    and neither is a figure to print as a multiple of an s.d. The refusal's
+    own sentence says which — it is every refused field's `reason`, printed
+    once below. Nor is the figure worded as the cause: the gate also refuses
+    a key that moves another option, whatever this one measured.
+
+    Slice 1 estimates NOTHING (§6, §14): a refused key carries no boundary,
+    so "the distance is estimated" would be false on every row the engine
+    produces today, and the line says what is true of the row in hand."""
+    option = reversal.option
+    deviation = reversal.max_path_deviation_over_sd
+    measured = ("" if deviation is None or not math.isfinite(deviation) else
+                f"; moving it shifts {option}'s present value by amounts that differ "
+                f"across paths by up to {deviation:.1e} of its s.d.")
+    then = ("each distance below is located by re-simulating, inside an interval"
+            if reversal.boundaries else
+            "no distance on it is solved or estimated in this run")
+    return f"      the exactness gate refused this key{measured} — so {then}"
+
+
 def _reversal_detail_lines(reversal) -> List[str]:
     """The solved numbers of ONE reversal row — exact or estimated, each in its
     own vocabulary (§0: the two kinds share no field set and cannot be
     concatenated into one ordered table)."""
-    lines: List[str] = []
     exact = isinstance(reversal, ExactReversal)
+    lines: List[str] = [_stated_by_line(reversal),
+                        _licence_line(reversal) if exact
+                        else _gate_refusal_line(reversal)]
     bracket = _bracket_clause(reversal.bracket_low, reversal.bracket_high,
                               reversal.bracket_source)
     if reversal.boundaries:
@@ -405,7 +577,9 @@ def _reversal_detail_lines(reversal) -> List[str]:
             solved = [b for b in ordered if isinstance(b, SolvedBoundary)]
             sampled = [b for b in ordered if isinstance(b, SampledBoundary)]
             if solved:
-                lines.append(f"      {head}{bracket} — solved on your own figures:")
+                # "Solved on the central case" is true whoever typed the
+                # figures; whose they are is `_stated_by_line`'s, above.
+                lines.append(f"      {head}{bracket} — solved on the central case:")
                 lines.extend(_solved_boundary_line(b) for b in solved)
             if sampled:
                 # The bracket prints on whichever group comes first, never on
@@ -418,17 +592,9 @@ def _reversal_detail_lines(reversal) -> List[str]:
                 lines.extend(_sampled_boundary_line(b) for b in sampled)
     else:
         lines.append(f"      no boundary solved {bracket}")
-    if exact:
-        lines.append(f"      exact to "
-                     f"{_deviation(reversal.max_path_deviation_over_sd)} of the "
-                     f"option's own s.d. over {reversal.probe_paths:,} probe paths")
-    else:
-        lines.append(f"      the exactness gate refused this key at "
-                     f"{_deviation(reversal.max_path_deviation_over_sd)} of the "
-                     f"option's own s.d., so the distance is estimated")
     if reversal.path_note is not None:
         lines.append(f"      {reversal.path_note}")
-    lines.extend(_refused_boundary_line(r) for r in reversal.refused_boundaries)
+    lines.extend(_refused_boundary_lines(reversal.refused_boundaries))
     if reversal.references:
         lines.append("      on the same axis: "
                      + "; ".join(_reference_clause(r) for r in reversal.references))
@@ -441,9 +607,10 @@ def _structural_zero_head(zero: StructuralZero) -> str:
 
 
 def _reversal_head(reversal) -> str:
-    """The row's subject: the key, whose option it names, and what the user
-    stated for it. Which KIND of distance this is belongs to the group heading
-    above it, so it is not restated per row."""
+    """The row's subject: the key, whose option it names, and what the config
+    states for it — whoever typed it, which `_stated_by_line` says next. Which
+    KIND of distance this is belongs to the group heading above it, so it is
+    not restated per row."""
     return (f"  {reversal.key} ({reversal.option}), stated "
             f"{reversal.stated_formatted}")
 
@@ -471,9 +638,12 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         # Subject first (the repo's own line doctrine), then the reason the
         # assembler recorded. `channel_id` is set by `one_channel`, which names
         # the channel carrying all of the run's spread and prints no numbers.
-        subject = ("which risk decides it" if outcome.channel_id is None
-                   else f"{channel(outcome.channel_id).label} carries all of this "
-                        f"run's spread")
+        if outcome.channel_id is None:
+            subject = "which risk decides it"
+        else:
+            label = channel(outcome.channel_id).label
+            subject = (f"{label} {_verb(label, 'carries', 'carry')} all of this "
+                       f"run's spread")
         return f"{subject} — not split: {outcome.reason}"
 
     dec: Decomposition = outcome
@@ -489,11 +659,15 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     lines.append(f"which risk decides it — {dec.paths:,} futures, "
                  f"{live} channels live")
     lines.append(f"  {verdict.reason}")
+    # The margin is STATED here, not referred to: on a decisive run
+    # `verdict.reason` prints a probability against the floor and no margin
+    # at all, so "that margin" had nothing to point back to.
     ratio = ("" if verdict.margin_pv == 0 else
              f" — {dec.sd_margin / abs(verdict.margin_pv):.1f}x the margin itself")
-    lines.append(f"  that margin averages {_money(dec.mean_margin)} across those "
-                 f"{dec.paths:,} futures and scatters by {_money(dec.sd_margin)} "
-                 f"(1 s.d.){ratio}")
+    lines.append(f"  the central case says {verdict.best} by "
+                 f"{_money(verdict.margin_pv)}; across those {dec.paths:,} futures "
+                 f"that margin averages {_money(dec.mean_margin)} and scatters by "
+                 f"{_money(dec.sd_margin)} (1 s.d.){ratio}")
 
     # --- THE SPREAD
     lines.append("")
@@ -501,8 +675,10 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # `ranked` is the register when it printed rows and None when it refused:
     # every later sentence that speaks of a leading row or of the table as a
     # whole reads it, so none of them can speak about a table that is not
-    # there.
+    # there. `leader_id` is the channel the block may name as leading the
+    # table, None when it names none (see WHO LEADS below).
     ranked = None
+    leader_id = None
     if isinstance(spread, RefusedSpread):
         # §0.1 item 7: the spread register refused by name (`P(f > 0) == 1`)
         # and the level and reversal registers still print below — the
@@ -520,10 +696,20 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 "register that declines to print arrives as RefusedSpread with "
                 "its reason, so this is a producer defect, not an empty table")
         ranked = spread
-        lines.append(f"  {'channel':<{_LABEL_W}} {'alone':<19} "
-                     f"{'with interaction':<19} {'changes sides':>19}")
+        # The flip column counts futures in which re-drawing one channel moves
+        # the sign of f — whether the CENTRAL CASE's winner is cheapest there
+        # — not futures whose cheapest option changes: a future that goes from
+        # the condo to the house while rent stays beaten is not counted. So
+        # the header names the winner it is about.
+        flip_head = f"flips whether {verdict.best} is cheapest"
+        cells = [_spread_cells(row) for row in spread.rows]
+        columns = (max([19] + [len(c[0]) for c in cells]),
+                   max([19] + [len(c[1]) for c in cells]),
+                   max([19, len(flip_head)] + [len(c[2]) for c in cells]))
+        lines.append(f"  {'channel':<{_LABEL_W}} {'alone':<{columns[0]}} "
+                     f"{'with interaction':<{columns[1]}} {flip_head:>{columns[2]}}")
         for row in sorted(spread.rows, key=_spread_sort_key):
-            lines.extend(_spread_row_lines(row, dec.paths))
+            lines.extend(_spread_row_lines(row, dec.paths, columns))
 
         # The residual line is printed, never inferred, and takes the refusal
         # branch when the CI permits (§4, §7 rule 5). `ResolvedInteraction` is
@@ -549,20 +735,40 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                          f"interaction is not measurable at {dec.paths:,} futures: "
                          f"estimator noise, not a finding; raise simulation.num_sims")
 
+        # WHO LEADS. `leading_channel_id` is the largest RESOLVED share, which
+        # is not the largest share: on examples/rent_vs_condo_vs_house.yaml
+        # the condo's costs carry a provisional 1.07 that did not resolve, and
+        # the resolved leader is the house's costs at 0.01. Naming that one
+        # would hand the superlative, and "the figure to check first", to a
+        # channel carrying a hundredth of the spread. So when the largest
+        # point share is an unresolved row, THAT row is named with its
+        # provisional figure and nothing is named as leading — here, in the
+        # provenance sentence below, and in the level register's closing.
+        top_row = max(spread.rows, key=_point_share)
+        if isinstance(top_row.shares, UnresolvedShares):
+            leader_id = None
+            top = top_row.shares
+            lines.append(
+                f"  the largest share is on {channel(top_row.channel_id).label}: "
+                f"{_share(top.provisional_alone)} {_interval(top.provisional_alone_ci)} "
+                f"alone, not resolved at {dec.paths:,} futures — so no channel leads "
+                f"this table; raise simulation.num_sims")
+        else:
+            leader_id = spread.leading_channel_id
         # The two columns a reader will otherwise conflate, printed with THIS
         # household's two figures and nothing else; what the columns MEAN is
         # cited once (see CONDITIONALITY above) rather than restated on every
         # run.
-        if spread.leading_channel_id is not None:
-            leader = channel(spread.leading_channel_id)
-            lead_row = next(r for r in spread.rows
-                            if r.channel_id == spread.leading_channel_id)
+        if leader_id is not None:
+            leader = channel(leader_id)
+            lead_row = next(r for r in spread.rows if r.channel_id == leader_id)
             lead_shares = lead_row.shares
             if isinstance(lead_shares, ResolvedShares):
                 lines.append(
-                    f"  {leader.label}'s two figures are different kinds of number: "
-                    f"{_share(lead_shares.alone)} of the spread's variance, "
-                    f"{_flip(lead_row.flip)} of the futures changing sides [{GLOSSARY}]"
+                    f"  on {leader.label} the two figures are different kinds of "
+                    f"number: {_share(lead_shares.alone)} of the spread's variance, "
+                    f"{_flip(lead_row.flip)} of the futures flipping whether "
+                    f"{verdict.best} is cheapest [{GLOSSARY}]"
                 )
     else:
         raise TypeError(
@@ -642,7 +848,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                        f"different winners"
                        if mover_level.prob_best_frozen > 0.5 else "")
             lines.append(
-                f"  {mover_phrase} moves the margin by "
+                f"  {mover_phrase} {_verb(mover.label, 'moves', 'move')} the margin by "
                 f"{_shift(mover_level.delta)}, and pricing it the central case's way "
                 f"takes P({verdict.best} cheapest) to "
                 f"{_prob(mover_level.prob_best_frozen)}{because}"
@@ -656,30 +862,47 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 f"trusting the tie"
             )
         else:
+            # "Cheapest either way" is the same claim the disagreement branch
+            # licenses its causal clause with — `best` in front of most futures
+            # — made twice, as drawn and priced the central case's way, so it
+            # is gated the same way on both figures it names. Below 0.5 on
+            # either, the sentence says which one fell, and no more.
+            fell = [where for where, p in (("as drawn", level.prob_best_base),
+                                           ("priced that way",
+                                            mover_level.prob_best_frozen))
+                    if not p > 0.5]
+            tail = ("" if not fell else
+                    f" — {' and '.join(fell)}, {verdict.best} is cheapest in no more "
+                    f"than half of these futures")
+            lead = (f"{verdict.best} is cheapest either way, and the largest shift is"
+                    if not fell else "the largest shift is")
             lines.append(
-                f"  {verdict.best} is cheapest either way, and the largest shift is "
-                f"{mover_phrase}, {_shift(mover_level.delta)}: with it priced the "
-                f"central case's way P({verdict.best} cheapest) is "
+                f"  {lead} {mover_phrase}, {_shift(mover_level.delta)}: with it priced "
+                f"the central case's way P({verdict.best} cheapest) is "
                 f"{_prob(mover_level.prob_best_frozen)} against "
-                f"{_prob(level.prob_best_base)} as drawn"
+                f"{_prob(level.prob_best_base)} as drawn{tail}"
             )
         # The other half of §1's finding, when the spread's leader is not the
         # level's: a channel can carry the scatter and move the answer by
         # nothing that resolves. Typed, not inferred — an `IndistinguishableLevel`.
-        if (ranked is not None and ranked.leading_channel_id is not None
-                and ranked.leading_channel_id != level.leading_channel_id):
-            top = channel(ranked.leading_channel_id)
+        # Only a channel the block names as leading (`leader_id`) can be "the
+        # spread's" here: a resolved row smaller than an unresolved one is not.
+        if (ranked is not None and leader_id is not None
+                and leader_id != level.leading_channel_id):
+            top = channel(leader_id)
             top_level = next((r.level for r in level.rows
-                              if r.channel_id == ranked.leading_channel_id), None)
+                              if r.channel_id == leader_id), None)
             top_shares = next((r.shares for r in ranked.rows
-                               if r.channel_id == ranked.leading_channel_id), None)
+                               if r.channel_id == leader_id), None)
             if (isinstance(top_level, IndistinguishableLevel)
                     and isinstance(top_shares, ResolvedShares)):
                 lines.append(
-                    f"  {top.label} is {_share(top_shares.alone)} of that spread and "
-                    f"moves the margin by nothing that resolves "
-                    f"({_shift(top_level.provisional_delta)} ± ${top_level.se:,.0f}) "
-                    f"— pure risk, and not a cost the central case left out"
+                    f"  {top.label} {_verb(top.label, 'is', 'are')} "
+                    f"{_share(top_shares.alone)} of that spread and "
+                    f"{_verb(top.label, 'moves', 'move')} the margin by nothing that "
+                    f"resolves ({_shift(top_level.provisional_delta)} ± "
+                    f"${top_level.se:,.0f}) — pure risk, and not a cost the central "
+                    f"case left out"
                 )
 
     # --- THE REVERSAL REGISTER: structural zeros with the numbers they carry
@@ -711,8 +934,11 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             lines.extend(_reversal_detail_lines(row))
     if reversal.estimated:
         lines.append("")
-        lines.append("  WHAT WOULD HAVE TO CHANGE — keys the engine can only re-price "
-                     "by re-simulating, each distance inside an interval")
+        # What follows the gate's refusal is each row's to say: slice 1
+        # estimates nothing, so a heading promising a distance inside an
+        # interval would be false over every row the engine produces today.
+        lines.append("  WHAT WOULD HAVE TO CHANGE — keys the engine cannot re-price "
+                     "exactly")
         for row in reversal.estimated:
             lines.append(_reversal_head(row))
             lines.extend(_reversal_detail_lines(row))
@@ -733,23 +959,55 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # the leading row is somebody's guess, the block may not write "X decides
     # the spread of this answer" — it writes the share and names the figure to
     # check. Flipping one `sources:` entry changes this sentence (test T14).
-    # A refused spread printed no ranking, so there is none to qualify.
+    # A refused spread printed no ranking, so there is none to qualify, and a
+    # table whose largest share did not resolve has no leader to license or to
+    # send the reader to a figure for (`leader_id`, WHO LEADS above).
+    #
+    # WHOSE the other widths are is counted by CLASS, never as one "guessed"
+    # pile: an `assistant` width is a figure the assistant chose, an
+    # `unattributed` one is a figure no `sources:` entry claims, and on a
+    # config with no `sources:` block every width is the second — so a
+    # sentence calling them all "the assistant's" contradicted the `[...]`
+    # tag printed beside the very figure it named.
     if ranked is not None:
-        guessed = [r for r in ranked.rows
-                   if any(w.source not in _SOURCED for w in r.widths)]
-        if ranked.superlative_licensed and ranked.leading_channel_id is not None:
-            leader = channel(ranked.leading_channel_id)
+        rows = ranked.rows
+        total = len(rows)
+        unclaimed = set(ranked.unattributed_channel_ids)
+        groups = [
+            ("assistant",
+             sum(1 for r in rows if any(w.source == "assistant" for w in r.widths)),
+             "sized by a figure the assistant chose, not by you", "you did not state"),
+            ("unattributed", sum(1 for r in rows if r.channel_id in unclaimed),
+             "sized by a figure no sources: entry claims, typed with nobody's name "
+             "on it", "that nobody's name is on"),
+        ]
+        named = {"user", "anchor", "assistant", "unattributed"}
+        for source in sorted({w.source for r in rows for w in r.widths} - named):
+            groups.append((source,
+                           sum(1 for r in rows if any(w.source == source
+                                                      for w in r.widths)),
+                           f"sized by a figure of source class {source}",
+                           f"whose source class is {source}"))
+        groups = [g for g in groups if g[1]]
+        if ranked.superlative_licensed and leader_id is not None:
+            leader = channel(leader_id)
             lines.append("")
-            lines.append(f"  {leader.label} decides the spread of this answer, and "
-                         f"every width behind that row is yours or an anchor's")
-        elif guessed:
-            scope = ("every channel above is" if len(guessed) == len(ranked.rows)
-                     else f"{len(guessed)} of the {len(ranked.rows)} channels above are")
-            check = ("" if ranked.check_first is None else
+            lines.append(f"  {leader.label} {_verb(leader.label, 'decides', 'decide')} "
+                         f"the spread of this answer, and every width behind that row "
+                         f"is yours or an anchor's")
+        elif groups:
+            def scope(count: int) -> str:
+                if count == total:
+                    return "every channel above is"
+                return (f"{count} of the {total} channels above "
+                        f"{'is' if count == 1 else 'are'}")
+            counted = ", and ".join(f"{scope(count)} {words}"
+                                    for _, count, words, _ in groups)
+            whose = " or ".join(owner for _, _, _, owner in groups)
+            check = ("" if ranked.check_first is None or leader_id is None else
                      f" — the figure to check first is {_width_cell(ranked.check_first)}")
             lines.append("")
-            lines.append(f"  {scope} sized by a figure the assistant chose, not by you, "
-                         f"so this ranking is a property of widths you did not "
-                         f"state{check}")
+            lines.append(f"  {counted}, so this ranking is a property of widths "
+                         f"{whose}{check}")
 
     return "\n".join(lines)

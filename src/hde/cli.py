@@ -7,6 +7,7 @@ Usage:
 
 import argparse
 import datetime
+import re
 import sys
 from pathlib import Path
 
@@ -162,7 +163,6 @@ def main() -> int:
     parser.add_argument(
         "--decompose",
         nargs="?",
-        type=int,
         const=_DECOMPOSE_AT_NUM_SIMS,
         default=None,
         metavar="N",
@@ -171,8 +171,9 @@ def main() -> int:
              "price that the central case does not, and solve what would have to "
              "change for the verdict to change. Opt-in because it re-prices the run "
              "many times over — bare, it runs at the config's own num_sims; "
-             "--decompose N runs the decomposition at N paths instead. Rides --json "
-             "as 'decomposition'",
+             "--decompose N (or --decompose=N) runs the decomposition at N paths "
+             "instead. Goes before or after the config. Rides --json as "
+             "'decomposition'; not part of --read-back",
     )
     parser.add_argument(
         "--break-even",
@@ -186,6 +187,21 @@ def main() -> int:
              "rides --json as 'break_evens'",
     )
     args = parser.parse_args()
+
+    # `hde --decompose config.yaml`: an optional value takes the next token
+    # whatever it is, so the config path arrives HERE and the positional is
+    # left empty. A whole number is the path count; anything else, with no
+    # config given, is the config and the flag was bare. With a config given
+    # as well, it can only be a malformed count, and argparse's own error for
+    # one is the answer.
+    if isinstance(args.decompose, str):
+        token = args.decompose
+        if re.fullmatch(r"[+-]?[0-9]+", token):
+            args.decompose = int(token)
+        elif args.config is None:
+            args.config, args.decompose = token, _DECOMPOSE_AT_NUM_SIMS
+        else:
+            parser.error(f"argument --decompose: invalid int value: {token!r}")
 
     if args.print_schema:
         import json as _json
@@ -230,6 +246,34 @@ def main() -> int:
         print("Error: config path required (or use --print-schema / --print-anchors "
               "/ --refresh-plan)", file=sys.stderr)
         return 1
+
+    # --decompose's refusals that the FLAGS alone decide, taken before anything
+    # is priced: each would otherwise run the whole Monte Carlo first and then
+    # refuse, or — with --read-back — compute the decomposition and print none
+    # of it, since stdout is then the read-back block alone.
+    decompose_paths = None
+    if args.decompose is not None:
+        # The sample-size override is the ASSEMBLER's figure (it is consumed at
+        # compute time); this surface only parses it, and refuses a value that
+        # cannot be a path count rather than passing it on.
+        decompose_paths = (None if args.decompose is _DECOMPOSE_AT_NUM_SIMS
+                           else args.decompose)
+        if decompose_paths is not None and decompose_paths < 1:
+            print(f"Error: --decompose takes a path count of 1 or more, got "
+                  f"{decompose_paths}", file=sys.stderr)
+            return 1
+        if args.no_deterministic:
+            print("Error: --decompose needs the deterministic run — the block is "
+                  "priced against the central case; re-run without "
+                  "--no-deterministic", file=sys.stderr)
+            return 1
+        if args.read_back:
+            print("Error: --decompose is not part of the read-back — --read-back "
+                  "prints the read-back lines alone, so this run would price the "
+                  "decomposition and show none of it. Run --decompose without "
+                  "--read-back: the block prints under the report, or rides --json "
+                  "as 'decomposition'", file=sys.stderr)
+            return 1
 
     # Validate config path
     config_path = Path(args.config)
@@ -329,20 +373,8 @@ def main() -> int:
     # assembler is the only thing that sees.
     decomposition = None
     if args.decompose is not None:
-        # The sample-size override is the ASSEMBLER's figure (it is consumed at
-        # compute time); this surface only parses it, and refuses a value that
-        # cannot be a path count rather than passing it on.
-        decompose_paths = (None if args.decompose is _DECOMPOSE_AT_NUM_SIMS
-                           else args.decompose)
-        if decompose_paths is not None and decompose_paths < 1:
-            print(f"Error: --decompose takes a path count of 1 or more, got "
-                  f"{decompose_paths}", file=sys.stderr)
-            return 1
-        if det_result is None:
-            print("Error: --decompose needs the deterministic run — the block is "
-                  "priced against the central case; re-run without "
-                  "--no-deterministic", file=sys.stderr)
-            return 1
+        # The flag-only refusals (a path count below one, --no-deterministic,
+        # --read-back) were taken before anything was priced, above.
         # A build that carries the surface without the estimators REFUSES here
         # rather than printing an empty block: a flag that comes out silent
         # because half the feature is missing is the cheap all-clear this repo

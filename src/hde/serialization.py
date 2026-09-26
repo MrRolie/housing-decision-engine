@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import math
 from importlib import metadata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -1086,7 +1087,35 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
         "superlative_licensed": spread.superlative_licensed,
         "check_first": (None if spread.check_first is None
                         else dataclasses.asdict(spread.check_first)),
+        # The rows at least one of whose widths no `sources:` entry claims —
+        # NOT "the assistant's", which is a different class. The text block
+        # counts them apart, and a consumer reading only the JSON must be able
+        # to as well.
+        "unattributed_channel_ids": list(spread.unattributed_channel_ids),
     }
+
+
+def _finite_or_null(node: Any) -> Any:
+    """The decomposition block with every float that is not a finite number
+    as `None`.
+
+    `json.dumps` writes NaN and infinity as the bare tokens `NaN` and
+    `Infinity`, which strict JSON parsers reject, so a document carrying one
+    would fail to parse for exactly the consumer this surface is for. And a
+    NaN is not a figure to hand on as one: the exactness gate records NaN when
+    a present value it compares was not a finite number, and `inf` when a
+    shift varies over paths that have no spread of their own. `null` says no
+    figure was measured; the row's refused boundaries carry the gate's reason,
+    which says why."""
+    if isinstance(node, float):
+        return node if math.isfinite(node) else None
+    if isinstance(node, dict):
+        return {key: _finite_or_null(value) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_finite_or_null(value) for value in node]
+    if isinstance(node, tuple):
+        return tuple(_finite_or_null(value) for value in node)
+    return node
 
 
 def _level_row_to_dict(row: "LevelRow") -> Dict[str, Any]:
@@ -1124,7 +1153,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
         return {"refusal": refusal}
 
     level, reversal = outcome.level, outcome.reversal
-    return {
+    return _finite_or_null({
         "paths": outcome.paths,
         "live_channel_ids": list(outcome.live_channel_ids),
         "mean_margin": outcome.mean_margin,
@@ -1150,7 +1179,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "structural_zeros": [dataclasses.asdict(zero)
                                  for zero in reversal.structural_zeros],
         },
-    }
+    })
 
 
 # ---------------------------------------------------------------------------

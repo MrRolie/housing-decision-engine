@@ -18,7 +18,9 @@ import difflib
 import importlib.machinery
 import inspect
 import json
+import math
 import pathlib
+import re
 import sys
 import types
 
@@ -44,27 +46,27 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 FIXTURE_BLOCK = """\
 which risk decides it — 2,000 futures, 7 channels live
   best guess says rent by $31,349 (7.8% of rent PV); most futures say condo (57% cheapest) — the two disagree, not decisive [hde verdict rule]
-  that margin averages -$67,194 across those 2,000 futures and scatters by $286,506 (1 s.d.) — 9.1x the margin itself
+  the central case says rent by $31,349; across those 2,000 futures that margin averages -$67,194 and scatters by $286,506 (1 s.d.) — 9.1x the margin itself
 
   THE SPREAD — where the $286,506 comes from
-  channel                 alone               with interaction          changes sides
-  the renter's portfolio  0.88 [0.78, 1.00]   0.84 [0.75, 0.95]    40.6% [38.4, 42.8]
+  channel                 alone               with interaction    flips whether rent is cheapest
+  the renter's portfolio  0.88 [0.78, 1.00]   0.84 [0.75, 0.95]               40.6% [38.4, 42.8]
       sized by simulation.investment_return_vol=10% [assistant]
-  the housing market      0.14 [0.11, 0.17]   0.13 [0.10, 0.16]    13.0% [11.5, 14.5]
+  the housing market      0.14 [0.11, 0.17]   0.13 [0.10, 0.16]               13.0% [11.5, 14.5]
       sized by simulation.value_growth_vol=7% [assistant]; condo.price_shock.annual_hazard=3% [assistant]; house.price_shock.annual_hazard=3% [assistant]; condo.price_shock.severity_vol=10% [anchor: price_shock.severity_vol]; house.price_shock.severity_vol=10% [anchor: price_shock.severity_vol]
-  your tenancy            0.10 [0.08, 0.12]   0.09 [0.07, 0.11]    13.0% [11.5, 14.5]
+  your tenancy            0.10 [0.08, 0.12]   0.09 [0.07, 0.11]               13.0% [11.5, 14.5]
       sized by rent.reset_hazard=7%/yr [assistant]; simulation.rent_escalation_vol=6% [assistant]; simulation.other_cost_vol=10% [assistant]; rent.events.moving_costs.cost_vol=20% [assistant]
-  the population          0.03 [0.02, 0.05]   0.03 [0.02, 0.05]       6.0% [5.0, 7.0]
+  the population          0.03 [0.02, 0.05]   0.03 [0.02, 0.05]                  6.0% [5.0, 7.0]
       sized by market_scenario.path [assistant] (the prior's own rows carry their citations); market_scenario.geography=MTL_RMR [user]
-  the condo's costs       0.01 [0.01, 0.02]   0.01 [0.01, 0.02]       4.0% [3.1, 4.9]
+  the condo's costs       0.01 [0.01, 0.02]   0.01 [0.01, 0.02]                  4.0% [3.1, 4.9]
       sized by simulation.condo_fee_vol=8% [assistant]; simulation.other_cost_vol=10% [assistant]; condo.events.special_assessment.cost_vol=25% [assistant]
-  the economy             0.01 [-0.002, 0.01] 0.01 [0.00, 0.01]       4.0% [3.1, 4.9]
+  the economy             0.01 [-0.002, 0.01] 0.01 [0.00, 0.01]                  4.0% [3.1, 4.9]
       sized by economic.inflation_vol=1.2% [assistant]; simulation.corr_inflation_condo=0.5 [assistant] (rho²=0.25 of the condo fee shock); simulation.condo_fee_vol=8% [assistant]; simulation.corr_inflation_house=0.5 [assistant] (rho²=0.25 of the house maintenance shock); simulation.house_maintenance_vol=20% [assistant]; simulation.corr_inflation_other=0.4 [assistant] (rho²=0.16 of each other-cost shock); simulation.other_cost_vol=10% [assistant]; simulation.corr_inflation_event_cost=0.3 [assistant] (rho²=0.09 of each event-cost shock)
-  the house's costs       not resolved        not resolved            0.4% [0.1, 0.7]
+  the house's costs       not resolved        not resolved                       0.4% [0.1, 0.7]
       -0.001 [-0.002, 0.001] alone and -0.002 [-0.003, 0.002] with interaction, at 2,000 futures
       sized by simulation.house_maintenance_vol=20% [assistant]; simulation.other_cost_vol=10% [assistant]; house.events.roof_replacement.cost_vol=20% [assistant]
   the first-order shares add to 1.16 [1.04, 1.31] — above the whole, so interaction is not measurable at 2,000 futures: estimator noise, not a finding; raise simulation.num_sims
-  the renter's portfolio's two figures are different kinds of number: 0.88 of the spread's variance, 40.6% of the futures changing sides [docs/reference/ARCHITECTURE.md figure glossary]
+  on the renter's portfolio the two figures are different kinds of number: 0.88 of the spread's variance, 40.6% of the futures flipping whether rent is cheapest [docs/reference/ARCHITECTURE.md figure glossary]
 
   THE LEVEL — what 2,000 futures price that the central case does not: a cost it leaves out, not a risk
   channel                 the margin moves by     P(rent cheapest), from 0.34
@@ -79,24 +81,28 @@ which risk decides it — 2,000 futures, 7 channels live
   the renter's portfolio is 0.88 of that spread and moves the margin by nothing that resolves (-$3,805 ± $5,383) — pure risk, and not a cost the central case left out
 
   NOT DRAWN IN THIS RUN — zero spread by construction, not by measurement
-  your renewal rate — house.mortgage_renewal_rates (4.60%, 5.00%, 4.80%, 4.40%): a path you stated, not a distribution — the engine anchors no forward rate and draws none, so renewal carries no spread here at all
-      replacing that path with one flat rate, inside a 1.00%–10.00% bracket [assistant] — solved on your own figures:
-        the central case's winner changes from rent to house at 1.6052% — re-simulated there: condo 0.19, house 0.52, rent 0.29
-        the runner-up changes from condo to house at 2.9549% — re-simulated there: condo 0.32, house 0.36, rent 0.31
+  your renewal rate — house.mortgage_renewal_rates (4.60%, 5.00%, 4.80%, 4.40%): house.mortgage_renewal_rates is a path this config states, not a distribution — the engine anchors no forward rate and draws none, so house's renewals carry no spread here at all. They carry a solved distance instead
+      the assistant typed this path, not you [assistant]
+      re-priced exactly: moving this key shifts house's present value by the same amount on every path (to within 2.0e-15 of its s.d., over 200 probe paths) and leaves every other option's untouched
+      replacing that path with one flat rate, inside a 1.00%–10.00% bracket [assistant] — solved on the central case:
+        as it rises past 1.6052%, the central case's winner changes from house to rent — re-simulated there: condo 0.19, house 0.52, rent 0.29
+        as it rises past 2.9549%, the runner-up changes from house to condo — re-simulated there: condo 0.38, house 0.31, rent 0.31
       on the same axis, bisected on the futures rather than solved:
-        the option most futures call cheapest changes from condo to house at 2.72%, where the futures sit at condo 0.34, house 0.34, rent 0.32 — bisected on 2,000 paths at seed 42, so it moves with the seed
-      exact to 2.0e-15 of the option's own s.d. over 200 probe paths
-      every grid point replaces the whole stated path with ONE figure applied at each renewal, so your stated path is not a point on that line
-      no boundary printed for the decisiveness verdict — no value in the bracket clears the 65% floor, so there is nothing to cross
-      on the same axis: your contract 4.35% [mortgage_rate.contracted_5y_uninsured]; today's posted 5-year 6.09% [mortgage_rate.posted_5y] — a list price to bracket a guess from above, never a ceiling on a 2031 renewal
-  your income — income.pay_drop_events: it moves the affordability report, not either option's present value, so it cannot move this margin
-
-  WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly
-  house.mortgage_rate (house), stated 4.35%
-      moving it inside a 1.00%–10.00% bracket [assistant] — solved on your own figures:
-        the central case's winner changes from rent to house at 2.2518% — re-simulated there: condo 0.24, house 0.44, rent 0.32
-      exact to 2.0e-15 of the option's own s.d. over 200 probe paths
-      on the same axis: today's posted 5-year 6.09% [mortgage_rate.posted_5y]
+        as it rises past 2.72%, the option most futures call cheapest changes from house to condo, where the futures sit at condo 0.35, house 0.35, rent 0.31 — bisected on 2,000 paths at seed 42, so the crossing moves with the seed
+      the config states house.mortgage_renewal_rates as a path (4.60%, 5.00%, 4.80%, 4.40%); every grid point replaces the whole path with ONE figure applied at each renewal, so the threshold reported is a flat renewal rate rather than the rate at the next renewal, and the stated path is not a point on this grid
+      no boundary printed for the decisiveness verdict — decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%, so no boundary of it lies in the range this axis searches
+      on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y] — a list price, to bracket a guess from above — never a ceiling on a renewal years from now
+  your contract rate — house.mortgage_rate (4.35%): house.mortgage_rate is one rate this config states, held for the opening term — no draw in this engine touches it, so house's financing carries no spread here at all. It carries a solved distance instead
+      this value is anchor-sourced [anchor]
+      re-priced exactly: moving this key shifts house's present value by the same amount on every path (to within 2.0e-15 of its s.d., over 200 probe paths) and leaves every other option's untouched
+      moving it inside a 1.00%–10.00% bracket [assistant] — solved on the central case:
+        as it rises past 1.9171%, the runner-up changes from house to condo — re-simulated there: condo 0.38, house 0.31, rent 0.31
+      on the same axis, bisected on the futures rather than solved:
+        as it rises past 1.60%, the option most futures call cheapest changes from house to condo, where the futures sit at condo 0.35, house 0.35, rent 0.31 — bisected on 2,000 paths at seed 42, so the crossing moves with the seed
+      no boundary printed for the central case's winner — best is 'rent' at every point of 1.00%–10.00%, so no boundary of it lies in the range this axis searches
+      no boundary printed for the decisiveness verdict — decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%, so no boundary of it lies in the range this axis searches
+      on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y] — a list price, to bracket a guess from above — never a ceiling on a renewal years from now
+  your income — income.pay_drop_events: income.pay_drop_events moves the affordability report, not either option's present value, so it cannot move this margin
 
   every channel above is sized by a figure the assistant chose, not by you, so this ranking is a property of widths you did not state — the figure to check first is simulation.investment_return_vol=10% [assistant]"""
 
@@ -110,6 +116,16 @@ def _line(block: str, needle: str) -> str:
     hits = [line for line in block.splitlines() if needle in line]
     assert len(hits) == 1, (needle, hits)
     return hits[0]
+
+
+def _zero_reading_figures(block: str) -> list:
+    """Every printed figure that reads as zero and cannot BE an exact zero.
+
+    An exact zero prints at the figure's own decimals and unsigned (`0.00`,
+    `0.0`); a signed zero (`-0.00`, `-0.000`) or one carried to a third zero
+    decimal (`0.000`) is a non-zero figure rounded into a zero. The old guard
+    here was `"-0.00 " not in block`, which a `-0.000` walks straight past."""
+    return re.findall(r"(?<![\d.])(?:-0\.0+|0\.000+)(?![\d])", block)
 
 
 # ---------------------------------------------------------------------------
@@ -296,17 +312,22 @@ class TestTheDraftDefectsOfItem18:
         *Kills it:* printing the solved rates without the bracket."""
         block = _render()
         assert ("      replacing that path with one flat rate, inside a 1.00%–10.00% "
-                "bracket [assistant] — solved on your own figures:") in block
+                "bracket [assistant] — solved on the central case:") in block
 
     def test_the_contract_rate_gets_its_own_row(self):
-        """§6 licenses `<opt>.mortgage_rate` for slice 1 and measures it at the
-        same 2.0e-15; §7's draft renders nothing for it.
-        *Kills it:* rendering only the reversals a structural zero joins."""
+        """§6 licenses `<opt>.mortgage_rate` for slice 1 and §0.1 item 23
+        measures it as the control; §7's draft renders nothing for it. On the
+        fixture it joins its own structural zero, and its winner never changes
+        across the bracket — which prints as a refusal, not as an absence.
+        *Kills it:* rendering only the first reversal a structural zero joins."""
         block = _render()
-        assert "  house.mortgage_rate (house), stated 4.35%" in block
-        assert ("        the central case's winner changes from rent to house at "
-                "2.2518% — re-simulated there: condo 0.24, house 0.44, rent 0.32"
+        assert ("  your contract rate — house.mortgage_rate (4.35%): house.mortgage_rate "
+                "is one rate this config states") in block
+        assert ("        as it rises past 1.9171%, the runner-up changes from house to "
+                "condo — re-simulated there: condo 0.38, house 0.31, rent 0.31"
                 ) in block
+        assert ("      no boundary printed for the central case's winner — best is "
+                "'rent' at every point of 1.00%–10.00%") in block
 
 
 # ---------------------------------------------------------------------------
@@ -328,13 +349,28 @@ class TestTheFormatterRules:
         *Kills it:* dropping the column, dropping it only where the shares did
         not resolve, or printing the point estimate bare."""
         block = _render()
-        assert ("  channel                 alone               with interaction     "
-                "     changes sides") in block
+        assert ("  channel                 alone               with interaction    "
+                "flips whether rent is cheapest") in block
         for cell in ("40.6% [38.4, 42.8]", "13.0% [11.5, 14.5]", "6.0% [5.0, 7.0]",
                      "4.0% [3.1, 4.9]", "0.4% [0.1, 0.7]"):
             assert cell in block, cell
         assert _line(block, "the house's costs       not resolved").endswith(
             "0.4% [0.1, 0.7]")
+
+    def test_the_flip_column_names_the_winner_whose_side_it_counts(self):
+        """The flip is `sign(f)` against the CENTRAL CASE's winner: a future
+        that moves from the condo to the house while rent stays beaten is not
+        counted. "changes sides" named no side, and the glossary read it as
+        "which option is cheapest", which is a different count. The header and
+        the sentence under the table both say whose side, and it is this run's
+        `verdict.best`.
+        *Kills it:* a fixed header, or one naming the runner-up."""
+        block = _render()
+        assert "changes sides" not in block and "changing sides" not in block
+        assert block.count("flipping whether rent is cheapest") == 1
+        other = format_decomposition(two_channel_option_state())
+        assert "flips whether condo is cheapest" in other
+        assert "flips whether rent is cheapest" not in other
 
     def test_an_unresolved_share_never_appears_as_a_number_in_a_column(self):
         """§7 rule 6 and §4's no-clamp rule: the estimates are kept, printed in
@@ -343,10 +379,63 @@ class TestTheFormatterRules:
         clamping it to 0.00."""
         block = _render()
         assert ("  the house's costs       not resolved        not resolved       "
-                "     0.4% [0.1, 0.7]") in block
+                "                0.4% [0.1, 0.7]") in block
         assert ("      -0.001 [-0.002, 0.001] alone and -0.002 [-0.003, 0.002] with "
                 "interaction, at 2,000 futures") in block
-        assert "-0.00 " not in block and "-0.00]" not in block
+        assert _zero_reading_figures(block) == []
+
+    def test_a_small_share_flip_or_probability_never_reads_as_zero(self):
+        """§4 and this module's own rule: a figure that is not zero never
+        prints as zero. Measured on examples/showcase_demographic_prior.yaml
+        before this was fixed: "0.001 [-0.000, 0.002]" and "-0.000 [-0.001,
+        0.001]" — the shares' own rule said three decimals would do, and the
+        test beside it looked for "-0.00 " and so never saw "-0.000". Each
+        figure here is small enough that its base decimals would round it to
+        zero, and each prints at the first decimal that shows it.
+        *Kills it:* reverting `_faithful` to a fixed three decimals (the
+        shares), one decimal (the flip), or two (the probability)."""
+        dec = two_channel_option_state()
+        condo, house = dec.spread.rows
+        tiny = dataclasses.replace(house, shares=dc.ResolvedShares(
+            alone=0.0004, alone_ci=dc.Interval(-0.0003, 0.0021),
+            with_interaction=0.0012, with_interaction_ci=dc.Interval(0.0004, 0.0019)),
+            flip=0.0002, flip_ci=dc.Interval(0.0001, 0.0004))
+        noise = dataclasses.replace(condo, shares=dc.UnresolvedShares(
+            provisional_alone=-0.0004,
+            provisional_alone_ci=dc.Interval(-0.0011, 0.0006),
+            provisional_with_interaction=0.0009,
+            provisional_with_interaction_ci=dc.Interval(0.00049, 0.0013)))
+        rare = dc.LevelRow(channel_id=4, level=dc.ResolvedLevel(
+            delta=-2110.0, se=505.0, prob_best_frozen=0.003))
+        block = format_decomposition(dataclasses.replace(
+            dec,
+            spread=dataclasses.replace(dec.spread, rows=(noise, tiny),
+                                       leading_channel_id=4),
+            level=dataclasses.replace(dec.level,
+                                      rows=(dec.level.rows[0], rare))))
+        assert ("  the house's costs       0.0004 [-0.0003, 0.002] 0.001 [0.0004, 0.002]"
+                "              0.02% [0.01, 0.04]") in block
+        assert ("      -0.0004 [-0.001, 0.001] alone and 0.001 [0.0005, 0.001] with "
+                "interaction, at 4,000 futures") in block
+        assert "  the house's costs          -$2,110 (± $505)     -> 0.003" in block
+        assert _zero_reading_figures(block) == []
+        # ...and an exact zero is still a zero, unsigned, at its own decimals
+        zero = dataclasses.replace(tiny, shares=dataclasses.replace(
+            tiny.shares, alone_ci=dc.Interval(-0.0, 0.0021)))
+        exact = format_decomposition(dataclasses.replace(
+            dec, spread=dataclasses.replace(dec.spread, rows=(condo, zero))))
+        assert "0.0004 [0.00, 0.002]" in exact
+
+    def test_a_share_outside_zero_to_one_never_reads_inside_it(self):
+        """The same rule's other half: an unresolved share of 1.004 at two
+        decimals reads "1.00" — all of the spread, and inside [0, 1] — on the
+        row that says it did not resolve BECAUSE it is above one. That is the
+        clamp §4 refuses, done by a rounding.
+        *Kills it:* dropping the [0, 1] half of `_faithful`."""
+        block = format_decomposition(seven_channel_other_household())
+        assert ("      1.004 [1.00, 1.01] alone and 1.01 [1.001, 1.01] with "
+                "interaction, at 6,000 futures") in block
+        assert "1.00 [1.00, 1.01] alone" not in block
 
     def test_the_residual_line_is_printed_and_takes_its_refusal_branch(self):
         """§7 rule 5 / §4: on this fixture at its committed 2,000 paths the
@@ -487,7 +576,7 @@ class TestTheProvenanceGate:
         *Kills it:* hardcoding either sentence, or inferring the class from the
         key's name."""
         block = format_decomposition(two_channel_option_state())
-        assert ("  the condo's costs decides the spread of this answer, and every "
+        assert ("  the condo's costs decide the spread of this answer, and every "
                 "width behind that row is yours or an anchor's") in block
         assert "the figure to check first" not in block
 
@@ -500,9 +589,235 @@ class TestTheProvenanceGate:
                                      formatted="9%", source="assistant"),)))
         partly = dataclasses.replace(dec, spread=dataclasses.replace(
             dec.spread, rows=rows, superlative_licensed=False, check_first=None))
-        assert ("  1 of the 2 channels above are sized by a figure the assistant "
+        assert ("  1 of the 2 channels above is sized by a figure the assistant "
                 "chose, not by you, so this ranking is a property of widths you did "
                 "not state") in format_decomposition(partly)
+
+    def test_an_unattributed_width_is_never_called_the_assistants(self):
+        """`unattributed` means no `sources:` entry claims the figure — typed
+        with nobody's name on it. On examples/basic_config.yaml, which declares
+        no `sources:` at all, the closing sentence read "sized by a figure the
+        assistant chose, not by you" and then named that figure with the tag
+        `[unattributed]`: one line contradicting itself. The rows are counted
+        from `SpreadRegister.unattributed_channel_ids`, the engine's own list,
+        and never folded into the assistant's count.
+        *Kills it:* counting `unattributed` as the assistant's, or dropping
+        the unattributed rows from the sentence."""
+        dec = two_channel_option_state()
+        unclaimed = tuple(
+            dataclasses.replace(row, widths=tuple(
+                dataclasses.replace(w, source="unattributed") for w in row.widths))
+            for row in dec.spread.rows)
+        check = dataclasses.replace(unclaimed[0].widths[0])
+        block = format_decomposition(dataclasses.replace(
+            dec, spread=dataclasses.replace(
+                dec.spread, rows=unclaimed, superlative_licensed=False,
+                check_first=check, unattributed_channel_ids=(3, 4))))
+        assert ("  every channel above is sized by a figure no sources: entry claims, "
+                "typed with nobody's name on it, so this ranking is a property of "
+                "widths that nobody's name is on — the figure to check first is "
+                "simulation.condo_fee_vol=6% [unattributed]") in block
+        assert "the assistant" not in block
+        assert "you did not state" not in block
+
+    def test_a_table_with_both_classes_names_each_with_its_own_count(self):
+        """Mixed: one row the assistant sized, another nobody claimed. Each
+        class is counted and worded as itself.
+        *Kills it:* one pile for "not yours", or a count taken from the wrong
+        class."""
+        dec = two_channel_option_state()
+        condo, house = dec.spread.rows
+        typed = dataclasses.replace(condo, widths=(dc.Width(
+            key="simulation.condo_fee_vol", formatted="6%", source="assistant"),))
+        unclaimed = dataclasses.replace(house, widths=(dc.Width(
+            key="simulation.house_maintenance_vol", formatted="9%",
+            source="unattributed"),))
+        block = format_decomposition(dataclasses.replace(
+            dec, spread=dataclasses.replace(
+                dec.spread, rows=(typed, unclaimed), superlative_licensed=False,
+                check_first=typed.widths[0], unattributed_channel_ids=(4,))))
+        assert ("  1 of the 2 channels above is sized by a figure the assistant chose, "
+                "not by you, and 1 of the 2 channels above is sized by a figure no "
+                "sources: entry claims, typed with nobody's name on it, so this "
+                "ranking is a property of widths you did not state or that nobody's "
+                "name is on — the figure to check first is simulation.condo_fee_vol=6% "
+                "[assistant]") in block
+
+
+# ---------------------------------------------------------------------------
+# Sentences a stranger read and found not so — each pinned on the words
+# ---------------------------------------------------------------------------
+
+class TestEverySentenceIsSo:
+    def test_an_unresolved_largest_share_is_named_and_leads_nothing(self):
+        """examples/rent_vs_condo_vs_house.yaml: the condo's costs carry a
+        provisional 1.07 that did not resolve, and the resolved leader was the
+        house's costs at 0.01 — so the block named a hundredth of the spread
+        as the leading channel and sent the reader to its width as "the
+        figure to check first". The unresolved row is named, with its figure,
+        and nothing is promoted in its place.
+        *Kills it:* keying the leading line on `leading_channel_id` alone, or
+        letting the superlative or the check-first figure through."""
+        dec = two_channel_option_state()
+        condo, house = dec.spread.rows
+        big = dataclasses.replace(condo, shares=dc.UnresolvedShares(
+            provisional_alone=1.07, provisional_alone_ci=dc.Interval(0.9996, 1.16),
+            provisional_with_interaction=1.04,
+            provisional_with_interaction_ci=dc.Interval(0.9998, 1.10)))
+        small = dataclasses.replace(house, shares=dc.ResolvedShares(
+            alone=0.01, alone_ci=dc.Interval(0.006, 0.02),
+            with_interaction=0.02, with_interaction_ci=dc.Interval(0.015, 0.025)),
+            widths=(dc.Width(key="simulation.house_maintenance_vol", formatted="15%",
+                             source="assistant"),))
+        block = format_decomposition(dataclasses.replace(
+            dec, spread=dataclasses.replace(
+                dec.spread, rows=(small, big), leading_channel_id=4,
+                superlative_licensed=True, check_first=small.widths[0])))
+        assert ("  the largest share is on the condo's costs: 1.07 [1.00, 1.16] alone, "
+                "not resolved at 4,000 futures — so no channel leads this table; "
+                "raise simulation.num_sims") in block
+        assert "different kinds of number" not in block
+        assert "decide the spread" not in block and "decides the spread" not in block
+        assert "the figure to check first" not in block
+        assert "house_maintenance_vol=15% [assistant]\n" in block + "\n"   # its row
+        assert "1 of the 2 channels above is sized by a figure the assistant" in block
+
+    def test_a_resolved_largest_share_still_leads(self):
+        """The widening of the rule above: an unresolved row SMALLER than the
+        resolved leader takes nothing from it.
+        *Kills it:* suppressing the leader whenever any row is unresolved."""
+        block = _render()      # the house's costs: unresolved at -0.001
+        assert "  on the renter's portfolio the two figures are different kinds" in block
+        assert "the largest share is on" not in block
+        assert "the figure to check first is simulation.investment_return_vol" in block
+
+    def test_the_header_states_the_margin_it_measures_the_scatter_against(self):
+        """On a decisive run `verdict.reason` prints a probability against the
+        floor and no margin, so "that margin averages …" had nothing to refer
+        to (examples/mortgage_house_vs_rent.yaml, advanced_config.yaml,
+        rent_vs_condo_vs_house.yaml). The margin is stated, with its winner.
+        *Kills it:* referring back to a margin the reason line did not print."""
+        block = format_decomposition(two_channel_option_state())
+        lines = block.splitlines()
+        assert lines[1] == "  P(condo cheapest) = 81% ≥ 65% floor [hde verdict rule]"
+        assert lines[2] == (
+            "  the central case says condo by $54,120; across those 4,000 futures that "
+            "margin averages $47,290 and scatters by $96,420 (1 s.d.) — 1.8x the "
+            "margin itself")
+
+    @pytest.mark.parametrize("channel_id", range(len(dc.CHANNELS)))
+    def test_every_label_reads_grammatically_where_it_is_named(self, channel_id):
+        """"the condo's costs's two figures" and "the condo's costs carries":
+        a possessive and a verb built for a singular label on a plural one.
+        Every sentence that names a leading channel is rendered for every one
+        of the seven labels.
+        *Kills it:* an `'s` appended to a label, or a verb that ignores it."""
+        label = dc.channel(channel_id).label
+        plural = label.endswith("s")
+        dec = two_channel_option_state()
+        rows = tuple(dataclasses.replace(r, channel_id=cid)
+                     for r, cid in zip(dec.spread.rows,
+                                       (channel_id, (channel_id + 1) % 7)))
+        level_rows = tuple(dataclasses.replace(r, channel_id=cid)
+                           for r, cid in zip(dec.level.rows,
+                                             (channel_id, (channel_id + 1) % 7)))
+        block = format_decomposition(dataclasses.replace(
+            dec, spread=dataclasses.replace(dec.spread, rows=rows,
+                                            leading_channel_id=channel_id),
+            level=dataclasses.replace(dec.level, rows=level_rows,
+                                      leading_channel_id=channel_id)))
+        assert "'s's" not in block and "s's " not in block
+        assert f"  on {label} the two figures are different kinds of number" in block
+        assert (f"  {label} {'decide' if plural else 'decides'} the spread of this "
+                f"answer") in block
+        refusal = format_decomposition(dc.DecompositionRefusal(
+            code="one_channel", reason="r", channel_id=channel_id))
+        assert refusal.startswith(
+            f"{label} {'carry' if plural else 'carries'} all of this run's spread")
+
+    def test_cheapest_either_way_is_said_only_when_it_is_so(self):
+        """The option-state closing printed "<best> is cheapest either way"
+        without reading the probability beside it. Gated at 0.5 on both
+        figures it names, as the disagreement branch gates its causal clause.
+        *Kills it:* deleting the gate (the claim prints over 0.44), or
+        widening it past 0.5 (it stops printing over a true majority)."""
+        dec = two_channel_option_state()
+        condo_row, house_row = dec.level.rows
+
+        def closing(frozen, base=dec.level.prob_best_base):
+            row = dataclasses.replace(condo_row, level=dataclasses.replace(
+                condo_row.level, prob_best_frozen=frozen))
+            block = format_decomposition(dataclasses.replace(
+                dec, level=dataclasses.replace(dec.level, rows=(row, house_row),
+                                               prob_best_base=base)))
+            return _line(block, "the largest shift is")
+
+        assert closing(0.44) == (
+            "  the largest shift is the condo's costs (0.62 of the spread), +$8,940: "
+            "with it priced the central case's way P(condo cheapest) is 0.44 against "
+            "0.81 as drawn — priced that way, condo is cheapest in no more than half "
+            "of these futures")
+        assert closing(0.50).endswith("priced that way, condo is cheapest in no more "
+                                      "than half of these futures")
+        assert closing(0.51).startswith("  condo is cheapest either way")
+        assert "either way" not in closing(0.93, base=0.48)
+        assert closing(0.93, base=0.48).endswith(
+            "— as drawn, condo is cheapest in no more than half of these futures")
+
+    @pytest.mark.parametrize("field, value", [("was", True), ("becomes", False),
+                                              ("was", ""), ("becomes", None)])
+    def test_a_crossing_that_is_not_words_raises_rather_than_printing(self, field,
+                                                                      value):
+        """The block printed "changes from True to False" once, for a crossing
+        out of decisiveness for the OTHER option. The contract refuses a
+        non-string when a boundary is built; the line that prints it refuses
+        again, because what it guards is the printing, and a boundary can
+        reach it without passing `__init__`.
+        *Kills it:* removing the check in `_crossing` (the literal prints)."""
+        dec = uncertainty_surface()
+        renewal = dec.reversal.exact[0]
+        crossing = renewal.boundaries[0]
+        forged = object.__new__(type(crossing))
+        for f in dataclasses.fields(crossing):
+            object.__setattr__(forged, f.name, getattr(crossing, f.name))
+        object.__setattr__(forged, field, value)
+        odd = dataclasses.replace(renewal, boundaries=(forged,)
+                                  + renewal.boundaries[1:])
+        with pytest.raises(TypeError, match="not words"):
+            format_decomposition(dataclasses.replace(
+                dec, reversal=dataclasses.replace(dec.reversal,
+                                                  exact=(odd,) + dec.reversal.exact[1:])))
+
+    def test_decisiveness_crossings_print_their_three_states_in_words(self):
+        block = format_decomposition(seven_channel_other_household())
+        assert "decisive for condo to not decisive" in block
+        assert "True" not in block and "False" not in block
+
+    @pytest.mark.parametrize("source, words", [
+        ("user", "      you stated this path [user]"),
+        ("assistant", "      the assistant typed this path, not you [assistant]"),
+        ("anchor", "      this path is anchor-sourced [anchor]"),
+        ("unattributed",
+         "      no sources: entry says who typed this path [unattributed]"),
+    ])
+    def test_a_reversal_row_says_whose_figure_the_stated_value_is(self, source,
+                                                                  words):
+        """"a path you stated … solved on your own figures" was printed over
+        the fixture's renewal ladder, which its own read-back calls
+        assistant-typed. The row now says whose figure it is from
+        `ExactReversal.stated_source`, "you" only for `user`, and the solved
+        group says what is true for every class: it is solved on the central
+        case.
+        *Kills it:* a fixed "you stated", or "your own figures" anywhere."""
+        dec = uncertainty_surface()
+        renewal = dataclasses.replace(dec.reversal.exact[0], stated_source=source)
+        block = format_decomposition(dataclasses.replace(
+            dec, reversal=dataclasses.replace(dec.reversal,
+                                              exact=(renewal,) + dec.reversal.exact[1:])))
+        assert words in block.splitlines()
+        assert "your own figures" not in block
+        assert ("you stated" in block) == (source == "user")
+        assert "— solved on the central case:" in block
 
 
 # ---------------------------------------------------------------------------
@@ -524,17 +839,38 @@ class TestRefusalsAreRenderedWithTheirReason:
         out = format_decomposition(dc.DecompositionRefusal(
             code="one_channel", channel_id=3,
             reason="one channel carries all of it, so there is nothing to split"))
-        assert out == ("the condo's costs carries all of this run's spread — not "
+        assert out == ("the condo's costs carry all of this run's spread — not "
                        "split: one channel carries all of it, so there is nothing to "
                        "split")
+        economy = format_decomposition(dc.DecompositionRefusal(
+            code="one_channel", channel_id=0, reason="r"))
+        assert economy == "the economy carries all of this run's spread — not split: r"
 
     def test_a_refused_boundary_is_named_rather_than_dropped(self):
         """§8 refusal 7: a boundary that vanishes with no row is an absence a
         reader reads as "nothing here".
         *Kills it:* dropping `refused_boundaries` from the render."""
-        assert ("      no boundary printed for the decisiveness verdict — no value in "
-                "the bracket clears the 65% floor, so there is nothing to cross"
-                ) in _render()
+        assert ("      no boundary printed for the decisiveness verdict — decisive says "
+                "'not decisive' at every one of 65 points across 1.00%–10.00%, so no "
+                "boundary of it lies in the range this axis searches") in _render()
+
+    def test_one_reason_refusing_several_fields_prints_once_naming_them_all(self):
+        """A key the exactness gate refuses carries the gate's one sentence on
+        all four fields (`break_even.reversal_register`). Printed per field it
+        reads as four findings where there is one.
+        *Kills it:* one line per refused field, or dropping the fields a
+        shared reason covers."""
+        dec = seven_channel_other_household()
+        row = dec.reversal.estimated[0]
+        why = "a present value this gate compares is not a finite number"
+        gated = dataclasses.replace(row, boundaries=(), refused_boundaries=tuple(
+            dc.RefusedBoundary(verdict_field=f, reason=why) for f in dc.BOUNDARY_FIELDS))
+        block = format_decomposition(dataclasses.replace(
+            dec, reversal=dataclasses.replace(dec.reversal, estimated=(gated,))))
+        assert block.count(why) == 1
+        assert ("      no boundary printed for the central case's winner, the runner-up, "
+                "the option most futures call cheapest or the decisiveness verdict — "
+                f"{why}") in block
 
     def test_a_refused_spread_prints_its_reason_verbatim_and_the_level_still_prints(
             self):
@@ -607,9 +943,10 @@ class TestRefusalsAreRenderedWithTheirReason:
             dec, reversal=dc.ReversalRegister(exact=(), estimated=(),
                                               structural_zeros=zeros)))
         assert ("  your renewal rate — house.mortgage_renewal_rates (4.60%, 5.00%, "
-                "4.80%, 4.40%): a path you stated, not a distribution") in block
+                "4.80%, 4.40%): house.mortgage_renewal_rates is a path this config "
+                "states, not a distribution") in block
         assert "replacing that path with one flat rate" not in block
-        assert "1.61%" not in block
+        assert "1.6052%" not in block
 
     def test_an_empty_reversal_register_says_it_found_no_candidate(self):
         block = format_decomposition(two_channel_option_state())
@@ -627,14 +964,104 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         block = format_decomposition(seven_channel_other_household())
         exact_at = block.index("  WHAT WOULD HAVE TO CHANGE — keys the engine "
                                "re-prices exactly")
-        estimated_at = block.index("  WHAT WOULD HAVE TO CHANGE — keys the engine can "
-                                   "only re-price by re-simulating, each distance "
-                                   "inside an interval")
+        estimated_at = block.index("  WHAT WOULD HAVE TO CHANGE — keys the engine "
+                                   "cannot re-price exactly")
         assert exact_at < estimated_at        # no interleaving, no shared ordering
-        assert ("      exact to 3.1e-15 of the option's own s.d. over 200 probe paths"
-                in block)
-        assert ("      the exactness gate refused this key at 1.8e+00 of the option's "
-                "own s.d., so the distance is estimated") in block
+        assert ("      re-priced exactly: moving this key shifts condo's present value "
+                "by the same amount on every path (to within 3.1e-15 of its s.d., over "
+                "200 probe paths) and leaves every other option's untouched") in block
+        assert ("      the exactness gate refused this key; moving it shifts house's "
+                "present value by amounts that differ across paths by up to 1.8e+00 "
+                "of its s.d. — so each distance below is located by re-simulating, "
+                "inside an interval") in block
+
+    def test_the_licence_is_a_property_of_the_key_and_prints_before_its_crossings(
+            self):
+        """The exactness gate's figure licenses reading the axis off the run's
+        own futures SHIFTED; it says nothing about how precisely a crossing
+        bisected on those futures sits. Printed after the sampled crossing it
+        read as that crossing's precision — a sample property dressed as a
+        config property, this feature's cardinal error. So it prints first,
+        labelled as the key's.
+        *Kills it:* moving the licence line back below the crossings, or
+        wording it as a precision."""
+        def rows_of(block, starts):
+            """Each reversal row's own lines: from its head to the next head."""
+            lines = block.splitlines()
+            heads = [i for i, line in enumerate(lines)
+                     if any(line.startswith(s) for s in starts)] + [len(lines)]
+            return [lines[a:b] for a, b in zip(heads, heads[1:])]
+
+        cases = (
+            (_render(), ("  your renewal rate", "  your contract rate",
+                         "  your income"), 2),
+            (format_decomposition(seven_channel_other_household()),
+             ("  condo.mortgage_renewal_rates", "  house.value_growth_rate", "  "
+              "WHAT WOULD HAVE TO CHANGE — keys the engine cannot"), 1),
+        )
+        for block, starts, expected in cases:
+            checked = 0
+            for row in rows_of(block, starts):
+                licence = [i for i, line in enumerate(row)
+                           if line.startswith("      re-priced exactly:")]
+                crossings = [i for i, line in enumerate(row)
+                             if "as it rises past" in line]
+                if not licence:
+                    continue
+                assert len(licence) == 1 and crossings
+                assert licence[0] < min(crossings), row
+                checked += 1
+            assert checked == expected
+        assert "exact to " not in _render()
+
+    def test_an_estimated_row_with_no_crossing_says_nothing_was_estimated(self):
+        """Slice 1 estimates NOTHING (§6, §14): a key the gate refuses carries
+        no boundary. "so the distance is estimated" was false on every such
+        row, and on the gate's non-finite refusal the figure it printed was
+        `nan` — a measurement of nothing. The figure prints only when it is a
+        finite number; the gate's reason says the rest, once.
+        *Kills it:* printing the deviation unconditionally (`nan`, `inf`), or
+        claiming a distance that is not there."""
+        dec = seven_channel_other_household()
+        row = dec.reversal.estimated[0]
+        why = ("a present value this gate compares is not a finite number — so "
+               "whether house.value_growth_rate shifts house by one constant cannot "
+               "be measured")
+        for deviation in (math.nan, math.inf, None):
+            gated = dataclasses.replace(
+                row, boundaries=(), max_path_deviation_over_sd=deviation,
+                refused_boundaries=tuple(dc.RefusedBoundary(verdict_field=f, reason=why)
+                                         for f in dc.BOUNDARY_FIELDS))
+            block = format_decomposition(dataclasses.replace(
+                dec, reversal=dataclasses.replace(dec.reversal, estimated=(gated,))))
+            assert ("      the exactness gate refused this key — so no distance on it "
+                    "is solved or estimated in this run") in block
+            assert not re.search(r"\b(nan|inf|None)\b", block), deviation
+            assert "distance is estimated" not in block
+            assert "inside an interval" not in block
+            assert block.count(why) == 1
+
+    def test_a_passing_gate_prints_its_figure_and_a_non_finite_one_refuses(self):
+        """An exact row's figure is the gate's PASSING measurement, and 0.0 is
+        a legal one (identical paths shifted by one constant measure exactly
+        zero). A figure that is not a finite number cannot have passed a gate
+        that fails closed, so it raises rather than printing `nan` as a
+        precision.
+        *Kills it:* deleting the guard (`nan` prints), or widening it to zero
+        (a legal exact row stops rendering)."""
+        dec = uncertainty_surface()
+        renewal = dec.reversal.exact[0]
+
+        def render(deviation):
+            row = dataclasses.replace(renewal, max_path_deviation_over_sd=deviation)
+            return format_decomposition(dataclasses.replace(
+                dec, reversal=dataclasses.replace(
+                    dec.reversal, exact=(row,) + dec.reversal.exact[1:])))
+
+        assert "(to within 0.0e+00 of its s.d., over 200 probe paths)" in render(0.0)
+        for deviation in (math.nan, math.inf):
+            with pytest.raises(ValueError, match="producer defect"):
+                render(deviation)
 
     def test_a_sampled_crossing_never_reads_as_a_solved_one(self):
         """§0.1 item 24, one level down: `best` and `runner_up`
@@ -648,17 +1075,18 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         against two, an explicit clause naming the sample, and the grouping.
         *Kills it:* one shape for both, or dropping any of the three."""
         block = _render()
-        assert ("        the central case's winner changes from rent to house at "
-                "1.6052% — re-simulated there: condo 0.19, house 0.52, rent 0.29"
+        assert ("        as it rises past 1.6052%, the central case's winner changes "
+                "from house to rent — re-simulated there: condo 0.19, house 0.52, "
+                "rent 0.29") in block
+        assert ("        as it rises past 2.9549%, the runner-up changes from house to "
+                "condo — re-simulated there: condo 0.38, house 0.31, rent 0.31"
                 ) in block
-        assert ("        the runner-up changes from condo to house at 2.9549% — "
-                "re-simulated there: condo 0.32, house 0.36, rent 0.31") in block
         assert ("      on the same axis, bisected on the futures rather than solved:"
                 ) in block
-        assert ("        the option most futures call cheapest changes from condo to "
-                "house at 2.72%, where the futures sit at condo 0.34, house 0.34, "
-                "rent 0.32 — bisected on 2,000 paths at seed 42, so it moves with "
-                "the seed") in block
+        assert ("        as it rises past 2.72%, the option most futures call cheapest "
+                "changes from house to condo, where the futures sit at condo 0.35, "
+                "house 0.35, rent 0.31 — bisected on 2,000 paths at seed 42, so the "
+                "crossing moves with the seed") in block
         # the sampled figure never appears at the solved precision, and the
         # solved ones never carry the sampled clause
         assert "2.7164%" not in block
@@ -678,15 +1106,16 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         group heading per reversal row instead of per kind."""
         block = format_decomposition(seven_channel_other_household())
         row = block.index("  condo.mortgage_renewal_rates (condo), stated 5.20%, 5.40%")
-        tail = block[row:block.index("      exact to 3.1e-15", row)]
+        tail = block[row:block.index("      the config states condo", row)]
         assert tail.count("WHAT WOULD HAVE TO CHANGE") == 0      # one row, two groups
-        assert "— solved on your own figures:" in tail
+        assert "— solved on the central case:" in tail
         assert "bisected on the futures rather than solved:" in tail
-        assert ("        the runner-up changes from house to rent at 5.0042% — "
-                "re-simulated there: condo 0.59, rent 0.30") in tail
-        assert ("        the decisiveness verdict changes from no to yes at 6.12%, "
-                "where the futures sit at condo 0.65, rent 0.26 — bisected on 6,000 "
-                "paths at seed 42, so it moves with the seed") in tail
+        assert ("        as it rises past 5.0042%, the runner-up changes from rent to "
+                "house — re-simulated there: condo 0.59, rent 0.30") in tail
+        assert ("        as it rises past 3.12%, the decisiveness verdict changes from "
+                "decisive for condo to not decisive, where the futures sit at condo "
+                "0.65, rent 0.26 — bisected on 6,000 paths at seed 42, so the "
+                "crossing moves with the seed") in tail
         # the kinds keep BOUNDARY_FIELDS' order inside each group
         assert tail.index("the option most futures call cheapest") < tail.index(
             "the decisiveness verdict")
@@ -705,7 +1134,7 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         assert ("      replacing that path with one flat rate, inside a 2.00%–12.00% "
                 "bracket [assistant], bisected on the futures rather than solved:"
                 ) in block
-        assert "solved on your own figures" not in block
+        assert "solved on the central case" not in block
 
     def test_a_crossing_with_no_confirming_run_prints_alone(self):
         """A crossing whose `confirming_probabilities` is EMPTY prints alone.
@@ -717,8 +1146,10 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         against, and the register is NOT empty there. `--decompose` never
         hands the formatter that register: it refuses the whole block with
         `no_futures` before any register is built (§0.1 item 25). So this
-        defends the library shape, which the deterministic renewal-flip line
-        reaches without futures, rather than a state the flag produces today.
+        defends the library shape — which §0.1 item 25 keeps for the
+        renewal-flip line of `2026-09-21-unpriced-dimensions.md` slice 2, and
+        which nothing in this package calls without futures today — rather
+        than a state the flag produces.
         *Kills it:* rendering "re-simulated there:" with nothing after it, or
         dropping the crossing because it has no probabilities."""
         dec = uncertainty_surface()
@@ -728,8 +1159,8 @@ class TestTheTwoReversalKindsAreNeverOneTable:
             for b in renewal.boundaries if isinstance(b, dc.SolvedBoundary)))
         block = format_decomposition(dataclasses.replace(
             dec, reversal=dataclasses.replace(dec.reversal, exact=(bare,))))
-        assert ("        the central case's winner changes from rent to house at "
-                "1.6052%\n") in block
+        assert ("        as it rises past 1.6052%, the central case's winner changes "
+                "from house to rent\n") in block
         assert "re-simulated there" not in block
         assert "no futures" not in block        # no invented explanation
 
@@ -745,7 +1176,7 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         stray = dc.EstimatedBoundary(
             verdict_field="best", value=0.016,
             value_ci=dc.Interval(low=0.015, high=0.017),
-            was="rent", becomes="house", resimulation_paths=500)
+            was="house", becomes="rent", resimulation_paths=500)
         odd = dataclasses.replace(renewal, boundaries=renewal.boundaries + (stray,))
         with pytest.raises(TypeError) as raised:
             format_decomposition(dataclasses.replace(
@@ -753,7 +1184,7 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         assert "house.mortgage_renewal_rates's exact reversal row" in str(raised.value)
         assert "EstimatedBoundary" in str(raised.value)
         # ...and only the stray: the same row without it renders in full
-        assert "at 1.6052%" in format_decomposition(dec)
+        assert "past 1.6052%" in format_decomposition(dec)
 
     def test_an_estimated_row_carrying_a_solved_crossing_raises(self):
         """The sibling of the case above, one tuple over: an estimated row's
@@ -761,7 +1192,7 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         than printing in the estimated row's vocabulary."""
         dec = seven_channel_other_household()
         row = dec.reversal.estimated[0]
-        solved = dc.SolvedBoundary(verdict_field="best", value=0.014, was="condo",
+        solved = dc.SolvedBoundary(verdict_field="best", value=0.044, was="condo",
                                    becomes="house", confirming_probabilities=())
         odd = dataclasses.replace(row, boundaries=row.boundaries + (solved,))
         with pytest.raises(TypeError, match="estimated reversal row carries a "
@@ -781,9 +1212,9 @@ class TestTheTwoReversalKindsAreNeverOneTable:
             format_decomposition(odd)
 
     def test_an_estimated_boundary_prints_its_interval_and_its_sample(self):
-        assert ("        the central case's winner changes from condo to house at "
-                "1.42%, inside 1.19%–1.68% on 3,000 re-simulated paths"
-                ) in format_decomposition(seven_channel_other_household())
+        assert ("        as it rises past 4.42% (inside 4.19%–4.68% on 3,000 "
+                "re-simulated paths), the central case's winner changes from condo "
+                "to house") in format_decomposition(seven_channel_other_household())
 
     def test_a_dead_draw_zero_prints_its_reason_and_not_a_measured_zero(self):
         """§3.5's third kind: a channel that draws every year and reaches no
@@ -799,9 +1230,9 @@ class TestTheTwoReversalKindsAreNeverOneTable:
         """§4: no share is ever clamped into [0, 1] — in either direction."""
         block = format_decomposition(seven_channel_other_household())
         assert ("  the economy             not resolved        not resolved       "
-                "     0.2% [0.1, 0.3]") in block
-        assert ("      1.00 [1.00, 1.01] alone and 1.01 [1.00, 1.01] with interaction, "
-                "at 6,000 futures") in block
+                "                 0.2% [0.1, 0.3]") in block
+        assert ("      1.004 [1.00, 1.01] alone and 1.01 [1.001, 1.01] with "
+                "interaction, at 6,000 futures") in block
 
 
 # ---------------------------------------------------------------------------
@@ -897,8 +1328,43 @@ class TestTheJsonBlock:
             == "best"
 
     def test_the_block_is_json_serialisable(self):
-        json.dumps(decomposition_to_dict(uncertainty_surface()))
-        json.dumps(decomposition_to_dict(seven_channel_other_household()))
+        json.dumps(decomposition_to_dict(uncertainty_surface()), allow_nan=False)
+        json.dumps(decomposition_to_dict(seven_channel_other_household()),
+                   allow_nan=False)
+
+    @pytest.mark.parametrize("deviation", [math.nan, math.inf])
+    def test_a_figure_that_is_not_a_number_is_null_and_the_json_is_strict(
+            self, deviation):
+        """The exactness gate records NaN when a present value it compares is
+        not a finite number, and `inf` for a shift that varies over paths with
+        no spread; `json.dumps` wrote them as the bare tokens `NaN` and
+        `Infinity`, which a strict parser rejects — the whole document fails
+        to parse for the consumer this surface exists for.
+        *Kills it:* serializing the float as it stands."""
+        dec = seven_channel_other_household()
+        row = dataclasses.replace(dec.reversal.estimated[0], boundaries=(),
+                                  max_path_deviation_over_sd=deviation)
+        doc = decomposition_to_dict(dataclasses.replace(
+            dec, reversal=dataclasses.replace(dec.reversal, estimated=(row,))))
+        text = json.dumps(doc, allow_nan=False)
+        assert json.loads(text)["reversal"]["estimated"][0][
+            "max_path_deviation_over_sd"] is None
+        # a finite figure is untouched, and so is every other number
+        assert doc["reversal"]["exact"][0]["max_path_deviation_over_sd"] == 3.1e-15
+        assert doc["sd_margin"] == 402115.0
+
+    def test_the_unattributed_rows_travel_as_their_own_list(self):
+        """`SpreadRegister.unattributed_channel_ids` — the rows no `sources:`
+        entry claims, which the text block counts apart from the assistant's
+        — was not in `--json`, so a consumer could not tell the two classes'
+        rows apart without re-reading every width.
+        *Kills it:* dropping the key, or emitting the assistant's rows in it."""
+        dec = uncertainty_surface()
+        doc = decomposition_to_dict(dataclasses.replace(
+            dec, spread=dataclasses.replace(dec.spread,
+                                            unattributed_channel_ids=(6, 2))))
+        assert doc["spread"]["unattributed_channel_ids"] == [6, 2]
+        assert decomposition_to_dict(dec)["spread"]["unattributed_channel_ids"] == []
 
     def test_a_refused_spread_is_a_refusal_in_the_spread_slot_with_no_rows(self):
         """§0.1 item 7 in this surface's terms: the refusal sits where the
@@ -958,6 +1424,45 @@ class TestTheJsonBlock:
         assert sorted(k for k in keys if f"`{k}`" not in section) == []
         for code in dc.REFUSAL_CODES + dc.SPREAD_REFUSAL_CODES:
             assert f"`{code}`" in section, code
+        # A whole-block code is documented by its own ROW of the refusal table,
+        # which says when it fires; a mention in passing elsewhere in the
+        # section (`identity_failed` is also named under `level`) is not that.
+        for code in dc.REFUSAL_CODES:
+            assert f"\n| `{code}` | " in section, code
+
+    def test_the_contract_states_the_resolution_rule_the_code_applies(self):
+        """The contract said "a row is unresolved when either share's interval
+        leaves [0, 1]"; the code (`decomposition_math.share_is_resolved`)
+        tests the POINT estimate, and the code's rule stands — a point outside
+        [0, 1] is a meaningless share, a small share whose interval touches
+        zero is a real one. A consumer reading the old sentence would treat
+        the fixture's economy row, resolved at 0.01 with an interval reaching
+        -0.002, as a row the engine should have refused. Both documents state
+        the point rule, and the row that proves the difference is pinned
+        beside them: its interval crosses zero, the code resolves it, and the
+        JSON says `resolved: true`.
+        *Kills it:* either document reverting to the interval rule, or the
+        code changing rule while the documents keep this one."""
+        from hde import decomposition_math as dm
+        row = next(r for r in uncertainty_surface().spread.rows if r.channel_id == 0)
+        assert row.shares.alone_ci.low < 0 < row.shares.alone
+        assert dm.share_is_resolved(row.shares.alone)
+        assert not dm.share_is_resolved(row.shares.alone_ci.low)
+        doc = decomposition_to_dict(uncertainty_surface())
+        economy = next(r for r in doc["spread"]["rows"] if r["channel"] == "economy")
+        assert economy["resolved"] is True and economy["alone_ci"]["low"] < 0
+        for name, rule in (
+                ("API_CONTRACT.md",
+                 "A row is unresolved when either share's\n    POINT estimate lies "
+                 "outside [0, 1]"),
+                ("ARCHITECTURE.md",
+                 "A row is `not resolved` when either share's POINT estimate lies "
+                 "outside [0, 1]")):
+            text = (REPO / "docs" / "reference" / name).read_text(encoding="utf-8")
+            assert rule in text, name
+            assert "a resolved share's printed interval may reach below 0" in text, name
+            assert "interval leaves [0, 1]" not in text, name
+            assert "whose interval leaves [0, 1]" not in text, name
 
 
 # ---------------------------------------------------------------------------
@@ -1113,6 +1618,93 @@ class TestTheFlag:
                 in capsys.readouterr().err)
         assert "paths" not in seam
 
+    @pytest.mark.parametrize("argv, paths", [
+        (["--decompose", "{config}"], None),
+        (["--decompose", "{config}", "--json"], None),
+        (["--decompose=300", "{config}"], 300),
+        (["--decompose", "300", "{config}"], 300),
+        (["{config}", "--decompose", "300"], 300),
+        (["{config}", "--decompose=300"], 300),
+        (["{config}", "--decompose"], None),
+    ])
+    def test_the_flag_goes_before_or_after_the_config(
+            self, tmp_path, monkeypatch, capsys, seam, argv, paths):
+        """`hde --decompose examples/x.yaml` exited 2 with an argparse error:
+        the flag's optional count swallowed the config path and refused it as
+        a number. The natural order works, and a count still reaches the
+        assembler in every position it can be written.
+        *Kills it:* typing the flag's value as an int again (the first case
+        exits 2), or reading a config path as a count."""
+        config = _config(tmp_path)
+        monkeypatch.setattr(sys, "argv",
+                            ["hde"] + [a.format(config=config) for a in argv])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        assert seam["spec"] is not None
+        assert seam.get("paths") == paths
+        if "--json" in argv:
+            assert json.loads(out)["decomposition"]["spread"]["leading_channel_id"] == 6
+        else:
+            assert "which risk decides it — 2,000 futures" in out
+
+    def test_a_count_that_is_not_a_number_is_still_refused_as_one(
+            self, tmp_path, monkeypatch, capsys, seam):
+        """The widening of the fix above: with the config already given, the
+        token after the flag can only be a malformed count, and it refuses as
+        one — it is never taken for a second config.
+        *Kills it:* accepting any non-numeric token as the config."""
+        monkeypatch.setattr(sys, "argv", ["hde", _config(tmp_path), "--decompose",
+                                          "abc"])
+        with pytest.raises(SystemExit) as raised:
+            cli_main()
+        assert raised.value.code == 2
+        assert "argument --decompose: invalid int value: 'abc'" in (
+            capsys.readouterr().err)
+        assert "spec" not in seam
+
+    def test_read_back_refuses_the_flag_before_anything_is_priced(
+            self, tmp_path, monkeypatch, capsys, seam):
+        """`--decompose --read-back` priced the whole decomposition and then
+        printed only the read-back, which does not carry the block — a run
+        that paid for an answer and showed none of it. It refuses up front,
+        says why, and names the two routes that do print the block.
+        *Kills it:* deleting the refusal (the seam is called and nothing
+        prints), or moving it after the Monte Carlo run."""
+        import hde.cli as cli_module
+
+        def priced(*a, **k):
+            raise AssertionError("the run was priced before the refusal")
+
+        monkeypatch.setattr(cli_module, "run_monte_carlo", priced)
+        monkeypatch.setattr(cli_module, "compute_deterministic", priced)
+        for flags in (["--decompose", "--read-back"], ["--decompose=500", "--read-back",
+                                                       "short"]):
+            monkeypatch.setattr(sys, "argv", ["hde", _config(tmp_path)] + flags)
+            assert cli_main() == 1
+            captured = capsys.readouterr()
+            assert ("Error: --decompose is not part of the read-back — --read-back "
+                    "prints the read-back lines alone, so this run would price the "
+                    "decomposition and show none of it. Run --decompose without "
+                    "--read-back: the block prints under the report, or rides --json "
+                    "as 'decomposition'") in captured.err
+            assert captured.out == ""
+            assert "spec" not in seam
+
+    def test_read_back_alone_and_decompose_alone_are_both_still_legal(
+            self, tmp_path, monkeypatch, capsys, seam):
+        """The refusal above both ways: widened to any read-back-shaped flag,
+        or to --json, it would refuse calls that were always legal.
+        *Kills it:* refusing --read-back without --decompose, or --decompose
+        with --json."""
+        config = _config(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--read-back"])
+        assert cli_main() == 0
+        assert capsys.readouterr().out.startswith("READ-BACK")
+        assert "spec" not in seam
+        monkeypatch.setattr(sys, "argv", ["hde", config, "--decompose", "--json"])
+        assert cli_main() == 0
+        assert "decomposition" in json.loads(capsys.readouterr().out)
+
     def test_the_flag_is_in_the_help_the_docs_are_checked_against(
             self, monkeypatch, capsys):
         monkeypatch.setattr(sys, "argv", ["hde", "--help"])
@@ -1157,6 +1749,32 @@ class TestTheRealAssemblerThroughTheFlag:
         refusal = json.loads(capsys.readouterr().out)["decomposition"]["refusal"]
         assert refusal["code"] == "no_futures"
         assert line == f"which risk decides it — not split: {refusal['reason']}"
+
+    def test_an_identity_that_fails_prints_the_assemblers_refusal_verbatim(
+            self, monkeypatch, capsys):
+        """`identity_failed` (the all-frozen paths agree with each other and
+        not with the central case) refuses the whole block, and its reason is
+        the assembler's sentence, printed after "not split:" with nothing
+        added — on both surfaces. Forced on a real run by holding the identity
+        to a budget of zero, which the all-frozen margin's measured rounding
+        (compounding year by year against `(1 + g) ** years`) always exceeds.
+        *Kills it:* a formatter that renders only the codes it knows, or one
+        that appends to the reason."""
+        import hde.decomposition_run as dr
+        monkeypatch.setattr(dr, "identity_budget", lambda det, verdict: 0.0)
+        basic = str(REPO / "examples" / "basic_config.yaml")
+        monkeypatch.setattr(sys, "argv", ["hde", basic, "--decompose", "50", "--json"])
+        assert cli_main() == 0
+        refusal = json.loads(capsys.readouterr().out)["decomposition"]["refusal"]
+        assert refusal["code"] == "identity_failed"
+        assert refusal["reason"].startswith("with every channel frozen, all 50 paths "
+                                            "price one margin")
+        monkeypatch.setattr(sys, "argv", ["hde", basic, "--decompose", "50"])
+        assert cli_main() == 0
+        out = capsys.readouterr().out
+        assert _line(out, "which risk decides it") == (
+            f"which risk decides it — not split: {refusal['reason']}")
+        assert "THE SPREAD" not in out and "THE LEVEL" not in out
 
     def test_every_future_agreeing_prints_the_named_refusal_and_the_level(
             self, monkeypatch, capsys):

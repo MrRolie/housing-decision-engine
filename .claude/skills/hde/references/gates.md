@@ -262,7 +262,11 @@ obeys: a share is never called importance or a contribution to the answer; a
 row that reads `not resolved` is quoted as not resolved, with its figures, and
 never rounded to zero; and the trailing line naming the figure to check first
 is part of the answer, because every width in that table is a number somebody
-typed rather than measured.
+typed rather than measured. Say whose, as the block does: an `[unattributed]`
+width is one no `sources:` entry claims, so the run cannot say whose it is — it
+is never "a figure the assistant chose". When the largest share did not resolve,
+the block names no channel as leading and no figure to check first; carry that,
+and never promote the largest RESOLVED row in its place.
 
 Silence and refusal are answers here too. `--decompose` prints nothing at all
 unless it is asked for, and when it is asked for it can still come back with a
