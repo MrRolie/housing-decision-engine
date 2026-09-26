@@ -610,22 +610,24 @@ class SolvedBoundary:
     no path count and no seed because its value depends on neither, and it
     prints at four decimals (`1.6052%`) for the same reason.
 
-    `confirming_probabilities` may be EMPTY: two of the boundaries read no path
-    at all, and the old single type's required probability fields are what made
-    `--no-monte-carlo` hand back an empty reversal register. MEASURED, no
-    shipped producer emits an empty one — every boundary is either confirmed or
-    comes back as a `RefusedBoundary` — and item 25 then made the path-free
-    route unreachable from `--decompose` anyway, since §8 refusal 2 fires
-    before any register is built. So the TYPE permits a state no producer
-    reaches today; that is recorded rather than hidden, and it is the seat's to
-    retract, not a renderer's to assume away.
+    `confirming_probabilities` is CORROBORATION and never the value's basis:
+    one full re-simulation at the solved value, which the free curve has to
+    agree with or the boundary is withheld as a `RefusedBoundary` (§6, test
+    T11). It is an EMPTY TUPLE when the run has no futures —
+    `break_even.reversal_register` called with `mc=None`, or on a single-path
+    run — and the boundary is solved there all the same. The field
+    has NO DEFAULT: "nothing corroborated this" is a claim its producer states
+    in the call, never a value the type supplies to a caller that forgot to
+    say. §0.1 item 25 rules that branch unreached from `--decompose` (§8
+    refusal 2 refuses the whole block on a path-free run before any register
+    is built), so it is the library shape.
     """
 
     verdict_field: str
     value: float
     was: str
     becomes: str
-    confirming_probabilities: Tuple[Tuple[str, float], ...] = ()
+    confirming_probabilities: Tuple[Tuple[str, float], ...]
 
 
 @dataclass(frozen=True)
@@ -660,25 +662,6 @@ class SampledBoundary:
     confirming_probabilities: Tuple[Tuple[str, float], ...]
     curve_paths: int
     seed: int
-
-
-@dataclass(frozen=True)
-class Boundary:
-    """SUPERSEDED by `SolvedBoundary` and `SampledBoundary` (§0.1 item 24).
-
-    Kept only because the landed reversal solver in `break_even.py` still
-    constructs it, and deleting it here would break a track mid-flight. It is
-    the exact shape item 24 names as the defect — one type for a solved figure
-    and a sampled one — so nothing new may be built against it, and the
-    migration of that producer is owed. When it lands, this class goes.
-    """
-
-    verdict_field: str
-    value: float
-    was: str
-    becomes: str
-    curve_probabilities: Tuple[Tuple[str, float], ...]
-    confirming_probabilities: Tuple[Tuple[str, float], ...]
 
 
 @dataclass(frozen=True)
@@ -717,6 +700,13 @@ class ExactReversal:
     than replacing a silent default, so the bracket's width must be PRINTED
     rather than assumed. A bracket figure on a row with no source class is the
     honesty contract's own breach.
+
+    `probe_paths` is never zero and `max_path_deviation_over_sd` never reads
+    zero-because-unmeasured: the gate's licence has a standard deviation for a
+    denominator, so a row that reaches this tuple was probed on paths even when
+    the caller's own run priced no futures (`break_even.reversal_register` says
+    what that costs). A field reading zero because nobody measured it is worse
+    than no field — it is an all-clear nothing earned.
     """
 
     key: str
@@ -727,11 +717,12 @@ class ExactReversal:
     bracket_source: str
     probe_paths: int
     max_path_deviation_over_sd: float
-    # A licensed key carries BOTH kinds at once: `best` and `runner_up` are
-    # solved on the deterministic verdict, `mc_best` and `decisive` bisected on
-    # the Monte Carlo curve (§0.1 item 24). This annotation is the ruled
-    # contract; `break_even.py`'s landed solver still emits the superseded
-    # `Boundary` and its migration is owed.
+    # Both of §6's boundary kinds land in this ONE tuple, as two TYPES rather
+    # than one type with a flag: the exactness gate splits ROWS by key, and
+    # these are two kinds WITHIN one key — `best` is a property of the config
+    # and `mc_best` a property of this run's sample. No alias unions them under
+    # a single name, because a name reads as a shared base class and there is
+    # none.
     boundaries: Tuple[Union[SolvedBoundary, SampledBoundary], ...]
     refused_boundaries: Tuple[RefusedBoundary, ...]
     references: Tuple[AxisReference, ...]
@@ -742,9 +733,10 @@ class ExactReversal:
 class EstimatedBoundary:
     """A verdict change LOCATED by re-simulation, inside an interval.
 
-    Deliberately not a `Boundary`: there is no confirming re-simulation to
-    compare against, because re-simulation is how the value was found. The
-    interval is the figure; the point is where inside it the estimate landed.
+    Deliberately neither of §6's two boundary kinds: there is no confirming
+    re-simulation to compare against, because re-simulation is how the value
+    was found, and no curve was bisected. The interval is the figure; the point
+    is where inside it the estimate landed.
     """
 
     verdict_field: str

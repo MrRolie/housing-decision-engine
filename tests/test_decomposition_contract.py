@@ -122,5 +122,34 @@ class TestTheBinding:
         # nothing downstream could tell a config property from a sample one.
         assert dc.SolvedBoundary.__mro__[1:] == dc.SampledBoundary.__mro__[1:] == (object,)
         solved, sampled = _fields(dc.SolvedBoundary), _fields(dc.SampledBoundary)
+        assert solved != sampled
         assert {"curve_paths", "seed"} <= sampled
         assert not {"curve_paths", "seed"} & solved
+        assert not [name for name in solved if "path" in name or "seed" in name]
+        assert "curve_probabilities" not in solved
+        assert dc.SolvedBoundary is not dc.EstimatedBoundary
+
+    def test_a_sampled_boundary_cannot_be_built_without_its_sample(self):
+        """Asserted in BOTH directions: the full call builds, and dropping
+        either the path count or the seed refuses."""
+        full = dict(verdict_field="mc_best", value=0.0271, was="condo", becomes="house",
+                    curve_probabilities=(("condo", 0.44),),
+                    confirming_probabilities=(("condo", 0.44),),
+                    curve_paths=2000, seed=42)
+        assert (dc.SampledBoundary(**full).curve_paths,
+                dc.SampledBoundary(**full).seed) == (2000, 42)
+        for missing in ("curve_paths", "seed"):
+            with pytest.raises(TypeError):
+                dc.SampledBoundary(**{k: v for k, v in full.items() if k != missing})
+
+    def test_a_solved_boundary_states_its_corroboration_or_does_not_build(self):
+        """An empty corroboration is a claim — "nothing re-simulated this" —
+        so its producer must state it. Asserted in BOTH directions: an explicit
+        empty tuple builds, and leaving the field out refuses rather than
+        defaulting the claim into existence."""
+        full = dict(verdict_field="best", value=0.016052, was="rent", becomes="house",
+                    confirming_probabilities=())
+        assert dc.SolvedBoundary(**full).confirming_probabilities == ()
+        with pytest.raises(TypeError):
+            dc.SolvedBoundary(**{k: v for k, v in full.items()
+                                 if k != "confirming_probabilities"})

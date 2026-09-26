@@ -17,15 +17,16 @@ from __future__ import annotations
 
 import copy
 import math
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict, single_path_run
-from .decomposition import (BOUNDARY_FIELDS, CHANNELS, AxisReference, Boundary,
+from .decomposition import (BOUNDARY_FIELDS, CHANNELS, AxisReference,
                             EstimatedReversal, ExactReversal, RefusedBoundary,
-                            ReversalRegister, StructuralZero)
+                            ReversalRegister, SampledBoundary, SolvedBoundary,
+                            StructuralZero)
 from .deterministic import compute_deterministic
 from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, ComparisonSpec,
                      MonteCarloOptionResult, Verdict, compute_verdict)
@@ -1182,21 +1183,24 @@ def format_break_even(result: Dict[str, Any]) -> str:
 #
 # EXACT AND ESTIMATED, in `decomposition`'s sense, split on whether the
 # EXACTNESS GATE licensed the key's shift, not on which verdict field moved:
-# a licensed key's boundaries are all exact, confirmed by re-simulation, and
-# live in `ExactReversal`; slice 1 REFUSES an unlicensed key rather than
-# estimating it (§6), so `EstimatedReversal` stays empty on a correct engine.
+# a licensed key's boundaries are all exact, confirmed by re-simulation
+# whenever the run has futures to re-simulate, and live in `ExactReversal`;
+# slice 1 REFUSES an unlicensed key rather than estimating it (§6), so
+# `EstimatedReversal` stays empty on a correct engine.
 # All four of `BOUNDARY_FIELDS` are answered on every row, and a kind this
 # solver cannot reach comes back as a `RefusedBoundary` naming why (§0.1
 # ruling 4) — an absent row and a refused row are different claims.
 #
-# ONE PROPERTY THE CONTRACT DOES NOT CARRY, measured here so a later reader
-# is not surprised by it: on tests/fixtures/uncertainty_surface.yaml the
-# `best` and `runner_up` boundaries are identical to seven digits at seeds 42,
-# 7, 1234, 99 and 2026, while the `mc_best` boundary moves across
+# TWO KINDS OF BOUNDARY, AND THE CONTRACT CARRIES WHICH, because the
+# measurement says they are not one thing: on tests/fixtures/uncertainty_surface.yaml
+# the `best` and `runner_up` boundaries are identical to seven digits at seeds
+# 42, 7, 1234, 99 and 2026, while the `mc_best` boundary moves across
 # 2.698%–2.805% over those same five seeds. Two are properties of the config;
-# one is a property of this run's 2,000 futures. `Boundary` gives all three
-# the same shape, so nothing downstream can tell them apart — the deterministic
-# pair is recoverable from `deterministic_boundaries`, which reads no path.
+# one is a property of this run's 2,000 futures. So a solved value comes back
+# as a `SolvedBoundary` carrying no sample and a bisected one as a
+# `SampledBoundary` carrying the curve's path count and seed — two types with
+# no shared base class and no shared field set, so a formatter cannot print the
+# sampled figure in the typography of the exact one.
 #
 # Why the register exists at all: `mortgage_renewal_rates` is a path the user
 # states, not a distribution, so its variance is zero BY CONSTRUCTION and any
@@ -1224,12 +1228,21 @@ REVERSAL_LEAVES: Tuple[str, ...] = ("mortgage_renewal_rates", "mortgage_rate")
 # exactly the same keys.
 REVERSAL_GATE_TOLERANCE = 1e-9
 
-# `BOUNDARY_FIELDS` split by HOW each one is located. The deterministic pair
-# comes off `solve_crossings`, reads no path, and is the same figure at any
-# `num_sims`; the futures pair is a step function of the axis found on the free
-# curve. Both kinds land in the same `ExactReversal.boundaries` tuple, because
-# `decomposition`'s exact/estimated axis is the GATE's, not this one — see the
-# section header.
+# `BOUNDARY_FIELDS` split by HOW each one is located, which is also WHICH TYPE
+# it comes back as. The deterministic pair comes off `solve_crossings`, reads no
+# path, and is the same figure at any `num_sims` or seed — a `SolvedBoundary`.
+# The futures pair is a step function of the axis found on the free curve, so it
+# moves with the sample — a `SampledBoundary`, carrying the curve's path count
+# and seed. `decisive` is in the futures pair because `compute_verdict` reads
+# `P(best cheapest) ≥ verdict.prob_floor` whenever this run has futures, so its
+# own flip is a fact about them.
+#
+# Both types still land in the one `ExactReversal.boundaries` tuple, because
+# `decomposition`'s exact/estimated axis splits ROWS BY KEY on the gate's
+# licence, and this split is two kinds WITHIN one key — see the section header.
+# These two lists must PARTITION `BOUNDARY_FIELDS`: `_typed_boundary` routes off
+# them and raises on a field in neither, so a fifth kind cannot be typed by
+# whichever branch happened to be the default.
 _DETERMINISTIC_FIELDS: Tuple[str, ...] = ("best", "runner_up")
 _FUTURES_FIELDS: Tuple[str, ...] = ("mc_best", "decisive")
 
@@ -1707,10 +1720,52 @@ def _futures_field_boundaries(
 
 def _probability_pairs(probs: Dict[str, Optional[float]]) -> Tuple[Tuple[str, float], ...]:
     """Option→P(cheapest) as ordered pairs, in the engine's own option order —
-    the shape `decomposition.Boundary` takes, so the frozen row is frozen all
-    the way down."""
+    the shape both boundary types take, so the frozen row is frozen all the way
+    down."""
     return tuple((name, probs[name]) for name in ("condo", "house", "rent")
                  if probs.get(name) is not None)
+
+
+def _typed_boundary(
+    field: str, entry: Dict[str, Any], *,
+    curve: Optional[Dict[str, Optional[float]]],
+    confirmed: Optional[Dict[str, Optional[float]]],
+    curve_paths: int, seed: int,
+) -> Union[SolvedBoundary, SampledBoundary]:
+    """One boundary, typed by WHICH SOLVER produced its value.
+
+    A `_DETERMINISTIC_FIELDS` value is solved on the deterministic verdict and
+    is the same figure at any seed, so it comes back as a `SolvedBoundary`
+    carrying no sample — `confirmed` is corroboration when a re-simulation ran
+    and an empty tuple when none did. A `_FUTURES_FIELDS` value is bisected on
+    this run's free curve, so it comes back as a `SampledBoundary` carrying the
+    curve's path count and seed, and it REFUSES to be built without them: a
+    sample-dependent figure with no sample on it is the confusion the two types
+    exist to make impossible.
+
+    A field in neither list raises. Routing it by a default branch would type a
+    fifth boundary kind as whichever of the two the branch happened to be, and
+    that is the one error no downstream reader could detect.
+    """
+    common = {"verdict_field": field, "value": entry["value"],
+              "was": str(entry["from"]), "becomes": str(entry["to"])}
+    if field in _DETERMINISTIC_FIELDS:
+        return SolvedBoundary(
+            **common,
+            confirming_probabilities=(
+                _probability_pairs(confirmed) if confirmed is not None else ()))
+    if field in _FUTURES_FIELDS:
+        if curve is None or confirmed is None:
+            raise ValueError(
+                f"{field} is bisected on the futures curve and this call has none, so "
+                f"nothing can say which sample its value belongs to")
+        return SampledBoundary(**common,
+                               curve_probabilities=_probability_pairs(curve),
+                               confirming_probabilities=_probability_pairs(confirmed),
+                               curve_paths=curve_paths, seed=seed)
+    raise ValueError(
+        f"{field} is in neither _DETERMINISTIC_FIELDS nor _FUTURES_FIELDS, so no solver "
+        f"claims it and nothing here can say whether its value reads a sample")
 
 
 # The label each candidate leaf prints under "NOT DRAWN IN THIS RUN" (§7). Two
@@ -1811,27 +1866,57 @@ def reversal_register(
     `RefusedBoundary` naming why (§0.1 ruling 4). An absent row and a refused
     row are different claims and a reader cannot tell them apart.
 
-    RETURNS AN EMPTY REGISTER, and that is data rather than an error, when the
-    block itself refuses: fewer than two options priced (`single_option`), or
-    no futures at all (`no_futures` — `--no-monte-carlo`, or a single-path
-    run). `decomposition.REFUSAL_CODES` is where those live and the assembler
-    carries them; this function has no field for a block-level refusal and
-    invents none.
+    RETURNS AN EMPTY REGISTER, and that is data rather than an error, on the one
+    config where no margin exists at all: fewer than two options priced
+    (`single_option`). `decomposition.REFUSAL_CODES` is where the block-level
+    refusals live and the assembler carries them; this function has no field for
+    one and invents none.
 
-    On no futures the DETERMINISTIC half is genuinely still available — a
-    crossing reads no path — and `decomposition.Boundary` requires both a
-    curve and a confirming set of probabilities, so it cannot express one.
-    `deterministic_boundaries` is the surface that answers there, and it is the
-    one the unpriced-dimensions renewal-flip line calls.
+    WITH NO FUTURES (`mc` is None — `--no-monte-carlo` — or a single-path run)
+    the register still answers, with its SOLVED half: a crossing of the
+    deterministic verdict reads no path, so `best` and `runner_up` come back as
+    `SolvedBoundary` rows with an empty `confirming_probabilities` (there is no
+    free curve for a re-simulation to confirm), and `mc_best` and `decisive`
+    come back as `RefusedBoundary` naming the absent futures. An empty register
+    here would hide two figures that need no futures to compute, and a reader
+    would take it as "nothing reverses".
+
+    What that route costs, stated because it is not free: the exactness gate
+    still runs, on `min(gate_paths, num_sims)` paths of a run whose caller
+    priced none, because its licence divides by a standard deviation — and on a
+    config where every uncertainty input is OFF those paths are identical, so
+    its one-constant-shift clause is measured against zero dispersion and
+    cannot fail. `probe_paths` and `max_path_deviation_over_sd` say on the row
+    what was probed; reporting `probe_paths=0` beside a `0.0` deviation instead
+    would be an all-clear nobody measured. The row still ROUTES on the gate as
+    the futures branch does, although a solved crossing reads no path and needs
+    no free curve: a key the gate refuses comes back as an `EstimatedReversal`
+    carrying no boundary, here as there.
+
+    THIS BRANCH IS THE LIBRARY SHAPE, AND NO SURFACE REACHES IT. Nothing in
+    this package calls this function on a run without futures, and §0.1 item
+    25 rules the branch deliberately unreached from `--decompose`: §8 refusal 2 refuses that whole block with
+    `no_futures` on a path-free run before any register is built, and names
+    `--break-even` as the route to the same crossing from the same solver. It
+    is kept, rather than turned into a refusal, because the crossings it
+    returns are `deterministic_boundaries`' own figures and need no futures; an
+    unreached branch with its reason recorded is not an oversight to be
+    "fixed" by wiring the block into a path-free run.
     """
     spec = load_config_dict(raw)
     options = _priced_options(raw)
-    if len(options) < 2 or mc is None or single_path_run(spec):
+    if len(options) < 2:
         return ReversalRegister(exact=(), estimated=(), structural_zeros=())
 
+    # One flag, read in both places that care: whether THIS run has futures for
+    # a curve to be read off. A single-path run has an `mc` object and no
+    # futures in it, so the two cases are one case here.
+    futures = mc if (mc is not None and not single_path_run(spec)) else None
     paths = int(spec.simulation.num_sims)
-    stated = compute_verdict(det, mc, years=spec.simulation.years,
-                             discount_rate=spec.simulation.discount_rate, single_path=False)
+    seed = int(spec.simulation.random_seed)
+    stated = compute_verdict(det, futures, years=spec.simulation.years,
+                             discount_rate=spec.simulation.discount_rate,
+                             single_path=futures is None)
     exact: List[ExactReversal] = []
     estimated: List[EstimatedReversal] = []
     zeros: List[StructuralZero] = []
@@ -1870,7 +1955,7 @@ def reversal_register(
                     for field in BOUNDARY_FIELDS)))
             continue
         boundaries, refused = _confirmed_boundaries(
-            raw, key, options, det, mc, stated, lo, hi, paths=paths,
+            raw, key, options, det, futures, stated, lo, hi, paths=paths, seed=seed,
             scan_points=scan_points, simulate=simulate, iterations=iterations)
         exact.append(ExactReversal(
             **common, probe_paths=gate["paths"],
@@ -1909,21 +1994,30 @@ def _axis_references(key: str) -> Tuple[AxisReference, ...]:
 
 def _confirmed_boundaries(
     raw: Dict[str, Any], key: str, options: Sequence[str],
-    det: ComparisonDeterministicResult, mc: ComparisonMonteCarloResult,
+    det: ComparisonDeterministicResult, mc: Optional[ComparisonMonteCarloResult],
     stated: Verdict, lo: float, hi: float, *,
-    paths: int, scan_points: int,
+    paths: int, seed: int, scan_points: int,
     simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult], iterations: int,
-) -> Tuple[List[Boundary], List[RefusedBoundary]]:
-    """Every one of `BOUNDARY_FIELDS` answered: a `Boundary` where one exists
-    and was confirmed, a `RefusedBoundary` naming why everywhere else.
+) -> Tuple[List[Union[SolvedBoundary, SampledBoundary]], List[RefusedBoundary]]:
+    """Every one of `BOUNDARY_FIELDS` answered: the boundary's own type where
+    one exists and was confirmed, a `RefusedBoundary` naming why everywhere
+    else. Nothing is ever silently absent — an absent row and a refused row are
+    different claims and a reader cannot tell them apart.
 
     Each reported boundary is confirmed by ONE FULL RE-SIMULATION at the solved
     value, compared against the free curve's own probabilities at that same
     value. A boundary of a futures field is additionally required to be
     identified outside Monte Carlo noise before it is confirmed at all —
     re-simulating an unidentified boundary would dress noise in a measurement.
+
+    `mc` IS None WHEN THIS RUN HAS NO FUTURES, and then there is no free curve
+    to build: the deterministic pair is still solved, comes back as
+    `SolvedBoundary` with nothing corroborating it, and the futures pair is
+    refused by name. The solved values are bit-identical either way, because
+    `deterministic_boundaries` reads no path in either case.
     """
-    free = _free_curve(raw, key, options, det, mc, single_path=False)
+    free = (_free_curve(raw, key, options, det, mc, single_path=False)
+            if mc is not None else None)
     solved = deterministic_boundaries(raw, key, lo, hi, base=det, iterations=iterations)
     per_field: Dict[str, Tuple[List[Dict[str, Any]], Optional[str]]] = {}
     for field in _DETERMINISTIC_FIELDS:
@@ -1940,10 +2034,16 @@ def _confirmed_boundaries(
                 if unchanged is not None else
                 "no pair of options crosses in this bracket, so no boundary exists to solve"))
     for field in _FUTURES_FIELDS:
-        per_field[field] = _futures_field_boundaries(
-            raw, key, field, free, stated, lo, hi, scan_points=scan_points)
+        per_field[field] = ((
+            _futures_field_boundaries(
+                raw, key, field, free, stated, lo, hi, scan_points=scan_points))
+            if free is not None else ([], (
+                f"{field} is read off this run's futures and this run has none "
+                f"(--no-monte-carlo, or a single-path run), so there is no curve for a "
+                f"boundary of it to lie on; the boundaries this row does carry are solved "
+                f"on the deterministic verdict and read no path")))
 
-    reported: List[Boundary] = []
+    reported: List[Union[SolvedBoundary, SampledBoundary]] = []
     refused: List[RefusedBoundary] = []
     for field in BOUNDARY_FIELDS:
         found, reason = per_field.get(field, ([], "this field was not solved for"))
@@ -1952,6 +2052,12 @@ def _confirmed_boundaries(
             continue
         for entry in found:
             value = entry["value"]
+            if free is None:
+                # No futures: the solved value stands on its own and nothing
+                # re-simulates it, which is what the empty corroboration says.
+                reported.append(_typed_boundary(field, entry, curve=None, confirmed=None,
+                                                curve_paths=paths, seed=seed))
+                continue
             curve = free(value)[1]
             if field in _FUTURES_FIELDS:
                 identified = _identification(
@@ -1970,10 +2076,7 @@ def _confirmed_boundaries(
                     f"curve (free {curve}, re-simulated {confirmed}) — the shift this boundary "
                     f"rests on is not exact after all, so it is withheld")))
                 continue
-            reported.append(Boundary(
-                verdict_field=field, value=value,
-                was=str(entry["from"]), becomes=str(entry["to"]),
-                curve_probabilities=_probability_pairs(curve),
-                confirming_probabilities=_probability_pairs(confirmed)))
+            reported.append(_typed_boundary(field, entry, curve=curve, confirmed=confirmed,
+                                            curve_paths=paths, seed=seed))
     reported.sort(key=lambda b: (BOUNDARY_FIELDS.index(b.verdict_field), b.value))
     return reported, refused

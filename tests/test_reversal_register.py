@@ -15,13 +15,15 @@ from rent to the house at 1.6052%, inside the bracket the engine already uses
 for a contract rate. A run that prices a financed option and cannot say that is
 telling a household renewal was weighed and found irrelevant.
 
-MEASURED, AND NOT CARRIED BY THE CONTRACT. Across seeds 42, 7, 1234, 99 and
+MEASURED, AND NOW CARRIED BY THE CONTRACT. Across seeds 42, 7, 1234, 99 and
 2026 the `best` and `runner_up` boundaries below are identical to seven digits
 while the `mc_best` boundary moves 2.698% -> 2.805%: two are properties of the
-config, one is a property of this run's 2,000 futures, and `Boundary` carries
-the same shape for all three. (That five-seed sweep is five full Monte Carlo
-runs and is deliberately NOT in this suite — it is recorded in the commit that
-landed the register.)
+config, one is a property of this run's 2,000 futures. So the first two arrive
+as `SolvedBoundary`, carrying no sample at all, and the third as
+`SampledBoundary`, carrying the curve's path count and its seed — and the class
+below pins which kind each field arrives as, on the real fixture. (That
+five-seed sweep is five full Monte Carlo runs and is deliberately NOT in this
+suite — it is recorded in the commit that landed the register.)
 """
 
 import copy
@@ -32,12 +34,14 @@ import numpy as np
 import pytest
 import yaml
 
-from hde.break_even import (BRACKET_SOURCE, RATE_BRACKETS, deterministic_boundaries,
-                            floor_at_zero, reversal_admission, reversal_bracket,
-                            reversal_candidates, reversal_gate, reversal_register,
-                            solve_break_even, solve_crossings)
+from hde.break_even import (BRACKET_SOURCE, RATE_BRACKETS, _DETERMINISTIC_FIELDS,
+                            _FUTURES_FIELDS, _typed_boundary,
+                            deterministic_boundaries, floor_at_zero, reversal_admission,
+                            reversal_bracket, reversal_candidates, reversal_gate,
+                            reversal_register, solve_break_even, solve_crossings)
 from hde.config import load_config_dict, single_path_run
-from hde.decomposition import BOUNDARY_FIELDS, EstimatedReversal, ExactReversal
+from hde.decomposition import (BOUNDARY_FIELDS, EstimatedReversal, ExactReversal,
+                               SampledBoundary, SolvedBoundary)
 from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
 from hde.sweep import load_at
@@ -95,6 +99,17 @@ def base(raw):
 def register(raw, base):
     _, det, mc = base
     return reversal_register(raw, det, mc)
+
+
+@pytest.fixture(scope="module")
+def reseeded(raw):
+    """The same config at a DIFFERENT seed. One reseed, not the five-seed sweep:
+    it is what makes "the sampled boundary carries this run's seed" a claim that
+    can fail, since a seed pinned to the fixture's own 42 passes every other
+    assertion in this file. Measured at 5s for the whole register."""
+    doc = _set(raw, "simulation.random_seed", 7)
+    spec = load_config_dict(doc)
+    return doc, compute_deterministic(spec), run_monte_carlo(spec)
 
 
 def _without(raw, *options):
@@ -177,6 +192,86 @@ class TestTheThreeFiguresOnTheFixture:
         row = _row(register, CONTRACT)
         assert [b.verdict_field for b in row.boundaries] == ["runner_up", "mc_best"]
         assert "is 'rent' at every point" in _refusal(row, "best").reason
+
+
+# ---------------------------------------------------------------------------
+# WHICH KIND EACH FIGURE IS — the split the register's own measurement forced
+# (§6, 2026-09-22). One level below the exactness gate: that one splits ROWS by
+# key, these are two kinds WITHIN one key.
+# ---------------------------------------------------------------------------
+
+class TestTheTwoBoundaryKinds:
+
+    def test_the_solved_pair_arrives_carrying_no_sample_at_all(self, register):
+        """`best` and `runner_up` are solved on the deterministic verdict, which
+        reads no path: identical to seven digits at seeds 42, 7, 1234, 99 and
+        2026. The type they arrive as has NO field that could name a sample, so
+        nothing downstream can attach this run's seed to a figure that does not
+        depend on it."""
+        for field in ("best", "runner_up"):
+            boundary = _boundary(_row(register, RENEWAL), field)
+            assert isinstance(boundary, SolvedBoundary)
+            assert not hasattr(boundary, "curve_paths")
+            assert not hasattr(boundary, "seed")
+
+    def test_the_futures_majority_arrives_carrying_the_sample_it_depends_on(self, register):
+        """`mc_best` is bisected on this run's own curve and moves
+        2.698%-2.805% across those same five seeds, so it arrives as the other
+        type — carrying the count of paths the curve was bisected on and the
+        seed that drew them. Without those two a reader is handed 2.716% in the
+        typography of an exact figure."""
+        boundary = _boundary(_row(register, RENEWAL), "mc_best")
+        assert isinstance(boundary, SampledBoundary)
+        assert (boundary.curve_paths, boundary.seed) == (PATHS, SEED)
+        assert boundary.value == pytest.approx(MAJORITY_SWAPS_AT, abs=1e-9)
+
+    def test_the_sample_on_the_row_is_this_runs_and_never_the_fixtures(self, reseeded):
+        """Reseeded to 7, which is the assertion that can fail: the sampled
+        boundary's seed follows the RUN and its value MOVES (measured
+        2.698%-2.805% over the five seeds), while the solved pair does not move
+        at all. A seed or a path count pinned to the fixture's own 42 and 2,000
+        would satisfy every other test in this file."""
+        doc, det, mc = reseeded
+        row = _row(reversal_register(doc, det, mc), RENEWAL)
+        sampled = _boundary(row, "mc_best")
+        assert (sampled.curve_paths, sampled.seed) == (PATHS, 7)
+        assert sampled.value != pytest.approx(MAJORITY_SWAPS_AT, abs=1e-9)
+        assert _boundary(row, "best").value == pytest.approx(BEST_FLIPS_AT, abs=1e-9)
+
+    def test_the_router_types_every_field_by_its_own_solver_and_refuses_a_fifth(self):
+        """The routing itself, for all four fields — `decisive` included, which
+        the fixture never yields a boundary of, so its route is pinned here or
+        nowhere. A field no solver claims RAISES: routed by a default branch it
+        would be typed as whichever kind the branch happened to be, and that is
+        the one error no downstream reader could detect.
+        """
+        entry = {"value": 0.0271, "from": "condo", "to": "house"}
+        probs = {"condo": 0.44, "house": 0.51, "rent": None}
+        kinds = {field: type(_typed_boundary(field, entry, curve=probs, confirmed=probs,
+                                             curve_paths=1234, seed=7))
+                 for field in BOUNDARY_FIELDS}
+        assert kinds == {"best": SolvedBoundary, "runner_up": SolvedBoundary,
+                         "mc_best": SampledBoundary, "decisive": SampledBoundary}
+        # The sample travels from the caller rather than from a constant.
+        sampled = _typed_boundary("decisive", entry, curve=probs, confirmed=probs,
+                                  curve_paths=1234, seed=7)
+        assert (sampled.curve_paths, sampled.seed) == (1234, 7)
+        with pytest.raises(ValueError, match="neither"):
+            _typed_boundary("margin_pv", entry, curve=probs, confirmed=probs,
+                            curve_paths=1234, seed=7)
+        # And a sampled field with no curve to belong to refuses rather than
+        # inventing a sample: this is the call the no-futures branch must never
+        # be able to make.
+        with pytest.raises(ValueError, match="no sample|has none"):
+            _typed_boundary("mc_best", entry, curve=None, confirmed=None,
+                            curve_paths=1234, seed=7)
+
+    def test_the_two_field_lists_partition_the_four_kinds(self):
+        """The router reads these lists, so a fifth field added to
+        `BOUNDARY_FIELDS` without a solver named for it must not fall through to
+        either type."""
+        assert set(_DETERMINISTIC_FIELDS) | set(_FUTURES_FIELDS) == set(BOUNDARY_FIELDS)
+        assert not set(_DETERMINISTIC_FIELDS) & set(_FUTURES_FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -343,13 +438,25 @@ class TestTheConfirmingResimulation:
 
     def test_every_reported_boundary_is_confirmed_by_a_full_re_simulation(self, register):
         """Measured: identical to the digit, both ways, at every boundary — and
-        that includes the two deterministic ones, whose confirmation is what
-        licenses the free curve the futures boundary is read off."""
+        that includes the solved ones, whose confirmation is what licenses the
+        free curve the sampled boundary is read off.
+
+        Asserted per KIND, because the two kinds make different claims about
+        the same re-simulation: on a sampled boundary the curve's own
+        probabilities are stored beside the confirming ones and the two must
+        agree; on a solved one the confirming set is CORROBORATION of a value
+        that read no path, so it is non-empty here and there is no curve field
+        to compare it against.
+        """
         reported = [b for row in register.exact for b in row.boundaries]
         assert len(reported) == 5, reported
         for boundary in reported:
-            assert boundary.curve_probabilities == boundary.confirming_probabilities
-            assert boundary.curve_probabilities  # not an empty tuple comparing equal
+            assert boundary.confirming_probabilities  # a re-simulation ran and agreed
+            if isinstance(boundary, SampledBoundary):
+                assert boundary.curve_probabilities == boundary.confirming_probabilities
+                assert boundary.curve_probabilities  # not an empty tuple comparing equal
+            else:
+                assert not hasattr(boundary, "curve_probabilities")
 
     def test_a_disagreeing_re_simulation_withholds_every_boundary(self, raw, base):
         """The check that can fail. `simulate` is the seam: a re-simulation that
@@ -389,6 +496,9 @@ class TestTheConfirmingResimulation:
         assert [b.value for b in row.boundaries] == [
             pytest.approx(BEST_FLIPS_AT, abs=1e-9),
             pytest.approx(RUNNER_UP_SWAPS_AT, abs=1e-9)]
+        # Same values at a twentieth of the paths, and the type says why they
+        # could not have moved: the solved kind carries no sample to move with.
+        assert all(isinstance(b, SolvedBoundary) for b in row.boundaries)
         reason = _refusal(row, "mc_best").reason
         assert "inside the" in reason and "100 paths cannot resolve" in reason
 
@@ -570,19 +680,82 @@ class TestTheStructuralZeros:
 
 class TestRefusals:
 
-    def test_without_futures_the_block_refuses_and_returns_an_empty_register(
-            self, raw, base):
-        """§8 refusal 2. `decomposition.Boundary` requires a curve AND a
-        confirming set of probabilities, so it cannot express a boundary that
-        read no path — an empty register is the honest shape, and the surface
-        that DOES answer there is `deterministic_boundaries`."""
+    def test_without_futures_the_register_still_carries_its_solved_half(self, raw, base):
+        """§8 refusal 2 refuses the BLOCK on a path-free run; this function is
+        not the block. The old one-shape boundary REQUIRED a curve and a
+        confirming set of probabilities, so a register with no futures came back
+        empty and two perfectly computable figures vanished — a reader saw
+        "nothing here" where the truth was "1.61%, and it reads no path".
+
+        Now the solved half answers: the same values, to the digit, as the run
+        WITH futures reports, because `deterministic_boundaries` reads no path
+        in either case. Nothing corroborates them, and the empty
+        `confirming_probabilities` is what says so rather than an omission.
+        """
         _, det, _ = base
         register = reversal_register(raw, det, None)
-        assert (register.exact, register.estimated, register.structural_zeros) == ((), (), ())
+        assert register.estimated == ()
+        row = _row(register, RENEWAL)
+        assert [b.verdict_field for b in row.boundaries] == ["best", "runner_up"]
+        assert [b.value for b in row.boundaries] == [
+            pytest.approx(BEST_FLIPS_AT, abs=1e-9),
+            pytest.approx(RUNNER_UP_SWAPS_AT, abs=1e-9)]
+        for boundary in row.boundaries:
+            assert isinstance(boundary, SolvedBoundary)
+            assert boundary.confirming_probabilities == ()
+        for field in ("mc_best", "decisive"):
+            assert "this run has none" in _refusal(row, field).reason
+        # The stated-path zeros come with it: they join to this row's solved
+        # rates, and a renewal ladder printed as a dash is the whole finding.
+        assert [z.reversal_key for z in register.structural_zeros
+                if z.kind == "stated_path"] == [RENEWAL, CONTRACT]
+        # One solver, two consumers: `deterministic_boundaries`, which reads
+        # no path either, reports the same figure.
         lo, hi = RATE_BRACKETS["mortgage_rate"]
         solved = deterministic_boundaries(raw, RENEWAL, lo, hi, base=det)
         best = [b for b in solved["boundaries"] if b["attribute"] == "best"]
         assert [b["value"] for b in best] == [pytest.approx(BEST_FLIPS_AT, abs=1e-9)]
+
+    def test_all_four_kinds_are_answered_on_a_run_with_no_futures_too(self, raw, base):
+        """The property that makes an absence unreadable as "nothing here", on
+        the branch where half the fields cannot be located at all: every one of
+        the four is either carried or refused BY NAME, on every row, and never
+        silently missing."""
+        _, det, _ = base
+        register = reversal_register(raw, det, None)
+        assert register.exact, "no exact reversal, so this test proves nothing"
+        for row in register.exact:
+            answered = [b.verdict_field for b in row.boundaries]
+            refused = [r.verdict_field for r in row.refused_boundaries]
+            assert set(answered) | set(refused) == set(BOUNDARY_FIELDS)
+            assert not set(answered) & set(refused)
+            for refusal in row.refused_boundaries:
+                assert refusal.reason and refusal.reason.strip()
+
+    @pytest.mark.parametrize("with_mc", [False, True], ids=["no-monte-carlo", "single-path"])
+    def test_a_single_path_run_is_a_run_with_no_futures(self, with_mc):
+        """The other way a run has no futures: a config whose every uncertainty
+        input is off. Its Monte Carlo object exists and holds N copies of one
+        path, so there is no curve to read a sampled boundary off — with or
+        without that object in hand the register answers with the solved half,
+        uncorroborated, and refuses the futures pair by name."""
+        raw = yaml.safe_load(SINGLE_PATH.read_text(encoding="utf-8"))
+        spec = load_config_dict(raw)
+        assert single_path_run(spec)
+        det = compute_deterministic(spec)
+        register = reversal_register(raw, det, run_monte_carlo(spec) if with_mc else None)
+        assert register.estimated == ()
+        row = _row(register, "condo.mortgage_rate")
+        lo, hi = RATE_BRACKETS["mortgage_rate"]
+        solved = deterministic_boundaries(raw, "condo.mortgage_rate", lo, hi, base=det)
+        expected = [(b["attribute"], b["value"]) for b in solved["boundaries"]]
+        assert expected, "no crossing in the bracket, so this test proves nothing"
+        assert [(b.verdict_field, b.value) for b in row.boundaries] == expected
+        for boundary in row.boundaries:
+            assert isinstance(boundary, SolvedBoundary)
+            assert boundary.confirming_probabilities == ()
+        for field in ("mc_best", "decisive"):
+            assert "this run has none" in _refusal(row, field).reason
 
     def test_a_single_option_config_has_no_winner_to_reverse(self, raw):
         one = _without(raw, "condo", "rent")
