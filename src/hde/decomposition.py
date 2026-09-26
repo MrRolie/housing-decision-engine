@@ -832,10 +832,12 @@ class ReversalRegister:
 # anything. Silence — the flag not passed — is `None`, not a refusal.
 REFUSAL_CODES: Tuple[str, ...] = (
     "no_futures",      # --no-monte-carlo, or a single-path run: there are no futures
+    "too_few_futures", # futures exist, fewer than the block can put an interval on
     "single_option",   # fewer than two options priced: no margin exists
     "one_channel",     # k_live == 1: the table would read 1.00 and be a tautology
     "no_spread",       # Var(f) == 0: every index is 0/0
     "budget",          # the work gate: names the figure and the two ways out
+    "freeze_leak",     # all channels frozen and the paths still differ: a draw escaped
 )
 
 
