@@ -36,7 +36,7 @@ from hde.break_even import (BRACKET_SOURCE, RATE_BRACKETS, deterministic_boundar
                             floor_at_zero, reversal_admission, reversal_bracket,
                             reversal_candidates, reversal_gate, reversal_register,
                             solve_break_even, solve_crossings)
-from hde.config import load_config_dict
+from hde.config import load_config_dict, single_path_run
 from hde.decomposition import BOUNDARY_FIELDS, EstimatedReversal, ExactReversal
 from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
@@ -44,6 +44,10 @@ from hde.sweep import load_at
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
+# A SHIPPED config with every uncertainty input off, so every path it prices is
+# the same path. The tests that read it assert that precondition first: an
+# example that later gains a volatility must fail them, not pass them vacuously.
+SINGLE_PATH = REPO_ROOT / "examples" / "first_time_buyer_montreal.yaml"
 
 RENEWAL = "house.mortgage_renewal_rates"
 CONTRACT = "house.mortgage_rate"
@@ -276,6 +280,19 @@ class TestTheExactnessGate:
         assert gate["others_bit_identical"]          # it is clause (b) that fires
         assert gate["worst_deviation_over_sd"] > 1.0
         assert "DIFFERENT amount on different paths" in gate["why"]
+
+    def test_identical_paths_license_a_constant_shift(self):
+        """On a single-path config every path carries the same float, and
+        rounding in `np.std` and in `x - mean(x)` returns one ULP for both — a
+        raw ratio of exactly 1.0, which refuses with "shifts condo by a
+        DIFFERENT amount on different paths" when not one path differs. The
+        shift of an identical set of paths is one constant by construction."""
+        raw = yaml.safe_load(SINGLE_PATH.read_text(encoding="utf-8"))
+        assert single_path_run(load_config_dict(raw))
+        gate = reversal_gate(raw, "condo.mortgage_rate", 0.10, paths=200)
+        assert gate["others_bit_identical"]
+        assert gate["worst_deviation_over_sd"] == 0.0
+        assert gate["licensed"], gate
 
     def test_a_key_that_moves_the_draw_stream_is_refused_by_clause_a(self, raw):
         """Clause (a), which nothing else catches: `rent.reset_hazard` names

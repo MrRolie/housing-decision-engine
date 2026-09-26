@@ -1363,8 +1363,16 @@ def reversal_gate(
             continue
         if name == option:
             delta = after.pvs - before.pvs
-            sd = float(np.std(before.pvs))
-            worst = float(np.max(np.abs(delta - float(np.mean(delta)))))
+            # IDENTICAL PATHS MEASURE AS IDENTICAL. On a single-path config
+            # every path carries the same float, yet `np.std` and `x − mean(x)`
+            # both round the mean and return one ULP of the PV (2.9e-11 on a
+            # present value near 200,501), so the raw ratio reads exactly 1.0
+            # and the gate would say the shift differs path by path when not
+            # one path does. A zero range is an exact zero; any real spread
+            # takes the arithmetic below unchanged.
+            sd = float(np.std(before.pvs)) if np.ptp(before.pvs) > 0 else 0.0
+            worst = (float(np.max(np.abs(delta - float(np.mean(delta)))))
+                     if np.ptp(delta) > 0 else 0.0)
             record["worst_deviation_over_sd"] = (
                 worst / sd if sd > 0 else (0.0 if worst == 0.0 else math.inf))
         elif not np.array_equal(before.pvs, after.pvs):
