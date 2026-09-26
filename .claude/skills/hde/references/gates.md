@@ -241,3 +241,36 @@ factor, not from a press projection, not from the old figure. A registry entry
 holds a published figure or it expires loudly; "the 2026 bracket is stale and
 the 2027 one is not published yet" is a complete, honest answer, and the plan's
 `found` line is the evidence for it.
+
+## 10. A share of the spread is not the risk that decides it
+
+`--decompose` prints three registers, and the trap is the first one. On this
+repo's own flagship fixture the spread table's top row is the renter's
+portfolio at 0.88 of the scatter — and pricing that channel the way the central
+case prices it moves the decision by nothing that resolves, while the tenancy,
+at 0.10 of the same scatter, moves it by more than $125,000. Quote the top
+share alone and you have named the channel that matters least, by a factor of
+58.
+
+So: read the SPREAD table for where the uncertainty is, the LEVEL register for
+which channel the futures price that the best guess does not, and the NOT DRAWN
+rows for what would have to change to reverse the verdict — and never quote one
+without the one under it. The engine will not print the spread table without
+the level register beside it; an answer that carries one and drops the other
+undoes that on the way out. Three more rules, each of which the block itself
+obeys: a share is never called importance or a contribution to the answer; a
+row that reads `not resolved` is quoted as not resolved, with its figures, and
+never rounded to zero; and the trailing line naming the figure to check first
+is part of the answer, because every width in that table is a number somebody
+typed rather than measured.
+
+Silence and refusal are answers here too. `--decompose` prints nothing at all
+unless it is asked for, and when it is asked for it can still come back with a
+named refusal instead of a table — one live channel ("there is nothing to
+split"), no futures, one priced option, no spread in the decision at all. Carry
+that sentence as the finding it is; it says the run had no split to make, never
+that the risks were weighed and found not to matter. When every future names
+the same winner, only the spread table refuses and the level register still
+prints under it: quote the level, and the refusal as the reason there is no
+share. A path-free run's refusal names `--break-even` and `--sweep` — follow
+that route rather than rerunning the block.

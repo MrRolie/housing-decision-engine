@@ -64,6 +64,7 @@ uv run hde <config.yaml> --json
 | `monte_carlo` | per option `mean`/`std`/`p5`/`p50`/`p95`, `prob_<option>_cheapest`, `affordability_mc`, `market_scenario`; `null` under `--no-monte-carlo` |
 | `sweeps` | only with `--sweep`: one entry per flag — `key`, `values` (the DISTINCT points actually run), per-point `rows` (`value`, `totals` per option, the verdict fields `best` / `runner_up` / `margin_pv` / `margin_frac` / `decisive` / `state` / `prob_best` / `mc_mean_best` / `reason`, the Monte Carlo majority `mc_best` and its `mc_prob_best` (the verdict's own) — `best` is the DETERMINISTIC winner and `prob_best` that winner's probability, so a row can read `best: rent` / `prob_best: 0.34` while the majority favours the house: that row's `state` is `disagreement` and its `decisive` is false, `affordability` per option — `max_ratio` and `years_exceeding` — when an `income` block is present, or `error` when that point is refused), `flips` (consecutive points whose cheapest option differs) plus `mc_mean_flips` (the same for `mc_mean_best`) and `mc_majority_flips` (the same for `mc_best`; the text block prints a `majority flip:` line only where it differs from the deterministic `flip:`), and `note` (present when either applies, `; `-joined: duplicate grid points collapsed — an integer key rounds `7:8:5` to five points and two values; or the price-scan coherence note below). Each row also carries (2026-09-04) `sentence` — the read-back's one line for that point, `<key>=<v>: best <opt> by <margin$> (<pct>% of <opt> PV)[, P(best) <p>%[ (at the floor)]][, insured <opt> <tier>%][, affordability <opt> max <r>% breaches years […]]`, only the clauses whose data the run has (`at the floor` marks a probability EQUAL to the 65% floor: decisive by ≥, with nothing to spare; the text table's decisive column prints `True (mc_floor, at the floor)` there; on a `disagreement` point the verdict clause reads `best guess <opt> by <margin$> (<pct>% of <opt> PV), most futures <other> (<p>%) — disagree` instead, the other clauses unchanged, and the table's decisive column prints `False (mc_floor, disagree: house 60%)`) — and `insured` (`{option: premium rate}` for every owned option whose derived mortgage insurance is required at that point); the sweep carries `base_value` (the key's value in the YAML, or `null`). A `sources:` declaration on the swept key is lifted at every grid point — its echo class there is `sweep` — rather than re-validated against an anchor's figure; the base run still validates it. The key may be a cost line by name, `<opt>.other_recurring_costs.<line name>.annual_amount` or `.escalation_rate` — the path `sources:` accepts (2026-09-08); the list is resolved by each line's `name`, a name no line carries is refused naming the lines that exist, and a `sources:` declaration on that line is echoed `swept:` like any other. When EVERY grid point is refused the block prints one line, `sweep <key>: every point refused — <reason>` (distinct reasons `; `-joined), and NO flip line — the flip lines describe points that ran. `real_equivalent_inflation` (2026-09-08) is the run's `inflation_rate` when the swept key is a rate the loader reads AS QUOTED and the run is nominal, else `null`: there the points are nominal figures — a typed 0 is a 2.1%/yr real decline while the omitted key is the neutral 0% real — so every row label and `sentence` carries the real equivalent, `house.value_growth_rate=0.00% (-2.06% real): best rent by …`, and the header adds one clause, `points are quoted rates; 0.0% quoted = -2.1% real, the neutral default is 2.1% quoted` (or `…, the anchored default 3.0% real is 5.2% quoted` for a key whose real default is not 0). Real mode, `rates: real` and every other key are unchanged |
 | `break_evens` | only with `--break-even`: one entry per flag — `key`, the two `options`, the `bracket` asked for, `searched` (the accepted run(s) actually scanned), `refused` (only when the loader refused grid points: `count`, `values`, `reason`), `note` (`; `-joined, present when any applies: a `market_scenario` prior does not move a deterministic threshold; where that prior's own reference drift sits against the tie band on a `<owned>.value_growth_rate` threshold — INSIDE / BELOW / ABOVE, with the reminder that the drift is added to `value_growth_rate` in the Monte Carlo rather than substituted for it; a crossing OR EITHER BAND EDGE that is a mortgage-insurance cliff (the 20%-down line crossed or a premium tier changed between the two sides of that point — a step, whose "tie band" is the step's width; the clause names which point jumped, and a point that is both the crossing and an edge is said once) or that borders a refused value; or the price-scan coherence note below), `across` (only beside `--sweep`: per swept key, `rows` of `{value, break_evens, cheaper_throughout?, refused?}` — the threshold re-solved at every sweep point; each row prints as ONE line carrying its sentence(s), what the config refused, and — with an `income` block — the `affordability` its `break_evens` hold, at the crossing and both band edges), `base_value`, `tie_band_fraction`, and `break_evens` (each: `sentence` — the threshold band-first in words, quote this shape; `value` where the deterministic totals cross, `cheaper_below` / `cheaper_above`, `tie_band` edges `[lo, hi]` — `null` when an edge lies outside the bracket; `affordability` — `threshold`, `value` and `tie_band` mirroring those keys, each holding per-option `{max_ratio, years_exceeding}` — or `null` without an `income` block); `cheaper_throughout` when there is no crossing, beside `no_crossing` (2026-09-04): `lo` / `hi` (the searched bounds), `cheaper`, `narrows_toward` (`low` or `high` — the end where the gap is smaller) and `widen` (the bracket to try next, one width further out on that side, or `null` when that end is one the config refuses beyond); the line reads `no crossing between <lo> and <hi>: <opt> is cheaper at both ends — widen with --break-even <key>=<lo'>:<hi'>`, on the base solve and on every `across` row; `at_floor` (2026-09-08) is true when the gap narrows toward a low end already at 0 on an input whose domain stops there — a dollar figure, a tax, cost, mortgage or share-of-price rate, a volatility; a growth, escalation, return or discount rate may be negative and keeps the open floor — and then `widen` never goes below 0: the line reads `no crossing down to 0 on <key>: <opt> is cheaper throughout that range — widen upward with --break-even <key>=0:<hi'>`, or `… — the high end is one the config refuses beyond; no wider bracket reaches a crossing` when the high end was refused. The key may be a cost line by name, `<opt>.other_recurring_costs.<line name>.annual_amount` (2026-09-08; the money default bracket is taken from that line's value) or `.escalation_rate` (give `lo:hi`) (an `across` block also carries the sweep key's `base_value`). The `sentence` closes with `(crossing <v>)` alone: the band rule is stated once, in the block's header line, and `tie_band_fraction` carries the figure. `real_equivalent_inflation` (2026-09-08; the same marker the sweeps carry, on the solved key — and on each `across` block for its sweep key) is set when the key is a quoted rate in a nominal run: each band edge and the crossing then state their real equivalent once, `rent is cheaper below 1.16% (-0.92% real); too close to call between 1.16% and 1.88% (-0.22% real); condo is cheaper above 1.88% (crossing 1.53%, -0.55% real)`, and an `across` row over such a sweep key labels its point `condo.value_growth_rate=0.00% (-2.06% real): …`; real mode is unchanged. The `note` also names a mortgage-insurance step strictly INSIDE the tie band — neither the crossing nor an edge — as `… lies inside the tie band, at <v> — the gap steps there; the band is not one smooth range of near-ties` |
+| `decomposition` | only with `--decompose`: which risk decides the verdict — the spread, level and reversal registers together, or a named refusal; keys, refusal codes and which figures move with the sample are in § The `decomposition` block below |
 
 **The read-back block (`assumptions.read_back`, `--read-back`).** The lines an
 answer must carry, assembled by the engine in one fixed order: every
@@ -165,6 +166,120 @@ and `purchase_costs_rate` are the rate alternatives that scale
 (`--print-schema`).
 
 Every figure's formula: `docs/reference/ARCHITECTURE.md` § Figure glossary.
+
+## The `decomposition` block (`--decompose`)
+
+Present only when `--decompose` (or `--decompose N`, a path count for the
+decomposition alone) is passed; without the flag the key is absent from the
+document, not `null`. Design: `docs/specs/2026-09-22-which-risk-decides-it.md`;
+what each figure means: `docs/reference/ARCHITECTURE.md` § Figure glossary,
+"Which risk decides it". The block has exactly two shapes.
+
+**A whole-block refusal** is one key, `refusal`, holding `code` and `reason` —
+`{"refusal": {"code", "reason"}}` — with NO register keys beside it — an empty register there would read as "nothing to report"
+rather than "this did not run". `reason` is the sentence the text block prints
+after `which risk decides it — not split:`, verbatim; the formatter adds
+nothing to it. `code` is one of:
+
+| `code` | Fires when |
+|---|---|
+| `no_futures` | `--no-monte-carlo`, or a single-path run (every uncertainty input off). The reason names the route to the crossing the block would have carried: `--break-even` (the same solver the reversal register uses; it takes one pair of options at a time, so on a three-option config the reason says one option's section must be dropped first) and `--sweep` |
+| `too_few_futures` | the run HAS futures, but fewer than 40 were asked for (`--decompose N`, or `simulation.num_sims`): below that one path weighs more than the 2.5% tail an interval cuts. Never reported as `no_futures` |
+| `single_option` | fewer than two options priced: no margin exists |
+| `one_channel` | exactly one channel reaches a cash flow; the refusal then also carries `channel_id`, `channel` and `label` naming it, and no figures |
+| `no_spread` | the margin is identical on every future, or no channel reaches a cash flow at all |
+| `budget` | the decomposition would price more than 250,000 model evaluations; the reason names the figure and the ways out |
+| `freeze_leak` | with every channel frozen the paths still price different margins: a draw escaped the freeze mask, so no figure of the block can be vouched for and none is emitted |
+
+**The block** carries all seven of `paths`, `live_channel_ids`, `mean_margin`,
+`sd_margin`, `spread`, `level` and `reversal`, always together — there is no
+spread without the level register beside it. The verdict is not copied in: the
+document's top-level `verdict` is its one home.
+
+- `spread` — `rows`, `interaction`, `leading_channel_id`, `superlative_licensed`
+  and `check_first`; OR, when every future names the same winner, a refusal in
+  the same slot with code `no_sign_variation` —
+  `{"refusal": {"code": "no_sign_variation", "reason"}}` — and no `rows` key.
+  The `level` and `reversal` registers are still present: nothing sits across
+  the line for a share to split, which is a finding about this run and not a
+  failed computation.
+  - Each row: `channel_id`, `channel` (the machine key), `label` (the printed
+    name), `resolved`, `flip`, `flip_ci`, `widths`, and EITHER `alone`,
+    `alone_ci`, `with_interaction`, `with_interaction_ci` (`resolved: true`)
+    OR `provisional_alone`, `provisional_alone_ci`,
+    `provisional_with_interaction`, `provisional_with_interaction_ci`
+    (`resolved: false`) — never both, so reading `alone` on an unresolved row
+    is a missing key, not a number. A row is unresolved when either share's
+    interval leaves [0, 1].
+  - Every interval is `{low, high}` — `low` and `high` — at 95%, and is never
+    clamped into [0, 1].
+  - `widths[]` and `check_first`: `key`, `formatted`, `source` (`user`,
+    `assistant`, `anchor` or `unattributed`), `anchor` and `note` (for the
+    economy row, which option volatility a correlation pulls and by how much).
+  - `interaction`: `resolved`, `first_order_sum`, `first_order_sum_ci`; on the
+    resolved branch only (the sum's interval entirely below 1), `residual`,
+    `residual_ci`, `unstated_first_order_sum` and `unstated_first_order_sum_ci`.
+- `level` — `rows`, `paths`, `prob_best_base`, `futures_margin`,
+  `all_frozen_margin`, `all_frozen_path_spread`, `all_frozen_deviation`,
+  `accounted_for` and `leading_channel_id`. Each row: `channel_id`, `channel`,
+  `label`, `resolved`, `se`, `prob_best_frozen`, and `delta` (`resolved: true`,
+  the shift exceeds 2·SE) or `provisional_delta` (`resolved: false`). The gap is
+  not stored: it is `all_frozen_margin − futures_margin`.
+  `all_frozen_path_spread` is how far the all-frozen paths differ from each
+  other, and is exactly 0.0 on every block emitted — anything else refuses as
+  `freeze_leak`. `all_frozen_deviation` is the all-frozen margin against
+  `verdict.margin_pv`: a few ULPs of the totals subtracted, and not zero by
+  construction, because the simulators compound year by year while the central
+  case takes `(1 + g) ** years`. The text block prints this one.
+- `reversal` — `exact`, `estimated` and `structural_zeros`, three lists that are
+  never ranked against each other.
+  - `exact[]`: `key`, `option`, `stated_formatted`, `bracket_low`,
+    `bracket_high`, `bracket_source`, `probe_paths`,
+    `max_path_deviation_over_sd`, `boundaries`, `refused_boundaries`,
+    `references` and `path_note`.
+  - An exact row's `boundaries[]` hold two kinds of crossing with no
+    discriminator key: the FIELD SET is the discriminator. A solved crossing
+    carries `verdict_field`, `value`, `was`, `becomes` and
+    `confirming_probabilities`; a sampled crossing carries the same plus
+    `curve_probabilities`, `curve_paths` and `seed`. `verdict_field` is one of
+    `best`, `runner_up`, `mc_best` or `decisive`; `was` and `becomes` are
+    strings (an option name, or `True`/`False` for `decisive`); each
+    `*_probabilities` is a list of `[option, probability]` pairs.
+  - `estimated[]`: the exact row's keys without `probe_paths`; its
+    `boundaries[]` carry `verdict_field`, `value`, `value_ci`, `was`, `becomes`
+    and `resimulation_paths`.
+  - `refused_boundaries[]`: `verdict_field` and `reason` — a crossing kind that
+    exists and is not printed, named rather than dropped. `references[]`:
+    `label`, `value`, `formatted`, `anchor` and `note`.
+  - `structural_zeros[]`: `kind` (`stated_path`, `no_pv_reach` or `dead_draw`),
+    `label`, `keys`, `reason`, `stated_formatted`, `channel_id` and
+    `reversal_key`, which joins to the `exact` row carrying that input's solved
+    crossings.
+
+**Which figures move with the sample.** A figure that changes with
+`simulation.random_seed` or with the path count is a property of this run's
+sample, and must never be quoted as a property of the user's config.
+
+- Sample-dependent: `mean_margin` and `sd_margin`; every share, `flip` and
+  interval in `spread`, and `first_order_sum` with its residual (the interval
+  bounds also move with the bootstrap's resample count, so they do not
+  reproduce a published figure to the digit); both `leading_channel_id`s, and
+  with them `superlative_licensed` and `check_first`; every level row and
+  `prob_best_base`, `futures_margin` and `accounted_for`; a SAMPLED crossing's
+  `value` — it names its own `curve_paths` and `seed`, and the text prints it at
+  two decimals with a clause saying it moves with the seed; every
+  `confirming_probabilities` and `curve_probabilities`; an estimated crossing's
+  `value` and `value_ci`; `max_path_deviation_over_sd`, measured on `probe_paths`
+  paths.
+- Properties of the config: `live_channel_ids`; the widths and their source
+  classes; a SOLVED crossing's `value` (it reads no path — measured identical to
+  seven digits across seeds, and printed at four decimals); the brackets and
+  `references`; the structural zeros; and `all_frozen_margin`, the central case
+  reached with every channel frozen.
+- The path counts are four different samples: `paths` is the decomposition's
+  (`--decompose N`, else `num_sims`), `level.paths` the level register's
+  (`min(paths, 2000)`), `probe_paths` the exactness gate's, and `curve_paths`
+  the Monte Carlo curve a sampled crossing was bisected on.
 
 ## Provenance
 

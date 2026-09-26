@@ -30,6 +30,18 @@ from .anchors import (
     refresh_group_members,
     short_cite,
 )
+from .decomposition import (
+    DecompositionOutcome,
+    DecompositionRefusal,
+    LevelRow,
+    RefusedSpread,
+    ResolvedInteraction,
+    ResolvedLevel,
+    ResolvedShares,
+    SpreadRegister,
+    SpreadRow,
+    channel as dc_channel,
+)
 from .market_scenario import LoadedScenarioPrior
 from .land_transfer_tax import option_province, purchase_costs_clause
 from .mortgage_insurance import financing_clause
@@ -1018,6 +1030,127 @@ def verdict_to_dict(verdict: Optional[Verdict]) -> Optional[Dict[str, Any]]:
     """The shared verdict (models.compute_verdict), JSON-shaped; None when no
     option was priced (e.g. a Monte-Carlo-only run)."""
     return dataclasses.asdict(verdict) if verdict is not None else None
+
+
+# ---------------------------------------------------------------------------
+# Which risk decides it — `decomposition` (--decompose, spec §7)
+# ---------------------------------------------------------------------------
+
+def _channel_id_fields(channel_id: int) -> Dict[str, Any]:
+    """The channel's id, machine key and printed label together, so a consumer
+    needs neither the table nor the text block to read a row. Derived from
+    `decomposition.CHANNELS`, which stays the one home."""
+    entry = dc_channel(channel_id)
+    return {"channel_id": entry.id, "channel": entry.key, "label": entry.label}
+
+
+def _spread_row_to_dict(row: "SpreadRow") -> Dict[str, Any]:
+    """One channel's shares. THE UNRESOLVED STATE KEEPS ITS OWN KEY NAMES: an
+    unresolved row carries `provisional_alone` and NO `alone`, so a consumer
+    reading `row["alone"]` raises a KeyError exactly where the typed contract
+    raises an AttributeError (decomposition.py's device, in JSON)."""
+    doc = _channel_id_fields(row.channel_id)
+    doc["resolved"] = isinstance(row.shares, ResolvedShares)
+    doc.update(dataclasses.asdict(row.shares))
+    doc["flip"] = row.flip
+    # The flip figure never travels without its width (§0.1 item 10): it is
+    # the one figure in decision space, and a bare point estimate beside
+    # neighbours that all carry an interval reads as the most certain of them.
+    doc["flip_ci"] = dataclasses.asdict(row.flip_ci)
+    doc["widths"] = [dataclasses.asdict(width) for width in row.widths]
+    return doc
+
+
+def _spread_to_dict(spread: Any) -> Dict[str, Any]:
+    """The spread register, or its refusal in the same slot (§0.1 item 7).
+
+    A refused spread serializes as `{"refusal": {"code", "reason"}}` and
+    carries NO `rows` key: an empty list beside printed level rows would let a
+    consumer read "no rows" as "nothing to report", the inference the named
+    refusal exists to prevent. Anything that is neither type raises rather
+    than being emitted in whichever shape it happens to resemble.
+    """
+    if isinstance(spread, RefusedSpread):
+        return {"refusal": {"code": spread.code, "reason": spread.reason}}
+    if not isinstance(spread, SpreadRegister):
+        raise TypeError(f"the spread register is a {type(spread).__name__}, "
+                        f"neither a SpreadRegister nor a RefusedSpread")
+    interaction: Dict[str, Any] = {
+        "resolved": isinstance(spread.interaction, ResolvedInteraction)
+    }
+    interaction.update(dataclasses.asdict(spread.interaction))
+    return {
+        "rows": [_spread_row_to_dict(row) for row in spread.rows],
+        "interaction": interaction,
+        "leading_channel_id": spread.leading_channel_id,
+        "superlative_licensed": spread.superlative_licensed,
+        "check_first": (None if spread.check_first is None
+                        else dataclasses.asdict(spread.check_first)),
+    }
+
+
+def _level_row_to_dict(row: "LevelRow") -> Dict[str, Any]:
+    """Same device: an indistinguishable row carries `provisional_delta` and no
+    `delta`, so no consumer can read a shift that did not resolve as one."""
+    doc = _channel_id_fields(row.channel_id)
+    doc["resolved"] = isinstance(row.level, ResolvedLevel)
+    doc.update(dataclasses.asdict(row.level))
+    return doc
+
+
+def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str, Any]]:
+    """The `decomposition` block of the `--json` document (spec §7).
+
+    None for silence — the flag not passed, which is every run shipped today,
+    and the reason the CLI omits the key entirely rather than emitting a null.
+
+    A refusal serializes as `{"refusal": {...}}` with NO register keys at all:
+    an empty `spread` beside a refusal would let a consumer read "no rows" as
+    "nothing to report" (§8). The three registers are emitted together or not
+    at all, which is the binding (§5 mechanism 5) in this surface's own terms.
+
+    `verdict` is deliberately absent: the document's top-level `verdict` key is
+    that object's one home, and a copy inside this block would be a second.
+    The level register's gap is absent for the same reason — it is
+    `all_frozen_margin − futures_margin`, both of which are here, so a consumer
+    subtracts rather than trusting a stored third figure (§0.1 ruling 2).
+    """
+    if outcome is None:
+        return None
+    if isinstance(outcome, DecompositionRefusal):
+        refusal: Dict[str, Any] = {"code": outcome.code, "reason": outcome.reason}
+        if outcome.channel_id is not None:
+            refusal.update(_channel_id_fields(outcome.channel_id))
+        return {"refusal": refusal}
+
+    level, reversal = outcome.level, outcome.reversal
+    return {
+        "paths": outcome.paths,
+        "live_channel_ids": list(outcome.live_channel_ids),
+        "mean_margin": outcome.mean_margin,
+        "sd_margin": outcome.sd_margin,
+        "spread": _spread_to_dict(outcome.spread),
+        "level": {
+            "rows": [_level_row_to_dict(row) for row in level.rows],
+            "paths": level.paths,
+            "prob_best_base": level.prob_best_base,
+            "futures_margin": level.futures_margin,
+            "all_frozen_margin": level.all_frozen_margin,
+            "all_frozen_path_spread": level.all_frozen_path_spread,
+            "all_frozen_deviation": level.all_frozen_deviation,
+            "accounted_for": level.accounted_for,
+            "leading_channel_id": level.leading_channel_id,
+        },
+        # The two reversal kinds stay two lists, never one with a flag: the
+        # split is a property of the model and the operator's ruling forbids
+        # ranking across it, which a single ordered list would invite (§0).
+        "reversal": {
+            "exact": [dataclasses.asdict(row) for row in reversal.exact],
+            "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
+            "structural_zeros": [dataclasses.asdict(zero)
+                                 for zero in reversal.structural_zeros],
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

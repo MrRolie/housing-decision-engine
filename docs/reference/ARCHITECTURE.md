@@ -497,6 +497,36 @@ Present only with an `income` block.
 | `years_exceeding` | years whose ratio exceeds the threshold | `[t : ratio_t > threshold]` |
 | `prob_condo_exceeds` / `prob_house_exceeds` / `prob_rent_exceeds` | Monte Carlo breach probability | share of paths on which ANY year's ratio exceeds the threshold, using the path's stochastic income (pay-drop `year_jitter_std`, `magnitude_vol` with the retained fraction clamped to `[0.01, 1]`) against the deterministic cost trajectory |
 
+### Which risk decides it — `decomposition` (`--decompose`)
+
+Three registers that answer three DIFFERENT questions about one quantity, and a
+reader who conflates two of them is the failure the feature exists to prevent
+(`docs/specs/2026-09-22-which-risk-decides-it.md`). This section is the one home
+for what the columns mean, so the printed block cites it instead of restating a
+definition on every run: what prints per run is what turns on that household.
+
+The quantity is `f`, the decision margin on every path — `min` over the other
+priced options of `PV_o` minus `PV_best`, so every priced option stays in it.
+`mean_margin` and `sd_margin` are `E[f]` and `sd(f)` on the spread register's
+own sample; `sd_margin` against `verdict.margin_pv` is the ratio the block
+leads with, because a share of a spread means nothing until the reader knows
+how wide that spread is against the answer.
+
+| Key | What it is | As computed |
+|---|---|---|
+| `alone` | if you learned that channel's realization exactly and nothing else, the fraction of the spread's VARIANCE that would go away. Never "importance", never "contribution to the answer": it is a share of scatter, and a channel can carry most of it while moving the answer by nothing | Saltelli 2010 first-order index over grouped draw sites, `mean(f(B)·(f(A_B^c) − f(A))) / Var(f(A))` |
+| `with_interaction` | the same, plus everything that channel does jointly with the others; `with_interaction − alone` is the measurement of model non-linearity | Jansen 1999 total index, `mean((f(A) − f(A_B^c))²) / (2·Var(f(A)))` |
+| `flip` (printed as "changes sides") | a FRACTION OF FUTURES, not a share of the spread: re-drawing that one channel and nothing else, the share of futures that change sides on which option is cheapest. It is the only column that speaks in decision space, it never sums to anything, and it is never omitted — nor printed without `flip_ci` beside it, because a point estimate with no width, among neighbours that all carry one, reads as the most certain figure in the table | `mean(sign(f(A)) ≠ sign(f(A_B^c)))` |
+| `alone_ci` / `with_interaction_ci` / `flip_ci` / `first_order_sum_ci` | 95% intervals, NEVER clamped into [0, 1] — a clamped share is the cheap all-clear in this feature's costume. A share whose interval leaves [0, 1] prints as `not resolved` with its provisional figure kept, never as `0.00` | 300-resample bootstrap over path indices, seeded from `random_seed` and a fixed salt, so it consumes no draw and reproduces across processes |
+| `first_order_sum` / `residual` | ΣS_c, and `1 − ΣS_c` as movement no single channel owns. The residual prints ONLY when the sum's interval lies entirely below 1; when the interval includes or exceeds 1 the block says so and refuses the figure, because there it is estimator noise | summed first-order indices; the branch is a property of the interval, not a choice |
+| `delta` (level register) | what the simulated futures price that the central case does NOT — a cost the deterministic line omits, read as a cost and not as a risk. NOT "what if this input were different" | `E[f]` with that channel frozen at the value `compute_deterministic` uses, minus `E[f]` as drawn, paired across paths |
+| `se` / `provisional_delta` | the paired standard error, and the point estimate of a shift no larger than 2·SE — printed as `indistinguishable from zero`, with the figure kept, because a channel that carries the scatter and moves the answer by nothing that resolves is the finding | — |
+| `prob_best_base` / `prob_best_frozen` | P(`verdict.best` cheapest) on the level register's own sample, as drawn and with one channel priced the central case's way. These are the level register's estimates on ITS sample, not `verdict.prob_best`, which comes from the shipped stream — two estimates of one quantity from two named samples | `mean(argmin == best)` per repriced sample |
+| `all_frozen_margin` / `all_frozen_path_spread` / `all_frozen_deviation` | the identity that makes the level register a fact, as two claims: with EVERY channel frozen every path prices ONE margin (`all_frozen_path_spread`, exactly 0.0 — a mask that misses a draw site, or reaches another channel's, breaks it, and then the whole block refuses as `freeze_leak` rather than print a register whose identity failed), and that margin is the central case's (`all_frozen_deviation`, a few ULPs of the totals subtracted, never zero by construction: the simulators compound year by year while the central case takes `(1 + g) ** years`). The printed "reproduces the central case to" figure is `all_frozen_deviation` | `max over paths of abs(f_frozen − f_frozen[0])`; `abs(f_frozen[0] − verdict.margin_pv)` |
+| `accounted_for` | the sum of all rows' shifts, the indistinguishable ones included, against the gap `all_frozen_margin − futures_margin`. The gap itself is the SUBTRACTION of the two figures printed beside it, never a stored third number | — |
+| structural zeros | a channel or input whose spread is zero BY CONSTRUCTION: a path the user stated and the engine never draws (`stated_path`), draws that reach no present value (`no_pv_reach`), or a channel that draws every year and reaches no cash flow (`dead_draw`). Printed as a named row with its reason and, for a stated path, the solved rates from the reversal register — never as a dash and never as a measured `0.00` | detected from the spec; costs no evaluation |
+| reversal rows | what would have to change for the verdict to change, solved on inputs the user STATED that carry no distribution. Rows GROUP by exactness — `exact` when every other option is bit-identical and the named option moves by one constant on every path, `estimated` otherwise — and are never ranked across that split, because ordering a rate against a rent would need a plausibility magnitude the engine has none of. Every row prints the bracket it was solved inside and whose figure that bracket's width is | `best` and `runner_up` crossings SOLVED on the central case through `break_even.solve_crossings` — a property of the config, printed at four decimals; `mc_best` and `decisive` crossings BISECTED on the Monte Carlo curve — a property of the sample, printed at two decimals with the paths and seed it depends on; each confirmed by one full re-simulation at its value, and a boundary inside Monte Carlo noise, or one whose confirmation disagrees, is REFUSED by name rather than dropped |
+
 ### The story's own figures (`--story`)
 
 | Act | Figure | As computed |

@@ -114,6 +114,7 @@ required key with the exact message — show it.
 | "What if I stayed N years / prices grew X / the price were Y?" — the flip point | `--sweep years=5,10,15,20` · `--sweep condo.value_growth_rate=0:0.04:5` · `--sweep condo.initial_value=380000,400000,420000` (repeatable; brackets in the config's own mode; `--no-monte-carlo` for speed) |
 | The threshold on ONE input — rent, price, years, growth, a placeholder in rate or dollar form | `--break-even rent.monthly_rent` · `--break-even years=3:30` · `--break-even condo.value_growth_rate=-0.02:0.05` · `--break-even house.other_recurring_costs.municipal_tax.annual_amount=2000:8000`; beside `--sweep` it is re-solved at every sweep point (`across`, one axis at a time — a combination is a second config); two priced options only; the lane is `references/threshold-lane.md` |
 | Agent-consumable result | append `--json` |
+| Which risk decides it | append `--decompose`; no share quoted without gate 10 (`references/gates.md`) |
 | Demographic prior (Québec only — the finest geography containing the user's area, and say which: `references/translation.md` lists them) | copy the `market_scenario` block from `examples/showcase_demographic_prior.yaml`; Monte Carlo on; with a `rent` option set `simulation.investment_return_vol: 0.10` or the engine warns |
 
 ## Judgment gates (one rule each; the why and the worked phrasing are in `references/gates.md`)
@@ -124,10 +125,9 @@ required key with the exact message — show it.
    neither option; at every sweep point too.
 2. **A default is not the user's input.** Read the `defaults applied:` line
    back before the verdict, each with its source; `[neutral, uncited]` means
-   no evidence. No price-growth view in a shipped-prior geography → run the
-   prior as a second config (it is the growth view, so leave the base at 0)
-   and quote the drift its assumptions line prints for the horizon's bands
-   — in ADDITION to the growth break-even, never instead of it.
+   no evidence. No price-growth view in a shipped-prior geography → the prior
+   as a second config AND the growth break-even, never one instead of the
+   other (`references/gates.md`).
 3. **Rates as quoted; a mortgage means `mode: nominal`.** Type every growth,
    escalation, return, discount and mortgage rate the way the user sees it
    quoted — the engine converts once (deflated in real mode, as typed in
@@ -236,8 +236,9 @@ the READ-BACK block is outside both.
   it); act 5 only with `market_scenario:`; act 6 only with `rent` plus an
   owned option.
 - `--json`: `engine_version`, `warnings`, `assumptions`, `verdict`,
-  `deterministic`, `monte_carlo` present; every `assumptions.defaults_applied`
-  entry carries an `anchor` with a `source`.
+  `deterministic`, `monte_carlo` present (`decomposition` only with
+  `--decompose`); every `assumptions.defaults_applied` entry carries an
+  `anchor` with a `source`.
 
 ## Escalation
 

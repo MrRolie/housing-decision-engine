@@ -24,6 +24,12 @@ from .unpriced import unpriced_warnings
 # A demographic prior enters the Monte Carlo only: a run that skips it shows
 # the deterministic line alone, and says so rather than let the prior's
 # presence in the echo read as its presence in the numbers (2026-09-04).
+# `--decompose` bare vs `--decompose N`: a sentinel rather than a number, so
+# "asked for it" and "asked for it at N paths" are never the same value. A bool
+# would not do — `isinstance(True, int)` is True, which is exactly how a
+# sentinel silently becomes a sample size.
+_DECOMPOSE_AT_NUM_SIMS = object()
+
 PRIOR_WITHOUT_MONTE_CARLO = (
     "market_scenario prior acts only in Monte Carlo — this run shows the "
     "deterministic line alone (the prior's drift is not in it)"
@@ -152,6 +158,21 @@ def main() -> int:
              "--sweep years=5,10,20 or --sweep condo.value_growth_rate=0:0.04:5; a cost line "
              "by its name, --sweep 'house.other_recurring_costs.property_tax.annual_amount=3000,6000'; "
              "prints per-point verdicts and where the cheapest option flips; rides --json as 'sweeps'",
+    )
+    parser.add_argument(
+        "--decompose",
+        nargs="?",
+        type=int,
+        const=_DECOMPOSE_AT_NUM_SIMS,
+        default=None,
+        metavar="N",
+        help="Which risk decides it: split the decision margin's spread across the "
+             "run's uncertainty channels (Sobol), say what the simulated futures "
+             "price that the central case does not, and solve what would have to "
+             "change for the verdict to change. Opt-in because it re-prices the run "
+             "many times over — bare, it runs at the config's own num_sims; "
+             "--decompose N runs the decomposition at N paths instead. Rides --json "
+             "as 'decomposition'",
     )
     parser.add_argument(
         "--break-even",
@@ -300,6 +321,56 @@ def main() -> int:
             warnings.append(warning)
             print(f"[warning] {warning}", file=sys.stderr)
 
+    # Which risk decides it (docs/specs/2026-09-22-which-risk-decides-it.md).
+    # Silent unless asked: no flag, no stream built, no draw consumed (§8
+    # case 1). The ESTIMATORS live behind one seam, `hde.decomposition_run`
+    # (spec §0.1 item 17); this surface renders what that seam returns and
+    # decides none of §8's refusals, which are judgments about data the
+    # assembler is the only thing that sees.
+    decomposition = None
+    if args.decompose is not None:
+        # The sample-size override is the ASSEMBLER's figure (it is consumed at
+        # compute time); this surface only parses it, and refuses a value that
+        # cannot be a path count rather than passing it on.
+        decompose_paths = (None if args.decompose is _DECOMPOSE_AT_NUM_SIMS
+                           else args.decompose)
+        if decompose_paths is not None and decompose_paths < 1:
+            print(f"Error: --decompose takes a path count of 1 or more, got "
+                  f"{decompose_paths}", file=sys.stderr)
+            return 1
+        if det_result is None:
+            print("Error: --decompose needs the deterministic run — the block is "
+                  "priced against the central case; re-run without "
+                  "--no-deterministic", file=sys.stderr)
+            return 1
+        # A build that carries the surface without the estimators REFUSES here
+        # rather than printing an empty block: a flag that comes out silent
+        # because half the feature is missing is the cheap all-clear this repo
+        # treats as the cardinal failure.
+        try:
+            from .decomposition_run import decompose
+        except ImportError as e:
+            # ONLY the seam's own absence is a refusal. An ImportError raised
+            # from inside a landed `decomposition_run` is a real defect, and
+            # reporting it as "not in this build" would be a wrong diagnosis
+            # of someone else's bug.
+            if getattr(e, "name", None) != "hde.decomposition_run":
+                raise
+            print("Error: --decompose needs the decomposition estimators "
+                  "(hde.decomposition_run), which this build does not carry — the "
+                  "surface is here, the registers are not", file=sys.stderr)
+            return 1
+        # `paths` is passed ONLY when the user gave one, so the call stays the
+        # six-argument seam §0.1 item 17 names unless the extra keyword is
+        # actually needed (§0.1 item 16).
+        extra = {} if decompose_paths is None else {"paths": decompose_paths}
+        try:
+            decomposition = decompose(spec, det=det_result, mc=mc_result,
+                                      verdict=verdict, raw=raw, prior=prior, **extra)
+        except (ConfigValidationError, InputError, ScenarioPriorError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []
     sweep_specs = []  # (key, values) pairs; --break-even re-solves at each
@@ -376,6 +447,9 @@ def main() -> int:
             doc["sweeps"] = sweeps
         if args.break_even:
             doc["break_evens"] = break_evens
+        if args.decompose is not None:
+            from .serialization import decomposition_to_dict
+            doc["decomposition"] = decomposition_to_dict(decomposition)
         print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
     elif args.read_back:
@@ -438,6 +512,17 @@ def main() -> int:
             status_out = sys.stderr if (args.json or args.read_back) else sys.stdout
             for path in saved:
                 print(f"Saved plot: {path}", file=status_out)
+
+    # The block goes under the verdict the report just printed, and before the
+    # threshold lines, in the same channel the other opt-in surfaces use (a
+    # flag the user asked for is not suppressed by -q, exactly as --sweep is
+    # not). Silence is the empty string, so a refusal is the only thing that
+    # can print here besides the block.
+    if decomposition is not None and not args.json and not args.read_back:
+        from .decomposition_text import format_decomposition
+        rendered = format_decomposition(decomposition)
+        if rendered:
+            print(f"\n{rendered}")
 
     if sweeps and not args.json and not args.read_back:
         from .sweep import format_sweep
