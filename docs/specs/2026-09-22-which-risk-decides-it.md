@@ -367,6 +367,66 @@ is not so — each fixed for its whole category, and each superseding the text i
   renewal years from now" is keyed on the renewal axis, which is admitted only when a renewal is
   priced.
 
+**27. "NOT DRAWN IN THIS RUN" IS FALSE FOR TWO OF THE THREE STRUCTURAL-ZERO KINDS, and this
+document wrote it.** §7's heading sat over income, and income draws: its pay-drop events advance
+their own stream and feed the run's affordability report. A `dead_draw` row says in its own
+words that its channel draws and multiplies by zero. Only a `stated_path` row is truly undrawn.
+The heading claims only what all three share, **zero spread by construction, not by
+measurement**, and each row states its own drawn-or-not fact: a stated path is touched by no
+draw; a dead draw is drawn and multiplied by zero; a draw with no present-value reach is drawn
+and reaches no option's present value.
+
+**28. THE INTERACTION SENTENCE CONTRADICTED THE COLUMN ABOVE IT, and this document prescribed
+its wording.** §4 keys "interaction is not measurable … estimator noise, not a finding" on the
+residual `1 − ΣS` alone, while the table's "with interaction" column measures each channel's
+`S_T − S`, and on examples/advanced_config.yaml that gap resolves. The bootstrap already
+resamples path indices, so each channel's `S_T − S` gets its own interval at no extra
+evaluation. The sentence says "not measurable" only when no channel's gap resolves. Otherwise it
+says the RESIDUAL does not resolve and points at the column where interaction does. Every route
+clause ("raise the path count") is one function conditioned on both caps, the level register's
+2,000-path cap and the budget ceiling. At a cap it says a larger run is not available, because
+at the N the budget refusal itself recommends, "raise N" was an instruction the engine would
+refuse.
+
+**29. `no_sign_variation` fires when f never changes sign in EITHER direction.** The code
+refused only on `P(f > 0) == 1`, every future naming the central case's winner. When every
+future names one OTHER option, `P(f > 0) == 0`, and the flip column is identically zero just the
+same: no re-draw moves a future across a boundary no future is near. The docs already said
+"every future names the same winner", so the code was narrower than its documentation. The
+condition becomes `P(f > 0) ∈ {0, 1}`, and the reason is worded for both sides.
+
+**30. A reference rate on a reversal axis is expressed on that key's own quoting axis.** On a
+config quoting `mortgage_rate_compounding: effective_annual`, the posted and contracted
+references printed as semi-annual quotes beside effective-annual crossings, so the gap they
+implied was off by 9 basis points at posted and 5 at contracted. Conversion goes through the
+engine's one rate conversion, never a second.
+
+**31. An empty reversal register says what is empty, not that nothing reverses.** Slice 1's
+candidates are a financed option's `mortgage_rate` and `mortgage_renewal_rates`. On an all-cash
+config the set is empty, but other stated keys still carry a reversal distance: `--break-even
+condo.monthly_fee` solves one on examples/advanced_config.yaml. The sentence names the empty
+candidate set and routes to `--break-even`.
+
+**32. ONE HOME FOR THE PROSE.** The block's own sentences are the product. `API_CONTRACT.md` is
+the one prose home for the agent-facing contract, and its sentences are pinned by
+sentence-against-output tests, not key-presence tests. The skill, `PROMPTS.md`,
+`ARCHITECTURE.md` and module docstrings do not restate a rule or a figure the block prints; they
+point at the contract or at the block. Measured: a docs review found twelve false sentences, and
+every one was a paraphrase of a rule living in a second home. Each such paraphrase is correct
+the day it is written and wrong after the next change, with nothing between the two copies to
+say so.
+
+**33. A FIX TO A SENTENCE'S CONDITION COLLAPSES ITS SIBLINGS INTO ONE FUNCTION.** One fix round
+repaired the level register's route clause and missed the spread register's, and repaired three
+stale `± $5,383` figures and missed a fourth. Enumeration by grep fails on a surface of this
+size. A condition that lives in one function cannot be missed at a second site, because there is
+no second site.
+
+**34. The provenance closing is built from the same widths the rows print, and it may not
+contradict a tag printed above it.** On the fixture it said "every channel above is sized by a
+figure the assistant chose, not by you", beneath a population row carrying
+`market_scenario.geography [user]`.
+
 ---
 
 ## 1. Why
