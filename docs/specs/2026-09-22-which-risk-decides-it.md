@@ -492,6 +492,91 @@ explanation of which channels move what.
   row did not resolve, no line calls it the largest; `--json` names it as
   `unresolved_top_channel_id`.
 
+**39. WHETHER A CHANNEL DRAWS, AND WHETHER IT IS LIVE, IS MEASURED ON THE RUN AND NEVER PREDICTED
+FROM THE CONFIG** *(2026-09-26, after the figures-only cut)*. Cutting the prose exposed an engine
+defect that the prose had been hiding. `live_channels` decided from the config whether each
+channel's draws could reach a cash flow, which put a second copy of the simulator's logic next to
+the simulator. The two disagreed. A generative sweep of 800 loadable random configs, compared
+against generator state and present-value bytes, found 19 disagreements, all on the tenancy:
+- In nominal mode, an as-quoted escalation of 0.0 is stored as the real rate −2.06%, so the
+  predicate said live while nothing moved.
+- With `inflation_vol > 0` and a deterministic inflation of 0, the predicate said dead while the
+  shock moved rent.
+- A lease reset to the tenant's own rent and escalation moves no present value, and was counted
+  live.
+
+The false outputs were the header count, a `one_channel` refusal where the contract's own table
+gives `no_spread`, a live spread row holding a measured zero, and "drawn" printed over income
+events that draw nothing. Twelve of seventeen branch mutants on the predicates survived the full
+suite. Two homes for one fact is the defect, so the fix is to measure, not to correct the
+predicate:
+
+- **Draws** means that channel's addressed generator advanced during the run `A` (the
+  generator-state instrument the contract tests already use).
+- **Live** means some option's present value differs between `A` and `A_B^(c)` on some future,
+  by more than the ULP budget the identity check already uses. There is one threshold, and it
+  lives in one place. The spread register already prices `A_B^(c)`, so this measurement costs a
+  re-draw only for channels that draw but are not live.
+- The consequences follow. `one_channel`, the header's `k`, and the structural-zero rows are
+  decided after pricing, as `no_spread` already is. Before pricing, the budget gate bounds its
+  cost with `k_draw`, and the largest admissible `N` it prints is computed on that bound.
+- Every drawn-or-live fact is scoped to the sample it was measured on ("on these N futures"). It
+  is stated at the grain it was measured. A stream is a channel, so "drawn" is the channel's fact
+  and never a key's. Item 27's per-kind facts are superseded wherever they were predictions.
+
+**40. EVERY WORD OF A STRUCTURAL-ZERO ROW IS TRUE OF WHAT IT NAMES.** On
+`examples/rent_vs_condo_vs_house.yaml` the block printed "your tenancy — rent.events: drawn, and
+reaching no cash flow", while the same report priced `events_pv` at $2,707 from exactly that key.
+The fact was true of the channel's re-draw and false of the key. A row may say that re-drawing
+moves no option's present value on these futures. It may never say that a key named in the row
+reaches no cash flow. The pin is a measurement at the grain of each claim, including a stated key
+with a deterministic cash flow, not a check of the words against the kind.
+
+**41. THE PATH NOTE IS A CONSTRUCTION FACT, AND ITEM 35 GAINS A SIXTH KIND FOR IT.** Items 26 and
+35 conflicted. Item 26 kept `flattened_path_note` inline because the reader needs it; item 35
+lists no such line. Both reviews read its "so … rather than …" clause as a reading instruction,
+and it is one. The reader still needs the fact, so it stays, in a different form. What prints is
+**how the printed axis was built**: each crossing on this key was priced with the stated path
+(4.60%, 5.00%, …) replaced by one rate at every renewal. The inference after "so" is cut. The
+sentence names only what the block prints; `--sweep`'s "every grid point", "this grid" and "the
+threshold reported" have no referent here. The contract's list of what prints gains this sixth
+kind.
+
+**42. EVERY PRINTED CROSSING SITS ON THE `was` SIDE.** `_solved_rate` rounded to nearest at four
+decimals while `_sampled_rate` rounded down. On `examples/mortgage_house_vs_rent.yaml` the solved
+crossing 6.784887% printed as 6.7849%, a rate at which `--sweep` already says rent. Both types
+round down at their own precision, through one function (item 33). The pin sweeps the printed
+figure, not the unrounded value.
+
+**43. A FIGURE THE ENGINE SETS IS TAGGED `[set in the engine]`, ONE LABEL.** The reversal bracket
+(`RATE_BRACKETS`) printed `[assistant]` while the budget ceiling printed `[set in the engine]`.
+In the read-back classes, `[assistant]` means a figure typed on the household's behalf for this
+run. A bracket written into the engine's code is not that. It has been left standing since
+round 3; it is ruled now.
+
+**44. "CANNOT BE WITNESSED" IS NOT A DISPOSITION FOR A SURVIVING MUTANT.** Two dispositions were
+false:
+- The `> 0.0` → `>= 0.0` mutant on `interaction_is_resolved`: a channel that moves `f` on few
+  futures gets a bootstrap low of exactly 0.0, and the review built the config.
+- The MARGIN mean over `f_a[:level_paths]`: `examples/advanced_config.yaml` prints it on a
+  shipped run.
+
+A formatter takes any outcome, and a math function takes any interval, so a guard with no real
+witness is pinned with a constructed one. That includes `_identification`'s noise bar, mutated in
+the narrow direction.
+
+**45. USAGE ERRORS ARE OUTSIDE ITEM 35.** A `--decompose` flag-combination error exits before
+anything is priced. It is CLI usage, not prose around a figure, and it may name the valid form.
+Item 35 governs the block.
+
+**46. THE CONTRACT'S UNIVERSAL SENTENCES ARE PARTITIONS, AND A PARTITION IS PINNED WHOLE.** "Every
+other figure moves with the seed or the path count" was false: `all_frozen_path_spread` and the
+config's own stated values move with neither. A sentence of the form "every X is Y" is pinned by
+enumerating every X in the output and checking each one, not by sampling. Where the output cannot
+be enumerated, the sentence is cut. The same holds for docstrings: the types module restates no
+field's meaning, and a test that fails on a restatement enforces it, because two "one home" passes
+that relied on reading did not hold.
+
 ---
 
 ## 1. Why
