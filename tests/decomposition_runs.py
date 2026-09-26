@@ -100,21 +100,51 @@ SAMPLED_ONLY = copy.deepcopy(FAR)
 SAMPLED_ONLY["rent"]["monthly_rent"] = 2400
 SAMPLED_ONLY["simulation"].update({"rent_escalation_vol": 0.10,
                                    "investment_return_vol": 0.12})
-# basic_config with a cheaper condo and a quieter fee: too close to call, and
-# the largest shift (the house's costs) resolves.
-TIE = yaml.safe_load((EXAMPLES / "basic_config.yaml").read_text(encoding="utf-8"))
-TIE["condo"]["monthly_fee"] = 432
-TIE["simulation"]["condo_fee_vol"] = 0.03
-# min_interaction.yaml with both widths declared the user's: the superlative
-# is licensed.
-LICENSED = yaml.safe_load(MIN_INTERACTION.read_text(encoding="utf-8"))
-LICENSED["sources"] = {"simulation.condo_fee_vol": "user",
-                       "simulation.house_maintenance_vol": "user"}
-# basic_config with the leading row's volatility declared the user's and its
-# event list left undeclared: a leading row sized by both kinds of input, so
-# what to check first is some of its widths and not all of them.
-MIXED = yaml.safe_load((EXAMPLES / "basic_config.yaml").read_text(encoding="utf-8"))
-MIXED["sources"] = {"simulation.condo_fee_vol": "user"}
+# The one-side-of-the-line guard's two edges, each one future away from it:
+# rent (the central case's winner) cheapest in exactly one of 2,000 futures,
+# and the house cheapest in all but one. The spread register prints a table
+# on both; a guard widened by any tolerance refuses one of them.
+NEAR_NONE = copy.deepcopy(ALL_OTHER)
+NEAR_NONE["rent"]["reset_hazard"] = 0.5
+NEAR_ALL = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
+NEAR_ALL["house"]["mortgage_rate"] = 0.0633
+NEAR_ALL["simulation"].update({"random_seed": 8, "num_sims": 2000})
+# Three options, the third far behind: only the renter's channels are live, and
+# they move rent, which never enters the margin — so the margin is one figure
+# on every future while two channels are live (spec §0.1 item 37).
+THIRD_FAR = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0},
+    "condo": {"initial_value": 400000, "monthly_fee": 300, "fee_escalation_rate": 0.0,
+              "all_cash": True, "purchase_costs": 5000, "value_growth_rate": 0.0},
+    "house": {"initial_value": 450000, "all_cash": True, "purchase_costs": 5000,
+              "annual_maintenance_rate": 0.01, "value_growth_rate": 0.0},
+    "rent": {"monthly_rent": 6000, "rent_escalation_rate": 0.02,
+             "invested_down_payment": 405000, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 400, "random_seed": 42, "rent_escalation_vol": 0.05,
+                   "investment_return_vol": 0.10},
+}
+# The same, with one renter's channel live: one live channel that never moves
+# the margin.
+THIRD_FAR_ONE = copy.deepcopy(THIRD_FAR)
+THIRD_FAR_ONE["rent"]["rent_escalation_rate"] = 0.0
+del THIRD_FAR_ONE["simulation"]["rent_escalation_vol"]
+THIRD_FAR_ONE["simulation"]["investment_return_vol"] = 0.02
+# Futures exist only because the income pay-drop draws: no channel is live,
+# while the affordability report moves with the draw.
+INCOME_ONLY = {
+    "years": 15, "discount_rate": 0.072,
+    "condo": {"monthly_fee": 700, "fee_escalation_rate": 0.052, "initial_value": 500000,
+              "all_cash": True, "purchase_costs": 7500},
+    "rent": {"monthly_rent": 2500, "rent_escalation_rate": 0.062,
+             "invested_down_payment": 500000, "investment_return_rate": 0.051},
+    "income": {"annual_income": 120000, "income_growth_rate": 0.052,
+               "affordability_threshold": 0.35,
+               "pay_drop_events": [{"year": 3, "magnitude": 0.80, "year_jitter_std": 2,
+                                    "magnitude_vol": 0.25}]},
+    "simulation": {"num_sims": 2000, "random_seed": 42},
+    "economic": {"mode": "real"},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -224,20 +254,18 @@ CORPUS = {
     "showcase": (SHOWCASE, "2000"),
     "min": (MIN_INTERACTION,),
     "advanced": (ADVANCED, "400"),
+    # The economy's interaction gap resolves here with its interval's low end
+    # a few thousandths above zero: the gap rule's narrow edge.
+    "advanced_4000": (ADVANCED, "4000"),
     "three": (THREE, "300"),
     "all_other": (ALL_OTHER, "400"),
     "basic": (EXAMPLES / "basic_config.yaml", "300"),
     "dead": (DEAD, "300"),
     "far": (FAR, "200"),
     "inert": (INERT, "200"),
-    # At the level register's own cap: a tie, and an option state, whose
-    # largest shift does not resolve there.
-    "basic_2000": (EXAMPLES / "basic_config.yaml", "2000"),
-    "three_2000": (THREE, "2000"),
     "sampled_only": (SAMPLED_ONLY, "200"),
-    "tie": (TIE, "2000"),
-    "licensed": (LICENSED,),
-    "mixed": (MIXED, "300"),
+    "near_none": (NEAR_NONE, "2000"),
+    "near_all": (NEAR_ALL, "2000"),
 }
 
 

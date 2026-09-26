@@ -255,10 +255,10 @@ def sum_first_order_shares(first_order: object) -> float:
 def share_is_resolved(share: float) -> bool:
     """False for a share the estimator's noise put outside [0, 1] (section 4).
 
-    The caller prints such a row as `not resolved at N futures` alongside the
-    measured value and its interval. It never clamps it into range: a negative
-    index printed as 0.00 reads as "measured, and it does not matter", which is
-    a different claim from "this sample cannot tell".
+    The caller prints such a row as not resolved, with the measured value and
+    its interval. It never clamps it into range: a negative index printed as
+    0.00 reads as "measured, and it does not matter", which is a different
+    claim from "this sample cannot tell".
     """
     value = float(share)
     return bool(0.0 <= value <= 1.0)
@@ -459,11 +459,9 @@ def residual_interaction(
 
       * the interval lies entirely BELOW 1 -> `(residual, low, high)`, movement
         no single channel owns;
-      * the interval includes or exceeds 1 -> None. The shares add to more than
-        the whole, which is estimator noise and not a finding, and a residual
-        computed from it would be a negative number dressed as a measurement.
-        The caller says interaction is not measurable at this sample size and
-        names the figure to raise.
+      * the interval includes or exceeds 1 -> None: a residual computed from
+        it could be a negative number dressed as a measurement. The caller
+        prints the residual as not resolved.
 
     Returning None rather than a number with a flag is deliberate: a caller
     cannot print a residual it was never given.
@@ -516,9 +514,8 @@ def level_shifts(f_base: object, f_frozen: object) -> Tuple[Array, Array]:
 def level_is_resolved(delta: float, standard_error: float) -> bool:
     """Section 3.4's rule: a level shift resolves when |delta| > 2 * SE.
 
-    False is not silence. The caller names the channel and prints the measured
-    pair as indistinguishable from zero at this sample size — which is the whole
-    finding on a channel that carries most of the spread and moves nothing.
+    False is not silence: the caller prints the row as not resolved, with its
+    measured pair.
     """
     return bool(abs(float(delta)) > LEVEL_RESOLUTION_SIGMAS * float(standard_error))
 

@@ -242,21 +242,21 @@ holds a published figure or it expires loudly; "the 2026 bracket is stale and
 the 2027 one is not published yet" is a complete, honest answer, and the plan's
 `found` line is the evidence for it.
 
-## 10. `--decompose`: carry the block's own sentences
+## 10. `--decompose`: quote the block, and read its meaning in the contract
 
-Each sentence the block prints is true of the run it came from, under a
-condition the engine checked on that run. A paraphrase keeps the words and
-drops the condition, so:
+The block prints figures, refusals and crossings, and no sentence about what
+they mean. Explaining them is your job, and the meaning you explain from is
+`docs/reference/API_CONTRACT.md` § The `decomposition` block. So:
 
-- Quote the block's lines as printed, with their figures and their `[...]`
-  tags. What a field, a refusal or a route means is in
-  `docs/reference/API_CONTRACT.md` § The `decomposition` block; read it there,
-  never restate it from memory.
-- Never quote a share from THE SPREAD without the closing line of THE LEVEL
-  beside it, and never call a share "importance" or a "contribution to the
-  answer".
-- Quote a `not resolved` row as not resolved, with its figures.
+- Quote the block's lines verbatim, with their figures and their `[...]` tags.
+- Never quote a row from THE SPREAD without the same channel's row from THE
+  LEVEL beside it.
+- Where the block prints `not resolved`, say it is not resolved, with the
+  figures printed behind the words.
+- Read what a figure, a refusal code or a path count means in the contract
+  section above before you explain it; never explain it from memory or from
+  this file.
+- Name a share by the column it is printed under, never "importance" or a
+  "contribution to the answer".
 - A refusal, of the whole block or of the spread alone, is that run's finding:
-  quote its sentence, and follow the route it names when it names one.
-- Carry the closing line about whose inputs sized the table, and the inputs it
-  says to check first, with their tags.
+  quote its line as printed.

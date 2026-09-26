@@ -471,6 +471,27 @@ other option, so the margin is identical on every future while a channel is live
 reason therefore reports the measured fact (the margin is identical on all N futures) and not an
 explanation of which channels move what.
 
+**38. Item 35 as built (2026-09-26).** What the block no longer prints, and what went with it:
+
+- The verdict line, the margin's sign clause and its multiple of the margin, the headings'
+  glosses ("where the $X comes from", "a cost or saving it leaves out, not a risk"), the
+  "different kinds of number" line and its glossary pointer, the indistinguishable-from-zero
+  line, the "of which these shifts account for" line, every closing (the three verdict-state
+  branches and the unresolved-top branches), and the provenance closing with its "check first".
+- In the reversal register: the structural zeros' reason sentences and their per-row source
+  lines, the "re-priced exactly" licence line, and the confirming probabilities in the text (they
+  stay in `--json`). Structural zeros print as their own group, no longer under a reversal row.
+- Every route clause, in the refusal reasons and in `no_distance_reason`, and the one-channel
+  label prefix: every refusal prints `not split (<code>): <reason>`.
+- `SpreadRegister.superlative_licensed`, `check_first` and `unattributed_channel_ids`,
+  `ResolvedInteraction.unstated_first_order_sum` and its interval, `StructuralZero.reason` and
+  `stated_formatted`, and `break_even.break_even_route`. §5 mechanisms 3 and 4 (the superlative
+  gated on provenance, and the unstated first-order sum) are retired with them; mechanism 1, the
+  source tag on every width, carries provenance on every row.
+- "largest alone share" and "largest shift in size" print only for a leading row. Where the top
+  row did not resolve, no line calls it the largest; `--json` names it as
+  `unresolved_top_channel_id`.
+
 ---
 
 ## 1. Why
@@ -794,13 +815,14 @@ turns them on.** Specifically `simulation.value_growth_vol` and `rent.reset_haza
 keys the one-world spec shipped unanchored on purpose. Silence about a channel that is off would
 let a reader conclude that prices, or a lease ending, had been weighed and found not to matter.
 
-**3. The superlative is gated on provenance.** When the leading channel's widths are all user-
+**3. The superlative is gated on provenance.** *(Retired, §0.1 item 38.)* When the leading channel's widths are all user-
 stated or anchored, the block may write *"X decides the spread of this answer"*. When any of
 them is assistant-typed, it may not; it writes the share and then: *this ranking is a property
 of widths you did not state — the figure to check first is `<key> = <value>`.* Change one
 `sources:` entry from `assistant` to `user` and the sentence changes. That is the test.
 
 **4. One computed provenance figure, able to be absent, and bound to the residual's own branch.**
+*(Retired, §0.1 item 38.)*
 The first-order shares of the channels whose widths are entirely assistant-typed, summed and
 named as a sum of first-order shares — never as a joint share. **It prints only when `ΣS_c` took
 the numeric branch of §4.** When `ΣS_c` took the refusal branch, the same number is noise, and a
@@ -819,7 +841,8 @@ say on nearly every config shipped today, and the index is solved from the user'
 the way `break_even.RATE_BRACKETS` already is. But the spread table may not be emitted without
 the level register beside it, and this is a property of the CODE, not a convention a formatter
 is trusted to honour: one function emits both registers or neither, and a caller cannot reach
-the spread rows alone. Mechanisms 1–4 above all stand and are all still required.
+the spread rows alone. Mechanisms 1 and 2 above stand and are still required; 3 and 4 are
+retired (§0.1 item 38).
 
 The reason is measured, in §0: the spread table's top row on this repo's own fixture is the
 renter's portfolio at 0.88 of the scatter, and freezing it moves the decision by −$2,200, while

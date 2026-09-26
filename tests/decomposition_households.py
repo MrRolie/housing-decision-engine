@@ -49,7 +49,7 @@ from hde.decomposition import (
     Width,
     AxisReference,
 )
-from hde.decomposition_run import _dead_draw_reason, largest_affordable_paths
+from hde.decomposition_run import largest_affordable_paths
 from hde.models import Verdict
 
 
@@ -77,32 +77,20 @@ def SpreadRow(*, shares, interaction_gap=None, interaction_gap_ci=None, **fields
                                interaction_gap_ci=interaction_gap_ci, **fields)
 
 
-def SpreadRegister(*, check_first=(), interaction_channel_ids=None, **fields):
-    """`check_first` as the tuple the contract carries (one width may be given
-    bare); `interaction_channel_ids` read off the rows' own gap intervals, the
-    way the assembler reads them, unless stated."""
-    if isinstance(check_first, Width):
-        check_first = (check_first,)
-    elif check_first is None:
-        check_first = ()
+def SpreadRegister(*, interaction_channel_ids=None, **fields):
+    """`interaction_channel_ids` read off the rows' own gap intervals, the way
+    the assembler reads them, unless stated."""
     if interaction_channel_ids is None:
         interaction_channel_ids = tuple(
             row.channel_id for row in fields["rows"]
             if row.interaction_gap_ci.low > 0.0)
-    return _contract.SpreadRegister(check_first=tuple(check_first),
-                                    interaction_channel_ids=interaction_channel_ids,
+    return _contract.SpreadRegister(interaction_channel_ids=interaction_channel_ids,
                                     **fields)
 
 
-# The empty register's sentence as the engine writes it for a two-option config
-# with no financing key (`break_even._no_distance_reason`), copied as data.
-NO_DISTANCE_TWO_OPTIONS = (
-    "no reversal distance is solved here: this block searches only a financed "
-    "option's mortgage_renewal_rates and mortgage_rate, and this config states no "
-    "such key. That is the reach of this search, not a finding that nothing would "
-    "reverse the verdict: for any other key this config states, --break-even <key> "
-    "solves the crossing on the central case with the solver the --decompose "
-    "reversal register uses.")
+# The empty register's fact as the engine writes it for a config with no
+# financing key (`break_even._no_distance_reason`), copied as data.
+NO_DISTANCE_TWO_OPTIONS = "this config states no mortgage_renewal_rates or mortgage_rate"
 
 
 def ReversalRegister(*, no_distance_reason=None, **fields):
@@ -146,8 +134,8 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
     """The flagship fixture's block: seven live channels, a disagreement, the
     renter's portfolio carrying the spread and the tenancy moving the answer.
 
-    `interaction` overrides the ΣS branch (§4 has both branches reachable on
-    this one fixture); `mean_margin` is E[f] on the SPREAD register's own A
+    `interaction` overrides the ΣS branch, so the resolved one prints too;
+    `mean_margin` is E[f] on the SPREAD register's own A
     matrix, which is not the level register's `futures_margin` (§0.1 ruling 1).
     """
     economy_widths = (
@@ -155,17 +143,18 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         # §0.1 ruling 6: the cell must name the corr keys AND the option vols
         # they pull from, because which vols are pulled depends on which rho is
         # non-zero. §7's draft listed only the corr keys and is in breach of §4.
-        _w("simulation.corr_inflation_condo", "0.5", "assistant",
-           note="rho²=0.25 of the condo fee shock"),
-        _w("simulation.condo_fee_vol", "8%", "assistant"),
-        _w("simulation.corr_inflation_house", "0.5", "assistant",
-           note="rho²=0.25 of the house maintenance shock"),
-        _w("simulation.house_maintenance_vol", "20%", "assistant"),
-        _w("simulation.corr_inflation_other", "0.4", "assistant",
-           note="rho²=0.16 of each other-cost shock"),
-        _w("simulation.other_cost_vol", "10%", "assistant"),
-        _w("simulation.corr_inflation_event_cost", "0.3", "assistant",
-           note="rho²=0.09 of each event-cost shock"),
+        # Each pulled vol carries the engine's note: the rho that pulls it and
+        # rho squared, as figures.
+        _w("simulation.corr_inflation_condo", "0.5", "assistant"),
+        _w("simulation.corr_inflation_house", "0.5", "assistant"),
+        _w("simulation.corr_inflation_other", "0.4", "assistant"),
+        _w("simulation.corr_inflation_event_cost", "0.3", "assistant"),
+        _w("simulation.condo_fee_vol", "8%", "assistant",
+           note="pulled by simulation.corr_inflation_condo = 0.5; rho squared 0.25"),
+        _w("simulation.house_maintenance_vol", "20%", "assistant",
+           note="pulled by simulation.corr_inflation_house = 0.5; rho squared 0.25"),
+        _w("simulation.other_cost_vol", "10%", "assistant",
+           note="pulled by simulation.corr_inflation_other = 0.4; rho squared 0.16"),
     )
     rows = (
         SpreadRow(
@@ -281,9 +270,6 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         ),
         leading_channel_id=6,
         unresolved_top_channel_id=None,
-        superlative_licensed=False,
-        check_first=_w("simulation.investment_return_vol", "10%", "assistant"),
-        unattributed_channel_ids=(),
     )
     # §3.4's rule is |Δ| > 2·SE. The house's costs at -$886 ± $179 is 4.95 SE,
     # so it is a RESOLVED row — §7's draft filed it under "indistinguishable
@@ -320,32 +306,25 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
     # The two reversal rows are the fixture's as `hde tests/fixtures/
     # uncertainty_surface.yaml --decompose` prints them at seed 42: the solved
     # values are spec §6's measurements, the probabilities at each crossing
-    # are that run's, rounded as the block rounds them, and every sentence the
-    # ENGINE writes (the zero reasons, the path note, the refusals, the axis
-    # references) is copied from it. Every crossing reads the key UPWARD
-    # (`decomposition.SolvedBoundary`): `was` holds below the value, `becomes`
-    # above it — so where this run's own value sits above a crossing, as the
-    # stated 4.35%–5.00% sit above all of these, `becomes` is the run's state.
-    # The posted rate's renewal clause is keyed on the AXIS: it prints on the
-    # renewal row and not on the contract-rate row.
-    def references(posted_note):
-        return (
-            AxisReference(label="contracted 5y uninsured", value=0.0435,
-                          formatted="4.35%",
-                          anchor="mortgage_rate.contracted_5y_uninsured"),
-            AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
-                          anchor="mortgage_rate.contracted_5y_insured"),
-            AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
-                          anchor="mortgage_rate.posted_5y", note=posted_note),
-        )
-    renewal_references = references("a list price, to bracket a guess from above — "
-                                     "never a ceiling on a renewal years from now")
-    contract_references = references("a list price, to bracket a guess from above")
+    # are that run's, and every sentence the ENGINE writes (the path note, the
+    # refusals, the axis references) is copied from it. Every crossing reads
+    # the key UPWARD (`decomposition.SolvedBoundary`): `was` holds below the
+    # value, `becomes` above it — so where this run's own value sits above a
+    # crossing, as the stated 4.35%–5.00% sit above all of these, `becomes` is
+    # the run's state.
+    references = (
+        AxisReference(label="contracted 5y uninsured", value=0.0435,
+                      formatted="4.35%",
+                      anchor="mortgage_rate.contracted_5y_uninsured"),
+        AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
+                      anchor="mortgage_rate.contracted_5y_insured"),
+        AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
+                      anchor="mortgage_rate.posted_5y"),
+    )
     no_decisive_crossing = RefusedBoundary(
         verdict_field="decisive",
         reason="decisive says 'not decisive' at every one of 65 points across "
-               "1.00%–10.00%, so no boundary of it lies in the range this axis "
-               "searches")
+               "1.00%–10.00%")
     renewal = ExactReversal(
         key="house.mortgage_renewal_rates",
         option="house",
@@ -385,7 +364,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                                      ("rent", 0.3100))),
         ),
         refused_boundaries=(no_decisive_crossing,),
-        references=renewal_references,
+        references=references,
         path_note="the config states house.mortgage_renewal_rates as a path (4.60%, "
                   "5.00%, 4.80%, 4.40%); every grid point replaces the whole path with "
                   "ONE figure applied at each renewal, so the threshold reported is a "
@@ -422,12 +401,10 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         ),
         refused_boundaries=(
             RefusedBoundary(verdict_field="best",
-                            reason="best is 'rent' at every point of 1.00%–10.00%, so "
-                                   "no boundary of it lies in the range this axis "
-                                   "searches"),
+                            reason="best is 'rent' throughout 1.00%–10.00%"),
             no_decisive_crossing,
         ),
-        references=contract_references,
+        references=references,
     )
     reversal = ReversalRegister(
         exact=(renewal, contract_rate),
@@ -437,29 +414,18 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 kind="stated_path",
                 label="the renewal rate",
                 keys=("house.mortgage_renewal_rates",),
-                reason="house.mortgage_renewal_rates is a path this config states, not "
-                       "a distribution — the engine anchors no forward rate, so house's "
-                       "renewals carry no spread here at all. They carry a solved "
-                       "distance instead",
-                stated_formatted="4.60%, 5.00%, 4.80%, 4.40%",
                 reversal_key="house.mortgage_renewal_rates",
             ),
             StructuralZero(
                 kind="stated_path",
                 label="the contract rate",
                 keys=("house.mortgage_rate",),
-                reason="house.mortgage_rate is one rate this config states, held for "
-                       "the opening term, so house's financing carries no spread here "
-                       "at all. It carries a solved distance instead",
-                stated_formatted="4.35%",
                 reversal_key="house.mortgage_rate",
             ),
             StructuralZero(
                 kind="no_pv_reach",
                 label="your income",
                 keys=("income.pay_drop_events",),
-                reason="income.pay_drop_events moves the affordability report, not "
-                       "any option's present value, so it cannot move this margin",
             ),
         ),
     )
@@ -476,13 +442,10 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
 
 
 def resolved_interaction() -> ResolvedInteraction:
-    """§4's numeric branch, measured on the same fixture at 10,000 paths, with
-    §5 mechanism 4's assistant-typed sum — which exists ONLY here."""
+    """§4's numeric branch: the residual exists ONLY here."""
     return ResolvedInteraction(
         first_order_sum=0.95, first_order_sum_ci=Interval(0.92, 0.98),
         residual=0.05, residual_ci=Interval(0.02, 0.08),
-        unstated_first_order_sum=0.94,
-        unstated_first_order_sum_ci=Interval(0.90, 0.97),
     )
 
 
@@ -558,11 +521,10 @@ def seven_channel_other_household() -> Decomposition:
             first_order_sum=0.88, first_order_sum_ci=Interval(0.81, 0.95),
             residual=0.12, residual_ci=Interval(0.05, 0.19),
         ),
-        leading_channel_id=1,
-        unresolved_top_channel_id=None,
-        superlative_licensed=True,
-        check_first=None,
-        unattributed_channel_ids=(),
+        # The engine's one top-row rule: the largest point estimate over every
+        # row, resolved or not — here the economy's unresolved 1.004.
+        leading_channel_id=None,
+        unresolved_top_channel_id=0,
     )
     level = LevelRegister(
         rows=(
@@ -602,8 +564,8 @@ def seven_channel_other_household() -> Decomposition:
                 stated_source="user",
                 bracket_low=0.02, bracket_high=0.12, bracket_source="assistant",
                 probe_paths=200, max_path_deviation_over_sd=3.1e-15,
-                # A licensed key carries BOTH kinds at once, so both group
-                # headings belong to ONE row. `decisive` is SAMPLED, not
+                # A licensed key carries BOTH kinds at once, on ONE row.
+                # `decisive` is SAMPLED, not
                 # solved: it turns on `prob_best` against the anchored floor,
                 # which is a figure of the sample (contract, 2026-09-22).
                 # Upward from a cheap renewal: decisive for the condo below
@@ -634,8 +596,7 @@ def seven_channel_other_household() -> Decomposition:
                 ),
                 refused_boundaries=(
                     RefusedBoundary(verdict_field="best",
-                                    reason="it does not change anywhere in the "
-                                           "bracket"),
+                                    reason="best is 'condo' throughout 2.00%–12.00%"),
                 ),
                 references=(
                     AxisReference(label="contracted 5y insured", value=0.0401,
@@ -685,8 +646,6 @@ def seven_channel_other_household() -> Decomposition:
                 kind="no_pv_reach",
                 label="your income",
                 keys=("income.pay_drop_events",),
-                reason="income.pay_drop_events moves the affordability report, not any "
-                       "option's present value, so it cannot move this margin",
             ),
         ),
     )
@@ -704,8 +663,8 @@ def seven_channel_other_household() -> Decomposition:
 
 def two_channel_option_state() -> Decomposition:
     """A second household, sharing nothing with the first: two live channels, a
-    decisive `option` verdict, the condo winning, widths the USER stated, the
-    superlative licensed, one dead-draw structural zero and no reversal row.
+    decisive `option` verdict, the condo winning, widths the USER stated, one
+    dead-draw structural zero and no reversal row.
 
     Every figure here is invented for the formatter's other branches — it is
     the control in the invariant-fraction measurement, not a measurement.
@@ -738,9 +697,6 @@ def two_channel_option_state() -> Decomposition:
         ),
         leading_channel_id=3,
         unresolved_top_channel_id=None,
-        superlative_licensed=True,
-        check_first=None,
-        unattributed_channel_ids=(),
     )
     level = LevelRegister(
         rows=(
@@ -767,14 +723,12 @@ def two_channel_option_state() -> Decomposition:
         spread=spread,
         level=level,
         # The renter's channel draws here (a moving event) and reaches no cash
-        # flow, so it is a dead-draw row and not a live one; its reason is the
-        # assembler's own sentence for a cost channel.
+        # flow, so it is a dead-draw row and not a live one.
         reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=(
             StructuralZero(
                 kind="dead_draw",
                 label="your tenancy",
                 keys=("rent.events",),
-                reason=_dead_draw_reason(None, 5),
                 channel_id=5,
             ),
         )),

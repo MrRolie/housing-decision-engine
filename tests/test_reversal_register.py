@@ -33,6 +33,7 @@ suite — it is recorded in the commit that landed the register.)
 
 import copy
 import math
+import re
 import os
 import pathlib
 
@@ -170,29 +171,14 @@ def _refusal(row, field):
 
 # The two futures-side fields are refused on a run with no futures for
 # DIFFERENT reasons, and each sentence has to be true of its own field.
-NO_MAJORITY_WITHOUT_FUTURES = (
-    "mc_best is read off this run's futures and this run has none "
-    "(--no-monte-carlo, or a single-path run), so there is no curve for a "
-    "boundary of it to lie on; the boundaries this row does carry are solved "
-    "on the deterministic verdict and read no path")
-DECISIVE_NOT_SOLVED_WITHOUT_FUTURES = (
-    "this solver locates decisive only on the futures curve, so on a run "
-    "without futures (--no-monte-carlo, or a single-path run) it is not "
-    "solved here — this run's own decisiveness is read off the central "
-    "case's margin against the tie band, and where that changes along this "
-    "axis is not reported; the boundaries this row does carry are solved on "
-    "the deterministic verdict and read no path")
-
-
 def _assert_the_no_futures_reasons_are_each_true(row):
-    """`mc_best` does not exist without futures, so "read off this run's
-    futures and this run has none" is true of it. `decisive` DOES exist — the
-    margin band decides it — so the same sentence is false of it, and its row
-    says what is true: this solver does not look for it there."""
-    assert _refusal(row, "mc_best").reason == NO_MAJORITY_WITHOUT_FUTURES
-    decisive = _refusal(row, "decisive").reason
-    assert decisive == DECISIVE_NOT_SOLVED_WITHOUT_FUTURES
-    assert "this run has none" not in decisive
+    """The measured fact, true of both fields: this run has no futures, and
+    this solver reads each of them only off futures. `decisive` DOES exist
+    without futures — the margin band decides it — so no reason may say it
+    does not (`test_without_futures_decisiveness_still_changes...`)."""
+    for field in ("mc_best", "decisive"):
+        assert _refusal(row, field).reason == (
+            f"this run has no futures, and this solver reads {field} only off futures")
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +217,7 @@ class TestTheThreeFiguresOnTheFixture:
         renewal finding is a number with nothing to compare it to."""
         row = _row(register, CONTRACT)
         assert [b.verdict_field for b in row.boundaries] == ["runner_up", "mc_best"]
-        assert "is 'rent' at every point" in _refusal(row, "best").reason
+        assert _refusal(row, "best").reason == "best is 'rent' throughout 1.00%–10.00%"
 
 
 # ---------------------------------------------------------------------------
@@ -347,8 +333,7 @@ class TestAllFourKindsAreAnswered:
         for at."""
         reason = _refusal(_row(register, RENEWAL), "decisive").reason
         assert reason == ("decisive says 'not decisive' at every one of 65 points "
-                          "across 1.00%–10.00%, so no boundary of it lies in the "
-                          "range this axis searches")
+                          "across 1.00%–10.00%")
         assert "False" not in reason
 
 
@@ -550,14 +535,16 @@ class TestWhoseFigureTheStatedValueIs:
             doc["sources"][RENEWAL] = declared
         assert be._stated_source(load_config_dict(doc), RENEWAL) == expected
 
-    def test_the_stated_path_rows_never_say_you_stated_it(self, register):
-        """The structural-zero reason is printed verbatim, so it must be true
-        whoever typed the figure: "this config states", never "you stated"."""
+    def test_the_stated_path_rows_carry_no_sentence_about_who_stated_it(self, register):
+        """A structural zero carries its kind and no sentence (§0.1 item 35):
+        whose figure the stated value is travels as the exact row's
+        `stated_source`, the read-back's own class."""
         zeros = [z for z in register.structural_zeros if z.kind == "stated_path"]
         assert len(zeros) == 2
         for zero in zeros:
-            assert "this config states" in zero.reason
-            assert "you stated" not in zero.reason
+            assert not hasattr(zero, "reason")
+            assert _row(register, zero.reversal_key).stated_source in (
+                "user", "assistant", "anchor", "unattributed")
 
 
 # ---------------------------------------------------------------------------
@@ -633,7 +620,9 @@ class TestTheExactnessGate:
         assert not gate["licensed"]
         assert gate["others_bit_identical"]          # it is clause (b) that fires
         assert gate["worst_deviation_over_sd"] > 1.0
-        assert "DIFFERENT amount on different paths" in gate["why"]
+        assert gate["why"].startswith(
+            f"moving {key} shifts {key.split('.')[0]} by a different amount on "
+            f"different paths (worst ")
 
     def test_identical_paths_license_a_constant_shift(self):
         """On a single-path config every path carries the same float, and
@@ -683,9 +672,8 @@ class TestTheExactnessGate:
                              simulate=self._poisoned("house", call, value))
         assert not gate["licensed"]
         assert gate["why"] == (
-            f"a present value this gate compares is not a finite number — house "
-            f"{where} (1 of 200 paths) — so whether {CONTRACT} shifts house by one "
-            f"constant cannot be measured, and no curve over it is licensed")
+            f"a present value this gate compares is not a finite number: house "
+            f"{where} (1 of 200 paths)")
         assert math.isnan(gate["worst_deviation_over_sd"])
         assert gate["others_bit_identical"] is None
 
@@ -697,10 +685,10 @@ class TestTheExactnessGate:
         gate = reversal_gate(raw, CONTRACT, 0.10, paths=200,
                              simulate=self._poisoned("condo", 2, math.nan))
         assert not gate["licensed"]
-        assert gate["why"].startswith(
-            "a present value this gate compares is not a finite number — condo with "
+        assert gate["why"] == (
+            "a present value this gate compares is not a finite number: condo with "
             "house.mortgage_rate at 10.00% (1 of 200 paths)")
-        assert "draw stream" not in gate["why"]
+        assert "which it does not name" not in gate["why"]
 
     def test_the_same_seam_with_a_finite_constant_still_licenses(self, raw):
         """The nearest legal call: the same one-figure edit, but to a finite
@@ -745,8 +733,8 @@ class TestTheExactnessGate:
         assert math.isnan(row.max_path_deviation_over_sd)
         assert {r.verdict_field for r in row.refused_boundaries} == set(BOUNDARY_FIELDS)
         for refusal in row.refused_boundaries:
-            assert refusal.reason.startswith(
-                "a present value this gate compares is not a finite number — house with "
+            assert refusal.reason == (
+                "a present value this gate compares is not a finite number: house with "
                 "house.mortgage_rate at 10.00% (1 of 200 paths)")
 
     @pytest.mark.parametrize("side", ["before", "after"])
@@ -768,24 +756,24 @@ class TestTheExactnessGate:
         monkeypatch.setattr(be, "_shift_deviation_over_sd", lambda before, after: math.nan)
         gate = reversal_gate(raw, CONTRACT, 0.10, paths=200)
         assert not gate["licensed"]
-        assert "DIFFERENT amount on different paths" in gate["why"]
+        assert "a different amount on different paths" in gate["why"]
         # ...and the reason a reader is shown says so in words: it printed
         # "worst nan of its own sd".
-        assert ("(how far the shift varies across paths could not be measured)"
-                in gate["why"])
+        assert "(its deviation over its own s.d. is not a number)" in gate["why"]
         assert "nan" not in gate["why"].lower().split()
 
     def test_a_finite_deviation_prints_as_a_multiple_of_the_s_d(self, raw, monkeypatch):
         """The nearest legal call to the two above: a finite figure that fails
         the tolerance prints as the multiple of the s.d. it is, against the
-        tolerance — words are for a figure that could not be measured, not for
-        every refusal.
+        tolerance — words are for a figure that is not a multiple of anything,
+        not for every refusal.
         *Kills it:* wording every refused figure as unmeasured."""
         monkeypatch.setattr(be, "_shift_deviation_over_sd", lambda before, after: 2.7)
         gate = reversal_gate(raw, CONTRACT, 0.10, paths=200)
         assert not gate["licensed"]
         assert "(worst 2.70e+00 of its own s.d., against 1e-09)" in gate["why"]
-        assert "could not be measured" not in gate["why"]
+        assert "not a number" not in gate["why"]
+        assert "differs across paths" not in gate["why"]
 
     def test_identical_paths_under_a_varying_shift_read_infinitely_far(self):
         """The s.d. half of the identical-paths guard. Every path of the
@@ -812,8 +800,8 @@ class TestTheExactnessGate:
         assert gate["worst_deviation_over_sd"] == math.inf
         assert not gate["licensed"]
         # The reason a reader is shown: it printed "worst inf of its own sd".
-        assert ("(condo's own paths do not differ from each other, so how far the "
-                "shift varies could not be measured against their s.d.)") in gate["why"]
+        assert ("(condo is priced the same on every path as stated, and its shift "
+                "differs across paths)") in gate["why"]
         assert " inf " not in gate["why"]
 
     def test_a_key_that_moves_the_draw_stream_is_refused_by_clause_a(self, raw):
@@ -825,7 +813,7 @@ class TestTheExactnessGate:
         assert not gate["licensed"]
         assert not gate["others_bit_identical"]
         assert set(gate["moved_others"]) == {"condo", "house"}
-        assert "changes the draw stream" in gate["why"]
+        assert gate["why"] == "moving rent.reset_hazard moves condo, house, which it does not name"
 
     def test_a_key_that_fails_the_gate_carries_no_boundary_and_says_why(self, raw, base):
         """The gate is load-bearing, not decorative. No financing-leg key can
@@ -852,7 +840,7 @@ class TestTheExactnessGate:
         row = register.estimated[0]
         assert row.boundaries == ()
         assert {r.verdict_field for r in row.refused_boundaries} == set(BOUNDARY_FIELDS)
-        assert all("DIFFERENT amount on different paths" in r.reason
+        assert all("a different amount on different paths" in r.reason
                    for r in row.refused_boundaries)
         assert row.max_path_deviation_over_sd > 1e-9
         assert row.stated_source == "assistant"   # whose figure travels with either kind
@@ -904,7 +892,11 @@ class TestTheConfirmingResimulation:
         row = _row(register, RENEWAL)
         assert row.boundaries == ()
         assert {r.verdict_field for r in row.refused_boundaries} == set(BOUNDARY_FIELDS)
-        assert "disagrees with the free curve" in _refusal(row, "best").reason
+        reason = _refusal(row, "best").reason
+        assert reason.startswith("the re-simulation at ") and ", and the free curve gives " in reason
+        # the two sets of figures it names are the two that disagreed
+        gave, curve = reason.split(" gives ", 1)[1].split(", and the free curve gives ")
+        assert gave != curve
 
     def test_a_futures_boundary_inside_monte_carlo_noise_is_not_reported(self, raw, register):
         """Refusal (i), asserted in BOTH directions so neither half can pass
@@ -928,7 +920,11 @@ class TestTheConfirmingResimulation:
         # could not have moved: the solved kind carries no sample to move with.
         assert all(isinstance(b, SolvedBoundary) for b in row.boundaries)
         reason = _refusal(row, "mc_best").reason
-        assert "inside the" in reason and "100 paths cannot resolve" in reason
+        assert reason.startswith("across the bracket the probabilities this boundary "
+                                 "turns on move by ")
+        assert reason.endswith(" on 100 paths")
+        moved, noise = (float(x) for x in re.findall(r"\d\.\d{4}", reason))
+        assert moved <= noise
 
 
 # ---------------------------------------------------------------------------
@@ -987,26 +983,24 @@ class TestTheBracket:
                 assert row.bracket_low <= boundary.value <= row.bracket_high
 
     def test_the_axis_carries_its_published_references(self, register):
-        """A solved rate needs something cited to be read against, and the
-        posted rate's note says what the citation does not license."""
-        refs = {r.anchor: r for r in _row(register, RENEWAL).references}
-        assert set(refs) == {"mortgage_rate.contracted_5y_uninsured",
-                             "mortgage_rate.contracted_5y_insured",
-                             "mortgage_rate.posted_5y"}
-        assert refs["mortgage_rate.posted_5y"].formatted == "6.09%"
-        assert "never a ceiling" in refs["mortgage_rate.posted_5y"].note
-        assert refs["mortgage_rate.contracted_5y_uninsured"].note is None
+        """The anchored rates on the axis, as figures with their anchors: on
+        this semi-annual axis no note, because nothing was converted and what
+        a reference licenses is interpretation (§0.1 item 35)."""
+        for key in (RENEWAL, CONTRACT):
+            refs = {r.anchor: r for r in _row(register, key).references}
+            assert set(refs) == {"mortgage_rate.contracted_5y_uninsured",
+                                 "mortgage_rate.contracted_5y_insured",
+                                 "mortgage_rate.posted_5y"}
+            assert refs["mortgage_rate.posted_5y"].formatted == "6.09%"
+            assert all(r.note is None for r in refs.values())
 
-    def test_the_renewal_clause_is_on_the_renewal_axis_only(self, register):
-        """"never a ceiling on a renewal years from now" is about a renewal. A
-        `mortgage_rate` row moves the rate priced from year 0, and on a run
-        with no renewal the clause named a renewal that run does not have —
-        so it is keyed on the axis, and the list-price clause stays on both.
-        *Kills it:* one note for every rate axis."""
-        contract = {r.anchor: r for r in _row(register, CONTRACT).references}
-        note = contract["mortgage_rate.posted_5y"].note
-        assert note == "a list price, to bracket a guess from above"
-        assert "renewal" not in note
+    def test_a_converted_reference_names_the_figure_as_published(self):
+        """The one note a reference carries: on an effective-annual axis the
+        semi-annual anchor is converted, and the note names it as published."""
+        refs = {r.anchor: r for r in be._axis_references(CONTRACT, "effective_annual")}
+        posted = refs["mortgage_rate.posted_5y"]
+        assert posted.note == "published as 6.09% compounded semi-annually"
+        assert posted.formatted != "6.09%"
 
 
 # ---------------------------------------------------------------------------
@@ -1069,79 +1063,15 @@ class TestTheStructuralZeros:
         renewal = zeros[RENEWAL]
         assert renewal.label == "the renewal rate"
         assert zeros[CONTRACT].label == "the contract rate"
-        assert renewal.stated_formatted == "4.60%, 5.00%, 4.80%, 4.40%"
-        assert "not a distribution" in renewal.reason
+        assert renewal.keys == (RENEWAL,) and renewal.channel_id is None
         assert _row(register, renewal.reversal_key).boundaries
-
-    def test_each_stated_path_row_gives_the_reason_true_of_its_own_key(self, register):
-        """The contract rate is not a forward path, so the ladder's own
-        justification may not be pasted onto its row — the category-general
-        sentence has to be true of the key it names."""
-        zeros = {z.reversal_key: z for z in register.structural_zeros
-                 if z.kind == "stated_path"}
-        assert "anchors no forward rate" in zeros[RENEWAL].reason
-        assert "anchors no forward rate" not in zeros[CONTRACT].reason
-        assert "held for the opening term" in zeros[CONTRACT].reason
 
     def test_the_income_block_reaches_no_present_value(self, register):
         zero = [z for z in register.structural_zeros if z.kind == "no_pv_reach"]
         assert len(zero) == 1
         assert zero[0].keys == ("income.pay_drop_events",)
-        # "any", not "either": this fixture prices THREE options.
-        assert "not any option's present value" in zero[0].reason
-        assert "either" not in zero[0].reason
+        assert zero[0].label == "your income"
         assert zero[0].channel_id is None
-
-    def test_the_contract_rate_is_held_for_what_the_run_prices(self, register):
-        """The fixture prices renewals (years 6, 11, 16 and 21 inside its
-        horizon), so its contract rate is held for the opening term — and only
-        a run that prices a renewal may say so."""
-        zeros = {z.reversal_key: z for z in register.structural_zeros
-                 if z.kind == "stated_path"}
-        assert "held for the opening term" in zeros[CONTRACT].reason
-        assert "amortization" not in zeros[CONTRACT].reason
-
-    def test_a_run_with_no_renewal_holds_the_rate_for_the_whole_amortization(self):
-        """examples/mortgage_house_vs_rent.yaml states no renewal, and its own
-        warning says "mortgage_rate 4.40% is held for the whole 25-year
-        amortization"; the structural-zero row said "held for the opening
-        term" on the same run. Keyed on `renewals_priced_inside`, the one
-        answer to "did the ladder reach this run".
-        *Kills it:* keying the clause on the key alone, or on a declared
-        ladder."""
-        raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
-        spec = load_config_dict(raw)
-        assert spec.house.mortgage_renewal_years is None
-        zero = be._stated_path_zero(raw, spec, CONTRACT, "house", solved=True)
-        assert ("house.mortgage_rate is one rate this config states, held for the "
-                "whole 25-year amortization, so") in zero.reason
-        assert "opening term" not in zero.reason
-        assert zero.label == "the contract rate"
-        refs = {r.anchor: r for r in be._axis_references(CONTRACT, "semi_annual")}
-        assert "renewal" not in refs["mortgage_rate.posted_5y"].note
-
-    def test_a_ladder_past_the_horizon_prices_no_renewal_and_says_so(self):
-        """A stated ladder whose first renewal falls past the horizon reaches
-        no payment and no PV (`renewals_priced_inside` is 0), so the rate is
-        held for every year the run prices — not for "the opening term", and
-        not for a whole amortization the config itself says renews. The same
-        config one year longer prices the first renewal, and the clause is the
-        opening term's again: the boundary is where the accessor puts it.
-        *Kills it:* reading the declared ladder instead of the priced one."""
-        raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
-        raw["house"]["mortgage_renewal_years"] = 5
-        raw["house"]["mortgage_renewal_rates"] = [0.05]
-
-        def reason(years):
-            doc = _set(raw, "years", years)
-            return be._stated_path_zero(doc, load_config_dict(doc), CONTRACT,
-                                        "house", solved=True).reason
-
-        short = reason(5)
-        assert ("held for every year this run prices — the stated ladder's first "
-                "renewal, in year 6, falls past its 5-year horizon") in short
-        assert "opening term" not in short and "amortization" not in short
-        assert "held for the opening term" in reason(6)
 
     def test_the_register_names_no_dead_draw_row_of_its_own(self, raw):
         """A channel that draws and reaches no cash flow is decided in ONE place,

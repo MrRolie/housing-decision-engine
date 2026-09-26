@@ -163,10 +163,8 @@ INCOME_STREAM_ID: int = 7
 
 
 # The most paths the LEVEL register prices (§9): a paired mean needs far fewer
-# paths than a variance ratio. Held here, beside the types, because two pieces
-# need it: the assembler sizes the register with it, and the formatter's route
-# clause must know it to say truthfully whether a larger run would resolve a
-# level row.
+# paths than a variance ratio. Held here, beside the types, because the
+# assembler sizes the register with it and the budget gate prices it.
 LEVEL_PATHS: int = 2000
 
 
@@ -297,18 +295,14 @@ class SpreadRow:
 class ResolvedInteraction:
     """The first-order sum resolved below one, so the residual exists.
 
-    `residual` exists only on this branch, and so does the assistant-typed share
-    sum, because on the refused branch that sum is noise: a block that refuses a
-    figure as a residual and then prints it as a provenance finding tells the
-    reader two things about one number.
+    `residual` exists only on this branch, so it cannot be printed on the
+    branch that refused it.
     """
 
     first_order_sum: float
     first_order_sum_ci: Interval
     residual: float
     residual_ci: Interval
-    unstated_first_order_sum: Optional[float] = None
-    unstated_first_order_sum_ci: Optional[Interval] = None
 
 
 @dataclass(frozen=True)
@@ -332,42 +326,30 @@ Interaction = Union[ResolvedInteraction, RefusedInteraction]
 class SpreadRegister:
     """Where the decision margin's scatter comes from.
 
-    WHICH ROW LEADS IS DECIDED ONCE, by the assembler's `_top_row`, and carried
-    here as exactly one of `leading_channel_id` or `unresolved_top_channel_id`;
-    the text and the JSON both read these fields, so neither re-derives the rule
-    (the rule itself: `docs/reference/API_CONTRACT.md`). The same goes for
-    `superlative_licensed`, `check_first`, `unattributed_channel_ids` and
-    `interaction_channel_ids`: carried rather than re-derived by a renderer, so
-    flipping one `sources:` entry changes them and a test can say so. None has a
-    default.
+    WHICH ROW IS ON TOP IS DECIDED ONCE, by the assembler's `_top_row`, and
+    carried here as exactly one of `leading_channel_id` or
+    `unresolved_top_channel_id`; the text and the JSON both read these fields,
+    so neither re-derives the rule. `interaction_channel_ids` is carried the
+    same way. None has a default.
     """
 
     rows: Tuple[SpreadRow, ...]
     interaction: Interaction
     leading_channel_id: Optional[int]
     unresolved_top_channel_id: Optional[int]
-    superlative_licensed: bool
-    check_first: Tuple[Width, ...]
-    unattributed_channel_ids: Tuple[int, ...]
     interaction_channel_ids: Tuple[int, ...]
 
     def __post_init__(self) -> None:
         _require_one_top("SpreadRegister", self.leading_channel_id,
                          self.unresolved_top_channel_id)
-        if self.leading_channel_id is None and (
-                self.superlative_licensed or self.check_first):
-            raise ValueError(
-                "SpreadRegister licenses a superlative or names a figure to check "
-                "first with no leading row: both are claims about the row that "
-                "leads, and when the top row did not resolve no row leads")
 
 
 # The spread register's OWN refusals, which suppress it and leave the level and
 # reversal registers printing. §5's binding runs one way — the spread may not
 # print without the level — so a refused spread beside a printed level is
-# permitted, and is the honest shape (§0.1 item 7).
+# permitted (§0.1 item 7).
 SPREAD_REFUSAL_CODES: Tuple[str, ...] = (
-    "no_sign_variation",   # P(f > 0) is 0 or 1: every future on one side of the line
+    "no_sign_variation",
 )
 
 
@@ -377,11 +359,9 @@ class RefusedSpread:
 
     A NAMED refusal rather than a `SpreadRegister` with no rows, because empty
     rows beside printed level rows leave the reader, and the formatter, to infer
-    why. On the reason, because the ruling's wording misleads whoever writes it:
-    the shares are well defined when the margin never changes sign; what
-    degenerates is the FLIP column, identically zero since no re-draw moves a
-    future across a line no future is near. So the sentence says there is nothing
-    to apportion IN DECISION SPACE, not that the arithmetic failed.
+    why. `reason` is the one measured fact that triggered it and nothing else:
+    this branch prices no re-draw, so it states nothing about what a re-draw
+    would do (spec §0.1 item 36).
     """
 
     code: str
@@ -394,10 +374,8 @@ class RefusedSpread:
 
 @dataclass(frozen=True)
 class ResolvedLevel:
-    """A channel whose freeze moves the expected margin by more than the
-    resolution multiple of its standard error — a cost the central case leaves
-    out, read as a cost and never as a risk.
-    """
+    """A channel whose freeze moves the expected margin by a shift that
+    resolved (`decomposition_math.level_resolved_mask`)."""
 
     delta: float
     se: float
@@ -406,12 +384,9 @@ class ResolvedLevel:
 
 @dataclass(frozen=True)
 class IndistinguishableLevel:
-    """A channel whose freeze moves the margin by no more than the resolution
-    multiple of its standard error: a row a reader must SEE rather than an
-    absence, since a channel can carry most of the scatter and move the answer
-    by nothing this run can tell from zero. `provisional_delta` shares no name
-    with `ResolvedLevel.delta`, so no renderer can print it in the resolved
-    column.
+    """A channel whose shift did not resolve: a row a reader must SEE rather
+    than an absence. `provisional_delta` shares no name with
+    `ResolvedLevel.delta`, so no renderer can print it in the resolved column.
     """
 
     provisional_delta: float
@@ -432,24 +407,12 @@ class LevelRow:
 class LevelRegister:
     """What the simulated futures price that the central case does not.
 
-    `futures_margin` and `prob_best_base` are computed on the register's OWN
-    sample, the first `paths` of the block's `A` matrix, because the freeze
-    comparisons are paired against it and a borrowed baseline would unpair them;
-    they are not the verdict's figures, which come from another sample. The gap
-    is not stored, because it is the subtraction of two fields that are.
-
-    THE IDENTITY IS TWO CLAIMS, SO IT IS TWO FIELDS. With every channel frozen,
-    the paths must agree with each other EXACTLY (`all_frozen_path_spread`, what
-    a missed draw site breaks) and agree with the central case to within a
-    units-in-the-last-place budget (`all_frozen_deviation`), never exactly: the
-    simulators compound year by year while the central case takes a closed form.
-    The assembler refuses the whole block when either fails, so a register that
-    reaches a reader held both. The measured instance is pinned in
-    `tests/test_decomposition_run.py::TestThePublishedFigures`.
-
-    THE CLOSING'S CHANNEL IS DECIDED ONCE, by the rule `SpreadRegister` uses
-    (`leading_channel_id` / `unresolved_top_channel_id`); WHICH sentence is chosen
-    is `verdict.state`'s business, never the sign of anything.
+    The gap is not stored, because it is the subtraction of two fields that
+    are. THE IDENTITY IS TWO CLAIMS, SO IT IS TWO FIELDS
+    (`all_frozen_path_spread`, `all_frozen_deviation`): the first is what a
+    missed draw site breaks, the second what compounding year by year against a
+    closed form moves by a few units in the last place. THE TOP ROW IS DECIDED
+    ONCE, by the rule `SpreadRegister` uses.
     """
 
     rows: Tuple[LevelRow, ...]
@@ -477,12 +440,8 @@ class LevelRegister:
 # sentence omits.
 BOUNDARY_FIELDS: Tuple[str, ...] = ("best", "runner_up", "mc_best", "decisive")
 
-# §3.5's three kinds, and whether each is drawn — two of the three are, so no
-# heading over all of them may say "not drawn". `stated_path`: stated in the
-# config, whoever typed it, and touched by no draw (a renewal ladder, a contract
-# rate). `no_pv_reach`: drawn, and reaching no option's present value (the
-# income block). `dead_draw`: a CHANNEL that is drawn and reaches no cash flow,
-# detected from the spec and costing no evaluation.
+# §3.5's three kinds. Two of the three are drawn, so no heading over all of
+# them may say "not drawn"; what each kind means is the contract's.
 STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "no_pv_reach", "dead_draw")
 
 
@@ -522,11 +481,10 @@ def _require_words(kind: str, verdict_field: str, was: object, becomes: object) 
 
 @dataclass(frozen=True)
 class AxisReference:
-    """A cited point on a reversal axis, to place a solved rate against, already
-    expressed on that axis.
+    """A cited point on a reversal axis, already expressed on that axis.
 
-    `note` carries what the citation does NOT license, and how it was converted
-    when the axis is quoted another way than the published figure.
+    `note` is set only when the axis is quoted another way than the published
+    figure, and names the figure as published.
     """
 
     label: str
@@ -606,9 +564,9 @@ class ExactReversal:
     """A stated input whose reversal distance the engine computed EXACTLY, because
     the exactness gate licensed its free curve.
 
-    `path_note` is `sweep.flattened_path_note`'s sentence whenever the config
-    states the key as a path, so the row never claims the user stated a flat
-    rate. `bracket_source` exists because a bracket that turns an honest refusal
+    `path_note` is whatever `sweep.flattened_path_note(raw, key)` returns for
+    this key, so the row never claims the user stated a flat rate.
+    `bracket_source` exists because a bracket that turns an honest refusal
     into an answer must show whose width it is. `probe_paths` is never zero and
     `max_path_deviation_over_sd` never reads zero-because-unmeasured: an all-clear
     nothing earned is worse than no field. `stated_source` has no default for the
@@ -685,18 +643,16 @@ class EstimatedReversal:
 class StructuralZero:
     """A channel or input with zero spread BY CONSTRUCTION, not by measurement.
 
-    Printed as a named row with its reason, never as a dash and never as a
-    measured zero: a reader who sees a dash concludes the thing was weighed and
-    found irrelevant. `reversal_key` joins a stated path to the `ExactReversal`
-    carrying its crossings; `channel_id` is set only for a `dead_draw`, the one
-    kind that is a channel.
+    Printed as a named row with its kind's drawn-or-not fact, never as a dash
+    and never as a measured zero: a reader who sees a dash concludes the thing
+    was weighed and found irrelevant. It carries no sentence of its own: the
+    KIND is the fact (spec §0.1 item 27), and a sentence beyond it would be an
+    explanation (§0.1 item 35).
     """
 
     kind: str
     label: str
     keys: Tuple[str, ...]
-    reason: str
-    stated_formatted: Optional[str] = None
     channel_id: Optional[int] = None
     reversal_key: Optional[str] = None
 
@@ -706,11 +662,11 @@ class ReversalRegister:
     """What would have to change for the verdict to change.
 
     The two row kinds are separate tuples, never one tuple with a flag.
-    `structural_zeros` lives here because a stated path's row carries numbers
-    from this register and the two render together. `no_distance_reason` is the
-    producer's sentence for a register with no row: it knows what it searched
-    and a renderer does not, and an empty register with no sentence reads as a
-    finding that nothing would reverse the verdict.
+    `structural_zeros` lives here because a stated path's zero and its exact
+    row are one input (spec §0.1 item 5). `no_distance_reason` is the
+    producer's measured fact for a register with no row: it knows what it
+    searched and a renderer does not, and an empty register with no sentence
+    reads as a finding that nothing would reverse the verdict.
     """
 
     exact: Tuple[ExactReversal, ...]
@@ -768,12 +724,9 @@ class Decomposition:
     `spread`, `level` and `reversal` carry no defaults, so there is no
     spread-only `Decomposition` to construct; the binding runs ONE WAY, which is
     why `spread` may be a `RefusedSpread`. `verdict` is the run's own
-    `models.Verdict`, held rather than copied: every probability and state in the
-    block comes back from `models.compute_verdict`. `max_paths` is carried so the
-    formatter's route clause can say truthfully whether a larger run exists.
-    `live_channel_ids` are the channels that REACH A CASH FLOW, which is not the
-    same as the channels that draw — a count that must not be taken from
-    generator state.
+    `models.Verdict`, held rather than copied, so the verdict keeps one home;
+    the block's own probabilities are frequencies the assembler takes on its
+    own futures.
     """
 
     paths: int
@@ -795,5 +748,5 @@ class Decomposition:
 
 
 # What the entry point returns: the block, a named refusal, or None for
-# silence — the flag not passed, which is every run shipped today.
+# silence — a run that did not pass the flag.
 DecompositionOutcome = Optional[Union[Decomposition, DecompositionRefusal]]

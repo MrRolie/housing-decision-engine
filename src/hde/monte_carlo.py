@@ -69,13 +69,12 @@ from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 #
 # The renter is TWO channels. `_simulate_rent_pv_once` has five draw sites and
 # exactly one of them, the per-year `z_inv`, is channel 6; the other four, plus
-# the tenancy's `reset_year`, are channel 5. Measured for 3.1: lumped, the
-# renter reads 0.809 of the spread and names nothing a household can act on;
-# split, the portfolio carries 0.877 of the spread while moving the expected
-# margin by an amount that does not resolve, and the shelter channel carries
-# 0.100 of it while moving the margin by +$125,074. One carries the scatter with
-# no shift that resolves, the other is an omitted cost, and a table that adds
-# them together is not worth printing.
+# the tenancy's `reset_year`, are channel 5. Lumped, one row carries both the
+# portfolio's scatter and the tenancy's omitted cost; split, on the flagship
+# fixture the portfolio carries most of the spread with a level shift that does
+# not resolve and the tenancy moves the margin by one that does
+# (`tests/test_decomposition_report.py`, FIXTURE_BLOCK). A table that adds the
+# two together names nothing a household can act on.
 
 # A channel's stream source: the generator its draw sites read, or a factory
 # from path index to that generator, which is what per-path addressing needs.

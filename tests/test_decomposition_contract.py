@@ -88,12 +88,17 @@ class TestResolvedAndUnresolvedAreDistinctStates:
         assert "residual" in _fields(dc.ResolvedInteraction)
         assert "residual" not in _fields(dc.RefusedInteraction)
 
-    def test_the_unstated_share_sum_lives_on_the_resolved_branch_only(self):
-        # §5 mechanism 4: on the refused branch that sum is noise, and a block
-        # that refuses to print a figure as a residual then prints it as a
-        # provenance finding says two things about one number.
-        assert "unstated_first_order_sum" in _fields(dc.ResolvedInteraction)
-        assert "unstated_first_order_sum" not in _fields(dc.RefusedInteraction)
+    def test_no_provenance_summary_survives_the_cut(self):
+        # §0.1 item 35: the block prints each width's own source tag and no
+        # summary of them, so the fields that fed the cut summary sentences
+        # are gone from the types, and a structural zero carries its kind, not
+        # a sentence.
+        assert _fields(dc.ResolvedInteraction) == {
+            "first_order_sum", "first_order_sum_ci", "residual", "residual_ci"}
+        assert not {"superlative_licensed", "check_first",
+                    "unattributed_channel_ids"} & _fields(dc.SpreadRegister)
+        assert _fields(dc.StructuralZero) == {"kind", "label", "keys", "channel_id",
+                                              "reversal_key"}
 
 
 class TestTheBinding:
@@ -233,16 +238,14 @@ class TestARegisterHasOneTopRow:
     """The top row of a register, by point estimate, either LEADS (it resolved)
     or is the UNRESOLVED TOP (it did not). Both at once would let the text name
     one channel as leading while the JSON names another as the largest — the
-    disagreement the pair exists to end. And with no leading row there is no
-    superlative to license and no figure to check first."""
+    disagreement the pair exists to end."""
 
     @staticmethod
     def _spread(**over):
         fields = dict(rows=(), interaction=dc.RefusedInteraction(
                           first_order_sum=1.1, first_order_sum_ci=dc.Interval(1.0, 1.2)),
                       leading_channel_id=6, unresolved_top_channel_id=None,
-                      superlative_licensed=False, check_first=(),
-                      unattributed_channel_ids=(), interaction_channel_ids=())
+                      interaction_channel_ids=())
         fields.update(over)
         return dc.SpreadRegister(**fields)
 
@@ -256,16 +259,11 @@ class TestARegisterHasOneTopRow:
         return dc.LevelRegister(**fields)
 
     def test_the_legal_shapes_build(self):
-        """A leader; an unresolved top; a licensed leader with no figure to
-        check; a leader with a figure to check. A guard widened to refuse any
-        of them fails here."""
-        width = dc.Width(key="simulation.investment_return_vol", formatted="10%",
-                         source="assistant")
+        """A leader; an unresolved top. A guard widened to refuse either
+        fails here."""
         assert self._spread().leading_channel_id == 6
         assert self._spread(leading_channel_id=None,
                             unresolved_top_channel_id=3).unresolved_top_channel_id == 3
-        assert self._spread(superlative_licensed=True).superlative_licensed
-        assert self._spread(check_first=(width,)).check_first == (width,)
         assert self._level().leading_channel_id == 5
         assert self._level(leading_channel_id=None,
                            unresolved_top_channel_id=3).unresolved_top_channel_id == 3
@@ -275,17 +273,6 @@ class TestARegisterHasOneTopRow:
         """*Kills it:* deleting `_require_one_top`."""
         with pytest.raises(ValueError, match="exactly one of the two"):
             getattr(self, build)(leading_channel_id=4, unresolved_top_channel_id=3)
-
-    @pytest.mark.parametrize("over", [
-        dict(superlative_licensed=True),
-        dict(check_first=(dc.Width(key="simulation.condo_fee_vol", formatted="10%",
-                                   source="assistant"),)),
-    ], ids=["superlative", "check_first"])
-    def test_no_leader_licenses_nothing(self, over):
-        """*Kills it:* deleting the no-leader guard, which let the JSON name a
-        figure to check first under a table the text says nothing leads."""
-        with pytest.raises(ValueError, match="no leading row"):
-            self._spread(leading_channel_id=None, unresolved_top_channel_id=3, **over)
 
     @pytest.mark.parametrize("register", [dc.SpreadRegister, dc.LevelRegister])
     def test_the_unresolved_top_has_no_default(self, register):

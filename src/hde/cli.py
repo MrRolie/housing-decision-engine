@@ -166,14 +166,10 @@ def main() -> int:
         const=_DECOMPOSE_AT_NUM_SIMS,
         default=None,
         metavar="N",
-        help="Which risk decides it: split the decision margin's spread across the "
-             "run's uncertainty channels (Sobol), say what the simulated futures "
-             "price that the central case does not, and solve what would have to "
-             "change for the verdict to change. Opt-in because it re-prices the run "
-             "many times over — bare, it runs at the config's own num_sims; "
-             "--decompose N (or --decompose=N) runs the decomposition at N paths "
-             "instead. Goes before or after the config. Rides --json as "
-             "'decomposition'; not part of --read-back",
+        help="Which risk decides it: the spread, level and reversal registers of "
+             "this run, optionally at N paths of its own. What each figure and "
+             "path count is: docs/reference/API_CONTRACT.md, the decomposition "
+             "block",
     )
     parser.add_argument(
         "--break-even",

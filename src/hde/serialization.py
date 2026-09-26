@@ -1092,13 +1092,6 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
         # name a leader the text says does not exist.
         "leading_channel_id": spread.leading_channel_id,
         "unresolved_top_channel_id": spread.unresolved_top_channel_id,
-        "superlative_licensed": spread.superlative_licensed,
-        "check_first": [dataclasses.asdict(width) for width in spread.check_first],
-        # The rows at least one of whose widths no `sources:` entry claims —
-        # NOT "the assistant's", which is a different class. The text block
-        # counts them apart, and a consumer reading only the JSON must be able
-        # to as well.
-        "unattributed_channel_ids": list(spread.unattributed_channel_ids),
         "interaction_channel_ids": list(spread.interaction_channel_ids),
     }
 
@@ -1138,8 +1131,8 @@ def _level_row_to_dict(row: "LevelRow") -> Dict[str, Any]:
 def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str, Any]]:
     """The `decomposition` block of the `--json` document (spec §7).
 
-    None for silence — the flag not passed, which is every run shipped today,
-    and the reason the CLI omits the key entirely rather than emitting a null.
+    None for silence — a run that did not pass the flag — and the CLI then
+    omits the key entirely rather than emitting a null.
 
     A refusal serializes as `{"refusal": {...}}` with NO register keys at all:
     an empty `spread` beside a refusal would let a consumer read "no rows" as
@@ -1181,8 +1174,8 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "unresolved_top_channel_id": level.unresolved_top_channel_id,
         },
         # The two reversal kinds stay two lists, never one with a flag: the
-        # split is a property of the model and the operator's ruling forbids
-        # ranking across it, which a single ordered list would invite (§0).
+        # split is a property of the model and no ranking crosses it, which a
+        # single ordered list would invite (spec §0).
         "reversal": {
             "exact": [dataclasses.asdict(row) for row in reversal.exact],
             "estimated": [dataclasses.asdict(row) for row in reversal.estimated],

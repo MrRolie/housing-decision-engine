@@ -29,6 +29,7 @@ for that.
 from __future__ import annotations
 
 import dataclasses
+import re
 import json
 import pathlib
 
@@ -428,41 +429,25 @@ class TestRefusals:
     """Every refusal the assembler owns: it fires when it should, and it does
     NOT fire on the nearest legal call."""
 
-    def test_no_monte_carlo_refuses_and_names_the_route_to_the_same_figure(self):
-        """§0.1 item 25: the block is futures-only, and the refusal names the
-        route to the crossing it would have carried — `--break-even`, from the
-        same solver, and `--sweep`. The ASSEMBLER writes that sentence; the
-        formatter prints it verbatim (`test_decomposition_report.py`).
-
-        On this three-option fixture `--break-even` refuses outright ("needs
-        exactly two priced options"), so a sentence offering it unqualified
-        would tell the user something false: the route says it takes one pair
-        at a time.
-        *Kills it:* dropping the route, or naming `--break-even` as though it
-        ran on three options."""
+    def test_no_monte_carlo_refuses_with_the_one_fact(self):
+        """§0.1 items 25 and 35: the block is futures-only, and the refusal
+        states the fact that fired it and names no route — the three-option
+        route it once named was a clause about a run the block did not price.
+        *Kills it:* a route or an explanation back in the reason."""
         spec = _fixture_spec(num_sims=40)
         got = decompose(spec, **{**_inputs(spec), "mc": None})
         assert isinstance(got, DecompositionRefusal) and got.code == "no_futures"
-        assert got.reason.startswith("there are no futures to decompose")
-        assert "--break-even <key> solves the crossing on the central case" in got.reason
-        assert "one pair of options at a time" in got.reason
-        assert "on this 3-option config" in got.reason
-        assert "--sweep <key>=<values> prints the verdict" in got.reason
-        assert got.reason.count("--break-even") == 1
+        assert got.reason == "this run has no futures"
 
-    def test_a_single_path_run_refuses_and_its_route_needs_no_pair_dropped(self):
-        """The nearest legal wording: two priced options, where `--break-even`
-        runs as it stands and the sentence must not ask for a section dropped."""
+    def test_a_single_path_run_refuses_with_the_same_fact(self):
+        """The other way to have no futures: every uncertainty input off."""
         spec = load_config(str(EXAMPLES / "first_time_buyer_montreal.yaml"))
         spec = dataclasses.replace(
             spec, simulation=dataclasses.replace(spec.simulation, num_sims=40))
         assert single_path_run(spec)
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_futures"
-        assert ("--break-even <key> solves the crossing on the central case"
-                in got.reason)
-        assert "--sweep <key>=<values>" in got.reason
-        assert "dropped" not in got.reason and "pair" not in got.reason
+        assert got.reason == "this run has no futures"
 
     def test_a_sample_too_small_to_interval_refuses_under_its_own_code(self):
         """Found by this file at two futures, where the bootstrap's own
@@ -477,9 +462,8 @@ class TestRefusals:
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "too_few_futures"
         assert got.code in REFUSAL_CODES
-        assert "2.5% tail" in got.reason
-        assert "no futures" not in got.reason
-        assert f"at least {dr.MIN_INTERVALLED_FUTURES} with --decompose N" in got.reason
+        assert got.reason == (f"{dr.MIN_INTERVALLED_FUTURES - 1} futures were asked for, "
+                              f"below the minimum of {dr.MIN_INTERVALLED_FUTURES}")
 
     def test_two_futures_refuse_rather_than_raise(self):
         """The case that found it: a 300-resample bootstrap over two paths
@@ -516,7 +500,7 @@ class TestRefusals:
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "one_channel"
         assert got.channel_id == channel_by_key("condo").id
-        assert "condo" in got.reason
+        assert got.reason == "one channel is live on this run: the condo's costs"
 
     def test_two_live_channels_do_not_reach_the_one_channel_refusal(self):
         """The nearest legal call: the same shape with one more channel live."""
@@ -555,7 +539,7 @@ class TestRefusals:
         assert live_channels(spec) == () and 0 in channels_that_draw(spec)
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_spread"
-        assert "reaches a cash flow" in got.reason
+        assert got.reason == "no channel is live on this run"
 
     def test_a_constant_margin_refuses_with_two_channels_live(self):
         """§8 refusal 5: `Var(f) == 0` with `k_live >= 1`.
@@ -568,7 +552,8 @@ class TestRefusals:
         assert len(live_channels(spec)) == 2
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_spread"
-        assert "identical on all" in got.reason
+        assert re.fullmatch(r"the margin is identical on all 64 futures \(\$[\d,]+\.\d\d\)",
+                            got.reason), got.reason
 
     def test_one_dollar_of_difference_does_not_refuse(self):
         """The nearest legal call: the same two live channels, and a spread."""
@@ -598,20 +583,17 @@ class TestRefusals:
         k = len(live_channels(spec))
         largest = dr.largest_affordable_paths(k)
         assert got.reason == (
-            "the spread and level registers would run up to "
-            f"{planned_evaluations(1_000_000, k, 2000):,} path evaluations (1,000,000 "
-            f"paths x {k + 2} matrices, plus 2,000 x {k + 1} for the level register: "
-            "one freeze per live channel and one with all of them frozen), above "
-            f"this engine's ceiling of {EVALUATION_CEILING:,} [set in the engine, not "
-            "by a published figure and not in your config]. Run it at a smaller "
-            "sample of its own with --decompose=N: on this run the largest N whose "
-            f"work stays within the ceiling is {largest:,} (--decompose={largest}).")
+            f"1,000,000 futures at {k} live channels price up to "
+            f"{planned_evaluations(1_000_000, k, 2000):,} path evaluations, above the "
+            f"ceiling of {EVALUATION_CEILING:,} [set in the engine]; the largest path "
+            f"count within it is {largest:,}")
         # The figure the reason prints counts the all-frozen run: at 1,000,000
         # paths and k live channels it is N·(k+2) + 2,000·(k+1), never the
         # N·(k+2) + 2,000·k that left that run out.
         assert planned_evaluations(1_000_000, k, 2000) == 1_000_000 * (k + 2) + 2000 * (k + 1)
-        # No way out is offered that nothing implements.
-        assert "channels to hold" not in got.reason
+        # No route: the largest N is a figure, and nothing tells the reader
+        # what to run.
+        assert "--decompose" not in got.reason
 
     @pytest.mark.parametrize("k_live", range(2, 8))
     def test_the_n_the_budget_refusal_names_is_the_largest_the_gate_admits(self, k_live):
@@ -638,10 +620,8 @@ class TestRefusals:
         verdict = compute_verdict(compute_deterministic(spec), mc,
                                   years=spec.simulation.years,
                                   discount_rate=spec.simulation.discount_rate)
-        assert dr._refusal_before_pricing(spec, mc, verdict, live, paths,
-                                          drawing=live) is None
-        over = dr._refusal_before_pricing(spec, mc, verdict, live, paths + 1_000,
-                                          drawing=live)
+        assert dr._refusal_before_pricing(spec, mc, verdict, live, paths) is None
+        over = dr._refusal_before_pricing(spec, mc, verdict, live, paths + 1_000)
         assert over is not None and over.code == "budget"
 
 
@@ -670,17 +650,11 @@ class TestEveryFutureAgrees:
         assert not isinstance(got.spread, SpreadRegister)
         assert got.spread.code == "no_sign_variation"
         assert got.spread.code in SPREAD_REFUSAL_CODES
-        # The sentence says what is true (RefusedSpread's docstring): nothing
-        # to split IN DECISION SPACE — never that the shares are undefined.
+        # §0.1 item 36: the measured fact alone — nothing about what a re-draw
+        # the block never priced would do.
         best = got.verdict.best
         assert got.spread.reason == (
-            f"no share is apportioned: {best} is cheapest in all "
-            f"{spec.simulation.num_sims:,} of these futures, so every future sits on "
-            f"the same side of the line the flip column counts — whether {best} is "
-            "cheapest — and no channel moved one across it: there is nothing to "
-            "split in decision space. The shares themselves are defined; they "
-            "would rank the scatter of a margin whose sign never changes.")
-        assert "undefined" not in got.spread.reason
+            f"{best} is cheapest in all {spec.simulation.num_sims:,} of these futures")
         # ...and the level register, which the one-way binding still prints.
         assert len(got.level.rows) == len(got.live_channel_ids)
         # Nothing measured for the spread would be printed, so no `B` matrix
@@ -689,6 +663,22 @@ class TestEveryFutureAgrees:
         k = len(got.live_channel_ids)
         assert sum(1 for _, freeze in spy.runs if not freeze) == 1
         assert len(spy.runs) == 1 + k + 1
+
+    @pytest.mark.parametrize("share, refuses", [
+        (0.0, True), (1.0, True), (1e-12, False), (1.0 - 1e-12, False),
+        (0.0005, False), (0.9995, False), (0.5, False)])
+    def test_the_guard_is_exactly_the_two_ends(self, share, refuses):
+        """`_one_side_of_the_line`, both ways: exactly 0 and exactly 1 refuse,
+        and one future in any count does not.
+        *Kills it:* widening the guard by any tolerance, or dropping a side."""
+        assert dr._one_side_of_the_line(share) is refuses
+
+    def test_every_future_on_the_other_side_refuses_with_that_fact(self):
+        """The P(f > 0) == 0 side, worded for it."""
+        refusal = dr._no_sign_variation("rent", 400, 0.0)
+        assert refusal.reason == "rent is cheapest in none of these 400 futures"
+        with pytest.raises(ValueError):
+            dr._no_sign_variation("rent", 400, 0.5)
 
     def test_a_disagreeing_future_prints_the_shares(self):
         """The nearest legal call: one future on the other side of zero."""
@@ -735,10 +725,10 @@ class TestTheFreezeIdentity:
         got = decompose(spec, paths=40, **inputs)
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "freeze_leak" and got.code in REFUSAL_CODES
-        assert got.reason.startswith(
-            "with every channel frozen, the 40 paths should price one margin, "
-            "and they differ by up to $")
-        assert "a draw escaped the freeze mask" in got.reason
+        assert re.fullmatch(r"with every channel frozen, the margins of the 40 paths "
+                            r"differ by up to \$\S+", got.reason), got.reason
+        spread = float(got.reason.rsplit("$", 1)[1].replace(",", ""))
+        assert spread > 0.0
 
     def test_an_exact_mask_does_not_refuse(self):
         """The nearest legal call: the same run with the mask whole.
@@ -783,13 +773,13 @@ class TestTheIdentityIsGated:
         got = decompose(spec, paths=40, **inputs)
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "identity_failed" and got.code in REFUSAL_CODES
-        assert got.reason.startswith(
-            "with every channel frozen, all 40 paths price one margin, $")
-        assert "and it should be the central case's own $" in got.reason
-        assert got.reason.endswith(
-            "(8 units in the last place of the largest option's present-value "
-            "terms, added by size). Every figure this block would print rests on "
-            "that freeze reproducing the central case, so it prints none of them.")
+        budget = dr.identity_budget(inputs["det"], inputs["verdict"])
+        assert got.reason == (
+            f"with every channel frozen, the 40 paths price a margin of "
+            f"${inputs['verdict'].margin_pv - 0.01:,.2f} against the central case's "
+            f"${inputs['verdict'].margin_pv:,.2f}, $"
+            f"{abs(inputs['verdict'].margin_pv - 0.01 - inputs['verdict'].margin_pv):.3g}"
+            f" apart, above the ${budget:.3g} this check allows")
 
     def test_at_the_budget_it_holds_and_one_step_past_it_refuses(self, monkeypatch):
         """Both sides of the boundary, on the run's own measured deviation:
@@ -851,7 +841,6 @@ class TestStructuralZeros:
         got = decompose(spec, **_inputs(spec))
         dead = [z for z in got.reversal.structural_zeros if z.kind == "dead_draw"]
         assert [z.channel_id for z in dead] == [4]
-        assert "scales a figure that is zero" in dead[0].reason
 
     def test_a_live_channel_gets_no_dead_draw_row(self):
         """The nearest legal call: the same house with its volatility on."""
@@ -885,13 +874,10 @@ class TestStructuralZeros:
         assert ids.count(0) == 1, f"the economy is named {ids.count(0)} times"
 
     @pytest.mark.parametrize("corr_condo", [0.0, 0.5])
-    def test_the_economy_s_dead_draw_reason_is_true_of_the_config(self, corr_condo):
-        """The economy's reason says the run is in real terms, that no
-        corr_inflation_* key is both non-zero and pulling on a shock that moves
-        a cash flow, and that the channel draws and moves nothing. Checked on
-        both configs that reach it: every correlation off, and one ON whose
-        shock is dead (the condo's fee at zero volatility) — the second is
-        where the old reason, "every one of them is off here", was false."""
+    def test_the_economy_s_dead_draw_is_drawn_and_reaches_nothing(self, corr_condo):
+        """The row's fact — drawn, and reaching no cash flow — on both configs
+        that reach it: every correlation off, and one ON whose shock is dead
+        (the condo's fee at zero volatility)."""
         spec = _fixture_spec(num_sims=40)
         spec = dataclasses.replace(
             spec,
@@ -905,11 +891,6 @@ class TestStructuralZeros:
         got = decompose(spec, **_inputs(spec))
         dead = [z for z in got.reversal.structural_zeros if z.channel_id == 0]
         assert len(dead) == 1 and dead[0].kind == "dead_draw"
-        reason = dead[0].reason
-        assert reason.startswith("this run is in real terms")
-        assert "no corr_inflation_* key on this config does both" in reason
-        assert "draws one figure per year and moves nothing" in reason
-        assert "every one of them is off" not in reason.lower()
         assert spec.economic.mode == "real"
         # "draws ... and moves nothing": the economy's stream advances, and
         # re-drawing it leaves every priced option's present value bit-identical.
@@ -1031,86 +1012,17 @@ class TestInteractionBranches:
         assert register.interaction.first_order_sum_ci.high < 1.0
         assert register.interaction.residual > 0.0
 
-    def test_the_unstated_sum_is_only_the_assistant_typed_channels(self):
-        f_a, f_b, f_ab = self._interacting_tables()
-        widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
-                  1: (Width("simulation.value_growth_vol", "7%", "user"),)}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
-        interaction = register.interaction
-        assert isinstance(interaction, ResolvedInteraction)
-        row = next(r for r in register.rows if r.channel_id == 0)
-        alone = (row.shares.alone if isinstance(row.shares, ResolvedShares)
-                 else row.shares.provisional_alone)
-        assert interaction.unstated_first_order_sum == pytest.approx(alone)
-        ci = interaction.unstated_first_order_sum_ci
-        assert ci is not None and ci.low <= interaction.unstated_first_order_sum <= ci.high
-
-    def test_an_unattributed_width_is_not_the_assistant_s(self):
-        """`unattributed` means no `sources:` entry claims the key. Counting it
-        into "a sum over channels sized entirely by figures the assistant
-        chose" reads that silence as the assistant's answer — the one
-        inference the source echo exists to refuse. It is named separately.
-        *Kills it:* counting every class outside user/anchor as the
-        assistant's, which is what the sum used to do."""
-        f_a, f_b, f_ab = self._interacting_tables()
-        widths = {0: (Width("economic.inflation_vol", "1%", "unattributed"),),
-                  1: (Width("simulation.value_growth_vol", "7%", "user"),)}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
-        assert isinstance(register.interaction, ResolvedInteraction)
-        assert register.interaction.unstated_first_order_sum is None
-        assert register.interaction.unstated_first_order_sum_ci is None
-        assert register.unattributed_channel_ids == (0,)
-
-    def test_a_row_with_one_unattributed_width_is_neither_all_assistant_nor_silent(self):
-        """A row sized by an assistant figure AND an unattributed one is not
-        "entirely assistant-typed", so it stays out of the sum — and it is on
-        the unattributed list, so the surface can say it was left out and why.
-        The assistant-only row beside it is the whole sum."""
-        f_a, f_b, f_ab = self._interacting_tables()
-        widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
-                  1: (Width("simulation.value_growth_vol", "7%", "assistant"),
-                      Width("house.price_shock.annual_hazard", "2%", "unattributed"))}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
-        interaction = register.interaction
-        assert isinstance(interaction, ResolvedInteraction)
-        row = next(r for r in register.rows if r.channel_id == 0)
-        alone = (row.shares.alone if isinstance(row.shares, ResolvedShares)
-                 else row.shares.provisional_alone)
-        assert interaction.unstated_first_order_sum == pytest.approx(alone)
-        assert register.unattributed_channel_ids == (1,)
-
-    def test_no_row_is_unattributed_when_every_width_is_declared(self):
-        """The nearest legal call: the same tables with every width claimed.
-        *Kills it:* an unattributed list that fires on a declared class."""
-        f_a, f_b, f_ab = self._interacting_tables()
-        widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
-                  1: (Width("simulation.value_growth_vol", "7%", "anchor",
-                            anchor="some.anchor"),)}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
-        assert register.unattributed_channel_ids == ()
-
-    def test_a_config_with_no_sources_block_names_every_row_unattributed(self):
+    def test_a_config_with_no_sources_block_tags_every_width_unattributed(self):
         """End to end, through the widths the assembler reads from the spec: a
         shipped config with no `sources:` block states its volatilities with
-        nobody's name on them, and every live row is named as such rather than
-        filed under the assistant."""
+        nobody's name on them, and every width is tagged so rather than filed
+        under the assistant."""
         spec = load_config(str(EXAMPLES / "basic_config.yaml"))
         assert not spec.sources.declared
         got = decompose(spec, paths=200, **_inputs(spec))
         assert isinstance(got, Decomposition) and isinstance(got.spread, SpreadRegister)
-        assert got.spread.unattributed_channel_ids == got.live_channel_ids
         for row in got.spread.rows:
             assert row.widths and {w.source for w in row.widths} == {"unattributed"}
-
-    def test_no_unstated_sum_when_every_width_is_the_user_s(self):
-        f_a, f_b, f_ab = self._interacting_tables()
-        widths = {0: (Width("economic.inflation_vol", "1%", "user"),),
-                  1: (Width("simulation.value_growth_vol", "7%", "anchor",
-                            anchor="some.anchor"),)}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
-        assert isinstance(register.interaction, ResolvedInteraction)
-        assert register.interaction.unstated_first_order_sum is None
-        assert register.interaction.unstated_first_order_sum_ci is None
 
     def test_the_refused_branch_has_no_residual_at_all(self):
         """A purely additive model at a small sample, where ΣS's interval
@@ -1254,18 +1166,10 @@ class TestThePublishedFigures:
             round(block.level.prob_best_base * block.level.paths), abs=1e-9)
 
     def test_every_width_on_the_fixture_is_declared(self, fixture_block):
-        """The fixture's `sources:` block claims every key it sets, so no row
-        is unattributed and the provenance sentence may say "the assistant
-        chose" of every row — which it could not on a config that is silent."""
-        assert fixture_block.spread.unattributed_channel_ids == ()
-
-    def test_the_superlative_is_refused_and_names_the_figure_to_check(
-            self, fixture_block):
-        """§5 mechanism 3: not one volatility on this fixture is user-stated."""
-        assert fixture_block.spread.superlative_licensed is False
-        check = fixture_block.spread.check_first
-        assert [w.key for w in check] == ["simulation.investment_return_vol"]
-        assert [w.source for w in check] == ["assistant"]
+        """The fixture's `sources:` block claims every key it sets, so no
+        width is tagged `unattributed`."""
+        for row in fixture_block.spread.rows:
+            assert all(w.source != "unattributed" for w in row.widths), row.channel_id
 
     def test_the_economy_row_names_the_vols_its_correlations_pull(
             self, fixture_block):
@@ -1278,7 +1182,8 @@ class TestThePublishedFigures:
         pulled = [w for w in widths if w.note]
         assert {"simulation.condo_fee_vol", "simulation.house_maintenance_vol",
                 "simulation.other_cost_vol"} <= {w.key for w in pulled}
-        assert any("rho squared = 0.25" in w.note for w in pulled)
+        assert any(w.note == "pulled by simulation.corr_inflation_condo = 0.5; rho "
+                           "squared 0.25" for w in pulled)
 
     def test_the_gap_is_the_subtraction_of_the_two_figures_carried(
             self, fixture_block):
@@ -1306,8 +1211,8 @@ class TestThePublishedFigures:
 
     def test_the_reversal_register_carries_the_renewal_ladder(
             self, fixture_block):
-        """The three registers arrive together, and the structural zero joins
-        to the row that carries its solved rates."""
+        """The three registers arrive together, and the structural zero names
+        the row that carries its solved rates."""
         register = fixture_block.reversal
         assert register.exact, "the fixture states a renewal ladder"
         keys = {row.key for row in register.exact}
@@ -1351,8 +1256,9 @@ class TestTheTopRowIsDecidedOnce:
         provisional share above 1 that does not resolve, and the house's costs
         resolve at about 0.01. The JSON named the house's costs as leading,
         and its maintenance volatility as the figure to check first, while the
-        text said no channel leads. The register now carries the answer and
-        both surfaces print it.
+        text said no channel leads. The register now carries the answer: the
+        JSON names the unresolved top, and the text calls no row the largest
+        (§0.1 item 35), with the condo's row behind "not resolved".
         *Kills it:* the old resolved-only selection."""
         spec = load_config(str(EXAMPLES / "rent_vs_condo_vs_house.yaml"))
         got = decompose(spec, **_inputs(spec))
@@ -1360,23 +1266,23 @@ class TestTheTopRowIsDecidedOnce:
         condo = channel_by_key("condo").id
         top = next(r for r in got.spread.rows if r.channel_id == condo)
         assert isinstance(top.shares, UnresolvedShares)
-        assert (got.spread.leading_channel_id, got.spread.unresolved_top_channel_id,
-                got.spread.superlative_licensed, got.spread.check_first) == (
-                    None, condo, False, ())
+        assert (got.spread.leading_channel_id,
+                got.spread.unresolved_top_channel_id) == (None, condo)
         doc = decomposition_to_dict(got)["spread"]
-        assert (doc["leading_channel_id"], doc["unresolved_top_channel_id"],
-                doc["check_first"]) == (None, condo, [])
+        assert (doc["leading_channel_id"], doc["unresolved_top_channel_id"]) == (
+            None, condo)
         block = format_decomposition(got)
-        assert "the largest share is on the condo's costs" in block
-        assert "no channel leads this table" in block
-        assert "check first" not in block
+        assert "largest alone share" not in block
+        assert any(line.startswith("  the condo's costs       not resolved: ")
+                   for line in block.splitlines())
 
     def test_an_unresolved_largest_shift_is_the_one_the_closing_names(self):
         """examples/basic_config.yaml, a tie: the house's costs resolve at
         about +$252 and the condo's costs move the margin by about +$390
         without resolving, taking P(house cheapest) out of the tie band. The
         closing called the house's costs the largest single shift; the
-        register now names the condo's costs as its unresolved top.
+        register now names the condo's costs as its unresolved top, and the
+        text calls no row the largest.
         *Kills it:* the old resolved-only selection."""
         spec = load_config(str(EXAMPLES / "basic_config.yaml"))
         got = decompose(spec, **_inputs(spec))
@@ -1391,8 +1297,4 @@ class TestTheTopRowIsDecidedOnce:
         assert (doc["leading_channel_id"], doc["unresolved_top_channel_id"]) == (
             None, condo)
         block = format_decomposition(got)
-        assert "the largest shift by point estimate, the condo's costs at +$" in block
-        assert "the largest single shift is the house's costs" not in block
-        # the register is at its cap, so no larger run is offered as a route
-        assert got.level.paths == LEVEL_PATHS
-        assert "so no larger run resolves it here" in block
+        assert "largest shift in size" not in block
