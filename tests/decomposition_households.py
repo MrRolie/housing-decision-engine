@@ -334,7 +334,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         stated_source="assistant",
         bracket_low=0.01,
         bracket_high=0.10,
-        bracket_source="assistant",
+        bracket_source="set in the engine",
         probe_paths=200,
         max_path_deviation_over_sd=2.0e-15,
         # `best` and `runner_up` are solved on the DETERMINISTIC verdict and
@@ -365,11 +365,8 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         ),
         refused_boundaries=(no_decisive_crossing,),
         references=references,
-        path_note="the config states house.mortgage_renewal_rates as a path (4.60%, "
-                  "5.00%, 4.80%, 4.40%); every grid point replaces the whole path with "
-                  "ONE figure applied at each renewal, so the threshold reported is a "
-                  "flat renewal rate rather than the rate at the next renewal, and the "
-                  "stated path is not a point on this grid",
+        path_note="each crossing on this key is priced with the stated path (4.60%, "
+                  "5.00%, 4.80%, 4.40%) replaced by one rate at every renewal",
     )
     # §6 licenses `<opt>.mortgage_rate` for slice 1 and §0.1 item 23 measures
     # it as the control: its winner never changes across the bracket.
@@ -380,7 +377,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         stated_source="anchor",
         bracket_low=0.01,
         bracket_high=0.10,
-        bracket_source="assistant",
+        bracket_source="set in the engine",
         probe_paths=200,
         max_path_deviation_over_sd=2.0e-15,
         boundaries=(
@@ -423,9 +420,12 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 reversal_key="house.mortgage_rate",
             ),
             StructuralZero(
-                kind="no_pv_reach",
-                label="your income",
+                kind="dead_draw",
+                label="your pay drops",
                 keys=("income.pay_drop_events",),
+                channel_id=7,
+                measured_paths=2000,
+                move_threshold=1.862645149230957e-09,
             ),
         ),
     )
@@ -562,7 +562,7 @@ def seven_channel_other_household() -> Decomposition:
                 option="condo",
                 stated_formatted="5.20%, 5.40%",
                 stated_source="user",
-                bracket_low=0.02, bracket_high=0.12, bracket_source="assistant",
+                bracket_low=0.02, bracket_high=0.12, bracket_source="set in the engine",
                 probe_paths=200, max_path_deviation_over_sd=3.1e-15,
                 # A licensed key carries BOTH kinds at once, on ONE row.
                 # `decisive` is SAMPLED, not
@@ -603,12 +603,8 @@ def seven_channel_other_household() -> Decomposition:
                                   formatted="4.01%",
                                   anchor="mortgage_rate.contracted_5y_insured"),
                 ),
-                path_note="the config states condo.mortgage_renewal_rates as a path "
-                          "(5.20%, 5.40%); every grid point replaces the whole path "
-                          "with ONE figure applied at each renewal, so the threshold "
-                          "reported is a flat renewal rate rather than the rate at the "
-                          "next renewal, and the stated path is not a point on this "
-                          "grid",
+                path_note="each crossing on this key is priced with the stated path "
+                          "(5.20%, 5.40%) replaced by one rate at every renewal",
             ),
         ),
         # RATE-SHAPED ON PURPOSE. The contract carries `bracket_low`,
@@ -624,7 +620,7 @@ def seven_channel_other_household() -> Decomposition:
                 option="house",
                 stated_formatted="3.10%",
                 stated_source="assistant",
-                bracket_low=0.0, bracket_high=0.06, bracket_source="assistant",
+                bracket_low=0.0, bracket_high=0.06, bracket_source="set in the engine",
                 max_path_deviation_over_sd=1.8e00,
                 # Upward from the stated 3.10%: the condo holds until growth
                 # this fast makes the house cheaper.
@@ -638,14 +634,16 @@ def seven_channel_other_household() -> Decomposition:
                 references=(),
             ),
         ),
-        # Every channel is live in this household, so its structural zero is
-        # the kind that names no channel: the income block, in the engine's
-        # own words (`break_even._other_structural_zeros`).
+        # Every channel is live in this household, so its one measured row is
+        # the income stream's (`decomposition_run._dead_draw_rows`).
         structural_zeros=(
             StructuralZero(
-                kind="no_pv_reach",
-                label="your income",
+                kind="dead_draw",
+                label="your pay drops",
                 keys=("income.pay_drop_events",),
+                channel_id=7,
+                measured_paths=6000,
+                move_threshold=3.725290298461914e-09,
             ),
         ),
     )
@@ -722,14 +720,17 @@ def two_channel_option_state() -> Decomposition:
         sd_margin=96420.0,
         spread=spread,
         level=level,
-        # The renter's channel draws here (a moving event) and reaches no cash
-        # flow, so it is a dead-draw row and not a live one.
+        # The renter's channel draws here (a moving event with no cost
+        # volatility), and re-drawing it moves no present value, so it is a
+        # dead-draw row and not a live one.
         reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=(
             StructuralZero(
                 kind="dead_draw",
                 label="your tenancy",
                 keys=("rent.events",),
                 channel_id=5,
+                measured_paths=4000,
+                move_threshold=1.862645149230957e-09,
             ),
         )),
     )

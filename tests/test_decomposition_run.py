@@ -21,6 +21,11 @@ THE THREE BIT-EXACT CONTRACTS, and why each is the sharpest test available:
   * THE GOLDEN IS UNTOUCHED by this module existing, and by a decomposition
     running between two legacy runs.
 
+WHICH CHANNELS DRAW AND WHICH ARE LIVE is measured on the run (§0.1 item 39);
+the tests here hold that measurement to answers known from the model's
+structure, and `tests/test_decomposition_liveness.py` holds it to independent
+instruments on the configs where a copy of the simulator's logic got it wrong.
+
 EVERY REFUSAL IS TESTED IN BOTH DIRECTIONS. A test that it fires, and a test
 that it does NOT fire on the nearest legal call — an over-wide refusal fails
 only on calls that were always legal, and nothing in an ordinary suite hunts
@@ -76,10 +81,9 @@ import hde.decomposition_math as dm
 import hde.decomposition_run as dr
 from hde.decomposition_run import (
     EVALUATION_CEILING,
-    channels_that_draw,
     decompose,
-    live_channels,
     margin_per_path,
+    measure_channels,
     planned_evaluations,
 )
 
@@ -95,16 +99,22 @@ EXAMPLES = REPO_ROOT / "examples"
 # Instruments
 # ---------------------------------------------------------------------------
 
-def _inputs(spec, *, raw=None, prior=None):
+def _inputs(spec, *, raw=None):
     """The four objects the CLI hands the seam, for one spec."""
-    if prior is None and spec.market_scenario is not None:
-        prior = _load_prior_if_any(spec)
     det = compute_deterministic(spec)
     mc = run_monte_carlo(spec)
     verdict = compute_verdict(det, mc, years=spec.simulation.years,
                               discount_rate=spec.simulation.discount_rate,
                               single_path=single_path_run(spec))
-    return dict(det=det, mc=mc, verdict=verdict, raw=raw, prior=prior)
+    return dict(det=det, mc=mc, verdict=verdict, raw=raw)
+
+
+def _measure(spec, paths=None):
+    """The engine's own measurement of draws and liveness on `paths` futures."""
+    det = compute_deterministic(spec)
+    verdict = compute_verdict(det, years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate)
+    return measure_channels(spec, det=det, verdict=verdict, paths=paths)
 
 
 def _fixture_spec(num_sims=None):
@@ -235,12 +245,13 @@ def _single_option_spec(num_sims=32):
 # ---------------------------------------------------------------------------
 
 class TestLiveness:
-    """§3.6, and §0.1 item 18: a channel that draws is not a channel that moves
-    a number. The rule is computed from what reaches a cash flow."""
+    """§3.6 and §0.1 items 22 and 39: a channel that draws is not a channel
+    that moves a number, and both are measured on the run. Each answer here is
+    known from the model's structure, not from another run of the same
+    measurement."""
 
-    # §3.6's own measured table, which is an independent measurement of the
-    # same rule: if a rule disagrees with this, one of the two is wrong and the
-    # test says which config.
+    # §3.6's own measured table: a record of the same question answered before
+    # this measurement existed. A config on which the two disagree names which.
     SPEC_TABLE = {
         "first_time_buyer_montreal.yaml": (),
         "income_shock.yaml": ("condo",),
@@ -253,47 +264,47 @@ class TestLiveness:
     }
 
     @pytest.mark.parametrize("name", sorted(SPEC_TABLE))
-    def test_the_rule_reproduces_the_spec_s_measured_table(self, name):
+    def test_the_measurement_reproduces_the_spec_s_table(self, name):
         expected = self.SPEC_TABLE[name]
         spec = load_config(str(EXAMPLES / name))
-        prior = _load_prior_if_any(spec) if spec.market_scenario is not None else None
-        got = tuple(channel(c).key for c in live_channels(spec, prior))
+        got = tuple(channel(c).key for c in _measure(spec, paths=40).live)
         assert got == expected, (
-            "§3.6 measured k_live on this shipped config and this rule "
-            f"disagrees: {got} against {expected}"
-        )
+            "§3.6 measured the live channels on this shipped config and this "
+            f"measurement disagrees: {got} against {expected}")
 
-    def test_the_fixture_has_all_seven_live(self):
-        spec = _fixture_spec()
-        assert len(live_channels(spec, _load_prior_if_any(spec))) == 7
+    def test_the_fixture_has_all_seven_live_and_its_income_stream_draws(self):
+        got = _measure(_fixture_spec(), paths=40)
+        assert got.live == tuple(range(7))
+        assert got.drawn == tuple(range(8))
+        assert got.moves[dc_income()] <= got.threshold
 
     def test_the_two_questions_have_different_answers(self):
         """The finding, on a config where the difference is total.
 
         `tests/test_channel_streams.py` pins, at the bit-generator state, that
-        three streams advance on this spec with every volatility at zero. The
-        honest answers to the two questions are three and NONE, and a liveness
-        rule that agreed with the streams test would print a three-row table of
-        channels that move nothing.
-        """
-        spec = _all_channels_spec()
-        assert channels_that_draw(spec) == (3, 4, 5)
-        assert live_channels(spec) == ()
+        three streams advance on this spec with every volatility at zero; a
+        measurement that called drawing live would print a three-row table of
+        channels that move nothing."""
+        got = _measure(_all_channels_spec())
+        assert got.drawn == (3, 4, 5)
+        assert got.live == ()
+        assert all(got.moves[c] == 0.0 for c in got.drawn)
 
     def test_the_real_mode_inflation_trap_draws_and_is_not_live(self):
-        """§3.5's third kind, the one the spec names."""
-        spec = _one_live_channel_spec(mode="real", inflation_vol=0.02)
-        assert 0 in channels_that_draw(spec)
-        assert 0 not in live_channels(spec)
+        """§3.5's third kind, the one the spec names: real mode discards the
+        inflation factor, and no correlation is on to carry it."""
+        got = _measure(_one_live_channel_spec(mode="real", inflation_vol=0.02))
+        assert 0 in got.drawn
+        assert 0 not in got.live
 
     def test_nominal_mode_makes_the_same_inflation_draw_live(self):
         """The nearest legal call: the factor composes into every growth rate."""
-        spec = _one_live_channel_spec(mode="nominal", inflation_vol=0.02)
-        assert 0 in live_channels(spec)
+        assert 0 in _measure(_one_live_channel_spec(mode="nominal",
+                                                    inflation_vol=0.02)).live
 
-    def test_a_zero_severity_crash_hazard_is_not_live(self):
+    def test_a_zero_severity_crash_hazard_draws_and_is_not_live(self):
         """`_apply_price_shock` multiplies the value by `1 - 0`, so a hazard
-        with no severity behind it reaches nothing."""
+        with no severity behind it draws its crash uniforms and moves nothing."""
         from hde.models import PriceShockParams
         spec = _twin_owners_spec()
         spec = dataclasses.replace(
@@ -302,15 +313,20 @@ class TestLiveness:
             condo=dataclasses.replace(
                 spec.condo,
                 price_shock=PriceShockParams(annual_hazard=0.05,
-                                             severity_mean=0.0)),
-        )
-        assert 1 not in live_channels(spec)
+                                             severity_mean=0.0)))
+        got = _measure(spec)
+        assert 1 in got.drawn and 1 not in got.live
         lively = dataclasses.replace(
             spec, condo=dataclasses.replace(
                 spec.condo,
                 price_shock=PriceShockParams(annual_hazard=0.05,
                                              severity_mean=0.2)))
-        assert 1 in live_channels(lively)
+        assert 1 in _measure(lively).live
+
+
+def dc_income():
+    from hde.decomposition import INCOME_STREAM_ID
+    return INCOME_STREAM_ID
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +516,7 @@ class TestRefusals:
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "one_channel"
         assert got.channel_id == channel_by_key("condo").id
-        assert got.reason == "one channel is live on this run: the condo's costs"
+        assert got.reason == "one channel is live on these 40 futures: the condo's costs"
 
     def test_two_live_channels_do_not_reach_the_one_channel_refusal(self):
         """The nearest legal call: the same shape with one more channel live."""
@@ -509,7 +525,7 @@ class TestRefusals:
             spec,
             simulation=dataclasses.replace(spec.simulation, num_sims=40,
                                            value_growth_vol=0.05))
-        assert len(live_channels(spec)) == 2
+        assert len(_measure(spec).live) == 2
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, Decomposition)
 
@@ -517,39 +533,34 @@ class TestRefusals:
         """The config layer's own rule gets there first, and correctly: with
         every uncertainty input off there are no futures at all."""
         spec = _all_channels_spec(num_sims=40)
-        assert live_channels(spec) == () and channels_that_draw(spec)
         assert single_path_run(spec)
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_futures"
 
-    def test_no_channel_reaching_a_cash_flow_refuses(self):
-        """k_live == 0 where `single_path_run` says otherwise — §8 enumerates
-        no case for it, and falling through to silence is what T13 forbids.
-
-        Reachable only through a channel that DRAWS and reaches nothing: the
-        real-mode inflation trap with every correlation off. `single_path_run`
-        reads a non-zero `inflation_vol` and says there are futures; there are,
-        and every one of them prices the same margin.
-        """
+    def test_a_channel_that_draws_and_moves_nothing_leaves_one_margin(self):
+        """The real-mode inflation trap with every correlation off:
+        `single_path_run` reads a non-zero `inflation_vol` and says there are
+        futures; there are, the economy draws on them, and every one prices the
+        same margin — the measured fact the refusal states."""
         spec = _one_live_channel_spec(mode="real", inflation_vol=0.02)
         spec = dataclasses.replace(
             spec, simulation=dataclasses.replace(spec.simulation,
                                                  num_sims=40, condo_fee_vol=0.0))
         assert not single_path_run(spec)
-        assert live_channels(spec) == () and 0 in channels_that_draw(spec)
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_spread"
-        assert got.reason == "no channel is live on this run"
+        assert re.fullmatch(r"the margin is identical on all 40 futures "
+                            r"\(-?\$[\d,]+\.\d\d\)", got.reason), got.reason
 
     def test_a_constant_margin_refuses_with_two_channels_live(self):
-        """§8 refusal 5: `Var(f) == 0` with `k_live >= 1`.
+        """§8 refusal 5: `Var(f) == 0` while channels move present values.
 
         Two identical owned options are moved by the market and the economy in
-        lockstep, so both channels are live, both reach a cash flow, and `f` is
-        still the same figure on every future.
+        lockstep, so both channels move both options, and `f` is still the same
+        figure on every future.
         """
         spec = _twin_owners_spec()
-        assert len(live_channels(spec)) == 2
+        assert len(_measure(spec).live) == 2
         got = decompose(spec, **_inputs(spec))
         assert isinstance(got, DecompositionRefusal) and got.code == "no_spread"
         assert re.fullmatch(r"the margin is identical on all 64 futures \(\$[\d,]+\.\d\d\)",
@@ -562,12 +573,14 @@ class TestRefusals:
         assert isinstance(got, Decomposition)
         assert got.sd_margin > 0.0
 
-    def test_the_budget_gate_fires_before_pricing_anything(self, monkeypatch):
-        """The call asks for 1,000,000 paths. With the gate broken it would
-        price them — minutes of work per matrix — so the stand-in for the
-        pricer RAISES on the first evaluation instead of counting it: a broken
-        gate fails here at once rather than running away. It is installed
-        AFTER `_inputs`, whose own Monte Carlo run is not this module's.
+    def test_more_futures_than_the_ceiling_refuses_before_pricing_anything(
+            self, monkeypatch):
+        """The call asks for 1,000,000 paths. Drawing them even once is above
+        the ceiling, whatever number of streams would draw, so the stand-in
+        for the pricer RAISES on the first evaluation instead of counting it: a
+        broken gate fails here at once rather than running away. It is
+        installed AFTER `_inputs`, whose own Monte Carlo run is not this
+        module's.
         *Kills it:* deleting the gate, or moving it after the first matrix."""
         spec = _fixture_spec(num_sims=40)
         inputs = _inputs(spec)
@@ -580,48 +593,73 @@ class TestRefusals:
         monkeypatch.setattr(dr, "run_monte_carlo", no_pricing)
         got = decompose(spec, paths=1_000_000, **inputs)
         assert isinstance(got, DecompositionRefusal) and got.code == "budget"
-        k = len(live_channels(spec))
-        largest = dr.largest_affordable_paths(k)
         assert got.reason == (
-            f"1,000,000 futures at {k} live channels price up to "
-            f"{planned_evaluations(1_000_000, k, 2000):,} path evaluations, above the "
-            f"ceiling of {EVALUATION_CEILING:,} [set in the engine]; the largest path "
-            f"count within it is {largest:,}")
-        # The figure the reason prints counts the all-frozen run: at 1,000,000
-        # paths and k live channels it is N·(k+2) + 2,000·(k+1), never the
-        # N·(k+2) + 2,000·k that left that run out.
-        assert planned_evaluations(1_000_000, k, 2000) == 1_000_000 * (k + 2) + 2000 * (k + 1)
-        # No route: the largest N is a figure, and nothing tells the reader
-        # what to run.
+            f"1,000,000 futures price 1,000,000 path evaluations before any "
+            f"re-draw, above the ceiling of {EVALUATION_CEILING:,} [set in the engine]")
+        # No route: nothing tells the reader what to run.
         assert "--decompose" not in got.reason
 
-    @pytest.mark.parametrize("k_live", range(2, 8))
-    def test_the_n_the_budget_refusal_names_is_the_largest_the_gate_admits(self, k_live):
-        """The figure the refusal prints is read off the gate's own cost
-        model, so following it never meets the same refusal — and one more
-        path would. The cost model is what the module SPENDS
-        (`TestCost`), so the N it names also prices within the ceiling: the
-        N it named before, 26,222 at seven channels, priced 251,998.
-        *Kills it:* a closed form that drifts from `planned_evaluations`."""
-        largest = dr.largest_affordable_paths(k_live)
-        assert largest >= dr.MIN_INTERVALLED_FUTURES
-        assert planned_evaluations(largest, k_live, dr._level_paths(largest)) <= EVALUATION_CEILING
-        assert planned_evaluations(largest + 1, k_live,
-                                   dr._level_paths(largest + 1)) > EVALUATION_CEILING
-
-    def test_the_budget_gate_does_not_fire_at_the_ceiling(self):
-        """Both sides of the boundary, without pricing either: the gate is a
-        pure function of the figures it names."""
-        live = tuple(range(7))
-        paths = (EVALUATION_CEILING - LEVEL_PATHS * 8) // 9
-        assert planned_evaluations(paths, 7, dr._level_paths(paths)) <= EVALUATION_CEILING
+    def test_the_first_gate_is_exactly_the_ceiling(self):
+        """Both sides of the pre-pricing gate: N at the ceiling passes it, one
+        more refuses.
+        *Kills it:* `>=` for `>`, or a gate that refuses earlier than the
+        figure it names."""
         spec = _fixture_spec(num_sims=40)
         mc = run_monte_carlo(spec)
         verdict = compute_verdict(compute_deterministic(spec), mc,
                                   years=spec.simulation.years,
                                   discount_rate=spec.simulation.discount_rate)
-        assert dr._refusal_before_pricing(spec, mc, verdict, live, paths) is None
-        over = dr._refusal_before_pricing(spec, mc, verdict, live, paths + 1_000)
+        assert dr._refusal_before_pricing(spec, mc, verdict, EVALUATION_CEILING) is None
+        over = dr._refusal_before_pricing(spec, mc, verdict, EVALUATION_CEILING + 1)
+        assert over is not None and over.code == "budget"
+
+    def test_the_gate_on_k_prices_only_the_futures_it_counts_on(self, monkeypatch):
+        """Past the first gate, the block prices its `N` futures once, counts
+        the streams that drew on them, and refuses on that count before any
+        re-draw: one matrix priced, and the reason names the count it measured.
+        On the fixture every one of its eight streams draws.
+        *Kills it:* gating on the live channels (a re-draw per stream would be
+        priced first), or on any count but the one measured."""
+        spec = _fixture_spec(num_sims=40)
+        inputs = _inputs(spec)
+        spy = _Spy(monkeypatch)
+        paths = 30_000
+        got = decompose(spec, paths=paths, **inputs)
+        assert isinstance(got, DecompositionRefusal) and got.code == "budget"
+        assert spy.runs == [(paths, ())]
+        k = 8
+        largest = dr.largest_affordable_paths(k)
+        assert got.reason == (
+            f"30,000 futures with {k} streams drawing on them price up to "
+            f"{planned_evaluations(paths, k, 2000):,} path evaluations, above the "
+            f"ceiling of {EVALUATION_CEILING:,} [set in the engine]; the largest path "
+            f"count within it is {largest:,}")
+        # The figure counts the all-frozen run: N·(k+2) + 2,000·(k+1).
+        assert planned_evaluations(paths, k, 2000) == paths * (k + 2) + 2000 * (k + 1)
+        assert "--decompose" not in got.reason
+
+    @pytest.mark.parametrize("k_draw", range(2, 9))
+    def test_the_n_the_budget_refusal_names_is_the_largest_the_gate_admits(self, k_draw):
+        """The figure the refusal prints is read off the gate's own cost
+        model, so following it never meets the same refusal — and one more
+        path would. The cost model is what the module SPENDS at most
+        (`TestCost`), so the N it names also prices within the ceiling.
+        *Kills it:* a closed form that drifts from `planned_evaluations`."""
+        largest = dr.largest_affordable_paths(k_draw)
+        assert largest >= dr.MIN_INTERVALLED_FUTURES
+        assert planned_evaluations(largest, k_draw, dr._level_paths(largest)) <= EVALUATION_CEILING
+        assert planned_evaluations(largest + 1, k_draw,
+                                   dr._level_paths(largest + 1)) > EVALUATION_CEILING
+        assert dr._budget_refusal(largest, k_draw) is None
+        assert dr._budget_refusal(largest + 1, k_draw).code == "budget"
+
+    def test_the_budget_gate_does_not_fire_at_the_ceiling(self):
+        """Both sides of the boundary, without pricing either: the gate is a
+        pure function of the figures it names."""
+        paths = (EVALUATION_CEILING - LEVEL_PATHS * 8) // 9
+        assert planned_evaluations(paths, 7, dr._level_paths(paths)) <= EVALUATION_CEILING
+        assert dr._budget_refusal(paths, 7) is None
+        over = dr._budget_refusal(paths + 1_000, 7)
         assert over is not None and over.code == "budget"
 
 
@@ -658,11 +696,14 @@ class TestEveryFutureAgrees:
         # ...and the level register, which the one-way binding still prints.
         assert len(got.level.rows) == len(got.live_channel_ids)
         # Nothing measured for the spread would be printed, so no `B` matrix
-        # and no `A_B` matrix is priced: `A`, the level register's freezes and
-        # the all-frozen run, and nothing else.
+        # is priced: `A`, one re-draw per drawing stream (which is how the
+        # live channels are known), the level register's freezes and the
+        # all-frozen run, and nothing else.
         k = len(got.live_channel_ids)
-        assert sum(1 for _, freeze in spy.runs if not freeze) == 1
-        assert len(spy.runs) == 1 + k + 1
+        drawn = k + len([z for z in got.reversal.structural_zeros
+                         if z.kind == "dead_draw"])
+        assert sum(1 for _, freeze in spy.runs if not freeze) == 1 + drawn
+        assert len(spy.runs) == 1 + drawn + k + 1
 
     @pytest.mark.parametrize("share, refuses", [
         (0.0, True), (1.0, True), (1e-12, False), (1.0 - 1e-12, False),
@@ -835,12 +876,35 @@ class TestTheIdentityIsGated:
 
 class TestStructuralZeros:
 
-    def test_a_channel_that_draws_and_reaches_nothing_gets_a_named_row(self):
+    def test_a_channel_that_draws_and_moves_nothing_gets_a_measured_row(self):
+        """The house here has no maintenance rate, no cost lines and no events:
+        its maintenance shock is drawn every year and multiplied by nothing.
+        Its row carries the stream, the futures and the threshold it was
+        measured on."""
         spec = _drawing_but_dead_house_spec()
-        assert 4 in channels_that_draw(spec) and 4 not in live_channels(spec)
-        got = decompose(spec, **_inputs(spec))
+        inputs = _inputs(spec)
+        got = decompose(spec, **inputs)
         dead = [z for z in got.reversal.structural_zeros if z.kind == "dead_draw"]
         assert [z.channel_id for z in dead] == [4]
+        assert dead[0].measured_paths == spec.simulation.num_sims
+        assert dead[0].move_threshold == dr.identity_budget(inputs["det"],
+                                                            inputs["verdict"])
+        assert dead[0].label == "the house's costs"
+
+    def test_a_measured_row_names_all_the_block_s_futures_above_the_level_s(self):
+        """Above 2,000 futures the level register reads the first 2,000, while
+        draws and liveness are measured on all N: the row names N, and the
+        printed row says N.
+        *Kills it:* the row carrying the level's path count, which every run
+        at N <= 2,000 agrees with."""
+        spec = _drawing_but_dead_house_spec()
+        got = decompose(spec, paths=2100, **_inputs(spec))
+        assert (got.paths, got.level.paths) == (2100, 2000)
+        (dead,) = [z for z in got.reversal.structural_zeros if z.kind == "dead_draw"]
+        assert dead.measured_paths == 2100
+        assert ("  the house's costs: drawn on these 2,100 futures, and re-drawing it "
+                "moved no option's present value by more than $"
+                in format_decomposition(got))
 
     def test_a_live_channel_gets_no_dead_draw_row(self):
         """The nearest legal call: the same house with its volatility on."""
@@ -850,14 +914,14 @@ class TestStructuralZeros:
             simulation=dataclasses.replace(spec.simulation,
                                            house_maintenance_vol=0.2),
             house=dataclasses.replace(spec.house, annual_maintenance_rate=0.01))
-        assert 4 in live_channels(spec)
         got = decompose(spec, **_inputs(spec))
+        assert 4 in got.live_channel_ids
         assert not [z for z in got.reversal.structural_zeros
                     if z.kind == "dead_draw"]
 
-    def test_one_channel_never_gets_two_rows(self):
-        """The reversal register detects the real-mode inflation trap itself;
-        the assembler's generalised rule must not name it twice."""
+    def test_one_stream_never_gets_two_rows(self):
+        """The real-mode inflation trap on the fixture: the economy draws and
+        moves nothing, and is named once."""
         spec = _fixture_spec(num_sims=40)
         spec = dataclasses.replace(
             spec,
@@ -866,18 +930,19 @@ class TestStructuralZeros:
                 spec.simulation, corr_inflation_condo=0.0,
                 corr_inflation_house=0.0, corr_inflation_other=0.0,
                 corr_inflation_event_cost=0.0))
-        assert 0 in channels_that_draw(spec) and 0 not in live_channels(spec)
         got = decompose(spec, paths=40, raw=_fixture_raw(), **{
             k: v for k, v in _inputs(spec).items() if k != "raw"})
+        assert 0 not in got.live_channel_ids
         ids = [z.channel_id for z in got.reversal.structural_zeros
                if z.channel_id is not None]
         assert ids.count(0) == 1, f"the economy is named {ids.count(0)} times"
 
     @pytest.mark.parametrize("corr_condo", [0.0, 0.5])
-    def test_the_economy_s_dead_draw_is_drawn_and_reaches_nothing(self, corr_condo):
-        """The row's fact — drawn, and reaching no cash flow — on both configs
-        that reach it: every correlation off, and one ON whose shock is dead
-        (the condo's fee at zero volatility)."""
+    def test_the_economy_s_dead_draw_is_drawn_and_moves_nothing(self, corr_condo):
+        """The row's facts — drawn, and its re-draw moving no present value —
+        on both configs that reach it: every correlation off, and one ON whose
+        shock is dead (the condo's fee at zero volatility). Each fact checked
+        with held generators, not the engine's addressed matrices."""
         spec = _fixture_spec(num_sims=40)
         spec = dataclasses.replace(
             spec,
@@ -886,14 +951,11 @@ class TestStructuralZeros:
                 spec.simulation, corr_inflation_condo=corr_condo, condo_fee_vol=0.0,
                 corr_inflation_house=0.0, corr_inflation_other=0.0,
                 corr_inflation_event_cost=0.0))
-        assert 0 in channels_that_draw(spec) and 0 not in live_channels(spec)
-        assert dr._inflation_pulls(spec) == []
         got = decompose(spec, **_inputs(spec))
         dead = [z for z in got.reversal.structural_zeros if z.channel_id == 0]
         assert len(dead) == 1 and dead[0].kind == "dead_draw"
         assert spec.economic.mode == "real"
-        # "draws ... and moves nothing": the economy's stream advances, and
-        # re-drawing it leaves every priced option's present value bit-identical.
+
         def held(economy_seed):
             seeds = {c: 1000 + c for c in range(8)}
             seeds[0] = economy_seed
@@ -925,49 +987,62 @@ class TestCost:
         off the formula it checks.
         *Kills it:* dropping the all-frozen run from `planned_evaluations`."""
         spy = _Spy(monkeypatch)
-        spec = _fixture_spec(num_sims=40)
+        spec = _drawing_but_dead_house_spec(num_sims=40)
         inputs = _inputs(spec)
         spy.runs.clear()
         got = decompose(spec, paths=40, **inputs)
-        k = len(got.live_channel_ids)
-        level = dr._level_paths(40)
         assert isinstance(got.spread, SpreadRegister)
-        assert spy.evaluations == planned_evaluations(40, k, level)
+        k_live = len(got.live_channel_ids)
+        k_draw = k_live + len([z for z in got.reversal.structural_zeros
+                               if z.kind == "dead_draw"])
+        assert (k_live, k_draw) == (2, 3)
+        level = dr._level_paths(40)
+        # What it spends: A, B, one re-draw per drawing stream, one freeze per
+        # live channel and the all-frozen run...
+        assert spy.evaluations == 40 * (k_draw + 2) + level * (k_live + 1)
+        # ...which the gate's figure bounds, and reaches when every drawing
+        # stream is live.
+        assert spy.evaluations <= planned_evaluations(40, k_draw, level)
+        assert planned_evaluations(40, k_live, level) == (
+            40 * (k_live + 2) + level * (k_live + 1))
         # And the runs themselves are the matrices §3.3 and §3.4 name.
-        assert sum(1 for _, freeze in spy.runs if not freeze) == k + 2
-        assert sum(1 for _, freeze in spy.runs if len(freeze) == 1) == k
+        assert sum(1 for _, freeze in spy.runs if not freeze) == k_draw + 2
+        assert sum(1 for _, freeze in spy.runs if len(freeze) == 1) == k_live
         assert sum(1 for _, freeze in spy.runs
                    if len(freeze) == len(dr.ALL_CHANNEL_IDS)) == 1
 
     def test_a_run_where_every_future_agrees_prices_what_the_formula_says(
             self, monkeypatch):
-        """When every future names one winner the spread register prices `A`
-        alone (§0.1 item 7), and the same formula says so with
-        `spread_priced=False`. The gate cannot know that before it prices `A`,
-        so it takes the default — the most the module can spend — and its
-        figure is an upper bound here, which the refusal says ("up to").
-        *Kills it:* a formula that counts `B` and `A_B` on this run, or a gate
-        figure below what such a run spends."""
+        """When every future names one winner the spread register prices no
+        `B` (§0.1 item 7), and the same formula says so with
+        `spread_priced=False`: the re-draws are still priced, because they are
+        how the live channels are known. The gate cannot know that before it
+        prices them, so it takes the default — the most the module can spend —
+        and its figure is an upper bound here, which the refusal says
+        ("up to").
+        *Kills it:* a formula that counts `B` on this run, or a gate figure
+        below what such a run spends."""
         spec = _every_future_agrees_spec()
         inputs = _inputs(spec)
         spy = _Spy(monkeypatch)
         got = decompose(spec, **inputs)
         assert isinstance(got.spread, RefusedSpread)
         n, k = spec.simulation.num_sims, len(got.live_channel_ids)
+        assert not got.reversal.structural_zeros
         level = dr._level_paths(n)
         assert spy.evaluations == planned_evaluations(n, k, level, spread_priced=False)
-        assert spy.evaluations == n + level * (k + 1)
+        assert spy.evaluations == n * (k + 1) + level * (k + 1)
         assert spy.evaluations < planned_evaluations(n, k, level)
 
     def test_the_n_the_refusal_names_on_the_fixture_prices_within_the_ceiling(self):
-        """The fixture's seven live channels, in figures: the refusal at
-        1,000,000 paths named N = 26,222, which priced 26,222 x 9 + 2,000 x 8 =
-        251,998 — above the 250,000 it was chosen under. The largest N is
-        26,000, and it prices exactly the ceiling.
+        """The fixture's eight drawing streams, in figures: N·10 + 2,000·9 fits
+        the 250,000 ceiling up to N = 23,200 exactly. A count that left out the
+        all-frozen run once named an N that priced above the ceiling it was
+        chosen under.
         *Kills it:* reading the N off a count that leaves out a run."""
-        assert dr.largest_affordable_paths(7) == 26_000
-        assert planned_evaluations(26_000, 7, dr._level_paths(26_000)) == 250_000
-        assert planned_evaluations(26_001, 7, dr._level_paths(26_001)) > 250_000
+        assert dr.largest_affordable_paths(8) == 23_200
+        assert planned_evaluations(23_200, 8, dr._level_paths(23_200)) == 250_000
+        assert planned_evaluations(23_201, 8, dr._level_paths(23_201)) > 250_000
 
     def test_the_sample_size_override_is_the_sample_size(self, monkeypatch):
         spy = _Spy(monkeypatch)

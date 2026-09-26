@@ -44,7 +44,7 @@ from .sources import MONEY_LEAVES
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
                     flattened_path_note,
                     join_notes, load_at, point_label, price_scan_note,
-                    real_equivalent_inflation, with_value)
+                    real_equivalent_inflation, stated_path, with_value)
 
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
@@ -99,7 +99,7 @@ RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
 # ranges and widening one must widen the other (2026-09-22, board item 4 §6).
 # Before this entry the leaf had NO bracket — `RATE_BRACKETS` is keyed by the
 # leaf — so `--break-even <opt>.mortgage_renewal_rates` refused rather than
-# borrowing one. The bracket is assistant-chosen like every other entry here
+# borrowing one. The bracket is set in the engine like every other entry here
 # and is printed on every solve, which is the only thing that keeps it a
 # declared convention rather than a silent one.
 RATE_BRACKETS["mortgage_renewal_rates"] = RATE_BRACKETS["mortgage_rate"]
@@ -1923,25 +1923,32 @@ def _stated_path_zero(key: str) -> StructuralZero:
                           keys=(key,), reversal_key=key)
 
 
-def _other_structural_zeros(raw: Dict[str, Any], spec: ComparisonSpec) -> List[StructuralZero]:
-    """The `no_pv_reach` row, resolved from the config and costing no
-    evaluation. A channel that draws and reaches no cash flow is the other
-    kind the section prints; it is decided in ONE place,
-    `decomposition_run._dead_draw_rows`, beside the liveness predicates it
-    rests on, and the assembler adds it to this register."""
-    out: List[StructuralZero] = []
-    if spec.income is not None and raw.get("income", {}).get("pay_drop_events"):
-        # "any", not "either": the run may price three options.
-        out.append(StructuralZero(
-            kind="no_pv_reach", label="your income", keys=("income.pay_drop_events",)))
-    return out
+def reversal_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
+    """How the reversal axis of `key` is built, for a key the config states as
+    a path of two or more different rates (§0.1 item 41), or None.
+
+    A construction fact about the figures printed beside it, and nothing
+    more: every point on the axis is the config with that one leaf set to one
+    figure (`sweep.load_at`), so the whole stated path is replaced by one rate
+    at every renewal. Which configs get it is `sweep.stated_path`'s answer, the
+    same one `--sweep`'s own note reads, so the two cannot disagree about what
+    is a path.
+    """
+    path = stated_path(raw, key)
+    if path is None:
+        return None
+    stated = ", ".join(_fmt_value(key, value) for value in path)
+    return (f"each crossing on this key is priced with the stated path ({stated}) "
+            f"replaced by one rate at every renewal")
 
 
-# Every `RATE_BRACKETS` entry is a span the assistant chose — the module's own
-# comment says so — and §6's correction is why the class is PRINTED: adding the
-# renewal entry converted an honest refusal into an answer, which is a stronger
-# act than replacing a silent default.
-BRACKET_SOURCE = "assistant"
+# Every `RATE_BRACKETS` entry is a span written into the engine's code, never a
+# figure typed for this household — so it carries the one label the block gives
+# every figure the engine sets (§0.1 item 43), the label the budget ceiling
+# carries. §6's correction is why the class is PRINTED: adding the renewal entry
+# converted an honest refusal into an answer, which is a stronger act than
+# replacing a silent default.
+BRACKET_SOURCE = "set in the engine"
 
 
 def reversal_register(
@@ -2049,7 +2056,7 @@ def reversal_register(
             "bracket_low": lo, "bracket_high": hi, "bracket_source": BRACKET_SOURCE,
             "max_path_deviation_over_sd": gate["worst_deviation_over_sd"],
             "references": _axis_references(key, mortgage_compounding_of(raw[option])),
-            "path_note": flattened_path_note(raw, key),
+            "path_note": reversal_path_note(raw, key),
         }
         if not gate["licensed"]:
             # Unreachable for a financing-leg key on a correct engine —
@@ -2073,7 +2080,6 @@ def reversal_register(
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
         zeros.append(_stated_path_zero(key))
 
-    zeros.extend(_other_structural_zeros(raw, spec))
     return ReversalRegister(
         exact=tuple(exact), estimated=tuple(estimated), structural_zeros=tuple(zeros),
         no_distance_reason=(None if (exact or estimated)

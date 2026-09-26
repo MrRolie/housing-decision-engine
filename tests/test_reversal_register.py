@@ -933,12 +933,13 @@ class TestTheConfirmingResimulation:
 
 class TestTheFlatteningTrap:
 
-    def test_the_renewal_row_says_the_stated_path_is_not_on_the_axis(self, register):
+    def test_the_renewal_row_says_how_its_axis_was_built(self, register):
+        """§0.1 item 41: a construction fact, and nothing after it — no "so",
+        and no grid, threshold or sweep the block does not print."""
         note = _row(register, RENEWAL).path_note
-        assert note is not None
-        assert "4.60%, 5.00%, 4.80%, 4.40%" in note
-        assert "ONE figure applied at each renewal" in note
-        assert "not a point on this grid" in note
+        assert note == ("each crossing on this key is priced with the stated path "
+                        "(4.60%, 5.00%, 4.80%, 4.40%) replaced by one rate at every "
+                        "renewal")
 
     def test_the_stated_path_is_reported_whole_and_unflattened(self, register):
         """A row that printed one figure where the user stated four would have
@@ -967,9 +968,9 @@ class TestTheBracket:
         """Converting an honest refusal into an answer is a stronger act than
         replacing a silent default, so the width the register chose is printed
         with its class rather than assumed."""
-        assert BRACKET_SOURCE == "assistant"
+        assert BRACKET_SOURCE == "set in the engine"
         for row in register.exact:
-            assert row.bracket_source == "assistant"
+            assert row.bracket_source == "set in the engine"
             assert (row.bracket_low, row.bracket_high) == RATE_BRACKETS["mortgage_rate"]
 
     def test_a_widen_hint_never_offers_a_negative_renewal_rate(self):
@@ -1066,18 +1067,20 @@ class TestTheStructuralZeros:
         assert renewal.keys == (RENEWAL,) and renewal.channel_id is None
         assert _row(register, renewal.reversal_key).boundaries
 
-    def test_the_income_block_reaches_no_present_value(self, register):
-        zero = [z for z in register.structural_zeros if z.kind == "no_pv_reach"]
-        assert len(zero) == 1
-        assert zero[0].keys == ("income.pay_drop_events",)
-        assert zero[0].label == "your income"
-        assert zero[0].channel_id is None
+    def test_the_register_names_only_stated_paths(self, register):
+        """Whether a stream draws, and whether its re-draw moves a present
+        value, is measured on the block's futures by the assembler, which this
+        register never sees; the income block's row is one of those
+        (`decomposition_run._dead_draw_rows`). This register once emitted it
+        from the config alone, and said "drawn" over pay drops that draw
+        nothing. *Kills it:* restoring that row here."""
+        assert {z.kind for z in register.structural_zeros} == {"stated_path"}
 
     def test_the_register_names_no_dead_draw_row_of_its_own(self, raw):
-        """A channel that draws and reaches no cash flow is decided in ONE place,
-        the assembler's `_dead_draw_rows`, beside the liveness predicates. This
-        register once carried a second copy for the real-mode economy, keyed on
-        a narrower condition than the assembler's, so the two could word one
+        """A stream that draws and moves nothing is decided in ONE place, the
+        assembler's `_dead_draw_rows`, on its own measurement. This register
+        once carried a second copy for the real-mode economy, keyed on a
+        narrower condition than the assembler's, so the two could word one
         channel two ways. *Kills it:* restoring that copy."""
         real = copy.deepcopy(raw)
         real["economic"]["mode"] = "real"

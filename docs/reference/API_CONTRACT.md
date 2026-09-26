@@ -183,8 +183,9 @@ config. `--decompose` with `--read-back` refuses before anything is priced
 **How many futures each register prices.** `--decompose N` (or
 `--decompose=N`) sets `N`; bare, `N` is `simulation.num_sims`.
 
-- The spread register, `mean_margin` and `sd_margin` are taken on `N` futures
-  the block draws for itself (`paths`).
+- The spread register, `mean_margin`, `sd_margin`, which streams draw and
+  which channels are live are taken on `N` futures the block draws for itself
+  (`paths`).
 - The level register prices the first `min(N, 2000)` of those futures
   (`level.paths`).
 - The reversal register prices none of them. It reads the run's own Monte
@@ -209,29 +210,41 @@ and the text block prints `which risk decides it — not split (<code>):
 |---|---|---|
 | `no_futures` | the run has no futures: `--no-monte-carlo`, or a single-path run (every uncertainty input off) | that the run has no futures |
 | `single_option` | fewer than two options are priced | that the run prices one option |
-| `one_channel` | exactly one channel is live | that channel |
-| `no_spread` | no channel is live, or `f` is identical on every one of the block's futures | which of the two; the second with the count and that figure |
-| `budget` | `N × (k + 2) + m × (k + 1)` path evaluations exceed 250,000, where `k` is the number of live channels and `m = min(N, 2000)` | `N`, `k`, that figure, the ceiling, and the largest `N` within the ceiling |
 | `too_few_futures` | the run has futures, but fewer than 40 were asked for | the count asked for and the minimum |
+| `budget` | `N` exceeds 250,000, before anything is priced; or, once the block's futures are priced, `N × (k + 2) + m × (k + 1)` path evaluations exceed 250,000, where `k` is the number of streams that drew on them and `m = min(N, 2000)` | the first: `N` and the ceiling; the second: `N`, `k`, that figure, the ceiling, and the largest `N` within the ceiling at `k` |
+| `no_spread` | `f` is identical on every one of the block's futures, or no channel is live on them | which of the two, with the count of futures; the first with that figure |
+| `one_channel` | exactly one channel is live on the block's futures | the count of futures and that channel |
 | `freeze_leak` | with every channel frozen, the paths price different margins | the path count and how far apart they are |
-| `identity_failed` | with every channel frozen, the paths price one margin, and it is further from `verdict.margin_pv` than `decomposition_math.identity_ulp_budget` allows | the path count, both margins, how far apart they are, and the allowance |
+| `identity_failed` | with every channel frozen, the paths price one margin, and it is further from `verdict.margin_pv` than `decomposition_run.identity_budget` allows | the path count, both margins, how far apart they are, and the allowance |
 
-The first refusal in this order that fires is the one returned, except that
-`no_spread` for an identical `f` is checked after `too_few_futures`.
+They are checked in this order, and the first that fires is the one returned:
+`no_futures`, `single_option`, `too_few_futures` and `budget` on `N` alone,
+before anything is priced; `no_spread` for an identical `f`, once the block's
+futures are priced; `budget` on `k`; `no_spread` for no live channel and
+`one_channel`, once each drawing stream is re-drawn; `freeze_leak` and
+`identity_failed`, once the level register is priced.
 
-**Live channels.** `live_channel_ids` are the channels whose draws reach a cash
-flow on this config: re-drawing one moves some priced option's present value.
-Ids: 0 economy, 1 market, 2 population, 3 condo, 4 house, 5 shelter, 6
-portfolio (`decomposition.CHANNELS`). A live channel may move only an option
-that never enters the margin, so `f` can be identical on every future with two
-channels live.
+**Draws and live channels, measured on the block's own futures.** The streams
+are the seven channels — ids 0 economy, 1 market, 2 population, 3 condo, 4
+house, 5 shelter, 6 portfolio (`decomposition.CHANNELS`) — and the income
+stream, id 7, which is not a channel. A stream draws when its generator
+advances while the block's `N` futures are priced. Every stream that draws is
+re-drawn alone on the same futures, and a channel is live when some priced
+option's present value, on some future, differs between the two by more than
+`decomposition_run.identity_budget`, the allowance `identity_failed` holds the
+all-frozen margin to. `live_channel_ids` are the live channels, in id order.
+Both facts are measured on these futures and on no others, and neither is read
+off the config. A live channel can move only an option that never enters the
+margin, so `f` can be identical on every future while channels move present
+values.
 
 **The block** carries `paths`, `max_paths`, `live_channel_ids`, `mean_margin`,
 `sd_margin`, `spread`, `level` and `reversal`, always together. The verdict is
 not copied in; the document's top-level `verdict` is its one home.
 
-- `paths` is `N`. `max_paths` is the largest `N` the budget admits at this many
-  live channels, so `paths` never exceeds it.
+- `paths` is `N`. `max_paths` is the largest `N` the budget admits at the number
+  of streams that drew on the block's futures — the live channels and the
+  streams of the `dead_draw` rows — so `paths` never exceeds it.
 - The block's figures are taken on `f`, the decision margin on each future: the
   cheapest other option's present value minus that of `verdict.best`
   (`decomposition_run.margin_per_path`). `f > 0` on a future is `verdict.best`
@@ -330,12 +343,13 @@ against each other.
   standard deviation, over `probe_paths` paths; `max_path_deviation_over_sd` is
   the largest departure measured.
 - `bracket_low` and `bracket_high` bound the search, on the key's own quoting
-  axis, and `bracket_source` is whose range that is: `assistant`, for a range
-  the engine chose (`break_even.RATE_BRACKETS`).
+  axis, and `bracket_source` is whose range that is: `set in the engine`, for a
+  range written into the engine (`break_even.RATE_BRACKETS`).
 - `path_note` is set when the config states the key as a path of two or more
-  different rates: every point searched replaces the whole path with one flat
-  rate, so the stated path is not a point on the axis. It is `null` otherwise,
-  a path of one repeated rate included.
+  different rates, and says how the axis was built: each crossing on the key is
+  priced with the stated path replaced by one rate at every renewal
+  (`break_even.reversal_path_note`). It is `null` otherwise, a path of one
+  repeated rate included.
 - `estimated[]` rows carry the same keys without `probe_paths`. A key there
   failed that test, and this engine locates no boundary on it: `boundaries` is
   empty and `refused_boundaries` carries the reason on every field. The
@@ -371,39 +385,70 @@ against each other.
   anchored rate on the key's own quoting axis. On an `effective_annual` config
   the semi-annual anchor passes through `rates.effective_mortgage_rate` and
   `note` names the figure as published; `note` is `null` otherwise.
-- `structural_zeros[]`: `kind`, `label`, `keys`, `channel_id` and
-  `reversal_key`. `stated_path` is an input no draw touches, named by
-  `reversal_key` as an `exact` row; `no_pv_reach` is drawn and reaches no
-  option's present value; `dead_draw` is a channel (`channel_id`) that is drawn
-  and reaches no cash flow.
+- `structural_zeros[]`: `kind`, `label`, `keys`, `channel_id`,
+  `reversal_key`, `measured_paths` and `move_threshold` — a row for each thing
+  with no row in `spread` or `level`, of one of two kinds:
+  - `stated_path`: a key the config states that no draw touches, in `keys` and
+    as `reversal_key`, which names its `exact` row. Decided by the model's
+    structure; `channel_id`, `measured_paths` and `move_threshold` are `null`.
+  - `dead_draw`: a stream (`channel_id`: a channel, or 7 for the income
+    stream) that drew on the block's `measured_paths` futures, and whose
+    re-draw moved no priced option's present value on them by more than
+    `move_threshold` (`decomposition_run.identity_budget`). Both facts are
+    measured, on those futures, and both are facts about the stream. `keys`
+    are the stated keys that size its draws, and nothing is said of them: a
+    key there can carry a cash flow of its own, as a stated event's
+    deterministic cost does. `reversal_key` is `null`.
 
 **The text block** prints these figures and no sentence about them. Every line
-is a heading, a figure row with its intervals and source tags, a crossing, a
-refusal with its code and `reason`, or a structural-zero row stating whether
-its keys are drawn. A crossing line names whether it was solved or sampled,
-and a sampled one its `curve_paths` and `seed`; a row's `path_note` prints
-beside its crossings. A figure that did not resolve prints behind
-`not resolved:`. `largest alone share:` and `largest shift in size:` name a
-register's top row when it is `leading_channel_id`; when the top row did not
-resolve, neither line prints. Each printed figure is rounded on its own from the
+is one of six kinds: a heading; a figure row with its intervals and source
+tags; a crossing; a path note; a refusal with its code and `reason`; or a row
+of `structural_zeros`. A crossing line names whether it was solved or sampled,
+and a sampled one its `curve_paths` and `seed`, and its rate is floored at its
+printed precision, so the field still says `was` at the printed rate. A path
+note is a row's `path_note`, printed after its bracket. A `stated_path` row
+prints its label, its keys and that no draw touches them; a `dead_draw` row
+prints its stream's label, that it drew on these `measured_paths` futures and
+that re-drawing it moved no option's present value by more than
+`move_threshold`, printed at three significant figures and taken upward so the
+sentence holds at the printed figure, then the keys that size its draws. A
+figure that did not
+resolve prints behind `not resolved:`, each row's interaction gap included.
+`not resolved` with no colon and no figure after it stands where the residual
+would print when `interaction.resolved` is false, a branch that carries no
+residual. `largest alone share:` and `largest shift in size:` name a register's
+top row when it is `leading_channel_id`; when the top row did not resolve,
+neither line prints. Each printed figure is rounded on its own from the
 unrounded field, except the level register's difference and sum, which are
 taken over the printed dollars.
 
 **Which figures move with the sample.** A figure that changes with
-`simulation.random_seed` or with the path count is a property of this run's
-sample and must never be quoted as a property of the user's config.
+`simulation.random_seed` or with `N` is a property of this run's sample and
+must never be quoted as a property of the user's config. Every number in the
+block is in exactly one of these four lists:
 
-- Properties of the config, the same at any seed and any path count:
-  `max_paths`, `live_channel_ids`, the widths and their sources, a solved
-  boundary's `value` and `further_changes`, the brackets, `references`,
-  `structural_zeros`, `no_distance_reason`, `all_frozen_margin` and
-  `all_frozen_deviation`.
-- Everything else in the block that is a figure moves with the seed or the
-  path count: `mean_margin`, `sd_margin`, every share, flip, gap and interval in
-  `spread` and the ids read off them, the level register's other figures, a
-  sampled boundary's `value` and `further_changes`, every `*_probabilities`,
-  and `max_path_deviation_over_sd`. So does whether `spread` refuses with
-  `no_sign_variation`.
+- The same at any seed and any `N`, properties of the config: `bracket_low`,
+  `bracket_high`, each reference's `value`, `probe_paths`, `curve_paths`, a
+  solved boundary's `value`, `all_frozen_margin`, `all_frozen_deviation` and
+  `move_threshold`.
+- The same on every block emitted: `all_frozen_path_spread`, which is `0.0`.
+- Figures that change with the seed or with `N`: `paths`, `level.paths` and
+  `measured_paths`, which are `N` or read off it; `seed`, which is the seed;
+  `mean_margin` and `sd_margin`; every share, flip, gap, sum and residual in
+  `spread`, with their intervals; `futures_margin`, `prob_best_base` and
+  `accounted_for`, and every level row's shift, `se` and `prob_best_frozen`; a
+  sampled boundary's `value`; every probability in a `*_probabilities` pair;
+  and `max_path_deviation_over_sd`.
+- Ids and counts measured on these futures, which two samples can share:
+  `live_channel_ids`, `max_paths`, every row's and every `structural_zeros`
+  row's `channel_id`, `leading_channel_id`, `unresolved_top_channel_id` and
+  `interaction_channel_ids`.
+
+Of the fields that are words, the widths with their sources,
+`stated_formatted`, `stated_source`, `bracket_source`, `path_note`,
+`no_distance_reason`, and a solved boundary's `was`, `becomes` and
+`further_changes` are the config's too; a sampled boundary's are the
+sample's, and so is whether `spread` refuses with `no_sign_variation`.
 
 ## Provenance
 

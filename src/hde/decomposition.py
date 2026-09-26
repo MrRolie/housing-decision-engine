@@ -3,27 +3,26 @@
 Design record: `docs/specs/2026-09-22-which-risk-decides-it.md`. What every
 field means, when it refuses and which figures move with the sample is written
 once, in `docs/reference/API_CONTRACT.md` § The `decomposition` block, and is
-checked against runs there; this module does not restate it. It holds the
-seven-channel table and the shape of every object the assembler
-(`decomposition_run`), the estimators (`decomposition_math`), the reversal
-solver (`break_even`) and the formatter (`decomposition_text`) hand each other.
-It computes NOTHING: no statistic, no draw, no sentence.
+checked against runs there. Every class docstring below is that pointer and
+nothing else (`POINTER`), and `tests/test_decomposition_contract.py` fails on a
+class docstring that says more. This module holds the seven-channel table and
+the shape of every object the assembler (`decomposition_run`), the estimators
+(`decomposition_math`), the reversal solver (`break_even`) and the formatter
+(`decomposition_text`) hand each other. It computes NOTHING: no statistic, no
+draw, no sentence.
 
 What the SHAPES are for, which is this module's own business:
 
-  - THE BINDING. The spread register may never be emitted without the level
-    register beside it, because the spread's top row can be a channel whose
-    shift the same run cannot tell from zero (the flagship fixture's case,
-    pinned in `tests/test_decomposition_run.py::TestThePublishedFigures`).
-    `Decomposition` requires all three registers with no default on any, so
-    no spread-only result can be constructed; the formatter completes the
-    guard (`decomposition_text`), and this module cannot reach it.
+  - THE BINDING. `Decomposition` requires all three registers with no default
+    on any, so no spread-only result can be constructed; the formatter
+    completes the guard (`decomposition_text`), and this module cannot reach
+    it.
   - TWO STATES THAT ARE NOT NONE AND NOT ZERO. A figure that did not resolve
-    is its own type carrying its own estimate under a `provisional_*` name that
-    the resolved type does not have, and the two share no base: a reader of
-    `row.shares.alone` on an unresolved row raises rather than printing noise
-    as a finding. `ResolvedInteraction` / `RefusedInteraction` use the same
-    device, so a residual cannot be printed on the branch that refused it.
+    is its own type, carrying its estimate under a `provisional_*` name the
+    resolved type does not have, and the two share no base: reading a resolved
+    name off an unresolved row raises rather than printing noise as a finding.
+    `ResolvedInteraction` / `RefusedInteraction` use the same device, and the
+    refused type has no residual attribute at all.
   - EXACT AND ESTIMATED REVERSALS ARE NOT ONE KIND WITH A FLAG, and neither
     are a solved crossing and a sampled one: no shared base class and no shared
     field set, so they cannot be concatenated into one ordered table.
@@ -40,20 +39,19 @@ if TYPE_CHECKING:  # no runtime import: this module stays free of engine code
     from .models import Verdict
 
 
+# Every class docstring in this module is this pointer and nothing more: a type
+# that restated what its fields mean would be a second home for the contract,
+# right the day it was written and wrong after the next change.
+POINTER = "Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."
+
+
 # ---------------------------------------------------------------------------
 # The channel partition (spec §3.1)
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Channel:
-    """One group of primitive DRAW SITES, not one group of config keys.
-
-    Grouping over draw sites keeps Sobol's independence assumption true: the
-    engine composes every correlation from independent primitives, and grouping
-    over config keys would import the dependence back. `sizing_keys` are the
-    dotted config keys that SIZE the channel, looked up in `sources.SourceEcho`
-    for the row's provenance; a key may size more than one channel.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     id: int
     key: str
@@ -127,9 +125,8 @@ CHANNELS: Tuple[Channel, ...] = (
         ),
     ),
     # The renter split is not deferrable (§3.1): lumped, the renter is one row
-    # naming nothing a household can act on. Split, the level register
-    # separates them — one carries scatter with no shift that resolves, one is
-    # an omitted cost.
+    # naming nothing a household can act on. Split, the two are two rows in
+    # each register, each with its own figures.
     Channel(
         id=5,
         key="shelter",
@@ -150,16 +147,17 @@ CHANNELS: Tuple[Channel, ...] = (
 )
 
 
-# Income's stream id, OUTSIDE the seven (§3.5.2, §0.1 item 21). It draws —
-# `pay_drop_events` carries a timing and a severity draw — and reaches no
-# present value, so it is a structural zero and never a row in any register. It
-# still needs an id, because the streams binding must hand it a generator never
-# shared with a channel that reaches a PV. It is refused by name in `freeze`,
-# and a hand-built binding missing an id the run reaches RAISES naming the
-# channel rather than falling back quietly. It is deliberately NOT in
-# `CHANNELS`: that tuple is the decomposition's partition, not the stream
-# roster, and `channel(INCOME_STREAM_ID)` therefore raises.
+# Income's stream id, OUTSIDE the seven (§0.1 item 21). A pay drop with a timing
+# or a size volatility draws from it, and those draws feed the affordability
+# report, so it needs a generator of its own, never shared with a channel. It
+# is refused by name in `freeze`, and a hand-built binding missing an id the
+# run reaches RAISES naming the id rather than falling back quietly. It is
+# deliberately NOT in `CHANNELS`: that tuple is the decomposition's partition,
+# not the stream roster, and `channel(INCOME_STREAM_ID)` therefore raises.
 INCOME_STREAM_ID: int = 7
+
+# The words the block names the income stream by, where it prints a row for it.
+INCOME_STREAM_LABEL: str = "your pay drops"
 
 
 # The most paths the LEVEL register prices (§9): a paired mean needs far fewer
@@ -189,13 +187,7 @@ def channel_by_key(key: str) -> Channel:
 
 @dataclass(frozen=True)
 class Interval:
-    """A `{low, high}` interval, never clamped into [0, 1].
-
-    What produces it, per field, is `docs/reference/API_CONTRACT.md`'s. Its
-    bounds depend on the bootstrap's salt and resample count while the point
-    estimates do not, so nobody tunes the salt to match a figure in the design
-    record, and tests assert inequalities with margin rather than bounds.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     low: float
     high: float
@@ -216,12 +208,7 @@ def _require_one_top(kind: str, leading: Optional[int],
 
 @dataclass(frozen=True)
 class Width:
-    """One input that SIZES a channel, with whose figure it is.
-
-    `source` is whatever `sources.SourceEcho.classify` returns for `key` — read
-    from there, never inferred from the key's name and never restated as a
-    vocabulary here. `formatted` is None when the key's value is not a figure.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     key: str
     formatted: Optional[str]
@@ -236,13 +223,7 @@ class Width:
 
 @dataclass(frozen=True)
 class ResolvedShares:
-    """A channel's two Sobol shares, both of which resolved.
-
-    The estimators are `decomposition_math.first_order_indices` and
-    `total_order_indices`, whose docstrings carry their formulas and why the
-    first-order numerator is centred. No attribute here is shared by name with
-    `UnresolvedShares`.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     alone: float
     alone_ci: Interval
@@ -252,14 +233,7 @@ class ResolvedShares:
 
 @dataclass(frozen=True)
 class UnresolvedShares:
-    """The same two shares, not resolved on this sample.
-
-    The estimates are KEPT, under `provisional_*` names no resolved type
-    carries, so no reader can take a resolved figure off an unresolved row. ONE
-    ROW STATE FROM TWO FIGURE VERDICTS: a row is unresolved if EITHER figure is,
-    because the alternative prints one resolved figure beside one that is noise
-    and leaves the reader to notice.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     provisional_alone: float
     provisional_alone_ci: Interval
@@ -272,15 +246,7 @@ Shares = Union[ResolvedShares, UnresolvedShares]
 
 @dataclass(frozen=True)
 class SpreadRow:
-    """One channel's row of the spread register.
-
-    `flip` sits outside `shares` because it survives an unresolved row, and
-    `flip_ci` travels with it because a bare point estimate among neighbours that
-    all carry an interval reads as the most certain figure in the table.
-    `interaction_gap` and its interval are the row's own measurement of what the
-    channel does jointly with the others. What each figure is:
-    `docs/reference/API_CONTRACT.md`.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     channel_id: int
     shares: Shares
@@ -293,11 +259,7 @@ class SpreadRow:
 
 @dataclass(frozen=True)
 class ResolvedInteraction:
-    """The first-order sum resolved below one, so the residual exists.
-
-    `residual` exists only on this branch, so it cannot be printed on the
-    branch that refused it.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     first_order_sum: float
     first_order_sum_ci: Interval
@@ -307,13 +269,7 @@ class ResolvedInteraction:
 
 @dataclass(frozen=True)
 class RefusedInteraction:
-    """The first-order sum did not resolve below one, so there is no residual.
-
-    There is deliberately no `residual` attribute: clamping the sum to one would
-    make the refusal unreachable, and a field that does not exist cannot be
-    printed by accident. The flagship fixture takes this branch; the one config
-    in this repo that takes the other is `tests/fixtures/min_interaction.yaml`.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     first_order_sum: float
     first_order_sum_ci: Interval
@@ -324,14 +280,7 @@ Interaction = Union[ResolvedInteraction, RefusedInteraction]
 
 @dataclass(frozen=True)
 class SpreadRegister:
-    """Where the decision margin's scatter comes from.
-
-    WHICH ROW IS ON TOP IS DECIDED ONCE, by the assembler's `_top_row`, and
-    carried here as exactly one of `leading_channel_id` or
-    `unresolved_top_channel_id`; the text and the JSON both read these fields,
-    so neither re-derives the rule. `interaction_channel_ids` is carried the
-    same way. None has a default.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     rows: Tuple[SpreadRow, ...]
     interaction: Interaction
@@ -355,14 +304,7 @@ SPREAD_REFUSAL_CODES: Tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class RefusedSpread:
-    """The spread register declining to print, in the spread register's slot.
-
-    A NAMED refusal rather than a `SpreadRegister` with no rows, because empty
-    rows beside printed level rows leave the reader, and the formatter, to infer
-    why. `reason` is the one measured fact that triggered it and nothing else:
-    this branch prices no re-draw, so it states nothing about what a re-draw
-    would do (spec §0.1 item 36).
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     code: str
     reason: str
@@ -374,8 +316,7 @@ class RefusedSpread:
 
 @dataclass(frozen=True)
 class ResolvedLevel:
-    """A channel whose freeze moves the expected margin by a shift that
-    resolved (`decomposition_math.level_resolved_mask`)."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     delta: float
     se: float
@@ -384,10 +325,7 @@ class ResolvedLevel:
 
 @dataclass(frozen=True)
 class IndistinguishableLevel:
-    """A channel whose shift did not resolve: a row a reader must SEE rather
-    than an absence. `provisional_delta` shares no name with
-    `ResolvedLevel.delta`, so no renderer can print it in the resolved column.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     provisional_delta: float
     se: float
@@ -399,21 +337,15 @@ Level = Union[ResolvedLevel, IndistinguishableLevel]
 
 @dataclass(frozen=True)
 class LevelRow:
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+
     channel_id: int
     level: Level
 
 
 @dataclass(frozen=True)
 class LevelRegister:
-    """What the simulated futures price that the central case does not.
-
-    The gap is not stored, because it is the subtraction of two fields that
-    are. THE IDENTITY IS TWO CLAIMS, SO IT IS TWO FIELDS
-    (`all_frozen_path_spread`, `all_frozen_deviation`): the first is what a
-    missed draw site breaks, the second what compounding year by year against a
-    closed form moves by a few units in the last place. THE TOP ROW IS DECIDED
-    ONCE, by the rule `SpreadRegister` uses.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     rows: Tuple[LevelRow, ...]
     paths: int
@@ -440,9 +372,10 @@ class LevelRegister:
 # sentence omits.
 BOUNDARY_FIELDS: Tuple[str, ...] = ("best", "runner_up", "mc_best", "decisive")
 
-# §3.5's three kinds. Two of the three are drawn, so no heading over all of
-# them may say "not drawn"; what each kind means is the contract's.
-STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "no_pv_reach", "dead_draw")
+# The two kinds of row with no place in the spread or the level (§0.1 items 39
+# and 40): one decided by the model's structure, one measured on the block's
+# own futures. What each kind means is the contract's.
+STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "dead_draw")
 
 
 # The sides of a crossing on which the scan can see the verdict change AGAIN.
@@ -481,11 +414,7 @@ def _require_words(kind: str, verdict_field: str, was: object, becomes: object) 
 
 @dataclass(frozen=True)
 class AxisReference:
-    """A cited point on a reversal axis, already expressed on that axis.
-
-    `note` is set only when the axis is quoted another way than the published
-    figure, and names the figure as published.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     label: str
     value: float
@@ -496,17 +425,7 @@ class AxisReference:
 
 @dataclass(frozen=True)
 class SolvedBoundary:
-    """A crossing solved on the DETERMINISTIC verdict — `best`, `runner_up`.
-
-    A property of the config, not of the sample, so it carries no path count and
-    no seed (seed-invariance is pinned in `tests/test_reversal_register.py`).
-    `confirming_probabilities` is CORROBORATION and never the value's basis, and
-    an EMPTY TUPLE when the run has no futures; it has no default, because
-    "nothing corroborated this" is a claim the producer states.
-    `was`/`becomes` and `further_changes` read as
-    `docs/reference/API_CONTRACT.md` says; both are validated here because a
-    coercion upstream once turned a decisiveness into "True".
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
@@ -522,17 +441,7 @@ class SolvedBoundary:
 
 @dataclass(frozen=True)
 class SampledBoundary:
-    """A crossing BISECTED on the Monte Carlo curve — `mc_best`, `decisive`.
-
-    A property of the sample as much as of the config, so it carries
-    `curve_paths` and `seed`, which are what its value depends on. IT SHARES NO
-    BASE CLASS AND NO FIELD SET WITH `SolvedBoundary`: one type for both let a
-    reader meet a sampled crossing in the typography of an exact one.
-    `curve_paths` is deliberately not `paths`, which would collide with
-    `LevelRegister.paths` and `Decomposition.paths`. This is a different axis
-    from `ExactReversal` vs `EstimatedReversal`, which splits across KEYS; a
-    licensed key carries both boundary kinds.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
@@ -551,9 +460,7 @@ class SampledBoundary:
 
 @dataclass(frozen=True)
 class RefusedBoundary:
-    """A boundary field on which nothing is printed, with the reason — recorded
-    rather than dropped, because an absent row reads as "nothing here".
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     reason: str
@@ -561,17 +468,7 @@ class RefusedBoundary:
 
 @dataclass(frozen=True)
 class ExactReversal:
-    """A stated input whose reversal distance the engine computed EXACTLY, because
-    the exactness gate licensed its free curve.
-
-    `path_note` is whatever `sweep.flattened_path_note(raw, key)` returns for
-    this key, so the row never claims the user stated a flat rate.
-    `bracket_source` exists because a bracket that turns an honest refusal
-    into an answer must show whose width it is. `probe_paths` is never zero and
-    `max_path_deviation_over_sd` never reads zero-because-unmeasured: an all-clear
-    nothing earned is worse than no field. `stated_source` has no default for the
-    same reason `SolvedBoundary.confirming_probabilities` has none.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     key: str
     option: str
@@ -596,10 +493,7 @@ class ExactReversal:
 
 @dataclass(frozen=True)
 class EstimatedBoundary:
-    """A verdict change LOCATED by re-simulation, inside an interval — neither of the
-    two solved kinds: re-simulation is how the value was found, so there is
-    nothing to confirm it against.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
@@ -616,14 +510,7 @@ class EstimatedBoundary:
 
 @dataclass(frozen=True)
 class EstimatedReversal:
-    """A stated input whose reversal distance the engine did not compute exactly.
-
-    Shares no base class and no field set with `ExactReversal`: the split is a
-    property of the model, never a ranking. SLICE ONE ESTIMATES NOTHING: a key
-    the gate refuses lands here with no boundary and every field refused under
-    the gate's own reason, so that it is named rather than absent, and a group
-    that appears later does not arrive as a flag bolted onto the exact kind.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     key: str
     option: str
@@ -641,33 +528,39 @@ class EstimatedReversal:
 
 @dataclass(frozen=True)
 class StructuralZero:
-    """A channel or input with zero spread BY CONSTRUCTION, not by measurement.
-
-    Printed as a named row with its kind's drawn-or-not fact, never as a dash
-    and never as a measured zero: a reader who sees a dash concludes the thing
-    was weighed and found irrelevant. It carries no sentence of its own: the
-    KIND is the fact (spec §0.1 item 27), and a sentence beyond it would be an
-    explanation (§0.1 item 35).
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     kind: str
     label: str
     keys: Tuple[str, ...]
     channel_id: Optional[int] = None
     reversal_key: Optional[str] = None
+    measured_paths: Optional[int] = None
+    move_threshold: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        # Each kind carries exactly the fields that say what it rests on: a
+        # structural row names the exact row beside it and was measured on no
+        # futures; a measured row names its stream, how many futures it was
+        # measured on and the threshold it was held to.
+        if self.kind not in STRUCTURAL_ZERO_KINDS:
+            raise ValueError(f"StructuralZero.kind is {self.kind!r}, not one of "
+                             f"{STRUCTURAL_ZERO_KINDS}")
+        measured = (self.channel_id, self.measured_paths, self.move_threshold)
+        if self.kind == "stated_path":
+            if self.reversal_key is None or any(v is not None for v in measured):
+                raise ValueError(
+                    "a stated_path row names its reversal_key and carries no "
+                    "measurement: no draw touches the key it names")
+        elif self.reversal_key is not None or any(v is None for v in measured):
+            raise ValueError(
+                "a dead_draw row names its stream, the futures it was measured on "
+                "and the threshold it was held to, and no reversal_key")
 
 
 @dataclass(frozen=True)
 class ReversalRegister:
-    """What would have to change for the verdict to change.
-
-    The two row kinds are separate tuples, never one tuple with a flag.
-    `structural_zeros` lives here because a stated path's zero and its exact
-    row are one input (spec §0.1 item 5). `no_distance_reason` is the
-    producer's measured fact for a register with no row: it knows what it
-    searched and a renderer does not, and an empty register with no sentence
-    reads as a finding that nothing would reverse the verdict.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     exact: Tuple[ExactReversal, ...]
     estimated: Tuple[EstimatedReversal, ...]
@@ -707,10 +600,7 @@ REFUSAL_CODES: Tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class DecompositionRefusal:
-    """The WHOLE block declining to print, with its own reason — decided by the
-    assembler, which sees the data, and merely rendered by the formatter. For
-    the case where only the spread register refuses, see `RefusedSpread`.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     code: str
     reason: str
@@ -719,15 +609,7 @@ class DecompositionRefusal:
 
 @dataclass(frozen=True)
 class Decomposition:
-    """The whole block: three registers, never fewer.
-
-    `spread`, `level` and `reversal` carry no defaults, so there is no
-    spread-only `Decomposition` to construct; the binding runs ONE WAY, which is
-    why `spread` may be a `RefusedSpread`. `verdict` is the run's own
-    `models.Verdict`, held rather than copied, so the verdict keeps one home;
-    the block's own probabilities are frequencies the assembler takes on its
-    own futures.
-    """
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     paths: int
     max_paths: int

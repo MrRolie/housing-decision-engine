@@ -117,6 +117,22 @@ def price_scan_note(raw: Dict[str, Any], key: str) -> Optional[str]:
     )
 
 
+def stated_path(raw: Dict[str, Any], key: str) -> Optional[List[float]]:
+    """The rates the config states for `key` when it states a PATH of two or
+    more different rates, else None — the one test of "a path" that both the
+    sweep's note and the reversal register's note read. A path of one repeated
+    rate is one figure, and a value that is not a list of numbers is no path."""
+    base = base_value(raw, key)
+    if not isinstance(base, list) or len(base) < 2:
+        return None
+    if not all(isinstance(item, (int, float)) and not isinstance(item, bool)
+               for item in base):
+        return None
+    if len({float(item) for item in base}) < 2:
+        return None
+    return [float(item) for item in base]
+
+
 def flattened_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
     """The coherence note for a sweep or break-even over a key the config
     states as a PATH — a renewal ladder.
@@ -130,17 +146,12 @@ def flattened_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
 
     A path of one repeated rate IS one figure, and a grid point at that figure
     prices it exactly, so it gets no note: "not a point on this grid" would be
-    false of it.
+    false of it. Which keys are such a path is `stated_path`'s answer.
     """
-    base = base_value(raw, key)
-    if not isinstance(base, list) or len(base) < 2:
+    path = stated_path(raw, key)
+    if path is None:
         return None
-    if not all(isinstance(item, (int, float)) and not isinstance(item, bool)
-               for item in base):
-        return None
-    if len({float(item) for item in base}) < 2:
-        return None
-    stated = ", ".join(_fmt_value(key, float(item)) for item in base)
+    stated = ", ".join(_fmt_value(key, item) for item in path)
     return (
         f"the config states {key} as a path ({stated}); every grid point replaces the "
         f"whole path with ONE figure applied at each renewal, so the threshold reported "

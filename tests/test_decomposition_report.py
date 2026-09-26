@@ -48,7 +48,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 # The block, verbatim, on the flagship fixture's measured figures. Regenerated
 # deliberately or not at all: this literal is what a household reads.
 FIXTURE_BLOCK = """\
-which risk decides it — 2,000 futures, 7 channels live
+which risk decides it — 2,000 futures, 7 channels live on them
   margin, the cheapest other option's present value minus rent's: central case $31,349; over this block's own 2,000 futures, mean -$67,194 and s.d. $286,506
 
   THE SPREAD
@@ -68,7 +68,7 @@ which risk decides it — 2,000 futures, 7 channels live
   the house's costs       not resolved: -0.001 [-0.002, 0.001]  not resolved: -0.002 [-0.003, 0.002]  0.4% [0.1, 0.7]
       sized by simulation.house_maintenance_vol=20% [assistant]; simulation.other_cost_vol=10% [assistant]; house.events.roof_replacement.cost_vol=20% [assistant]
   alone shares summed before rounding: 1.16 [1.04, 1.31]; 1 minus that sum: not resolved
-  with interaction minus alone, before rounding: not resolved: the renter's portfolio, the housing market, your tenancy, the population, the condo's costs, the economy, the house's costs
+  with interaction minus alone, before rounding: the renter's portfolio not resolved: -0.04 [-0.05, 0.01]; the housing market not resolved: -0.01 [-0.02, 0.01]; your tenancy not resolved: -0.01 [-0.02, 0.01]; the population not resolved: 0.00 [-0.01, 0.01]; the condo's costs not resolved: 0.00 [-0.01, 0.01]; the economy not resolved: 0.00 [-0.01, 0.01]; the house's costs not resolved: -0.001 [-0.01, 0.01]
   largest alone share: the renter's portfolio
 
   THE LEVEL — the first 2,000 of these futures
@@ -84,22 +84,22 @@ which risk decides it — 2,000 futures, 7 channels live
   the 7 shifts above, summed: $98,113
   largest shift in size: your tenancy
 
-  ZERO SPREAD BY CONSTRUCTION, NOT BY MEASUREMENT
+  NO ROW IN THE SPREAD OR THE LEVEL
   the renewal rate — house.mortgage_renewal_rates: no draw touches it
   the contract rate — house.mortgage_rate: no draw touches it
-  your income — income.pay_drop_events: drawn, and reaching no option's present value
+  your pay drops: drawn on these 2,000 futures, and re-drawing it moved no option's present value by more than $1.87e-09; sized by income.pay_drop_events
 
   WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly
   house.mortgage_renewal_rates, stated 4.60%, 5.00%, 4.80%, 4.40% [assistant]
-      bracket searched: 1.00%–10.00% [assistant]
-      the config states house.mortgage_renewal_rates as a path (4.60%, 5.00%, 4.80%, 4.40%); every grid point replaces the whole path with ONE figure applied at each renewal, so the threshold reported is a flat renewal rate rather than the rate at the next renewal, and the stated path is not a point on this grid
+      bracket searched: 1.00%–10.00% [set in the engine]
+      each crossing on this key is priced with the stated path (4.60%, 5.00%, 4.80%, 4.40%) replaced by one rate at every renewal
       solved on the central case: as it rises past 1.6052%, the central case's winner changes from house to rent
       solved on the central case: as it rises past 2.9549%, the runner-up changes from house to condo (and changes again below it, inside the bracket)
       sampled on 2,000 paths at seed 42: as it rises past 2.71%, the option most futures call cheapest changes from house to condo
       no boundary printed for the decisiveness verdict — decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%
       on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y]
   house.mortgage_rate, stated 4.35% [anchor]
-      bracket searched: 1.00%–10.00% [assistant]
+      bracket searched: 1.00%–10.00% [set in the engine]
       solved on the central case: as it rises past 1.9171%, the runner-up changes from house to condo
       sampled on 2,000 paths at seed 42: as it rises past 1.59%, the option most futures call cheapest changes from house to condo
       no boundary printed for the central case's winner — best is 'rent' throughout 1.00%–10.00%
@@ -359,7 +359,7 @@ class TestTheDraftDefectsOfItem18:
         lines = _render().splitlines()
         head = lines.index("  house.mortgage_renewal_rates, stated 4.60%, 5.00%, 4.80%, "
                            "4.40% [assistant]")
-        assert lines[head + 1] == "      bracket searched: 1.00%–10.00% [assistant]"
+        assert lines[head + 1] == "      bracket searched: 1.00%–10.00% [set in the engine]"
 
     def test_the_contract_rate_gets_its_own_row(self):
         """§6 licenses `<opt>.mortgage_rate` for slice 1 and §0.1 item 23
@@ -496,22 +496,26 @@ class TestTheFormatterRules:
             "sum: 0.05 [0.02, 0.08]")
 
     def test_the_gap_line_names_every_row_once_resolved_or_not(self):
-        """The interaction gap prints for the rows whose gap resolved and names
-        the rest behind "not resolved", so no row's gap vanishes.
-        *Kills it:* dropping the unresolved names, or printing a gap figure for
-        a row whose gap did not resolve."""
+        """Every row's gap prints with its interval, in the table's order, and
+        a gap that did not resolve prints behind "not resolved:" (§0.1 item 46:
+        a figure that did not resolve prints behind the words, never in place
+        of them).
+        *Kills it:* dropping an unresolved row's figure, or printing a gap that
+        did not resolve without the words before it."""
         dec = two_channel_option_state()
+        condo, house = dec.spread.rows
+        cells = {row.channel_id: f"{dt._share(row.interaction_gap)} "
+                                 f"{dt._interval(row.interaction_gap_ci)}"
+                 for row in (condo, house)}
         both = format_decomposition(dec)
         assert _line(both, "with interaction minus alone") == (
-            "  with interaction minus alone, before rounding: not resolved: the "
-            "condo's costs, the house's costs")
+            f"  with interaction minus alone, before rounding: the condo's costs not "
+            f"resolved: {cells[3]}; the house's costs not resolved: {cells[4]}")
         one = format_decomposition(dataclasses.replace(
             dec, spread=dataclasses.replace(dec.spread, interaction_channel_ids=(3,))))
-        condo = dec.spread.rows[0]
         assert _line(one, "with interaction minus alone") == (
             f"  with interaction minus alone, before rounding: the condo's costs "
-            f"{dt._share(condo.interaction_gap)} {dt._interval(condo.interaction_gap_ci)}"
-            f"; not resolved: the house's costs")
+            f"{cells[3]}; the house's costs not resolved: {cells[4]}")
 
     def test_every_row_carries_its_widths_inline_on_that_row(self):
         """§7 rule 7 / §5 mechanism 1: a reader cannot see the ranking without
@@ -721,8 +725,10 @@ class TestTheCrossings:
         the two groups."""
         lines = format_decomposition(seven_channel_other_household()).splitlines()
         head = lines.index("  condo.mortgage_renewal_rates, stated 5.20%, 5.40% [user]")
+        # 5.004182% floors to 5.0041%: the printed rate is one at which the
+        # field still says `was` (§0.1 item 42).
         solved = lines.index("      solved on the central case: as it rises past "
-                             "5.0042%, the runner-up changes from rent to house")
+                             "5.0041%, the runner-up changes from rent to house")
         majority = lines.index("      sampled on 6,000 paths at seed 42: as it rises past "
                                "3.84%, the option most futures call cheapest changes "
                                "from condo to rent")
@@ -742,7 +748,8 @@ class TestTheCrossings:
             b for b in row.boundaries if isinstance(b, dc.SampledBoundary)))
         block = format_decomposition(dataclasses.replace(
             dec, reversal=dataclasses.replace(dec.reversal, exact=(sampled_only,))))
-        assert "      bracket searched: 2.00%–12.00% [assistant]" in block.splitlines()
+        assert ("      bracket searched: 2.00%–12.00% [set in the engine]"
+                in block.splitlines())
         assert "solved on the central case" not in block
 
     def test_a_crossing_of_neither_kind_raises_rather_than_vanishing(self):
@@ -880,12 +887,12 @@ class TestRefusalsAreRenderedWithTheirReason:
         assert lines[heading + 3] == "  THE LEVEL — the first 2,000 of these futures"
         assert block.count(reason) == 1
         for absent in ("with interaction", "summed before rounding", "largest alone",
-                       "sized by", "not resolved: -0.001"):
+                       "      sized by", "not resolved: -0.001"):
             assert absent not in block, absent
         assert "  your tenancy            +$125,074 (± $1,775)                     0.54" \
             in lines
         assert "  largest shift in size: your tenancy" in lines
-        assert "  ZERO SPREAD BY CONSTRUCTION, NOT BY MEASUREMENT" in lines
+        assert "  NO ROW IN THE SPREAD OR THE LEVEL" in lines
 
     def test_an_empty_spread_register_raises_rather_than_printing_over_nothing(self):
         """A `SpreadRegister` with no rows is a state no producer emits: a spread
@@ -907,33 +914,60 @@ class TestRefusalsAreRenderedWithTheirReason:
             format_decomposition(dataclasses.replace(dec, spread=dec.level))
 
     def test_structural_zeros_render_without_any_reversal_row(self):
-        """The zero rows are their own group: they print with no exact row
-        beside them, each with its kind's drawn-or-not fact and nothing else.
-        *Kills it:* rendering the zeros only under a reversal row, or a reason
-        sentence after the fact."""
+        """The rows with no place in either register are their own group: they
+        print with no exact row beside them, each with its kind's facts and
+        nothing else.
+        *Kills it:* rendering them only under a reversal row, or a reason
+        sentence after the facts."""
         dec = uncertainty_surface()
-        zeros = tuple(dataclasses.replace(z, reversal_key=None)
-                      for z in dec.reversal.structural_zeros)
+        zeros = tuple(z for z in dec.reversal.structural_zeros if z.kind == "dead_draw")
         block = format_decomposition(dataclasses.replace(
             dec, reversal=dc.ReversalRegister(exact=(), estimated=(),
                                               structural_zeros=zeros,
                                               no_distance_reason="none searched")))
         lines = block.splitlines()
-        at = lines.index("  ZERO SPREAD BY CONSTRUCTION, NOT BY MEASUREMENT")
-        assert lines[at + 1:at + 4] == [
-            "  the renewal rate — house.mortgage_renewal_rates: no draw touches it",
-            "  the contract rate — house.mortgage_rate: no draw touches it",
-            "  your income — income.pay_drop_events: drawn, and reaching no option's "
-            "present value"]
+        at = lines.index("  NO ROW IN THE SPREAD OR THE LEVEL")
+        assert lines[at + 1:at + 2] == [
+            "  your pay drops: drawn on these 2,000 futures, and re-drawing it moved no "
+            "option's present value by more than $1.87e-09; sized by "
+            "income.pay_drop_events"]
         assert lines[-1] == "  WHAT WOULD HAVE TO CHANGE — not solved: none searched"
 
-    def test_a_dead_draw_zero_is_a_zero_row_and_not_a_measured_zero(self):
-        """A channel that draws and reaches no cash flow prints as a zero by
-        construction with its drawn fact — never as a measured `0.00` row."""
+    def test_a_dead_draw_row_says_its_facts_of_the_stream_and_never_of_a_key(self):
+        """A stream that drew and moves nothing prints as its own row, never as
+        a measured `0.00` row, and its two facts are said of the STREAM by
+        name, scoped to the futures and the threshold they were measured on
+        (§0.1 items 39 and 40). The key follows as what sizes the stream, and
+        no fact is said of it: `rent.events` carries a deterministic cost that
+        reaches rent's present value.
+        *Kills it:* the key as the row's subject, or a fact with no scope."""
         block = format_decomposition(two_channel_option_state())
-        assert ("  your tenancy — rent.events: drawn, and reaching no cash flow"
+        assert ("  your tenancy: drawn on these 4,000 futures, and re-drawing it moved no "
+                "option's present value by more than $1.87e-09; sized by rent.events"
                 in block.splitlines())
         assert "your tenancy            0.00" not in block
+        assert "rent.events:" not in block and "cash flow" not in block
+
+    def test_a_row_of_each_kind_carries_exactly_what_its_kind_rests_on(self):
+        """A stated-path row names its exact row and no measurement; a measured
+        row names its stream, its futures and its threshold, and no exact row.
+        *Kills it:* a measured row with no scope, or a stated path carrying one."""
+        with pytest.raises(ValueError, match="stated_path"):
+            dc.StructuralZero(kind="stated_path", label="x", keys=("a.b",),
+                              reversal_key="a.b", measured_paths=10)
+        with pytest.raises(ValueError, match="stated_path"):
+            dc.StructuralZero(kind="stated_path", label="x", keys=("a.b",))
+        with pytest.raises(ValueError, match="dead_draw"):
+            dc.StructuralZero(kind="dead_draw", label="x", keys=(), channel_id=5,
+                              measured_paths=10)
+        with pytest.raises(ValueError, match="dead_draw"):
+            dc.StructuralZero(kind="dead_draw", label="x", keys=(), channel_id=5,
+                              measured_paths=10, move_threshold=1e-9,
+                              reversal_key="rent.events")
+        with pytest.raises(ValueError, match="not one of"):
+            dc.StructuralZero(kind="no_pv_reach", label="x", keys=())
+        dc.StructuralZero(kind="dead_draw", label="x", keys=(), channel_id=5,
+                          measured_paths=10, move_threshold=1e-9)
 
     def test_a_zero_of_a_kind_the_formatter_cannot_state_raises(self):
         """The drawn-or-not fact is per kind; a kind with no fact is a producer
@@ -1028,7 +1062,7 @@ class TestTheJsonBlock:
             "condo.mortgage_renewal_rates"]
         assert [row["key"] for row in doc["reversal"]["estimated"]] == [
             "house.value_growth_rate"]
-        assert doc["reversal"]["exact"][0]["bracket_source"] == "assistant"
+        assert doc["reversal"]["exact"][0]["bracket_source"] == "set in the engine"
         assert doc["reversal"]["exact"][0]["refused_boundaries"][0]["verdict_field"] \
             == "best"
 

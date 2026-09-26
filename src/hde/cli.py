@@ -166,10 +166,11 @@ def main() -> int:
         const=_DECOMPOSE_AT_NUM_SIMS,
         default=None,
         metavar="N",
-        help="Which risk decides it: the spread, level and reversal registers of "
-             "this run, optionally at N paths of its own. What each figure and "
-             "path count is: docs/reference/API_CONTRACT.md, the decomposition "
-             "block",
+        help="Which risk decides it. The spread register prices N futures of the "
+             "block's own (N defaults to simulation.num_sims), the level register "
+             "the first min(N, 2000) of them, and the reversal register reads the "
+             "run's own simulation.num_sims paths whatever N is. What each figure "
+             "means: docs/reference/API_CONTRACT.md, the decomposition block",
     )
     parser.add_argument(
         "--break-even",
@@ -394,13 +395,11 @@ def main() -> int:
                   "(hde.decomposition_run), which this build does not carry — the "
                   "surface is here, the registers are not", file=sys.stderr)
             return 1
-        # `paths` is passed ONLY when the user gave one, so the call stays the
-        # six-argument seam §0.1 item 17 names unless the extra keyword is
-        # actually needed (§0.1 item 16).
+        # `paths` is passed ONLY when the user gave one (§0.1 item 16).
         extra = {} if decompose_paths is None else {"paths": decompose_paths}
         try:
             decomposition = decompose(spec, det=det_result, mc=mc_result,
-                                      verdict=verdict, raw=raw, prior=prior, **extra)
+                                      verdict=verdict, raw=raw, **extra)
         except (ConfigValidationError, InputError, ScenarioPriorError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1

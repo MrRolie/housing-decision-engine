@@ -244,15 +244,16 @@ the 2027 one is not published yet" is a complete, honest answer, and the plan's
 
 ## 10. `--decompose`: quote the block, and read its meaning in the contract
 
-The block prints figures, refusals and crossings, and no sentence about what
-they mean. Explaining them is your job, and the meaning you explain from is
-`docs/reference/API_CONTRACT.md` § The `decomposition` block. So:
+What the block prints, line by line, is written in
+`docs/reference/API_CONTRACT.md` § The `decomposition` block, under "The text
+block". Explaining the lines is your job, and that section is what you explain
+them from. So:
 
 - Quote the block's lines verbatim, with their figures and their `[...]` tags.
 - Never quote a row from THE SPREAD without the same channel's row from THE
   LEVEL beside it.
-- Where the block prints `not resolved`, say it is not resolved, with the
-  figures printed behind the words.
+- Where the block prints `not resolved`, say it is not resolved, and quote what
+  the block prints after the words.
 - Read what a figure, a refusal code or a path count means in the contract
   section above before you explain it; never explain it from memory or from
   this file.

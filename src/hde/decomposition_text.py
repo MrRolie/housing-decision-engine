@@ -7,19 +7,12 @@ block. Nothing here computes a statistic: every figure printed is a field, a
 count of a field's entries (the live channels, the level rows), or a
 subtraction or sum of PRINTED figures performed where it is printed.
 
-WHAT THE BLOCK PRINTS (spec §0.1 item 35): figures, not interpretation. Every
-line is exactly one of five kinds —
-
-  - a HEADING or a column heading;
-  - a FIGURE ROW: a register's figures with their intervals, "not resolved"
-    where a figure did not resolve, and the source tag of every width;
-  - a CROSSING: the key, the value, what the field reads on each side of it
-    read upward, whether it was solved or sampled, and a sampled crossing's
-    paths and seed; a stated path's flattened-path note prints beside its
-    crossings, because it says how to read them (§0.1 item 26);
-  - a REFUSAL: its code and the one measured fact that fired it, written by
-    the party that refused and printed verbatim;
-  - a STRUCTURAL-ZERO row, stating its kind's drawn-or-not fact (§0.1 item 27).
+WHAT THE BLOCK PRINTS (spec §0.1 items 35 and 41): figures, not
+interpretation. Every line is exactly one of the six kinds the contract lists
+(`docs/reference/API_CONTRACT.md`, "The text block"): a heading, a figure row,
+a crossing, a path note, a refusal, or a row with no place in either
+register. A refusal's reason and a path note are written by the party that
+produced them and printed verbatim.
 
 No line says why a figure is what it is, which figure matters, or what to run
 next. What a figure means is `docs/reference/API_CONTRACT.md`'s, and
@@ -46,7 +39,7 @@ resolved cell.
 """
 from __future__ import annotations
 
-import math
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from typing import List, Optional, Sequence, Tuple
 
 from .decomposition import (
@@ -156,21 +149,43 @@ def _rate(value: float) -> str:
     return f"{value:.2%}"
 
 
+def _floored_rate(value: float, places: int) -> str:
+    """A crossing's rate as a percent at `places` decimals, FLOORED — the one
+    rule both crossing types print through (§0.1 items 33 and 42).
+
+    Every crossing reads its key upward, so the figure printed has to be one at
+    which the field still says `was`. To the nearest instead, a solved crossing
+    printed a rate above its value, one at which `--sweep` already says
+    `becomes` (`test_a_printed_crossing_is_a_rate_the_field_still_says_was`
+    sweeps the printed figure). The floor is taken on the float's exact decimal
+    value, so no binary representation can lift the printed figure past the
+    value."""
+    exact = Decimal(value).scaleb(2)
+    return f"{exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_FLOOR):.{places}f}%"
+
+
 def _solved_rate(value: float) -> str:
     """A crossing solved on the DETERMINISTIC verdict, at four decimals: a
     property of the config as it stands, the same at any seed. A sampled
     crossing prints at two, so the two never share a typography."""
-    return f"{value:.4%}"
+    return _floored_rate(value, 4)
 
 
 def _sampled_rate(value: float) -> str:
-    """A crossing bisected on the futures, at two decimals ROUNDED DOWN.
+    """A crossing bisected on the futures, at two decimals."""
+    return _floored_rate(value, 2)
 
-    Every crossing reads its key upward, so the figure printed is one at which
-    the field still says `was`. Rounded to the nearest instead, a crossing in
-    the upper half of a hundredth printed a rate at which `--sweep` already
-    says `becomes`."""
-    return f"{math.floor(value * 10_000 + 1e-9) / 10_000:.2%}"
+
+def _ceiled_threshold(value: float) -> str:
+    """A move threshold at three significant figures, CEILED. A row says no
+    move was above it, so the printed figure is never below the value it
+    stands for, and the sentence holds at the figure printed — the crossings'
+    floor, facing the other way. Taken on the float's exact decimal value."""
+    exact = Decimal(value)
+    if not exact.is_finite() or exact <= 0:
+        raise ValueError(f"a move threshold is a positive figure, not {value!r}")
+    step = Decimal(1).scaleb(exact.adjusted() - 2)
+    return f"{float(exact.quantize(step, rounding=ROUND_CEILING)):.3g}"
 
 
 def _dollars(value: float) -> float:
@@ -425,21 +440,24 @@ def _reversal_detail_lines(reversal) -> List[str]:
     return lines
 
 
-# What each structural-zero KIND says about drawing (§0.1 item 27): the
-# heading claims only what all three share, and each row states its own fact.
-_DRAWN_FACT = {
-    "stated_path": "no draw touches it",
-    "no_pv_reach": "drawn, and reaching no option's present value",
-    "dead_draw": "drawn, and reaching no cash flow",
-}
-
-
 def _structural_zero_line(zero: StructuralZero) -> str:
-    if zero.kind not in _DRAWN_FACT:
-        raise ValueError(
-            f"a structural zero of kind {zero.kind!r} reached the formatter, which "
-            f"can say whether {sorted(_DRAWN_FACT)} are drawn and not this one")
-    return f"  {zero.label} — {', '.join(zero.keys)}: {_DRAWN_FACT[zero.kind]}"
+    """One row with no place in either register, in its kind's words.
+
+    A `stated_path` row's fact is about the key it names: no draw touches it. A
+    `dead_draw` row's facts are about its STREAM, measured on the block's own
+    futures, and are said of the stream by name; the keys that size the
+    stream's draws follow as what they are, and nothing is said of a key
+    (§0.1 items 39 and 40)."""
+    if zero.kind == "stated_path":
+        return f"  {zero.label} — {', '.join(zero.keys)}: no draw touches it"
+    if zero.kind == "dead_draw":
+        sized = f"; sized by {', '.join(zero.keys)}" if zero.keys else ""
+        return (f"  {zero.label}: drawn on these {zero.measured_paths:,} futures, and "
+                f"re-drawing it moved no option's present value by more than "
+                f"${_ceiled_threshold(zero.move_threshold)}{sized}")
+    raise ValueError(
+        f"a row of kind {zero.kind!r} reached the formatter, which prints "
+        f"stated_path and dead_draw rows and not this one")
 
 
 def _refusal(code: str, reason: str) -> str:
@@ -473,7 +491,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     spread, level, reversal = dec.spread, dec.level, dec.reversal
     lines: List[str] = [
         f"which risk decides it — {dec.paths:,} futures, "
-        f"{len(dec.live_channel_ids)} channels live",
+        f"{len(dec.live_channel_ids)} channels live on them",
         f"  margin, the cheapest other option's present value minus {best}'s: "
         f"central case {_money(verdict.margin_pv)}; over this block's own "
         f"{dec.paths:,} futures, mean {_money(dec.mean_margin)} and s.d. "
@@ -518,14 +536,14 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                      f"{_share(interaction.first_order_sum)} "
                      f"{_interval(interaction.first_order_sum_ci)}; 1 minus that sum: "
                      f"{residual}")
+        # Every row's gap, in the table's order, each behind "not resolved:"
+        # where it did not resolve: the one rule for such a figure.
         interacting = set(spread.interaction_channel_ids)
-        parts = [f"{channel(row.channel_id).label} {_share(row.interaction_gap)} "
-                 f"{_interval(row.interaction_gap_ci)}"
-                 for row in ordered if row.channel_id in interacting]
-        flat = [channel(row.channel_id).label for row in ordered
-                if row.channel_id not in interacting]
-        if flat:
-            parts.append("not resolved: " + ", ".join(flat))
+        parts = [f"{channel(row.channel_id).label} "
+                 + _not_resolved(f"{_share(row.interaction_gap)} "
+                                 f"{_interval(row.interaction_gap_ci)}",
+                                 row.channel_id in interacting)
+                 for row in ordered]
         lines.append("  with interaction minus alone, before rounding: " + "; ".join(parts))
         top = _top_line(
             "alone share", spread.leading_channel_id, spread.unresolved_top_channel_id,
@@ -571,7 +589,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     # EXACTNESS — never ranked across that split.
     if reversal.structural_zeros:
         lines.append("")
-        lines.append("  ZERO SPREAD BY CONSTRUCTION, NOT BY MEASUREMENT")
+        lines.append("  NO ROW IN THE SPREAD OR THE LEVEL")
         lines.extend(_structural_zero_line(zero) for zero in reversal.structural_zeros)
     if reversal.exact:
         lines.append("")

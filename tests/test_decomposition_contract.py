@@ -98,7 +98,8 @@ class TestResolvedAndUnresolvedAreDistinctStates:
         assert not {"superlative_licensed", "check_first",
                     "unattributed_channel_ids"} & _fields(dc.SpreadRegister)
         assert _fields(dc.StructuralZero) == {"kind", "label", "keys", "channel_id",
-                                              "reversal_key"}
+                                              "reversal_key", "measured_paths",
+                                              "move_threshold"}
 
 
 class TestTheBinding:
@@ -357,3 +358,27 @@ class TestABlockPricesNoMoreThanTheBudgetAdmits:
     def test_outside_the_range_refuses(self, paths, max_paths):
         with pytest.raises(ValueError, match="largest affordable"):
             self._build(paths, max_paths)
+
+
+def test_every_class_docstring_is_the_pointer_and_nothing_more():
+    """What each field means is written once, in the contract. A class
+    docstring that restated it would be a second home with nothing to keep it
+    true, so every class the module defines carries exactly `POINTER`, and the
+    pointer names a section the contract has.
+    *Kills it:* any sentence added to, or put in place of, a class docstring."""
+    import ast
+    import pathlib
+    source = pathlib.Path(dc.__file__)
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    assert len(classes) >= 20
+    wrong = [(node.name, ast.get_docstring(node, clean=False)) for node in classes
+             if ast.get_docstring(node, clean=False) != dc.POINTER]
+    assert not wrong, wrong
+    for node in classes:
+        assert getattr(dc, node.name).__doc__ == dc.POINTER, node.name
+    contract = (pathlib.Path(__file__).resolve().parents[1] / "docs" / "reference"
+                / "API_CONTRACT.md").read_text(encoding="utf-8")
+    assert dc.POINTER.startswith("Fields: docs/reference/API_CONTRACT.md § ")
+    heading = dc.POINTER.split(" § ", 1)[1].rstrip(".")
+    assert any(line.startswith(f"## {heading}") for line in contract.splitlines())

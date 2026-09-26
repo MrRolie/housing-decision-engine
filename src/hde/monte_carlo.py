@@ -1101,8 +1101,8 @@ def _simulate_rent_pv_once(
     # The other four, and the `reset_year` the caller draws, are shelter: the
     # escalation shock, the renter's event years, their event-cost shocks and
     # their other-cost shocks. Lumped, the two answer with one number that names
-    # nothing a household can act on; split, one row carries scatter with no
-    # shift that resolves and the other is a cost the central case omits.
+    # nothing a household can act on; split, each has a row of its own in each
+    # register, with its own figures.
     b = _as_binding(rng)
     shelter_frozen = b.frozen_at(5)
     portfolio_frozen = b.frozen_at(6)
