@@ -427,6 +427,50 @@ contradict a tag printed above it.** On the fixture it said "every channel above
 figure the assistant chose, not by you", beneath a population row carrying
 `market_scenario.geography [user]`.
 
+**35. THE BLOCK PRINTS FIGURES, NOT INTERPRETATION** *(operator ruling 2026-09-26, taken after
+four fix-and-review rounds)*. Across those rounds the figures held: every crossing matched a
+sweep of the same axis, every source tag matched the run's own read-back, and the estimators
+matched answers derived on paper. Every failure after the second round was in the prose around
+the figures: refusal reasons that explained instead of reporting, route advice to commands that
+refuse, and closing sentences that told the reader why. Each round removed the sentences it was
+shown, and the next review found new kinds. The ruling moves interpretation out of the block:
+
+- The block prints the three registers' figures with their intervals, the source tag of every
+  width, and every crossing with its solved-or-sampled type and its sample.
+- A refusal prints its code and the ONE MEASURED FACT that triggered it (for example: the margin
+  is identical on all N futures; every one of these N futures names house; this run has no
+  futures). No clause explains why the fact holds, and no clause predicts what a run the block
+  did not price would show.
+- NO ROUTE ADVICE. Nothing tells the reader to raise a path count, run --break-even or run
+  --sweep. The one exception is a figure the engine computed and a test proved: the largest N
+  the budget admits is a number, not advice.
+- NO INTERPRETIVE CLOSINGS. "the channel to check first", "that channel is why", "pure risk" and
+  their kind are cut. Which row is largest may be printed as a figure only where the engine's
+  one top-row rule has resolved it.
+- The assistant interprets, bound by the skill to quote the block's figures verbatim and to read
+  a field's meaning in `docs/reference/API_CONTRACT.md`, the one prose home. The binding of
+  §5 mechanism 5 (the spread is never emitted without the level) stays in code, because it is
+  a property of what prints, not a sentence.
+
+What falls out, recorded rather than argued away: someone reading raw `--decompose` output gets
+tables, not an explanation of them.
+
+**36. ITEM 29'S PREMISE WAS FALSE, AND ITEM 7'S RATIONALE WITH IT.** Both said the flip column is
+identically zero when f never changes sign, because "no re-draw moves a future across a boundary
+no future is near". That was a heuristic, not a fact. When every future in `A` names one winner,
+re-drawing a channel creates NEW futures, and some can land on the other side. Measured:
+examples/mortgage_house_vs_rent.yaml at mortgage_rate 6.30%, seed 2, `--decompose=200` has a 0.5%
+flip for the house's costs. The refusal stays, because printing no table where the sample shows
+no sign variation is a design choice and states nothing false. Its reason becomes the measured
+fact alone: every one of these N futures names the same winner. It no longer claims that no
+channel could move one, since the block never priced the re-draws that would show it.
+
+**37. On a run pricing three or more options, liveness judged on option values is not a claim
+about the decision margin.** A live channel can move an option that never becomes the cheapest
+other option, so the margin is identical on every future while a channel is live. The no-spread
+reason therefore reports the measured fact (the margin is identical on all N futures) and not an
+explanation of which channels move what.
+
 ---
 
 ## 1. Why
