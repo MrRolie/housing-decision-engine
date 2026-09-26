@@ -212,6 +212,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         leading_channel_id=6,
         superlative_licensed=False,
         check_first=_w("simulation.investment_return_vol", "10%", "assistant"),
+        unattributed_channel_ids=(),
     )
     # §3.4's rule is |Δ| > 2·SE. The house's costs at -$886 ± $179 is 4.95 SE,
     # so it is a RESOLVED row — §7's draft filed it under "indistinguishable
@@ -248,6 +249,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         key="house.mortgage_renewal_rates",
         option="house",
         stated_formatted="4.60%, 5.00%, 4.80%, 4.40%",
+        stated_source="assistant",
         bracket_low=0.01,
         bracket_high=0.10,
         bracket_source="assistant",
@@ -301,6 +303,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         key="house.mortgage_rate",
         option="house",
         stated_formatted="4.35%",
+        stated_source="anchor",
         bracket_low=0.01,
         bracket_high=0.10,
         bracket_source="assistant",
@@ -440,6 +443,7 @@ def seven_channel_other_household() -> Decomposition:
         leading_channel_id=1,
         superlative_licensed=True,
         check_first=None,
+        unattributed_channel_ids=(),
     )
     level = LevelRegister(
         rows=(
@@ -475,6 +479,7 @@ def seven_channel_other_household() -> Decomposition:
                 key="condo.mortgage_renewal_rates",
                 option="condo",
                 stated_formatted="5.20%, 5.40%",
+                stated_source="user",
                 bracket_low=0.02, bracket_high=0.12, bracket_source="assistant",
                 probe_paths=200, max_path_deviation_over_sd=3.1e-15,
                 # A licensed key carries BOTH kinds at once, so both group
@@ -528,6 +533,7 @@ def seven_channel_other_household() -> Decomposition:
                 key="house.value_growth_rate",
                 option="house",
                 stated_formatted="3.10%",
+                stated_source="assistant",
                 bracket_low=0.0, bracket_high=0.06, bracket_source="assistant",
                 max_path_deviation_over_sd=1.8e00,
                 boundaries=(
@@ -599,6 +605,7 @@ def two_channel_option_state() -> Decomposition:
         leading_channel_id=3,
         superlative_licensed=True,
         check_first=None,
+        unattributed_channel_ids=(),
     )
     level = LevelRegister(
         rows=(

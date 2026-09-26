@@ -1,11 +1,12 @@
 """Which risk decides it — the three registers, as TYPES ONLY.
 
 Design: `docs/specs/2026-09-22-which-risk-decides-it.md`. This module is the
-contract five parallel tracks build against (spec §12's four, plus the
-assembler §0.1 item 17 found missing from it), and the only file they share. It
-holds the seven-channel table and the shape of every object those tracks hand
-each other. It computes NOTHING: no statistic, no draw, no sentence. Arithmetic
-in this file is a defect — it belongs in the track that owns it.
+contract every piece of the block is written against (spec §12's four pieces,
+plus the assembler §0.1 item 17 found missing from them), and the only file
+they share. It holds the seven-channel table and the shape of every object
+those pieces hand each other. It computes NOTHING: no statistic, no draw, no
+sentence. Arithmetic in this file is a defect — it belongs in the module that
+owns it.
 
 WHO BUILDS A `Decomposition`: the assembler, at
 `hde/decomposition_run.py :: decompose(spec, *, det, mc, verdict, raw, prior)`
@@ -39,9 +40,9 @@ row the code will not emit without cannot be.
 Here that ruling is encoded as far as a dataclass reaches: `Decomposition`
 requires `spread`, `level` and `reversal` together, with no default on any of
 them, so no "spread-only" result object can be constructed at all. THE
-ENFORCEMENT IS COMPLETED BY TRACK D'S RENDERER — one function emits both
-registers or neither, and no caller-reachable path returns the spread rows
-alone (spec §12 track D, §7 formatter rule 1, test T7). This module cannot
+ENFORCEMENT IS COMPLETED BY THE FORMATTER (`decomposition_text`) — one function
+emits both registers or neither, and no caller-reachable path returns the
+spread rows alone (spec §7 formatter rule 1, test T7). This module cannot
 reach the formatter; do not read the type as the whole guard.
 
 TWO STATES THAT ARE NOT NONE AND NOT ZERO. A figure that did not resolve is a
@@ -119,8 +120,9 @@ CHANNELS: Tuple[Channel, ...] = (
         # so the cell that omits them is itself a wrong answer (§4). §4 also
         # requires the cell to name THE OPTION VOLS THOSE KEYS PULL FROM, which
         # depend on which rho is non-zero and so cannot live in a static table:
-        # they reach the row as extra `Width` entries or notes from the track
-        # that reads the spec. §7's own draft lists only the keys below.
+        # they reach the row as extra `Width` entries or notes from the
+        # assembler, which reads the spec. §7's own draft lists only the keys
+        # below.
         sizing_keys=(
             "economic.inflation_vol",
             "simulation.corr_inflation_condo",
@@ -304,7 +306,7 @@ class UnresolvedShares:
     and never dropped. They are named `provisional_*` so that no formatter can
     read a resolved figure off an unresolved row by attribute name.
     
-    ONE ROW STATE FROM TWO FIGURE VERDICTS (seat ruling 2026-09-21, §0.1
+    ONE ROW STATE FROM TWO FIGURE VERDICTS (ruled 2026-09-21, spec §0.1
     item 11): a row is unresolved if EITHER figure is unresolved. The rule was
     unstated and the assembly was about to have to invent it. Conservative is
     correct here for the same reason the register refuses at all — the
@@ -333,7 +335,7 @@ class SpreadRow:
     speaks in decision space, and on the fixture's portfolio the two numbers a
     reader will otherwise conflate are 0.88 and 0.41.
 
-    `flip_ci` carries its bootstrap interval (seat ruling 2026-09-21, §0.1
+    `flip_ci` carries its bootstrap interval (ruled 2026-09-21, spec §0.1
     item 10). §3.3 says 95% intervals on EVERY figure; §7's draft prints no
     interval on this column, and the draft loses. The reason this column in
     particular may not be printed bare is the reason it exists: it is the one
@@ -361,8 +363,9 @@ class ResolvedInteraction:
     share. It lives here rather than on the register because it is noise on the
     refused branch, and a block that refuses to print a figure as a residual
     and then prints it as a provenance finding tells the reader two different
-    things about one number. None when every width is the user's or an
-    anchor's, where the clause does not print at all.
+    things about one number. None when no row's widths are ALL assistant-typed,
+    where the clause does not print at all. A row with any `unattributed`
+    width is not in the sum — see `SpreadRegister.unattributed_channel_ids`.
     """
 
     first_order_sum: float
@@ -414,6 +417,16 @@ class SpreadRegister:
     the ungated sentence names instead — the one number the ranking would move
     on. Both are carried rather than re-derived by the formatter so that
     flipping one `sources:` entry changes them, and a test can say so (T14).
+
+    `unattributed_channel_ids` are the rows, in row order, at least one of
+    whose widths no `sources:` entry claims. They are NOT "the assistant chose":
+    an unattributed figure is one nobody's name is on, and reading that silence
+    as the assistant's answer is the inference the source echo exists to
+    refuse. So they are never inside `ResolvedInteraction`'s assistant-typed
+    sum, and they are carried on the register rather than on the interaction
+    because WHOSE figures sized the rows is a fact on both branches of §4 —
+    it is the sum that is noise on the refused one, not the provenance. No
+    default: "none unattributed" is a claim the producer states.
     """
 
     rows: Tuple[SpreadRow, ...]
@@ -421,6 +434,7 @@ class SpreadRegister:
     leading_channel_id: Optional[int]
     superlative_licensed: bool
     check_first: Optional[Width]
+    unattributed_channel_ids: Tuple[int, ...]
 
 
 # The spread register's OWN refusals, which suppress it and leave the level and
@@ -539,7 +553,10 @@ class LevelRegister:
         when the mask is right. This is what a missed draw site actually
         breaks, and it is the sharp half;
       - `all_frozen_deviation` — that one value against `verdict.margin_pv`,
-        held to a ULP budget scaled to the totals subtracted, never to zero.
+        held to a ULP budget scaled to the totals subtracted, never to zero
+        (`decomposition_math.identity_ulp_budget`, its one home). Past that
+        budget the assembler refuses the WHOLE block as `identity_failed`, so
+        a register that reaches a reader always held it.
 
     A mask that misses a draw site fails the first; so does a mask that reaches
     another channel's site (test T2). Chasing bit-exactness on the margin would
@@ -586,6 +603,24 @@ BOUNDARY_FIELDS: Tuple[str, ...] = ("best", "runner_up", "mc_best", "decisive")
 STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "no_pv_reach", "dead_draw")
 
 
+def _require_words(kind: str, verdict_field: str, was: object, becomes: object) -> None:
+    """Every boundary's `was` and `becomes` are the WORDS a reader is shown for
+    the verdict on each side of it — an option's name, or a decisiveness state
+    such as "decisive for house" — never a raw value. Checked when the boundary
+    is built, because the defect this refuses was a coercion upstream of it:
+    `decisive` travelled as a bool, `str()` turned it into "True", and the
+    block printed "changes from True to False" twice on one axis, once for a
+    crossing that was a change from not decisive to decisive for the OTHER
+    option (spec §6; a reading of `--sweep` either side is the check).
+    """
+    for name, value in (("was", was), ("becomes", becomes)):
+        if not isinstance(value, str) or not value.strip():
+            raise TypeError(
+                f"{kind}.{name} for {verdict_field!r} is {value!r} "
+                f"({type(value).__name__}), not words: a boundary states what the "
+                f"verdict reads on each side of it as text a reader can be shown")
+
+
 @dataclass(frozen=True)
 class AxisReference:
     """A cited point on a reversal axis, to place the solved rate against.
@@ -621,6 +656,12 @@ class SolvedBoundary:
     say. §0.1 item 25 rules that branch unreached from `--decompose` (§8
     refusal 2 refuses the whole block on a path-free run before any register
     is built), so it is the library shape.
+
+    `was` and `becomes` READ THE KEY UPWARD, on every boundary of every kind:
+    `was` is what the verdict field says just BELOW `value`, `becomes` what it
+    says just above — whichever side of the crossing this run's own value sits
+    on. So `--sweep` at a point either side prints `was` below and `becomes`
+    above. Both are words (`_require_words`), never a raw value.
     """
 
     verdict_field: str
@@ -628,6 +669,9 @@ class SolvedBoundary:
     was: str
     becomes: str
     confirming_probabilities: Tuple[Tuple[str, float], ...]
+
+    def __post_init__(self) -> None:
+        _require_words("SolvedBoundary", self.verdict_field, self.was, self.becomes)
 
 
 @dataclass(frozen=True)
@@ -652,6 +696,13 @@ class SampledBoundary:
     gate splits ACROSS KEYS on whether the free-curve licence holds; this
     splits WITHIN ONE KEY, one level below where the gate operates. A licensed
     key carries both kinds at once.
+
+    `was` / `becomes` read the key upward, as on `SolvedBoundary`. For
+    `decisive` they are one of "decisive for <option>" or "not decisive" —
+    three states on a two-option axis, never a boolean: a boolean merges
+    decisive for one option with decisive for the other, and a crossing from
+    not decisive into the OTHER option's decisiveness then prints as
+    "True to False" (`break_even.decisive_state` is the one home of the words).
     """
 
     verdict_field: str
@@ -662,6 +713,9 @@ class SampledBoundary:
     confirming_probabilities: Tuple[Tuple[str, float], ...]
     curve_paths: int
     seed: int
+
+    def __post_init__(self) -> None:
+        _require_words("SampledBoundary", self.verdict_field, self.was, self.becomes)
 
 
 @dataclass(frozen=True)
@@ -707,11 +761,22 @@ class ExactReversal:
     the caller's own run priced no futures (`break_even.reversal_register` says
     what that costs). A field reading zero because nobody measured it is worse
     than no field — it is an all-clear nothing earned.
+
+    `stated_source` is WHOSE figure the stated value is — "user", "anchor",
+    "assistant" or "unattributed" — read from `sources.SourceEcho.classify`,
+    the classifier the read-back's source echo prints, and never from a second
+    one. The row's boundaries are solved on the config's figures whoever typed
+    them, so a sentence about the user's OWN figures is true only when this
+    says "user": the fixture's renewal ladder is assistant-typed, and the
+    read-back says so in the same run. It has NO DEFAULT, for the reason
+    `SolvedBoundary.confirming_probabilities` has none: "nobody's in
+    particular" is a claim the producer states, never one the type supplies.
     """
 
     key: str
     option: str
     stated_formatted: str
+    stated_source: str
     bracket_low: float
     bracket_high: float
     bracket_source: str
@@ -746,6 +811,9 @@ class EstimatedBoundary:
     becomes: str
     resimulation_paths: int
 
+    def __post_init__(self) -> None:
+        _require_words("EstimatedBoundary", self.verdict_field, self.was, self.becomes)
+
 
 @dataclass(frozen=True)
 class EstimatedReversal:
@@ -756,18 +824,23 @@ class EstimatedReversal:
     that could be concatenated into one ordered table would reintroduce the
     ranking the operator refused. `max_path_deviation_over_sd` is here too, and
     it is the figure that FAILED the exactness gate — the reason this row is in
-    this tuple rather than the other one.
+    this tuple rather than the other one. It is NaN when the gate refused
+    because a present value it compares was not a finite number: not a number
+    is what was measured. `stated_source` is `ExactReversal.stated_source`.
 
-    SLICE 1 POPULATES THIS NEVER, and that is not an oversight: §6 REFUSES
-    every key that fails the exactness gate rather than estimating it, and §14
-    defers the keys that would need estimating. The type exists because the
-    operator's ruling is that the rows GROUP by exactness, and a group that
-    appears later must not arrive as a flag bolted onto the exact kind.
+    SLICE 1 ESTIMATES NOTHING, and that is not an oversight: §6 REFUSES every
+    key that fails the exactness gate rather than estimating it, and §14 defers
+    the keys that would need estimating. Such a key still lands here — with no
+    boundary, and every field refused under the gate's own reason — so that it
+    is named rather than absent. The type exists because the operator's ruling
+    is that the rows GROUP by exactness, and a group that appears later must
+    not arrive as a flag bolted onto the exact kind.
     """
 
     key: str
     option: str
     stated_formatted: str
+    stated_source: str
     bracket_low: float
     bracket_high: float
     bracket_source: str
@@ -838,6 +911,8 @@ REFUSAL_CODES: Tuple[str, ...] = (
     "no_spread",       # Var(f) == 0: every index is 0/0
     "budget",          # the work gate: names the figure and the two ways out
     "freeze_leak",     # all channels frozen and the paths still differ: a draw escaped
+    "identity_failed", # all channels frozen, the paths agree, and their margin is not
+                       # the central case's within `identity_ulp_budget`
 )
 
 
@@ -866,7 +941,7 @@ class Decomposition:
 
     `spread`, `level` and `reversal` carry no defaults, so there is no
     "spread-only" `Decomposition` to construct (§5 mechanism 5). That is the
-    type's half of the binding; track D's renderer completes it. The binding
+    type's half of the binding; the formatter completes it (§7 rule 1). The binding
     runs ONE WAY, which is why `spread` may be a `RefusedSpread`: a refused
     spread beside a printed level is permitted and honest, a printed spread
     beside no level is not (§0.1 item 7).

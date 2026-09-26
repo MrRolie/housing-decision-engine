@@ -1,5 +1,5 @@
 """
-The reversal register — board item 4 track C, slice 1
+The reversal register — board item 4, slice 1
 (docs/specs/2026-09-22-which-risk-decides-it.md §6, §8, §10, §11, and §0.1's
 rulings 4, 5 and 9 on what typing the contract found).
 
@@ -10,9 +10,14 @@ else, before the verdict names a different winner.
 THE ONE FINDING THESE TESTS GUARD. `house.mortgage_renewal_rates` is a path the
 user states, so its variance is identically zero and any variance table prints
 it as a dash. On this repo's own flagship fixture the opposite is true:
-replacing the stated ladder with one flat rate, the verdict's own winner flips
-from rent to the house at 1.6052%, inside the bracket the engine already uses
-for a contract rate. A run that prices a financed option and cannot say that is
+replacing the stated ladder with one flat rate, the verdict's own winner is the
+house below 1.6052% and rent above it — inside the bracket the engine already
+uses for a contract rate, and the run itself says rent.
+
+EVERY BOUNDARY READS THE KEY UPWARD: `was` is what the verdict says just below
+the value, `becomes` what it says just above, so `--sweep` at a point either
+side prints `was` below and `becomes` above. `TestEveryBoundaryReadsTheKeyUpward`
+checks exactly that, against the sweep rather than against the solver. A run that prices a financed option and cannot say that is
 telling a household renewal was weighed and found irrelevant.
 
 MEASURED, AND NOW CARRIED BY THE CONTRACT. Across seeds 42, 7, 1234, 99 and
@@ -27,6 +32,7 @@ suite — it is recorded in the commit that landed the register.)
 """
 
 import copy
+import math
 import os
 import pathlib
 
@@ -34,8 +40,10 @@ import numpy as np
 import pytest
 import yaml
 
-from hde.break_even import (BRACKET_SOURCE, RATE_BRACKETS, _DETERMINISTIC_FIELDS,
-                            _FUTURES_FIELDS, _typed_boundary,
+import hde.break_even as be
+from hde.break_even import (BRACKET_SOURCE, RATE_BRACKETS, REVERSAL_GATE_TOLERANCE,
+                            _DETERMINISTIC_FIELDS, _FUTURES_FIELDS,
+                            _shift_deviation_over_sd, _typed_boundary,
                             deterministic_boundaries, floor_at_zero, reversal_admission,
                             reversal_bracket, reversal_candidates, reversal_gate,
                             reversal_register, solve_break_even, solve_crossings)
@@ -44,7 +52,7 @@ from hde.decomposition import (BOUNDARY_FIELDS, EstimatedReversal, ExactReversal
                                SampledBoundary, SolvedBoundary)
 from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
-from hde.sweep import load_at
+from hde.sweep import load_at, run_sweep
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
@@ -52,6 +60,10 @@ CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
 # the same path. The tests that read it assert that precondition first: an
 # example that later gains a volatility must fail them, not pass them vacuously.
 SINGLE_PATH = REPO_ROOT / "examples" / "first_time_buyer_montreal.yaml"
+# A SHIPPED two-option config whose futures are decisive for the house at its
+# own contract rate and decisive for rent past ~6.84%, with a tie band between:
+# the axis on which a boolean decisiveness printed "True to False" twice.
+TWO_OPTION = REPO_ROOT / "examples" / "mortgage_house_vs_rent.yaml"
 
 RENEWAL = "house.mortgage_renewal_rates"
 CONTRACT = "house.mortgage_rate"
@@ -65,9 +77,9 @@ PATHS = 2000
 # Measured on this tree, derived from the solver rather than copied from the
 # spec: `solve_crossings` on the relevant pair for the two deterministic
 # figures, an independent bisection of the free curve for the third.
-BEST_FLIPS_AT = 0.016052260138094424        # rent -> house, the master's-project finding
-RUNNER_UP_SWAPS_AT = 0.029549435637891294   # condo -> house
-MAJORITY_SWAPS_AT = 0.027164030807034577    # condo -> house, a property of THIS sample
+BEST_FLIPS_AT = 0.016052260138094424        # house below, rent above: the master's-project finding
+RUNNER_UP_SWAPS_AT = 0.029549435637891294   # house below, condo above
+MAJORITY_SWAPS_AT = 0.027164030807034577    # house below, condo above — a property of THIS sample
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -156,6 +168,33 @@ def _refusal(row, field):
     return found[0]
 
 
+# The two futures-side fields are refused on a run with no futures for
+# DIFFERENT reasons, and each sentence has to be true of its own field.
+NO_MAJORITY_WITHOUT_FUTURES = (
+    "mc_best is read off this run's futures and this run has none "
+    "(--no-monte-carlo, or a single-path run), so there is no curve for a "
+    "boundary of it to lie on; the boundaries this row does carry are solved "
+    "on the deterministic verdict and read no path")
+DECISIVE_NOT_SOLVED_WITHOUT_FUTURES = (
+    "this solver locates decisive only on the futures curve, so on a run "
+    "without futures (--no-monte-carlo, or a single-path run) it is not "
+    "solved here — this run's own decisiveness is read off the central "
+    "case's margin against the tie band, and where that changes along this "
+    "axis is not reported; the boundaries this row does carry are solved on "
+    "the deterministic verdict and read no path")
+
+
+def _assert_the_no_futures_reasons_are_each_true(row):
+    """`mc_best` does not exist without futures, so "read off this run's
+    futures and this run has none" is true of it. `decisive` DOES exist — the
+    margin band decides it — so the same sentence is false of it, and its row
+    says what is true: this solver does not look for it there."""
+    assert _refusal(row, "mc_best").reason == NO_MAJORITY_WITHOUT_FUTURES
+    decisive = _refusal(row, "decisive").reason
+    assert decisive == DECISIVE_NOT_SOLVED_WITHOUT_FUTURES
+    assert "this run has none" not in decisive
+
+
 # ---------------------------------------------------------------------------
 # The three figures. Each is re-derived independently in the class below, so
 # the numbers pinned here are not their own authority.
@@ -167,19 +206,20 @@ class TestTheThreeFiguresOnTheFixture:
         """The finding: an input with no variance at all reverses the verdict
         inside the bracket the engine already uses for a mortgage rate."""
         flip = _boundary(_row(register, RENEWAL), "best")
-        assert (flip.was, flip.becomes) == ("rent", "house")
+        # Read upward: the house wins below the flat rate, rent above it.
+        assert (flip.was, flip.becomes) == ("house", "rent")
         assert flip.value == pytest.approx(BEST_FLIPS_AT, abs=1e-9)
         lo, hi = RATE_BRACKETS["mortgage_rate"]
         assert lo < flip.value < hi
 
     def test_the_runner_up_swaps_where_the_house_crosses_the_condo(self, register):
         swap = _boundary(_row(register, RENEWAL), "runner_up")
-        assert (swap.was, swap.becomes) == ("condo", "house")
+        assert (swap.was, swap.becomes) == ("house", "condo")
         assert swap.value == pytest.approx(RUNNER_UP_SWAPS_AT, abs=1e-9)
 
     def test_the_option_most_futures_call_cheapest_changes_too(self, register):
         swap = _boundary(_row(register, RENEWAL), "mc_best")
-        assert (swap.was, swap.becomes) == ("condo", "house")
+        assert (swap.was, swap.becomes) == ("house", "condo")
         assert swap.value == pytest.approx(MAJORITY_SWAPS_AT, abs=1e-9)
 
     def test_the_contract_rate_alone_reverses_no_winner_anywhere_in_its_bracket(
@@ -245,7 +285,7 @@ class TestTheTwoBoundaryKinds:
         would be typed as whichever kind the branch happened to be, and that is
         the one error no downstream reader could detect.
         """
-        entry = {"value": 0.0271, "from": "condo", "to": "house"}
+        entry = {"value": 0.0271, "was": "condo", "becomes": "house"}
         probs = {"condo": 0.44, "house": 0.51, "rent": None}
         kinds = {field: type(_typed_boundary(field, entry, curve=probs, confirmed=probs,
                                              curve_paths=1234, seed=7))
@@ -265,6 +305,13 @@ class TestTheTwoBoundaryKinds:
         with pytest.raises(ValueError, match="no sample|has none"):
             _typed_boundary("mc_best", entry, curve=None, confirmed=None,
                             curve_paths=1234, seed=7)
+        # And the router passes `was` / `becomes` through UNCOERCED, so a raw
+        # boolean decisiveness reaches the type's own check and refuses there.
+        # A `str()` in the router is what once printed "True to False".
+        for field in BOUNDARY_FIELDS:
+            with pytest.raises(TypeError, match="not words"):
+                _typed_boundary(field, {"value": 0.05, "was": True, "becomes": False},
+                                curve=probs, confirmed=probs, curve_paths=1234, seed=7)
 
     def test_the_two_field_lists_partition_the_four_kinds(self):
         """The router reads these lists, so a fifth field added to
@@ -295,14 +342,161 @@ class TestAllFourKindsAreAnswered:
 
     def test_decisiveness_never_changes_and_is_refused_rather_than_dropped(self, register):
         """The fixture is not decisive anywhere in the bracket. That is an
-        ANSWER — the row names it, with the resolution it was looked for at."""
+        ANSWER — the row names it, in words, with the resolution it was looked
+        for at."""
         reason = _refusal(_row(register, RENEWAL), "decisive").reason
-        assert "says False at every one of 65 points" in reason
-        assert "1.00%–10.00%" in reason
+        assert reason == ("decisive says 'not decisive' at every one of 65 points "
+                          "across 1.00%–10.00%, so no boundary of it lies in the "
+                          "range this axis searches")
+        assert "False" not in reason
 
 
 # ---------------------------------------------------------------------------
-# One solver, two consumers (seat ruling; spec T12)
+# Every boundary reads the key UPWARD, and agrees with --sweep either side
+# ---------------------------------------------------------------------------
+
+# Half a hundredth of a basis point. Far below the nearest two boundaries on any
+# axis here (the example's `best` and `mc_best` sit 0.3 bp apart) and far above
+# the bisection's own 1e-12 resolution, so a point either side is in the region
+# the boundary claims and in no other.
+_EITHER_SIDE = 1e-5
+
+
+def _sweep_says(row, field):
+    """What one `--sweep` row says for a verdict field, in the words a boundary
+    must carry. Written out here from the row's own `best` / `decisive` columns
+    rather than by calling the register's labeller, so the two are compared and
+    not assumed equal."""
+    if field == "decisive":
+        return f"decisive for {row['best']}" if row["decisive"] else "not decisive"
+    return row[field]
+
+
+def _assert_agrees_with_the_sweep(raw, key, boundaries):
+    assert boundaries, "no boundary to check, so this test proves nothing"
+    for boundary in boundaries:
+        rows = run_sweep(raw, key, [boundary.value - _EITHER_SIDE,
+                                    boundary.value + _EITHER_SIDE])["rows"]
+        below, above = (_sweep_says(r, boundary.verdict_field) for r in rows)
+        assert (boundary.was, boundary.becomes) == (below, above), (
+            f"{boundary.verdict_field} at {boundary.value!r} reads "
+            f"{boundary.was!r} -> {boundary.becomes!r}; --sweep prints {below!r} just "
+            f"below and {above!r} just above")
+
+
+@pytest.fixture(scope="module")
+def two_option():
+    raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
+    spec = load_config_dict(raw)
+    return raw, reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
+
+
+class TestEveryBoundaryReadsTheKeyUpward:
+    """`was` is what the verdict says just BELOW the value and `becomes` what it
+    says just above — checked against `--sweep` at a point either side, never
+    against the solver that produced it.
+
+    Two defects this closes. Each edge used to be labelled from inside the
+    run's own region, so an edge BELOW that region read downward and one above
+    it read upward: on the fixture the winner is the house below 1.6052% and
+    rent above, and the row said "from rent to house". And decisiveness
+    travelled as a boolean, which merges decisive for one option with decisive
+    for the other: on the two-option example the block printed "True to False
+    at 6.74%" and "True to False at 6.84%", where the second crossing runs from
+    a tie INTO rent's decisiveness and is True to False in no reading direction.
+    """
+
+    @pytest.mark.parametrize("key", [RENEWAL, CONTRACT])
+    def test_every_fixture_boundary_agrees_with_a_sweep_either_side(self, raw, register, key):
+        """Every edge on the fixture lies BELOW the run's own region, which is
+        the side the old labelling read backwards.
+        *Kills it:* labelling a lower edge from inside the run's region."""
+        _assert_agrees_with_the_sweep(raw, key, _row(register, key).boundaries)
+
+    def test_the_two_option_example_agrees_with_a_sweep_either_side(self, two_option):
+        raw, register = two_option
+        _assert_agrees_with_the_sweep(raw, CONTRACT, _row(register, CONTRACT).boundaries)
+
+    def test_decisiveness_is_named_for_whom_and_never_as_a_boolean(self, two_option):
+        """The example is decisive for the house at its own 4.40%. One edge
+        bounds that region, read upward, in words that say for whom — and the
+        crossing past ~6.84% from the tie band into RENT's decisiveness is no
+        edge of this run's region, so it is not reported as one.
+        *Kills it:* a boolean `decisive`, which re-admits the 6.84% edge as a
+        second "True to False"."""
+        _, register = two_option
+        decisive = [b for b in _row(register, CONTRACT).boundaries
+                    if b.verdict_field == "decisive"]
+        assert [(b.was, b.becomes) for b in decisive] == [("decisive for house", "not decisive")]
+        assert 0.066 < decisive[0].value < 0.068
+        for boundary in _row(register, CONTRACT).boundaries:
+            assert {boundary.was, boundary.becomes}.isdisjoint({"True", "False"})
+
+    def test_a_run_inside_the_tie_band_reads_both_its_edges_upward(self, two_option):
+        """The same example restated at 6.80%, inside the band where neither
+        option is decisive. Its region now has TWO edges, and the upper one is
+        the crossing into rent's decisiveness — the case the boolean could not
+        say, read in the one direction that makes both lines true."""
+        raw, _ = two_option
+        inside = _set(raw, CONTRACT, 0.068)
+        spec = load_config_dict(inside)
+        register = reversal_register(inside, compute_deterministic(spec), run_monte_carlo(spec))
+        decisive = [b for b in _row(register, CONTRACT).boundaries
+                    if b.verdict_field == "decisive"]
+        assert [(b.was, b.becomes) for b in decisive] == [
+            ("decisive for house", "not decisive"),
+            ("not decisive", "decisive for rent")]
+        _assert_agrees_with_the_sweep(inside, CONTRACT, decisive)
+
+
+# ---------------------------------------------------------------------------
+# Whose figure the stated value is (the read-back's own classifier)
+# ---------------------------------------------------------------------------
+
+class TestWhoseFigureTheStatedValueIs:
+    """A row's boundaries are solved on the config's figures whoever typed
+    them, so "solved on your own figures" is true only of a figure the user
+    stated. The fixture's renewal ladder is assistant-typed and its contract
+    rate an anchor's, and the read-back of the same run says so; each row now
+    carries that class, from the same classifier, for the words to key on."""
+
+    def test_each_fixture_row_carries_the_echo_s_own_class(self, raw, register):
+        echo = load_config_dict(raw).sources
+        assert _row(register, RENEWAL).stated_source == "assistant"
+        assert _row(register, CONTRACT).stated_source == "anchor"
+        for row in register.exact:
+            assert row.stated_source == echo.classify(row.key)
+
+    def test_a_config_with_no_sources_block_reads_unattributed(self, two_option):
+        """Silence is reported, never read as the user's answer."""
+        _, register = two_option
+        assert _row(register, CONTRACT).stated_source == "unattributed"
+
+    @pytest.mark.parametrize("declared,expected", [
+        ("user", "user"), ("assistant", "assistant"), (None, "unattributed")],
+        ids=["user", "assistant", "undeclared"])
+    def test_one_sources_entry_moves_the_class(self, raw, declared, expected):
+        """Change one `sources:` entry and the class follows it — the test §5
+        names for the provenance gate, applied to the stated value."""
+        doc = copy.deepcopy(raw)
+        if declared is None:
+            del doc["sources"][RENEWAL]
+        else:
+            doc["sources"][RENEWAL] = declared
+        assert be._stated_source(load_config_dict(doc), RENEWAL) == expected
+
+    def test_the_stated_path_rows_never_say_you_stated_it(self, register):
+        """The structural-zero reason is printed verbatim, so it must be true
+        whoever typed the figure: "this config states", never "you stated"."""
+        zeros = [z for z in register.structural_zeros if z.kind == "stated_path"]
+        assert len(zeros) == 2
+        for zero in zeros:
+            assert "this config states" in zero.reason
+            assert "you stated" not in zero.reason
+
+
+# ---------------------------------------------------------------------------
+# One solver, two consumers (spec §0; T12)
 # ---------------------------------------------------------------------------
 
 class TestOneSolverTwoConsumers:
@@ -326,7 +520,7 @@ class TestOneSolverTwoConsumers:
         """`--break-even` refuses a three-option config, so the two surfaces are
         compared where both can speak. `deterministic_boundaries` needs no Monte
         Carlo at all, which is also the shape the unpriced-dimensions
-        renewal-flip line calls it in."""
+        renewal-flip line is planned to call it in (that slice is not built)."""
         two = _without(raw, "condo")
         lo, hi = RATE_BRACKETS["mortgage_rate"]
         cli = solve_break_even(two, RENEWAL, None, None)
@@ -389,6 +583,153 @@ class TestTheExactnessGate:
         assert gate["worst_deviation_over_sd"] == 0.0
         assert gate["licensed"], gate
 
+    @staticmethod
+    def _poisoned(option, call, value, index=3):
+        """`simulate` for the gate with ONE present value replaced: `call` 1 is
+        the run at the stated value, 2 the run at the probe. The real engine
+        prices both; only the one figure is doctored."""
+        calls = []
+
+        def simulate(spec):
+            result = run_monte_carlo(spec)
+            calls.append(spec)
+            if len(calls) == call:
+                pvs = np.array(getattr(result, option).pvs, dtype=float)
+                pvs[index] = value
+                getattr(result, option).pvs = pvs
+            return result
+
+        return simulate
+
+    @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf],
+                             ids=["nan", "inf", "-inf"])
+    @pytest.mark.parametrize("call,where", [
+        (1, "with house.mortgage_rate as stated"),
+        (2, "with house.mortgage_rate at 10.00%"),
+    ], ids=["stated", "at"])
+    def test_a_non_finite_present_value_in_the_named_option_refuses_by_name(
+            self, raw, value, call, where):
+        """Both sides failed OPEN before: a NaN in the stated run's array made
+        `np.ptp(x) > 0` False and read as a zero deviation, and a NaN in the
+        probe's array made the deviation NaN, which `NaN > tolerance` never
+        exceeds. Either way the gate licensed a curve nothing had measured.
+        *Kills it:* deleting the non-finite refusal."""
+        gate = reversal_gate(raw, CONTRACT, 0.10, paths=200,
+                             simulate=self._poisoned("house", call, value))
+        assert not gate["licensed"]
+        assert gate["why"] == (
+            f"a present value this gate compares is not a finite number — house "
+            f"{where} (1 of 200 paths) — so whether {CONTRACT} shifts house by one "
+            f"constant cannot be measured, and no curve over it is licensed")
+        assert math.isnan(gate["worst_deviation_over_sd"])
+        assert gate["others_bit_identical"] is None
+
+    def test_a_non_finite_value_in_another_option_is_named_as_that_not_as_a_stream(
+            self, raw):
+        """`array_equal` is False on NaN, so a NaN in the condo — which the key
+        does not name — used to refuse under "it changes the draw stream",
+        which is not what happened."""
+        gate = reversal_gate(raw, CONTRACT, 0.10, paths=200,
+                             simulate=self._poisoned("condo", 2, math.nan))
+        assert not gate["licensed"]
+        assert gate["why"].startswith(
+            "a present value this gate compares is not a finite number — condo with "
+            "house.mortgage_rate at 10.00% (1 of 200 paths)")
+        assert "draw stream" not in gate["why"]
+
+    def test_the_same_seam_with_a_finite_constant_still_licenses(self, raw):
+        """The nearest legal call: the same one-figure edit, but to a finite
+        value on every path — one constant, which is exactly what licenses.
+        *Kills it:* a refusal widened past non-finite values."""
+        calls = []
+
+        def constant(spec):
+            result = run_monte_carlo(spec)
+            calls.append(spec)
+            if len(calls) == 2:
+                result.house.pvs = result.house.pvs + 1234.5
+            return result
+
+        gate = reversal_gate(raw, CONTRACT, 0.10, paths=200, simulate=constant)
+        assert gate["licensed"], gate
+        assert gate["others_bit_identical"] is True
+
+    def test_the_refusal_reaches_the_row_a_reader_sees(self, raw, base):
+        """Through `reversal_register`: the row moves to the estimated kind
+        with every boundary refused under the gate's own sentence, and its
+        deviation is NaN — not a number is what was measured."""
+        _, det, mc = base
+        gate_runs = []
+
+        def poisoned_probe(spec):
+            result = run_monte_carlo(spec)
+            # The gate prices 200 paths; the confirming re-simulations price the
+            # run's own 2,000. Gate runs come in (stated, probe) pairs, one pair
+            # per key in candidate order: RENEWAL, then CONTRACT.
+            if spec.simulation.num_sims == 200:
+                gate_runs.append(spec)
+            if spec.simulation.num_sims == 200 and len(gate_runs) == 4:
+                pvs = np.array(result.house.pvs, dtype=float)
+                pvs[0] = math.nan
+                result.house.pvs = pvs
+            return result
+
+        register = reversal_register(raw, det, mc, simulate=poisoned_probe)
+        assert [r.key for r in register.estimated] == [CONTRACT]
+        row = register.estimated[0]
+        assert math.isnan(row.max_path_deviation_over_sd)
+        assert {r.verdict_field for r in row.refused_boundaries} == set(BOUNDARY_FIELDS)
+        for refusal in row.refused_boundaries:
+            assert refusal.reason.startswith(
+                "a present value this gate compares is not a finite number — house with "
+                "house.mortgage_rate at 10.00% (1 of 200 paths)")
+
+    @pytest.mark.parametrize("side", ["before", "after"])
+    def test_the_shift_measure_itself_never_admits_a_nan(self, side):
+        """Below the refusal, the measure must not fail open on its own: in the
+        `> 0` form a NaN read as "no spread" and came back 0.0.
+        *Kills it:* reverting the delta half of the identical-paths guard to
+        `np.ptp(delta) > 0`."""
+        before = np.array([100.0, 101.0, 102.0, 103.0])
+        after = before + 5.0
+        (before if side == "before" else after)[1] = math.nan
+        measured = _shift_deviation_over_sd(before, after)
+        assert not measured <= REVERSAL_GATE_TOLERANCE
+
+    def test_a_deviation_that_is_not_a_number_never_licenses(self, raw, monkeypatch):
+        """The comparison fails closed too: `NaN > tolerance` is False, so the
+        old `deviation > tolerance` test licensed a NaN.
+        *Kills it:* writing the licence test as `deviation > tolerance`."""
+        monkeypatch.setattr(be, "_shift_deviation_over_sd", lambda before, after: math.nan)
+        gate = reversal_gate(raw, CONTRACT, 0.10, paths=200)
+        assert not gate["licensed"]
+        assert "DIFFERENT amount on different paths" in gate["why"]
+
+    def test_identical_paths_under_a_varying_shift_read_infinitely_far(self):
+        """The s.d. half of the identical-paths guard. Every path of the
+        single-path config's condo is one float, and `np.std` of them is one
+        ULP rather than zero — so without the guard a shift that varies path
+        by path is divided by rounding noise and reported as a large FINITE
+        multiple of an s.d. the option does not have.
+        *Kills it:* deleting the `np.ptp(before) == 0` half."""
+        raw = yaml.safe_load(SINGLE_PATH.read_text(encoding="utf-8"))
+        seen = []
+
+        def varying(spec):
+            result = run_monte_carlo(spec)
+            seen.append(np.array(result.condo.pvs))
+            if len(seen) == 2:
+                result.condo.pvs = result.condo.pvs + np.arange(result.condo.pvs.size) * 1.0
+            return result
+
+        gate = reversal_gate(raw, "condo.mortgage_rate", 0.10, paths=200, simulate=varying)
+        stated = seen[0]
+        assert np.ptp(stated) == 0.0 and float(np.std(stated)) > 0.0, (
+            "the precondition that makes this test able to fail: identical paths "
+            "whose np.std is rounding noise rather than zero")
+        assert gate["worst_deviation_over_sd"] == math.inf
+        assert not gate["licensed"]
+
     def test_a_key_that_moves_the_draw_stream_is_refused_by_clause_a(self, raw):
         """Clause (a), which nothing else catches: `rent.reset_hazard` names
         `rent`, and `_sample_reset_year` returns early inside its own year
@@ -428,6 +769,7 @@ class TestTheExactnessGate:
         assert all("DIFFERENT amount on different paths" in r.reason
                    for r in row.refused_boundaries)
         assert row.max_path_deviation_over_sd > 1e-9
+        assert row.stated_source == "assistant"   # whose figure travels with either kind
 
 
 # ---------------------------------------------------------------------------
@@ -703,8 +1045,7 @@ class TestRefusals:
         for boundary in row.boundaries:
             assert isinstance(boundary, SolvedBoundary)
             assert boundary.confirming_probabilities == ()
-        for field in ("mc_best", "decisive"):
-            assert "this run has none" in _refusal(row, field).reason
+        _assert_the_no_futures_reasons_are_each_true(row)
         # The stated-path zeros come with it: they join to this row's solved
         # rates, and a renewal ladder printed as a dash is the whole finding.
         assert [z.reversal_key for z in register.structural_zeros
@@ -754,8 +1095,23 @@ class TestRefusals:
         for boundary in row.boundaries:
             assert isinstance(boundary, SolvedBoundary)
             assert boundary.confirming_probabilities == ()
-        for field in ("mc_best", "decisive"):
-            assert "this run has none" in _refusal(row, field).reason
+        _assert_the_no_futures_reasons_are_each_true(row)
+
+    def test_without_futures_decisiveness_still_changes_so_its_reason_cannot_be_none(self):
+        """Why the decisive sentence had to change. On the shipped single-path
+        config the verdict IS decisive at some rates of the bracket and not at
+        others — read off the central margin, with no futures anywhere — so
+        "decisive is read off this run's futures and this run has none" told
+        the reader something false about a field that exists and moves."""
+        raw = yaml.safe_load(SINGLE_PATH.read_text(encoding="utf-8"))
+        assert single_path_run(load_config_dict(raw))
+        rows = run_sweep(raw, "condo.mortgage_rate", [0.044, 0.048, 0.053],
+                         monte_carlo=False)["rows"]
+        assert [(r["decisive"], r["rule"]) for r in rows] == [
+            (True, "margin_band"), (False, "margin_band"), (True, "margin_band")]
+        det = compute_deterministic(load_config_dict(raw))
+        row = _row(reversal_register(raw, det, None), "condo.mortgage_rate")
+        _assert_the_no_futures_reasons_are_each_true(row)
 
     def test_a_single_option_config_has_no_winner_to_reverse(self, raw):
         one = _without(raw, "condo", "rent")

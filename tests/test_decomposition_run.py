@@ -68,6 +68,7 @@ from hde.models import (
 )
 from hde.monte_carlo import _load_prior_if_any, addressed_streams, run_monte_carlo
 
+import hde.decomposition_math as dm
 import hde.decomposition_run as dr
 from hde.decomposition_run import (
     EVALUATION_CEILING,
@@ -136,19 +137,6 @@ class _Spy:
     @property
     def evaluations(self):
         return sum(paths for paths, _ in self.runs)
-
-
-def _ulp_budget(det, verdict, ulps=8.0):
-    """A budget in ULPs of the TOTALS being subtracted, not a chosen epsilon.
-
-    `f` is a difference of two present values in the hundreds of thousands, so
-    the smallest representable step in the inputs is `np.spacing` of the larger
-    of them. The measured deviation on the fixture is 5.821e-11 — one ULP of a
-    total in [2^18, 2^19) — and this leaves margin rather than sitting on it.
-    """
-    totals = [abs(opt.total_pv)
-              for opt in (det.condo, det.house, det.rent) if opt is not None]
-    return float(ulps * np.spacing(max(totals + [abs(verdict.margin_pv)])))
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +355,7 @@ class TestBitExactContracts:
             "bit for bit; a spread here means a draw site escaped the mask"
         )
         deviation = float(np.max(np.abs(frozen - verdict.margin_pv)))
-        budget = _ulp_budget(det, verdict)
+        budget = dr.identity_budget(det, verdict)
         assert deviation <= budget, (
             f"the frozen margin is {deviation:.3e} from the verdict's own, "
             f"above {budget:.3e} — the deterministic side takes (1+g)**n while "
@@ -605,7 +593,29 @@ class TestRefusals:
         monkeypatch.setattr(dr, "run_monte_carlo", no_pricing)
         got = decompose(spec, paths=1_000_000, **inputs)
         assert isinstance(got, DecompositionRefusal) and got.code == "budget"
-        assert "--decompose=N" in got.reason and f"{EVALUATION_CEILING:,}" in got.reason
+        k = len(live_channels(spec))
+        largest = dr.largest_affordable_paths(k)
+        assert got.reason == (
+            f"this decomposition would price {planned_evaluations(1_000_000, k, 2000):,} "
+            f"futures (1,000,000 paths x {k + 2} matrices, plus 2,000 x {k} for the "
+            f"level register), above the ceiling of {EVALUATION_CEILING:,} "
+            "[assistant-chosen: no published figure sets it]. Run it at a smaller "
+            "sample of its own with --decompose=N: on this run the largest N under "
+            f"the ceiling is {largest}.")
+        # No way out is offered that nothing implements.
+        assert "channels to hold" not in got.reason
+
+    @pytest.mark.parametrize("k_live", range(2, 8))
+    def test_the_n_the_budget_refusal_names_is_the_largest_the_gate_admits(self, k_live):
+        """The figure the refusal prints is read off the gate's own cost
+        model, so following it never meets the same refusal — and one more
+        path would.
+        *Kills it:* a closed form that drifts from `planned_evaluations`."""
+        largest = dr.largest_affordable_paths(k_live)
+        assert largest >= dr.MIN_INTERVALLED_FUTURES
+        assert planned_evaluations(largest, k_live, dr._level_paths(largest)) <= EVALUATION_CEILING
+        assert planned_evaluations(largest + 1, k_live,
+                                   dr._level_paths(largest + 1)) > EVALUATION_CEILING
 
     def test_the_budget_gate_does_not_fire_at_the_ceiling(self):
         """Both sides of the boundary, without pricing either: the gate is a
@@ -720,6 +730,96 @@ class TestTheFreezeIdentity:
         got = decompose(spec, paths=40, **_inputs(spec))
         assert isinstance(got, Decomposition)
         assert got.level.all_frozen_path_spread == 0.0
+
+
+class TestTheIdentityIsGated:
+    """§3.4 as amended by §0.1 item 19: the all-frozen margin is the central
+    case's own to within a ULP budget. The budget used to live only in this
+    file, so the product would have printed "all N frozen reproduces the
+    central case" at any deviation. It now lives in `decomposition_math`, the
+    assembler refuses the WHOLE block past it, and this file imports it."""
+
+    @staticmethod
+    def _offset_all_frozen(monkeypatch, offset: float):
+        """The all-frozen run with every path of the central case's winner
+        moved by one constant: the paths still agree with EACH OTHER (so
+        `freeze_leak` stays quiet) and the margin they agree on is `offset`
+        from the central case's. Priced by the real engine; only that one
+        run's array is moved."""
+        inner = dr.run_monte_carlo
+
+        def offset_run(spec, streams=None, *, freeze=()):
+            result = inner(spec, streams, freeze=freeze)
+            if tuple(freeze) == dr.ALL_CHANNEL_IDS:
+                result.rent.pvs = result.rent.pvs + offset
+            return result
+
+        monkeypatch.setattr(dr, "run_monte_carlo", offset_run)
+
+    def test_a_margin_off_the_central_case_refuses_the_whole_block(self, monkeypatch):
+        """*Kills it:* deleting the gate, which prints every register — and
+        "reproduces the central case" — over a freeze that does not."""
+        spec = _fixture_spec(num_sims=40)
+        inputs = _inputs(spec)
+        assert inputs["verdict"].best == "rent"
+        self._offset_all_frozen(monkeypatch, 0.01)
+        got = decompose(spec, paths=40, **inputs)
+        assert isinstance(got, DecompositionRefusal)
+        assert got.code == "identity_failed" and got.code in REFUSAL_CODES
+        assert got.reason.startswith(
+            "with every channel frozen, all 40 paths price one margin, $")
+        assert "and it should be the central case's own $" in got.reason
+        assert got.reason.endswith(
+            "(8 units in the last place of the largest option's present-value "
+            "terms, added by size). Every figure this block would print rests on "
+            "that freeze reproducing the central case, so it prints none of them.")
+
+    def test_at_the_budget_it_holds_and_one_step_past_it_refuses(self, monkeypatch):
+        """Both sides of the boundary, on the run's own measured deviation:
+        a budget exactly equal to it holds, the next float below it does not.
+        *Kills it:* `<` for `<=` (the first half), or no gate (the second)."""
+        spec = _fixture_spec(num_sims=40)
+        inputs = _inputs(spec)
+        measured = decompose(spec, paths=40, **inputs)
+        assert isinstance(measured, Decomposition)
+        deviation = measured.level.all_frozen_deviation
+        assert deviation > 0.0, "a zero deviation cannot sit strictly above a budget"
+        monkeypatch.setattr(dr, "identity_budget", lambda det, verdict: deviation)
+        assert isinstance(decompose(spec, paths=40, **inputs), Decomposition)
+        monkeypatch.setattr(dr, "identity_budget",
+                            lambda det, verdict: float(np.nextafter(deviation, 0.0)))
+        got = decompose(spec, paths=40, **inputs)
+        assert isinstance(got, DecompositionRefusal) and got.code == "identity_failed"
+
+    def test_the_budget_is_the_math_module_s_over_the_terms_summed(self):
+        """One home: the assembler's budget is `identity_ulp_budget` over each
+        option's breakdown terms added by size (its total is their sum), and
+        nothing else."""
+        spec = _fixture_spec(num_sims=40)
+        det = compute_deterministic(spec)
+        verdict = compute_verdict(det, years=spec.simulation.years,
+                                  discount_rate=spec.simulation.discount_rate)
+        options = (det.condo, det.house, det.rent)
+        assert all(o.total_pv == sum(o.breakdown.values()) for o in options)
+        terms = [sum(abs(x) for x in o.breakdown.values()) for o in options]
+        assert dr.identity_budget(det, verdict) == 8.0 * np.spacing(max(terms))
+
+    def test_a_small_net_total_over_large_terms_is_not_refused(self):
+        """Why the budget is scaled by the TERMS. The twin all-cash owners net
+        ~$400k of equity against their costs to totals of $23,170, and the
+        all-frozen margin sits one ulp of those terms from the central case —
+        32 ulps of the net total. Scaled by the total, the gate refused this
+        legal run: an over-wide refusal that fails only on calls that were
+        always legal. *Kills it:* scaling the budget by `total_pv` alone."""
+        spec = _twin_owners_spec(differ=True)
+        inputs = _inputs(spec)
+        det = inputs["det"]
+        net = max(abs(det.condo.total_pv), abs(det.house.total_pv))
+        got = decompose(spec, **inputs)
+        assert isinstance(got, Decomposition)
+        assert got.level.all_frozen_deviation > 8.0 * np.spacing(net), (
+            "the precondition: this run's deviation is beyond a budget scaled by "
+            "the net total, so the test fails if the gate is ever scaled that way")
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +954,63 @@ class TestInteractionBranches:
         ci = interaction.unstated_first_order_sum_ci
         assert ci is not None and ci.low <= interaction.unstated_first_order_sum <= ci.high
 
+    def test_an_unattributed_width_is_not_the_assistant_s(self):
+        """`unattributed` means no `sources:` entry claims the key. Counting it
+        into "a sum over channels sized entirely by figures the assistant
+        chose" reads that silence as the assistant's answer — the one
+        inference the source echo exists to refuse. It is named separately.
+        *Kills it:* counting every class outside user/anchor as the
+        assistant's, which is what the sum used to do."""
+        f_a, f_b, f_ab = self._interacting_tables()
+        widths = {0: (Width("economic.inflation_vol", "1%", "unattributed"),),
+                  1: (Width("simulation.value_growth_vol", "7%", "user"),)}
+        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
+        assert isinstance(register.interaction, ResolvedInteraction)
+        assert register.interaction.unstated_first_order_sum is None
+        assert register.interaction.unstated_first_order_sum_ci is None
+        assert register.unattributed_channel_ids == (0,)
+
+    def test_a_row_with_one_unattributed_width_is_neither_all_assistant_nor_silent(self):
+        """A row sized by an assistant figure AND an unattributed one is not
+        "entirely assistant-typed", so it stays out of the sum — and it is on
+        the unattributed list, so the surface can say it was left out and why.
+        The assistant-only row beside it is the whole sum."""
+        f_a, f_b, f_ab = self._interacting_tables()
+        widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
+                  1: (Width("simulation.value_growth_vol", "7%", "assistant"),
+                      Width("house.price_shock.annual_hazard", "2%", "unattributed"))}
+        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
+        interaction = register.interaction
+        assert isinstance(interaction, ResolvedInteraction)
+        row = next(r for r in register.rows if r.channel_id == 0)
+        alone = (row.shares.alone if isinstance(row.shares, ResolvedShares)
+                 else row.shares.provisional_alone)
+        assert interaction.unstated_first_order_sum == pytest.approx(alone)
+        assert register.unattributed_channel_ids == (1,)
+
+    def test_no_row_is_unattributed_when_every_width_is_declared(self):
+        """The nearest legal call: the same tables with every width claimed.
+        *Kills it:* an unattributed list that fires on a declared class."""
+        f_a, f_b, f_ab = self._interacting_tables()
+        widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
+                  1: (Width("simulation.value_growth_vol", "7%", "anchor",
+                            anchor="some.anchor"),)}
+        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
+        assert register.unattributed_channel_ids == ()
+
+    def test_a_config_with_no_sources_block_names_every_row_unattributed(self):
+        """End to end, through the widths the assembler reads from the spec: a
+        shipped config with no `sources:` block states its volatilities with
+        nobody's name on them, and every live row is named as such rather than
+        filed under the assistant."""
+        spec = load_config(str(EXAMPLES / "basic_config.yaml"))
+        assert not spec.sources.declared
+        got = decompose(spec, paths=200, **_inputs(spec))
+        assert isinstance(got, Decomposition) and isinstance(got.spread, SpreadRegister)
+        assert got.spread.unattributed_channel_ids == got.live_channel_ids
+        for row in got.spread.rows:
+            assert row.widths and {w.source for w in row.widths} == {"unattributed"}
+
     def test_no_unstated_sum_when_every_width_is_the_user_s(self):
         f_a, f_b, f_ab = self._interacting_tables()
         widths = {0: (Width("economic.inflation_vol", "1%", "user"),),
@@ -986,7 +1143,7 @@ class TestThePublishedFigures:
             self, fixture_block):
         spec = _fixture_spec()
         det = compute_deterministic(spec)
-        budget = _ulp_budget(det, fixture_block.verdict)
+        budget = dr.identity_budget(det, fixture_block.verdict)
         assert fixture_block.level.all_frozen_path_spread == 0.0
         assert fixture_block.level.all_frozen_deviation <= budget
         assert fixture_block.level.all_frozen_margin == pytest.approx(
@@ -1004,6 +1161,12 @@ class TestThePublishedFigures:
         # ...and the register's own figure is a frequency of its OWN sample.
         assert block.level.prob_best_base * block.level.paths == pytest.approx(
             round(block.level.prob_best_base * block.level.paths), abs=1e-9)
+
+    def test_every_width_on_the_fixture_is_declared(self, fixture_block):
+        """The fixture's `sources:` block claims every key it sets, so no row
+        is unattributed and the provenance sentence may say "the assistant
+        chose" of every row — which it could not on a config that is silent."""
+        assert fixture_block.spread.unattributed_channel_ids == ()
 
     def test_the_superlative_is_refused_and_names_the_figure_to_check(
             self, fixture_block):

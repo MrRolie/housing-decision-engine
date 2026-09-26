@@ -188,8 +188,9 @@ nothing to it. `code` is one of:
 | `single_option` | fewer than two options priced: no margin exists |
 | `one_channel` | exactly one channel reaches a cash flow; the refusal then also carries `channel_id`, `channel` and `label` naming it, and no figures |
 | `no_spread` | the margin is identical on every future, or no channel reaches a cash flow at all |
-| `budget` | the decomposition would price more than 250,000 model evaluations; the reason names the figure and the ways out |
+| `budget` | the decomposition would price more than 250,000 model evaluations; the reason names the figure and the largest `--decompose N` that fits under the ceiling |
 | `freeze_leak` | with every channel frozen the paths still price different margins: a draw escaped the freeze mask, so no figure of the block can be vouched for and none is emitted |
+| `identity_failed` | with every channel frozen the paths agree, but the margin they price is further from `verdict.margin_pv` than 8 units in the last place of the largest option's present-value terms added by size: the freeze does not reproduce the central case, and both registers rest on it, so none is emitted |
 
 **The block** carries all seven of `paths`, `live_channel_ids`, `mean_margin`,
 `sd_margin`, `spread`, `level` and `reversal`, always together — there is no
@@ -228,12 +229,15 @@ document's top-level `verdict` is its one home.
   `all_frozen_path_spread` is how far the all-frozen paths differ from each
   other, and is exactly 0.0 on every block emitted — anything else refuses as
   `freeze_leak`. `all_frozen_deviation` is the all-frozen margin against
-  `verdict.margin_pv`: a few ULPs of the totals subtracted, and not zero by
-  construction, because the simulators compound year by year while the central
-  case takes `(1 + g) ** years`. The text block prints this one.
+  `verdict.margin_pv`: a few ULPs of the present-value terms the margin is
+  summed from, and not zero by construction, because the simulators compound
+  year by year while the central case takes `(1 + g) ** years`; past 8 of them
+  the block refuses as `identity_failed`. The text block prints this one.
 - `reversal` — `exact`, `estimated` and `structural_zeros`, three lists that are
   never ranked against each other.
-  - `exact[]`: `key`, `option`, `stated_formatted`, `bracket_low`,
+  - `exact[]`: `key`, `option`, `stated_formatted`, `stated_source` (whose
+    figure the stated value is — `user`, `anchor`, `assistant` or
+    `unattributed`, the read-back's own source class), `bracket_low`,
     `bracket_high`, `bracket_source`, `probe_paths`,
     `max_path_deviation_over_sd`, `boundaries`, `refused_boundaries`,
     `references` and `path_note`.
@@ -243,7 +247,9 @@ document's top-level `verdict` is its one home.
     `confirming_probabilities`; a sampled crossing carries the same plus
     `curve_probabilities`, `curve_paths` and `seed`. `verdict_field` is one of
     `best`, `runner_up`, `mc_best` or `decisive`; `was` and `becomes` are
-    strings (an option name, or `True`/`False` for `decisive`); each
+    strings read UPWARD along the key — `was` is what the field says just
+    below `value`, `becomes` just above — holding an option name, or for
+    `decisive` one of `decisive for <option>` or `not decisive`; each
     `*_probabilities` is a list of `[option, probability]` pairs.
   - `estimated[]`: the exact row's keys without `probe_paths`; its
     `boundaries[]` carry `verdict_field`, `value`, `value_ci`, `was`, `becomes`

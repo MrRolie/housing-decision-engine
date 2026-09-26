@@ -69,6 +69,9 @@ __all__ = [
     "level_shifts",
     "level_is_resolved",
     "level_resolved_mask",
+    "IDENTITY_ULPS",
+    "identity_ulp_budget",
+    "identity_holds",
 ]
 
 Array = npt.NDArray[np.float64]
@@ -91,6 +94,20 @@ BOOTSTRAP_SPAWN_SALT = 20260922
 # paired standard error. The rest are named as indistinguishable from zero at
 # this sample size — a row the reader must see, never an absence.
 LEVEL_RESOLUTION_SIGMAS = 2.0
+
+# Section 3.4 as amended by 0.1 item 19: with every channel frozen, the margin
+# every path prices is held to the central case's own within this many units in
+# the last place of the magnitude the margin is summed from — never to zero.
+# The simulators compound the value year by year while the central case takes
+# `(1 + g) ** years`, and on the design's fixture that difference measured
+# exactly ONE ulp of the $476,086 house total (5.821e-11). Measured on every
+# shipped example and on an all-cash pair whose $23,170 totals net about $400k
+# of equity against costs, it is at most 1.5 ulps of the terms summed by
+# magnitude — and 32 ulps of that pair's NET total, which is why the caller
+# passes the terms' magnitude and not the total. Eight leaves room without
+# admitting any figure a person could see: at a million dollars of terms it is
+# under a millionth of a cent.
+IDENTITY_ULPS = 8.0
 
 # Resample work is done in blocks of at most this many floats so that a large
 # path count cannot turn a sub-second bootstrap into a memory event. The block
@@ -461,3 +478,35 @@ def level_resolved_mask(deltas: object, standard_errors: object) -> npt.NDArray[
         )
     mask: npt.NDArray[np.bool_] = np.abs(delta_arr) > LEVEL_RESOLUTION_SIGMAS * error_arr
     return mask
+
+
+def identity_ulp_budget(figures: object, ulps: float = IDENTITY_ULPS) -> float:
+    """The budget the all-frozen identity is held to: `ulps` units in the last
+    place of the LARGEST magnitude given (section 3.4, 0.1 item 19).
+
+    Stated in ULPs of the inputs rather than as a tolerance somebody liked. A
+    sum's rounding scales with the magnitude of what was added, not with the
+    net it lands on (the textbook bound is a few units of `sum |x_i|`), so the
+    caller passes each total's terms summed by magnitude; the smallest step any
+    of them can take is `np.spacing` of the largest, and a structural rounding
+    difference is a small multiple of that step. The one home of this budget —
+    the assembler gates on it and the tests import it.
+
+    NaN when any figure is not finite: no budget can be stated then, and
+    `identity_holds` does not hold against a NaN, so the block refuses rather
+    than vouching for an identity nobody could measure.
+    """
+    values = np.abs(np.asarray(figures, dtype=np.float64).ravel())
+    if values.size == 0:
+        raise ValueError("the identity budget needs the figures being subtracted; none were given")
+    if not np.all(np.isfinite(values)):
+        return math.nan
+    return float(float(ulps) * np.spacing(np.max(values)))
+
+
+def identity_holds(deviation: float, budget: float) -> bool:
+    """`deviation <= budget`, failing CLOSED: a NaN on either side does not
+    hold. Written so, not as `not deviation > budget`, because `NaN > x` is
+    False and that form would vouch for a deviation that is not a number."""
+    d, b = float(deviation), float(budget)
+    return bool(math.isfinite(d) and math.isfinite(b) and d <= b)

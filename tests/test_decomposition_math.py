@@ -732,7 +732,7 @@ def test_a_single_future_refuses() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 10. The boundary this track was built behind, and the estimator's own limit.
+# 10. The boundary this module was built behind, and the estimator's own limit.
 # ---------------------------------------------------------------------------
 
 def test_this_module_imports_no_engine_and_loads_on_its_own() -> None:
@@ -839,3 +839,37 @@ def test_centring_changes_nothing_in_expectation() -> None:
     shifted_uncentred = np.mean(shifted_b * (shifted_ab - shifted_a), axis=1) / np.var(shifted_a)
     assert np.allclose(shifted_centred, centred, atol=1e-9)
     assert np.abs(shifted_uncentred - uncentred).max() > 0.01
+
+
+# ---------------------------------------------------------------------------
+# 11. The all-frozen identity's budget — its one home is this module.
+# ---------------------------------------------------------------------------
+
+def test_the_identity_budget_is_ulps_of_the_largest_figure_subtracted() -> None:
+    """Section 3.4 as amended by 0.1 item 19: measured on the design's fixture
+    the deviation is exactly one ulp of the $476,086 house total, and the
+    budget is eight of them — taken by MAGNITUDE, so a negative margin sizes
+    it as well as a positive total."""
+    assert dm.IDENTITY_ULPS == 8.0
+    assert dm.identity_ulp_budget([476_086.0, -31_348.66]) == 8.0 * np.spacing(476_086.0)
+    assert dm.identity_ulp_budget([-900_000.0, 476_086.0]) == 8.0 * np.spacing(900_000.0)
+    assert np.spacing(476_086.0) == pytest.approx(5.821e-11, rel=1e-3)
+
+
+def test_no_budget_is_stated_over_a_figure_that_is_not_a_number() -> None:
+    assert math.isnan(dm.identity_ulp_budget([476_086.0, math.nan]))
+    assert math.isnan(dm.identity_ulp_budget([math.inf]))
+    with pytest.raises(ValueError, match="none were given"):
+        dm.identity_ulp_budget([])
+
+
+def test_the_identity_holds_at_the_budget_and_fails_closed_past_it() -> None:
+    """At exactly the budget it holds; one float past it, or a NaN on either
+    side, it does not — `not deviation > budget` would have vouched for NaN."""
+    budget = dm.identity_ulp_budget([476_086.0])
+    assert dm.identity_holds(budget, budget)
+    assert dm.identity_holds(0.0, budget)
+    assert not dm.identity_holds(float(np.nextafter(budget, 1.0)), budget)
+    assert not dm.identity_holds(math.nan, budget)
+    assert not dm.identity_holds(0.0, math.nan)
+    assert not dm.identity_holds(math.inf, math.inf)

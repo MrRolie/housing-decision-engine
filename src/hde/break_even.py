@@ -952,8 +952,8 @@ def band_sentence(
 
 def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> List[str]:
     """The threshold in words, one sentence per crossing (or the no-crossing
-    line). One builder for the text block, the read-back and every `across`
-    row, so the three cannot phrase the same threshold differently."""
+    line). One function words the text block, the read-back and every
+    `across` row, so the three cannot phrase the same threshold differently."""
     if not result_like["break_evens"]:
         record = result_like.get("no_crossing")
         if record is None:  # a caller that solved without the record
@@ -1072,7 +1072,7 @@ def across_row_sentence(
     """One `across` row in words: the sweep point, the threshold re-solved
     there, what the config refused, and what the crossing costs against income.
 
-    One builder for the text block and the read-back line (2026-09-04 review:
+    One function words the text block and the read-back line (2026-09-04 review:
     the block carried the base sentence alone, so an answer reduced a whole
     years bracket to "near $300k"). The read-back passes `refused_clause=False`
     and `head=False` where its header states those once, and `drop` for the
@@ -1338,6 +1338,33 @@ def reversal_admission(
                   "deltas": {option: deltas[option] for option in moves}, "why": None}
 
 
+def _shift_deviation_over_sd(before: Any, after: Any) -> float:
+    """Clause (b)'s measure: `max |Δ_i − mean Δ| / sd(before)` for one option's
+    per-path PVs at the stated value and at the probe.
+
+    IDENTICAL PATHS MEASURE AS IDENTICAL. On a single-path config every path
+    carries the same float, yet `np.std` and `x − mean(x)` both round the mean
+    and return one ULP of the PV (2.9e-11 on a present value near 200,501).
+    Left to that arithmetic, a constant shift reads a ratio of exactly 1.0 and
+    refuses when not one path differs, and a shift that DOES vary is divided by
+    rounding noise and printed as a finite multiple of an s.d. that is really
+    zero. So a zero range is an exact zero, on each half separately: a constant
+    shift of identical paths is 0.0, a varying one is `inf`, and any real
+    spread takes the arithmetic unchanged.
+
+    Both halves test `== 0`, never `> 0`: `np.ptp` of an array holding a NaN is
+    NaN, and `NaN > 0` is False, so the `> 0` form read a NaN as "no spread"
+    and returned 0.0 — a licence. In the `== 0` form a NaN takes the arithmetic
+    and comes back NaN or `inf`, neither of which any tolerance admits.
+    `reversal_gate` refuses a non-finite PV by name before it gets here; this
+    form is what keeps the measure itself from failing open.
+    """
+    delta = after - before
+    sd = 0.0 if np.ptp(before) == 0 else float(np.std(before))
+    worst = 0.0 if np.ptp(delta) == 0 else float(np.max(np.abs(delta - float(np.mean(delta)))))
+    return worst / sd if sd > 0 else (0.0 if worst == 0.0 else math.inf)
+
+
 def reversal_gate(
     raw: Dict[str, Any], key: str, probe: float,
     *, paths: int = 200,
@@ -1358,6 +1385,17 @@ def reversal_gate(
     mechanism behind the licence is readable rather than lucky: `_financing_pv`
     is one terminal call and `equity_N = value_N·(1−s) − balance_N` has no
     clamp, so `balance_N` separates additively from the path-dependent value.
+
+    A NON-FINITE PRESENT VALUE REFUSES FIRST, on either run and on every
+    option, with its own reason. Every comparison below fails OPEN on NaN:
+    `np.ptp(x) > 0` and `NaN > tolerance` are both False, so one NaN in the
+    stated run's array read as a zero deviation, and one NaN in the probe's
+    array as a deviation no tolerance exceeds — either way the gate licensed a
+    curve it never measured. And `array_equal` is False on NaN, so a NaN in an
+    option the key does not name refused under the draw-stream sentence, which
+    is not what happened. The refused record carries `worst_deviation_over_sd`
+    as NaN — not a number is what was measured — and `others_bit_identical`
+    as None, since neither clause was reached.
     """
     option = key.split(".", 1)[0]
     spec = load_config_dict(raw)
@@ -1370,24 +1408,28 @@ def reversal_gate(
         "others_bit_identical": True, "moved_others": [],
         "worst_deviation_over_sd": None, "licensed": False, "why": None,
     }
-    for name in _priced_options(raw):
-        before, after = getattr(base, name, None), getattr(at, name, None)
-        if before is None or after is None:
-            continue
+    pairs = [(name, getattr(base, name, None), getattr(at, name, None))
+             for name in _priced_options(raw)]
+    pairs = [(name, before, after) for name, before, after in pairs
+             if before is not None and after is not None]
+    unreadable = [
+        f"{name} {where} ({bad:,} of {pvs.size:,} paths)"
+        for name, before, after in pairs
+        for where, pvs in ((f"with {key} as stated", before.pvs),
+                           (f"with {key} at {_fmt_value(key, probe)}", after.pvs))
+        for bad in [int(np.count_nonzero(~np.isfinite(pvs)))] if bad
+    ]
+    if unreadable:
+        record.update(
+            others_bit_identical=None, worst_deviation_over_sd=math.nan,
+            why=(f"a present value this gate compares is not a finite number — "
+                 f"{'; '.join(unreadable)} — so whether {key} shifts {option} by one "
+                 f"constant cannot be measured, and no curve over it is licensed"))
+        return record
+    for name, before, after in pairs:
         if name == option:
-            delta = after.pvs - before.pvs
-            # IDENTICAL PATHS MEASURE AS IDENTICAL. On a single-path config
-            # every path carries the same float, yet `np.std` and `x − mean(x)`
-            # both round the mean and return one ULP of the PV (2.9e-11 on a
-            # present value near 200,501), so the raw ratio reads exactly 1.0
-            # and the gate would say the shift differs path by path when not
-            # one path does. A zero range is an exact zero; any real spread
-            # takes the arithmetic below unchanged.
-            sd = float(np.std(before.pvs)) if np.ptp(before.pvs) > 0 else 0.0
-            worst = (float(np.max(np.abs(delta - float(np.mean(delta)))))
-                     if np.ptp(delta) > 0 else 0.0)
-            record["worst_deviation_over_sd"] = (
-                worst / sd if sd > 0 else (0.0 if worst == 0.0 else math.inf))
+            record["worst_deviation_over_sd"] = _shift_deviation_over_sd(
+                before.pvs, after.pvs)
         elif not np.array_equal(before.pvs, after.pvs):
             record["others_bit_identical"] = False
             record["moved_others"].append(name)
@@ -1398,7 +1440,7 @@ def reversal_gate(
             f"neither — it changes the draw stream, so no curve over it is free")
     elif deviation is None:
         record["why"] = f"{option} is not priced in this run, so its shift cannot be measured"
-    elif deviation > REVERSAL_GATE_TOLERANCE:
+    elif not deviation <= REVERSAL_GATE_TOLERANCE:
         record["why"] = (
             f"moving {key} shifts {option} by a DIFFERENT amount on different paths (worst "
             f"{deviation:.2e} of its own sd, against {REVERSAL_GATE_TOLERANCE:.0e}) — the "
@@ -1470,6 +1512,38 @@ def _free_curve(
     return at
 
 
+def decisive_state(verdict: Verdict) -> str:
+    """The `decisive` verdict field in the words a boundary carries: one of
+    "decisive for <option>" or "not decisive".
+
+    FOR WHOM is read off the verdict, not guessed: `compute_verdict` sets
+    `decisive` only in its `option` state, and that state is decisive for
+    `best`, the central case's winner — under `mc_floor` because P(best
+    cheapest) clears the floor with no other option the majority, under
+    `margin_band` because the central margin clears the tie band. Every other
+    state is not decisive, and the words say no more than that: `tie` and
+    `disagreement` are both "not decisive", because naming the difference here
+    would report a change between them as a change of decisiveness when
+    decisiveness did not change. Whether the majority left `best` is
+    `mc_best`'s own boundary.
+
+    A boolean is what this replaces, and it was false on a two-option axis:
+    decisive for the house below 6.74% and decisive for rent above 6.84% are
+    both True, so the crossing out of the tie band INTO rent's decisiveness
+    printed as "True to False" (examples/mortgage_house_vs_rent.yaml,
+    `house.mortgage_rate`, against `--sweep` either side).
+    """
+    return f"decisive for {verdict.best}" if verdict.decisive else "not decisive"
+
+
+def field_state(verdict: Verdict, field: str) -> Any:
+    """What `field` of `verdict` says, as a boundary reads it: the option name
+    for `best`, `runner_up` and `mc_best`, and `decisive_state` for
+    `decisive`. One accessor for the scan, the bisection and the run's own
+    reading, so the three cannot compare different things."""
+    return decisive_state(verdict) if field == "decisive" else getattr(verdict, field)
+
+
 def _matching_runs(values: Sequence[Any], target: Any) -> List[List[int]]:
     """The maximal contiguous index runs of `values` equal to `target`."""
     runs: List[List[int]] = []
@@ -1496,10 +1570,19 @@ def _region_boundaries(
 
     There is no base POINT on the axis to measure a distance from when the
     config states the input as a path. What is well defined, and what the
-    output prints, is the edge of the region whose answer matches the run's:
-    *the winner changes from rent to the house at 1.61%* means `best` is `rent`
-    above that value and `house` below it. `([], record)` comes back when the
-    run's own answer appears nowhere on the axis — reported, never dropped.
+    output prints, is the edge of the region whose answer matches the run's.
+
+    EVERY EDGE READS THE KEY UPWARD: `was` is what `field` says just below the
+    edge and `becomes` what it says just above, whichever side the run's own
+    region lies on — so `--sweep` at a point either side prints `was` below
+    and `becomes` above. On the fixture the winner is the house below a flat
+    renewal rate of 1.61% and rent above it, so that edge is `was="house"`,
+    `becomes="rent"` although the run itself says rent. Labelling each edge
+    from inside the run's region instead made the lower edge read downward and
+    the upper one upward, so no single reading direction made both true.
+    `direction` still says which side of the run's region the edge bounds.
+    `([], record)` comes back when the run's own answer appears nowhere on the
+    axis — reported, never dropped.
     """
     runs = _matching_runs(region_values, says_now)
     if not runs:
@@ -1519,11 +1602,13 @@ def _region_boundaries(
         holds = [low if low is not None else region_span[first][0],
                  high if high is not None else region_span[last][1]]
         if low is not None:
-            out.append({"attribute": field, "from": says_now, "to": region_values[first - 1],
-                        "value": low, "direction": "below", "holds": holds})
+            out.append({"attribute": field, "was": region_values[first - 1],
+                        "becomes": says_now, "value": low, "direction": "below",
+                        "holds": holds})
         if high is not None:
-            out.append({"attribute": field, "from": says_now, "to": region_values[last + 1],
-                        "value": high, "direction": "above", "holds": holds})
+            out.append({"attribute": field, "was": says_now,
+                        "becomes": region_values[last + 1], "value": high,
+                        "direction": "above", "holds": holds})
     return out, None
 
 
@@ -1543,10 +1628,11 @@ def deterministic_boundaries(
 ) -> Dict[str, Any]:
     """Every value in `[lo, hi]` at which the DETERMINISTIC verdict stops
     saying what this config's own run says — the half of the reversal register
-    that carries no sample in it anywhere, and the half the deterministic
-    renewal-flip line of `2026-09-21-unpriced-dimensions.md` slice 2 calls.
+    that carries no sample in it anywhere. The deterministic renewal-flip line
+    of `2026-09-21-unpriced-dimensions.md` slice 2 is planned to call it too;
+    that slice is not built, so today the reversal register is its only caller.
 
-    ONE SOLVER, TWO CONSUMERS (seat ruling, mechanism): every value reported
+    ONE SOLVER, TWO CONSUMERS (spec §0): every value reported
     here is `solve_crossings`' own figure on the relevant pair, so the number
     this prints and the number `--break-even` prints on that pair are the same
     number BY CONSTRUCTION rather than by a test comparing two bisections.
@@ -1653,7 +1739,7 @@ def _identification(
     largest and the test is at its strictest.
     """
     if field == "mc_best":
-        watched = [o for o in (boundary["from"], boundary["to"]) if isinstance(o, str)]
+        watched = [o for o in (boundary["was"], boundary["becomes"]) if isinstance(o, str)]
     else:
         watched = [best] if best else []
     rows = []
@@ -1691,7 +1777,8 @@ def _futures_field_boundaries(
     is not seen, which is why `scan_points` rides with every row.
     """
     xs = [lo + (hi - lo) * i / (scan_points - 1) for i in range(scan_points)]
-    values = [getattr(free(x)[0], field) for x in xs]
+    says_now = field_state(stated, field)
+    values = [field_state(free(x)[0], field) for x in xs]
     groups: List[Tuple[int, int, Any]] = []
     start = 0
     for i in range(1, len(values) + 1):
@@ -1704,15 +1791,15 @@ def _futures_field_boundaries(
         a, b, _ = groups[index]
         inside = xs[a] if step < 0 else xs[b]
         outside = xs[groups[index - 1][1]] if step < 0 else xs[groups[index + 1][0]]
-        return _step_edge(lambda v: getattr(free(v)[0], field),
-                          getattr(stated, field), inside, outside)
+        return _step_edge(lambda v: field_state(free(v)[0], field),
+                          says_now, inside, outside)
 
     found, anomaly = _region_boundaries(
-        key, field, getattr(stated, field), [g[2] for g in groups], span, edge_at, (lo, hi))
+        key, field, says_now, [g[2] for g in groups], span, edge_at, (lo, hi))
     if anomaly is not None:
         return [], anomaly["why"] + f" (scanned at {scan_points} points)"
     if not found:
-        return [], (f"{field} says {getattr(stated, field)!r} at every one of {scan_points} "
+        return [], (f"{field} says {says_now!r} at every one of {scan_points} "
                     f"points across {_fmt_value(key, lo)}–{_fmt_value(key, hi)}, so no "
                     f"boundary of it lies in the range this axis searches")
     return found, None
@@ -1747,8 +1834,11 @@ def _typed_boundary(
     fifth boundary kind as whichever of the two the branch happened to be, and
     that is the one error no downstream reader could detect.
     """
+    # `was` / `becomes` pass through UNCOERCED: a `str()` here is what turned
+    # a boolean decisiveness into "True" and let it print, so the type's own
+    # check is the one that has to see the raw value.
     common = {"verdict_field": field, "value": entry["value"],
-              "was": str(entry["from"]), "becomes": str(entry["to"])}
+              "was": entry["was"], "becomes": entry["becomes"]}
     if field in _DETERMINISTIC_FIELDS:
         return SolvedBoundary(
             **common,
@@ -1793,14 +1883,19 @@ def _stated_path_zero(raw: Dict[str, Any], key: str, option: str) -> StructuralZ
     # rate already contracted for the opening term, and a sentence that is true
     # of the row it was written for is exactly what a category-general branch
     # loses first (2026-09-22, the same find as the bracket refusal above).
+    #
+    # "This config states", never "you stated": the reason is printed whoever
+    # typed the figure, and on the fixture the ladder is assistant-typed and the
+    # contract rate an anchor's, which the read-back of the same run says. WHOSE
+    # figure it is travels as the joined row's `stated_source`.
     if isinstance(value, list):
-        reason = (f"{key} is a path you stated, not a distribution — the engine anchors no "
-                  f"forward rate and draws none, so {option}'s renewals carry no spread here "
-                  f"at all. They carry a solved distance instead")
+        reason = (f"{key} is a path this config states, not a distribution — the engine "
+                  f"anchors no forward rate and draws none, so {option}'s renewals carry no "
+                  f"spread here at all. They carry a solved distance instead")
     else:
-        reason = (f"{key} is one rate you stated, held for the opening term — no draw in this "
-                  f"engine touches it, so {option}'s financing carries no spread here at all. "
-                  f"It carries a solved distance instead")
+        reason = (f"{key} is one rate this config states, held for the opening term — no "
+                  f"draw in this engine touches it, so {option}'s financing carries no spread "
+                  f"here at all. It carries a solved distance instead")
     return StructuralZero(
         kind="stated_path", label=_STATED_PATH_LABELS.get(leaf, key),
         keys=(key,), reason=reason,
@@ -1877,9 +1972,11 @@ def reversal_register(
     deterministic verdict reads no path, so `best` and `runner_up` come back as
     `SolvedBoundary` rows with an empty `confirming_probabilities` (there is no
     free curve for a re-simulation to confirm), and `mc_best` and `decisive`
-    come back as `RefusedBoundary` naming the absent futures. An empty register
-    here would hide two figures that need no futures to compute, and a reader
-    would take it as "nothing reverses".
+    come back as `RefusedBoundary`, each with the reason true of it
+    (`_unsolved_without_futures`): there is no majority without futures, while
+    decisiveness exists — read off the margin band — and this solver does not
+    look for it there. An empty register here would hide two figures that need
+    no futures to compute, and a reader would take it as "nothing reverses".
 
     What that route costs, stated because it is not free: the exactness gate
     still runs, on `min(gate_paths, num_sims)` paths of a run whose caller
@@ -1935,6 +2032,7 @@ def reversal_register(
             # The STATED value, never flattened: the schedule is what the axis
             # replaces, so one figure here would erase the trap.
             "stated_formatted": _stated_formatted(raw, key),
+            "stated_source": _stated_source(spec, key),
             "bracket_low": lo, "bracket_high": hi, "bracket_source": BRACKET_SOURCE,
             "max_path_deviation_over_sd": gate["worst_deviation_over_sd"],
             "references": _axis_references(key),
@@ -1967,6 +2065,24 @@ def reversal_register(
                             structural_zeros=tuple(zeros))
 
 
+def _stated_source(spec: ComparisonSpec, key: str) -> str:
+    """Whose figure the stated `key` is: `SourceEcho.classify`'s own answer —
+    the classifier the read-back's source echo prints — and no second one.
+
+    Every candidate is a key the config STATES, and the echo carries an entry
+    for every stated value (the undeclared ones as `unattributed`), so a
+    missing entry means the candidate rule and the echo disagree about what
+    the config says. That RAISES rather than printing a guessed class.
+    """
+    echo = spec.sources
+    source = echo.classify(key) if echo is not None else None
+    if source is None:
+        raise ValueError(
+            f"{key} is a reversal candidate, so this config states it, yet the source "
+            f"echo has no entry for it — nothing can say whose figure it is")
+    return source
+
+
 def _stated_formatted(raw: Dict[str, Any], key: str) -> str:
     value = base_value(raw, key)
     if isinstance(value, list):
@@ -1990,6 +2106,35 @@ def _axis_references(key: str) -> Tuple[AxisReference, ...]:
             note=("a list price, to bracket a guess from above — never a ceiling on a "
                   "renewal years from now" if name.endswith("posted_5y") else None)))
     return tuple(out)
+
+
+def _unsolved_without_futures(field: str) -> str:
+    """Why a futures-side field is not solved on a run WITHOUT futures — one
+    sentence per field, because the true reason differs.
+
+    `mc_best` does not exist on such a run: the majority is a frequency over
+    futures, and `compute_verdict` leaves it None. `decisive` DOES exist — the
+    verdict reads it off the central case's margin against the tie band
+    (`margin_band`) — and it can change inside the bracket: on
+    examples/first_time_buyer_montreal.yaml `--sweep condo.mortgage_rate`
+    prints it True at 4.40%, False from 4.50% to 5.10%, True again from 5.20%
+    (condo decisive below, rent decisive above). So "read off this run's
+    futures, and this run has none" was false of `decisive`. What is true is a
+    fact about THIS solver: it locates `decisive` only on the futures curve.
+    """
+    if field == "decisive":
+        return (
+            "this solver locates decisive only on the futures curve, so on a run "
+            "without futures (--no-monte-carlo, or a single-path run) it is not "
+            "solved here — this run's own decisiveness is read off the central "
+            "case's margin against the tie band, and where that changes along this "
+            "axis is not reported; the boundaries this row does carry are solved on "
+            "the deterministic verdict and read no path")
+    return (
+        f"{field} is read off this run's futures and this run has none "
+        f"(--no-monte-carlo, or a single-path run), so there is no curve for a "
+        f"boundary of it to lie on; the boundaries this row does carry are solved "
+        f"on the deterministic verdict and read no path")
 
 
 def _confirmed_boundaries(
@@ -2037,11 +2182,7 @@ def _confirmed_boundaries(
         per_field[field] = ((
             _futures_field_boundaries(
                 raw, key, field, free, stated, lo, hi, scan_points=scan_points))
-            if free is not None else ([], (
-                f"{field} is read off this run's futures and this run has none "
-                f"(--no-monte-carlo, or a single-path run), so there is no curve for a "
-                f"boundary of it to lie on; the boundaries this row does carry are solved "
-                f"on the deterministic verdict and read no path")))
+            if free is not None else ([], _unsolved_without_futures(field)))
 
     reported: List[Union[SolvedBoundary, SampledBoundary]] = []
     refused: List[RefusedBoundary] = []

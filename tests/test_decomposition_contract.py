@@ -1,4 +1,4 @@
-"""The decomposition contract — the one file five parallel tracks share.
+"""The decomposition contract — the one file every piece of the block shares.
 
 Nothing here tests what a frozen dataclass gives for free. It guards: the
 channel ids are FIXED INTEGERS in fixed slots, checked ACROSS PROCESSES at two
@@ -153,3 +153,70 @@ class TestTheBinding:
         with pytest.raises(TypeError):
             dc.SolvedBoundary(**{k: v for k, v in full.items()
                                  if k != "confirming_probabilities"})
+
+
+class TestABoundaryStatesBothSidesInWords:
+    """`was` and `becomes` are the words a reader is shown for the verdict on
+    each side of a boundary — an option's name, or "decisive for house" — on
+    EVERY boundary kind. A boolean decisiveness once reached the output through
+    a `str()` as "changes from True to False", on a crossing that ran from not
+    decisive into decisive for the OTHER option; the type now refuses anything
+    that is not text, so no coercion upstream can launder a raw value through.
+    """
+
+    _BUILDS = {
+        dc.SolvedBoundary: dict(verdict_field="best", value=0.016052,
+                                confirming_probabilities=()),
+        dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674,
+                                 curve_probabilities=(("house", 0.65),),
+                                 confirming_probabilities=(("house", 0.65),),
+                                 curve_paths=5000, seed=42),
+        dc.EstimatedBoundary: dict(verdict_field="best", value=0.014,
+                                   value_ci=dc.Interval(0.012, 0.016),
+                                   resimulation_paths=500),
+    }
+
+    @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
+    def test_words_build(self, cls):
+        """The legal call, so the refusals below cannot pass by refusing
+        everything."""
+        built = cls(**self._BUILDS[cls], was="decisive for house", becomes="not decisive")
+        assert (built.was, built.becomes) == ("decisive for house", "not decisive")
+
+    @pytest.mark.parametrize("cls", list(_BUILDS), ids=lambda c: c.__name__)
+    @pytest.mark.parametrize("side", ["was", "becomes"])
+    @pytest.mark.parametrize("value", [True, False, None, 0.0, "", "   "])
+    def test_anything_but_words_refuses(self, cls, side, value):
+        sides = {"was": "house", "becomes": "rent", side: value}
+        with pytest.raises(TypeError, match="not words"):
+            cls(**self._BUILDS[cls], **sides)
+
+
+class TestAStatedValueSaysWhoseFigureItIs:
+    """`stated_source` has no default on either reversal kind: a row whose
+    producer did not say whose figure the stated value is must not build, or
+    the words keyed on it would fall back to whichever reading the default
+    happened to favour."""
+
+    _EXACT = dict(key="house.mortgage_renewal_rates", option="house",
+                  stated_formatted="4.60%, 5.00%", bracket_low=0.01,
+                  bracket_high=0.10, bracket_source="assistant", probe_paths=200,
+                  max_path_deviation_over_sd=9.5e-16, boundaries=(),
+                  refused_boundaries=(), references=())
+
+    def test_both_kinds_build_with_it_and_refuse_without_it(self):
+        exact = dc.ExactReversal(**self._EXACT, stated_source="assistant")
+        assert exact.stated_source == "assistant"
+        estimated_kwargs = {k: v for k, v in self._EXACT.items() if k != "probe_paths"}
+        estimated = dc.EstimatedReversal(**estimated_kwargs, stated_source="user")
+        assert estimated.stated_source == "user"
+        with pytest.raises(TypeError, match="stated_source"):
+            dc.ExactReversal(**self._EXACT)
+        with pytest.raises(TypeError, match="stated_source"):
+            dc.EstimatedReversal(**estimated_kwargs)
+
+    def test_it_has_no_default_anywhere(self):
+        for cls in (dc.ExactReversal, dc.EstimatedReversal):
+            field = next(f for f in dataclasses.fields(cls) if f.name == "stated_source")
+            assert field.default is dataclasses.MISSING
+            assert field.default_factory is dataclasses.MISSING

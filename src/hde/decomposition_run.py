@@ -26,8 +26,10 @@ WHAT IT DOES, in the order it does it, because the order is the cost model:
   3. the level register: the freeze mask, paired against `A`'s own first `m`
      paths, plus the all-frozen run that makes the register a fact. When that
      run's paths disagree with each other the whole block refuses
-     (`freeze_leak`): a register whose identity failed does not print as though
-     it held.
+     (`freeze_leak`), and when they agree on a margin further from the central
+     case's than `decomposition_math.identity_ulp_budget` allows it refuses too
+     (`identity_failed`): a register whose identity failed does not print as
+     though it held, and neither does anything else built on the freeze.
   4. the reversal register: `break_even.reversal_register`'s solved rows and
      structural zeros, plus the dead-draw rows only this module can see.
 
@@ -102,6 +104,8 @@ __all__ = [
     "channels_that_draw",
     "planned_evaluations",
     "actual_evaluations",
+    "largest_affordable_paths",
+    "identity_budget",
     "DEFAULT_LEVEL_PATHS",
     "EVALUATION_CEILING",
     "OPTION_NAMES",
@@ -657,17 +661,38 @@ def _refusal_before_pricing(spec, mc, verdict, live: Tuple[int, ...],
         )
     work = planned_evaluations(paths, len(live), _level_paths(paths))
     if work > EVALUATION_CEILING:
+        # ONE way out, and it is named with the figure that fits. An earlier
+        # sentence also offered to "say which channels to hold"; no flag and no
+        # mechanism does that, and the nearest real one — zeroing a channel's
+        # widths in the config — is refused outright for the tenancy (a zeroed
+        # reset hazard beside a stated market rent) and decomposes a different
+        # run from the one the user asked about.
         return _refuse(
             "budget",
             f"this decomposition would price {work:,} futures "
             f"({paths:,} paths x {len(live) + 2} matrices, plus "
             f"{_level_paths(paths):,} x {len(live)} for the level register), "
             f"above the ceiling of {EVALUATION_CEILING:,} "
-            "[the ceiling is assistant-chosen; the spec names no figure]. "
-            "Two ways out: run the decomposition at its own smaller sample "
-            "with --decompose=N, or say which channels to hold.",
+            "[assistant-chosen: no published figure sets it]. "
+            "Run it at a smaller sample of its own with --decompose=N: on this "
+            f"run the largest N under the ceiling is {largest_affordable_paths(len(live))}.",
         )
     return None
+
+
+def largest_affordable_paths(k_live: int) -> int:
+    """The largest `--decompose=N` whose planned work clears
+    `EVALUATION_CEILING` at `k_live` live channels — read off
+    `planned_evaluations` itself, which is monotone in N, so the cost model
+    keeps one home and this can never name an N the gate would refuse."""
+    low, high = 0, EVALUATION_CEILING
+    while low < high:
+        mid = (low + high + 1) // 2
+        if planned_evaluations(mid, k_live, _level_paths(mid)) <= EVALUATION_CEILING:
+            low = mid
+        else:
+            high = mid - 1
+    return low
 
 
 # ---------------------------------------------------------------------------
@@ -737,6 +762,26 @@ def _all_widths_stated_by_user(widths: Sequence[Width]) -> bool:
     user's or an anchor's. A row with no width at all does not license it —
     silence about whose figure sized a channel is not the user's figure."""
     return bool(widths) and all(w.source in _USER_CLASSES for w in widths)
+
+
+def _all_widths_typed_by_the_assistant(widths: Sequence[Width]) -> bool:
+    """§5 mechanism 4's membership: every width on the row is `assistant` —
+    the one class that says the assistant chose the figure.
+
+    `unattributed` is NOT that class. It means no `sources:` entry claims the
+    key: typed in the config with nobody's name on it. Counting it as "the
+    assistant chose" reads that silence as an answer, which is the one
+    inference the source echo exists to refuse (`config`'s decisiveness
+    warning, ruled 2026-09-21; "silence is reported, never inferred",
+    `sources`). Such rows are named separately, by
+    `SpreadRegister.unattributed_channel_ids`.
+    """
+    return bool(widths) and all(w.source == "assistant" for w in widths)
+
+
+def _has_unattributed_width(widths: Sequence[Width]) -> bool:
+    """A row at least one of whose widths no `sources:` entry claims."""
+    return any(w.source == "unattributed" for w in widths)
 
 
 def _first_unstated(widths: Sequence[Width]) -> Optional[Width]:
@@ -967,9 +1012,7 @@ def _spread_register(
         # is structurally impossible to print on the branch where it is noise.
         unstated_positions = [
             position for position, channel_id in enumerate(live)
-            if widths_by_channel.get(channel_id)
-            and all(w.source not in _USER_CLASSES
-                    for w in widths_by_channel[channel_id])
+            if _all_widths_typed_by_the_assistant(widths_by_channel.get(channel_id, ()))
         ]
         unstated_sum: Optional[float] = None
         unstated_ci: Optional[Interval] = None
@@ -989,10 +1032,14 @@ def _spread_register(
     licensed = leading_row is not None and _all_widths_stated_by_user(leading_row.widths)
     check_first = None if licensed or leading_row is None else _first_unstated(
         leading_row.widths)
+    unattributed = tuple(
+        channel_id for channel_id in live
+        if _has_unattributed_width(widths_by_channel.get(channel_id, ())))
     return SpreadRegister(rows=tuple(rows), interaction=interaction,
                           leading_channel_id=leading,
                           superlative_licensed=licensed,
-                          check_first=check_first)
+                          check_first=check_first,
+                          unattributed_channel_ids=unattributed)
 
 
 def _no_sign_variation(best: str, futures: int) -> RefusedSpread:
@@ -1104,9 +1151,10 @@ def _freeze_leak(level: LevelRegister) -> DecompositionRefusal:
     level (§5 mechanism 5), so nothing prints — a named refusal, never a
     register that reads as though the identity held.
 
-    `all_frozen_deviation` is NOT gated here: it is held to a ULP budget
-    scaled to the totals subtracted, never to zero, because the simulators
-    compound year by year while the central case takes `(1 + g) ** years`.
+    `all_frozen_deviation` is NOT gated here but by `_identity_failed`: it is
+    held to a ULP budget scaled to the totals subtracted, never to zero,
+    because the simulators compound year by year while the central case takes
+    `(1 + g) ** years`.
     """
     return _refuse(
         "freeze_leak",
@@ -1116,6 +1164,54 @@ def _freeze_leak(level: LevelRegister) -> DecompositionRefusal:
         "so every shift the level register would print is measured against a "
         "baseline that is not the central case. This block cannot vouch for "
         "its figures on this run, and prints none of them.",
+    )
+
+
+def identity_budget(det, verdict) -> float:
+    """The ULP budget the all-frozen identity is held to ON THIS RUN:
+    `decomposition_math.identity_ulp_budget` over the magnitude the margin is
+    summed from — each priced option's breakdown terms added by size (its
+    `total_pv` is their sum), that total itself, and the verdict's margin.
+
+    The TERMS and not the total, because the rounding lives in them: an
+    all-cash pair whose totals net ~$400k of equity against costs to $23,170
+    measured a deviation of 32 ulps of that total and ONE ulp of its terms.
+    Scaled by the total, the gate refused that legal run. The budget's rule
+    has its one home in `decomposition_math`; which figures it is taken over
+    has its one home here, and the tests import both."""
+    figures: List[float] = [abs(verdict.margin_pv)]
+    for option in (det.condo, det.house, det.rent):
+        if option is not None:
+            figures.append(abs(option.total_pv))
+            figures.append(float(sum(abs(term) for term in option.breakdown.values())))
+    return dm.identity_ulp_budget(figures)
+
+
+def _identity_failed(level: LevelRegister, verdict, budget: float) -> DecompositionRefusal:
+    """The all-frozen run agrees with ITSELF but not with the central case.
+
+    `freeze_leak` catches paths that differ from each other. This is the other
+    half of the identity (§3.4, amended by §0.1 item 19): every path prices one
+    margin, and that margin must be the verdict's own to within
+    `identity_budget` — a few units in the last place, the structural rounding
+    between compounding year by year and `(1 + g) ** years`. Beyond it, the
+    freeze does not reproduce the central case, and "all N frozen reproduces the
+    central case" would be printed over a run where it did not. The level
+    register's shifts are measured against that freeze and the spread register
+    is priced by the same machinery, so the WHOLE block refuses — both
+    registers rest on it, and the spread may not print without the level.
+    """
+    return _refuse(
+        "identity_failed",
+        f"with every channel frozen, all {level.paths:,} paths price one margin, "
+        f"${level.all_frozen_margin:,.2f}, and it should be the central case's own "
+        f"${verdict.margin_pv:,.2f}: they are ${level.all_frozen_deviation:.3g} apart, "
+        f"above the ${budget:.3g} that compounding year by year against the "
+        "central case's closed form can explain "
+        f"({dm.IDENTITY_ULPS:g} units in the last place of the largest option's "
+        "present-value terms, added by size). Every figure this block would "
+        "print rests on that freeze "
+        "reproducing the central case, so it prints none of them.",
     )
 
 
@@ -1235,6 +1331,9 @@ def decompose(spec, *, det, mc, verdict, raw=None, prior=None,
     level = _level_register(spec, verdict, best, f_a, live, seed, level_paths)
     if level.all_frozen_path_spread != 0.0:
         return _freeze_leak(level)
+    budget = identity_budget(det, verdict)
+    if not dm.identity_holds(level.all_frozen_deviation, budget):
+        return _identity_failed(level, verdict, budget)
     reversal = _reversal_register(spec, raw, det, mc, live, drawing)
 
     return Decomposition(
