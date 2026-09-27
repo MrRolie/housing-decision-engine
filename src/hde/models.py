@@ -109,6 +109,48 @@ class EventConfig:
     hazard_start_year: int = 1
     cost_distribution: Literal["normal", "lognormal"] = "lognormal"
 
+    def fire_window(self, years: int) -> Tuple[int, int]:
+        """The first and last year the futures can fire this event: its stated
+        window inside the horizon, and for hazard timing no earlier than the
+        hazard's start. Empty when the first year is past the last."""
+        first = max(1, self.min_year)
+        if self.timing_model == "hazard":
+            first = max(first, self.hazard_start_year)
+        last = years if self.max_year is None else min(self.max_year, years)
+        return first, last
+
+    def hazard_schedule(self, years: int) -> List[Tuple[int, float]]:
+        """(year, annual hazard clamped to [0, 1]) for every year of the fire
+        window: the one schedule the futures draw from and the read-back and
+        the loader read."""
+        start = max(1, self.hazard_start_year)
+        first, last = self.fire_window(years)
+        return [(t, min(max(self.hazard_base + self.hazard_growth * max(0, t - start), 0.0), 1.0))
+                for t in range(first, last + 1)]
+
+    def hazard_fire_facts(self, years: int) -> Tuple[float, Optional[int]]:
+        """(the probability the event fires within the horizon, the first year
+        by which at least half of ALL futures have fired it — None when fewer
+        than half ever do), exact from `hazard_schedule`."""
+        survive = 1.0
+        half: Optional[int] = None
+        for year, hazard in self.hazard_schedule(years):
+            survive *= 1.0 - hazard
+            if half is None and 1.0 - survive >= 0.5:
+                half = year
+        return 1.0 - survive, half
+
+    def fire_year_varies(self, years: int) -> bool:
+        """Whether the futures' fire year is not a single point. A hazard that
+        is 0 throughout never fires, and one whose first positive year is
+        certain always fires there; jitter varies only inside a window of more
+        than one year."""
+        if self.timing_model == "hazard":
+            positive = [h for _, h in self.hazard_schedule(years) if h > 0]
+            return bool(positive) and positive[0] < 1.0
+        first, last = self.fire_window(years)
+        return self.timing_std_years > 0 and first < last
+
 
 @dataclass
 class CondoParams:

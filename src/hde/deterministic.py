@@ -596,9 +596,15 @@ def _annual_costs_for_option(
     sim: SimulationParams,
     econ: EconomicParams,
     rent_reset_year: Optional[int] = None,
+    event_years: Optional[List[Optional[int]]] = None,
 ) -> List[float]:
     """
     Un-discounted annual housing cost by year, used for affordability ratios.
+
+    `event_years` gives the year each of `params.events` fires on one Monte
+    Carlo path, in list order (None: it never does), so the ratio charges the
+    events that path's present value charges. Omitted, each event is at its
+    best-guess year.
 
     Note: these are nominal/undiscounted cash outflows (not PVs); they are
     divided by the year's income to form an affordability ratio.
@@ -638,14 +644,16 @@ def _annual_costs_for_option(
     def _g(rate: float) -> float:
         return _effective_growth_rate(rate, econ)
 
+    if event_years is None:
+        event_years = [_event_year_deterministic(ev, sim.years) for ev in params.events]
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
         mort_t = (payment_in_year(segments, year) if segments is not None
                   else (mort_payment if year <= mort_term else 0.0))
         ev_cost = sum(
-            ev.base_cost for ev in params.events
-            if _event_year_deterministic(ev, sim.years) == year
+            ev.base_cost for ev, fired in zip(params.events, event_years)
+            if fired == year
         )
         other_cost = sum(
             c.annual_amount * ((1 + _g(c.escalation_rate)) ** t)

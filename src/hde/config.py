@@ -1042,7 +1042,7 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
             owned.append(f"{name}.price_shock")
         if option.other_recurring_costs and sim.other_cost_vol:
             owned.append("simulation.other_cost_vol")
-        if _stochastic_events(option):
+        if _stochastic_events(option, spec.simulation.years):
             owned.append(f"{name}.events")
     if spec.rent is not None:
         if sim.rent_escalation_vol:
@@ -1051,7 +1051,7 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
             renter.append("simulation.investment_return_vol")
         if spec.rent.other_recurring_costs and sim.other_cost_vol:
             renter.append("simulation.other_cost_vol")
-        if _stochastic_events(spec.rent):
+        if _stochastic_events(spec.rent, spec.simulation.years):
             renter.append("rent.events")
         # The lease reset is the renter's own tail: on some paths the rent
         # series moves to a different track and on others it does not. Missing
@@ -1066,15 +1066,10 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
     return owned, renter, shared
 
 
-def _stochastic_events(option: Any) -> bool:
-    """True when any of an option's events carries timing or cost dispersion."""
-    for event in option.events:
-        if event.timing_std_years != 0 or event.cost_vol != 0:
-            return True
-        if event.timing_model == "hazard" and (event.hazard_base != 0
-                                               or event.hazard_growth != 0):
-            return True
-    return False
+def _stochastic_events(option: Any, years: int) -> bool:
+    """True when any of an option's events differs between futures: its fire
+    year is not a single point, or its cost is drawn."""
+    return any(event.cost_vol > 0 or event.fire_year_varies(years) for event in option.events)
 
 
 def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
@@ -1282,13 +1277,8 @@ def single_path_run(spec: ComparisonSpec) -> bool:
         shock = getattr(opt, "price_shock", None)
         if shock is not None and shock.annual_hazard > 0:
             return False
-        for event in opt.events:
-            if event.timing_std_years != 0 or event.cost_vol != 0:
-                return False
-            if event.timing_model == "hazard" and (
-                event.hazard_base != 0 or event.hazard_growth != 0
-            ):
-                return False
+        if _stochastic_events(opt, sim.years):
+            return False
     if spec.income is not None:
         for drop in spec.income.pay_drop_events:
             if drop.year_jitter_std != 0 or drop.magnitude_vol != 0:
@@ -2033,6 +2023,43 @@ def _capital_bound_message(name: str, opt: Any) -> str:
             f"above the price ${opt.initial_value:,.0f}")
 
 
+def _event_refusals(option_name: str, events: List[EventConfig], years: int) -> List[str]:
+    """One option's events refused, each naming the key and the fact."""
+    out: List[str] = []
+    names = [event.name for event in events]
+    for name in sorted({n for n in names if names.count(n) > 1}):
+        out.append(f"{option_name}.events: {names.count(name)} events are named '{name}'")
+    for event in events:
+        key = f"{option_name}.events['{event.name}']"
+        for field_name in ("timing_std_years", "cost_vol"):
+            value = getattr(event, field_name)
+            if value < 0:
+                out.append(f"{key}.{field_name} should be >= 0, got {value}")
+        if event.min_year > years:
+            out.append(f"{key}.min_year ({event.min_year}) > years ({years})")
+            continue
+        if event.max_year is not None and event.min_year > event.max_year:
+            out.append(f"{key}.min_year ({event.min_year}) > max_year ({event.max_year})")
+            continue
+        if event.expected_year < event.min_year or (
+                event.max_year is not None and event.expected_year > event.max_year):
+            window = f"[{event.min_year}, {event.max_year if event.max_year is not None else years}]"
+            out.append(f"{key}.expected_year ({event.expected_year}) is outside its window {window}")
+        if event.timing_model != "hazard":
+            continue
+        if event.hazard_start_year > years:
+            out.append(f"{key}.hazard_start_year ({event.hazard_start_year}) > years ({years}): "
+                       f"no future fires it")
+        elif event.max_year is not None and event.hazard_start_year > event.max_year:
+            out.append(f"{key}.hazard_start_year ({event.hazard_start_year}) > max_year "
+                       f"({event.max_year}): no future fires it")
+        elif not any(h > 0 for _, h in event.hazard_schedule(years)):
+            first, last = event.fire_window(years)
+            out.append(f"{key}: timing_model hazard, but the hazard is 0 in every year it can "
+                       f"fire [{first}, {last}]: no future fires it")
+    return out
+
+
 def validate_config(spec: ComparisonSpec) -> List[str]:
     """
     Validate configuration parameters.
@@ -2139,6 +2166,11 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             warnings.append(
                 f"Event '{event.name}' cost_distribution must be 'normal' or 'lognormal', got {event.cost_distribution}"
             )
+    # An event that cannot happen, or whose window contradicts itself, would be
+    # charged by the best guess and priced otherwise by the futures.
+    for option_name, option in (("condo", spec.condo), ("house", spec.house), ("rent", spec.rent)):
+        if option is not None:
+            warnings.extend(_event_refusals(option_name, option.events, sim.years))
 
     for _name, _opt in (("condo", spec.condo), ("house", spec.house)):
         if _opt is not None and _opt.purchase_costs < 0:
@@ -2173,6 +2205,9 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
         for event in income.pay_drop_events:
             if not (0 < event.magnitude <= 1):
                 warnings.append(f"pay_drop_event year={event.year}: magnitude must be in (0, 1]")
+            if not (1 <= event.year <= sim.years):
+                warnings.append(f"income.pay_drop_events year ({event.year}) is outside the "
+                                f"horizon [1, {sim.years}]")
 
     if econ.inflation_vol < 0:
         warnings.append(f"inflation_vol should be >= 0, got {econ.inflation_vol}")

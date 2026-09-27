@@ -1640,8 +1640,8 @@ def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carrie
     carries (stated or defaulted) for an option the run prices, each
     correlation followed by the shocks it pulls; each carries the read-back's
     own tag and figure; and each dead row names the same keys. On the
-    witnesses the printed line is pinned too: a hazard of zero, an event that
-    starts after the horizon, and a cost volatility on an option holding no
+    witnesses the printed line is pinned too: a hazard of zero, an event no
+    future fires, and a cost volatility on an option holding no
     line print their figures, and a correlation onto an unpriced option does
     not print.
     *Kills it:* a predicate that asks whether a draw fires (the witnesses'

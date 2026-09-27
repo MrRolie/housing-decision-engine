@@ -703,12 +703,7 @@ def _sample_event_year_hazard(
     Sample event year using a simple hazard that can rise over time.
     Returns None if the event never occurs within the horizon.
     """
-    hazard_start = max(1, event.hazard_start_year)
-    for year in range(1, max_year + 1):
-        hazard = 0.0
-        if year >= hazard_start:
-            hazard = event.hazard_base + event.hazard_growth * max(0, year - hazard_start)
-        hazard = min(max(hazard, 0.0), 1.0)
+    for year, hazard in event.hazard_schedule(max_year):
         if hazard <= 0:
             continue
         if rng.random() < hazard:
@@ -819,6 +814,7 @@ def _simulate_condo_pv_once(
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
+    event_years_out: Optional[List[Optional[int]]] = None,
 ) -> float:
     """
     Run one simulation of condo PV with randomness.
@@ -865,6 +861,8 @@ def _simulate_condo_pv_once(
                        for event in condo.events}
     else:
         event_years = {event.name: _sample_event_year(event, sim.years, g) for event in condo.events}
+    if event_years_out is not None:
+        event_years_out.extend(event_years[event.name] for event in condo.events)
 
     drift_context = _drift_context(prior_rows, world)
 
@@ -956,6 +954,7 @@ def _simulate_house_pv_once(
     prior_rows=None,
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
+    event_years_out: Optional[List[Optional[int]]] = None,
 ) -> float:
     """
     Run one simulation of house PV with randomness.
@@ -992,6 +991,8 @@ def _simulate_house_pv_once(
                        for event in house.events}
     else:
         event_years = {event.name: _sample_event_year(event, sim.years, g) for event in house.events}
+    if event_years_out is not None:
+        event_years_out.extend(event_years[event.name] for event in house.events)
 
     drift_context = _drift_context(prior_rows, world)
 
@@ -1069,6 +1070,7 @@ def _simulate_rent_pv_once(
     rng: Union[np.random.Generator, "_Binding"],
     tax: Optional[TaxParams] = None,
     reset_year: Optional[int] = None,
+    event_years_out: Optional[List[Optional[int]]] = None,
 ) -> float:
     """
     Run one simulation of rent PV with randomness.
@@ -1156,9 +1158,12 @@ def _simulate_rent_pv_once(
                        for event in rent.events}
     else:
         event_years = {event.name: _sample_event_year(event, sim.years, g_shelter) for event in rent.events}
+    if event_years_out is not None:
+        event_years_out.extend(event_years[event.name] for event in rent.events)
     for event in rent.events:
         year = event_years[event.name]
-        if year is None:
+        # Bounded like the owned loops, which run 1..years and never index past it.
+        if year is None or year > sim.years:
             continue
         if shelter_frozen:
             event_cost = event.base_cost
@@ -1496,8 +1501,8 @@ def run_monte_carlo(
     afford_condo_costs: List[float] = []
     afford_house_costs: List[float] = []
     afford_rent_costs: List[float] = []
+    from .deterministic import _annual_costs_for_option, _event_year_deterministic
     if spec.income is not None:
-        from .deterministic import _annual_costs_for_option
         if spec.condo is not None:
             afford_condo_costs = _annual_costs_for_option("condo", spec.condo, sim, econ)
         if spec.house is not None:
@@ -1529,19 +1534,28 @@ def run_monte_carlo(
         )
 
     # The affordability channel reads an UNDISCOUNTED cost array per option and
-    # compares it against a per-path income. A lease reset changes that array,
-    # so when the channel is wired the arrays are precomputed once per possible
-    # reset year and indexed per path. Without this the affordability report
-    # read one array for the whole run and said `prob_rent_exceeds: 0.0` on a
-    # config whose reset pushed the burden from 23.8% to 70.3% of income on 998
-    # of 1,000 paths — a probability of zero for something close to certain.
-    afford_rent_by_reset: dict = {}
-    if (spec.income is not None and spec.rent is not None
-            and spec.rent.reset_hazard > 0):
-        from .deterministic import _annual_costs_for_option as _costs
-        for k in range(1, sim.years + 1):
-            afford_rent_by_reset[k] = _costs("rent", spec.rent, sim, econ,
-                                             rent_reset_year=k)
+    # compares it against a per-path income. A lease reset and each event's
+    # year change that array, so a path whose reset or event years differ from
+    # the best guess's reads its own, built once per distinct combination.
+    # Without the reset the affordability report read one array for the whole
+    # run and said `prob_rent_exceeds: 0.0` on a config whose reset pushed the
+    # burden from 23.8% to 70.3% of income on 998 of 1,000 paths — a
+    # probability of zero for something close to certain.
+    afford_by_path: dict = {}
+    best_guess_years = {name: [_event_year_deterministic(e, sim.years) for e in opt.events]
+                        for name, opt in (("condo", spec.condo), ("house", spec.house),
+                                          ("rent", spec.rent)) if opt is not None}
+
+    def _path_costs(option_type, params, central, reset_year, fired):
+        if params is None:
+            return central
+        if reset_year is None and fired == best_guess_years[option_type]:
+            return central
+        key = (option_type, reset_year, tuple(fired))
+        if key not in afford_by_path:
+            afford_by_path[key] = _annual_costs_for_option(
+                option_type, params, sim, econ, rent_reset_year=reset_year, event_years=fired)
+        return afford_by_path[key]
 
     for i in range(n):
         # This path's generators, resolved once and handed to every draw site in
@@ -1564,12 +1578,14 @@ def run_monte_carlo(
                 and not binding.frozen_at(5)):
             reset_year = _sample_reset_year(
                 spec.rent.reset_hazard, sim.years, binding.gen(5))
+        fired: Dict[str, List[Optional[int]]] = {"condo": [], "house": [], "rent": []}
         if spec.condo is not None:
             condo_pvs[i] = _simulate_condo_pv_once(
                 spec.condo, sim, econ, world, binding,
                 prior_rows=condo_prior_rows,
                 shock=spec.condo.price_shock,
                 hbp_repayment_pv=condo_hbp,
+                event_years_out=fired["condo"],
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
@@ -1577,18 +1593,18 @@ def run_monte_carlo(
                 prior_rows=house_prior_rows,
                 shock=spec.house.price_shock,
                 hbp_repayment_pv=house_hbp,
+                event_years_out=fired["house"],
             )
         if spec.rent is not None:
             rent_pvs[i] = _simulate_rent_pv_once(
-                spec.rent, sim, econ, world, binding, spec.tax, reset_year=reset_year)
+                spec.rent, sim, econ, world, binding, spec.tax, reset_year=reset_year,
+                event_years_out=fired["rent"])
         if spec.income is not None:
-            rent_costs_this_path = (
-                afford_rent_by_reset.get(reset_year, afford_rent_costs)
-                if reset_year is not None else afford_rent_costs
-            )
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,
-                afford_condo_costs, afford_house_costs, rent_costs_this_path,
+                _path_costs("condo", spec.condo, afford_condo_costs, None, fired["condo"]),
+                _path_costs("house", spec.house, afford_house_costs, None, fired["house"]),
+                _path_costs("rent", spec.rent, afford_rent_costs, reset_year, fired["rent"]),
                 binding,
             )
             if afford_condo_flags is not None:

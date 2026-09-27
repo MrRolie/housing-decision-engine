@@ -62,7 +62,8 @@ from .tax_treatment import (
     fhsa_clause, financing_additions, hbp_line, tax_line, tax_summary_line, tax_to_dict,
 )
 from .deterministic import (
-    hbp_leg_for, renewal_segments_for, renewals_priced_inside, renter_terminal_for,
+    _event_year_deterministic, hbp_leg_for, renewal_segments_for, renewals_priced_inside,
+    renter_terminal_for,
 )
 
 
@@ -1392,6 +1393,49 @@ def year1_cash_lines(
     return ["Year-1 cash (undiscounted; PV totals above credit equity at sale)"] + rows
 
 
+def _share(p: float) -> str:
+    """A probability at one decimal that never prints as certain or as zero when it is not."""
+    text = f"{p:.1%}"
+    if p < 1 and text == "100.0%":
+        return "over 99.9%"
+    if p > 0 and text == "0.0%":
+        return "under 0.1%"
+    return text
+
+
+def best_guess_lines(spec: ComparisonSpec) -> List[str]:
+    """Where the best guess and the futures time a risk differently
+    (2026-09-27): the best guess charges each event once, in the year the
+    config places it, and fires neither the lease reset nor the price crash.
+    Every hazard-timed event gets the year it is charged, the share of futures
+    that fire it within the horizon and the year by which half of all futures
+    have (exact from `EventConfig.hazard_schedule`)."""
+    years = spec.simulation.years
+    lines: List[str] = []
+    for name in ("condo", "house", "rent"):
+        option = getattr(spec, name)
+        for event in (option.events if option is not None else []):
+            if event.timing_model != "hazard":
+                continue
+            p, half = event.hazard_fire_facts(years)
+            when = (f"and half of all futures have by year {half}" if half is not None
+                    else "so fewer than half ever do")
+            lines.append(
+                f"best guess: {name}.events['{event.name}'] is charged in year "
+                f"{_event_year_deterministic(event, years)}; on its hazard {_share(p)} of "
+                f"futures fire it within the {years} years, {when}")
+    if spec.rent is not None and spec.rent.reset_hazard > 0:
+        lines.append(f"best guess: the rent is priced on a tenancy that never resets; the "
+                     f"futures reset it at {spec.rent.reset_hazard:.1%}/yr (rent.reset_hazard)")
+    for name in _OWNED:
+        option = getattr(spec, name)
+        if option is not None and option.price_shock is not None and option.price_shock.annual_hazard > 0:
+            lines.append(f"best guess: the {name} is priced with no price crash; the futures "
+                         f"draw one at {option.price_shock.annual_hazard:.1%}/yr "
+                         f"({name}.price_shock.annual_hazard)")
+    return lines
+
+
 def _option_lines(echo: Sequence[str], suffix: str) -> List[str]:
     """The per-option assumption lines with one suffix (`financing:`,
     `other costs:`), in the engine's own option order."""
@@ -1520,6 +1564,7 @@ def _read_back_sections(
         ("mode", [line for line in echo if line.startswith("mode:")]
                  if spec.economic.mode == "nominal" else [], []),
         ("decisiveness", decisive, decisive),
+        ("best guess", best_guess_lines(spec), []),
         ("financing", _option_lines(echo, "financing:"), []),
         # The renewal ladder (slice 1, 2026-09-21): a laddered run's payments
         # step, and the path that stepped them is a SCENARIO the user stated,
@@ -1608,7 +1653,7 @@ def read_back_lines(
     under and each one in both forms, as quoted and in use; in nominal mode the
     `mode:` line, which names the discount rate stated and the rate in use
     (a real figure composed, or a quoted figure used as typed); the
-    decisiveness rule;
+    decisiveness rule; the `best guess:` lines;
     each option's financing line and its
     `purchase costs:` line; the year-1 cash view; each option's other-costs
     line with its citation or `no anchor match`; the affordability summary;

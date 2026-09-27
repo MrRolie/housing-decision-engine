@@ -437,7 +437,7 @@ OWNED_EVENT["rent"]["monthly_rent"] = 1500
 # channel's draws, for an option the run prices, as the read-back states or
 # defaults it — whether or not the draw fires. Each config below states an
 # input whose draw never fires on the run, and its width prints all the same.
-# The condo's one event has a hazard that starts after the horizon.
+# The condo's one event has a hazard of one in a billion, in the last year.
 EV_LATE_START = {
     "years": 20, "discount_rate": 0.03,
     "economic": {"mode": "nominal", "inflation_rate": 0.02, "inflation_vol": 0.02},
@@ -445,8 +445,8 @@ EV_LATE_START = {
               "all_cash": True, "purchase_costs": 5200, "value_growth_rate": 0.02,
               "events": [{"name": "roof_replacement", "base_cost": 15000, "cost_vol": 0.2,
                           "expected_year": 20, "timing_model": "hazard",
-                          "hazard_base": 0.05, "hazard_growth": 0.01,
-                          "hazard_start_year": 25}]},
+                          "hazard_base": 1e-9, "hazard_growth": 0.01,
+                          "hazard_start_year": 20}]},
     "rent": {"monthly_rent": 1400, "rent_escalation_rate": 0.0,
              "invested_down_payment": 355200, "investment_return_rate": 0.03},
     "simulation": {"num_sims": 400, "random_seed": 42, "condo_fee_vol": 0.1,

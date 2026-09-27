@@ -655,9 +655,11 @@ class TestReviewModifications:
         from hde.story_plots import _cumulative_cost_curves
         cfg = {"years": 10, "discount_rate": 0.03, "rates": "real",
                "rent": {"monthly_rent": 1_000, "rent_escalation_rate": 0.0,
-                        "events": [{"name": "move", "base_cost": 10_000, "expected_year": 3, "min_year": 5}]},
+                        "events": [{"name": "move", "base_cost": 10_000, "expected_year": 5, "min_year": 5}]},
                "simulation": {"num_sims": 2, "random_seed": 1}}
         spec = load_config_dict(cfg)
+        # Below its window: the loader refuses it, a spec built in code does not.
+        spec.rent.events[0].expected_year = 3
         det = compute_deterministic(spec)
         assert det.rent.breakdown["events_pv"] == pytest.approx(pv_single(10_000, 0.03, 5))
         assert run_monte_carlo(spec).rent.summary.mean == pytest.approx(det.rent.total_pv)
