@@ -724,6 +724,51 @@ cannot pass now refuses the block with a code and the check's measured fact, and
 above it prints as usual. The bootstrap's degenerate resample is one such refusal. A formatter
 check that duplicates a check the assembler already runs is deleted rather than caught twice.
 
+**59. THE REVERSAL REGISTER RETURNS ON TOP OF THE SPREAD AND LEVEL AS LANDED** *(2026-09-27, opening
+the second landing of item 56)*. It is rebuilt on main, not replayed from the old branch, so
+every rule the first landing settled binds it:
+- widths are structural, with the source echo's tag (item 53);
+- comments are judged on truth (item 55);
+- appending prose is not a mutation (item 57);
+- a check refuses and never loses the report (item 58);
+- every emitted key is defined in the contract and checked by enumeration;
+- placement is pinned by diffing the output.
+
+It restores the register in `decompose()`, `decomposition.reversal` under `--json`, the text
+section (crossings, the path note, refused boundaries, stated-path zeros), and three registers
+in the contract, `--help` and the skill. The `break_even.py` docstrings that describe a printing
+surface become true again, or are cut.
+
+**60. A CROSSING IS SOLVED TO THE PRECISION IT CAN PRINT, AND PRINTED FROM ITS BRACKET'S `was`
+END.** The last full review found a solved crossing whose bisection stopped at a relative width
+of 1e-9 and returned the bracket's midpoint, while item 54 widened the printed figure to twelve
+places of a percent (1e-14). Two defects followed. A stated rate lying between that midpoint and
+the true edge printed past a crossing the run had not reached. And the printed-rate check could
+find no precision that passed, so it stopped a legal run.
+- A crossing on the central case bisects until its bracket is a few ULPs wide, which is cheap
+  because each point is one deterministic evaluation. A crossing on the futures keeps its 1e-12
+  bisection, and its printed precision never widens past its bracket's width.
+- The printed figure is floored from the bracket's `was` end, never from its midpoint. Item 54's
+  evaluation at the printed figure stays.
+- A stated figure is ordered against the bracket, not a point. At or below the `was` end it lies
+  on the `was` side, and at or above the other end on the `becomes` side. Inside the bracket it
+  is at the crossing to machine precision and prints equal to it, which is true.
+
+**61. A REVERSAL CHECK THAT CANNOT PASS REFUSES ITS OWN ROW, NOT THE BLOCK.** Item 58 made a
+failing check refuse the block. The reversal register holds many independent crossings, and one
+of them failing says nothing about the spread, the level or the other crossings. So a check on
+one crossing refuses that boundary with a code and the fact it measured, and everything else
+prints. That covers the printed-rate check, the figure-order check and the nine-point scan
+check. Its reason states what was measured: the precisions tried and what the field read at each
+floored figure. It never states a condition it did not test.
+
+**62. A FIGURE A ROW'S JUDGMENT RESTS ON SHOWS THAT JUDGMENT AT ITS PRINTED DIGITS.** Items 42 and
+54 applied this to crossings. The level register had the same gap. A resolved row printed
+"-$218 (± $109)", where 218 > 2 × 109 is false at the printed digits, and "$0 (± $0)" printed as
+resolved. A level row now prints its shift and standard error at the least precision (dollars,
+then cents, then further) at which the printed pair shows the row's judgment:
+|shift| > 2 × s.e. on a resolved row, and not on an unresolved one.
+
 ---
 
 ## 1. Why
