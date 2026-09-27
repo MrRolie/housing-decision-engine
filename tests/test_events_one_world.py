@@ -230,6 +230,14 @@ def test_a_hazard_fires_only_inside_the_stated_window():
     assert abs(len(fired) / len(years) - p) < 4 * se
 
 
+def test_a_hazard_that_starts_inside_the_window_fires_from_its_start():
+    """The window's first year is the later of min_year and hazard_start_year."""
+    late_start = copy.deepcopy(C5)
+    late_start["house"]["events"][0]["hazard_start_year"] = 16
+    fired = {y for y in _fire_years(late_start) if y is not None}
+    assert fired == {16, 17, 18}
+
+
 # ---------------------------------------------------------------------------
 # E4 — the gate asks whether the futures' timing can differ
 # ---------------------------------------------------------------------------
@@ -420,3 +428,11 @@ def test_a_share_never_prints_as_certain_or_as_none_when_it_is_not(hazard, share
     (line,) = _best_guess(_cfg(_roof(expected_year=1, timing_model="hazard",
                                      hazard_base=hazard)))
     assert f"on its hazard {share} of futures fire it" in line
+
+
+def test_a_share_of_exactly_none_prints_as_none():
+    """Only a spec built in code reaches a hazard of 0: the loader refuses it."""
+    spec = load_config_dict(_cfg(_roof(timing_model="hazard", hazard_base=0.1)))
+    spec.house.events[0].hazard_base = 0.0
+    (line,) = [x for x in read_back_lines(spec) if x.startswith("best guess:")]
+    assert "on its hazard 0.0% of futures fire it" in line
