@@ -17,43 +17,35 @@ from __future__ import annotations
 import copy
 import dataclasses
 import decimal
-import inspect
 import json
 import math
 import pathlib
 import re
 import sys
-import types
 
 import numpy as np
 import pytest
 import yaml
 
-from hde import break_even as be
 from hde import decomposition as dc
 from hde import decomposition_math as dm
 from hde import decomposition_run as dr
 from hde import decomposition_text as dt
 from hde import monte_carlo
-from hde.break_even import REVERSAL_GATE_TOLERANCE, reversal_admission
 from hde.config import load_config_dict, single_path_run
-from hde.deterministic import renewal_segments_for
 from hde.monte_carlo import run_monte_carlo
-from hde.rates import effective_mortgage_rate
-from hde.sweep import flattened_path_note
 
+from tests import decomposition_households as hh
 from tests import test_decomposition_sentences as sentences
 from tests.decomposition_oracles import freeze_moves, oracle_drawn, oracle_moves, threshold
 from tests.decomposition_runs import (
-    CONDO_ONLY, CONTRACT, CRASH_EVERY_YEAR, FIXTURE, INCOME, MIN_INTERACTION, MONTREAL, MORTGAGE, NEAR_ALL,
-    NO_REACH, RARE_RESET_ONE, RARE_RESET_THREE, REPO, THIRD_FAR, Run, _block_text, _cli,
-    _load, _strict, _sweep_states, corpus, HAZARD_ONLY, CORRELATION_UNPRICED_CONDO,
+    CONDO_ONLY, CONTRACT, CRASH_EVERY_YEAR, FIXTURE, INCOME, INCOME_ONLY, MONTREAL, MORTGAGE,
+    INCOME_ONE_CHANNEL, NEAR_ALL, NO_REACH, PRIOR_NO_RENT, RARE2, RARE_RESET_ONE, RARE_RESET_THREE, REPO,
+    THIRD_FAR, Run, _block_text, _cli, _load, _strict, corpus, force_income_move, untag,
+    HAZARD_ONLY, CORRELATION_UNPRICED_CONDO,
     CORRELATION_UNPRICED_HOUSE, CORRELATIONS_PULL_NOTHING, RENTER_LINE_DRAWN, OWNED_LINE,
     OWNED_EVENT, EV_LATE_START, LINES_CONDO_ONLY, LINES_CONDO_NO_HOUSE, HAZARD_ZERO,
-    RESET_ZERO, VALUE_VOL_ZERO, BOTH_SHOCKS_DEFAULTED, UNPRICED_CONDO_ZERO_RHO,
-    SLIVER_LOW, SLIVER_HIGH,
-    SOLVED_SLIVER, STATED_BESIDE_CROSSING, THREE_OPTION_RUNNER_UP,
-    REFERENCE_BESIDE_CROSSING)
+    RESET_ZERO, VALUE_VOL_ZERO, BOTH_SHOCKS_DEFAULTED, UNPRICED_CONDO_ZERO_RHO)
 from tests.test_decomposition_liveness import RESET_TO_OWN_RENT_ALONE
 from tests.test_decomposition_sentences import TWINS
 
@@ -194,33 +186,27 @@ def test_presence(runs, monkeypatch):
 
 @claims("sets `N`; bare, `N` is `simulation.num_sims`.",
         "are taken on `N` futures the block draws for itself (`paths`).",
-        "The level register prices the first `min(N, 2000)` of those futures",
-        "The reversal register prices none of them.",
-        "It reads the run's own Monte Carlo sample and re-simulates the config")
+        "The level register prices the first `min(N, 2000)` of those futures")
 def test_the_assembler_says_whose_each_probability_is(runs):
     """`decomposition_run`'s docstring says which probabilities the assembler
-    takes itself and on which futures, and which are `break_even`'s. Each
-    clause is checked on runs whose N differs from `simulation.num_sims`.
-    *Kills it:* a docstring that files the reversal register's probabilities
-    under the assembler's, or under `f`'s sign, or on the block's N — in
-    place of one of its two sentences or beside them: every sentence of the
-    docstring that speaks of a probability is one of these two."""
+    takes and on which futures. Each clause is checked on runs whose N
+    differs from `simulation.num_sims`.
+    *Kills it:* a docstring that files a probability on other futures than
+    these — in place of its one sentence or beside it: every sentence of the
+    docstring that speaks of a probability is this one."""
     said = " ".join(dr.__doc__.split())
     whose = [
         "The probabilities this module takes itself are frequencies of `f`'s sign on "
         "futures it priced: over all N for whether the futures sit on both sides of the "
-        "line, and over the level register's first paths for its `prob_best_*`.",
-        "The reversal register's probabilities are not this module's: `break_even` takes "
-        "them per option, on the run's own Monte Carlo sample and on re-simulations, at "
-        "the config's `simulation.num_sims`."]
+        "line, and over the level register's first paths for its `prob_best_*`."]
 
     def about_probabilities(text):
         return [s for s in re.split(r"(?<=\.)\s+(?=[A-Z`])", text)
                 if "probabilit" in s.lower()]
 
     assert about_probabilities(said) == whose
-    appended = said.replace(whose[1], whose[1] + " Every probability here is taken on "
-                            "the block's N futures.")
+    appended = said.replace(whose[0], whose[0] + " Every probability here is taken on "
+                            "the run's own Monte Carlo sample.")
     assert about_probabilities(appended) != whose
     fixture = runs["fixture"]
     f_a = fixture.f_a()
@@ -231,24 +217,12 @@ def test_the_assembler_says_whose_each_probability_is(runs):
     assert mortgage.block["spread"]["refusal"]["reason"] == (
         f"{mortgage.doc['verdict']['best']} is cheapest in all "
         f"{mortgage.paths():,} of these futures")
-    num_sims = fixture.spec.simulation.num_sims
-    priced = {o for o in ("condo", "house", "rent") if fixture.doc["deterministic"][o]}
-    boundaries = [b for row in fixture.block["reversal"]["exact"] for b in row["boundaries"]]
-    sampled = [b for b in boundaries if "curve_paths" in b]
-    assert sampled and fixture.paths() != num_sims
-    for b in sampled:
-        assert b["curve_paths"] == num_sims
-        assert {o for o, _ in b["curve_probabilities"]} == priced
-    for b in boundaries:
-        assert {o for o, _ in b["confirming_probabilities"]} == priced
+    assert fixture.paths() != fixture.spec.simulation.num_sims
 
 
 def test_how_many_futures_each_register_prices(runs):
-    """The fixture at `--decompose=300`: the spread and the level at 300, the
-    reversal register at the config's 2,000 and seed 42, its gate at 200. At
-    4,000 the level stops at 2,000; bare, `N` is the config's own count. That
-    the reversal register is the same at another `N` is checked in
-    `test_which_figures_move_with_the_seed_and_the_path_count`."""
+    """The fixture at `--decompose=300`: the spread and the level at 300. At
+    4,000 the level stops at 2,000; bare, `N` is the config's own count."""
     fixture = runs["fixture"]
     block = fixture.block
     assert block["paths"] == 300 == fixture.f_a().size
@@ -257,36 +231,22 @@ def test_how_many_futures_each_register_prices(runs):
     # the rows that measure it are the spread register's (§0.1 item 48)
     assert [z["measured_paths"] for z in block["spread"]["structural_zeros"]
             if z["kind"] == "dead_draw"] == [300]
-    assert not [z for z in block["reversal"]["structural_zeros"]
-                if z["measured_paths"] is not None]
-    sim = fixture.raw["simulation"]
-    assert (sim["num_sims"], sim["random_seed"]) == (2000, 42)
-    sampled = [b for row in block["reversal"]["exact"] for b in row["boundaries"]
-               if "seed" in b]
-    assert sampled and all((b["curve_paths"], b["seed"]) == (2000, 42) for b in sampled)
-    assert [row["probe_paths"] for row in block["reversal"]["exact"]] == [200, 200]
     assert runs["advanced_4000"].block["level"]["paths"] == 2000
     assert runs["advanced_4000"].block["paths"] == 4000
     code, out, _ = _cli("--decompose", runs["mortgage"].path, "--json")
     bare = _strict(out)["decomposition"]
     assert bare["paths"] == runs["mortgage"].spec.simulation.num_sims != 200
-    # the re-simulation behind a solved boundary is the config's own run
-    row = block["reversal"]["exact"][0]
-    solved = next(b for b in row["boundaries"] if "seed" not in b)
-    again = run_monte_carlo(be.load_at(fixture.raw, row["key"], solved["value"]))
-    assert [list(p) for p in solved["confirming_probabilities"]] == [
-        [o, getattr(again, f"prob_{o}_cheapest")] for o in ("condo", "house", "rent")]
 
 
 @claims("Every number in the block is finite, so a strict JSON parser",
-        "The one figure that can be is",
         "A measured zero stays `0.0`.")
 def test_numbers(runs):
-    """Strict parsing is `Run`'s own; here the zero half — a real 0.0 is not
-    turned into `null` by the guard that nulls a non-finite figure — and the
-    one field that can be null. Its non-finite half is driven end to end in
-    `test_decomposition_report.py::TestTheRealAssemblerThroughTheFlag::
-    test_a_gate_that_cannot_measure_says_so_in_words_and_in_strict_json`."""
+    """Strict parsing is `Run`'s own; here no figure of any corpus run is
+    `null`, a real 0.0 is not turned into `null` by the guard that nulls a
+    non-finite figure, and a figure that is not finite — constructed, since
+    no run emits one — is emitted as `null` and the document stays strict.
+    *Kills it:* deleting the guard (a bare `NaN` token fails the strict
+    parser) or widening it to take in a zero."""
     for name in ("fixture", "mortgage", "advanced", "three", "min"):
         level = runs[name].block["level"]
         assert level["all_frozen_path_spread"] == 0.0, name
@@ -305,9 +265,23 @@ def test_numbers(runs):
     for run in runs.values():
         walk(run.block, ())
     figures = {"alone", "with_interaction", "flip", "delta", "provisional_delta", "se",
-               "mean_margin", "sd_margin", "value", "max_path_deviation_over_sd",
-               "low", "high", "first_order_sum", "residual"}
+               "mean_margin", "sd_margin", "low", "high", "first_order_sum", "residual",
+               "move_threshold", "futures_margin", "all_frozen_margin",
+               "all_frozen_deviation", "accounted_for", "prob_best_base",
+               "prob_best_frozen", "interaction_gap"}
     assert not (set(nulls) & figures)
+    from hde.serialization import decomposition_to_dict
+    from tests.decomposition_households import uncertainty_surface
+    dec = uncertainty_surface()
+    first = dec.level.rows[0]
+    rows = (dataclasses.replace(first, level=dataclasses.replace(first.level,
+                                                                se=float("nan"))),
+            ) + dec.level.rows[1:]
+    doc = decomposition_to_dict(dataclasses.replace(
+        dec, level=dataclasses.replace(dec.level, rows=rows, accounted_for=0.0)))
+    text = json.dumps(doc)
+    assert _strict(text)["level"]["rows"][0]["se"] is None
+    assert _strict(text)["level"]["accounted_for"] == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +441,120 @@ def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
         f"above the ${budget:.3g} this check allows")}}
 
 
+@claims("| `income_moved` |")
+def test_income_moved(tmp_path, monkeypatch):
+    """Forced, as no correct engine moves a present value by re-drawing the
+    income stream: its re-draw handed back as `A`'s own present values moved
+    by one figure (`force_income_move`). Past the allowance the block refuses,
+    stating the count of futures, that move and the allowance; at half the
+    allowance it does not, and the block is the one the run prints unforced.
+    *Kills it:* the check deleted, or widened to a move inside the allowance."""
+    raw = _load(FIXTURE)
+    spec = load_config_dict(raw)
+    det, mc = compute_deterministic_and_mc(spec)
+    allowance = dr.identity_budget(det, _verdict(spec, det, mc))
+    unforced, _, _, _ = _refusal(tmp_path, raw, "40")
+    assert "refusal" not in unforced
+    assert dc.INCOME_STREAM_ID in [z["channel_id"] for z in
+                                   unforced["spread"]["structural_zeros"]]
+    with monkeypatch.context() as patched:
+        force_income_move(patched, 1000.0)
+        doc, text, _, _ = _refusal(tmp_path, raw, "40")
+    reason = (f"re-drawing the income stream moved an option's present value on these 40 "
+              f"futures by up to $1e+03, above ${allowance:.3g}")
+    assert doc == {"refusal": {"code": "income_moved", "reason": reason}}
+    assert text == f"which risk decides it — not split (income_moved): {reason}"
+    with monkeypatch.context() as patched:
+        force_income_move(patched, allowance / 2)
+        doc, _, _, _ = _refusal(tmp_path, raw, "40")
+    assert doc == unforced
+
+
+@claims("| `untagged_width` |")
+def test_untagged_width(tmp_path, monkeypatch):
+    """Forced, as every width a correct engine names has a read-back tag: the
+    tag withheld from one key (`untag`). The block refuses, naming that key and
+    the row it is on, on `--json` too, where no formatter reads a tag.
+    *Kills it:* the check deleted, so the width is emitted with no tag."""
+    with monkeypatch.context() as patched:
+        untag(patched, "simulation.investment_return_vol")
+        doc, text, _, _ = _refusal(tmp_path, _load(FIXTURE), "40")
+    reason = (f"simulation.investment_return_vol, a width on the row of "
+              f"{dc.channel_by_key('portfolio').label}, has no tag in the read-back")
+    assert doc == {"refusal": {"code": "untagged_width", "reason": reason}}
+    assert text == f"which risk decides it — not split (untagged_width): {reason}"
+
+
+@claims("| `degenerate_resample` |")
+def test_degenerate_resample(tmp_path, runs):
+    """Two rare hazards on 400 futures: the margin differs across them, and a
+    resample of the table the spread register's intervals are read off (the
+    run's seed, `bootstrap_path_indices`) holds one margin. The reason names
+    the first such resample, of how many, and that margin. On 2,000 futures of
+    the same config no resample does, and the block prints.
+    *Kills it:* the check deleted, or a reason naming another resample or
+    another figure."""
+    doc, _, _, full = _refusal(tmp_path, RARE2, "400")
+    spec = load_config_dict(RARE2)
+    f = dr.margin_per_path(dr._run(dr._spec_at(spec, 400), dr.MATRIX_A),
+                           full["verdict"]["best"])
+    assert float(np.ptp(f)) > 0.0
+    table = dm.bootstrap_path_indices(400, dm.DEFAULT_RESAMPLES,
+                                      int(spec.simulation.random_seed))
+    flat = [i for i, rows in enumerate(table) if float(np.ptp(f[rows])) == 0.0]
+    value = float(f[table[flat[0]][0]])
+    assert value > 0.0 and dm.DEFAULT_RESAMPLES == 300
+    assert doc == {"refusal": {"code": "degenerate_resample", "reason": (
+        f"the margin is identical on all 400 futures of bootstrap resample {flat[0] + 1} "
+        f"of 300 (${value:,.2f})")}}
+    assert "refusal" not in runs["rare2"].block and runs["rare2"].block["paths"] == 2000
+
+
+@claims("The run's report prints in full above it, and the rest of the `--json`")
+def test_a_whole_block_refusal_prints_beside_the_report(tmp_path):
+    """On a refusal decided before pricing, one decided by the re-draws, and
+    one a check that cannot pass returns (a bootstrap resample holding one
+    margin): the text is the run's own report, unchanged, with the refusal
+    line after it, and the document is the run's own with `decomposition`
+    added, each with exit 0.
+    *Kills it:* a refusal that stops the report, exits non-zero, or drops a
+    key of the document."""
+    path = tmp_path / "rare2.yaml"
+    path.write_text(yaml.safe_dump(RARE2, sort_keys=False), encoding="utf-8")
+    for source, extra, code in ((MONTREAL, (), "no_futures"), (INCOME, (), "one_channel"),
+                                (path, ("400",), "degenerate_resample")):
+        status, report, _ = _cli(source, "-q")
+        assert status == 0
+        status, text, _ = _cli(source, "--decompose", *extra, "-q")
+        assert status == 0
+        status, bare, _ = _cli(source, "--json")
+        assert status == 0
+        status, out, _ = _cli(source, "--decompose", *extra, "--json")
+        assert status == 0
+        doc = _strict(out)
+        refusal = doc.pop("decomposition")["refusal"]
+        assert refusal["code"] == code
+        assert doc == _strict(bare)
+        assert text == (f"{report}\nwhich risk decides it — not split ({code}): "
+                        f"{refusal['reason']}\n")
+
+
+def test_an_exception_that_is_no_check_reaches_the_caller(monkeypatch):
+    """Only a check that cannot pass is a refusal (§0.1 item 58). An engine
+    defect inside the block — a KeyError, or a ValueError or a TypeError no
+    check raised — reaches the caller as itself, never as a refusal and never
+    as a message that a check failed.
+    *Kills it:* the CLI or the assembler catching more than the check's own
+    exception."""
+    for error in (KeyError("a defect"), ValueError("a defect"), TypeError("a defect")):
+        def broken(*args, **kwargs):
+            raise error
+        with monkeypatch.context() as patched:
+            patched.setattr(dr, "_top_row", broken)
+            with pytest.raises(type(error)):
+                _cli(FIXTURE, "--decompose=40", "--json")
+
+
 @claims("They are checked in this order, and the first that fires is the one returned")
 def test_the_refusal_order(tmp_path, monkeypatch):
     """Each pair: a config on which BOTH conditions hold, and the earlier code
@@ -504,6 +592,29 @@ def test_the_refusal_order(tmp_path, monkeypatch):
     got = dr.decompose(spec, det=det, mc=mc, verdict=_verdict(spec, det, mc),
                        raw=_load(INCOME), paths=40)
     assert got.code == "one_channel"
+    # The checks on the way, each forced beside a code that holds too: an
+    # identical margin before the income stream's move, that move before one
+    # live channel, one live channel before the widths are read, the widths
+    # before the bootstrap, and the bootstrap before the level's identity.
+    from tests.test_decomposition_run import TestTheFreezeIdentity
+    assert _refusal(tmp_path, INCOME_ONE_CHANNEL, "400")[0]["refusal"]["code"] == \
+        "one_channel"
+    with monkeypatch.context() as patched:
+        force_income_move(patched, 1000.0)
+        doc, _, _, _ = _refusal(tmp_path, INCOME_ONLY)
+        assert doc["refusal"]["code"] == "no_spread"
+        doc, _, _, _ = _refusal(tmp_path, INCOME_ONE_CHANNEL, "400")
+        assert doc["refusal"]["code"] == "income_moved"
+    with monkeypatch.context() as patched:
+        untag(patched)
+        doc, _, _, _ = _refusal(tmp_path, _load(INCOME))
+        assert doc["refusal"]["code"] == "one_channel"
+        doc, _, _, _ = _refusal(tmp_path, RARE2, "400")
+        assert doc["refusal"]["code"] == "untagged_width"
+    with monkeypatch.context() as patched:
+        TestTheFreezeIdentity._leaky_mask(patched, escaped=dc.channel_by_key("shelter").id)
+        doc, _, _, _ = _refusal(tmp_path, RARE2, "400")
+        assert doc["refusal"]["code"] == "degenerate_resample"
 
 
 def compute_deterministic_and_mc(spec):
@@ -611,7 +722,7 @@ def _det_verdict(raw):
 def test_the_block_keys(runs):
     for run in runs.values():
         assert set(run.block) == {"paths", "max_paths", "live_channel_ids", "mean_margin",
-                                  "sd_margin", "spread", "level", "reversal"}
+                                  "sd_margin", "spread", "level"}
         assert "verdict" not in json.dumps(list(run.block))
 
 
@@ -675,7 +786,7 @@ def test_the_spread_keys_and_its_refusal(runs):
         run = runs[name]
         f = run.f_a()
         assert float(np.mean(f > 0.0)) == side, name
-        assert run.block["level"]["rows"] and "reversal" in run.block
+        assert run.block["level"]["rows"]
         best = run.doc["verdict"]["best"]
         reason = (f"{best} is cheapest in all {run.paths():,} of these futures" if side
                   else f"{best} is cheapest in none of these {run.paths():,} futures")
@@ -812,10 +923,13 @@ def _width_keys(run, channel_key):
 
 # The oracle's own account of which options a sizing key's draws belong to,
 # written from the simulator's draw sites (`monte_carlo`), never read off the
-# engine: a cost or return channel's keys are its option's; on the other
-# channels an option's own section is that option's, and these `simulation.*`
-# keys are the options named. Any other key's draw reaches every option.
-_ORACLE_CHANNEL_OPTIONS = {3: {"condo"}, 4: {"house"}, 5: {"rent"}, 6: {"rent"}}
+# engine: a cost or return channel's keys are its option's, and the population
+# prior's rows are handed to the condo's and the house's simulations only; on
+# the economy's and the market's rows an option's own section is that
+# option's, and these `simulation.*` keys are the options named. Any other key
+# sizes a draw every option's simulation reads.
+_ORACLE_CHANNEL_OPTIONS = {2: {"condo", "house"}, 3: {"condo"}, 4: {"house"},
+                           5: {"rent"}, 6: {"rent"}}
 _ORACLE_KEY_OPTIONS = {
     "simulation.corr_inflation_condo": {"condo"},
     "simulation.corr_inflation_house": {"house"},
@@ -978,15 +1092,19 @@ _WIDTH_WITNESSES = {
     "renter_line": (RENTER_LINE_DRAWN, {}),
     "owned_line": (OWNED_LINE, {}),
     "owned_event": (OWNED_EVENT, {}),
+    "prior_no_rent": (PRIOR_NO_RENT, {
+        "the population": "market_scenario.path='tests/fixtures/scenario_prior_golden.json' "
+                          "[assistant]; market_scenario.geography='MTL_RMR' [user]"}),
 }
 
 
 @claims("A width is a sizing input of the row's channel's draws",
         "Whether its draw fires on the run is not asked",
-        "On the economy row each correlation among the widths is followed",
+        "On the economy row the row's own widths come first, then the widths of the",
         "One the config states carries its read-back class as `source`",
-        "`tag` is the tag the source lines of `assumptions.lines` give the key")
-def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carries(tmp_path):
+        "`tag` is the read-back's tag for the key (`serialization.read_back_tag`)")
+def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carries(tmp_path,
+                                                                                 runs):
     """§0.1 item 53, enumerated: on every row of every corpus run and every
     witness, the widths are exactly the channel's sizing keys the read-back
     carries (stated or defaulted) for an option the run prices, each
@@ -999,8 +1117,13 @@ def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carrie
     *Kills it:* a predicate that asks whether a draw fires (the witnesses'
     lines lose a width), dropping the priced-option filter (M28 prints the
     condo's correlation), an option map that files a channel under another
-    option (the condo row without a house loses its widths), a tag rebuilt
-    from the class (the defaults' cites vanish), or a width left out."""
+    option (the condo row without a house loses its widths, the population's
+    under the renter loses them with no renter priced), a tag rebuilt from the
+    class (the defaults' cites vanish), or a width left out. The order is
+    pinned literally on the advanced example's economy row, where each
+    correlation followed by the shocks it pulls would read otherwise, and the
+    tag with no `sources:` block on the basic example, where no source line
+    lists a stated key."""
     seen = 0
     for name, (raw, lines) in _WIDTH_WITNESSES.items():
         got = Run(raw, "400").materialise(tmp_path / name)
@@ -1019,6 +1142,41 @@ def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carrie
     defaulted = {e["key"] for e in both.doc["assumptions"]["defaults_applied"]}
     assert {f"{o}.price_shock.{s}" for o in ("condo", "house")
             for s in ("severity_mean", "severity_vol")} <= defaulted
+    # the row's own widths first, then the pulled ones in their correlations' order
+    assert _width_keys(runs["advanced"], "economy") == [
+        "economic.inflation_vol", "simulation.corr_inflation_condo",
+        "simulation.corr_inflation_house", "simulation.corr_inflation_other",
+        "simulation.corr_inflation_event_cost", "simulation.condo_fee_vol",
+        "simulation.house_maintenance_vol", "simulation.other_cost_vol",
+        "condo.events", "house.events"]
+    # with no `sources:` block every stated key is filed under `unattributed`,
+    # and that is its tag, though no source line lists it
+    basic = runs["basic"]
+    assert "sources" not in basic.raw
+    assert basic.doc["assumptions"]["sources"]["declared"] is False
+    stated = [w for row in basic.block["spread"]["rows"] for w in row["widths"]
+              if w["source"] != "default"]
+    assert stated and {(w["source"], w["tag"]) for w in stated} == {
+        ("unattributed", "unattributed")}
+    assert not any(line.strip().startswith("unattributed:")
+                   for line in basic.doc["assumptions"]["lines"])
+
+
+def test_the_oracle_s_option_map_is_the_simulator_s(runs):
+    """`_ORACLE_CHANNEL_OPTIONS`, measured: on the fixture, which prices all
+    three options and draws every channel, re-drawing each channel the map
+    names, alone, moves the present values of exactly the options it names
+    and leaves the others' bit for bit.
+    *Kills it:* an oracle that files a channel's draws under another option,
+    as the population's under the renter, which reads none of them."""
+    spec = dr._spec_at(runs["fixture"].spec, 40)
+    base = dr._run(spec, dr.MATRIX_A)
+    for channel_id, options in _ORACLE_CHANNEL_OPTIONS.items():
+        redrawn = dr._run(spec, dr.MATRIX_A, {channel_id: dr.MATRIX_B})
+        moved = {name for name in ("condo", "house", "rent")
+                 if np.asarray(getattr(redrawn, name).pvs).tobytes()
+                 != np.asarray(getattr(base, name).pvs).tobytes()}
+        assert moved == options, (channel_id, moved)
 
 
 def test_every_width_on_every_corpus_row_is_a_sizing_input_the_read_back_carries(runs):
@@ -1135,136 +1293,43 @@ def test_the_all_frozen_identity_the_sum_and_the_top_row(runs):
 
 
 # ---------------------------------------------------------------------------
-# reversal
+# The reversal library, which no CLI surface reaches (§0.1 item 56)
 # ---------------------------------------------------------------------------
 
-@claims("`reversal` — what would have to change for the verdict to change",
-        "It carries `exact`, `estimated`, `structural_zeros`, `no_distance_code` and",
-        "The search covers a financed option's `mortgage_rate` and")
-def test_what_the_reversal_register_searches(runs):
-    fixture = runs["fixture"].block["reversal"]
-    assert set(fixture) == {"exact", "estimated", "structural_zeros", "no_distance_code",
-                            "no_distance_reason"}
-    assert [r["key"] for r in fixture["exact"]] == ["house.mortgage_renewal_rates",
-                                                    "house.mortgage_rate"]
-    assert [r["key"] for r in runs["mortgage"].block["reversal"]["exact"]] == [
-        "house.mortgage_rate"]
-    for name in ("fixture", "mortgage"):
-        run = runs[name]
-        for row in run.block["reversal"]["exact"]:
-            admitted, _ = reversal_admission(run.raw, row["key"], row["bracket_high"])
-            assert admitted
-    for name in ("advanced", "showcase", "three", "min"):
-        block = runs[name].block["reversal"]
-        assert block["exact"] == [] and block["estimated"] == []
-        raw = runs[name].raw
-        assert not any(isinstance(raw.get(o), dict) and (
-            "mortgage_rate" in raw[o] or "mortgage_renewal_rates" in raw[o])
-            for o in ("condo", "house"))
-
-
-@claims("`no_distance_code` and `no_distance_reason` are set exactly when `exact` and",
-        "`no_distance_reason` is the measured fact, and `no_distance_code` is")
-def test_the_empty_register_states_what_the_config_states(runs):
-    """Every run of the corpus, both ways, and the two codes only a library
-    call reaches: a block handed no config mapping, and a register on one
-    option. Each code writes its own reason (§0.1 item 50).
-    *Kills it:* a code on a register with rows, or one naming the other case."""
-    seen = set()
-    for run in runs.values():
-        reversal = run.block["reversal"]
-        empty = not (reversal["exact"] or reversal["estimated"])
-        assert (reversal["no_distance_reason"] is not None) == empty
-        assert (reversal["no_distance_code"] is not None) == empty
-        if not empty:
-            continue
-        seen.add(reversal["no_distance_code"])
-        stated = be.reversal_candidates(run.raw)
-        if not stated:
-            assert reversal["no_distance_code"] == "no_candidate"
-            assert reversal["no_distance_reason"] == (
-                "this config states no mortgage_renewal_rates or mortgage_rate")
-        else:
-            assert reversal["no_distance_code"] == "not_admitted"
-            for key, _ in stated:
-                assert f"this config states {key}, and " in reversal["no_distance_reason"]
-                assert not be.reversal_admission(run.raw, key,
-                                                 be.reversal_bracket(key)[1])[0]
-        assert sentences._NO_DISTANCE_REASON[reversal["no_distance_code"]].fullmatch(
-            reversal["no_distance_reason"])
-    assert seen == {"no_candidate", "not_admitted"}
-    fixture = runs["fixture"]
-    det, mc, verdict = fixture.inputs()
-    bare = dr.decompose(dr._spec_at(fixture.spec, 40), det=det, mc=mc, verdict=verdict,
-                        raw=None, paths=40)
-    assert (bare.reversal.no_distance_code, bare.reversal.exact) == ("no_mapping", ())
+def test_no_cli_surface_reaches_the_reversal_library(monkeypatch):
+    """§0.1 item 56: the block prints the spread and the level, and
+    `break_even.reversal_register` is a library no CLI surface calls. Every
+    entry point of that library raises here, and the CLI runs whole on a
+    financed config whose stated contract rate the library would search —
+    `--decompose` in text and in `--json`, beside `--sweep` and
+    `--break-even` on that very rate — and the block carries no `reversal`.
+    *Kills it:* the assembler, the formatter or the serializer calling the
+    reversal register again, or reading any of its solvers."""
+    from hde import break_even
     from hde.deterministic import compute_deterministic
-    one = load_config_dict(CONDO_ONLY)
-    lone = be.reversal_register(copy.deepcopy(CONDO_ONLY), compute_deterministic(one),
-                                run_monte_carlo(one))
-    assert (lone.no_distance_code, lone.no_distance_reason) == (
-        "single_option", "fewer than two options are priced")
+    raw = _load(MORTGAGE)
+    spec = load_config_dict(copy.deepcopy(raw))
+    # the library, called directly, does search this config's contract rate
+    library = break_even.reversal_register(raw, compute_deterministic(spec),
+                                           run_monte_carlo(spec))
+    assert [row.key for row in library.exact] == ["house.mortgage_rate"]
 
-
-@claims("`exact[]` rows:", "A key is exact when moving it to `bracket_high` leaves")
-def test_the_exact_rows_and_their_licence(runs):
-    from hde.break_even import reversal_gate
-    run = runs["mortgage"]
-    for row in run.block["reversal"]["exact"]:
-        assert set(row) == {"key", "option", "stated_formatted", "stated_source",
-                            "stated_tag", "bracket_low", "bracket_high", "bracket_source",
-                            "probe_paths", "max_path_deviation_over_sd", "boundaries",
-                            "refused_boundaries", "references", "path_note"}
-        assert row["stated_source"] == run.spec.sources.classify(row["key"])
-        assert row["stated_tag"] == sentences._read_back_tag(run.doc, row["key"])
-        gate = reversal_gate(run.raw, row["key"], row["bracket_high"],
-                             paths=row["probe_paths"])
-        assert gate["licensed"] and gate["others_bit_identical"]
-        assert gate["paths"] == row["probe_paths"]
-        assert gate["worst_deviation_over_sd"] == row["max_path_deviation_over_sd"]
-        assert row["max_path_deviation_over_sd"] <= REVERSAL_GATE_TOLERANCE
-
-
-@claims("`bracket_low` and `bracket_high` bound the search")
-def test_the_bracket_is_the_engines_own(runs):
-    for name in ("fixture", "mortgage"):
-        for row in runs[name].block["reversal"]["exact"]:
-            leaf = row["key"].split(".", 1)[1]
-            assert (row["bracket_low"], row["bracket_high"]) == be.RATE_BRACKETS[leaf]
-            assert row["bracket_source"] == "set in the engine"
-
-
-@claims("`path_note` is set when the config states the key as a path of two or more",
-        "a path of one repeated rate included.")
-def test_the_path_note(runs):
-    """How the axis was built, checked against the axis: every crossing on the
-    ladder is re-priced at its value with one rate at every renewal (the
-    solved ones on the deterministic verdict, through the loader the
-    register's own sweep reads), and that is the note's whole content."""
-    run = runs["fixture"]
-    rows = {r["key"]: r for r in run.block["reversal"]["exact"]}
-    ladder = rows["house.mortgage_renewal_rates"]
-    stated = run.raw["house"]["mortgage_renewal_rates"]
-    assert len(set(stated)) > 1
-    assert ladder["path_note"] == (
-        "each crossing on this key is priced with the stated path "
-        f"({', '.join(f'{v:.2%}' for v in stated)}) replaced by one rate at every renewal")
-    assert ladder["path_note"] == be.reversal_path_note(run.raw, ladder["key"])
-    base = renewal_segments_for(load_config_dict(copy.deepcopy(run.raw)).house)
-    assert len({s.rate for s in base[1:]}) > 1
-    for boundary in ladder["boundaries"]:
-        at = be.load_at(run.raw, ladder["key"], boundary["value"])
-        renewals = renewal_segments_for(at.house)[1:]
-        assert len(renewals) == len(base) - 1
-        assert len({s.rate for s in renewals}) == 1
-    assert rows["house.mortgage_rate"]["path_note"] is None
-    flat = copy.deepcopy(run.raw)
-    flat["house"]["mortgage_renewal_rates"] = [0.05, 0.05, 0.05]
-    assert be.reversal_path_note(flat, "house.mortgage_renewal_rates") is None
-    flat["house"]["mortgage_renewal_rates"] = [0.05, 0.06]
-    assert be.reversal_path_note(flat, "house.mortgage_renewal_rates") is not None
-    # the sweep's own note reads the same test of "a path", and is unchanged
-    assert flattened_path_note(flat, "house.mortgage_renewal_rates") is not None
+    def unreachable(*args, **kwargs):
+        raise AssertionError("a CLI surface reached the reversal library")
+    for name in ("reversal_register", "reversal_candidates", "reversal_admission",
+                 "reversal_gate", "deterministic_boundaries", "reversal_path_note",
+                 "printed_crossing", "ordered_figure"):
+        monkeypatch.setattr(break_even, name, unreachable)
+    code, out, _ = _cli(MORTGAGE, "--decompose=200", "--json")
+    assert code == 0
+    block = _strict(out)["decomposition"]
+    assert set(block) == {"paths", "max_paths", "live_channel_ids", "mean_margin",
+                          "sd_margin", "spread", "level"}
+    code, out, _ = _cli(MORTGAGE, "--decompose=200", "-q")
+    assert code == 0 and "THE LEVEL" in out
+    code, _, _ = _cli(MORTGAGE, "--decompose=200", "--sweep", "house.mortgage_rate=0.04,0.05",
+                      "--break-even", "house.mortgage_rate", "--json")
+    assert code == 0
 
 
 # What `hde --help` says of `--decompose`, as a template: each claim it makes
@@ -1272,9 +1337,8 @@ def test_the_path_note(runs):
 # against runs. A help text that says anything else fails the match.
 HELP_DECOMPOSE = re.compile(
     r"--decompose \[N\] Which risk decides it\. The spread register prices N futures "
-    r"of the block's own \(N defaults to (?P<default>simulation\.num_sims)\), the level "
-    r"register the first min\(N, (?P<cap>[\d,]+)\) of them, and the reversal register "
-    r"reads the run's own (?P<reversal>simulation\.num_sims) paths whatever N is\. "
+    r"of the block's own \(N defaults to (?P<default>simulation\.num_sims)\), and the "
+    r"level register the first min\(N, (?P<cap>[\d,]+)\) of them\. "
     r"What each figure means: (?P<doc>docs/reference/API_CONTRACT\.md), the "
     r"(?P<section>decomposition) block$")
 
@@ -1305,13 +1369,10 @@ def test_a_row_measured_on_the_futures_is_the_spread_register_s(tmp_path):
     """§0.1 item 48's witness. A lease reset so rare that the tenancy draws
     and moves nothing on 40 futures, and is live on 5,000: its `dead_draw` row
     appears with `N` and goes with it, and it is the spread register's, in the
-    JSON and under THE SPREAD in the text. The reversal register is the same
-    object at both counts, whole.
-    *Kills it:* a measured row back in `reversal.structural_zeros`, or a
-    reversal register that changes with `N`."""
+    JSON and under THE SPREAD in the text.
+    *Kills it:* a measured row printed outside the spread register."""
     few = Run(RARE_RESET_THREE, "40").materialise(tmp_path / "few")
     many = Run(RARE_RESET_THREE, "5000").materialise(tmp_path / "many")
-    assert few.block["reversal"] == many.block["reversal"]
     assert [(z["kind"], z["channel_id"], z["measured_paths"])
             for z in few.block["spread"]["structural_zeros"]] == [("dead_draw", 5, 40)]
     assert many.block["spread"]["structural_zeros"] == []
@@ -1320,51 +1381,15 @@ def test_a_row_measured_on_the_futures_is_the_spread_register_s(tmp_path):
     row = next(i for i, line in enumerate(lines) if line.startswith("  your tenancy: drawn"))
     assert lines.index("  THE SPREAD") < row < next(
         i for i, line in enumerate(lines) if line.startswith("  THE LEVEL"))
-    assert "NO ROW IN THE SPREAD OR THE LEVEL" not in few.text
-
-
-def test_the_reversal_register_is_break_even_s_and_nothing_added(monkeypatch):
-    """What makes "the reversal register reads the run's own num_sims paths
-    whatever N is" true by construction: the block's `reversal` IS the object
-    `break_even.reversal_register` returns, and that function is handed the
-    config, the central case and the run's own Monte Carlo result — nothing
-    the block's `N` sizes.
-    *Kills it:* the assembler adding a row to the register, or handing it
-    anything of the block's own futures."""
-    from hde import break_even
-    from hde.deterministic import compute_deterministic
-    from hde.models import compute_verdict
-    raw = _load(FIXTURE)
-    spec = load_config_dict(copy.deepcopy(raw))
-    det = compute_deterministic(spec)
-    mc = run_monte_carlo(spec)
-    verdict = compute_verdict(det, mc, years=spec.simulation.years,
-                              discount_rate=spec.simulation.discount_rate)
-    seen = []
-    real = break_even.reversal_register
-
-    def spy(*args, **kwargs):
-        seen.append((args, kwargs))
-        seen.append(real(*args, **kwargs))
-        return seen[-1]
-
-    monkeypatch.setattr(break_even, "reversal_register", spy)
-    got = dr.decompose(spec, det=det, mc=mc, verdict=verdict, raw=raw, paths=300)
-    (args, kwargs), returned = seen
-    assert got.reversal is returned
-    assert kwargs == {} and len(args) == 3
-    assert args[0] is raw and args[1] is det and args[2] is mc
 
 
 def test_the_help_says_how_many_futures_each_register_reads(runs):
     """`hde --help` is read before the contract is: every count it gives for
     `--decompose` is checked against runs. N is the block's `paths` (bare, the
-    config's `simulation.num_sims`), the level reads `min(N, cap)` of them at
-    an N under the cap and one over it, and the reversal register's curves
-    are bisected on the config's `simulation.num_sims` at an N that differs
-    from it.
-    *Kills it:* a help text that names another count for any register, or a
-    cap other than the engine's."""
+    config's `simulation.num_sims`), and the level reads `min(N, cap)` of them
+    at an N under the cap and one over it.
+    *Kills it:* a help text that names another count for either register, a
+    third register, or a cap other than the engine's."""
     m = HELP_DECOMPOSE.fullmatch(_help_entry())
     assert m, _help_entry()
     cap = int(m["cap"].replace(",", ""))
@@ -1376,9 +1401,6 @@ def test_the_help_says_how_many_futures_each_register_reads(runs):
     big = runs["advanced_4000"]
     assert big.block["paths"] == 4000 > cap
     assert big.block["level"]["paths"] == min(4000, cap)
-    curves = [b["curve_paths"] for row in fixture.block["reversal"]["exact"]
-              for b in row["boundaries"] if "curve_paths" in b]
-    assert curves and set(curves) == {num_sims}
     code, out, _ = _cli("--decompose", runs["mortgage"].path, "--json")
     assert code == 0
     assert _strict(out)["decomposition"]["paths"] == runs["mortgage"].spec.simulation.num_sims
@@ -1386,303 +1408,28 @@ def test_the_help_says_how_many_futures_each_register_reads(runs):
     assert "## The `decomposition` block" in (REPO / m["doc"]).read_text(encoding="utf-8")
 
 
-@claims("`estimated[]` rows carry the same keys without `probe_paths`.",
-        "A key there failed that test, and this engine locates no boundary on it",
-        "The boundary such a row is typed for")
-def test_an_estimated_row_carries_no_boundary(monkeypatch):
-    """Forced on a real run: with the gate's deviation held above its
-    tolerance the key lands in `estimated[]` with every field refused. And no
-    module outside the types and the text constructs the boundary type an
-    estimated row is typed for."""
-    monkeypatch.setattr(be, "_shift_deviation_over_sd", lambda before, after: 1.0)
-    code, out, _ = _cli(MORTGAGE, "--decompose", "200", "--json")
-    assert code == 0
-    reversal = _strict(out)["decomposition"]["reversal"]
-    assert reversal["exact"] == []
-    (row,) = reversal["estimated"]
-    exact_fields = {f.name for f in dataclasses.fields(dc.ExactReversal)}
-    assert set(row) == exact_fields - {"probe_paths"}
-    assert row["boundaries"] == []
-    assert {r["verdict_field"] for r in row["refused_boundaries"]} == set(dc.BOUNDARY_FIELDS)
-    assert [f.name for f in dataclasses.fields(dc.EstimatedBoundary)] == [
-        "verdict_field", "value", "value_ci", "was", "becomes", "further_changes",
-        "resimulation_paths"]
-    for path in (REPO / "src" / "hde").glob("*.py"):
-        if path.name in ("decomposition.py", "decomposition_text.py"):
-            continue
-        assert "EstimatedBoundary(" not in path.read_text(encoding="utf-8"), path.name
-
-
-@claims("A boundary carries `verdict_field`, `value`, `formatted`, `was`, `becomes`,",
-        "`best` and `runner_up` are SOLVED on the central case;",
-        "`was` is what the field says at the lower end of the bracket the boundary",
-        "For `decisive` they read")
-def test_every_boundary_reads_upward_against_a_sweep(runs):
-    """`was` at the figure the block prints for the boundary, and `becomes`
-    just above its unrounded value (§0.1 item 54: one printed step up is not
-    where `becomes` is read)."""
-    for name in ("fixture", "mortgage", "decisive_step", "decisive_step_lower"):
-        run = runs[name]
-        for row in run.block["reversal"]["exact"]:
-            for boundary in row["boundaries"]:
-                field = boundary["verdict_field"]
-                solved = field in ("best", "runner_up")
-                keys = {"verdict_field", "value", "formatted", "was", "becomes",
-                        "further_changes", "confirming_probabilities"}
-                if not solved:
-                    keys |= {"curve_probabilities", "curve_paths", "seed"}
-                assert set(boundary) == keys
-                below, above = _sweep_states(run.path, row["key"],
-                                             [_percent(boundary["formatted"]),
-                                              boundary["value"] + 1e-9], not solved)
-                assert below[field] == boundary["was"], (name, row["key"], field)
-                assert above[field] == boundary["becomes"], (name, row["key"], field)
-                if field == "decisive":
-                    assert re.fullmatch(r"decisive for \w+|not decisive", boundary["was"])
-
-
-@claims("`confirming_probabilities` is each option's probability of being cheapest",
-        "A boundary is reported only where the two are equal.",
-        "Each is a list of `[option, probability]` pairs.")
-def test_the_confirming_and_the_curve_probabilities(runs):
-    """A sampled boundary's two lists are equal pair for pair; the confirming
-    one is a full re-simulation at the boundary's value (checked on one
-    sampled boundary here, and on a solved one in
-    `test_how_many_futures_each_register_prices`)."""
-    sampled = []
-    for name in ("fixture", "mortgage"):
-        for row in runs[name].block["reversal"]["exact"]:
-            for boundary in row["boundaries"]:
-                for pair in boundary["confirming_probabilities"]:
-                    assert isinstance(pair[0], str) and 0.0 <= pair[1] <= 1.0
-                    assert len(pair) == 2
-                if "seed" in boundary:
-                    assert boundary["curve_probabilities"] == boundary[
-                        "confirming_probabilities"]
-                    sampled.append((runs[name], row, boundary))
-    run, row, boundary = sampled[0]
-    again = run_monte_carlo(be.load_at(run.raw, row["key"], boundary["value"]))
-    assert [list(p) for p in boundary["confirming_probabilities"]] == [
-        [o, getattr(again, f"prob_{o}_cheapest")] for o in ("condo", "house", "rent")
-        if getattr(again, f"prob_{o}_cheapest") is not None]
-
-
-@claims("Boundaries are the edges of every stretch of the bracket",
-        "`best` and `runner_up` are found by scanning each",
-        "A change and its reversal inside one scan step are")
-def test_the_two_scans(runs, monkeypatch):
-    """The solver on synthetic curves, and on the register's own call: 9
-    points per pair, bisected where the gap changes sign; 65 points for the
-    futures fields, each edge of a stretch bisected; a flip that starts and
-    ends inside one step is not seen by either."""
-    asked = []
-
-    def gap(inside):
-        def totals(v):
-            asked.append(v)
-            return (-1.0 if inside(v) else 1.0, 0.0)
-        return totals
-
-    none = be.solve_crossings("house.mortgage_rate", ("condo", "house"), 0.01, 0.10,
-                              gap(lambda v: 0.0205 < v < 0.0206))
-    assert none["break_evens"] == []
-    assert asked == pytest.approx([0.01 + 0.09 * i / 8 for i in range(9)])
-    asked.clear()
-    one = be.solve_crossings("house.mortgage_rate", ("condo", "house"), 0.01, 0.10,
-                             gap(lambda v: v > 0.05))
-    assert [b["value"] for b in one["break_evens"]] == pytest.approx([0.05], abs=1e-8)
-
-    xs = []
-
-    def curve(inside):
-        def free(x):
-            xs.append(x)
-            return types.SimpleNamespace(mc_best="house" if inside(x) else "condo"), {}
-        return free
-
-    stated = types.SimpleNamespace(mc_best="condo")
-    found, why = be._futures_field_boundaries(
-        {}, "house.mortgage_rate", "mc_best", curve(lambda x: 0.0205 < x < 0.0206),
-        stated, 0.01, 0.10, scan_points=be.REVERSAL_SCAN_POINTS)
-    assert found == [] and why[0] == "unchanged"
-    assert why[1].startswith("mc_best says 'condo' at every one of 65 points")
-    assert xs == pytest.approx([0.01 + 0.09 * i / 64 for i in range(65)])
-    found, why = be._futures_field_boundaries(
-        {}, "house.mortgage_rate", "mc_best", curve(lambda x: 0.0205 < x < 0.03),
-        stated, 0.01, 0.10, scan_points=be.REVERSAL_SCAN_POINTS)
-    assert why is None
-    assert [b["value"] for b in found] == pytest.approx([0.0205, 0.03], abs=1e-9)
-    assert inspect.signature(be.reversal_register).parameters[
-        "scan_points"].default == 65
-
-    # the register's own solver call: each pair of the fixture's three options,
-    # each scanned at the same nine points before it bisects
-    calls = []
-    real = be.solve_crossings
-
-    def recorded(key, options, lo, hi, totals_at, **kwargs):
-        seen = []
-        calls.append((options, seen))
-
-        def spy(v):
-            seen.append(v)
-            return totals_at(v)
-        return real(key, options, lo, hi, spy, **kwargs)
-
-    monkeypatch.setattr(be, "solve_crossings", recorded)
-    raw = runs["fixture"].raw
-    be.deterministic_boundaries(raw, "house.mortgage_rate", 0.01, 0.10)
-    assert sorted(o for o, _ in calls) == [("condo", "house"), ("condo", "rent"),
-                                           ("house", "rent")]
-    for _, seen in calls:
-        assert seen[:9] == pytest.approx([0.01 + 0.09 * i / 8 for i in range(9)])
-
-
-@claims("`further_changes` is `\"above\"` when")
-def test_further_changes_against_a_sweep_past_the_edge(runs):
-    """For each boundary, sweep from the edge to where the field says what the
-    run says again, or to the bracket's end, on the flagged side: more than
-    one state there exactly when `further_changes` names that side."""
-    checked = set()
-    for name in ("fixture", "mortgage", "decisive_step", "decisive_step_lower"):
-        run = runs[name]
-        for row in run.block["reversal"]["exact"]:
-            for boundary in row["boundaries"]:
-                field = boundary["verdict_field"]
-                futures = field not in ("best", "runner_up")
-                upward = boundary["was"] == _run_says(run, row, field, futures)
-                side = "above" if upward else "below"
-                end = row["bracket_high"] if upward else row["bracket_low"]
-                # fine steps off the edge first, where a short stretch lives,
-                # then the rest of the way to the bracket's end
-                step = 1.0 if upward else -1.0
-                fine = [boundary["value"] + step * d for d in (2e-4, 5e-4, 1e-3, 2e-3, 4e-3)]
-                grid = [x for x in fine if min(boundary["value"], end) < x
-                        < max(boundary["value"], end)]
-                grid += list(np.linspace(boundary["value"], end, 13)[1:])
-                states = [s[field] for s in _sweep_states(run.path, row["key"], grid, futures)]
-                says = boundary["was"] if upward else boundary["becomes"]
-                stretch = []
-                for state in states:
-                    if state == says:
-                        break
-                    stretch.append(state)
-                changes = len(set(stretch)) > 1
-                assert (boundary["further_changes"] == side) == changes, (
-                    name, row["key"], field, stretch)
-                if boundary["further_changes"] is not None:
-                    checked.add(boundary["further_changes"])
-    assert checked == {"above", "below"}
-
-
-def _run_says(run, row, field, futures):
-    """What `field` says at the config's own value of the row's key."""
-    doc = run.doc["verdict"]
-    if field == "decisive":
-        return f"decisive for {doc['best']}" if doc["decisive"] else "not decisive"
-    return doc[field]
-
-
-@claims("`refused_boundaries[]`: `verdict_field`, `code` and `reason`: one for a field",
-        "`reason` is the measured fact, and `code` is `unchanged` when",
-        "`references[]`: `label`, `value`, `formatted`, `anchor` and `note`",
-        "On an `effective_annual` config the semi-annual anchor passes through")
-def test_the_refused_fields_and_the_references(runs):
-    """The refused entries and the references on real rows; each code by its
-    own witness in `tests/test_decomposition_refusal_codes.py`, which also
-    checks the head each code prints behind. And a field with one boundary
-    printed and another refused says so line by line: its refusal never says
-    no boundary was printed for it."""
-    from hde.anchors import ANCHORS
-    from tests.decomposition_households import uncertainty_surface
-    dec = uncertainty_surface()
-    renewal = dec.reversal.exact[0]
-    edge = dc.RefusedBoundary(verdict_field="mc_best", code="not_identified",
-                              reason="across the bracket the probabilities this boundary "
-                                     "turns on move by 0.0100, not more than 2 s.e. at the "
-                                     "boundary (0.0400) on 2000 paths")
-    both = dataclasses.replace(renewal, refused_boundaries=renewal.refused_boundaries + (edge,))
-    text = dt.format_decomposition(dataclasses.replace(
-        dec, reversal=dataclasses.replace(dec.reversal,
-                                          exact=(both,) + dec.reversal.exact[1:])))
-    lines = text.splitlines()
-    assert any(line.startswith("      sampled on 2,000 paths at seed 42: as it rises past "
-                               "2.71%, the option most futures call cheapest") for line in lines)
-    assert ("      a boundary not printed for the option most futures call cheapest "
-            f"(not_identified): {edge.reason}") in lines
-    assert not any(line.startswith("      no boundary printed for the option most futures")
-                   for line in lines)
-    assert set(dc.EDGE_REFUSAL_CODES) < set(dc.BOUNDARY_REFUSAL_CODES)
-    refused = 0
-    for name, converted in (("fixture", False), ("mortgage", True)):
-        run = runs[name]
-        for row in run.block["reversal"]["exact"]:
-            for item in row["refused_boundaries"]:
-                assert set(item) == {"verdict_field", "code", "reason"}
-                # the measured fact: the reason template its code writes, which
-                # the sentence tests check against the run
-                assert sentences._BOUNDARY_REASON[item["code"]].fullmatch(
-                    item["reason"]), item
-                refused += 1
-            for ref in row["references"]:
-                assert set(ref) == {"label", "value", "formatted", "anchor", "note"}
-                published = ANCHORS[ref["anchor"]].value
-                want = (effective_mortgage_rate(published, "semi_annual") if converted
-                        else published)
-                assert ref["value"] == want
-                assert ref["note"] == (f"published as {published:.2%} compounded "
-                                       f"semi-annually" if converted else None)
-    assert refused
-    assert runs["mortgage"].raw["house"]["mortgage_rate_compounding"] == "effective_annual"
-    # the stated rate, typed on that axis, sits where the converted contracted
-    # figure does: 4.40% typed against 4.35% published
-    row = runs["mortgage"].block["reversal"]["exact"][0]
-    refs = {r["anchor"]: r["value"] for r in row["references"]}
-    assert abs(refs["mortgage_rate.contracted_5y_uninsured"] - 0.044) < 0.0003
-
-
-@claims("`structural_zeros[]`, in `reversal` and in `spread`: `kind`, `label`,",
-        "`reversal.structural_zeros` holds the `stated_path` rows and",
-        "Decided by the model's structure;",
+@claims("`structural_zeros[]`: `kind`, `label`, `keys`, `channel_id`,",
         "Both facts are measured, on those futures, and both are facts about the stream.",
-        "`keys` are the keys of the stream's widths (the income stream's",
-        "`reversal_key` is `null`.")
+        "`keys` are the keys of the stream's widths (the income stream's")
 def test_the_structural_zeros_say_what_is_drawn(runs):
-    """Checked at the generators: a stated path moves no stream's state; the
-    income stream and a dead channel do move theirs, and re-seeding them, on
-    held generators and as many futures as the row names, moves no present
-    value past the row's threshold. And at the grain of a key (§0.1 item 40):
-    `rent.events` on `three` names a stated moving cost whose deterministic
-    present value is in rent's, and the row names it only as what sizes the
-    tenancy's draws."""
+    """Checked at the generators: the income stream and a dead channel move
+    their state, and re-seeding them, on held generators and as many futures
+    as the row names, moves no present value past the row's threshold. And at
+    the grain of a key (§0.1 item 40): `rent.events` on `three` names a stated
+    moving cost whose deterministic present value is in rent's, and the row
+    names it only as what sizes the tenancy's draws."""
     fixture = runs["fixture"]
-    zeros = (fixture.block["reversal"]["structural_zeros"]
-             + fixture.block["spread"]["structural_zeros"])
+    zeros = fixture.block["spread"]["structural_zeros"]
     for zero in zeros:
-        assert set(zero) == {"kind", "label", "keys", "channel_id", "reversal_key",
-                             "measured_paths", "move_threshold"}
-    # each register holds its own kind, on every run of the corpus
+        assert set(zero) == {"kind", "label", "keys", "channel_id", "measured_paths",
+                             "move_threshold"}
+    # every row of every run of the corpus is a dead_draw row
     for name, run in runs.items():
-        assert {z["kind"] for z in run.block["reversal"]["structural_zeros"]} <= {
-            "stated_path"}, name
         assert {z["kind"] for z in run.block["spread"]["structural_zeros"]} <= {
             "dead_draw"}, name
-    exact_keys = {r["key"] for r in fixture.block["reversal"]["exact"]}
     spec = dr._spec_at(fixture.spec, 40)
-    for zero in (z for z in zeros if z["kind"] == "stated_path"):
-        assert zero["reversal_key"] in exact_keys and zero["channel_id"] is None
-        moved = copy.deepcopy(fixture.raw)
-        moved["sources"].pop(zero["reversal_key"], None)
-        key = zero["reversal_key"].split(".", 1)[1]
-        value = moved["house"][key]
-        moved["house"][key] = ([v + 0.01 for v in value] if isinstance(value, list)
-                               else value + 0.01)
-        assert _stream_states(spec) == _stream_states(
-            dr._spec_at(load_config_dict(moved), 40)), zero["label"]
-    for zero in (z for z in zeros if z["kind"] == "stated_path"):
-        assert (zero["measured_paths"], zero["move_threshold"]) == (None, None)
     income = next(z for z in zeros if z["kind"] == "dead_draw")
-    assert income["channel_id"] == dc.INCOME_STREAM_ID and income["reversal_key"] is None
+    assert income["channel_id"] == dc.INCOME_STREAM_ID
     assert income["keys"] == ["income.pay_drop_events"]
     assert income["measured_paths"] == fixture.block["paths"]
     assert 7 in _moved_streams(spec)
@@ -1695,7 +1442,6 @@ def test_the_structural_zeros_say_what_is_drawn(runs):
         assert zero["channel_id"] in _moved_streams(spec3)
         moves = oracle_moves(three.spec, zero["measured_paths"])
         assert moves[zero["channel_id"]] <= zero["move_threshold"]
-        assert zero["reversal_key"] is None
     # the key the tenancy's row names carries a cash flow of its own
     tenancy = dead[0]
     assert tenancy["keys"] == ["rent.events"]
@@ -1728,59 +1474,32 @@ def _moved_streams(spec):
     return {c for c in before if before[c] != after[c]}
 
 
-def _pvs(spec, overrides):
-    mc = run_monte_carlo(spec, _held(overrides))
-    return {o: np.asarray(getattr(mc, o).pvs).tobytes()
-            for o in ("condo", "house", "rent") if getattr(mc, o) is not None}
-
-
 # ---------------------------------------------------------------------------
 # The text block
 # ---------------------------------------------------------------------------
 
 @claims("**The text block** prints these figures and no sentence about them.",
-        "Every line is one of six kinds: a heading; a figure row",
-        "A crossing line names whether it was solved or sampled",
-        "A path note is a row's `path_note`, printed after its bracket.",
-        "A `stated_path` row prints its label, its keys and that no draw touches them",
-        "a `dead_draw` row prints, under the spread register's heading after its figures",
-        "A refused boundary prints as `no boundary printed for <fields> (<code>): <reason>`")
-def test_the_text_block_holds_six_kinds_of_line(runs):
+        "Every line is one of four kinds: a heading; a figure row",
+        "`move_threshold` prints at three significant figures, taken upward")
+def test_the_text_block_holds_four_kinds_of_line(runs):
     """Every line of every render is one template of the sentence tests, and
-    every template is one of the six kinds or a blank — the path note under its
-    own kind, not filed as a crossing (§0.1 item 41); the crossing lines of the
-    fixture carry their type, and the sampled ones their paths and seed, with
-    the path note after the bracket; each structural-zero row prints its kind's
-    fields."""
+    every template is a blank or one of four of the six kinds (§0.1 items 35
+    and 41): the crossing and the path note left with the reversal register
+    (§0.1 item 56), so no template is of either kind. Each structural-zero row
+    prints its fields, after the spread register's figures."""
     kinds = set(sentences.KINDS.values())
-    assert kinds == {"layout", "header", "figure row", "crossing", "path note", "refusal",
-                     "structural zero"}
+    assert kinds <= sentences.SIX_KINDS | {"layout"}
+    assert kinds == {"layout", "header", "figure row", "refusal", "structural zero"}
     # §0.1 item 50: a refusal is its code and one fact, every one of them
     refusals = [name for name, kind in sentences.KINDS.items() if kind == "refusal"]
-    assert set(refusals) == {"REFUSAL", "SPREAD_REFUSED", "REFUSED_BOUNDARY", "NO_DISTANCE"}
+    assert set(refusals) == {"REFUSAL", "SPREAD_REFUSED"}
     for name in refusals:
         assert {"code", "reason"} <= set(sentences.LINES[name].groupindex), name
-    assert sentences.KINDS["PATH_NOTE"] == "path note"
     for render in sentences.renders():
         for line in sentences._lines(render):
             assert sentences.KINDS[line.template] in kinds
     run = runs["fixture"]
     lines = run.text.splitlines()
-    for row in run.block["reversal"]["exact"]:
-        for boundary in row["boundaries"]:
-            if "seed" in boundary:
-                head = (f"      sampled on {boundary['curve_paths']:,} paths at seed "
-                        f"{boundary['seed']}: as it rises past "
-                        f"{boundary['formatted']}, ")
-            else:
-                head = (f"      solved on the central case: as it rises past "
-                        f"{boundary['formatted']}, ")
-            assert sum(line.startswith(head) for line in lines) == 1, head
-    ladder = run.block["reversal"]["exact"][0]
-    at = lines.index(f"      bracket searched: {dt._rate(ladder['bracket_low'])}–"
-                     f"{dt._rate(ladder['bracket_high'])} [{ladder['bracket_source']}]")
-    assert lines[at + 1] == f"      {ladder['path_note']}"
-    assert lines[at + 2].startswith("      solved on the central case:")
     level_head = next(i for i, line in enumerate(lines) if line.startswith("  THE LEVEL"))
     dead = run.block["spread"]["structural_zeros"]
     # under the spread register's heading, after its figures: the last lines
@@ -1792,21 +1511,13 @@ def test_the_text_block_holds_six_kinds_of_line(runs):
         f"${dt._ceiled_threshold(zero['move_threshold'])}; sized by "
         f"{', '.join(zero['keys'])}" for zero in dead]
     assert lines[level_head - 2 - len(dead)].startswith("  largest alone share:")
-    for zero in run.block["reversal"]["structural_zeros"] + dead:
-        if zero["kind"] == "stated_path":
-            want = f"  {zero['label']} — {', '.join(zero['keys'])}: no draw touches it"
-        else:
-            want = (f"  {zero['label']}: drawn on these {zero['measured_paths']:,} futures, "
-                    f"and re-drawing it moved no option's present value by more than "
-                    f"${dt._ceiled_threshold(zero['move_threshold'])}; sized by "
-                    f"{', '.join(zero['keys'])}")
-            # three significant figures, taken upward
-            printed = decimal.Decimal(dt._ceiled_threshold(zero["move_threshold"]))
-            assert len(printed.normalize().as_tuple().digits) <= 3
-            assert printed >= decimal.Decimal(zero["move_threshold"])
-            assert printed - decimal.Decimal(1).scaleb(printed.adjusted() - 2) \
-                < decimal.Decimal(zero["move_threshold"])
-        assert want in lines, want
+    for zero in dead:
+        # three significant figures, taken upward
+        printed = decimal.Decimal(dt._ceiled_threshold(zero["move_threshold"]))
+        assert len(printed.normalize().as_tuple().digits) <= 3
+        assert printed >= decimal.Decimal(zero["move_threshold"])
+        assert printed - decimal.Decimal(1).scaleb(printed.adjusted() - 2) \
+            < decimal.Decimal(zero["move_threshold"])
 
 
 def _table_line(text, heading, channel_id):
@@ -1833,7 +1544,7 @@ def _assert_top_line(text, what, leading):
 
 
 @claims("A figure that did not resolve prints behind",
-        "`not resolved` with no colon and no figure after it stands where the residual",
+        "by `; 1 minus that sum: not resolved` when the sum's interval includes 1,",
         "`largest alone share:` and `largest shift in size:` name a",
         "when a register's top row did not resolve, that register's line does not print.",
         "Each printed figure is rounded on its own from the unrounded field")
@@ -1843,7 +1554,9 @@ def test_the_text_block_prints_the_registers_own_judgments(runs):
     the level's difference over the printed figures. And the partition of
     "not resolved" pinned whole (§0.1 item 46): over every line of every
     render, each occurrence is either followed by ": " and a figure, or is
-    the residual's own place on a block whose interaction did not resolve."""
+    the residual's own place on a block whose sum's interval includes 1. Where
+    that interval lies above 1, the line ends at the interval (§4), on the
+    fixture at its own count of futures."""
     residual_seen = 0
     for render in sentences.renders():
         for line in render.text.splitlines():
@@ -1852,9 +1565,25 @@ def test_the_text_block_prints_the_registers_own_judgments(runs):
                     assert re.match(r"not resolved: [+-]?\$?-?\d", line[hit.start():]), line
                     continue
                 assert line.endswith("; 1 minus that sum: not resolved"), line
-                assert render.block["spread"]["interaction"]["resolved"] is False
+                interaction = render.block["spread"]["interaction"]
+                assert interaction["resolved"] is False
+                low, high = (interaction["first_order_sum_ci"]["low"],
+                             interaction["first_order_sum_ci"]["high"])
+                assert low <= 1.0 <= high, line
                 residual_seen += 1
     assert residual_seen
+    above = 0
+    for render in sentences.renders():
+        interaction = render.block.get("spread", {}).get("interaction")
+        if interaction is None or interaction["first_order_sum_ci"]["low"] <= 1.0:
+            continue
+        (line,) = [line for line in render.text.splitlines()
+                   if line.startswith("  alone shares summed")]
+        assert line == (f"  alone shares summed before rounding: "
+                        f"{dt._share(interaction['first_order_sum'])} "
+                        f"{dt._interval(dc.Interval(**interaction['first_order_sum_ci']))}")
+        above += render.engine
+    assert above
     seen_unresolved = 0
     tops = set()
     for name in ("fixture", "showcase", "three", "advanced", "basic"):
@@ -1894,203 +1623,162 @@ def test_the_text_block_prints_the_registers_own_judgments(runs):
                                f"{dt._share(inter['first_order_sum'])} ") for line in lines)
 
 
-# §0.1 item 54's witnesses, each printing a figure on a crossing's axis where a
-# floor at one fixed precision put it on the wrong side, and the lines each
-# prints now. SLIVER_LOW printed "6.27%" for the lower edge of a `was` stretch
-# narrower than 0.01%, where `--sweep` says decisive for house; SOLVED_SLIVER
-# printed "6.2724%" for a runner-up stretch lying wholly above it;
-# STATED_BESIDE_CROSSING printed its stated 6.273% as "6.27%" below a solved
-# "6.2724%" and beside a sampled "6.27%" whose value lies above 6.273%;
-# SLIVER_HIGH is the upper-edge twin, whose `becomes` holds just above the edge
-# and not one printed step up; THREE_OPTION_RUNNER_UP reads an upper edge's
-# `becomes` in the solved span next to it (the mutant that read two spans on
-# printed "from condo to rent"); REFERENCE_BESIDE_CROSSING printed the
-# contracted rate, 4.3973% on this axis, as "4.40%" beside a solved "4.3985%",
-# and its stated 4.40%, a float just below 4.40%, beside a sampled crossing
-# at 4.4057% that floored to the same "4.40%".
-_FIGURE_WITNESSES = {
-    "sliver_low": (SLIVER_LOW, (
-        "      sampled on 400 paths at seed 42: as it rises past 6.277%, the decisiveness "
-        "verdict changes from not decisive to decisive for rent (and changes again below "
-        "it, inside the bracket)",)),
-    "solved_sliver": (SOLVED_SLIVER, (
-        "      solved on the central case: as it rises past 6.27248%, the runner-up changes "
-        "from house to condo (and changes again below it, inside the bracket)",)),
-    "stated_beside_crossing": (STATED_BESIDE_CROSSING, (
-        "  house.mortgage_rate, stated 6.273% [unattributed]",
-        "      solved on the central case: as it rises past 6.2724%, the central case's "
-        "winner changes from house to rent",
-        "      sampled on 400 paths at seed 42: as it rises past 6.278%, the option most "
-        "futures call cheapest changes from house to rent")),
-    "sliver_high": (SLIVER_HIGH, (
-        "      sampled on 400 paths at seed 42: as it rises past 6.27%, the decisiveness "
-        "verdict changes from decisive for house to not decisive (and changes again above "
-        "it, inside the bracket)",)),
-    "three_option_runner_up": (THREE_OPTION_RUNNER_UP, (
-        "      solved on the central case: as it rises past 3.7997%, the runner-up changes "
-        "from condo to house (and changes again above it, inside the bracket)",)),
-    "reference_beside_crossing": (REFERENCE_BESIDE_CROSSING, (
-        "  house.mortgage_rate, stated 4.40% [unattributed]",
-        "      solved on the central case: as it rises past 4.3985%, the central case's "
-        "winner changes from house to rent",
-        "      sampled on 400 paths at seed 42: as it rises past 4.405%, the option most "
-        "futures call cheapest changes from house to rent",
-        "      on the same axis: contracted 5y uninsured 4.397% "
-        "[mortgage_rate.contracted_5y_uninsured] — published as 4.35% compounded "
-        "semi-annually; contracted 5y insured 4.05% [mortgage_rate.contracted_5y_insured] "
-        "— published as 4.01% compounded semi-annually; posted 5y 6.18% "
-        "[mortgage_rate.posted_5y] — published as 6.09% compounded semi-annually")),
+# The contract's skeleton of every line the text block prints, as its spans:
+# each is a backticked span of the section, and a line is its spans in order.
+_SUMS = "alone shares summed before rounding: <first_order_sum> [<low>, <high>]"
+_ZERO = ("<label>: drawn on these <measured_paths> futures, and re-drawing it moved no "
+         "option's present value by more than $<move_threshold>")
+_SKELETONS = {
+    "HEADER": ("which risk decides it — <paths> futures, <k> channels live on them",),
+    "REFUSAL": ("which risk decides it — not split (<code>): <reason>",),
+    "MARGIN": ("margin, the cheapest other option's present value minus <best>'s: central "
+               "case <margin>; over this block's own <paths> futures, mean <mean_margin> "
+               "and s.d. <sd_margin>",),
+    "SPREAD_HEAD": ("THE SPREAD",),
+    "SPREAD_REFUSED": ("not split (<code>): <reason>",),
+    "SPREAD_COLS": ("channel alone with interaction flips whether <best> is cheapest",),
+    "SPREAD_ROW": ("<label> <alone> [<low>, <high>] <with_interaction> [<low>, <high>] "
+                   "<flip>% [<low>, <high>]",),
+    "WIDTHS": ("sized by <widths>",),
+    "SUMS": (_SUMS,),
+    "SUMS_RESIDUAL": (_SUMS, "; 1 minus that sum: <residual> [<low>, <high>]"),
+    "SUMS_UNRESOLVED": (_SUMS, "; 1 minus that sum: not resolved"),
+    "GAPS": ("with interaction minus alone, before rounding: <label> <interaction_gap> "
+             "[<low>, <high>]",),
+    "SPREAD_TOP": ("largest alone share: <label>",),
+    "ZERO": (_ZERO,),
+    "ZERO_KEYS": (_ZERO, "; sized by <keys>"),
+    "LEVEL_HEAD": ("THE LEVEL — the first <level.paths> of these futures",),
+    "LEVEL_BASE": ("as drawn: mean margin <futures_margin>, P(<best> cheapest) "
+                   "<prob_best_base>; the central case's margin minus that mean: <gap>",),
+    "LEVEL_COLS": ("channel margin shift, channel frozen (± 1 s.e.) P(<best> cheapest), "
+                   "channel frozen",),
+    "LEVEL_ROW": ("<label> <shift> (± $<se>) <prob_best_frozen>",),
+    "LEVEL_SUM": ("the <n> shifts above, summed: <sum>",),
+    "LEVEL_TOP": ("largest shift in size: <label>",),
 }
+# The order the contract gives the lines in, over the skeletons' names.
+_ORDER = re.compile(
+    r"REFUSAL|HEADER MARGIN BLANK SPREAD_HEAD (?:SPREAD_REFUSED|SPREAD_COLS"
+    r"(?: SPREAD_ROW WIDTHS)+ SUMS\w* GAPS(?: SPREAD_TOP)?)(?: ZERO\w*)* BLANK LEVEL_HEAD "
+    r"LEVEL_BASE LEVEL_COLS(?: LEVEL_ROW)+ LEVEL_SUM(?: LEVEL_TOP)?")
+# A placeholder that may hold any text; every other one is a figure or a label,
+# which holds no bracket and no `; `.
+_FREE = {"<reason>", "<widths>", "<keys>"}
 
 
-def _percent(text):
-    return float(decimal.Decimal(text.rstrip("%")).scaleb(-2))
+def _span_pattern(span):
+    return "".join(
+        (".+" if part in _FREE else r"[^\[\];]+?") if re.fullmatch(r"<[^<>]+>", part)
+        else re.escape(part)
+        for part in re.split(r"(<[^<>]+>)", span) if part)
 
 
-def _splits(printed, value, figures):
-    """Whether a stated or cited figure below `value` prints, at the finest
-    precision it may be given, at or above the printed crossing: then no
-    rounding of it prints it below the crossing, where it is."""
-    shown = decimal.Decimal(printed.rstrip("%"))
-    finest = be.PRINTED_RATE_MAX_PLACES
-    return any(shown <= decimal.Decimal(f"{f:.{finest}%}".rstrip("%"))
-               for f in figures if f < value)
+def _skeleton_pattern(name, spans):
+    if name == "GAPS":
+        # one part per row, `; `-joined
+        head, part = spans[0].split(": ", 1)
+        one = _span_pattern(part)
+        return re.compile(f"{re.escape(head)}: {one}(?:; {one})*")
+    return re.compile("".join(_span_pattern(span) for span in spans))
 
 
-@claims("Its rate is `formatted`: `value` floored,",
-        "So the field says `was` at the printed rate because that is checked",
-        "A stated figure and a reference's `formatted` print at two decimals")
-def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(tmp_path):
-    """§0.1 item 54, on its witnesses. Every crossing's figure is its value
-    floored, at its kind's precision or more; at the printed figure `--sweep`
-    says `was`, and just above the unrounded value `becomes` — never one
-    printed step up, where on a sliver a third state lies; one decimal fewer
-    would fail (the field says something else there, or a stated or cited
-    figure lies between), so it widened no further than it had to; and the
-    stated figure and every reference order against every printed crossing as
-    the unrounded values do.
-    *Kills it:* printing at a fixed precision (the witnesses' lines revert),
-    checking the field at the value instead of at the printed figure, widening
-    past need, or a stated figure rounded without looking at the crossings."""
-    live = 0
-    for name, (raw, lines) in _FIGURE_WITNESSES.items():
-        got = Run(raw).materialise(tmp_path / name)
-        printed_lines = got.text.splitlines()
-        for line in lines:
-            assert line in printed_lines, (name, line)
-        for row in got.block["reversal"]["exact"]:
-            option, leaf = row["key"].split(".", 1)
-            stated = raw[option][leaf]
-            figures = ([float(v) for v in (stated if isinstance(stated, list) else [stated])]
-                       + [r["value"] for r in row["references"]])
-            for boundary in row["boundaries"]:
-                field, sampled = boundary["verdict_field"], "curve_paths" in boundary
-                places = len(boundary["formatted"].rstrip("%").split(".")[1])
-                assert places >= (2 if sampled else 4), boundary
-                assert boundary["formatted"] == be.floored_rate(boundary["value"], places)
-                at, above = _sweep_states(got.path, row["key"],
-                                          [_percent(boundary["formatted"]),
-                                           boundary["value"] + 1e-9], sampled)
-                assert at[field] == boundary["was"], (name, boundary, at)
-                assert above[field] == boundary["becomes"], (name, boundary, above)
-                if places > (2 if sampled else 4):
-                    fewer = be.floored_rate(boundary["value"], places - 1)
-                    (there,) = _sweep_states(got.path, row["key"], [_percent(fewer)], sampled)
-                    assert (there[field] != boundary["was"]
-                            or _splits(fewer, boundary["value"], figures)), (name, fewer)
-                    live += 1
-            shown = row["stated_formatted"].split(", ")
-            values = stated if isinstance(stated, list) else [stated]
-            pairs = list(zip(shown, [float(v) for v in values])) + [
-                (r["formatted"], r["value"]) for r in row["references"]]
-            for figure, value in pairs:
-                def ordered(text):
-                    return all(
-                        sentences._order(decimal.Decimal(text.rstrip("%")),
-                                         decimal.Decimal(b["formatted"].rstrip("%")))
-                        == sentences._order(value, b["value"]) for b in row["boundaries"])
-                assert ordered(figure), (name, figure)
-                # two decimals, or more only where fewer would mis-order it
-                places = len(figure.rstrip("%").split(".")[1])
-                assert places >= 2 and figure == f"{value:.{places}%}", (name, figure)
-                if places > 2:
-                    assert not ordered(f"{value:.{places - 1}%}"), (name, figure)
-                    live += 1
-    assert live >= 4       # the widening is exercised, not only its absence
+@claims("The lines it prints are these, in this order, and no others",
+        "- `which risk decides it — <paths> futures, <k> channels live on them`",
+        "- `margin, the cheapest other option's present value minus <best>'s:",
+        "- A blank line, and `THE SPREAD`.",
+        "- For a refused spread, `not split (<code>): <reason>`; otherwise its table:",
+        "- Each row of `structural_zeros`, refused spread or not:",
+        "- A blank line, and `THE LEVEL — the first <level.paths> of these futures`.",
+        "- `as drawn: mean margin <futures_margin>,",
+        "- `channel margin shift, channel frozen (± 1 s.e.) P(<best> cheapest), channel")
+def test_the_text_block_prints_the_contract_s_lines_in_its_order_and_no_others():
+    """§0.1 item 46's rule for a list that says it is whole: every span of
+    every skeleton is the contract's own text, character for character; every
+    line of every render, its runs of spaces collapsed, is exactly one
+    skeleton; the lines of each render come in the contract's order; and every
+    skeleton, each ending of the sums line and of a `structural_zeros` row
+    included, is printed by a run of the engine. What each figure in a line is
+    checked against is the sentence tests' (`LINE_CLAIMS`).
+    *Kills it:* a line the contract does not list, a listed line no run
+    prints, an ending of a line the contract gives wrong (the sums line's with
+    its interval above 1, a `structural_zeros` row's with no keys), or two
+    lines printed out of the contract's order."""
+    section = " ".join(_section().split())
+    for spans in _SKELETONS.values():
+        for span in spans:
+            assert f"`{span}`" in section, span
+    patterns = {name: _skeleton_pattern(name, spans) for name, spans in _SKELETONS.items()}
+    printed = set()
+    for render in sentences.renders():
+        names = []
+        for line in render.text.splitlines():
+            if not line.strip():
+                names.append("BLANK")
+                continue
+            flat = " ".join(line.split())
+            hits = [name for name, pattern in patterns.items() if pattern.fullmatch(flat)]
+            assert len(hits) == 1, (render.name, line, hits)
+            names.append(hits[0])
+            if render.engine:
+                printed.add(hits[0])
+        assert _ORDER.fullmatch(" ".join(names)), (render.name, names)
+    assert printed == set(_SKELETONS), set(_SKELETONS) - printed
 
 
-@claims("`--decompose` stops with an error naming the check rather than print the line")
-def test_a_check_that_cannot_pass_stops_the_block_by_name(monkeypatch):
-    """A fail-safe inside the block or the reversal solver reaches the user
-    as an error naming its check and exit 1, never as a traceback. Three are
-    forced at 40 futures.
-
-    The nine-point check (§0.1 item 47) with no solved crossing handed back:
-    the ranking changes across the bracket, and the check reads it at each of
-    the nine points (a check that read the bracket's low end at every point
-    would find the run's own answer there and pass, while its reason says
-    "at every one of 9 points"). The printed-rate check (§0.1 item 54) with
-    no precision allowed past the one it starts at. The width check (§0.1
-    item 53) with no tag for any key.
-    *Kills it:* the CLI no longer catching the raise, the nine-point check
-    reading one point, or any of the three checks deleted."""
-    def no_crossings(key, pair, lo, hi, totals_at, **kwargs):
-        return {"break_evens": []}
-
-    with monkeypatch.context() as patched:
-        patched.setattr(be, "solve_crossings", no_crossings)
-        code, out, err = _cli(MORTGAGE, "--decompose=40")
-    assert code == 1 and "Traceback" not in err and "which risk decides it" not in out
-    assert ("Error: --decompose stopped, a check failed: the 9-point scan check: on "
-            "house.mortgage_rate no solved crossing moves best, and at the 9 scan points "
-            "it reads ['house', ") in err
-    # the ranking the check read differs across the grid, and the run's own
-    # answer is the one at the bracket's low end
-    grid = [be._ranking_at(_load(MORTGAGE), "house.mortgage_rate", x)["best"]
-            for x in be._scan_grid(0.01, 0.10, be.CROSSING_SCAN_POINTS)]
-    assert grid[0] == "house" and set(grid) == {"house", "rent"}
-
-    with monkeypatch.context() as patched:
-        patched.setattr(be, "PRINTED_RATE_MAX_PLACES", 3)
-        code, out, err = _cli(MORTGAGE, "--decompose=40")
-    assert code == 1 and "Traceback" not in err and "which risk decides it" not in out
-    assert ("Error: --decompose stopped, a check failed: the printed-rate check: "
-            "house.mortgage_rate's best crossing at ") in err
-
-    # the width check (§0.1 item 53): a width whose key the source lines give
-    # no tag stops the block, on `--json` too, where no formatter would have
-    # refused the untagged width
-    import hde.serialization as serialization
-    with monkeypatch.context() as patched:
-        patched.setattr(serialization, "read_back_tag", lambda spec, key: None)
-        code, out, err = _cli(FIXTURE, "--decompose=40", "--json")
-    assert code == 1 and "Traceback" not in err and out == ""
-    assert "Error: --decompose stopped, a check failed: the width check: " in err
-    assert "sizes a draw on this run and the read-back gives it no tag" in err
+def _printed_labels(render, template):
+    return [line.m["label"] for line in sentences._lines(render) if line.template == template]
 
 
-def test_the_figure_checks_raise_where_nothing_passes():
-    """Each check, alone: a crossing whose field never says `was` at any
-    floored figure, and a stated figure equal to a crossing's value, which a
-    rounding upward never prints equal to that crossing's floored figure."""
-    with pytest.raises(ValueError, match="the printed-rate check"):
-        be.printed_crossing("house.mortgage_rate", "decisive", 0.0627, "not decisive",
-                            lambda v: "decisive for rent", 0.01)
-    assert be.printed_crossing("house.mortgage_rate", "decisive", 0.0627123, "x",
-                               lambda v: "x" if v >= 0.06271 else "y", 0.01) == "6.271%"
-    with pytest.raises(ValueError, match="the figure-order check"):
-        be.ordered_figure("house.mortgage_rate", 0.0627126,
-                          [(0.0627126, be.floored_rate(0.0627126, 4))])
-    assert be.ordered_figure("house.mortgage_rate", 0.06273,
-                             [(0.0627246, "6.2724%")]) == "6.273%"
-    # a floored figure below the bracket is off the axis searched, and passed
-    # over for a finer one
-    assert be.printed_crossing("house.mortgage_rate", "best", 0.0100003, "x",
-                               lambda v: "x", 0.0100001) == "1.00003%"
-    # a stated figure between a printed crossing and its value holds the
-    # crossing's figure above it
-    assert be.printed_crossing("house.mortgage_rate", "mc_best", 0.06278, "house",
-                               lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
+@claims("A table's rows print resolved rows first, each group largest first")
+def test_the_rows_print_resolved_first_each_group_largest_first():
+    """Over every render: the spread table's rows are the JSON's sorted
+    resolved first, each group by its `alone` point, largest first; the level
+    table's resolved first, each group by the size of its shift before
+    rounding. Some table on the engine's runs prints in an order other than
+    the JSON's, and some holds both groups, so neither rule holds by accident.
+    *Kills it:* a table printed in the JSON's order, a group sorted smallest
+    first, or the unresolved rows first."""
+    reordered = mixed = 0
+    for render in sentences.renders():
+        block = render.block
+        if "refusal" in block:
+            continue
+        tables = [(block["level"]["rows"], "LEVEL_ROW", lambda r: abs(_shift(r)))]
+        if "rows" in block["spread"]:
+            tables.append((block["spread"]["rows"], "SPREAD_ROW", _point))
+        for rows, template, size in tables:
+            want = sorted(rows, key=lambda r: (not r["resolved"], -size(r)))
+            labels = [dc.channel(r["channel_id"]).label for r in want]
+            assert _printed_labels(render, template) == labels, (render.name, template)
+            if render.engine:
+                reordered += want != rows
+                mixed += len({r["resolved"] for r in rows}) == 2
+    assert reordered and mixed
+
+
+@claims("A dollar figure prints its sign before the dollar sign")
+def test_a_dollar_figure_carries_its_sign_before_the_dollar_and_a_zero_none():
+    """Over every line of every render, no sign after a dollar sign and no
+    signed zero; and on figures a fraction of a dollar either side of zero,
+    in the lines and in a reason's figures at two decimals, the zero prints
+    unsigned, a shift's included: a zero has no side.
+    *Kills it:* the sign put after the dollar sign, or a zero printed with
+    the sign of what rounded to it."""
+    for render in sentences.renders():
+        for line in render.text.splitlines():
+            assert "$-" not in line, (render.name, line)
+            for token in re.findall(r"[+-]\$[\d,.]+", line):
+                assert re.search(r"[1-9]", token), (render.name, line)
+    assert [dt._money(v) for v in (-0.4, 0.4, -0.6, -1234.6, 1234.6)] == [
+        "$0", "$0", "-$1", "-$1,235", "$1,235"]
+    assert [dt._shift(v) for v in (-0.3, 0.3, -0.0, -2.5, 2.5)] == [
+        "$0", "$0", "$0", "-$2", "+$2"]
+    assert [dr.signed_dollars(v, 2) for v in (-0.004, 0.004, -0.005001, -8002.31)] == [
+        "$0.00", "$0.00", "-$0.01", "-$8,002.31"]
+    outcome = hh.uncertainty_surface(mean_margin=-0.4)
+    text = dt.format_decomposition(outcome)
+    assert ", mean $0 and s.d." in text
 
 
 # ---------------------------------------------------------------------------
@@ -2098,18 +1786,11 @@ def test_the_figure_checks_raise_where_nothing_passes():
 # ---------------------------------------------------------------------------
 
 # Every numeric leaf of the block, by the list the contract files it under.
-# The key is the leaf's path with list positions dropped, and a boundary's
-# `value` is filed by its kind. `test_the_partition_of_the_numbers_is_whole`
-# enumerates every leaf of two runs against this map, and checks each name
-# against the contract's own list.
+# The key is the leaf's path with list positions dropped.
+# `test_the_partition_of_the_numbers_is_whole` enumerates every leaf of two
+# runs against this map, and checks each name against the contract's own list.
 PARTITION = {
     "config": {
-        "reversal.exact[].bracket_low": "`bracket_low`",
-        "reversal.exact[].bracket_high": "`bracket_high`",
-        "reversal.exact[].references[].value": "each reference's `value`",
-        "reversal.exact[].probe_paths": "`probe_paths`",
-        "reversal.exact[].boundaries[].curve_paths": "`curve_paths`",
-        "reversal.exact[].boundaries[].value#solved": "a solved boundary's `value`",
         "level.all_frozen_margin": "`all_frozen_margin`",
         "level.all_frozen_deviation": "`all_frozen_deviation`",
         "spread.structural_zeros[].move_threshold": "`move_threshold`",
@@ -2121,7 +1802,6 @@ PARTITION = {
         "paths": "`paths`",
         "level.paths": "`level.paths`",
         "spread.structural_zeros[].measured_paths": "`measured_paths`",
-        "reversal.exact[].boundaries[].seed": "`seed`, which is the seed",
         "mean_margin": "`mean_margin`",
         "sd_margin": "`sd_margin`",
         **{f"spread.rows[].{name}{bound}": "every share, flip, gap, sum and residual in"
@@ -2138,12 +1818,6 @@ PARTITION = {
         "level.rows[].provisional_delta": "every level row's shift",
         "level.rows[].se": "`se`",
         "level.rows[].prob_best_frozen": "`prob_best_frozen`",
-        "reversal.exact[].boundaries[].value#sampled": "a sampled boundary's `value`",
-        "reversal.exact[].boundaries[].confirming_probabilities[][]":
-            "every probability in a `*_probabilities` pair",
-        "reversal.exact[].boundaries[].curve_probabilities[][]":
-            "every probability in a `*_probabilities` pair",
-        "reversal.exact[].max_path_deviation_over_sd": "`max_path_deviation_over_sd`",
     },
     "ids": {
         "live_channel_ids[]": "`live_channel_ids`",
@@ -2178,13 +1852,8 @@ def _numeric_leaves(node, path="", stable=""):
         yield path, stable, node
         return
     if isinstance(node, dict):
-        kind = ""
-        if "verdict_field" in node and "value" in node:
-            kind = "#sampled" if "seed" in node else "#solved"
         for key, value in node.items():
             filed = f"{path}.{key}" if path else key
-            if key == "value" and kind:
-                filed += kind
             yield from _numeric_leaves(value, filed, f"{stable}.{key}")
         return
     seen: dict = {}
@@ -2192,7 +1861,7 @@ def _numeric_leaves(node, path="", stable=""):
         name = position
         if isinstance(item, dict):
             base = (item.get("channel_id"), item.get("key"), item.get("label"),
-                    item.get("verdict_field"), item.get("kind"))
+                    item.get("kind"))
             seen[base] = seen.get(base, -1) + 1
             name = (*base, seen[base])
         yield from _numeric_leaves(item, f"{path}[]", f"{stable}[{name}]")
@@ -2204,8 +1873,7 @@ def _numeric_leaves(node, path="", stable=""):
         "- The same on every block emitted:",
         "- Figures that change with the seed or with `N`:",
         "- Ids and counts measured on these futures, which two samples can share:",
-        "Of the fields that are words,",
-        "So is a whole-block refusal that fires once the block's futures are priced")
+        "Of the fields that are words,")
 def test_the_partition_of_the_numbers_is_whole(runs, tmp_path):
     """§0.1 item 46: a universal sentence is pinned by enumerating every case.
     Two runs of the fixture that differ in seed AND in `N` (42 at 300, 7 at
@@ -2260,7 +1928,14 @@ def test_the_partition_of_the_numbers_is_whole(runs, tmp_path):
     refusals.append(one.block)
     assert {r["refusal"]["code"] for r in refusals} >= {
         "no_futures", "single_option", "too_few_futures", "budget", "no_spread",
-        "one_channel"}
+        "one_channel", "degenerate_resample"}
+    # the refusals filed with the sample: every code but the three decided
+    # before anything is priced
+    words = section[section.index("Of the fields that are words"):]
+    start = words.index("once the block's futures are priced (")
+    priced = words[start:words.index(")", start)]
+    assert set(re.findall(r"`(\w+)`", priced)) - {"k"} == set(dc.REFUSAL_CODES) - {
+        "no_futures", "single_option", "too_few_futures"}
     leaves = sorted({path for block in refusals for path, _, _ in _numeric_leaves(block)})
     assert leaves == ["refusal.channel_id"]
     assert sorted(set(leaves) - set(filed)) == []
@@ -2269,30 +1944,8 @@ def test_the_partition_of_the_numbers_is_whole(runs, tmp_path):
     assert one.block["refusal"]["channel_id"] in many.block["live_channel_ids"]
     assert len(many.block["live_channel_ids"]) > 1
     # the words the contract files with the config
-    for key in ("stated_source", "stated_tag", "bracket_source"):
-        assert ([r[key] for r in a_run.block["reversal"]["exact"]]
-                == [r[key] for r in b_run.block["reversal"]["exact"]]), key
-    assert a_run.block["reversal"]["no_distance_code"] == b_run.block["reversal"][
-        "no_distance_code"]
     assert [r["widths"] for r in a_run.block["spread"]["rows"]] == [
         r["widths"] for r in b_run.block["spread"]["rows"]]
-    for x, y in zip(a_run.block["reversal"]["exact"], b_run.block["reversal"]["exact"]):
-        assert ([(b["verdict_field"], b["formatted"], b["was"], b["becomes"],
-                  b["further_changes"]) for b in x["boundaries"] if "seed" not in b]
-                == [(b["verdict_field"], b["formatted"], b["was"], b["becomes"],
-                     b["further_changes"]) for b in y["boundaries"] if "seed" not in b])
-    # the config's figures at a precision a sampled crossing can widen: each
-    # printed figure is the stated or cited value itself, at the decimals it
-    # prints with
-    for row in a_run.block["reversal"]["exact"] + b_run.block["reversal"]["exact"]:
-        option, leaf = row["key"].split(".", 1)
-        stated = a_run.raw[option][leaf]
-        pairs = list(zip(row["stated_formatted"].split(", "),
-                         stated if isinstance(stated, list) else [stated]))
-        pairs += [(r["formatted"], r["value"]) for r in row["references"]]
-        for figure, value in pairs:
-            places = len(figure.rstrip("%").split(".")[1])
-            assert figure == f"{float(value):.{places}%}", (figure, value)
 
 
 @claims("A figure that changes with `simulation.random_seed` or with `N` is a property")
@@ -2309,29 +1962,14 @@ def test_which_figures_move_with_the_seed_and_the_path_count(runs, tmp_path):
             r["widths"] for r in b["spread"]["rows"]]
         assert _without_counts(a["spread"]["structural_zeros"]) == _without_counts(
             b["spread"]["structural_zeros"])
-        assert a["reversal"]["no_distance_reason"] == b["reversal"]["no_distance_reason"]
         assert a["level"]["all_frozen_margin"] == b["level"]["all_frozen_margin"]
         assert a["level"]["all_frozen_deviation"] == b["level"]["all_frozen_deviation"]
         assert a["mean_margin"] != b["mean_margin"] and a["sd_margin"] != b["sd_margin"]
         assert _rows(a)[0]["flip"] != _rows(b)[0]["flip"]
         assert a["level"]["futures_margin"] != b["level"]["futures_margin"]
-    for x, y in zip(a["reversal"]["exact"], other_seed.block["reversal"]["exact"]):
-        assert (x["bracket_low"], x["bracket_high"], x["references"]) == (
-            y["bracket_low"], y["bracket_high"], y["references"])
-        solved_x = [(b["verdict_field"], b["value"], b["further_changes"])
-                    for b in x["boundaries"] if "seed" not in b]
-        solved_y = [(b["verdict_field"], b["value"], b["further_changes"])
-                    for b in y["boundaries"] if "seed" not in b]
-        assert solved_x == solved_y
-        sampled_x = [b["value"] for b in x["boundaries"] if "seed" in b]
-        sampled_y = [b["value"] for b in y["boundaries"] if "seed" in b]
-        assert sampled_x != sampled_y
-    # the reversal register reads no future of the block's own: at another N
-    # it is the same register, whole — every sampled figure and every row
-    # (§0.1 item 48) — and the rows measured on the block's own futures are
-    # the spread register's, stating the count they were measured on
+    # the rows measured on the block's own futures are the spread register's,
+    # stating the count they were measured on (§0.1 item 48)
     assert other_count.block["paths"] == 400
-    assert other_count.block["reversal"] == a["reversal"]
     assert [z["measured_paths"] for z in other_count.block["spread"]["structural_zeros"]
             if z["kind"] == "dead_draw"] == [400]
     # one config, two path counts: the spread refuses at 200 and prints at 2,000
@@ -2381,8 +2019,8 @@ _GATES_10_BULLETS = (
     "above before you explain it; never explain it from memory or from this file.",
     "Name a share by the column it is printed under, never \"importance\" or a "
     "\"contribution to the answer\".",
-    "A refusal, of the whole block, of the spread, of a boundary or of the search for "
-    "one, is that run's finding: quote its line as printed.",
+    "A refusal, of the whole block or of the spread, is that run's finding: quote its "
+    "line as printed.",
 )
 
 
@@ -2418,8 +2056,8 @@ def test_the_skill_is_behavioural_and_restates_nothing():
     section = _between(text, "## 10. `--decompose`", "\n## ")
     assert _gates_10(text) == (_GATES_10_HEADING, _GATES_10_OPENING, _GATES_10_BULLETS, [])
     appended_bullet = text.replace(
-        "  for one, is that run's finding: quote its line as printed.\n",
-        "  for one, is that run's finding: quote its line as printed.\n"
+        "  its line as printed.\n",
+        "  its line as printed.\n"
         "- When every future names the same winner, only the spread table refuses.\n")
     qualified = text.replace("  THE LEVEL beside it.\n",
                              "  THE LEVEL beside it, unless the share resolved.\n")
@@ -2497,8 +2135,8 @@ def test_the_implementing_modules_point_at_the_contract_for_kinds_and_meanings()
     contract for the six kinds of line and for what a field means. Their
     module docstrings name the contract, and no docstring or comment of theirs
     lists the kinds or writes out a field of the block as what it is — the
-    formatter's module docstring listed the six kinds, and `_crossing`'s said
-    what `was` and `becomes` read.
+    formatter's module docstring once listed the six kinds, and a helper's
+    once said what a field read.
     *Kills it:* either restatement put back, as the two below are."""
     fields = set()
 
@@ -2511,12 +2149,11 @@ def test_the_implementing_modules_point_at_the_contract_for_kinds_and_meanings()
             for value in node:
                 walk(value)
 
-    from tests import decomposition_households as hh
     from hde.serialization import decomposition_to_dict
     for build in (hh.uncertainty_surface, hh.seven_channel_other_household,
                   hh.two_channel_option_state):
         walk(decomposition_to_dict(build()))
-    assert {"was", "becomes", "further_changes", "flip", "move_threshold"} <= fields
+    assert {"flip", "move_threshold", "alone", "tag", "accounted_for"} <= fields
     for module in (dt, dr):
         path = pathlib.Path(module.__file__)
         assert "`docs/reference/API_CONTRACT.md`" in module.__doc__, path.name
@@ -2525,10 +2162,9 @@ def test_the_implementing_modules_point_at_the_contract_for_kinds_and_meanings()
                "a heading, a figure row, a crossing, a path note, a refusal, or a row "
                "with no place in either register.")]
     assert _restatements(listed, fields) == [("<module>", "the six kinds")]
-    defined = [("_crossing", "EVERY boundary reads its key UPWARD: `was` is what the field "
-                "says just below the value and `becomes` just above it.")]
-    assert [text for _, text in _restatements(defined, fields)] == [
-        "`was` is what", "just below the value"]
+    defined = [("_spread_cells", "`flip` is the fraction of futures in which re-drawing "
+                "the channel changes the sign of the margin.")]
+    assert [text for _, text in _restatements(defined, fields)] == ["`flip` is the fraction"]
 
 
 def test_the_decomposition_modules_docstrings_carry_no_measured_figure():

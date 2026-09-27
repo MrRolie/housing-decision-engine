@@ -7,12 +7,11 @@ block. Nothing here computes a statistic: every figure printed is a field, a
 count of a field's entries (the live channels, the level rows), or a
 subtraction or sum of PRINTED figures performed where it is printed.
 
-WHAT THE BLOCK PRINTS (spec §0.1 items 35, 41 and 52): figures, not
+WHAT THE BLOCK PRINTS (spec §0.1 items 35, 52 and 56): figures, not
 interpretation. The kinds of line it may print, and what every field means,
 are `docs/reference/API_CONTRACT.md`'s, under "The text block" and the
-field bullets of its `decomposition` section. A refusal's reason, a path
-note, a width's tag and a crossing's printed figure are written by the party
-that produced them and printed verbatim.
+field bullets of its `decomposition` section. A refusal's reason and a
+width's tag are written by the party that produced them and printed verbatim.
 
 No line says why a figure is what it is, which figure matters, or what to run
 next. Interpreting the block is the assistant's, bound by the skill.
@@ -27,8 +26,7 @@ far as a dataclass reaches; this file completes it STRUCTURALLY:
     that takes a `Decomposition`;
   - no function named for a register exists, and only that function reads a
     register's rows, so no callable in the process returns the spread table;
-  - the helpers take one row, one width, one interval, one boundary — never a
-    register.
+  - the helpers take one row, one width, one interval — never a register.
 
 TWO STATES THAT ARE NOT NONE AND NOT ZERO. Resolved and unresolved figures
 share no attribute name for their point estimate, so this module tells them
@@ -41,24 +39,19 @@ from __future__ import annotations
 from decimal import ROUND_CEILING, Decimal
 from typing import List, Optional, Sequence, Tuple
 
+from .decomposition_math import sum_lies_above_one
+from .decomposition_run import signed_dollars
+
 from .decomposition import (
-    BOUNDARY_FIELDS,
-    EDGE_REFUSAL_CODES,
     Decomposition,
     DecompositionOutcome,
     DecompositionRefusal,
-    EstimatedBoundary,
-    ExactReversal,
-    IndistinguishableLevel,
     Interval,
     LevelRow,
-    RefusedBoundary,
     RefusedSpread,
     ResolvedInteraction,
     ResolvedLevel,
     ResolvedShares,
-    SampledBoundary,
-    SolvedBoundary,
     SpreadRegister,
     SpreadRow,
     StructuralZero,
@@ -76,16 +69,17 @@ _LABEL_W = 23
 # ---------------------------------------------------------------------------
 
 def _money(value: float) -> str:
-    """A dollar figure with its natural sign: `$N`, `-$N`."""
-    return f"${value:,.0f}" if value >= 0 else f"-${-value:,.0f}"
+    """A dollar figure with its natural sign, `$N` or `-$N`; one whose printed
+    digits are all zero prints unsigned (`decomposition_run.signed_dollars`)."""
+    return signed_dollars(value)
 
 
 def _shift(value: float) -> str:
-    """A dollar SHIFT, its sign shown: a freeze's direction is the point. An
-    exact zero has no direction, and prints as `_faithful` prints one."""
-    if value == 0.0:
-        return f"${_faithful(value, 0)}"
-    return f"+${value:,.0f}" if value > 0 else f"-${-value:,.0f}"
+    """A dollar SHIFT, its sign shown, `+$N` or `-$N`: a freeze's direction is
+    the point. A shift that prints as zero dollars shows no direction, and
+    prints unsigned, as `_money` prints any zero."""
+    text = signed_dollars(value)
+    return text if text == "$0" or text.startswith("-") else f"+{text}"
 
 
 def _faithful(value: float, places: int, scale: float = 1.0) -> str:
@@ -147,30 +141,26 @@ def _flip_cell(value: float, interval: Interval) -> str:
 
 
 def _prob(value: float) -> str:
-    """A probability, two decimals — the block's only rounding of one, and
-    never `0.00` for a probability that is not zero (`_faithful`)."""
+    """A probability at two decimals, or more where two would lie
+    (`_faithful`)."""
     return _faithful(value, 2)
-
-
-def _rate(value: float) -> str:
-    return f"{value:.2%}"
 
 
 def _ceiled_threshold(value: float) -> str:
     """A move threshold at three significant figures, CEILED. A row says no
     move was above it, so the printed figure is never below the value it
     stands for, and the sentence holds at the figure printed. Taken on the
-    float's exact decimal value."""
+    float's exact decimal value. The threshold is the identity's budget, which
+    a row reaches only where `decomposition_math.identity_holds` held against
+    it, so it is finite; it is a positive multiple of a float spacing."""
     exact = Decimal(value)
-    if not exact.is_finite() or exact <= 0:
-        raise ValueError(f"a move threshold is a positive figure, not {value!r}")
     step = Decimal(1).scaleb(exact.adjusted() - 2)
     return f"{float(exact.quantize(step, rounding=ROUND_CEILING)):.3g}"
 
 
 def _dollars(value: float) -> float:
     """A dollar figure AS PRINTED — rounded the way `_money` and `_shift` print
-    it. Any figure the block derives from printed dollars (the level gap, the
+    its magnitude. Any figure the block derives from printed dollars (the level gap, the
     sum of its shifts) is derived from these, so a reader adding up the printed
     figures lands on the printed result (§0.1 ruling 2)."""
     return float(f"{value:.0f}")
@@ -183,27 +173,23 @@ def _not_resolved(figure: str, resolved: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Row-level helpers. Each takes ONE row (or one width, one boundary) — never a
-# register, so none of them can return a table (see THE BINDING above).
+# Row-level helpers. Each takes ONE row (or one width) — never a register, so
+# none of them can return a table (see THE BINDING above).
 # ---------------------------------------------------------------------------
 
 def _width_cell(width: Width) -> str:
     """One width with its tag, inline on its own row; a width with no
     `formatted` prints its key alone. The tag is the one the producer took
-    from the read-back, printed as it is; a width carrying none raises rather
-    than print a figure with nobody's name on it."""
-    if width.tag is None:
-        raise ValueError(f"the width {width.key} carries no tag: whose figure it is "
-                         f"cannot be printed")
+    from the read-back, printed as it is (the producer refuses a width with
+    none: `untagged_width`)."""
     head = width.key if width.formatted is None else f"{width.key}={width.formatted}"
     note = "" if width.note is None else f" ({width.note})"
     return f"{head} [{width.tag}]{note}"
 
 
 def _widths_line(widths: Sequence[Width]) -> str:
-    """Every width of one row, never a subset: the `economy` row's cell must
-    carry the `corr_inflation_*` keys AND the option vols they pull from, or
-    the cell is itself a wrong answer (§4, §0.1 ruling 6)."""
+    """Every width of one row, never a subset, in the row's own order
+    (`decomposition_run.width_keys`)."""
     return "      sized by " + "; ".join(_width_cell(w) for w in widths)
 
 
@@ -236,13 +222,9 @@ def _spread_sort_key(row: SpreadRow) -> Tuple[int, float]:
 
 def _level_point_signed(level) -> float:
     """ONE level row's point shift, with its sign, resolved or not — the
-    figure the row prints."""
-    if isinstance(level, ResolvedLevel):
-        return level.delta
-    if isinstance(level, IndistinguishableLevel):
-        return level.provisional_delta
-    raise TypeError(f"a level row carries a {type(level).__name__}, which is "
-                    f"neither ResolvedLevel nor IndistinguishableLevel")
+    figure the row prints. Which kind a row is has been checked where the
+    register was built (`decomposition_run._level_point`)."""
+    return level.delta if isinstance(level, ResolvedLevel) else level.provisional_delta
 
 
 def _level_cells(row: LevelRow) -> Tuple[str, str]:
@@ -255,195 +237,34 @@ def _level_cells(row: LevelRow) -> Tuple[str, str]:
 
 
 def _level_sort_key(row: LevelRow) -> Tuple[int, float]:
-    """Resolved rows first, each group by the size of its printed shift."""
+    """Resolved rows first, each group by the size of its shift before
+    rounding."""
     return (0 if isinstance(row.level, ResolvedLevel) else 1,
             -abs(_level_point_signed(row.level)))
 
 
-def _top_line(what: str, leading, unresolved_top, resolved: dict) -> Optional[str]:
+def _top_line(what: str, leading: Optional[int]) -> Optional[str]:
     """The register's top row, printed as a figure only where the engine's one
     top-row rule resolved it (§0.1 item 35): a LEADING row. Where the top row
     did not resolve there is no line — "largest" over a figure the same block
     prints as not resolved would rank noise — and `--json` names that row.
-
-    Read from the register and never re-derived here. `resolved` maps each
-    row's channel to whether that row resolved, and a leader that is not a
-    resolved row of the register is a producer defect, not a line to print."""
-    if leading is None and unresolved_top is None:
-        raise ValueError(
-            f"a register with rows names no top row for its {what}: a register "
-            f"with rows has one, so this is a producer defect")
+    Read from the register (`decomposition_run._top_row` decides it), never
+    re-derived here."""
     if leading is None:
         return None
-    if resolved.get(leading) is not True:
-        state = {False: "an unresolved row", None: "no row"}[resolved.get(leading)]
-        raise TypeError(
-            f"the register names {channel(leading).label} as its leading row for its "
-            f"{what}, and that channel is {state} of the register: a producer defect")
     return f"  largest {what}: {channel(leading).label}"
 
 
-# The four boundary kinds in words (§0.1 ruling 4). An unknown kind renders as
-# its own field name rather than being dropped.
-_BOUNDARY_LABEL = {
-    "best": "the central case's winner",
-    "runner_up": "the runner-up",
-    "mc_best": "the option most futures call cheapest",
-    "decisive": "the decisiveness verdict",
-}
-
-# The order the crossings print in, which is `BOUNDARY_FIELDS`' own order.
-_BOUNDARY_ORDER = {field: index for index, field in enumerate(BOUNDARY_FIELDS)}
-
-
-def _crossing(boundary, where: str) -> str:
-    """"as it rises past <where>, <field> changes from <was> to <becomes>", and,
-    when the boundary's `further_changes` names a side, a clause saying so.
-    What the three fields mean is the contract's. They are printed as WORDS;
-    this line refuses anything else where it is printed, because a boolean
-    that reached a household once read "changes from True to False"."""
-    label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
-    for name in ("was", "becomes"):
-        words = getattr(boundary, name)
-        if not isinstance(words, str) or not words.strip():
-            raise TypeError(
-                f"{type(boundary).__name__}.{name} for {boundary.verdict_field!r} is "
-                f"{words!r} ({type(words).__name__}), not words: this block prints "
-                f"what the verdict reads on each side of a crossing, never a raw value")
-    side = boundary.further_changes
-    further = "" if side is None else f" (and changes again {side} it, inside the bracket)"
-    return (f"as it rises past {where}, {label} changes from {boundary.was} "
-            f"to {boundary.becomes}{further}")
-
-
-def _solved_boundary_line(boundary: SolvedBoundary) -> str:
-    """A crossing solved on the central case, at the figure its producer
-    checked the field on (`break_even.printed_crossing`)."""
-    return f"      solved on the central case: {_crossing(boundary, boundary.formatted)}"
-
-
-def _sampled_boundary_line(boundary: SampledBoundary) -> str:
-    """A crossing bisected on the futures names its sample on its own line, so
-    a quote of the line carries it; its figure is the one its producer
-    checked (`break_even.printed_crossing`)."""
-    return (f"      sampled on {boundary.curve_paths:,} paths at seed {boundary.seed}: "
-            f"{_crossing(boundary, boundary.formatted)}")
-
-
-def _estimated_boundary_line(boundary: EstimatedBoundary) -> str:
-    where = (f"{_rate(boundary.value)} (inside {_rate(boundary.value_ci.low)}–"
-             f"{_rate(boundary.value_ci.high)})")
-    return (f"      estimated on {boundary.resimulation_paths:,} re-simulated paths: "
-            f"{_crossing(boundary, where)}")
-
-
-def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
-    """Boundaries that are not printed, recorded rather than dropped: a boundary
-    that vanishes with no row is an absence a reader reads as "nothing here".
-    One line per code and reason, naming every field it refuses, in the one
-    shape every refusal prints in: its code, then its reason (§0.1 item 50).
-
-    A code that refuses one BOUNDARY (`EDGE_REFUSAL_CODES`) leaves the field's
-    other boundaries standing, and one of them may print on the line above, so
-    its line says a boundary was not printed and never that none was."""
-    refusals: List[Tuple[str, str]] = []
-    fields: dict = {}
-    for item in refused:
-        refusal = (item.code, item.reason)
-        if refusal not in fields:
-            refusals.append(refusal)
-            fields[refusal] = []
-        fields[refusal].append(
-            _BOUNDARY_LABEL.get(item.verdict_field, item.verdict_field))
-    lines: List[str] = []
-    for code, reason in refusals:
-        labels = fields[(code, reason)]
-        named = (labels[0] if len(labels) == 1
-                 else f"{', '.join(labels[:-1])} or {labels[-1]}")
-        head = "a boundary not printed" if code in EDGE_REFUSAL_CODES else "no boundary printed"
-        lines.append(f"      {head} for {named} {_refusal(code, reason)}")
-    return lines
-
-
-def _reference_clause(reference) -> str:
-    anchor = "" if reference.anchor is None else f" [{reference.anchor}]"
-    note = "" if reference.note is None else f" — {reference.note}"
-    return f"{reference.label} {reference.formatted}{anchor}{note}"
-
-
-def _bracket_line(low: float, high: float, source: str) -> str:
-    """The bracket the key was searched inside, with WHOSE width it is (§6's
-    correction: a bracket that turns an honest refusal into an answer shows
-    the range it chose and whose figure it is)."""
-    return f"      bracket searched: {_rate(low)}–{_rate(high)} [{source}]"
-
-
-def _require_types(items: Sequence[object], allowed: Tuple[type, ...],
-                   where: str) -> None:
-    """Raise on any item that is none of `allowed`: a branch that filters by
-    `isinstance` drops what it did not foresee without a word, and an absent
-    row is what a reader takes for "nothing here"."""
-    for item in items:
-        if not isinstance(item, allowed):
-            names = " or ".join(t.__name__ for t in allowed)
-            raise TypeError(
-                f"{where} carries a {type(item).__name__}, which is not a {names}: "
-                f"this block cannot say what that figure is, so it does not print "
-                f"it as one of them or drop it as though it were absent")
-
-
-def _reversal_head(reversal) -> str:
-    """The row's subject: the key, what the config states for it, and whose
-    figure that is — the tag the read-back of the same run gives the key."""
-    return f"  {reversal.key}, stated {reversal.stated_formatted} [{reversal.stated_tag}]"
-
-
-def _reversal_detail_lines(reversal) -> List[str]:
-    """ONE reversal row's figures: its bracket, its path note, its crossings —
-    solved ones first, each typed on its own line — the fields it refused, and
-    the cited figures on its axis."""
-    lines: List[str] = [_bracket_line(reversal.bracket_low, reversal.bracket_high,
-                                      reversal.bracket_source)]
-    if reversal.path_note is not None:
-        lines.append(f"      {reversal.path_note}")
-    ordered = sorted(
-        reversal.boundaries,
-        key=lambda b: (_BOUNDARY_ORDER.get(b.verdict_field, len(_BOUNDARY_ORDER)),
-                       b.verdict_field),
-    )
-    if isinstance(reversal, ExactReversal):
-        _require_types(ordered, (SolvedBoundary, SampledBoundary),
-                       f"{reversal.key}'s exact reversal row")
-        lines.extend(_solved_boundary_line(b) for b in ordered
-                     if isinstance(b, SolvedBoundary))
-        lines.extend(_sampled_boundary_line(b) for b in ordered
-                     if isinstance(b, SampledBoundary))
-    else:
-        _require_types(ordered, (EstimatedBoundary,),
-                       f"{reversal.key}'s estimated reversal row")
-        lines.extend(_estimated_boundary_line(b) for b in ordered)
-    lines.extend(_refused_boundary_lines(reversal.refused_boundaries))
-    if reversal.references:
-        lines.append("      on the same axis: "
-                     + "; ".join(_reference_clause(r) for r in reversal.references))
-    return lines
-
-
 def _structural_zero_line(zero: StructuralZero) -> str:
-    """One row of `structural_zeros`, in the words the contract gives its kind.
-    A `dead_draw` row's words are said of its stream by name, and its keys
-    follow as the keys that size that stream's draws; nothing is said of their
-    cash flows (§0.1 items 39 and 40)."""
-    if zero.kind == "stated_path":
-        return f"  {zero.label} — {', '.join(zero.keys)}: no draw touches it"
-    if zero.kind == "dead_draw":
-        sized = f"; sized by {', '.join(zero.keys)}" if zero.keys else ""
-        return (f"  {zero.label}: drawn on these {zero.measured_paths:,} futures, and "
-                f"re-drawing it moved no option's present value by more than "
-                f"${_ceiled_threshold(zero.move_threshold)}{sized}")
-    raise ValueError(
-        f"a row of kind {zero.kind!r} reached the formatter, which prints "
-        f"stated_path and dead_draw rows and not this one")
+    """One `dead_draw` row of the spread register's `structural_zeros` (the
+    only kind `SpreadRegister` and `RefusedSpread` hold). Its words are said
+    of its stream by name, and its keys follow as the keys that size that
+    stream's draws; nothing is said of their cash flows (§0.1 items 39 and
+    40)."""
+    sized = f"; sized by {', '.join(zero.keys)}" if zero.keys else ""
+    return (f"  {zero.label}: drawn on these {zero.measured_paths:,} futures, and "
+            f"re-drawing it moved no option's present value by more than "
+            f"${_ceiled_threshold(zero.move_threshold)}{sized}")
 
 
 def _refusal(code: str, reason: str) -> str:
@@ -474,7 +295,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     dec: Decomposition = outcome
     verdict = dec.verdict
     best = verdict.best
-    spread, level, reversal = dec.spread, dec.level, dec.reversal
+    spread, level = dec.spread, dec.level
     lines: List[str] = [
         f"which risk decides it — {dec.paths:,} futures, "
         f"{len(dec.live_channel_ids)} channels live on them",
@@ -488,8 +309,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     lines.append("")
     lines.append("  THE SPREAD")
     if isinstance(spread, RefusedSpread):
-        # The level and reversal registers still print below: the binding
-        # runs one way.
+        # The level register still prints below: the binding runs one way.
         lines.append(f"  not split {_refusal(spread.code, spread.reason)}")
     elif isinstance(spread, SpreadRegister):
         if not spread.rows:
@@ -511,14 +331,19 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
 
         # The register's own sums, each labelled with what it is a sum of:
         # the shares are summed before rounding, so a reader adding the printed
-        # column is told why the last digit can differ.
+        # column is told why the last digit can differ. The residual prints
+        # with its interval where it resolved, "not resolved" where the sum's
+        # interval includes 1, and not at all where it lies above 1 (§4).
         interaction = spread.interaction
-        residual = (f"{_share(interaction.residual)} {_interval(interaction.residual_ci)}"
-                    if isinstance(interaction, ResolvedInteraction) else "not resolved")
-        lines.append(f"  alone shares summed before rounding: "
-                     f"{_share(interaction.first_order_sum)} "
-                     f"{_interval(interaction.first_order_sum_ci)}; 1 minus that sum: "
-                     f"{residual}")
+        summed = (f"  alone shares summed before rounding: "
+                  f"{_share(interaction.first_order_sum)} "
+                  f"{_interval(interaction.first_order_sum_ci)}")
+        if isinstance(interaction, ResolvedInteraction):
+            summed += (f"; 1 minus that sum: {_share(interaction.residual)} "
+                       f"{_interval(interaction.residual_ci)}")
+        elif not sum_lies_above_one(interaction.first_order_sum_ci.low):
+            summed += "; 1 minus that sum: not resolved"
+        lines.append(summed)
         # Every row's gap, in the table's order, each behind "not resolved:"
         # where it did not resolve: the one rule for such a figure.
         interacting = set(spread.interaction_channel_ids)
@@ -528,9 +353,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                                  row.channel_id in interacting)
                  for row in ordered]
         lines.append("  with interaction minus alone, before rounding: " + "; ".join(parts))
-        top = _top_line(
-            "alone share", spread.leading_channel_id, spread.unresolved_top_channel_id,
-            {row.channel_id: isinstance(row.shares, ResolvedShares) for row in ordered})
+        top = _top_line("alone share", spread.leading_channel_id)
         if top is not None:
             lines.append(top)
     else:
@@ -543,8 +366,6 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
 
     # --- THE LEVEL. Emitted by these same lines, unconditionally: there is no
     # branch above that can skip it, which is the binding.
-    _require_types([r.level for r in level.rows],
-                   (ResolvedLevel, IndistinguishableLevel), "the level register")
     # The gap and the sum are taken over the PRINTED dollars, never over a
     # stored third number (§0.1 ruling 2).
     frozen_printed = _dollars(level.all_frozen_margin)
@@ -565,34 +386,8 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         lines.append(f"  {channel(row.channel_id).label:<{_LABEL_W}} "
                      f"{shift:<{shift_w}}  {prob}")
     lines.append(f"  the {len(level.rows)} shifts above, summed: {_money(shifts_printed)}")
-    top = _top_line(
-        "shift in size", level.leading_channel_id, level.unresolved_top_channel_id,
-        {row.channel_id: isinstance(row.level, ResolvedLevel) for row in ordered_level})
+    top = _top_line("shift in size", level.leading_channel_id)
     if top is not None:
         lines.append(top)
-
-    # --- THE REVERSAL REGISTER: its structural zeros, then the rows grouped BY
-    # EXACTNESS — never ranked across that split.
-    if reversal.structural_zeros:
-        lines.append("")
-        lines.append("  NO ROW IN THE SPREAD OR THE LEVEL")
-        lines.extend(_structural_zero_line(zero) for zero in reversal.structural_zeros)
-    if reversal.exact:
-        lines.append("")
-        lines.append("  WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly")
-        for row in reversal.exact:
-            lines.append(_reversal_head(row))
-            lines.extend(_reversal_detail_lines(row))
-    if reversal.estimated:
-        lines.append("")
-        lines.append("  WHAT WOULD HAVE TO CHANGE — keys the engine cannot re-price "
-                     "exactly")
-        for row in reversal.estimated:
-            lines.append(_reversal_head(row))
-            lines.extend(_reversal_detail_lines(row))
-    if not (reversal.exact or reversal.estimated):
-        lines.append("")
-        lines.append(f"  WHAT WOULD HAVE TO CHANGE — not solved "
-                     f"{_refusal(reversal.no_distance_code, reversal.no_distance_reason)}")
 
     return "\n".join(lines)

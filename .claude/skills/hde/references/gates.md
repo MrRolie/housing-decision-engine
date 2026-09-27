@@ -259,5 +259,5 @@ them from. So:
   this file.
 - Name a share by the column it is printed under, never "importance" or a
   "contribution to the answer".
-- A refusal, of the whole block, of the spread, of a boundary or of the search
-  for one, is that run's finding: quote its line as printed.
+- A refusal, of the whole block or of the spread, is that run's finding: quote
+  its line as printed.

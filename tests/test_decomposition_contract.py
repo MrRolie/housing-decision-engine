@@ -6,8 +6,10 @@ hash seeds, since a set-derived table moves only between processes and an id
 feeds the stream key (§3.1, §3.2); a resolved figure and an unresolved one
 share no attribute name, so a formatter cannot print the second as though it
 resolved (§4, §7 rule 6); and the spread register cannot be built without its
-level register, a refused spread is NAMED rather than empty, and the two
-reversal kinds are not interchangeable (§5 mechanism 5, §0.1 item 7, §6).
+level register, and a refused spread is NAMED rather than empty (§5 mechanism
+5, §0.1 item 7). The reversal library's types (§6) stay here for
+`break_even.reversal_register`, which no block carries (§0.1 item 56); the
+two reversal kinds are not interchangeable.
 """
 import dataclasses
 import os
@@ -110,7 +112,10 @@ class TestTheBinding:
             if f.default is dataclasses.MISSING
             and f.default_factory is dataclasses.MISSING
         }
-        assert {"spread", "level", "reversal"} <= required
+        assert {"spread", "level"} <= required
+        # §0.1 item 56: the block carries two registers, and the reversal
+        # register is not one of them.
+        assert "reversal" not in {f.name for f in dataclasses.fields(dc.Decomposition)}
 
     def test_a_refused_spread_is_named_and_carries_no_rows(self):
         # §0.1 item 7: a refused spread beside a printed level is the honest
@@ -451,19 +456,35 @@ _RULE_LINE = re.compile(r"-{20,}")
 
 
 def _prose_of_the_types_module(source):
-    """`(where, text)` for every docstring — the module's, each class's and
-    each function's — and every comment in `source`, each comment by line."""
+    """`(where, text)` for every string statement in `source` and every
+    comment, each comment by line. A string statement is any expression
+    statement that is a string or an f-string, wherever it stands: the
+    docstring of the module, a class or a function, one under a field, and a
+    bare one inside a body."""
     import ast
+    import inspect
     import io
     import tokenize
     tree = ast.parse(source)
-    nodes = [tree] + [n for n in ast.walk(tree) if isinstance(
-        n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))]
+    owners = {}
+    for node in [tree] + [n for n in ast.walk(tree) if isinstance(
+            n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))]:
+        if node.body and isinstance(node.body[0], ast.Expr):
+            owners[id(node.body[0])] = getattr(node, "name", "<module>")
     out = []
-    for node in nodes:
-        doc = ast.get_docstring(node, clean=True)
-        if doc is not None:
-            out.append((f"docstring of {getattr(node, 'name', '<module>')}", doc))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Expr):
+            continue
+        value = node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            text = inspect.cleandoc(value.value)
+        elif isinstance(value, ast.JoinedStr):
+            text = ast.unparse(value)
+        else:
+            continue
+        where = (f"docstring of {owners[id(node)]}" if id(node) in owners
+                 else f"string at line {node.lineno}")
+        out.append((where, text))
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type == tokenize.COMMENT:
             out.append((f"comment at line {token.start[0]}", token.string.lstrip("#").strip()))
@@ -481,8 +502,7 @@ def _not_a_pointer(source):
 
 
 _SIDE_HEAD = ("def _require_side(kind: str, verdict_field: str, further_changes: object) "
-              "-> None:\n    \"\"\"Fields: docs/reference/API_CONTRACT.md § The "
-              "`decomposition` block.")
+              "-> None:\n    \"\"\"Design: docs/specs/2026-09-22-which-risk-decides-it.md §6.")
 
 
 def test_every_docstring_and_every_comment_is_a_pointer():
@@ -490,11 +510,12 @@ def test_every_docstring_and_every_comment_is_a_pointer():
     docstrings and comments alike. What a field means, when a refusal fires and
     why a shape is what it is are written in the contract and the design
     record; a sentence here would be a second home with nothing to keep it
-    true. Every docstring of the module, its classes and its functions, and
-    every comment, is a pointer line (or a rule of dashes), whole.
-    *Kills it:* a sentence appended to any docstring or any comment — the
-    ones appended below, to a function docstring and to a comment, fail it —
-    or one put in place of a pointer."""
+    true. Every string statement of the module — its docstrings, one under a
+    field, a bare one in a body — and every comment is a pointer line (or a
+    rule of dashes), whole.
+    *Kills it:* a sentence appended to any docstring or any comment, or
+    written as a string statement anywhere — the ones below fail it — or one
+    put in place of a pointer."""
     import pathlib
     source = pathlib.Path(dc.__file__).read_text(encoding="utf-8")
     found = _prose_of_the_types_module(source)
@@ -507,7 +528,7 @@ def test_every_docstring_and_every_comment_is_a_pointer():
     assert appended != source
     assert _not_a_pointer(appended) == [
         ("docstring of _require_side",
-         "Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.\n" + restated)]
+         "Design: docs/specs/2026-09-22-which-risk-decides-it.md §6.\n" + restated)]
     pointer = "# Design: docs/specs/2026-09-22-which-risk-decides-it.md §0.1 items 39 and 40.\n"
     comment = "A dead_draw row is a stream that drew and moved no present value."
     commented = source.replace(pointer, pointer + "# " + comment + "\n")
@@ -516,13 +537,40 @@ def test_every_docstring_and_every_comment_is_a_pointer():
     positions = "# Design: docs/specs/2026-09-22-which-risk-decides-it.md §3.2.\n"
     same_line = source.replace(positions, positions[:-1] + " Ids are positions.\n")
     assert same_line != source and len(_not_a_pointer(same_line)) == 1
+    # and a string statement that is no docstring of a class or a function: one
+    # under a field, and a bare one in a function body, an f-string included
+    for anchor, restatement, after in (
+            ("    move_threshold: Optional[float] = None\n",
+             '    """`move_threshold` is the largest move any re-draw made."""\n', True),
+            ("    tag: Optional[str] = None\n",
+             '    """`tag` is the read-back\'s tag for this width\'s key."""\n', True),
+            ("    if not 0 <= channel_id < len(CHANNELS):\n",
+             '    "A channel id is the address of the stream that draws it."\n', False),
+            ("    if not 0 <= channel_id < len(CHANNELS):\n",
+             '    f"A channel id is {channel_id}."\n', False)):
+        assert source.count(anchor) == 1, anchor
+        mutated = source.replace(anchor, anchor + restatement if after
+                                 else restatement + anchor)
+        assert [where.split(" at ")[0] for where, _ in _not_a_pointer(mutated)] == [
+            "string"], restatement
+
+
+# The reversal library's types (§6): `break_even.reversal_register` builds
+# them and no block carries them (§0.1 item 56), so the contract describes none
+# of their fields and each points at the design record instead.
+REVERSAL_LIBRARY = {"AxisReference", "SolvedBoundary", "SampledBoundary",
+                    "RefusedBoundary", "ExactReversal", "EstimatedBoundary",
+                    "EstimatedReversal", "ReversalRegister"}
+DESIGN_6 = "Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."
 
 
 def test_every_class_docstring_is_the_pointer_and_nothing_more():
     """What each field means is written once, in the contract. A class
     docstring that restated it would be a second home with nothing to keep it
-    true, so every class the module defines carries exactly `POINTER`, and the
-    pointer names a section the contract has.
+    true, so every class the block carries carries exactly `POINTER`, and the
+    pointer names a section the contract has; the reversal library's classes
+    carry the design record's §6 pointer, and the block's contract names none
+    of their own keys.
     *Kills it:* any sentence added to, or put in place of, a class docstring."""
     import ast
     import pathlib
@@ -530,13 +578,21 @@ def test_every_class_docstring_is_the_pointer_and_nothing_more():
     tree = ast.parse(source.read_text(encoding="utf-8"))
     classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
     assert len(classes) >= 20
+    assert REVERSAL_LIBRARY <= {node.name for node in classes}
     wrong = [(node.name, ast.get_docstring(node, clean=False)) for node in classes
-             if ast.get_docstring(node, clean=False) != dc.POINTER]
+             if ast.get_docstring(node, clean=False)
+             != (DESIGN_6 if node.name in REVERSAL_LIBRARY else dc.POINTER)]
     assert not wrong, wrong
     for node in classes:
-        assert getattr(dc, node.name).__doc__ == dc.POINTER, node.name
+        assert getattr(dc, node.name).__doc__ == (
+            DESIGN_6 if node.name in REVERSAL_LIBRARY else dc.POINTER), node.name
     contract = (pathlib.Path(__file__).resolve().parents[1] / "docs" / "reference"
                 / "API_CONTRACT.md").read_text(encoding="utf-8")
     assert dc.POINTER.startswith("Fields: docs/reference/API_CONTRACT.md § ")
     heading = dc.POINTER.split(" § ", 1)[1].rstrip(".")
     assert any(line.startswith(f"## {heading}") for line in contract.splitlines())
+    start = contract.index("## The `decomposition` block")
+    section = contract[start:contract.index("\n## ", start + 1)]
+    for name in ("stated_formatted", "bracket_low", "probe_paths", "path_note",
+                 "confirming_probabilities", "no_distance_code", "reversal"):
+        assert f"`{name}`" not in section, name

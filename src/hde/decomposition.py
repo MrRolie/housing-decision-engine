@@ -333,12 +333,12 @@ BOUNDARY_FIELDS: Tuple[str, ...] = ("best", "runner_up", "mc_best", "decisive")
 STRUCTURAL_ZERO_KINDS: Tuple[str, ...] = ("stated_path", "dead_draw")
 
 
-# Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.
+# Design: docs/specs/2026-09-22-which-risk-decides-it.md §6.
 FURTHER_CHANGE_SIDES: Tuple[str, ...] = ("above", "below")
 
 
 def _require_side(kind: str, verdict_field: str, further_changes: object) -> None:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
     if further_changes is not None and further_changes not in FURTHER_CHANGE_SIDES:
         raise ValueError(
             f"{kind}.further_changes for {verdict_field!r} is {further_changes!r}, "
@@ -356,7 +356,7 @@ def _require_words(kind: str, verdict_field: str, was: object, becomes: object) 
 
 @dataclass(frozen=True)
 class AxisReference:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     label: str
     value: float
@@ -367,7 +367,7 @@ class AxisReference:
 
 @dataclass(frozen=True)
 class SolvedBoundary:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     verdict_field: str
     value: float
@@ -384,7 +384,7 @@ class SolvedBoundary:
 
 @dataclass(frozen=True)
 class SampledBoundary:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     verdict_field: str
     value: float
@@ -412,7 +412,7 @@ BOUNDARY_REFUSAL_CODES: Tuple[str, ...] = (
     "no_futures",
 )
 
-# Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.
+# Design: docs/specs/2026-09-22-which-risk-decides-it.md §6.
 EDGE_REFUSAL_CODES: Tuple[str, ...] = (
     "not_identified",
     "unconfirmed",
@@ -427,14 +427,14 @@ NO_DISTANCE_CODES: Tuple[str, ...] = (
 
 
 def _require_code(kind: str, code: object, codes: Tuple[str, ...]) -> None:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
     if code not in codes:
         raise ValueError(f"{kind}.code is {code!r}, not one of {codes}")
 
 
 @dataclass(frozen=True)
 class RefusedBoundary:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     verdict_field: str
     code: str
@@ -446,7 +446,7 @@ class RefusedBoundary:
 
 @dataclass(frozen=True)
 class ExactReversal:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     key: str
     option: str
@@ -467,7 +467,7 @@ class ExactReversal:
 
 @dataclass(frozen=True)
 class EstimatedBoundary:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     verdict_field: str
     value: float
@@ -484,7 +484,7 @@ class EstimatedBoundary:
 
 @dataclass(frozen=True)
 class EstimatedReversal:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     key: str
     option: str
@@ -533,7 +533,7 @@ class StructuralZero:
 
 @dataclass(frozen=True)
 class ReversalRegister:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
 
     exact: Tuple[ExactReversal, ...]
     estimated: Tuple[EstimatedReversal, ...]
@@ -567,6 +567,9 @@ REFUSAL_CODES: Tuple[str, ...] = (
     "one_channel",
     "no_spread",
     "budget",
+    "income_moved",
+    "untagged_width",
+    "degenerate_resample",
     "freeze_leak",
     "identity_failed",
 )
@@ -593,7 +596,6 @@ class Decomposition:
     sd_margin: float
     spread: Union[SpreadRegister, RefusedSpread]
     level: LevelRegister
-    reversal: ReversalRegister
 
     def __post_init__(self) -> None:
         if not 0 < self.paths <= self.max_paths:

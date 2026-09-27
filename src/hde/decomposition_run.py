@@ -1,8 +1,7 @@
 """Which risk decides it — THE ASSEMBLER (spec §0.1 item 17).
 
 It turns one spec into the `DecompositionOutcome` the other pieces exchange:
-the estimators (`decomposition_math`) take arrays, the reversal solver
-(`break_even`) answers about stated inputs, and the formatter
+the estimators (`decomposition_math`) take arrays, and the formatter
 (`decomposition_text`) renders what this module builds. Its surface is
 
     decompose(spec, *, det, mc, verdict, raw, paths) -> DecompositionOutcome
@@ -23,30 +22,28 @@ WHAT IT DOES, in the order it does it, because the order is the cost model:
   3. the budget gate, on the number of streams that drew on `A`;
   4. one `A_B^(c)` per stream that drew, and from them which channels are
      live, which decides the channel refusals (`no_spread` with no channel
-     live, `one_channel`) and the header's count;
+     live, `one_channel`) and the header's count. A stream that drew and is
+     not live is a row of the spread register's, measured on these futures;
   5. when futures sit on both sides of the line, `B`, and the spread register
      over the live channels' `A_B^(c)`;
   6. the level register — the freeze mask, paired against `A`'s own first
      paths — and the all-frozen run whose identity, failing, refuses the whole
-     block (`freeze_leak`, `identity_failed`);
-  7. the reversal register: `break_even.reversal_register`'s rows and
-     structural zeros, unchanged. A row for every stream that drew and is not
-     live is measured on the block's futures, so it is the spread register's.
+     block (`freeze_leak`, `identity_failed`).
 
-The whole-block refusals and the spread's are judgments about the DATA, and
-this module decides them; the reversal register's refusals, per field and per
-boundary, are `break_even.reversal_register`'s. The formatter renders a refusal
-and never decides one.
+Every refusal the block carries, the whole block's and the spread's, is
+decided here; the formatter renders a refusal and never decides one. A check
+on the way that cannot pass raises `CheckFailed` with its code and the one
+fact it measured, and `decompose` returns that as the block's refusal (§0.1
+item 58), so the report the block sits under still prints. Nothing else is
+caught: an exception that is no check is an engine defect, and reaches the
+caller as one.
 
 It is not a second verdict: `verdict` is carried through untouched. The
 probabilities this module takes itself are frequencies of `f`'s sign on
 futures it priced: over all N for whether the futures sit on both sides of the
-line, and over the level register's first paths for its `prob_best_*`. The
-reversal register's probabilities are not this module's: `break_even` takes
-them per option, on the run's own Monte Carlo sample and on re-simulations,
-at the config's `simulation.num_sims`. And it is not a second home for the
-estimators: no index, interval, standard error or resolution rule is computed
-here.
+line, and over the level register's first paths for its `prob_best_*`. And it
+is not a second home for the estimators: no index, interval, standard error or
+resolution rule is computed here.
 
 DRAWS AND LIVENESS ARE MEASURED, NEVER PREDICTED (§0.1 item 39). Whether a
 stream draws is whether its generator advanced while `A` was priced; whether a
@@ -87,7 +84,6 @@ from .decomposition import (
     ResolvedInteraction,
     ResolvedLevel,
     ResolvedShares,
-    ReversalRegister,
     Shares,
     SpreadRegister,
     SpreadRow,
@@ -100,6 +96,8 @@ from .monte_carlo import addressed_streams, run_monte_carlo
 
 __all__ = [
     "decompose",
+    "CheckFailed",
+    "signed_dollars",
     "margin_per_path",
     "measure_channels",
     "ChannelMeasurement",
@@ -145,16 +143,31 @@ EVALUATION_CEILING = 250_000
 # weighs `1/n` of every figure. When `1/n` exceeds 0.025 — below forty futures
 # — a single path is wider than the tail the interval claims to cut, and the
 # bound it prints is that path rather than the distribution.
-#
-# The same floor closes a fail-safe hole found by this module's own test at two
-# futures: a 300-resample bootstrap draws a degenerate resample (every index the
-# same path) with probability `n**(1-n)` each time, so below five futures it is
-# arithmetically certain to hit one, and `bootstrap_spread_intervals` refuses
-# with a ValueError. Unguarded, that reached a user as a traceback instead of a
-# named refusal — the cheap all-clear's noisier cousin, and still a surface that
-# could not say why.
 MIN_INTERVALLED_FUTURES = 40
 
+
+
+class CheckFailed(Exception):
+    """A check inside the block that cannot pass: the refusal `code` it
+    carries and the one `reason` it measured (§0.1 items 35 and 58).
+    `decompose` returns it as the block's refusal; nothing else in this module
+    catches it."""
+
+    def __init__(self, code: str, reason: str) -> None:
+        super().__init__(f"({code}): {reason}")
+        self.code = code
+        self.reason = reason
+
+
+def signed_dollars(value: float, places: int = 0) -> str:
+    """A dollar figure at `places` decimals, its sign before the dollar sign
+    (`-$N`), and a figure whose printed digits are all zero with no sign: a printed
+    zero has no side. The one rule for a dollar figure in the block's lines
+    and in the reasons written here."""
+    text = f"{abs(float(value)):,.{places}f}"
+    if float(value) < 0.0 and float(text.replace(",", "")) != 0.0:
+        return f"-${text}"
+    return f"${text}"
 
 
 # ---------------------------------------------------------------------------
@@ -252,8 +265,8 @@ def _largest_move(base, redrawn) -> float:
     return max(moves) if moves else 0.0
 
 
-def _liveness(base, redraws: Dict[int, object],
-              threshold: float) -> Tuple[Dict[int, float], Tuple[int, ...]]:
+def _liveness(base, redraws: Dict[int, object], threshold: float,
+              paths: int) -> Tuple[Dict[int, float], Tuple[int, ...]]:
     """`(largest move per stream, live channel ids)` from `A` and each drawing
     stream's `A_B^(c)`.
 
@@ -264,19 +277,19 @@ def _liveness(base, redraws: Dict[int, object],
 
     The income stream is re-drawn and measured like every other stream. It is
     not a channel, so a move beyond the budget there is not a row this block
-    has a place for: it RAISES, naming the move, rather than printing a
-    partition that leaves a present value's mover out.
+    has a place for: the check fails (`income_moved`), naming the move, rather
+    than printing a partition that leaves a present value's mover out.
     """
     moves = {stream_id: _largest_move(base, result)
              for stream_id, result in redraws.items()}
     moving = tuple(stream_id for stream_id in sorted(moves)
                    if not dm.identity_holds(moves[stream_id], threshold))
     if INCOME_STREAM_ID in moving:
-        raise ValueError(
-            f"the income-stream check: re-drawing the income stream moved an option's "
-            f"present value by ${moves[INCOME_STREAM_ID]:.6g}, above the "
-            f"${threshold:.3g} the identity allows: the income stream is not a "
-            f"channel, and no register has a row for it")
+        raise CheckFailed(
+            "income_moved",
+            f"re-drawing the income stream moved an option's present value on these "
+            f"{int(paths):,} futures by up to ${moves[INCOME_STREAM_ID]:.3g}, above "
+            f"${threshold:.3g}")
     return moves, moving
 
 
@@ -298,11 +311,13 @@ def measure_channels(spec, *, det, verdict, paths: Optional[int] = None) -> Chan
     `num_sims`), measured exactly as `decompose` measures them — the same
     recorder, the same re-draws, the same threshold — with no refusal and no
     budget gate in between. For a caller that wants the measurement alone, at
-    a cost of one matrix per drawing stream plus `A`."""
+    a cost of one matrix per drawing stream plus `A`. The income-stream check
+    raises `CheckFailed` here as it refuses the block in `decompose`."""
     spec_at_paths = _spec_at(spec, paths if paths is not None else spec.simulation.num_sims)
     base, drawn = _run_recording_draws(spec_at_paths)
     threshold = identity_budget(det, verdict)
-    moves, live = _liveness(base, _redraws(spec_at_paths, drawn), threshold)
+    moves, live = _liveness(base, _redraws(spec_at_paths, drawn), threshold,
+                            int(spec_at_paths.simulation.num_sims))
     return ChannelMeasurement(paths=int(spec_at_paths.simulation.num_sims), drawn=drawn,
                               moves=moves, threshold=threshold, live=live)
 
@@ -326,11 +341,9 @@ def planned_evaluations(paths: int, k_draw: int, level_paths: int, *,
     under; one formula cannot disagree with itself.
 
     `spread_priced=False` is the run where every future lies on one side of the
-    line: `B` is not priced. The gate cannot know that before it prices the
-    re-draws, so it takes the default, and its figure is the most the module
-    can spend — which is why the refusal says "up to". The reversal register's
-    evaluations are `break_even`'s, at the config's own `num_sims`, and are not
-    counted here.
+    line: `B` is not priced. The budget gate takes the default whichever side
+    the futures sit on, so its figure is the most the module can spend, and
+    its refusal says "up to".
     """
     spread = int(paths) * (int(k_draw) + (2 if spread_priced else 1))
     return spread + int(level_paths) * (int(k_draw) + 1)
@@ -360,7 +373,7 @@ def largest_affordable_paths(k_draw: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# §8 — the refusals, which are judgments about the data
+# §8 — the refusals
 # ---------------------------------------------------------------------------
 
 def _refuse(code: str, reason: str, channel_id: Optional[int] = None) -> DecompositionRefusal:
@@ -443,14 +456,19 @@ def _priced(spec) -> Tuple[str, ...]:
     return tuple(n for n in OPTION_NAMES if getattr(spec, n, None) is not None)
 
 
-# The option whose draws a cost or return channel's sizing keys size. The
-# three cost channels share `simulation.other_cost_vol`, so which option a
-# key's draws belong to is the CHANNEL's, never the key's.
-_CHANNEL_OPTION: Dict[int, str] = {3: "condo", 4: "house", 5: "rent", 6: "rent"}
+# The options whose draws a channel's sizing keys size, where the CHANNEL
+# decides it. A cost or return channel's draws are its one option's: the three
+# cost channels share `simulation.other_cost_vol`, so which option a key's
+# draws belong to is the channel's, never the key's. The population prior's
+# rows reach the owned options' values: `monte_carlo.run_monte_carlo` hands
+# them to the condo's and the house's simulations, and the renter's reads none.
+_CHANNEL_OPTIONS: Dict[int, Tuple[str, ...]] = {
+    2: ("condo", "house"), 3: ("condo",), 4: ("house",), 5: ("rent",), 6: ("rent",)}
 
-# On a channel no one option owns, the `simulation.*` sizing keys that size
-# one option's draws. A key named neither here nor under an option's own
-# section sizes a draw every priced option reads.
+# On the economy's and the market's rows, the `simulation.*` sizing keys that
+# size one option's draws. Any other key on those rows is under an option's
+# own section, which is that option's, or sizes a draw every option's
+# simulation reads.
 _SIMULATION_KEY_OPTIONS: Dict[str, Tuple[str, ...]] = {
     "simulation.corr_inflation_condo": ("condo",),
     "simulation.corr_inflation_house": ("house",),
@@ -472,11 +490,11 @@ _PULLS: Dict[str, Tuple[str, ...]] = {
 
 def sized_options(channel_id: int, key: str) -> Optional[Tuple[str, ...]]:
     """The options whose draws `key` sizes on channel `channel_id`'s row, or
-    None where the draw reaches every option. The one home of the filter
-    §0.1 item 53 keeps: it is read off the model's structure, never off a
-    value the config gives the key."""
-    if channel_id in _CHANNEL_OPTION:
-        return (_CHANNEL_OPTION[channel_id],)
+    None where every option's simulation reads the draw. The one home of the
+    filter §0.1 item 53 keeps: it is read off the simulator's draw sites
+    (`monte_carlo`), never off a value the config gives the key."""
+    if channel_id in _CHANNEL_OPTIONS:
+        return _CHANNEL_OPTIONS[channel_id]
     section = key.split(".", 1)[0]
     if section in OPTION_NAMES:
         return (section,)
@@ -525,18 +543,19 @@ def width_keys(spec, channel_id: int) -> Tuple[Tuple[str, Optional[str]], ...]:
     return tuple(out)
 
 
-def _width(spec, key: str, pulled_by: Optional[str] = None) -> Width:
-    """One member of `width_keys` as a `Width`: its figure and its tag as the
-    read-back gives them (`serialization.read_back_tag`, character for
-    character), and for a pulled key the correlation's figure and its square.
-    A member with no read-back tag RAISES: nothing can say whose figure it
+def _width(spec, key: str, pulled_by: Optional[str], label: str) -> Width:
+    """One member of `width_keys` on the row of `label` as a `Width`: its
+    figure and its tag as the read-back gives them
+    (`serialization.read_back_tag`, character for character), and for a pulled
+    key the correlation's figure and its square. A member with no read-back
+    tag fails the check (`untagged_width`): nothing can say whose figure it
     is, and a width left out would be an absence nobody reported."""
     from .serialization import default_anchor, echo_value, read_back_tag
     tag = read_back_tag(spec, key)
     if tag is None:
-        raise ValueError(
-            f"the width check: {key} sizes a draw on this run and the read-back "
-            f"gives it no tag, so nothing can say whose figure it is")
+        raise CheckFailed("untagged_width",
+                          f"{key}, a width on the row of {label}, has no tag in the "
+                          f"read-back")
     note = None
     if pulled_by is not None:
         rho = float(getattr(spec.simulation, pulled_by.split(".", 1)[1]))
@@ -554,7 +573,8 @@ def _widths_for(spec, raw, entry: Channel) -> Tuple[Width, ...]:
     """The widths on one channel's row: every member of `width_keys`, in
     its order."""
     spec = _echo_of(spec, raw)
-    return tuple(_width(spec, key, pulled_by) for key, pulled_by in width_keys(spec, entry.id))
+    return tuple(_width(spec, key, pulled_by, entry.label)
+                 for key, pulled_by in width_keys(spec, entry.id))
 
 
 # ---------------------------------------------------------------------------
@@ -589,31 +609,6 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
             kind="dead_draw", label=label, keys=keys, channel_id=stream_id,
             measured_paths=int(paths), move_threshold=float(threshold)))
     return rows
-
-
-def _reversal_register(raw, det, mc) -> ReversalRegister:
-    """§6's register: `break_even.reversal_register`, and nothing added to it.
-
-    The solved rows, the per-boundary refusals of §8 item 7 and the stated-path
-    zeros are all `break_even.reversal_register`'s by ruling (§0.1 items 5 and
-    17). It is handed THIS run's own `det` and `mc` and never the block's own
-    futures, so the register reads no figure that moves with `N` (§0.1 item
-    48): the rows measured on those futures are the spread register's.
-
-    Without a raw mapping there is nothing to solve on: every candidate in §6
-    is a key the CONFIG states, and `reversal_register` re-loads the config to
-    probe it. A directly-constructed spec therefore gets an empty register
-    with the code `no_mapping`, whose reason says the block was handed no
-    config mapping — a fact about the call, never a claim that no candidate
-    exists.
-    """
-    if raw is None:
-        return ReversalRegister(
-            exact=(), estimated=(), structural_zeros=(), no_distance_code="no_mapping",
-            no_distance_reason="this block was handed no config mapping")
-    from .break_even import reversal_register as solve_reversal_register
-    return solve_reversal_register(raw, det, mc)
-
 
 
 # ---------------------------------------------------------------------------
@@ -674,7 +669,8 @@ def _spread_register(
 
     Every figure comes from `decomposition_math`; the only judgments here are
     which rows resolved, which row is on top and whether it leads (`_top_row`),
-    and which rows' gaps resolved.
+    and which rows' gaps resolved. A resample of the bootstrap that holds one
+    value of `f` fails the check (`degenerate_resample`).
 
     A ROW IS UNRESOLVED IF EITHER FIGURE IS (§0.1 item 11). Conservative is
     correct for the same reason the register refuses at all: the alternative
@@ -689,8 +685,15 @@ def _spread_register(
     total = dm.total_order_indices(f_a, f_ab)
     flip = dm.sign_flip_fraction_of_futures(f_a, f_ab)
     gaps = dm.interaction_gaps(f_a, f_b, f_ab)
-    first_ci, total_ci, flip_ci, sum_ci = dm.bootstrap_spread_intervals(
-        f_a, f_b, f_ab, seed=seed)
+    try:
+        first_ci, total_ci, flip_ci, sum_ci = dm.bootstrap_spread_intervals(
+            f_a, f_b, f_ab, seed=seed)
+    except dm.DegenerateResample as flat:
+        raise CheckFailed(
+            "degenerate_resample",
+            f"the margin is identical on all {flat.n_futures:,} futures of bootstrap "
+            f"resample {flat.resample:,} of {flat.n_resamples:,} "
+            f"({signed_dollars(flat.value, 2)})") from flat
     gap_ci = dm.bootstrap_interaction_gap_intervals(f_a, f_b, f_ab, seed=seed)
 
     rows: List[SpreadRow] = []
@@ -761,9 +764,8 @@ def _one_side_of_the_line(best_cheapest: float) -> bool:
 
 def _no_sign_variation(best: str, futures: int, best_cheapest: float,
                        dead: Tuple[StructuralZero, ...]) -> RefusedSpread:
-    """The spread register's refusal in its own slot; the level and reversal
-    registers still print. Its reason is the measured fact alone (§0.1 item
-    36)."""
+    """The spread register's refusal in its own slot; the level register still
+    prints. Its reason is the measured fact alone (§0.1 item 36)."""
     if not _one_side_of_the_line(best_cheapest):
         raise ValueError(
             f"P({best} cheapest) is {best_cheapest!r} on this sample, so futures sit on "
@@ -909,8 +911,8 @@ def _identity_failed(level: LevelRegister, verdict, budget: float) -> Decomposit
     return _refuse(
         "identity_failed",
         f"with every channel frozen, the {level.paths:,} paths price a margin of "
-        f"${level.all_frozen_margin:,.2f} against the central case's "
-        f"${verdict.margin_pv:,.2f}, ${level.all_frozen_deviation:.3g} apart, "
+        f"{signed_dollars(level.all_frozen_margin, 2)} against the central case's "
+        f"{signed_dollars(verdict.margin_pv, 2)}, ${level.all_frozen_deviation:.3g} apart, "
         f"above the ${budget:.3g} this check allows",
     )
 
@@ -968,13 +970,10 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         spec: the run's own `ComparisonSpec`.
         det, mc, verdict: THIS run's deterministic result, Monte Carlo result
             and verdict. They are read, never recomputed: the verdict stays
-            `models.compute_verdict`'s; `mc` says whether the run has futures
-            and is the sample the reversal register reads its curve off; `det`
-            and `verdict` size the identity's budget, and the reversal register
-            reads them as its base case.
-        raw: the mapping the config came from. §6's candidates are keys the
-            config STATES and the reversal solver re-loads it to probe them, so
-            without it the block carries no solved rows.
+            `models.compute_verdict`'s; `mc` says whether the run has futures;
+            `det` and `verdict` size the identity's budget.
+        raw: the mapping the config came from, from which a spec that carries
+            no source echo gets the read-back's tags for its widths.
         paths: `--decompose=N`'s sample-size override, consumed here because N
             is a compute-time figure (§0.1 item 16). Default is the config's
             own `num_sims`.
@@ -1003,20 +1002,32 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         # Identical is max == min, exactly: a variance of 2,000 copies of one
         # figure is not always 0.0, because their mean need not be that figure
         # to the last bit.
-        value = float(f_a[0])
         return _refuse(
             "no_spread",
             f"the margin is identical on all {f_a.size:,} futures "
-            f"({'-' if value < 0 else ''}${abs(value):,.2f})",
+            f"({signed_dollars(float(f_a[0]), 2)})",
         )
     refusal = _budget_refusal(requested, len(drawn))
     if refusal is not None:
         return refusal
 
+    try:
+        return _priced_block(spec, det, verdict, raw, requested, seed, best, level_paths,
+                             spec_at_paths, base, drawn, f_a)
+    except CheckFailed as failed:
+        return _refuse(failed.code, failed.reason)
+
+
+def _priced_block(spec, det, verdict, raw, requested: int, seed: int, best: str,
+                  level_paths: int, spec_at_paths, base, drawn: Tuple[int, ...],
+                  f_a: Array) -> DecompositionOutcome:
+    """`decompose` from the re-draws on: the channel refusals, the spread and
+    level registers and the identity's refusals. A check that cannot pass on
+    the way raises `CheckFailed`, which `decompose` returns as the refusal."""
     # Which channels are live, on THESE futures: each drawing stream re-drawn.
     threshold = identity_budget(det, verdict)
     redraws = _redraws(spec_at_paths, drawn)
-    _, live = _liveness(base, redraws, threshold)
+    _, live = _liveness(base, redraws, threshold, requested)
     refusal = _channel_refusal(live, requested)
     if refusal is not None:
         return refusal
@@ -1046,7 +1057,6 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         return _freeze_leak(level)
     if not dm.identity_holds(level.all_frozen_deviation, threshold):
         return _identity_failed(level, verdict, threshold)
-    reversal = _reversal_register(raw, det, mc)
 
     return Decomposition(
         paths=int(f_a.size),
@@ -1057,5 +1067,4 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         sd_margin=float(np.std(f_a)),
         spread=spread,
         level=level,
-        reversal=reversal,
     )

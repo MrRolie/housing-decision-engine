@@ -167,10 +167,9 @@ def main() -> int:
         default=None,
         metavar="N",
         help="Which risk decides it. The spread register prices N futures of the "
-             "block's own (N defaults to simulation.num_sims), the level register "
-             "the first min(N, 2000) of them, and the reversal register reads the "
-             "run's own simulation.num_sims paths whatever N is. What each figure "
-             "means: docs/reference/API_CONTRACT.md, the decomposition block",
+             "block's own (N defaults to simulation.num_sims), and the level register "
+             "the first min(N, 2000) of them. What each figure means: "
+             "docs/reference/API_CONTRACT.md, the decomposition block",
     )
     parser.add_argument(
         "--break-even",
@@ -403,14 +402,9 @@ def main() -> int:
         except (ConfigValidationError, InputError, ScenarioPriorError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
-        except (ValueError, TypeError) as e:
-            # A check inside the block (or inside the reversal solver it
-            # calls) that could not verify what it would print raises rather
-            # than print it, and its message names the check. It reaches the
-            # user as that message and an exit code, never as a traceback that
-            # ends the report with no reason given.
-            print(f"Error: --decompose stopped, a check failed: {e}", file=sys.stderr)
-            return 1
+        # A check inside the block that cannot pass comes back as the block's
+        # refusal, under the report (§0.1 item 58); nothing else is caught
+        # here, so an engine defect is never printed as a failed check.
 
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []

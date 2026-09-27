@@ -675,6 +675,28 @@ def test_a_spread_with_no_variance_refuses_rather_than_dividing_by_zero() -> Non
         dm.bootstrap_spread_intervals(flat, other, table, seed=1)
 
 
+def test_a_resample_holding_one_value_of_f_refuses_and_a_near_flat_one_does_not() -> None:
+    """A resample whose futures all carry one value of `f` has no index to
+    read, and the bootstrap names it: which resample, of how many, over how
+    many futures, and the value. One whose values differ by a billionth is not
+    that, and yields its intervals.
+    *Kills it:* the check deleted (a 0/0 read as an interval), or widened by a
+    tolerance (a near-flat resample refused)."""
+    other = np.arange(40, dtype=float)
+    table = np.vstack([other[::-1]])
+    lone = np.zeros(40)
+    lone[7] = 1.0
+    indices = dm.bootstrap_path_indices(40, dm.DEFAULT_RESAMPLES, 3)
+    first = next(i for i, rows in enumerate(indices) if 7 not in rows)
+    with pytest.raises(dm.DegenerateResample) as flat:
+        dm.bootstrap_spread_intervals(lone, other, table, seed=3)
+    assert (flat.value.resample, flat.value.n_resamples, flat.value.n_futures,
+            flat.value.value) == (first + 1, dm.DEFAULT_RESAMPLES, 40, 0.0)
+    near = np.tile([0.0, 1e-9], 20)
+    assert all(len(set(near[rows])) == 2 for rows in indices)
+    dm.bootstrap_spread_intervals(near, other, table, seed=3)
+
+
 def test_tables_that_do_not_match_refuse() -> None:
     f_a = np.arange(10, dtype=float)
     with pytest.raises(ValueError, match="same size"):

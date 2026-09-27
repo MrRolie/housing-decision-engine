@@ -238,8 +238,7 @@ def test_the_income_stream_draws_only_with_a_volatility_on_it():
     block, text = _render("fixed_pay_drop_row", FIXED_PAY_DROP)
     assert "your pay drops" not in text
     assert all(z["channel_id"] != INCOME_STREAM_ID
-               for z in block["spread"]["structural_zeros"]
-               + block["reversal"]["structural_zeros"])
+               for z in block["spread"]["structural_zeros"])
     spec = load_config_dict(copy.deepcopy(FIXED_PAY_DROP))
     assert INCOME_STREAM_ID not in oracle_drawn(spec)
 
@@ -265,13 +264,13 @@ def test_the_threshold_is_the_identity_s_budget():
         3: _priced(condo=[1.0, 1.0 + 2 * t, 1.0], rent=[2.0, 2.0, 2.0]),
         6: _priced(condo=[1.0 + 0.5 * t, 1.0, 1.0], rent=[2.0, 2.0, 2.0]),
     }
-    moves, live = dr._liveness(base, redraws, t)
+    moves, live = dr._liveness(base, redraws, t, 3)
     assert moves[3] > t > moves[6] > 0.0
     assert live == (3,)
     # Exactly at the budget the move is inside it; one float below, past it.
     move = moves[3]
-    assert dr._liveness(base, {3: redraws[3]}, move)[1] == ()
-    assert dr._liveness(base, {3: redraws[3]}, float(np.nextafter(move, 0.0)))[1] == (3,)
+    assert dr._liveness(base, {3: redraws[3]}, move, 3)[1] == ()
+    assert dr._liveness(base, {3: redraws[3]}, float(np.nextafter(move, 0.0)), 3)[1] == (3,)
 
 
 def test_the_recorder_watches_every_generator_it_hands_out():
@@ -304,18 +303,22 @@ def test_every_option_and_every_future_is_compared():
     base = _priced(condo=[1.0, 1.0, 1.0], house=[3.0, 3.0, 3.0], rent=[2.0, 2.0, 2.0])
     only_rent = _priced(condo=[1.0, 1.0, 1.0], house=[3.0, 3.0, 3.0], rent=[2.0, 2.0, 5.0])
     only_later = _priced(condo=[1.0, 7.0, 1.0], house=[3.0, 3.0, 3.0], rent=[2.0, 2.0, 2.0])
-    assert dr._liveness(base, {5: only_rent, 3: only_later}, t)[1] == (3, 5)
+    assert dr._liveness(base, {5: only_rent, 3: only_later}, t, 3)[1] == (3, 5)
 
 
 def test_a_moving_income_stream_is_refused_by_name():
     """The income stream is not a channel, so a re-draw of it that moved a
-    present value has no row to go to: it raises rather than printing a
-    partition with a mover left out."""
+    present value has no row to go to: the check fails (`income_moved`),
+    stating the move, rather than printing a partition with a mover left
+    out; a re-draw that moves nothing passes."""
     base = _priced(condo=[1.0], rent=[2.0])
-    with pytest.raises(ValueError, match="income stream"):
-        dr._liveness(base, {INCOME_STREAM_ID: _priced(condo=[1.0], rent=[3.0])}, 1e-9)
+    with pytest.raises(dr.CheckFailed) as failed:
+        dr._liveness(base, {INCOME_STREAM_ID: _priced(condo=[1.0], rent=[3.0])}, 1e-9, 1)
+    assert (failed.value.code, failed.value.reason) == ("income_moved", (
+        "re-drawing the income stream moved an option's present value on these 1 "
+        "futures by up to $1, above $1e-09"))
     assert dr._liveness(base, {INCOME_STREAM_ID: _priced(condo=[1.0], rent=[2.0])},
-                        1e-9)[1] == ()
+                        1e-9, 1)[1] == ()
 
 
 # A condo fee volatility so small that re-drawing it moves the condo's present

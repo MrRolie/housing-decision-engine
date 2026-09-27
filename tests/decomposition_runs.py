@@ -15,11 +15,13 @@ import json
 import pathlib
 import sys
 import tempfile
+import types
 
 import numpy as np
 import yaml
 
 from hde import decomposition_run as dr
+from hde.decomposition import INCOME_STREAM_ID
 from hde.cli import main as cli_main
 from hde.config import load_config_dict
 from hde.deterministic import compute_deterministic
@@ -77,29 +79,12 @@ DEAD["condo"]["price_shock"] = {"annual_hazard": 0.05, "severity_mean": 0.0,
                                 "severity_vol": 0.1}
 DEAD["simulation"].update({"condo_fee_vol": 0.10, "value_growth_vol": 0.0,
                            "corr_inflation_house": 0.5})
-# A financed condo far enough ahead that no crossing of the central case's
-# verdict lies anywhere in its contract rate's bracket.
-FAR = copy.deepcopy(ALL_OTHER)
-del FAR["condo"]["all_cash"]
-FAR["condo"].update({"down_payment": 100000, "mortgage_rate": 0.045,
-                     "mortgage_term_years": 25})
-FAR["rent"].update({"monthly_rent": 4000, "reset_hazard": 0.0,
-                    "rent_escalation_rate": 0.02})
-del FAR["rent"]["reset_to_monthly_rent"]
-FAR["simulation"]["rent_escalation_vol"] = 0.05
 # A financed condo with nothing borrowed: its contract rate is stated and moves
 # no present value, so the reversal register searches it and finds it inert.
 INERT = copy.deepcopy(ALL_OTHER)
 del INERT["condo"]["all_cash"]
 INERT["condo"].update({"down_payment": 350000, "mortgage_rate": 0.045,
                        "mortgage_term_years": 25})
-# The same financed condo nearer rent, with the renter's portfolio drawn: the
-# central case's winner holds across the contract rate's whole bracket and its
-# decisiveness does not, so the only crossing on the row is bisected.
-SAMPLED_ONLY = copy.deepcopy(FAR)
-SAMPLED_ONLY["rent"]["monthly_rent"] = 2400
-SAMPLED_ONLY["simulation"].update({"rent_escalation_vol": 0.10,
-                                   "investment_return_vol": 0.12})
 # The one-side-of-the-line guard's two edges, each one future away from it:
 # rent (the central case's winner) cheapest in exactly one of 2,000 futures,
 # and the house cheapest in all but one. The spread register prints a table
@@ -145,6 +130,10 @@ INCOME_ONLY = {
     "simulation": {"num_sims": 2000, "random_seed": 42},
     "economic": {"mode": "real"},
 }
+# The same with the condo's fee drawn: one channel is live, and the pay-drop
+# draw beside it.
+INCOME_ONE_CHANNEL = copy.deepcopy(INCOME_ONLY)
+INCOME_ONE_CHANNEL["simulation"]["condo_fee_vol"] = 0.05
 
 
 def _rare_reset(*, one_channel: bool) -> dict:
@@ -326,63 +315,6 @@ BOTH_SHOCKS_DEFAULTED = copy.deepcopy(HAZARD_ONLY)
 BOTH_SHOCKS_DEFAULTED["house"]["price_shock"] = {"annual_hazard": 0.04}
 BOTH_SHOCKS_DEFAULTED["sources"]["house.price_shock.annual_hazard"] = "assistant"
 
-# A printed figure on a crossing's axis is checked on its side (spec §0.1
-# item 54). A five-year house against rent whose decisiveness goes decisive
-# for house, not decisive, decisive for rent inside one printed step of a
-# sampled crossing: the lower edge's `was` is a sliver narrower than 0.01%.
-SLIVER_LOW = {
-    "years": 5,
-    "economic": {"mode": "nominal", "inflation_rate": 0.021},
-    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.08,
-              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
-              "purchase_costs": 8200, "value_growth_rate": 0.031,
-              "annual_maintenance_rate": 0.01},
-    "rent": {"monthly_rent": 2300.5, "rent_escalation_rate": 0.031,
-             "invested_down_payment": 110000, "investment_return_rate": 0.051},
-    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.015,
-                   "rent_escalation_vol": 0.004},
-}
-# Its upper-edge twin: the run is decisive for house, and the stretch that is
-# not decisive lies above the edge, narrower than one printed step.
-SLIVER_HIGH = copy.deepcopy(DECISIVE_STEP)
-SLIVER_HIGH["simulation"].update({"house_maintenance_vol": 0.008,
-                                  "rent_escalation_vol": 0.002})
-# A stated rate between a solved crossing and the next printed step up.
-STATED_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
-STATED_BESIDE_CROSSING["house"]["mortgage_rate"] = 0.06273
-# A rent at which the central case's winner changes just above the
-# contracted rate as it sits on this axis: the reference printed at two
-# decimals would read above the crossing it lies below.
-REFERENCE_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
-REFERENCE_BESIDE_CROSSING["rent"]["monthly_rent"] = 1696.44
-# Three options, the condo's central present value fifty cents above rent's:
-# the runner-up is the house on a stretch narrower than one solved step.
-SOLVED_SLIVER = copy.deepcopy(DECISIVE_STEP_LOWER)
-SOLVED_SLIVER["condo"] = {"initial_value": 400000, "down_payment": 80000,
-                          "mortgage_rate": 0.05,
-                          "mortgage_rate_compounding": "effective_annual",
-                          "mortgage_term_years": 25, "purchase_costs": 6000,
-                          "monthly_fee": 1254.1807, "fee_escalation_rate": 0.03,
-                          "value_growth_rate": 0.031}
-SOLVED_SLIVER["simulation"].update({"house_maintenance_vol": 0.02,
-                                    "rent_escalation_vol": 0.005, "condo_fee_vol": 0.3})
-# Three options on which the runner-up changes twice above the central case's
-# winner's crossing: the deterministic edge reads the span next to it.
-THREE_OPTION_RUNNER_UP = {
-    "years": 20,
-    "economic": {"mode": "nominal", "inflation_rate": 0.021},
-    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.021, "initial_value": 420000,
-              "all_cash": True, "purchase_costs": 6000, "value_growth_rate": 0.031},
-    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.03,
-              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
-              "purchase_costs": 8200, "value_growth_rate": 0.031,
-              "annual_maintenance_rate": 0.01},
-    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
-             "invested_down_payment": 110000, "investment_return_rate": 0.051},
-    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.2,
-                   "rent_escalation_vol": 0.05, "condo_fee_vol": 0.1},
-}
-
 # A crash in every year of every future, at one fixed severity: the margin is
 # one figure on every future, and below zero, so the identical-margin
 # reason's sign has a witness (spec §0.1 item 44).
@@ -414,6 +346,43 @@ NEAR_ONE = {
 }
 
 
+# Two rare hazards, one on the condo's price and one on the lease: the margin
+# is one figure on almost every future. At 400 futures one of the bootstrap's
+# resamples holds one figure, and the block refuses (`degenerate_resample`,
+# §0.1 item 58); at 2,000 it prints, and the condo's costs draw, move nothing
+# and have no width, so their row names no keys.
+RARE2 = {
+    "years": 10, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200,
+              "price_shock": {"annual_hazard": 0.0005}},
+    "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.01, "reset_hazard": 0.0005,
+             "reset_to_monthly_rent": 2500, "invested_down_payment": 355200,
+             "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 400, "random_seed": 42},
+}
+
+
+def _prior_no_rent() -> dict:
+    """The showcase with no renter, and none of the renter's inputs or their
+    sources."""
+    raw = yaml.safe_load(SHOWCASE.read_text(encoding="utf-8"))
+    renter = ("simulation.rent_escalation_vol", "simulation.investment_return_vol")
+    del raw["rent"]
+    raw["sources"] = {key: source for key, source in raw["sources"].items()
+                      if not key.startswith("rent.") and key not in renter}
+    for key in renter:
+        raw["simulation"].pop(key.split(".", 1)[1], None)
+    return raw
+
+
+# The population prior with no renter priced: its rows reach the condo's and
+# the house's values and the renter's none, so its widths print (§0.1 item 53's
+# option map).
+PRIOR_NO_RENT = _prior_no_rent()
+
+
 # ---------------------------------------------------------------------------
 # Instruments
 # ---------------------------------------------------------------------------
@@ -442,20 +411,6 @@ def _block_text(out):
     start = next(i for i, line in enumerate(lines)
                  if "which risk decides it" in line or "all of this run's spread" in line)
     return "\n".join(lines[start:])
-
-
-def _sweep_states(path, key, values, futures):
-    """What `--sweep <key>=<values>` says at each value, field by field, in
-    the words a boundary uses; `futures` runs the sweep with Monte Carlo."""
-    argv = [path, "--sweep", f"{key}=" + ",".join(f"{v:.10f}" for v in values), "--json"]
-    if not futures:
-        argv.insert(1, "--no-monte-carlo")
-    code, out, _ = _cli(*argv)
-    assert code == 0
-    rows = _strict(out)["sweeps"][0]["rows"]
-    return [{"best": r["best"], "runner_up": r["runner_up"], "mc_best": r["mc_best"],
-             "decisive": f"decisive for {r['best']}" if r["decisive"] else "not decisive"}
-            for r in rows]
 
 
 class Run:
@@ -514,6 +469,36 @@ def _load(path):
     return yaml.safe_load(pathlib.Path(path).read_text(encoding="utf-8"))
 
 
+# ---------------------------------------------------------------------------
+# Forcing a check no correct engine fails (§0.1 item 58)
+# ---------------------------------------------------------------------------
+
+def force_income_move(monkeypatch, move):
+    """The income stream's re-draw handed back as `A`'s own present values
+    moved by `move` on every future, for every priced option."""
+    original = dr._redraws
+
+    def redraws(spec_at_paths, drawn):
+        out = original(spec_at_paths, drawn)
+        if INCOME_STREAM_ID in out:
+            base = dr._run(spec_at_paths, dr.MATRIX_A)
+            out[INCOME_STREAM_ID] = types.SimpleNamespace(**{
+                name: (None if getattr(base, name, None) is None else types.SimpleNamespace(
+                    pvs=np.asarray(getattr(base, name).pvs, dtype=np.float64) + move))
+                for name in ("condo", "house", "rent")})
+        return out
+    monkeypatch.setattr(dr, "_redraws", redraws)
+
+
+def untag(monkeypatch, key=None):
+    """The read-back's tag withheld from `key`, or from every key."""
+    import hde.serialization as serialization
+    original = serialization.read_back_tag
+    monkeypatch.setattr(serialization, "read_back_tag",
+                        lambda spec, name: None if key in (None, name)
+                        else original(spec, name))
+
+
 # The runs every sentence and contract test reads: name -> (config, extra flags).
 CORPUS = {
     "fixture": (FIXTURE, "300"),
@@ -528,13 +513,12 @@ CORPUS = {
     "all_other": (ALL_OTHER, "400"),
     "basic": (EXAMPLES / "basic_config.yaml", "300"),
     "dead": (DEAD, "300"),
-    "far": (FAR, "200"),
-    "inert": (INERT, "200"),
-    "sampled_only": (SAMPLED_ONLY, "200"),
     "near_none": (NEAR_NONE, "2000"),
     "near_all": (NEAR_ALL, "2000"),
-    "decisive_step": (DECISIVE_STEP,),
-    "decisive_step_lower": (DECISIVE_STEP_LOWER,),
+    # The fixture at its own count of futures: the interval on the alone
+    # shares' sum lies entirely above 1, so no residual clause prints.
+    "fixture_own": (FIXTURE,),
+    "rare2": (RARE2, "2000"),
 }
 
 

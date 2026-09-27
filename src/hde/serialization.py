@@ -41,6 +41,7 @@ from .decomposition import (
     ResolvedShares,
     SpreadRegister,
     SpreadRow,
+    StructuralZero,
     channel as dc_channel,
 )
 from .market_scenario import LoadedScenarioPrior
@@ -1087,6 +1088,15 @@ def _spread_row_to_dict(row: "SpreadRow") -> Dict[str, Any]:
     return doc
 
 
+def _dead_draw_to_dict(zero: "StructuralZero") -> Dict[str, Any]:
+    """One `dead_draw` row, the one kind the spread register holds. The
+    type's `reversal_key` belongs to the `stated_path` kind, which no block
+    carries, so it is not emitted."""
+    return {"kind": zero.kind, "label": zero.label, "keys": list(zero.keys),
+            "channel_id": zero.channel_id, "measured_paths": zero.measured_paths,
+            "move_threshold": zero.move_threshold}
+
+
 def _spread_to_dict(spread: Any) -> Dict[str, Any]:
     """The spread register, or its refusal in the same slot (§0.1 item 7).
 
@@ -1102,7 +1112,7 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
     if not isinstance(spread, (RefusedSpread, SpreadRegister)):
         raise TypeError(f"the spread register is a {type(spread).__name__}, "
                         f"neither a SpreadRegister nor a RefusedSpread")
-    zeros = [dataclasses.asdict(zero) for zero in spread.structural_zeros]
+    zeros = [_dead_draw_to_dict(zero) for zero in spread.structural_zeros]
     if isinstance(spread, RefusedSpread):
         return {"refusal": {"code": spread.code, "reason": spread.reason},
                 "structural_zeros": zeros}
@@ -1130,11 +1140,8 @@ def _finite_or_null(node: Any) -> Any:
     `json.dumps` writes NaN and infinity as the bare tokens `NaN` and
     `Infinity`, which strict JSON parsers reject, so a document carrying one
     would fail to parse for exactly the consumer this surface is for. And a
-    NaN is not a figure to hand on as one: the exactness gate records NaN when
-    a present value it compares was not a finite number, and `inf` when a
-    shift varies over paths that have no spread of their own. `null` says no
-    figure was measured; the row's refused boundaries carry the gate's reason,
-    which says why."""
+    NaN is not a figure to hand on as one: `null` says no figure was
+    measured."""
     if isinstance(node, float):
         return node if math.isfinite(node) else None
     if isinstance(node, dict):
@@ -1163,7 +1170,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
 
     A refusal serializes as `{"refusal": {...}}` with NO register keys at all:
     an empty `spread` beside a refusal would let a consumer read "no rows" as
-    "nothing to report" (§8). The three registers are emitted together or not
+    "nothing to report" (§8). The two registers are emitted together or not
     at all, which is the binding (§5 mechanism 5) in this surface's own terms.
 
     `verdict` is deliberately absent: the document's top-level `verdict` key is
@@ -1180,7 +1187,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             refusal.update(_channel_id_fields(outcome.channel_id))
         return {"refusal": refusal}
 
-    level, reversal = outcome.level, outcome.reversal
+    level = outcome.level
     return _finite_or_null({
         "paths": outcome.paths,
         "max_paths": outcome.max_paths,
@@ -1199,17 +1206,6 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "accounted_for": level.accounted_for,
             "leading_channel_id": level.leading_channel_id,
             "unresolved_top_channel_id": level.unresolved_top_channel_id,
-        },
-        # The two reversal kinds stay two lists, never one with a flag: the
-        # split is a property of the model and no ranking crosses it, which a
-        # single ordered list would invite (spec §0).
-        "reversal": {
-            "exact": [dataclasses.asdict(row) for row in reversal.exact],
-            "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
-            "structural_zeros": [dataclasses.asdict(zero)
-                                 for zero in reversal.structural_zeros],
-            "no_distance_code": reversal.no_distance_code,
-            "no_distance_reason": reversal.no_distance_reason,
         },
     })
 

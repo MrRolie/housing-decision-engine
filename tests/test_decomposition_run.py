@@ -133,8 +133,7 @@ class _Spy:
     """Counts the evaluations this module spends, by replacing its own binding.
 
     `hde.decomposition_run.run_monte_carlo` is the name every matrix goes
-    through, so this sees all of them — and none of `break_even`'s, which spends
-    its own on the reversal register's gate and confirming re-simulations.
+    through, so this sees all of them.
     """
 
     def __init__(self, monkeypatch):
@@ -688,7 +687,7 @@ class TestRefusals:
 
 class TestEveryFutureAgrees:
     """§0.1 item 7: `P(f > 0) == 1` refuses the SPREAD register by name, in its
-    own slot, and the level and reversal registers still print."""
+    own slot, and the level register still prints."""
 
     def test_p_of_f_positive_equal_to_one_refuses_the_spread_by_name(
             self, monkeypatch):
@@ -844,11 +843,12 @@ class TestTheIncomeStreamIsReDrawn:
                   if z.channel_id == dc_income()]
         assert [z.kind for z in income] == ["dead_draw"]
 
-    def test_a_re_draw_of_the_income_stream_that_moves_a_value_raises(self, monkeypatch):
+    def test_a_re_draw_of_the_income_stream_that_moves_a_value_refuses(self, monkeypatch):
         """The income stream feeds the affordability report only, so no real
         run moves a present value with it; the move is constructed on the one
-        re-draw, through `decompose` itself (§0.1 item 44).
-        *Kills it:* skipping the income stream's re-draw, or the raise."""
+        re-draw, through `decompose` itself (§0.1 item 44), and the check
+        refuses the block with the move it measured (§0.1 item 58).
+        *Kills it:* skipping the income stream's re-draw, or the check."""
         spec = _fixture_spec(num_sims=40)
         inputs = _inputs(spec)
         inner = dr._run
@@ -860,10 +860,11 @@ class TestTheIncomeStreamIsReDrawn:
             return result
 
         monkeypatch.setattr(dr, "_run", moving_income)
-        with pytest.raises(ValueError, match=r"^the income-stream check: re-drawing the "
-                                             r"income stream moved an option's present "
-                                             r"value by \$1, above"):
-            decompose(spec, paths=40, **inputs)
+        got = decompose(spec, paths=40, **inputs)
+        allowance = dr.identity_budget(inputs["det"], inputs["verdict"])
+        assert (got.code, got.reason) == ("income_moved", (
+            f"re-drawing the income stream moved an option's present value on these 40 "
+            f"futures by up to $1, above ${allowance:.3g}"))
 
 
 class TestTheIdentityIsGated:
@@ -1370,16 +1371,11 @@ class TestThePublishedFigures:
                 assert width.source in ("user", "assistant", "anchor",
                                         "unattributed")
 
-    def test_the_reversal_register_carries_the_renewal_ladder(
-            self, fixture_block):
-        """The three registers arrive together, and the structural zero names
-        the row that carries its solved rates."""
-        register = fixture_block.reversal
-        assert register.exact, "the fixture states a renewal ladder"
-        keys = {row.key for row in register.exact}
-        assert "house.mortgage_renewal_rates" in keys
-        zeros = {z.reversal_key for z in register.structural_zeros}
-        assert "house.mortgage_renewal_rates" in zeros
+    def test_the_two_registers_arrive_together_and_no_third(self, fixture_block):
+        """§0.1 item 56: the block is the spread and the level, and carries
+        no reversal register."""
+        assert fixture_block.spread.rows and fixture_block.level.rows
+        assert not hasattr(fixture_block, "reversal")
 
 
 # ---------------------------------------------------------------------------

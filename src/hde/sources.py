@@ -714,12 +714,12 @@ NO_BLOCK_LINE = ("sources: none declared — the read-back cannot tell the user'
 
 
 def stated_tag(entry: SourceEntry) -> str:
-    """The tag the read-back gives one STATED key: the anchor it names in
-    brackets on the `anchor-sourced:` line, and otherwise the class the echo
-    files it under (`user`, `assistant`, `unattributed`, `sweep`), the line
-    that lists it carrying no bracket of its own. The one home of that tag:
-    `source_lines` prints it, and so does every other surface that tags a
-    stated figure (`serialization.read_back_tag`)."""
+    """The tag the read-back gives one STATED key: the anchor it names, and
+    otherwise the class the echo files it under (`user`, `assistant`,
+    `unattributed`, `sweep`). The one home of that tag: `source_lines` prints
+    an anchor's in brackets on the `anchor-sourced:` line, and every surface
+    that tags a stated figure prints the whole of it
+    (`serialization.read_back_tag`)."""
     return entry.anchor if entry.source == "anchor" else entry.source
 
 

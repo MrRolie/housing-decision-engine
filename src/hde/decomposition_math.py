@@ -53,11 +53,13 @@ __all__ = [
     "sum_first_order_shares",
     "share_is_resolved",
     "bootstrap_path_indices",
+    "DegenerateResample",
     "bootstrap_spread_intervals",
     "interaction_gaps",
     "bootstrap_interaction_gap_intervals",
     "interaction_is_resolved",
     "residual_interaction",
+    "sum_lies_above_one",
     "level_shift",
     "level_shifts",
     "level_is_resolved",
@@ -297,6 +299,25 @@ def bootstrap_path_indices(n_futures: int, n_resamples: int, seed: int) -> npt.N
     return table
 
 
+class DegenerateResample(ValueError):
+    """A bootstrap resample whose futures all carry one value of `f`.
+
+    Every index is 0/0 on it, so no interval can be read off the resamples.
+    It is raised with what was measured — which resample (counted from 1), of
+    how many, over how many futures, and the one value — so the caller that
+    refuses on it can state that fact and no other.
+    """
+
+    def __init__(self, resample: int, n_resamples: int, n_futures: int, value: float):
+        self.resample = int(resample)
+        self.n_resamples = int(n_resamples)
+        self.n_futures = int(n_futures)
+        self.value = float(value)
+        super().__init__(
+            f"resample {self.resample} of {self.n_resamples} over {self.n_futures} "
+            f"futures holds one value of f, {self.value!r}")
+
+
 def bootstrap_spread_intervals(
     f_a: object,
     f_b: object,
@@ -383,12 +404,14 @@ def _resampled_figures(
         rows = indices[start:stop]
         a_r = a[rows]
         b_r = b[rows]
+        # One value of `f` is max == min, exactly: the variance of many copies
+        # of one figure need not come out 0.0, because their mean need not be
+        # that figure to the last bit.
+        flat = np.flatnonzero(np.ptp(a_r, axis=1) == 0.0)
+        if flat.size:
+            raise DegenerateResample(start + int(flat[0]) + 1, n_resamples, n_futures,
+                                     float(a_r[flat[0], 0]))
         var_r = np.var(a_r, axis=1)
-        if not np.all(var_r > 0.0):
-            raise ValueError(
-                "a resample drew futures of identical f: Var(f) is zero inside the bootstrap. "
-                "Too few futures to interval this decomposition."
-            )
         sign_a_r = np.sign(a_r)
         # Centred per RESAMPLE, by that resample's own mean: the bootstrap
         # applies the whole estimator to each resample, the way `var_r` is
@@ -461,8 +484,8 @@ def residual_interaction(
       * the interval lies entirely BELOW 1 -> `(residual, low, high)`, movement
         no single channel owns;
       * the interval includes or exceeds 1 -> None: a residual computed from
-        it could be a negative number dressed as a measurement. The caller
-        prints the residual as not resolved.
+        it could be a negative number dressed as a measurement. Which of the
+        two it is, `sum_lies_above_one` says.
 
     Returning None rather than a number with a flag is deliberate: a caller
     cannot print a residual it was never given.
@@ -475,6 +498,13 @@ def residual_interaction(
         return None
     point = float(sum_of_shares)
     return (1.0 - point, 1.0 - high, 1.0 - low)
+
+
+def sum_lies_above_one(sum_low: float) -> bool:
+    """Whether the interval on Sigma S_c lies entirely ABOVE 1 — the branch of
+    `residual_interaction`'s None where the interval does not include 1 at
+    all, so the residual is not unresolved: section 4 prints none."""
+    return bool(float(sum_low) > 1.0)
 
 
 def level_shift(f_base: object, f_frozen: object) -> Tuple[float, float]:

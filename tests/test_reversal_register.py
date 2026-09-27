@@ -32,10 +32,12 @@ suite — it is recorded in the commit that landed the register.)
 """
 
 import copy
+import dataclasses
 import math
 import re
 import os
 import pathlib
+import types
 
 import numpy as np
 import pytest
@@ -55,7 +57,8 @@ from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
 from hde.sweep import load_at, run_sweep
 
-from tests.decomposition_runs import DECISIVE_STEP, DECISIVE_STEP_LOWER, THIRD_IN_ONE_CELL
+from tests.decomposition_runs import (CONDO_ONLY, DECISIVE_STEP, DECISIVE_STEP_LOWER, INERT,
+                                      THIRD_IN_ONE_CELL)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
@@ -1312,3 +1315,141 @@ class TestRefusals:
         spec = load_config_dict(one)
         register = reversal_register(one, compute_deterministic(spec), run_monte_carlo(spec))
         assert (register.exact, register.estimated, register.structural_zeros) == ((), (), ())
+
+
+def test_the_figure_checks_raise_where_nothing_passes():
+    """Each check, alone: a crossing whose field never says `was` at any
+    floored figure, and a stated figure equal to a crossing's value, which a
+    rounding upward never prints equal to that crossing's floored figure."""
+    with pytest.raises(ValueError, match="the printed-rate check"):
+        be.printed_crossing("house.mortgage_rate", "decisive", 0.0627, "not decisive",
+                            lambda v: "decisive for rent", 0.01)
+    assert be.printed_crossing("house.mortgage_rate", "decisive", 0.0627123, "x",
+                               lambda v: "x" if v >= 0.06271 else "y", 0.01) == "6.271%"
+    with pytest.raises(ValueError, match="the figure-order check"):
+        be.ordered_figure("house.mortgage_rate", 0.0627126,
+                          [(0.0627126, be.floored_rate(0.0627126, 4))])
+    assert be.ordered_figure("house.mortgage_rate", 0.06273,
+                             [(0.0627246, "6.2724%")]) == "6.273%"
+    # a floored figure below the bracket is off the axis searched, and passed
+    # over for a finer one
+    assert be.printed_crossing("house.mortgage_rate", "best", 0.0100003, "x",
+                               lambda v: "x", 0.0100001) == "1.00003%"
+    # a stated figure between a printed crossing and its value holds the
+    # crossing's figure above it
+    assert be.printed_crossing("house.mortgage_rate", "mc_best", 0.06278, "house",
+                               lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
+
+# ---------------------------------------------------------------------------
+# The library's own seams, reached by a direct call
+# ---------------------------------------------------------------------------
+
+# The refusal a futures field writes when the run's own state is read at no
+# point of its scan.
+_SAYS_SO_NOWHERE = re.compile(
+    r"^(?P<field>best|runner_up|mc_best|decisive) says '(?P<value>[^']+)' in this run "
+    r"and at none of (?P<n>\d+) points across (?P<lo>\d+\.\d+%)–(?P<hi>\d+\.\d+%)$")
+
+
+def test_a_field_the_axis_never_reproduces_says_so():
+    """"in this run and at none of N points": the run's own state is read at
+    no point of the scan. A futures field on a free curve that never names the
+    run's own answer, and a solved field on an axis whose nine points never
+    read the run's own winner, each state the scan the refusal rests on."""
+    xs = []
+
+    def free(x):
+        xs.append(x)
+        return types.SimpleNamespace(mc_best="condo" if x < 0.05 else "house"), {}
+
+    found, why = be._futures_field_boundaries(
+        {}, "house.mortgage_rate", "mc_best", free,
+        types.SimpleNamespace(mc_best="rent"), 0.01, 0.10,
+        scan_points=be.REVERSAL_SCAN_POINTS)
+    assert found == [] and why[0] == "not_on_axis"
+    m = _SAYS_SO_NOWHERE.match(why[1])
+    assert m and (m["field"], m["value"], int(m["n"])) == ("mc_best", "rent", 65)
+    assert sorted(set(xs)) == pytest.approx(
+        [0.01 + 0.09 * i / 64 for i in range(65)])
+    assert "rent" not in {free(x)[0].mc_best for x in list(xs)}
+
+
+def test_a_boundary_with_no_probability_is_not_identified():
+    record = be._identification("mc_best", {"was": "condo", "becomes": "house"},
+                                {"lo": {}, "hi": {}, "at": {}}, "condo", 100)
+    assert not record["identified"] and record["watched"] == []
+    assert record["why"] == "no probability is attached to this boundary"
+
+
+def test_a_gate_handed_no_figures_for_its_option_raises():
+    """The key's option is in the config, so a run with no present values for
+    it is a producer defect: the gate raises rather than printing a reason for
+    a case the engine cannot produce."""
+    raw = yaml.safe_load(TWO_OPTION.read_text(encoding="utf-8"))
+
+    def without_the_house(spec):
+        return dataclasses.replace(run_monte_carlo(spec), house=None)
+
+    with pytest.raises(ValueError, match="nothing to measure"):
+        be.reversal_gate(raw, "house.mortgage_rate", 0.10, paths=40,
+                         simulate=without_the_house)
+
+
+def test_a_register_on_one_option_has_no_verdict_to_reverse():
+    spec = load_config_dict(copy.deepcopy(CONDO_ONLY))
+    register = be.reversal_register(copy.deepcopy(CONDO_ONLY), compute_deterministic(spec),
+                                    run_monte_carlo(spec))
+    assert [o for o in ("condo", "house", "rent") if o in CONDO_ONLY] == ["condo"]
+    assert register.exact == () and register.estimated == ()
+    assert register.no_distance_reason == "fewer than two options are priced"
+
+
+def test_a_key_the_loader_refuses_at_the_far_end_is_named_as_that(monkeypatch):
+    """The empty register never calls a refused probe a key that moved
+    nothing: the loader's refusal is named as the loader's."""
+    raw = copy.deepcopy(INERT)
+    real_load_at = be.load_at
+
+    def refuse_far_end(doc, key, value):
+        if key == "condo.mortgage_rate" and value == be.reversal_bracket(key)[1]:
+            raise be.ConfigValidationError("a refusal the test put there")
+        return real_load_at(doc, key, value)
+
+    monkeypatch.setattr(be, "load_at", refuse_far_end)
+    spec = load_config_dict(raw)
+    register = be.reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
+    reason = register.no_distance_reason
+    assert register.no_distance_code == "not_admitted"
+    assert reason == ("this config states condo.mortgage_rate, and the loader refuses it "
+                      "at the far end of its bracket")
+
+
+
+
+def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the_noise():
+    """`_identification` names a boundary identified when the smallest
+    bracket-wide move of a watched probability exceeds `2·SE` at the
+    boundary, and not otherwise. Constructed on both sides of the line: a
+    move between 1 and 2 times the noise is identified, a move at or under
+    it is not, and the reason printed for the latter carries both figures.
+    *Kills it:* comparing against any multiple of the noise but one (a move
+    of 1.5 noise refused, or one of 0.75 noise admitted), or `>=`."""
+    paths = 400
+    at = 0.5
+    noise = 2.0 * math.sqrt(at * (1.0 - at) / paths)
+
+    def record(low, high):
+        probs = {"lo": {"condo": low}, "hi": {"condo": high}, "at": {"condo": at}}
+        return be._identification("best", {"was": "condo", "becomes": "house"},
+                                  probs, "condo", paths)
+
+    for factor in (1.5, 1.01, 1.99):
+        got = record(0.2, 0.2 + factor * noise)
+        assert got["identified"] is True, factor
+        assert got["two_se"] == noise and got["why"] is None
+    for factor in (0.75, 0.5, 0.0):
+        got = record(0.2, 0.2 + factor * noise)
+        assert got["identified"] is False, factor
+        assert (f"move by {got['delta_p']:.4f}, not more than 2 s.e. at the boundary "
+                f"({noise:.4f}) on {paths} paths") in got["why"]
+    assert record(0.0, noise)["identified"] is False
