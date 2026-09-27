@@ -57,6 +57,7 @@ there is none.
 from __future__ import annotations
 
 import dataclasses
+from decimal import ROUND_CEILING, Decimal
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -98,6 +99,7 @@ __all__ = [
     "decompose",
     "CheckFailed",
     "signed_dollars",
+    "ceiled_figure",
     "margin_per_path",
     "measure_channels",
     "ChannelMeasurement",
@@ -168,6 +170,17 @@ def signed_dollars(value: float, places: int = 0) -> str:
     if float(value) < 0.0 and float(text.replace(",", "")) != 0.0:
         return f"-${text}"
     return f"${text}"
+
+
+def ceiled_figure(value: float, digits: int, grouping: str = "") -> str:
+    """A positive upper bound at `digits` significant figures, taken UPWARD
+    on the float's exact decimal value, so the printed figure is never below
+    the value it stands for and a sentence that says no move exceeded it, or
+    that a move was up to it, holds at the figure printed. `grouping` is the
+    format's thousands separator (`","`), or none."""
+    exact = Decimal(value)
+    step = Decimal(1).scaleb(exact.adjusted() - (digits - 1))
+    return f"{float(exact.quantize(step, rounding=ROUND_CEILING)):{grouping}.{digits}g}"
 
 
 # ---------------------------------------------------------------------------
@@ -288,8 +301,8 @@ def _liveness(base, redraws: Dict[int, object], threshold: float,
         raise CheckFailed(
             "income_moved",
             f"re-drawing the income stream moved an option's present value on these "
-            f"{int(paths):,} futures by up to ${moves[INCOME_STREAM_ID]:.3g}, above "
-            f"${threshold:.3g}")
+            f"{int(paths):,} futures by up to ${ceiled_figure(moves[INCOME_STREAM_ID], 3)}, "
+            f"above ${threshold:.3g}")
     return moves, moving
 
 
@@ -403,8 +416,8 @@ def _refusal_before_pricing(spec, mc, verdict, paths: int) -> Optional[Decomposi
         # false about the run it just made.
         return _refuse(
             "too_few_futures",
-            f"{paths:,} futures were asked for, below the minimum of "
-            f"{MIN_INTERVALLED_FUTURES}",
+            f"{paths:,} {'future was' if paths == 1 else 'futures were'} asked for, "
+            f"below the minimum of {MIN_INTERVALLED_FUTURES}",
         )
     if paths > EVALUATION_CEILING:
         # `A` is priced whatever else happens, and it is where the drawing
@@ -465,10 +478,13 @@ def _priced(spec) -> Tuple[str, ...]:
 _CHANNEL_OPTIONS: Dict[int, Tuple[str, ...]] = {
     2: ("condo", "house"), 3: ("condo",), 4: ("house",), 5: ("rent",), 6: ("rent",)}
 
-# On the economy's and the market's rows, the `simulation.*` sizing keys that
-# size one option's draws. Any other key on those rows is under an option's
-# own section, which is that option's, or sizes a draw every option's
-# simulation reads.
+# On the economy's and the market's rows, the `simulation.*` sizing keys whose
+# draws some options' simulations read and others' do not, and the options
+# that read them: a correlation onto one option's shock, and the shock it
+# pulls, are that option's; the market's value volatility sizes one draw the
+# condo's and the house's simulations both read and the renter's does not.
+# Any other key on those rows is under an option's own section, which is that
+# option's, or sizes a draw every option's simulation reads.
 _SIMULATION_KEY_OPTIONS: Dict[str, Tuple[str, ...]] = {
     "simulation.corr_inflation_condo": ("condo",),
     "simulation.corr_inflation_house": ("house",),
@@ -521,9 +537,10 @@ def width_keys(spec, channel_id: int) -> Tuple[Tuple[str, Optional[str]], ...]:
     """`(key, pulled by)` for every width on channel `channel_id`'s row — the
     ONE home of which keys a row names (§0.1 item 53): the channel's sizing
     keys (`CHANNELS`) that the config states or the run defaulted, for an
-    option this run prices (`sized_options`), and on the economy's row, after
-    each correlation among them, the keys of the shocks it pulls under the
-    same rule. `pulled by` is that correlation, or None.
+    option this run prices (`sized_options`), in `CHANNELS`' order; then, on
+    the economy's row, after all of those, the keys of the shocks its
+    correlations among them pull, under the same rule, in the order of the
+    correlations that pull them. `pulled by` is that correlation, or None.
 
     Nothing here asks whether a draw fires: a hazard of zero, an events list
     with no entry, a cost line no option holds are all sizing inputs as the
@@ -866,7 +883,7 @@ def _freeze_leak(level: LevelRegister) -> DecompositionRefusal:
     return _refuse(
         "freeze_leak",
         f"with every channel frozen, the margins of the {level.paths:,} paths "
-        f"differ by up to ${level.all_frozen_path_spread:,.6g}",
+        f"differ by up to ${ceiled_figure(level.all_frozen_path_spread, 6, ',')}",
     )
 
 

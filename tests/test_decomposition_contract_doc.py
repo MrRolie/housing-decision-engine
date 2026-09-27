@@ -40,7 +40,8 @@ from tests import test_decomposition_sentences as sentences
 from tests.decomposition_oracles import freeze_moves, oracle_drawn, oracle_moves, threshold
 from tests.decomposition_runs import (
     CONDO_ONLY, CONTRACT, CRASH_EVERY_YEAR, FIXTURE, INCOME, INCOME_ONLY, MONTREAL, MORTGAGE,
-    INCOME_ONE_CHANNEL, NEAR_ALL, NO_REACH, PRIOR_NO_RENT, RARE2, RARE_RESET_ONE, RARE_RESET_THREE, REPO,
+    INCOME_ONE_CHANNEL, NEAR_ALL, NO_REACH, PRIOR_NO_CONDO, PRIOR_NO_HOUSE,
+    PRIOR_NO_RENT, RARE2, RARE_RESET_ONE, RARE_RESET_THREE, REPO,
     THIRD_FAR, Run, _block_text, _cli, _load, _strict, corpus, force_income_move, untag,
     HAZARD_ONLY, CORRELATION_UNPRICED_CONDO,
     CORRELATION_UNPRICED_HOUSE, CORRELATIONS_PULL_NOTHING, RENTER_LINE_DRAWN, OWNED_LINE,
@@ -151,13 +152,225 @@ def _refusal(tmp_path, raw, *extra):
 # The section's own frame
 # ---------------------------------------------------------------------------
 
-@claims("This section is the one prose home for the block",
-        "checks each sentence here against a run",
+@claims("checks each sentence here against a run",
         "Design record:")
 def test_the_frame_points_at_files_that_exist():
     assert pathlib.Path(__file__).name == "test_decomposition_contract_doc.py"
     assert (REPO / "docs" / "specs" / "2026-09-22-which-risk-decides-it.md").is_file()
     assert "test_decomposition_contract_doc.py" in _section()
+
+
+# Where the contract says what each key of the block means, by where the key
+# sits: the sentence (or the sentences) that says what it holds, never a list
+# of keys alone. A key ending in `_ci` is defined by the one naming rule for
+# intervals, and an interval's `low` and `high` by the sentence on intervals.
+_STREAM = ("Where the block names a stream, `channel_id` is its id, `label` the name the "
+           "text block prints for it (the channel's `label` in `decomposition.CHANNELS`, or "
+           "`your pay drops` for the income stream), and `channel`, where it is carried, "
+           "the channel's key: the word after its id above.")
+_SPREAD_TOP = "The TOP ROW is the row with the largest `alone` point estimate"
+_LEVEL_TOP = ("The TOP ROW is the row with the largest shift in size, resolved or not, "
+              "named as in `spread`.")
+_LEADING = "It is `leading_channel_id` when it resolved"
+_UNRESOLVED_TOP = "`unresolved_top_channel_id` when it did not; the other is `null`"
+_SPREAD_REFUSAL = ("it instead carries `refusal`, whose `code` is `no_sign_variation` and whose "
+                   "`reason` states which")
+_PROVISIONAL = ("OR the same four figures as `provisional_alone`, `provisional_alone_ci`, "
+                "`provisional_with_interaction`")
+_WIDTH_FIGURE = ("`key` names that input, and `formatted` is its figure as the read-back "
+                 "prints it.")
+_SHIFT = ("and the shift, as `delta` (`resolved: true`) or `provisional_delta` "
+          "(`resolved: false`).", "The shift is the mean over those futures")
+_MEANINGS = {
+    ("", "paths"): ("`paths` is `N`.",),
+    ("", "max_paths"): ("`max_paths` is the largest `N` the budget admits",),
+    ("", "live_channel_ids"): ("`live_channel_ids` are the live channels, in id order.",),
+    ("", "mean_margin"): ("`mean_margin` and `sd_margin` are the mean and population "
+                          "standard deviation",),
+    ("", "sd_margin"): ("`mean_margin` and `sd_margin` are the mean and population "
+                        "standard deviation",),
+    ("", "spread"): ("`spread` — how the variance of `f` splits across the live channels.",),
+    ("", "level"): ("`level` — what the futures price that the central case does not.",),
+    ("", "refusal"): ("**A whole-block refusal** is one key, `refusal`, holding `code` and "
+                      "`reason`",),
+    ("refusal", "code"): ("`code` is one of:",),
+    ("refusal", "reason"): ("`reason` is the measured fact that fired the refusal",),
+    ("refusal", "channel_id"): (_STREAM,),
+    ("refusal", "channel"): (_STREAM,),
+    ("refusal", "label"): (_STREAM,),
+    ("spread", "rows"): ("`rows` holds one row per live channel, and each carries "
+                         "`channel_id`, `channel`, `label`, `resolved`, `flip`",),
+    ("spread", "interaction"): ("`interaction`, the alone shares' sum and what it leaves "
+                                "that no single channel owns",),
+    ("spread", "leading_channel_id"): (_SPREAD_TOP, _LEADING),
+    ("spread", "unresolved_top_channel_id"): (_SPREAD_TOP, _UNRESOLVED_TOP),
+    ("spread", "interaction_channel_ids"): ("`interaction_channel_ids` are the rows whose "
+                                            "`interaction_gap_ci` lies entirely above 0.",),
+    ("spread", "structural_zeros"): ("`structural_zeros[]`: `kind`, `label`, `keys`, "
+                                     "`channel_id`, `measured_paths` and `move_threshold`, "
+                                     "one row per stream",),
+    ("spread", "refusal"): (_SPREAD_REFUSAL,),
+    ("spread.refusal", "code"): (_SPREAD_REFUSAL,),
+    ("spread.refusal", "reason"): (_SPREAD_REFUSAL,),
+    ("spread.rows[]", "channel_id"): (_STREAM,),
+    ("spread.rows[]", "channel"): (_STREAM,),
+    ("spread.rows[]", "label"): (_STREAM,),
+    ("spread.rows[]", "resolved"): ("A row is `resolved: false` when either share's point "
+                                    "estimate lies outside [0, 1]",),
+    ("spread.rows[]", "alone"): ("`alone` is the channel's first-order Sobol index",),
+    ("spread.rows[]", "with_interaction"): ("`with_interaction` is its total index",),
+    ("spread.rows[]", "provisional_alone"): (_PROVISIONAL,),
+    ("spread.rows[]", "provisional_with_interaction"): (_PROVISIONAL,),
+    ("spread.rows[]", "flip"): ("`flip` is a fraction of futures, not a share",),
+    ("spread.rows[]", "interaction_gap"): ("`interaction_gap` is `with_interaction − alone` "
+                                           "on that row",),
+    ("spread.rows[]", "widths"): ("`widths[]`: `key`, `formatted`, `source`, `anchor`, "
+                                  "`note` and `tag`. A width is a sizing input of the row's "
+                                  "channel's draws",),
+    ("spread.rows[].widths[]", "key"): (_WIDTH_FIGURE,),
+    ("spread.rows[].widths[]", "formatted"): (_WIDTH_FIGURE,),
+    ("spread.rows[].widths[]", "source"): ("One the config states carries its read-back "
+                                           "class as `source`",),
+    ("spread.rows[].widths[]", "anchor"): ("`anchor` names the registry entry the figure "
+                                           "came from",),
+    ("spread.rows[].widths[]", "note"): ("On the economy row a `note` names the correlation "
+                                         "key that pulls an option's shock onto that row",),
+    ("spread.rows[].widths[]", "tag"): ("`tag` is the read-back's tag for the key",),
+    ("spread.interaction", "resolved"): ("`resolved` is true when that interval lies "
+                                         "entirely below 1",),
+    ("spread.interaction", "first_order_sum"): ("`first_order_sum` (the sum of every row's "
+                                                "`alone` point estimate",),
+    ("spread.interaction", "residual"): ("`residual` (`1 − first_order_sum`)",),
+    ("spread.structural_zeros[]", "kind"): ("`kind` is `dead_draw` on every row.",),
+    ("spread.structural_zeros[]", "label"): (_STREAM,),
+    ("spread.structural_zeros[]", "channel_id"): (_STREAM, "(`channel_id`: a channel, or 7 "
+                                                           "for the income stream)"),
+    ("spread.structural_zeros[]", "keys"): ("`keys` are the keys of the stream's widths",),
+    ("spread.structural_zeros[]", "measured_paths"): ("that drew on the block's "
+                                                      "`measured_paths` futures",),
+    ("spread.structural_zeros[]", "move_threshold"): ("whose re-draw moved no priced "
+                                                      "option's present value on them by "
+                                                      "more than `move_threshold`",),
+    ("level", "rows"): ("`rows` holds one row per live channel, and each carries "
+                        "`channel_id`, `channel`, `label`, `resolved`, `se`",),
+    ("level", "paths"): ("The level register prices the first `min(N, 2000)` of those "
+                         "futures (`level.paths`).",),
+    ("level", "prob_best_base"): ("`prob_best_base` and `futures_margin` are the fraction "
+                                  "of the level's futures with `f > 0` and the mean of `f` "
+                                  "over them.",),
+    ("level", "futures_margin"): ("`prob_best_base` and `futures_margin` are the fraction "
+                                  "of the level's futures with `f > 0` and the mean of `f` "
+                                  "over them.",),
+    ("level", "all_frozen_margin"): ("`all_frozen_margin` is the margin every path prices "
+                                     "with every channel frozen.",),
+    ("level", "all_frozen_path_spread"): ("`all_frozen_path_spread` is how far those paths "
+                                          "differ from each other",),
+    ("level", "all_frozen_deviation"): ("`all_frozen_deviation` is `all_frozen_margin` "
+                                        "against `verdict.margin_pv`.",),
+    ("level", "accounted_for"): ("`accounted_for` is the sum of every row's shift",),
+    ("level", "leading_channel_id"): (_LEVEL_TOP, _LEADING),
+    ("level", "unresolved_top_channel_id"): (_LEVEL_TOP, _UNRESOLVED_TOP),
+    ("level.rows[]", "channel_id"): (_STREAM,),
+    ("level.rows[]", "channel"): (_STREAM,),
+    ("level.rows[]", "label"): (_STREAM,),
+    ("level.rows[]", "resolved"): ("`label`, `resolved`, `se`, `prob_best_frozen`, and the "
+                                   "shift",
+                                   "A row resolves when the size of its shift exceeds twice "
+                                   "its `se`."),
+    ("level.rows[]", "se"): ("`se` is the paired standard error of that difference",),
+    ("level.rows[]", "prob_best_frozen"): ("`prob_best_frozen` the fraction with `f > 0` "
+                                           "once frozen.",),
+    ("level.rows[]", "delta"): _SHIFT,
+    ("level.rows[]", "provisional_delta"): _SHIFT,
+    ("*", "*_ci"): ("A key ending in `_ci` is the interval on the figure its name begins "
+                    "with.",),
+    ("*_ci", "low"): ("Every interval is an object with `low` and `high`: a 95% percentile "
+                      "interval",),
+    ("*_ci", "high"): ("Every interval is an object with `low` and `high`: a 95% percentile "
+                       "interval",),
+}
+
+
+def _emitted(node, parent="", out=None):
+    """`(where it sits, key)` for every key of one `decomposition` object, a
+    `*_ci` key filed under the naming rule and its bounds under intervals."""
+    out = set() if out is None else out
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key.endswith("_ci"):
+                assert key[:-3] in node, (parent, key)   # the figure it is the interval on
+                out.add(("*", "*_ci"))
+                _emitted(value, "*_ci", out)
+            else:
+                out.add((parent, key))
+                _emitted(value, f"{parent}.{key}".lstrip("."), out)
+    elif isinstance(node, list):
+        for value in node:
+            _emitted(value, f"{parent}[]", out)
+    return out
+
+
+def _named_streams(node):
+    """Every object of the block that names a stream by `channel_id`."""
+    if isinstance(node, dict):
+        if "channel_id" in node:
+            yield node
+        for value in node.values():
+            yield from _named_streams(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _named_streams(value)
+
+
+@claims("This section is the one prose home for the block: what every key means",
+        _STREAM,
+        "`decomposition.StructuralZero` also has a `stated_path` kind and a")
+def test_the_contract_says_what_every_key_the_block_emits_means(tmp_path, runs):
+    """Enumerated: every key of `--json`'s `decomposition` across the corpus and
+    two whole-block refusals, by where it sits, has a sentence of this section
+    that says what it holds (`_MEANINGS`), and the section still carries each
+    such sentence; and every meaning listed is a key some run emits. A stream's
+    `channel` and `label` are the ones `decomposition.CHANNELS` holds for its
+    id, or the income stream's own label; and the reversal library's
+    `stated_path` kind and `reversal_key` field, which the types still carry,
+    are never emitted.
+    *Kills it:* a key the block emits that no sentence defines (a
+    `reversal_key` put back, a new key with no meaning written), a defining
+    sentence cut from the contract, or a row naming its stream by another
+    stream's key or label."""
+    section = " ".join(_section().split())
+    documents = [run.block for run in runs.values()]
+    for raw in (_load(MONTREAL), _load(INCOME)):
+        doc, _, _, _ = _refusal(tmp_path, raw)
+        documents.append(doc)
+    emitted = set()
+    for document in documents:
+        _emitted(document, out=emitted)
+    assert emitted - set(_MEANINGS) == set()
+    assert set(_MEANINGS) - emitted == set()
+    for (parent, key), fragments in _MEANINGS.items():
+        assert all(" ".join(f.split()) in section for f in fragments), (parent, key)
+        pattern = r"`_ci`" if key == "*_ci" else rf"`(?:[\w.]+\.)?{re.escape(key)}(?:`|\[\]|:)"
+        assert any(re.search(pattern, f) for f in fragments), (parent, key)
+    # each stream named by its own key and label
+    named = [node for document in documents for node in _named_streams(document)]
+    assert {node["channel_id"] for node in named} >= {dc.INCOME_STREAM_ID} | set(range(7))
+    assert documents[-1]["refusal"]["code"] == "one_channel" and \
+        "channel" in documents[-1]["refusal"]
+    for node in named:
+        if node["channel_id"] == dc.INCOME_STREAM_ID:
+            assert node["label"] == dc.INCOME_STREAM_LABEL and "channel" not in node
+            continue
+        entry = dc.channel(node["channel_id"])
+        assert node["label"] == entry.label, node
+        assert node.get("channel", entry.key) == entry.key, node
+    # the reversal library's members of the type, and none of them emitted
+    assert "stated_path" in dc.STRUCTURAL_ZERO_KINDS
+    assert "reversal_key" in {f.name for f in dataclasses.fields(dc.StructuralZero)}
+    assert all(("reversal_key" not in key) for _, key in emitted)
+    zeros = [zero for document in documents
+             for zero in document.get("spread", {}).get("structural_zeros", ())]
+    assert zeros and {zero["kind"] for zero in zeros} == {"dead_draw"}
 
 
 # ---------------------------------------------------------------------------
@@ -398,20 +611,31 @@ def test_budget(tmp_path, runs):
 
 @claims("| `too_few_futures` |")
 def test_too_few_futures(tmp_path):
-    doc, _, _, _ = _refusal(tmp_path, _load(MORTGAGE), "39")
+    doc, text, _, _ = _refusal(tmp_path, _load(MORTGAGE), "39")
     assert doc["refusal"] == {"code": "too_few_futures",
                               "reason": "39 futures were asked for, below the minimum of 40"}
+    assert text == ("which risk decides it — not split (too_few_futures): 39 futures were "
+                    "asked for, below the minimum of 40")
+    doc, text, _, _ = _refusal(tmp_path, _load(MORTGAGE), "1")
+    assert doc["refusal"] == {"code": "too_few_futures",
+                              "reason": "1 future was asked for, below the minimum of 40"}
+    assert text == ("which risk decides it — not split (too_few_futures): 1 future was "
+                    "asked for, below the minimum of 40")
     doc, _, _, _ = _refusal(tmp_path, _load(MORTGAGE), "40")
     assert "refusal" not in doc and doc["paths"] == 40
 
 
-@claims("| `freeze_leak` |", "| `identity_failed` |")
+@claims("| `freeze_leak` |", "| `identity_failed` |",
+        "how far apart a `freeze_leak` reason says the paths are at six")
 def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
     """Neither fires on a correct engine, so each is forced through the CLI on
     the fixture at 40 paths with the real engine and one run moved: a mask
     that lets one channel escape (the paths then differ), and the all-frozen
     run shifted by one constant (they agree, off the central case). Each
-    reason is re-derived from that same run."""
+    reason is re-derived from that same run; the leak's spread prints at six
+    significant figures, taken upward.
+    *Kills it:* that spread printed to nearest, which lands below it here, or
+    a step above its ceiling."""
     from tests.test_decomposition_run import TestTheFreezeIdentity, TestTheIdentityIsGated
     fixture = runs["fixture"]
     det, _, verdict = fixture.inputs()
@@ -423,9 +647,14 @@ def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
                                     verdict.best)
     spread = float(np.max(np.abs(frozen - frozen[0])))
     assert spread > 0.0
-    assert _strict(out)["decomposition"] == {"refusal": {"code": "freeze_leak", "reason": (
-        f"with every channel frozen, the margins of the 40 paths differ by up to "
-        f"${spread:,.6g}")}}
+    reason = _strict(out)["decomposition"]["refusal"]["reason"]
+    assert _strict(out)["decomposition"] == {"refusal": {"code": "freeze_leak",
+                                                         "reason": reason}}
+    printed = re.fullmatch(r"with every channel frozen, the margins of the 40 paths differ "
+                           r"by up to \$(?P<spread>[\d,.]+(?:e[+-]\d+)?)", reason)["spread"]
+    _taken_upward(printed, spread, 6)
+    # a spread whose nearest figure at six places lies below it
+    assert decimal.Decimal(f"{spread:.6g}") < decimal.Decimal(spread)
     with monkeypatch.context() as patched:
         TestTheIdentityIsGated._offset_all_frozen(patched, 0.01)
         code, out, _ = _cli(fixture.path, "--decompose=40", "--json")
@@ -441,14 +670,27 @@ def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
         f"above the ${budget:.3g} this check allows")}}
 
 
-@claims("| `income_moved` |")
+def _taken_upward(printed, value, digits):
+    """`printed` is `value` at `digits` significant figures, taken upward: no
+    more digits, never below it, and less than one printed step above it."""
+    figure = decimal.Decimal(printed.replace(",", ""))
+    assert len(figure.normalize().as_tuple().digits) <= digits, printed
+    assert figure >= decimal.Decimal(value), (printed, value)
+    assert figure - decimal.Decimal(1).scaleb(figure.adjusted() - (digits - 1)) \
+        < decimal.Decimal(value), (printed, value)
+
+
+@claims("| `income_moved` |", "`income_moved` reason states print at three significant figures")
 def test_income_moved(tmp_path, monkeypatch):
     """Forced, as no correct engine moves a present value by re-drawing the
     income stream: its re-draw handed back as `A`'s own present values moved
     by one figure (`force_income_move`). Past the allowance the block refuses,
-    stating the count of futures, that move and the allowance; at half the
-    allowance it does not, and the block is the one the run prints unforced.
-    *Kills it:* the check deleted, or widened to a move inside the allowance."""
+    stating the count of futures, that move taken upward at three significant
+    figures, and the allowance; at half the allowance it does not, and the
+    block is the one the run prints unforced. The move forced is one whose
+    nearest figure at three places lies below it.
+    *Kills it:* the check deleted, or widened to a move inside the allowance,
+    or the largest move printed to nearest or a step above its ceiling."""
     raw = _load(FIXTURE)
     spec = load_config_dict(raw)
     det, mc = compute_deterministic_and_mc(spec)
@@ -457,13 +699,20 @@ def test_income_moved(tmp_path, monkeypatch):
     assert "refusal" not in unforced
     assert dc.INCOME_STREAM_ID in [z["channel_id"] for z in
                                    unforced["spread"]["structural_zeros"]]
-    with monkeypatch.context() as patched:
-        force_income_move(patched, 1000.0)
-        doc, text, _, _ = _refusal(tmp_path, raw, "40")
-    reason = (f"re-drawing the income stream moved an option's present value on these 40 "
-              f"futures by up to $1e+03, above ${allowance:.3g}")
-    assert doc == {"refusal": {"code": "income_moved", "reason": reason}}
-    assert text == f"which risk decides it — not split (income_moved): {reason}"
+    base = dr._run(dr._spec_at(spec, 40), dr.MATRIX_A)
+    # 1,234.5 prints as 1.23e+03 to nearest, below the move; 1,000 is exact
+    for forced, printed in ((1234.5, "1.24e+03"), (1000.0, "1e+03")):
+        with monkeypatch.context() as patched:
+            force_income_move(patched, forced)
+            doc, text, _, _ = _refusal(tmp_path, raw, "40")
+        reason = (f"re-drawing the income stream moved an option's present value on these "
+                  f"40 futures by up to ${printed}, above ${allowance:.3g}")
+        assert doc == {"refusal": {"code": "income_moved", "reason": reason}}
+        assert text == f"which risk decides it — not split (income_moved): {reason}"
+        moved = max(float(np.max(np.abs((np.asarray(getattr(base, o).pvs) + forced)
+                                        - np.asarray(getattr(base, o).pvs))))
+                    for o in ("condo", "house", "rent"))
+        _taken_upward(printed, moved, 3)
     with monkeypatch.context() as patched:
         force_income_move(patched, allowance / 2)
         doc, _, _, _ = _refusal(tmp_path, raw, "40")
@@ -510,22 +759,30 @@ def test_degenerate_resample(tmp_path, runs):
     assert "refusal" not in runs["rare2"].block and runs["rare2"].block["paths"] == 2000
 
 
-@claims("The run's report prints in full above it, and the rest of the `--json`")
+@claims("The run's report still prints in full, with exit 0: in the text")
 def test_a_whole_block_refusal_prints_beside_the_report(tmp_path):
     """On a refusal decided before pricing, one decided by the re-draws, and
     one a check that cannot pass returns (a bootstrap resample holding one
     margin): the text is the run's own report, unchanged, with the refusal
-    line after it, and the document is the run's own with `decomposition`
-    added, each with exit 0.
+    line inserted above its `READ-BACK` block, which still prints last; under
+    `--quiet`, which prints no `READ-BACK` block, the refusal line follows the
+    report; and the document is the run's own with `decomposition` added,
+    each with exit 0.
     *Kills it:* a refusal that stops the report, exits non-zero, or drops a
-    key of the document."""
+    key of the document, or a refusal line printed below the `READ-BACK`
+    block."""
+    from hde.serialization import READ_BACK_HEADER
     path = tmp_path / "rare2.yaml"
     path.write_text(yaml.safe_dump(RARE2, sort_keys=False), encoding="utf-8")
     for source, extra, code in ((MONTREAL, (), "no_futures"), (INCOME, (), "one_channel"),
                                 (path, ("400",), "degenerate_resample")):
-        status, report, _ = _cli(source, "-q")
+        status, report, _ = _cli(source)
         assert status == 0
-        status, text, _ = _cli(source, "--decompose", *extra, "-q")
+        status, text, _ = _cli(source, "--decompose", *extra)
+        assert status == 0
+        status, quiet_report, _ = _cli(source, "-q")
+        assert status == 0
+        status, quiet_text, _ = _cli(source, "--decompose", *extra, "-q")
         assert status == 0
         status, bare, _ = _cli(source, "--json")
         assert status == 0
@@ -535,8 +792,12 @@ def test_a_whole_block_refusal_prints_beside_the_report(tmp_path):
         refusal = doc.pop("decomposition")["refusal"]
         assert refusal["code"] == code
         assert doc == _strict(bare)
-        assert text == (f"{report}\nwhich risk decides it — not split ({code}): "
-                        f"{refusal['reason']}\n")
+        line = f"which risk decides it — not split ({code}): {refusal['reason']}"
+        above, header, below = report.partition(f"\n{READ_BACK_HEADER}\n")
+        assert header and below.strip(), code
+        assert text == f"{above}\n{line}\n{header}{below}"
+        assert READ_BACK_HEADER not in quiet_report
+        assert quiet_text == f"{quiet_report}\n{line}\n"
 
 
 def test_an_exception_that_is_no_check_reaches_the_caller(monkeypatch):
@@ -797,9 +1058,13 @@ def test_the_spread_keys_and_its_refusal(runs):
                    for z in run.block["spread"]["structural_zeros"])
 
 
-@claims("Each row carries `channel_id`, `channel`, `label`, `resolved`, `flip`",
+@claims("`label`, `resolved`, `flip`, `flip_ci`, `widths`",
         "(`resolved: false`), never both.")
 def test_a_row_carries_one_set_of_share_keys(runs):
+    for run in runs.values():
+        rows = run.block["spread"].get("rows")
+        if rows is not None:
+            assert sorted(row["channel_id"] for row in rows) == run.block["live_channel_ids"]
     for name in ("fixture", "showcase", "three", "min"):
         for row in _rows(runs[name].block):
             base = {"channel_id", "channel", "label", "resolved", "flip", "flip_ci",
@@ -816,6 +1081,7 @@ def test_a_row_carries_one_set_of_share_keys(runs):
         "Neither is how often the channel changes the answer.",
         "`flip` is a fraction of futures, not a share",
         "`interaction_gap` is `with_interaction − alone` on that row, before rounding.",
+        "A key ending in `_ci` is the interval on the figure its name begins with.",
         "Every interval is an object with `low` and `high`: a 95% percentile")
 def test_the_row_figures_are_the_named_estimators_on_the_blocks_own_matrices(runs):
     run = runs["fixture"]
@@ -850,14 +1116,29 @@ def test_the_row_figures_are_the_named_estimators_on_the_blocks_own_matrices(run
         "A row is `resolved: false` when either share's point estimate lies outside",
         "its interval does not decide it, so a resolved share's interval may")
 def test_the_resolution_rule_is_the_point_rule(runs):
+    """Either share outside [0, 1] leaves the row unresolved. The
+    with-interaction half is witnessed on its own: the condo's alone share
+    inside [0, 1] beside a share with interaction above 1, where the row
+    prints both figures behind the words and, being the top row, names no
+    largest share.
+    *Kills it:* a row resolved on its alone share only, or on either share."""
     seen_negative_resolved = False
-    for name in ("fixture", "showcase", "three", "min", "advanced"):
+    for name in ("fixture", "showcase", "three", "min", "advanced", "together_above_one"):
         for row in _rows(runs[name].block):
             inside = 0.0 <= _point(row) <= 1.0 and 0.0 <= _together(row) <= 1.0
             assert row["resolved"] == inside, (name, row["channel"])
             ci = row["alone_ci"] if row["resolved"] else row["provisional_alone_ci"]
             seen_negative_resolved |= row["resolved"] and ci["low"] < 0
     assert seen_negative_resolved      # an unclamped interval below 0 on a resolved row
+    run = runs["together_above_one"]
+    (condo,) = [row for row in _rows(run.block) if row["channel"] == "condo"]
+    assert 0.0 <= _point(condo) <= 1.0 < _together(condo)
+    assert any(row["resolved"] for row in _rows(run.block))
+    assert run.block["spread"]["unresolved_top_channel_id"] == condo["channel_id"]
+    line = _table_line(run.text, "  THE SPREAD", condo["channel_id"])
+    assert re.fullmatch(rf"  {re.escape(condo['label'])} +not resolved: 0\.99 \[[^]]+\] +"
+                        r"not resolved: 1\.02 \[[^]]+\] +[\d.]+% \[[^]]+\]", line), line
+    assert "largest alone share" not in run.text
 
 
 @claims("The TOP ROW is the row with the largest `alone` point estimate",
@@ -1009,6 +1290,18 @@ def _read_back_figure(doc, key):
     return None
 
 
+def _read_back_anchor(doc, width):
+    """The registry entry the read-back says a width's figure came from: the
+    one an `anchor` source names, the one a default was read from, or none."""
+    if width["source"] == "anchor":
+        return doc["assumptions"]["sources"]["anchor"][width["key"]]
+    if width["source"] == "default":
+        (entry,) = [e for e in doc["assumptions"]["defaults_applied"]
+                    if e["key"] == width["key"]]
+        return entry["anchor"]["name"] if entry["anchor"] else None
+    return None
+
+
 def _assert_widths_enumerated(name, doc, raw):
     """Every width on every row of one run, and every dead row's keys,
     against `CHANNELS`, the read-back and the oracle's option map: the same
@@ -1028,6 +1321,7 @@ def _assert_widths_enumerated(name, doc, raw):
             assert tag is not None, (name, width["key"])
             assert width["tag"] == tag, (name, width)
             assert width["formatted"] == _read_back_figure(doc, width["key"]), (name, width)
+            assert width["anchor"] == _read_back_anchor(doc, width), (name, width)
             seen += 1
     for zero in block["spread"]["structural_zeros"]:
         if zero["channel_id"] == dc.INCOME_STREAM_ID:
@@ -1095,6 +1389,12 @@ _WIDTH_WITNESSES = {
     "prior_no_rent": (PRIOR_NO_RENT, {
         "the population": "market_scenario.path='tests/fixtures/scenario_prior_golden.json' "
                           "[assistant]; market_scenario.geography='MTL_RMR' [user]"}),
+    "prior_no_condo": (PRIOR_NO_CONDO, {
+        "the population": "market_scenario.path='tests/fixtures/scenario_prior_golden.json' "
+                          "[assistant]; market_scenario.geography='MTL_RMR' [user]"}),
+    "prior_no_house": (PRIOR_NO_HOUSE, {
+        "the population": "market_scenario.path='tests/fixtures/scenario_prior_golden.json' "
+                          "[assistant]; market_scenario.geography='MTL_RMR' [user]"}),
 }
 
 
@@ -1102,6 +1402,7 @@ _WIDTH_WITNESSES = {
         "Whether its draw fires on the run is not asked",
         "On the economy row the row's own widths come first, then the widths of the",
         "One the config states carries its read-back class as `source`",
+        "`key` names that input, and `formatted` is its figure as the read-back",
         "`tag` is the read-back's tag for the key (`serialization.read_back_tag`)")
 def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carries(tmp_path,
                                                                                  runs):
@@ -1118,7 +1419,8 @@ def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carrie
     lines lose a width), dropping the priced-option filter (M28 prints the
     condo's correlation), an option map that files a channel under another
     option (the condo row without a house loses its widths, the population's
-    under the renter loses them with no renter priced), a tag rebuilt from the
+    under the renter loses them with no renter priced, and the population's
+    under one owned option loses them beside the other alone), a tag rebuilt from the
     class (the defaults' cites vanish), or a width left out. The order is
     pinned literally on the advanced example's economy row, where each
     correlation followed by the shocks it pulls would read otherwise, and the
@@ -1199,8 +1501,8 @@ def test_the_interacting_rows(runs):
     assert seen and not runs["fixture"].block["spread"]["interaction_channel_ids"]
 
 
-@claims("`interaction`: `resolved`, `first_order_sum`",
-        "When that interval lies entirely below 1 it is")
+@claims("`interaction`, the alone shares' sum and what it leaves",
+        "`resolved` is true when that interval lies entirely below 1")
 def test_the_interaction_branches(runs):
     for name in ("fixture", "showcase", "min", "advanced"):
         spread = runs[name].block["spread"]
@@ -1228,7 +1530,7 @@ def test_the_interaction_branches(runs):
 @claims("`level` — what the futures price that the central case does not",
         "It carries `rows`, `paths`, `prob_best_base`",
         "`prob_best_base` and `futures_margin` are the fraction",
-        "Each row carries `channel_id`, `channel`, `label`, `resolved`, `se`",
+        "`label`, `resolved`, `se`, `prob_best_frozen`, and the shift",
         "The shift is the mean over those futures",
         "A row resolves when the size of its shift exceeds twice its `se`.")
 def test_the_level_register_re_derived(runs):
@@ -1241,6 +1543,9 @@ def test_the_level_register_re_derived(runs):
     spec = dr._spec_at(run.spec, m)
     best = run.doc["verdict"]["best"]
     signs = set()
+    for each in runs.values():
+        assert sorted(row["channel_id"] for row in each.block["level"]["rows"]) == \
+            each.block["live_channel_ids"]
     for row in level["rows"]:
         assert set(row) == {"channel_id", "channel", "label", "resolved", "se",
                             "prob_best_frozen", "delta" if row["resolved"] else
@@ -1480,7 +1785,7 @@ def _moved_streams(spec):
 
 @claims("**The text block** prints these figures and no sentence about them.",
         "Every line is one of four kinds: a heading; a figure row",
-        "`move_threshold` prints at three significant figures, taken upward")
+        "`move_threshold` and the largest move an")
 def test_the_text_block_holds_four_kinds_of_line(runs):
     """Every line of every render is one template of the sentence tests, and
     every template is a blank or one of four of the six kinds (§0.1 items 35

@@ -36,11 +36,10 @@ resolved cell.
 """
 from __future__ import annotations
 
-from decimal import ROUND_CEILING, Decimal
 from typing import List, Optional, Sequence, Tuple
 
 from .decomposition_math import sum_lies_above_one
-from .decomposition_run import signed_dollars
+from .decomposition_run import ceiled_figure, signed_dollars
 
 from .decomposition import (
     Decomposition,
@@ -153,9 +152,7 @@ def _ceiled_threshold(value: float) -> str:
     float's exact decimal value. The threshold is the identity's budget, which
     a row reaches only where `decomposition_math.identity_holds` held against
     it, so it is finite; it is a positive multiple of a float spacing."""
-    exact = Decimal(value)
-    step = Decimal(1).scaleb(exact.adjusted() - 2)
-    return f"{float(exact.quantize(step, rounding=ROUND_CEILING)):.3g}"
+    return ceiled_figure(value, 3)
 
 
 def _dollars(value: float) -> float:

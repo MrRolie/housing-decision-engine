@@ -364,15 +364,34 @@ RARE2 = {
 }
 
 
-def _prior_no_rent() -> dict:
-    """The showcase with no renter, and none of the renter's inputs or their
-    sources."""
+# Three options, the condo's costs dominant: on 200 futures at this seed the
+# condo's alone share lies inside [0, 1] and its share with interaction above
+# 1, so the with-interaction half of the row rule alone keeps that row
+# unresolved (spec §0.1 item 11).
+TOGETHER_ABOVE_ONE = {
+    "years": 20,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.021, "initial_value": 420000,
+              "all_cash": True, "purchase_costs": 6000, "value_growth_rate": 0.031},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.03,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 1, "house_maintenance_vol": 0.2,
+                   "rent_escalation_vol": 0.05, "condo_fee_vol": 0.1},
+}
+
+
+def _prior_without(option: str, simulation_keys: tuple) -> dict:
+    """The showcase with no `option`, and none of that option's inputs or
+    their sources."""
     raw = yaml.safe_load(SHOWCASE.read_text(encoding="utf-8"))
-    renter = ("simulation.rent_escalation_vol", "simulation.investment_return_vol")
-    del raw["rent"]
+    del raw[option]
     raw["sources"] = {key: source for key, source in raw["sources"].items()
-                      if not key.startswith("rent.") and key not in renter}
-    for key in renter:
+                      if not key.startswith(f"{option}.") and key not in simulation_keys}
+    for key in simulation_keys:
         raw["simulation"].pop(key.split(".", 1)[1], None)
     return raw
 
@@ -380,7 +399,14 @@ def _prior_no_rent() -> dict:
 # The population prior with no renter priced: its rows reach the condo's and
 # the house's values and the renter's none, so its widths print (§0.1 item 53's
 # option map).
-PRIOR_NO_RENT = _prior_no_rent()
+PRIOR_NO_RENT = _prior_without(
+    "rent", ("simulation.rent_escalation_vol", "simulation.investment_return_vol"))
+# The population prior beside ONE owned option, each way: its rows reach both
+# owned options' values, so its widths print beside either one alone.
+PRIOR_NO_CONDO = _prior_without(
+    "condo", ("simulation.condo_fee_vol", "simulation.corr_inflation_condo"))
+PRIOR_NO_HOUSE = _prior_without(
+    "house", ("simulation.house_maintenance_vol", "simulation.corr_inflation_house"))
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +545,7 @@ CORPUS = {
     # shares' sum lies entirely above 1, so no residual clause prints.
     "fixture_own": (FIXTURE,),
     "rare2": (RARE2, "2000"),
+    "together_above_one": (TOGETHER_ABOVE_ONE, "200"),
 }
 
 

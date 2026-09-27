@@ -151,6 +151,7 @@ REFUSALS = {
     # more futures than the ceiling, refused before anything is priced
     "budget_n": (FIXTURE, "250001"),
     "too_few": (MORTGAGE, "39"),
+    "too_few_one": (MORTGAGE, "1"),
     # a bootstrap resample holding one value of the margin
     "degenerate_resample": (RARE2, "400"),
 }
@@ -763,7 +764,8 @@ def test_the_line_says_what_is_so(template):
 REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in {
     # whole-block refusals
     "NO_FUTURES": r"^this run has no futures$",
-    "TOO_FEW": r"^(?P<n>[\d,]+) futures were asked for, below the minimum of (?P<min>\d+)$",
+    "TOO_FEW": (r"^(?P<n>[\d,]+) (?P<noun>future was|futures were) asked for, below the "
+                r"minimum of (?P<min>\d+)$"),
     "SINGLE_OPTION": r"^this run prices one option$",
     "ONE_CHANNEL": rf"^one channel is live on these (?P<n>[\d,]+) futures: (?P<label>{LABEL})$",
     "NO_SPREAD_UNREACHED": r"^no channel is live on these (?P<n>[\d,]+) futures$",
@@ -882,6 +884,7 @@ def _r_too_few(render, m, node):
     n = _whole(m["n"])
     assert n == int(render.extra[0])
     assert int(m["min"]) == dr.MIN_INTERVALLED_FUTURES and n < dr.MIN_INTERVALLED_FUTURES
+    assert (m["noun"] == "future was") == (n == 1)
 
 
 def _r_single_option(render, m, node):

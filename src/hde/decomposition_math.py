@@ -3,10 +3,15 @@ column, the bootstrap that puts an interval on each figure, and the level
 register's paired statistics.
 
 Pure numpy. This module imports nothing from the engine — no spec, no config,
-no simulation, no result type. It takes arrays of the decision margin `f`
-evaluated on matched sets of futures and returns plain floats, tuples and
-arrays. Each function's docstring carries its own formula; what the figures
-mean to a reader of the block is `docs/reference/API_CONTRACT.md`'s.
+no simulation, no result type. Its functions take arrays of the decision
+margin `f` evaluated on matched sets of futures, figures and counts read off
+them, and the bootstrap's settings (the run's seed, the resample count, the
+confidence); the all-frozen identity's two (`identity_ulp_budget`,
+`identity_holds`) take what that identity is checked on: the magnitudes its
+budget is scaled to, the budget, and the deviation held to it. They return
+plain floats, booleans, tuples and arrays, or None.
+Each function's docstring carries its own formula; what the figures mean to a
+reader of the block is `docs/reference/API_CONTRACT.md`'s.
 
 ONE AMENDMENT TO THE DESIGN RECORD'S FORMULA BLOCK, ruled in its section 0.1
 item 13 and carried here: the first-order numerator's `f(B)` is CENTRED by
@@ -19,8 +24,12 @@ THE THREE TABLES, named once:
     f_ab   `f` on A with ONE channel's draws taken from B     shape (k, n)
            Row `c` differs from `f_a` in channel `c` and in nothing else.
 
-Every function here is a statement about those tables and nothing else: it
-cannot know which channel is which, and it never decides what prints.
+No function here is given a channel's id or name, so none can know which
+channel is which. The resolution rules (`share_is_resolved`,
+`interaction_is_resolved`, `level_is_resolved`, `level_resolved_mask`,
+`residual_interaction`, `sum_lies_above_one`) do decide what prints: whether a
+figure prints as resolved, and whether a residual prints at all. How a line
+reads is its caller's.
 
 TWO KINDS OF NUMBER, and conflating them is this feature's headline failure:
 a SHARE OF THE SPREAD's variance (`first_order_indices`,
@@ -246,8 +255,10 @@ def sign_flip_fraction_of_futures(f_a: object, f_ab: object) -> Array:
 def sum_first_order_shares(first_order: object) -> float:
     """Sigma S_c — the first-order shares, added up.
 
-    The only sum in this module, and it takes first-order shares only. Its value
-    against 1 is what `residual_interaction` branches on.
+    It takes first-order shares only. `bootstrap_spread_intervals` adds up each
+    resample's first-order shares the same way for the interval on this sum;
+    `residual_interaction` branches on that interval against 1, and subtracts
+    this sum from 1.
     """
     arr = np.asarray(first_order, dtype=np.float64)
     if arr.ndim != 1:

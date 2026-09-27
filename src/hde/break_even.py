@@ -1218,7 +1218,7 @@ def format_break_even(result: Dict[str, Any]) -> str:
 # and one carrying dashes and concludes renewal was weighed and found
 # irrelevant, when the verdict's own winner can change inside the bracket the
 # engine already uses for a contract rate (the fixture's does, pinned in
-# `tests/test_decomposition_run.py`).
+# `tests/test_reversal_register.py::TestTheThreeFiguresOnTheFixture`).
 # ---------------------------------------------------------------------------
 
 # The financing-leg keys, per owned option. Candidates are inputs the config

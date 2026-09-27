@@ -197,8 +197,9 @@ reads it: a figure that is not a finite number is emitted as `null`, never as
 with no register keys beside it; `one_channel` also carries `channel_id`,
 `channel` and `label`. `reason` is the measured fact that fired the refusal,
 and the text block prints `which risk decides it — not split (<code>):
-<reason>`. The run's report prints in full above it, and the rest of the
-`--json` document beside it, with exit 0. `code` is one of:
+<reason>`. The run's report still prints in full, with exit 0: in the text
+above it, except the `READ-BACK` block, which prints below it, last; under
+`--json`, as the rest of the document beside it. `code` is one of:
 
 | `code` | Fires when | `reason` states |
 |---|---|---|
@@ -226,7 +227,11 @@ level register is priced.
 **Draws and live channels, measured on the block's own futures.** The streams
 are the seven channels — ids 0 economy, 1 market, 2 population, 3 condo, 4
 house, 5 shelter, 6 portfolio (`decomposition.CHANNELS`) — and the income
-stream, id 7, which is not a channel. A stream draws when its generator
+stream, id 7, which is not a channel. Where the block names a stream,
+`channel_id` is its id, `label` the name the text block prints for it (the
+channel's `label` in `decomposition.CHANNELS`, or `your pay drops` for the
+income stream), and `channel`, where it is carried, the channel's key: the
+word after its id above. A stream draws when its generator
 advances while the block's `N` futures are priced. Every stream that draws is
 re-drawn alone on the same futures, and a channel is live when some priced
 option's present value, on some future, differs between the two by more than
@@ -256,14 +261,15 @@ in; the document's top-level `verdict` is its one home.
 `spread` — how the variance of `f` splits across the live channels. It carries
 `rows`, `interaction`, `leading_channel_id`, `unresolved_top_channel_id`,
 `interaction_channel_ids` and `structural_zeros`. When `f > 0` on every one of
-the block's futures, or on none of them, it instead carries `refusal`, with
-code `no_sign_variation` and a `reason` stating which, and `structural_zeros`,
-and no `rows`; `level` is still present.
+the block's futures, or on none of them, it instead carries `refusal`, whose
+`code` is `no_sign_variation` and whose `reason` states which, and
+`structural_zeros`, and no `rows`; `level` is still present.
 
-- Each row carries `channel_id`, `channel`, `label`, `resolved`, `flip`,
-  `flip_ci`, `widths`, `interaction_gap`, `interaction_gap_ci`, and EITHER
-  `alone`, `alone_ci`, `with_interaction`, `with_interaction_ci`
-  (`resolved: true`) OR `provisional_alone`, `provisional_alone_ci`,
+- `rows` holds one row per live channel, and each carries `channel_id`,
+  `channel`, `label`, `resolved`, `flip`, `flip_ci`, `widths`,
+  `interaction_gap`, `interaction_gap_ci`, and EITHER `alone`, `alone_ci`,
+  `with_interaction`, `with_interaction_ci` (`resolved: true`) OR the same
+  four figures as `provisional_alone`, `provisional_alone_ci`,
   `provisional_with_interaction`, `provisional_with_interaction_ci`
   (`resolved: false`), never both.
 - `alone` is the channel's first-order Sobol index
@@ -278,7 +284,8 @@ and no `rows`; `level` is still present.
 - `interaction_gap` is `with_interaction − alone` on that row, before rounding.
   `interaction_channel_ids` are the rows whose `interaction_gap_ci` lies
   entirely above 0.
-- Every interval is an object with `low` and `high`: a 95% percentile interval
+- A key ending in `_ci` is the interval on the figure its name begins with.
+  Every interval is an object with `low` and `high`: a 95% percentile interval
   from one 300-resample bootstrap over path indices, never clamped into
   [0, 1].
 - A row is `resolved: false` when either share's point estimate lies outside
@@ -291,14 +298,17 @@ and no `rows`; `level` is still present.
   width is a sizing input of the row's channel's draws (its `sizing_keys` in
   `decomposition.CHANNELS`) that the config states or that the run defaulted
   (`assumptions.defaults_applied`, the read-back's `defaults applied:` line),
-  for an option this run prices (`decomposition_run.width_keys`). Whether its
-  draw fires on the run is not asked: a hazard of 0 prints as its figure. On
-  the economy row the row's own widths come first, then the widths of the
-  option shocks its correlations pull, by the same rule, in the order of the
-  correlations that pull them. One the config states carries its read-back
-  class as `source` (`user`, `assistant`, `anchor` or `unattributed`); one the
-  engine filled in carries `default`, with `anchor` naming the registry entry
-  it came from. `tag` is the read-back's tag for the key
+  for an option this run prices (`decomposition_run.width_keys`). `key` names
+  that input, and `formatted` is its figure as the read-back prints it.
+  Whether its draw fires on the run is not asked: a hazard of 0 prints as its
+  figure. On the economy row the row's own widths come first, then the widths
+  of the option shocks its correlations pull, by the same rule, in the order
+  of the correlations that pull them. One the config states carries its
+  read-back class as `source` (`user`, `assistant`, `anchor` or
+  `unattributed`); one the engine filled in carries `default`; `anchor` names
+  the registry entry the figure came from, the one an `anchor` source names or
+  the one a default was read from, and is `null` where there is none. `tag` is
+  the read-back's tag for the key
   (`serialization.read_back_tag`): for a key the config states, the anchor it
   names where `assumptions.sources` files it under `anchor`, and otherwise the
   class `assumptions.sources` files it under (`user`, `assistant` or
@@ -308,10 +318,11 @@ and no `rows`; `level` is still present.
   row a `note` names the correlation key that pulls an option's shock onto
   that row, its value `rho`, and `rho` squared: the fraction of that shock's
   variance that comes from the economy's draw.
-- `interaction`: `resolved`, `first_order_sum` (the sum of every row's `alone`
+- `interaction`, the alone shares' sum and what it leaves that no single
+  channel owns: `resolved`, `first_order_sum` (the sum of every row's `alone`
   point estimate, resolved or not, before rounding) and `first_order_sum_ci`.
-  When that interval lies entirely below 1 it is resolved and adds `residual`
-  (`1 − first_order_sum`) and `residual_ci`.
+  `resolved` is true when that interval lies entirely below 1, and then it adds
+  `residual` (`1 − first_order_sum`) and `residual_ci`.
 - `structural_zeros[]`: `kind`, `label`, `keys`, `channel_id`,
   `measured_paths` and `move_threshold`, one row per stream (`channel_id`: a
   channel, or 7 for the income stream) that drew on the block's
@@ -322,7 +333,9 @@ and no `rows`; `level` is still present.
   stream. `keys` are the keys of the stream's widths (the income stream's,
   the keys the read-back carries of its pay drops), and the row says nothing
   of their cash flows: a key there can carry a cash flow of its own, as a
-  stated event's deterministic cost does.
+  stated event's deterministic cost does. `decomposition.StructuralZero` also
+  has a `stated_path` kind and a `reversal_key` field; both are the reversal
+  library's (`break_even.py`), and `--decompose` emits neither.
 
 `level` — what the futures price that the central case does not. It carries
 `rows`, `paths`, `prob_best_base`, `futures_margin`, `all_frozen_margin`,
@@ -331,9 +344,10 @@ and no `rows`; `level` is still present.
 
 - `prob_best_base` and `futures_margin` are the fraction of the level's futures
   with `f > 0` and the mean of `f` over them.
-- Each row carries `channel_id`, `channel`, `label`, `resolved`, `se`,
-  `prob_best_frozen`, and `delta` (`resolved: true`) or `provisional_delta`
-  (`resolved: false`). The shift is the mean over those futures of `f` with that
+- `rows` holds one row per live channel, and each carries `channel_id`,
+  `channel`, `label`, `resolved`, `se`, `prob_best_frozen`, and the shift, as
+  `delta` (`resolved: true`) or `provisional_delta` (`resolved: false`). The
+  shift is the mean over those futures of `f` with that
   channel frozen, priced the central case's way, minus `f` as drawn; `se` is the
   paired standard error of that difference, and `prob_best_frozen` the fraction
   with `f > 0` once frozen.
@@ -388,8 +402,10 @@ in the spread, by the shift's size in the level. A figure that did not resolve
 prints behind `not resolved:`, each row's interaction gap included. `largest
 alone share:` and `largest shift in size:` name a register's top row when it
 is `leading_channel_id`; when a register's top row did not resolve, that
-register's line does not print. `move_threshold` prints at three significant
-figures, taken upward so the sentence holds at the printed figure. Each printed
+register's line does not print. `move_threshold` and the largest move an
+`income_moved` reason states print at three significant figures, and how far
+apart a `freeze_leak` reason says the paths are at six, each taken upward so
+the sentence holds at the printed figure. Each printed
 figure is rounded on its own from the unrounded field, except the level
 register's difference (`<gap>`) and sum, which are taken over the printed
 dollars. A dollar figure prints its sign before the dollar sign, and a shift

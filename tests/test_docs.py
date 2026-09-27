@@ -141,6 +141,30 @@ def test_no_tracked_text_file_carries_a_merge_conflict_marker():
     assert not offenders, offenders
 
 
+def test_every_test_a_source_comment_points_at_exists():
+    """A source comment that says where a claim is pinned names a test file,
+    and a class or function in it, that exists: a pointer at a test that was
+    deleted sends the reader to nothing.
+    *Kills it:* a named test file, class or function removed or renamed."""
+    import ast
+    root = Path(__file__).resolve().parents[1]
+    pointer = re.compile(r"tests/(?P<file>\w+\.py)(?P<names>(?:::\w+)*)")
+    named = 0
+    for source in sorted((root / "src" / "hde").glob("*.py")):
+        for m in pointer.finditer(source.read_text(encoding="utf-8")):
+            target = root / "tests" / m["file"]
+            assert target.is_file(), (source.name, m.group(0))
+            scope = ast.parse(target.read_text(encoding="utf-8"))
+            for name in m["names"].split("::")[1:]:
+                found = [node for node in scope.body
+                         if isinstance(node, (ast.ClassDef, ast.FunctionDef))
+                         and node.name == name]
+                assert found, (source.name, m.group(0))
+                scope = found[0]
+                named += 1
+    assert named
+
+
 def test_prompts_doc_is_linked_and_every_command_it_shows_runs(monkeypatch, capsys):
     """PROMPTS.md sits beside the README for the person who just cloned the repo: every
     flag it names must be a real option and every config path it runs must exist."""
