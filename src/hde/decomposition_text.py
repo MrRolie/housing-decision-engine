@@ -10,9 +10,9 @@ subtraction or sum of PRINTED figures performed where it is printed.
 WHAT THE BLOCK PRINTS (spec §0.1 items 35, 41 and 52): figures, not
 interpretation. The kinds of line it may print, and what every field means,
 are `docs/reference/API_CONTRACT.md`'s, under "The text block" and the
-field bullets of its `decomposition` section; this module restates neither.
-A refusal's reason and a path note are written by the party that produced
-them and printed verbatim.
+field bullets of its `decomposition` section. A refusal's reason, a path
+note, a width's tag and a crossing's printed figure are written by the party
+that produced them and printed verbatim.
 
 No line says why a figure is what it is, which figure matters, or what to run
 next. Interpreting the block is the assistant's, bound by the skill.
@@ -31,18 +31,19 @@ far as a dataclass reaches; this file completes it STRUCTURALLY:
     register.
 
 TWO STATES THAT ARE NOT NONE AND NOT ZERO. Resolved and unresolved figures
-share no attribute name for their point estimate, so this module dispatches
-on the TYPE and never with `getattr` or a `try`: a figure that did not
+share no attribute name for their point estimate, so this module tells them
+apart by TYPE and never with `getattr` or a `try`: a figure that did not
 resolve prints behind the words "not resolved" and cannot be printed in a
 resolved cell.
 """
 from __future__ import annotations
 
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import List, Optional, Sequence, Tuple
 
 from .decomposition import (
     BOUNDARY_FIELDS,
+    EDGE_REFUSAL_CODES,
     Decomposition,
     DecompositionOutcome,
     DecompositionRefusal,
@@ -80,8 +81,11 @@ def _money(value: float) -> str:
 
 
 def _shift(value: float) -> str:
-    """A dollar SHIFT, sign always shown: a freeze's direction is the point."""
-    return f"+${value:,.0f}" if value >= 0 else f"-${-value:,.0f}"
+    """A dollar SHIFT, its sign shown: a freeze's direction is the point. An
+    exact zero has no direction, and prints as `_faithful` prints one."""
+    if value == 0.0:
+        return f"${_faithful(value, 0)}"
+    return f"+${value:,.0f}" if value > 0 else f"-${-value:,.0f}"
 
 
 def _faithful(value: float, places: int, scale: float = 1.0) -> str:
@@ -94,9 +98,9 @@ def _faithful(value: float, places: int, scale: float = 1.0) -> str:
       - print a figure that is not zero AS zero — a small negative share at two
         or three places reads as a signed zero, a measured nothing, the cheap
         all-clear in the costume of a rounding;
-      - print a figure that is not one AS one — all but one future of
-        thousands read as "P(rent cheapest) 1.00", every one of them (§0.1
-        item 51);
+      - print a figure that is not one AS one — a probability over thousands of
+        futures, all but one of them on one side, printed as though every one
+        were (§0.1 item 51);
       - print a figure outside [0, 1] inside it, or one inside it outside — an
         unresolved share a hair above one reads as "all of the spread" on the
         row that did not resolve BECAUSE it is above one.
@@ -152,37 +156,11 @@ def _rate(value: float) -> str:
     return f"{value:.2%}"
 
 
-def _floored_rate(value: float, places: int) -> str:
-    """A crossing's rate as a percent at `places` decimals, FLOORED — the one
-    rule both crossing types print through (§0.1 items 33 and 42).
-
-    Every crossing reads its key upward, so the figure printed has to be one at
-    which the field still says `was`. To the nearest instead, a solved crossing
-    printed a rate above its value, one at which `--sweep` already says
-    `becomes` (`test_a_printed_crossing_is_a_rate_the_field_still_says_was`
-    sweeps the printed figure). The floor is taken on the float's exact decimal
-    value, so no binary representation can lift the printed figure past the
-    value."""
-    exact = Decimal(value).scaleb(2)
-    return f"{exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_FLOOR):.{places}f}%"
-
-
-def _solved_rate(value: float) -> str:
-    """A solved crossing's rate, at four decimals. A sampled crossing prints
-    at two, so the two never share a typography."""
-    return _floored_rate(value, 4)
-
-
-def _sampled_rate(value: float) -> str:
-    """A sampled crossing's rate, at two decimals."""
-    return _floored_rate(value, 2)
-
-
 def _ceiled_threshold(value: float) -> str:
     """A move threshold at three significant figures, CEILED. A row says no
     move was above it, so the printed figure is never below the value it
-    stands for, and the sentence holds at the figure printed — the crossings'
-    floor, facing the other way. Taken on the float's exact decimal value."""
+    stands for, and the sentence holds at the figure printed. Taken on the
+    float's exact decimal value."""
     exact = Decimal(value)
     if not exact.is_finite() or exact <= 0:
         raise ValueError(f"a move threshold is a positive figure, not {value!r}")
@@ -211,11 +189,15 @@ def _not_resolved(figure: str, resolved: bool) -> str:
 
 def _width_cell(width: Width) -> str:
     """One width with its tag, inline on its own row; a width with no
-    `formatted` prints its key alone."""
+    `formatted` prints its key alone. The tag is the one the producer took
+    from the read-back, printed as it is; a width carrying none raises rather
+    than print a figure with nobody's name on it."""
+    if width.tag is None:
+        raise ValueError(f"the width {width.key} carries no tag: whose figure it is "
+                         f"cannot be printed")
     head = width.key if width.formatted is None else f"{width.key}={width.formatted}"
-    tag = width.source if width.anchor is None else f"{width.source}: {width.anchor}"
     note = "" if width.note is None else f" ({width.note})"
-    return f"{head} [{tag}]{note}"
+    return f"{head} [{width.tag}]{note}"
 
 
 def _widths_line(widths: Sequence[Width]) -> str:
@@ -335,14 +317,17 @@ def _crossing(boundary, where: str) -> str:
 
 
 def _solved_boundary_line(boundary: SolvedBoundary) -> str:
-    return f"      solved on the central case: {_crossing(boundary, _solved_rate(boundary.value))}"
+    """A crossing solved on the central case, at the figure its producer
+    checked the field on (`break_even.printed_crossing`)."""
+    return f"      solved on the central case: {_crossing(boundary, boundary.formatted)}"
 
 
 def _sampled_boundary_line(boundary: SampledBoundary) -> str:
     """A crossing bisected on the futures names its sample on its own line, so
-    a quote of the line carries it."""
+    a quote of the line carries it; its figure is the one its producer
+    checked (`break_even.printed_crossing`)."""
     return (f"      sampled on {boundary.curve_paths:,} paths at seed {boundary.seed}: "
-            f"{_crossing(boundary, _sampled_rate(boundary.value))}")
+            f"{_crossing(boundary, boundary.formatted)}")
 
 
 def _estimated_boundary_line(boundary: EstimatedBoundary) -> str:
@@ -356,7 +341,11 @@ def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
     """Boundaries that are not printed, recorded rather than dropped: a boundary
     that vanishes with no row is an absence a reader reads as "nothing here".
     One line per code and reason, naming every field it refuses, in the one
-    shape every refusal prints in: its code, then its reason (§0.1 item 50)."""
+    shape every refusal prints in: its code, then its reason (§0.1 item 50).
+
+    A code that refuses one BOUNDARY (`EDGE_REFUSAL_CODES`) leaves the field's
+    other boundaries standing, and one of them may print on the line above, so
+    its line says a boundary was not printed and never that none was."""
     refusals: List[Tuple[str, str]] = []
     fields: dict = {}
     for item in refused:
@@ -371,7 +360,8 @@ def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
         labels = fields[(code, reason)]
         named = (labels[0] if len(labels) == 1
                  else f"{', '.join(labels[:-1])} or {labels[-1]}")
-        lines.append(f"      no boundary printed for {named} {_refusal(code, reason)}")
+        head = "a boundary not printed" if code in EDGE_REFUSAL_CODES else "no boundary printed"
+        lines.append(f"      {head} for {named} {_refusal(code, reason)}")
     return lines
 
 
@@ -390,7 +380,7 @@ def _bracket_line(low: float, high: float, source: str) -> str:
 
 def _require_types(items: Sequence[object], allowed: Tuple[type, ...],
                    where: str) -> None:
-    """Raise on any item that is none of `allowed`: a dispatch that filters by
+    """Raise on any item that is none of `allowed`: a branch that filters by
     `isinstance` drops what it did not foresee without a word, and an absent
     row is what a reader takes for "nothing here"."""
     for item in items:
@@ -404,8 +394,8 @@ def _require_types(items: Sequence[object], allowed: Tuple[type, ...],
 
 def _reversal_head(reversal) -> str:
     """The row's subject: the key, what the config states for it, and whose
-    figure that is — the class the read-back of the same run prints."""
-    return f"  {reversal.key}, stated {reversal.stated_formatted} [{reversal.stated_source}]"
+    figure that is — the tag the read-back of the same run gives the key."""
+    return f"  {reversal.key}, stated {reversal.stated_formatted} [{reversal.stated_tag}]"
 
 
 def _reversal_detail_lines(reversal) -> List[str]:
@@ -442,7 +432,8 @@ def _reversal_detail_lines(reversal) -> List[str]:
 def _structural_zero_line(zero: StructuralZero) -> str:
     """One row of `structural_zeros`, in the words the contract gives its kind.
     A `dead_draw` row's words are said of its stream by name, and its keys
-    follow with nothing said of them (§0.1 items 39 and 40)."""
+    follow as the keys that size that stream's draws; nothing is said of their
+    cash flows (§0.1 items 39 and 40)."""
     if zero.kind == "stated_path":
         return f"  {zero.label} — {', '.join(zero.keys)}: no draw touches it"
     if zero.kind == "dead_draw":
@@ -506,9 +497,6 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
                 "a SpreadRegister with no rows reached the formatter; a spread "
                 "register that declines to print arrives as RefusedSpread with "
                 "its reason, so this is a producer defect, not an empty table")
-        # The flip column counts futures in which re-drawing one channel moves
-        # the sign of f — whether the CENTRAL CASE's winner is cheapest there —
-        # so the heading names that winner.
         flip_head = f"flips whether {best} is cheapest"
         ordered = sorted(spread.rows, key=_spread_sort_key)
         cells = [_spread_cells(row) for row in ordered]

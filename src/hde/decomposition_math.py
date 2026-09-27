@@ -83,9 +83,10 @@ DEFAULT_CONFIDENCE = 0.95
 # published interval.
 BOOTSTRAP_SPAWN_SALT = 20260922
 
-# Section 3.4: a level shift is a number only when it clears twice its own
-# paired standard error. The rest print behind "not resolved:" at this sample
-# size — a row the reader must see, never an absence.
+# Section 3.4: a level shift RESOLVES only when its size exceeds this many of
+# its own paired standard errors. A shift that does not is still a number, and
+# prints behind "not resolved:" at this sample size — a row the reader must
+# see, never an absence.
 LEVEL_RESOLUTION_SIGMAS = 2.0
 
 # Section 3.4 as amended by 0.1 item 19: with every channel frozen, the margin

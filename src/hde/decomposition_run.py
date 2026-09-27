@@ -33,8 +33,10 @@ WHAT IT DOES, in the order it does it, because the order is the cost model:
      structural zeros, unchanged. A row for every stream that drew and is not
      live is measured on the block's futures, so it is the spread register's.
 
-Every refusal is a judgment about the DATA and so is this module's; the
-formatter renders a refusal and never decides one.
+The whole-block refusals and the spread's are judgments about the DATA, and
+this module decides them; the reversal register's refusals, per field and per
+boundary, are `break_even.reversal_register`'s. The formatter renders a refusal
+and never decides one.
 
 It is not a second verdict: `verdict` is carried through untouched. The
 probabilities this module takes itself are frequencies of `f`'s sign on
@@ -271,10 +273,10 @@ def _liveness(base, redraws: Dict[int, object],
                    if not dm.identity_holds(moves[stream_id], threshold))
     if INCOME_STREAM_ID in moving:
         raise ValueError(
-            f"re-drawing the income stream moved an option's present value by "
-            f"${moves[INCOME_STREAM_ID]:.6g}, above the ${threshold:.3g} the identity "
-            f"allows: the income stream is not a channel, and no register has a row "
-            f"for it")
+            f"the income-stream check: re-drawing the income stream moved an option's "
+            f"present value by ${moves[INCOME_STREAM_ID]:.6g}, above the "
+            f"${threshold:.3g} the identity allows: the income stream is not a "
+            f"channel, and no register has a row for it")
     return moves, moving
 
 
@@ -434,144 +436,125 @@ def _channel_refusal(live: Tuple[int, ...], paths: int) -> Optional[Decompositio
 
 
 # ---------------------------------------------------------------------------
-# §5 — the widths, and who typed them
+# §5 — the widths, and who typed them (§0.1 item 53)
 # ---------------------------------------------------------------------------
 
 def _priced(spec) -> Tuple[str, ...]:
     return tuple(n for n in OPTION_NAMES if getattr(spec, n, None) is not None)
 
 
-def _width(spec, raw, key: str, note: Optional[str] = None) -> Optional[Width]:
-    """One sizing key as a `Width`, or None when it sized no draw on this run
-    (§0.1 item 49).
+# The option whose draws a cost or return channel's sizing keys size. The
+# three cost channels share `simulation.other_cost_vol`, so which option a
+# key's draws belong to is the CHANNEL's, never the key's.
+_CHANNEL_OPTION: Dict[int, str] = {3: "condo", 4: "house", 5: "rent", 6: "rent"}
 
-    A key the config states is a width with the source class `spec.sources`
-    gives it — `SourceEcho.classify`'s own answer, never inferred from the
-    key's name (test T14); `unattributed` is what the echo itself calls a
-    stated key on a config with no `sources:` block. A key the config leaves
-    out is a width only when the engine filled it from an anchor
-    (`spec.defaults_applied`, the loader's one record of that): a price
-    shock's severity defaults to its anchored figure, and sizes the shock's
-    draws as a stated one would. Any other unstated sizing key defaults to
-    zero and has no figure to print. An events list with no entry sizes no
-    draw, stated or not.
-    """
-    if key.endswith(".events"):
-        option = getattr(spec, key.split(".", 1)[0], None)
-        if option is None or not option.events:
-            return None
-    echo = getattr(spec, "sources", None)
-    entry = echo.get(key) if echo is not None else None
+# On a channel no one option owns, the `simulation.*` sizing keys that size
+# one option's draws. A key named neither here nor under an option's own
+# section sizes a draw every priced option reads.
+_SIMULATION_KEY_OPTIONS: Dict[str, Tuple[str, ...]] = {
+    "simulation.corr_inflation_condo": ("condo",),
+    "simulation.corr_inflation_house": ("house",),
+    "simulation.value_growth_vol": ("condo", "house"),
+    "simulation.condo_fee_vol": ("condo",),
+    "simulation.house_maintenance_vol": ("house",),
+}
+
+# Each economy correlation, and the sizing keys of the option shocks it
+# composes the economy's draw into (`monte_carlo._correlated_z` at each draw
+# site): §4 and §0.1 item 6 put those keys on the economy's row, noted.
+_PULLS: Dict[str, Tuple[str, ...]] = {
+    "simulation.corr_inflation_condo": ("simulation.condo_fee_vol",),
+    "simulation.corr_inflation_house": ("simulation.house_maintenance_vol",),
+    "simulation.corr_inflation_other": ("simulation.other_cost_vol",),
+    "simulation.corr_inflation_event_cost": ("condo.events", "house.events", "rent.events"),
+}
+
+
+def sized_options(channel_id: int, key: str) -> Optional[Tuple[str, ...]]:
+    """The options whose draws `key` sizes on channel `channel_id`'s row, or
+    None where the draw reaches every option. The one home of the filter
+    §0.1 item 53 keeps: it is read off the model's structure, never off a
+    value the config gives the key."""
+    if channel_id in _CHANNEL_OPTION:
+        return (_CHANNEL_OPTION[channel_id],)
+    section = key.split(".", 1)[0]
+    if section in OPTION_NAMES:
+        return (section,)
+    return _SIMULATION_KEY_OPTIONS.get(key)
+
+
+def _echo_of(spec, raw):
+    """`spec`, carrying the read-back's source echo: the loader's own, or for
+    a directly-constructed spec the echo that same loader builds from `raw`."""
+    if getattr(spec, "sources", None) is not None or raw is None:
+        return spec
+    from .sources import build_source_echo
+    return dataclasses.replace(spec, sources=build_source_echo(raw)[0])
+
+
+def _given(spec, key: str) -> bool:
+    """Whether the read-back carries `key`: the config states it (the source
+    echo's entry) or the run defaulted it (`spec.defaults_applied`)."""
+    echo = spec.sources
+    return (echo is not None and echo.get(key) is not None) or key in spec.defaults_applied
+
+
+def width_keys(spec, channel_id: int) -> Tuple[Tuple[str, Optional[str]], ...]:
+    """`(key, pulled by)` for every width on channel `channel_id`'s row — the
+    ONE home of which keys a row names (§0.1 item 53): the channel's sizing
+    keys (`CHANNELS`) that the config states or the run defaulted, for an
+    option this run prices (`sized_options`), and on the economy's row, after
+    each correlation among them, the keys of the shocks it pulls under the
+    same rule. `pulled by` is that correlation, or None.
+
+    Nothing here asks whether a draw fires: a hazard of zero, an events list
+    with no entry, a cost line no option holds are all sizing inputs as the
+    config states them, and their figures say so."""
+    priced = set(_priced(spec))
+
+    def member(key: str) -> bool:
+        options = sized_options(channel_id, key)
+        return _given(spec, key) and (options is None or bool(priced.intersection(options)))
+
+    out: List[Tuple[str, Optional[str]]] = []
+    for key in channel(channel_id).sizing_keys:
+        if member(key):
+            out.append((key, None))
+    for key, _ in list(out):
+        out.extend((pulled, key) for pulled in _PULLS.get(key, ()) if member(pulled))
+    return tuple(out)
+
+
+def _width(spec, key: str, pulled_by: Optional[str] = None) -> Width:
+    """One member of `width_keys` as a `Width`: its figure and its tag as the
+    read-back gives them (`serialization.read_back_tag`, character for
+    character), and for a pulled key the correlation's figure and its square.
+    A member with no read-back tag RAISES: nothing can say whose figure it
+    is, and a width left out would be an absence nobody reported."""
+    from .serialization import default_anchor, echo_value, read_back_tag
+    tag = read_back_tag(spec, key)
+    if tag is None:
+        raise ValueError(
+            f"the width check: {key} sizes a draw on this run and the read-back "
+            f"gives it no tag, so nothing can say whose figure it is")
+    note = None
+    if pulled_by is not None:
+        rho = float(getattr(spec.simulation, pulled_by.split(".", 1)[1]))
+        note = f"pulled by {pulled_by} = {rho:g}; rho squared {rho * rho:g}"
+    entry = spec.sources.get(key) if spec.sources is not None else None
     if entry is not None:
         return Width(key=key, formatted=entry.formatted, source=entry.source,
-                     anchor=entry.anchor, note=note)
-    if key in getattr(spec, "defaults_applied", ()):
-        from .serialization import default_anchor, echo_value
-        anchor = default_anchor(spec, key)
-        return Width(key=key, formatted=echo_value(spec, key), source="default",
-                     anchor=anchor.name if anchor is not None else None, note=note)
-    if raw is None:
-        return None
-    # A spec built from a config always carries an echo; this path is the
-    # directly-constructed spec, where the raw mapping is the only evidence.
-    from .sources import format_source_value, raw_value
-    try:
-        value = raw_value(raw, key)
-    except (KeyError, TypeError, IndexError):
-        return None
-    return Width(key=key, formatted=format_source_value(key, value),
-                 source="unattributed", anchor=None, note=note)
-
-
-# The economy's sizing keys that are correlations: each sizes a draw only
-# through the option shock it pulls (`_inflation_pulls`).
-_CORRELATION_KEYS: Tuple[str, ...] = (
-    "simulation.corr_inflation_condo",
-    "simulation.corr_inflation_house",
-    "simulation.corr_inflation_other",
-    "simulation.corr_inflation_event_cost",
-)
-
-
-def _inflation_pulls(spec) -> List[Tuple[str, str, float]]:
-    """The (rho key, pulled key, rho) triples the economy's row names.
-
-    §4 and §0.1 item 6: the `economy` row's provenance cell must list the
-    `corr_inflation_*` keys AND THE OPTION VOLS THEY PULL FROM, because which
-    vols are pulled depends on which rho is non-zero — so they cannot be static
-    sizing keys and arrive as extra width entries from the code that reads the
-    config. This is that code, and it reads STRUCTURE only: a non-zero rho,
-    and a shock of a priced option it composes into (`_correlated_z` at the
-    draw site) — the condo's fee, the house's maintenance, an owned option's
-    other cost lines (a renter's only while `other_cost_vol` draws them), a
-    priced option's events. It is also the ONE rule for
-    the correlation key itself (§0.1 item 49): a rho that pulls no shock of
-    this run sized no draw, and is not a width. Whether the pulled shock then
-    moves a present value is not asked here — that is measured, on the run,
-    by the liveness the row stands on.
-    """
-    sim = spec.simulation
-    priced = _priced(spec)
-    out: List[Tuple[str, str, float]] = []
-    if sim.corr_inflation_condo != 0 and "condo" in priced:
-        out.append(("simulation.corr_inflation_condo",
-                    "simulation.condo_fee_vol", sim.corr_inflation_condo))
-    if sim.corr_inflation_house != 0 and "house" in priced:
-        out.append(("simulation.corr_inflation_house",
-                    "simulation.house_maintenance_vol", sim.corr_inflation_house))
-    if sim.corr_inflation_other != 0 and any(
-            getattr(spec, name).other_recurring_costs
-            and (name != "rent" or sim.other_cost_vol > 0) for name in priced):
-        out.append(("simulation.corr_inflation_other",
-                    "simulation.other_cost_vol", sim.corr_inflation_other))
-    if sim.corr_inflation_event_cost != 0:
-        for name in priced:
-            if getattr(spec, name).events:
-                out.append(("simulation.corr_inflation_event_cost",
-                            f"{name}.events", sim.corr_inflation_event_cost))
-    return out
-
-
-# The option whose cost lines a cost channel's `simulation.other_cost_vol`
-# multiplies (`monte_carlo`'s loop over `other_recurring_costs`).
-_CHANNEL_OPTION: Dict[int, str] = {3: "condo", 4: "house", 5: "rent"}
+                     anchor=entry.anchor, note=note, tag=tag)
+    anchor = default_anchor(spec, key)
+    return Width(key=key, formatted=echo_value(spec, key), source="default",
+                 anchor=anchor.name if anchor is not None else None, note=note, tag=tag)
 
 
 def _widths_for(spec, raw, entry: Channel) -> Tuple[Width, ...]:
-    """The widths on one channel's row: its sizing keys that sized a draw on
-    this run (§0.1 item 49), plus §4's extras.
-
-    §0.1 item 6: the `economy` row must name the option vols its correlations
-    pull from, and which those are depends on which rho is non-zero, so they
-    cannot be static sizing keys. Each arrives with the rho that pulls it and
-    rho squared, as figures; what rho squared is, is the contract's. A
-    correlation that pulls no shock of this run is left out with the shock,
-    and so is the other-cost volatility on the row of an option holding no
-    other-cost line: the loop it multiplies draws nothing.
-    """
-    widths: List[Width] = []
-    seen: set = set()
-    pulls = _inflation_pulls(spec) if entry.id == 0 else []
-    pulling = {rho_key for rho_key, _, _ in pulls}
-    option = getattr(spec, _CHANNEL_OPTION.get(entry.id, ""), None)
-    for key in entry.sizing_keys:
-        if key in _CORRELATION_KEYS and key not in pulling:
-            continue
-        if (key == "simulation.other_cost_vol" and entry.id in _CHANNEL_OPTION
-                and not (option is not None and option.other_recurring_costs)):
-            continue
-        got = _width(spec, raw, key)
-        if got is not None and got.key not in seen:
-            widths.append(got)
-            seen.add(got.key)
-    if entry.id == 0:
-        for rho_key, vol_key, rho in pulls:
-            note = f"pulled by {rho_key} = {rho:g}; rho squared {rho * rho:g}"
-            got = _width(spec, raw, vol_key, note=note)
-            if got is not None and (got.key, note) not in seen:
-                widths.append(got)
-                seen.add((got.key, note))
-    return tuple(widths)
+    """The widths on one channel's row: every member of `width_keys`, in
+    its order."""
+    spec = _echo_of(spec, raw)
+    return tuple(_width(spec, key, pulled_by) for key, pulled_by in width_keys(spec, entry.id))
 
 
 # ---------------------------------------------------------------------------
@@ -586,17 +569,18 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
                     paths: int, threshold: float) -> List[StructuralZero]:
     """A `dead_draw` row for every stream that drew on these futures and is not
     live on them: both facts MEASURED, and scoped to the futures and the
-    threshold they were measured on. The row names its stream; the keys it
-    carries are the keys of that stream's widths (`_widths_for`), and nothing
-    the row says is said of a key (§0.1 items 40 and 49)."""
+    threshold they were measured on. The row names its stream, and the keys it
+    carries are the keys of that stream's widths (`width_keys`; for the income
+    stream, its keys the read-back carries). Its words are said of the stream,
+    never of a key's cash flow (§0.1 items 40 and 53)."""
+    spec = _echo_of(spec, raw)
     rows: List[StructuralZero] = []
     for stream_id in drawn:
         if stream_id in live:
             continue
         if stream_id == INCOME_STREAM_ID:
             label = INCOME_STREAM_LABEL
-            keys = tuple(key for key in _INCOME_KEYS
-                         if _width(spec, raw, key) is not None)
+            keys = tuple(key for key in _INCOME_KEYS if _given(spec, key))
         else:
             entry = channel(stream_id)
             label = entry.label
@@ -618,8 +602,9 @@ def _reversal_register(raw, det, mc) -> ReversalRegister:
 
     Without a raw mapping there is nothing to solve on: every candidate in §6
     is a key the CONFIG states, and `reversal_register` re-loads the config to
-    probe it. A directly-constructed spec therefore gets no solved rows — an
-    empty tuple that says the assembler found no candidate, never that none
+    probe it. A directly-constructed spec therefore gets an empty register
+    with the code `no_mapping`, whose reason says the block was handed no
+    config mapping — a fact about the call, never a claim that no candidate
     exists.
     """
     if raw is None:

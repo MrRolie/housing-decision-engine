@@ -170,6 +170,7 @@ class Width:
     source: str
     anchor: Optional[str] = None
     note: Optional[str] = None
+    tag: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +371,7 @@ class SolvedBoundary:
 
     verdict_field: str
     value: float
+    formatted: str
     was: str
     becomes: str
     further_changes: Optional[str]
@@ -386,6 +388,7 @@ class SampledBoundary:
 
     verdict_field: str
     value: float
+    formatted: str
     was: str
     becomes: str
     further_changes: Optional[str]
@@ -407,6 +410,12 @@ BOUNDARY_REFUSAL_CODES: Tuple[str, ...] = (
     "unconfirmed",
     "not_exact",
     "no_futures",
+)
+
+# Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.
+EDGE_REFUSAL_CODES: Tuple[str, ...] = (
+    "not_identified",
+    "unconfirmed",
 )
 
 NO_DISTANCE_CODES: Tuple[str, ...] = (
@@ -443,6 +452,7 @@ class ExactReversal:
     option: str
     stated_formatted: str
     stated_source: str
+    stated_tag: str
     bracket_low: float
     bracket_high: float
     bracket_source: str
@@ -480,6 +490,7 @@ class EstimatedReversal:
     option: str
     stated_formatted: str
     stated_source: str
+    stated_tag: str
     bracket_low: float
     bracket_high: float
     bracket_source: str

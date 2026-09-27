@@ -250,8 +250,8 @@ block". Explaining the lines is your job, and that section is what you explain
 them from. So:
 
 - Quote the block's lines verbatim, with their figures and their `[...]` tags.
-- Never quote a row from THE SPREAD without the same channel's row from THE
-  LEVEL beside it.
+- Never quote a row of THE SPREAD's table without the same channel's row from
+  THE LEVEL beside it.
 - Where the block prints `not resolved`, say it is not resolved, and quote what
   the block prints after the words.
 - Read what a figure, a refusal code or a path count means in the contract
@@ -259,5 +259,5 @@ them from. So:
   this file.
 - Name a share by the column it is printed under, never "importance" or a
   "contribution to the answer".
-- A refusal, of the whole block or of the spread alone, is that run's finding:
-  quote its line as printed.
+- A refusal, of the whole block, of the spread, of a boundary or of the search
+  for one, is that run's finding: quote its line as printed.

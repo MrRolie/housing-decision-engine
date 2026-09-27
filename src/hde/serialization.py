@@ -56,7 +56,7 @@ from .models import (
     Verdict,
 )
 from .rates import ConvertedRate, converted_for, deflate, inflation_anchor_name
-from .sources import SourceEcho, source_echo_to_dict, source_lines
+from .sources import SourceEcho, source_echo_to_dict, source_lines, stated_tag
 from .tax_treatment import (
     fhsa_clause, financing_additions, hbp_line, tax_line, tax_summary_line, tax_to_dict,
 )
@@ -635,6 +635,28 @@ def default_anchor(spec: ComparisonSpec, key: str) -> Optional[Anchor]:
     return ANCHORS.get(_ECHO_ALIASES.get(key, key))
 
 
+def default_tag(spec: ComparisonSpec, key: str) -> Optional[str]:
+    """The cite the read-back's `defaults applied:` line brackets beside one
+    defaulted key, or None where it prints no bracket (no cite exists)."""
+    anchor = default_anchor(spec, key)
+    cite = short_cite(anchor.name) if anchor is not None else short_cite(key)
+    return cite or None
+
+
+def read_back_tag(spec: ComparisonSpec, key: str) -> Optional[str]:
+    """The tag the read-back gives `key` — the ONE home of whose figure a key
+    is, for every surface that prints a tag beside one: `sources.stated_tag`
+    for a key the config states, `default_tag` for one the engine filled in,
+    and None for a key the read-back does not carry at all."""
+    echo = spec.sources
+    entry = echo.get(key) if echo is not None else None
+    if entry is not None:
+        return stated_tag(entry)
+    if key in spec.defaults_applied:
+        return default_tag(spec, key)
+    return None
+
+
 def cover_clause(spec: ComparisonSpec, name: str, raw: Optional[Dict[str, Any]]) -> str:
     """`this cash covers 20% down up to a price of $X (purchase_costs $Y at that
     price; above it the mortgage is insured)` — the ceiling a stated
@@ -919,8 +941,7 @@ def format_assumptions(
         )
     if spec.defaults_applied:
         def _echo_entry(key: str) -> str:
-            anchor = default_anchor(spec, key)
-            cite = short_cite(anchor.name) if anchor is not None else short_cite(key)
+            cite = default_tag(spec, key)
             tag = f" [{cite}]" if cite else ""
             return f"{key}={echo_value(spec, key)}{tag}"
         joined = ", ".join(_echo_entry(key) for key in spec.defaults_applied)

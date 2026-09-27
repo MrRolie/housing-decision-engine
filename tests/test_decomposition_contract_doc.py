@@ -49,7 +49,11 @@ from tests.decomposition_runs import (
     NO_REACH, RARE_RESET_ONE, RARE_RESET_THREE, REPO, THIRD_FAR, Run, _block_text, _cli,
     _load, _strict, _sweep_states, corpus, HAZARD_ONLY, CORRELATION_UNPRICED_CONDO,
     CORRELATION_UNPRICED_HOUSE, CORRELATIONS_PULL_NOTHING, RENTER_LINE_DRAWN, OWNED_LINE,
-    OWNED_EVENT)
+    OWNED_EVENT, EV_LATE_START, LINES_CONDO_ONLY, LINES_CONDO_NO_HOUSE, HAZARD_ZERO,
+    RESET_ZERO, VALUE_VOL_ZERO, BOTH_SHOCKS_DEFAULTED, UNPRICED_CONDO_ZERO_RHO,
+    SLIVER_LOW, SLIVER_HIGH,
+    SOLVED_SLIVER, STATED_BESIDE_CROSSING, THREE_OPTION_RUNNER_UP,
+    REFERENCE_BESIDE_CROSSING)
 from tests.test_decomposition_liveness import RESET_TO_OWN_RENT_ALONE
 from tests.test_decomposition_sentences import TWINS
 
@@ -771,7 +775,7 @@ def test_the_widths_whose_they_are_and_what_rho_squared_is(runs):
         run = runs[name]
         for row in run.block["spread"]["rows"]:
             for width in row["widths"]:
-                assert set(width) == {"key", "formatted", "source", "anchor", "note"}
+                assert set(width) == {"key", "formatted", "source", "anchor", "note", "tag"}
                 assert width["source"] in ("user", "assistant", "anchor", "unattributed")
                 assert run.spec.sources.classify(width["key"]) == width["source"]
                 assert width["key"] not in run.spec.defaults_applied
@@ -806,76 +810,224 @@ def _width_keys(run, channel_key):
     return [w["key"] for w in row["widths"]]
 
 
-@claims("A width is an input that sized the row's draws on this run.",
-        "One the config states carries its read-back class as `source`",
-        "A correlation is a width only when it pulls a shock this run draws")
-def test_a_width_is_an_input_that_sized_the_draw(runs, tmp_path):
-    """§0.1 item 49, on rendered rows. A price shock stating only its hazard
-    names the two severities the engine filled in, with their anchors, as the
-    read-back's `defaults applied` does; the other rows name no key the config
-    leaves out. A correlation onto a shock this run never draws — an unpriced
-    condo or house, a renter's cost line at zero volatility, no cost line on an
-    owned option, no event — is not named, and neither is the volatility it
-    would pull; each is named once that shock is drawn. An empty events list
-    and the other-cost volatility of an option holding no cost line are not
-    widths.
-    *Kills it:* dropping the defaulted severities, naming an unstated key, or
-    widening any one of those guards."""
-    severity = Run(HAZARD_ONLY, "400").materialise(tmp_path / "hazard_only")
-    defaults = {e["key"]: e for e in severity.doc["assumptions"]["defaults_applied"]}
-    assert _sized_by(severity, "the housing market") == [
-        "condo.price_shock.annual_hazard=5.0% [assistant]",
-        "condo.price_shock.severity_mean=25.0% [default: price_shock.severity_mean]",
-        "condo.price_shock.severity_vol=10.0% [default: price_shock.severity_vol]"]
-    for key in ("condo.price_shock.severity_mean", "condo.price_shock.severity_vol"):
-        assert defaults[key]["anchor"]["name"] == key.split(".", 1)[1]
-    for row in severity.block["spread"]["rows"]:
+# The oracle's own account of which options a sizing key's draws belong to,
+# written from the simulator's draw sites (`monte_carlo`), never read off the
+# engine: a cost or return channel's keys are its option's; on the other
+# channels an option's own section is that option's, and these `simulation.*`
+# keys are the options named. Any other key's draw reaches every option.
+_ORACLE_CHANNEL_OPTIONS = {3: {"condo"}, 4: {"house"}, 5: {"rent"}, 6: {"rent"}}
+_ORACLE_KEY_OPTIONS = {
+    "simulation.corr_inflation_condo": {"condo"},
+    "simulation.corr_inflation_house": {"house"},
+    "simulation.condo_fee_vol": {"condo"},
+    "simulation.house_maintenance_vol": {"house"},
+    "simulation.value_growth_vol": {"condo", "house"},
+}
+# Each economy correlation and the keys of the shocks `_correlated_z` composes
+# it into, at the draw sites.
+_ORACLE_PULLS = {
+    "simulation.corr_inflation_condo": ("simulation.condo_fee_vol",),
+    "simulation.corr_inflation_house": ("simulation.house_maintenance_vol",),
+    "simulation.corr_inflation_other": ("simulation.other_cost_vol",),
+    "simulation.corr_inflation_event_cost": ("condo.events", "house.events", "rent.events"),
+}
+
+
+def _oracle_options(channel_id, key):
+    if channel_id in _ORACLE_CHANNEL_OPTIONS:
+        return _ORACLE_CHANNEL_OPTIONS[channel_id]
+    section = key.split(".", 1)[0]
+    if section in ("condo", "house", "rent"):
+        return {section}
+    return _ORACLE_KEY_OPTIONS.get(key)
+
+
+def _given_by_the_read_back(doc):
+    """Every key the read-back carries: each stated key the source echo lists,
+    and each key the run defaulted."""
+    echo = doc["assumptions"]["sources"]
+    given = {e["key"] for source in ("user", "assistant", "unattributed", "sweep")
+             for e in echo.get(source) or ()}
+    given |= set(echo.get("anchor") or {})
+    given |= {e["key"] for e in doc["assumptions"]["defaults_applied"]}
+    return given
+
+
+def _expected_widths(doc, raw, channel_id):
+    """`[(key, pulled by)]` a row names, by §0.1 item 53's rule, from the
+    read-back and `CHANNELS` alone."""
+    priced = {o for o in ("condo", "house", "rent") if o in raw}
+    given = _given_by_the_read_back(doc)
+
+    def member(key):
+        options = _oracle_options(channel_id, key)
+        return key in given and (options is None or bool(options & priced))
+
+    out = [(key, None) for key in dc.channel(channel_id).sizing_keys if member(key)]
+    for key, _ in list(out):
+        out.extend((pulled, key) for pulled in _ORACLE_PULLS.get(key, ()) if member(pulled))
+    return out
+
+
+def _pulled_by(width):
+    if width["note"] is None:
+        return None
+    return re.match(r"pulled by (?P<key>[\w.]+) = ", width["note"])["key"]
+
+
+def _read_back_figure(doc, key):
+    """The figure the source lines print for `key` (`assumptions.lines`):
+    `key=<figure>` on the source or defaults line that lists it, or the echo's
+    own figure where no `sources:` block lets a line list it."""
+    for line in doc["assumptions"]["lines"]:
+        line = line.strip()
+        label, _, rest = line.partition(": ")
+        if label in ("user-stated", "assistant-typed", "unattributed", "anchor-sourced",
+                     "defaults applied", "swept"):
+            m = re.search(rf"(?:^|, ){re.escape(key)}=(?P<figure>.+?)(?: \[[^\]]+\])?"
+                          rf"(?=, [\w.]+=|$)", rest)
+            if m:
+                return m["figure"]
+    echo = doc["assumptions"]["sources"]
+    for entry in echo.get("unattributed") or ():
+        if entry["key"] == key and not echo["declared"]:
+            return entry["formatted"]
+    return None
+
+
+def _assert_widths_enumerated(name, doc, raw):
+    """Every width on every row of one run, and every dead row's keys,
+    against `CHANNELS`, the read-back and the oracle's option map: the same
+    keys in the same order, set equality both ways, and for each the
+    read-back's own tag and figure, character for character."""
+    block = doc["decomposition"]
+    if "refusal" in block:
+        return 0
+    seen = 0
+    for row in block["spread"].get("rows", ()):
+        want = _expected_widths(doc, raw, row["channel_id"])
+        got = [(w["key"], _pulled_by(w)) for w in row["widths"]]
+        assert got == want, (name, row["channel"], got, want)
         for width in row["widths"]:
-            stated = severity.spec.sources.classify(width["key"]) is not None
-            assert stated != (width["source"] == "default"), width
-            assert stated or width["key"] in severity.spec.defaults_applied, width
+            tag = sentences._read_back_tag(doc, width["key"])
+            # a key in the set with no read-back tag fails here, never silently
+            assert tag is not None, (name, width["key"])
+            assert width["tag"] == tag, (name, width)
+            assert width["formatted"] == _read_back_figure(doc, width["key"]), (name, width)
+            seen += 1
+    for zero in block["spread"]["structural_zeros"]:
+        if zero["channel_id"] == dc.INCOME_STREAM_ID:
+            want = [k for k in ("income.pay_drop_events",) if k in _given_by_the_read_back(doc)]
+        else:
+            want = [key for key, _ in _expected_widths(doc, raw, zero["channel_id"])]
+        assert list(zero["keys"]) == want, (name, zero)
+    return seen
 
-    def economy(raw, name):
-        run = Run(raw, "400").materialise(tmp_path / name)
-        return run, _width_keys(run, "economy")
 
-    run, keys = economy(CORRELATION_UNPRICED_CONDO, "unpriced_condo")
-    assert keys == ["economic.inflation_vol", "simulation.corr_inflation_house",
-                    "simulation.house_maintenance_vol"]
-    assert "corr_inflation_condo" not in run.text and "condo_fee_vol" not in run.text
-    run, keys = economy(CORRELATION_UNPRICED_HOUSE, "unpriced_house")
-    assert keys == ["economic.inflation_vol", "simulation.corr_inflation_condo",
-                    "simulation.condo_fee_vol"]
-    assert "corr_inflation_house" not in run.text and "house_maintenance_vol" not in run.text
-    run, keys = economy(CORRELATIONS_PULL_NOTHING, "pull_nothing")
-    assert keys == ["economic.inflation_vol", "simulation.corr_inflation_house",
-                    "simulation.house_maintenance_vol"]
-    assert "corr_inflation_other" not in run.text
-    assert "corr_inflation_event_cost" not in run.text
-    # the house holds no cost line: its row names no other-cost volatility,
-    # while the renter's, which holds one, does
-    assert _width_keys(run, "house") == ["simulation.house_maintenance_vol"]
-    assert _width_keys(run, "shelter") == ["simulation.rent_escalation_vol",
-                                           "simulation.other_cost_vol"]
-    for raw, name in ((RENTER_LINE_DRAWN, "renter_line"), (OWNED_LINE, "owned_line")):
-        run, keys = economy(raw, name)
-        assert keys == ["economic.inflation_vol", "simulation.corr_inflation_house",
-                        "simulation.corr_inflation_other",
-                        "simulation.house_maintenance_vol", "simulation.other_cost_vol"], name
-        assert ("simulation.other_cost_vol=" + ("10.0%" if name == "renter_line" else "0.0%")
-                + " [unattributed] (pulled by simulation.corr_inflation_other = 0.4; rho "
-                "squared 0.16)") in "; ".join(_sized_by(run, "the economy")), name
-    run, keys = economy(OWNED_EVENT, "owned_event")
-    assert keys == ["economic.inflation_vol", "simulation.corr_inflation_house",
-                    "simulation.corr_inflation_event_cost",
-                    "simulation.house_maintenance_vol", "house.events"]
-    assert "corr_inflation_other" not in run.text
-    # an events list with no event sizes nothing: the shipped basic example
-    # states one for its condo
-    basic = runs["basic"]
-    assert basic.raw["condo"]["events"] == []
-    assert "condo.events" not in basic.text
-    assert "house.events=1 entry [unattributed]" in _sized_by(basic, "the house's costs")
+# Configs whose widths are pinned as the block prints them (§0.1 item 53's
+# witnesses): each input sizes a draw that never fires on its run, or sizes one
+# only for an option the run does not price.
+_WIDTH_WITNESSES = {
+    "ev_late_start": (EV_LATE_START, {
+        "the condo's costs": "simulation.condo_fee_vol=10.0% [unattributed]; condo.events=1 "
+                             "entry [unattributed]",
+        "the economy": "economic.inflation_vol=2.0% [unattributed]; "
+                       "simulation.corr_inflation_event_cost=0.5 [unattributed]; "
+                       "condo.events=1 entry [unattributed] (pulled by "
+                       "simulation.corr_inflation_event_cost = 0.5; rho squared 0.25)"}),
+    "lines_condo_only": (LINES_CONDO_ONLY, {
+        "the condo's costs": "simulation.condo_fee_vol=10.0% [unattributed]; "
+                             "simulation.other_cost_vol=10.0% [unattributed]",
+        "the house's costs": "simulation.house_maintenance_vol=30.0% [unattributed]; "
+                             "simulation.other_cost_vol=10.0% [unattributed]"}),
+    "lines_condo_no_house": (LINES_CONDO_NO_HOUSE, {
+        "the condo's costs": "simulation.condo_fee_vol=10.0% [unattributed]; "
+                             "simulation.other_cost_vol=10.0% [unattributed]; "
+                             "condo.events=0 entries [unattributed]",
+        "the renter's portfolio": "simulation.investment_return_vol=5.0% [unattributed]"}),
+    "hazard_zero": (HAZARD_ZERO, {
+        "the housing market": "simulation.value_growth_vol=5.0% [assistant]; "
+                              "condo.price_shock.annual_hazard=0.0% [assistant]; "
+                              "condo.price_shock.severity_mean=25.0% [TREB 1989–96]; "
+                              "condo.price_shock.severity_vol=10.0% [TREB 1989–96 "
+                              "(calibrated)]"}),
+    "reset_zero": (RESET_ZERO, {
+        "your tenancy": "simulation.rent_escalation_vol=3.0% [unattributed]; rent.events=1 "
+                        "entry [assistant]; rent.reset_hazard=0.0% [unattributed]"}),
+    "value_vol_zero": (VALUE_VOL_ZERO, {
+        "the housing market": "simulation.value_growth_vol=0.0% [unattributed]; "
+                              "condo.price_shock.annual_hazard=5.0% [assistant]; "
+                              "condo.price_shock.severity_mean=25.0% [TREB 1989–96]; "
+                              "condo.price_shock.severity_vol=10.0% [TREB 1989–96 "
+                              "(calibrated)]"}),
+    "m28": (CORRELATION_UNPRICED_CONDO, {
+        "the economy": "economic.inflation_vol=2.0% [unattributed]; "
+                       "simulation.corr_inflation_house=0.5 [unattributed]; "
+                       "simulation.house_maintenance_vol=20.0% [unattributed] (pulled by "
+                       "simulation.corr_inflation_house = 0.5; rho squared 0.25)"}),
+    "hazard_only": (HAZARD_ONLY, {
+        "the housing market": "condo.price_shock.annual_hazard=5.0% [assistant]; "
+                              "condo.price_shock.severity_mean=25.0% [TREB 1989–96]; "
+                              "condo.price_shock.severity_vol=10.0% [TREB 1989–96 "
+                              "(calibrated)]"}),
+    "both_shocks_defaulted": (BOTH_SHOCKS_DEFAULTED, {}),
+    "unpriced_condo_zero_rho": (UNPRICED_CONDO_ZERO_RHO, {
+        "the housing market": "simulation.value_growth_vol=5.0% [unattributed]"}),
+    "unpriced_house": (CORRELATION_UNPRICED_HOUSE, {}),
+    "pull_nothing": (CORRELATIONS_PULL_NOTHING, {}),
+    "renter_line": (RENTER_LINE_DRAWN, {}),
+    "owned_line": (OWNED_LINE, {}),
+    "owned_event": (OWNED_EVENT, {}),
+}
+
+
+@claims("A width is a sizing input of the row's channel's draws",
+        "Whether its draw fires on the run is not asked",
+        "On the economy row each correlation among the widths is followed",
+        "One the config states carries its read-back class as `source`",
+        "`tag` is the tag the source lines of `assumptions.lines` give the key")
+def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carries(tmp_path):
+    """§0.1 item 53, enumerated: on every row of every corpus run and every
+    witness, the widths are exactly the channel's sizing keys the read-back
+    carries (stated or defaulted) for an option the run prices, each
+    correlation followed by the shocks it pulls; each carries the read-back's
+    own tag and figure; and each dead row names the same keys. On the
+    witnesses the printed line is pinned too: a hazard of zero, an event that
+    starts after the horizon, and a cost volatility on an option holding no
+    line print their figures, and a correlation onto an unpriced option does
+    not print.
+    *Kills it:* a predicate that asks whether a draw fires (the witnesses'
+    lines lose a width), dropping the priced-option filter (M28 prints the
+    condo's correlation), an option map that files a channel under another
+    option (the condo row without a house loses its widths), a tag rebuilt
+    from the class (the defaults' cites vanish), or a width left out."""
+    seen = 0
+    for name, (raw, lines) in _WIDTH_WITNESSES.items():
+        got = Run(raw, "400").materialise(tmp_path / name)
+        seen += _assert_widths_enumerated(name, got.doc, got.raw)
+        for label, cells in lines.items():
+            assert _sized_by(got, label) == cells.split("; "), (name, label)
+    assert seen
+    # the witnesses are live: each prints the width a prediction dropped
+    m28 = Run(CORRELATION_UNPRICED_CONDO, "400").materialise(tmp_path / "m28_again")
+    assert "corr_inflation_condo" not in m28.text and "condo_fee_vol" not in m28.text
+    zero = Run(UNPRICED_CONDO_ZERO_RHO, "400").materialise(tmp_path / "zero_again")
+    (economy,) = [z for z in zero.block["spread"]["structural_zeros"] if z["channel_id"] == 0]
+    assert economy["keys"] == ["economic.inflation_vol", "simulation.corr_inflation_house",
+                               "simulation.house_maintenance_vol"]
+    both = Run(BOTH_SHOCKS_DEFAULTED, "400").materialise(tmp_path / "both_again")
+    defaulted = {e["key"] for e in both.doc["assumptions"]["defaults_applied"]}
+    assert {f"{o}.price_shock.{s}" for o in ("condo", "house")
+            for s in ("severity_mean", "severity_vol")} <= defaulted
+
+
+def test_every_width_on_every_corpus_row_is_a_sizing_input_the_read_back_carries(runs):
+    """The same enumeration over every row of every run of the shared corpus,
+    the dead rows' keys included."""
+    seen = 0
+    for name, run in runs.items():
+        seen += _assert_widths_enumerated(name, run.doc, run.raw)
+    assert seen
 
 
 @claims("`interaction_channel_ids` are the rows whose `interaction_gap_ci` lies")
@@ -1060,10 +1212,11 @@ def test_the_exact_rows_and_their_licence(runs):
     run = runs["mortgage"]
     for row in run.block["reversal"]["exact"]:
         assert set(row) == {"key", "option", "stated_formatted", "stated_source",
-                            "bracket_low", "bracket_high", "bracket_source", "probe_paths",
-                            "max_path_deviation_over_sd", "boundaries",
+                            "stated_tag", "bracket_low", "bracket_high", "bracket_source",
+                            "probe_paths", "max_path_deviation_over_sd", "boundaries",
                             "refused_boundaries", "references", "path_note"}
         assert row["stated_source"] == run.spec.sources.classify(row["key"])
+        assert row["stated_tag"] == sentences._read_back_tag(run.doc, row["key"])
         gate = reversal_gate(run.raw, row["key"], row["bracket_high"],
                              paths=row["probe_paths"])
         assert gate["licensed"] and gate["others_bit_identical"]
@@ -1260,25 +1413,28 @@ def test_an_estimated_row_carries_no_boundary(monkeypatch):
         assert "EstimatedBoundary(" not in path.read_text(encoding="utf-8"), path.name
 
 
-@claims("A boundary carries `verdict_field`, `value`, `was`, `becomes`,",
+@claims("A boundary carries `verdict_field`, `value`, `formatted`, `was`, `becomes`,",
         "`best` and `runner_up` are SOLVED on the central case;",
         "`was` is what the field says at the lower end of the bracket the boundary",
         "For `decisive` they read")
 def test_every_boundary_reads_upward_against_a_sweep(runs):
+    """`was` at the figure the block prints for the boundary, and `becomes`
+    just above its unrounded value (§0.1 item 54: one printed step up is not
+    where `becomes` is read)."""
     for name in ("fixture", "mortgage", "decisive_step", "decisive_step_lower"):
         run = runs[name]
         for row in run.block["reversal"]["exact"]:
             for boundary in row["boundaries"]:
                 field = boundary["verdict_field"]
                 solved = field in ("best", "runner_up")
-                keys = {"verdict_field", "value", "was", "becomes", "further_changes",
-                        "confirming_probabilities"}
+                keys = {"verdict_field", "value", "formatted", "was", "becomes",
+                        "further_changes", "confirming_probabilities"}
                 if not solved:
                     keys |= {"curve_probabilities", "curve_paths", "seed"}
                 assert set(boundary) == keys
                 below, above = _sweep_states(run.path, row["key"],
-                                             [boundary["value"] - 1e-4,
-                                              boundary["value"] + 1e-4], not solved)
+                                             [_percent(boundary["formatted"]),
+                                              boundary["value"] + 1e-9], not solved)
                 assert below[field] == boundary["was"], (name, row["key"], field)
                 assert above[field] == boundary["becomes"], (name, row["key"], field)
                 if field == "decisive":
@@ -1427,11 +1583,36 @@ def _run_says(run, row, field, futures):
     return doc[field]
 
 
-@claims("`refused_boundaries[]`: `verdict_field`, `code` and `reason`, for a field on",
+@claims("`refused_boundaries[]`: `verdict_field`, `code` and `reason`: one for a field",
+        "`reason` is the measured fact, and `code` is `unchanged` when",
         "`references[]`: `label`, `value`, `formatted`, `anchor` and `note`",
         "On an `effective_annual` config the semi-annual anchor passes through")
 def test_the_refused_fields_and_the_references(runs):
+    """The refused entries and the references on real rows; each code by its
+    own witness in `tests/test_decomposition_refusal_codes.py`, which also
+    checks the head each code prints behind. And a field with one boundary
+    printed and another refused says so line by line: its refusal never says
+    no boundary was printed for it."""
     from hde.anchors import ANCHORS
+    from tests.decomposition_households import uncertainty_surface
+    dec = uncertainty_surface()
+    renewal = dec.reversal.exact[0]
+    edge = dc.RefusedBoundary(verdict_field="mc_best", code="not_identified",
+                              reason="across the bracket the probabilities this boundary "
+                                     "turns on move by 0.0100, not more than 2 s.e. at the "
+                                     "boundary (0.0400) on 2000 paths")
+    both = dataclasses.replace(renewal, refused_boundaries=renewal.refused_boundaries + (edge,))
+    text = dt.format_decomposition(dataclasses.replace(
+        dec, reversal=dataclasses.replace(dec.reversal,
+                                          exact=(both,) + dec.reversal.exact[1:])))
+    lines = text.splitlines()
+    assert any(line.startswith("      sampled on 2,000 paths at seed 42: as it rises past "
+                               "2.71%, the option most futures call cheapest") for line in lines)
+    assert ("      a boundary not printed for the option most futures call cheapest "
+            f"(not_identified): {edge.reason}") in lines
+    assert not any(line.startswith("      no boundary printed for the option most futures")
+                   for line in lines)
+    assert set(dc.EDGE_REFUSAL_CODES) < set(dc.BOUNDARY_REFUSAL_CODES)
     refused = 0
     for name, converted in (("fixture", False), ("mortgage", True)):
         run = runs[name]
@@ -1464,7 +1645,7 @@ def test_the_refused_fields_and_the_references(runs):
         "`reversal.structural_zeros` holds the `stated_path` rows and",
         "Decided by the model's structure;",
         "Both facts are measured, on those futures, and both are facts about the stream.",
-        "`keys` are the keys of the stream's widths, and nothing is said of them",
+        "`keys` are the keys of the stream's widths (the income stream's",
         "`reversal_key` is `null`.")
 def test_the_structural_zeros_say_what_is_drawn(runs):
     """Checked at the generators: a stated path moves no stream's state; the
@@ -1590,10 +1771,10 @@ def test_the_text_block_holds_six_kinds_of_line(runs):
             if "seed" in boundary:
                 head = (f"      sampled on {boundary['curve_paths']:,} paths at seed "
                         f"{boundary['seed']}: as it rises past "
-                        f"{dt._sampled_rate(boundary['value'])}, ")
+                        f"{boundary['formatted']}, ")
             else:
                 head = (f"      solved on the central case: as it rises past "
-                        f"{dt._solved_rate(boundary['value'])}, ")
+                        f"{boundary['formatted']}, ")
             assert sum(line.startswith(head) for line in lines) == 1, head
     ladder = run.block["reversal"]["exact"][0]
     at = lines.index(f"      bracket searched: {dt._rate(ladder['bracket_low'])}–"
@@ -1654,7 +1835,7 @@ def _assert_top_line(text, what, leading):
 @claims("A figure that did not resolve prints behind",
         "`not resolved` with no colon and no figure after it stands where the residual",
         "`largest alone share:` and `largest shift in size:` name a",
-        "when the top row did not resolve, neither line prints.",
+        "when a register's top row did not resolve, that register's line does not print.",
         "Each printed figure is rounded on its own from the unrounded field")
 def test_the_text_block_prints_the_registers_own_judgments(runs):
     """On the fixture: each unresolved spread and level row behind the words,
@@ -1711,6 +1892,205 @@ def test_the_text_block_prints_the_registers_own_judgments(runs):
     inter = run.block["spread"]["interaction"]
     assert any(line.startswith(f"  alone shares summed before rounding: "
                                f"{dt._share(inter['first_order_sum'])} ") for line in lines)
+
+
+# §0.1 item 54's witnesses, each printing a figure on a crossing's axis where a
+# floor at one fixed precision put it on the wrong side, and the lines each
+# prints now. SLIVER_LOW printed "6.27%" for the lower edge of a `was` stretch
+# narrower than 0.01%, where `--sweep` says decisive for house; SOLVED_SLIVER
+# printed "6.2724%" for a runner-up stretch lying wholly above it;
+# STATED_BESIDE_CROSSING printed its stated 6.273% as "6.27%" below a solved
+# "6.2724%" and beside a sampled "6.27%" whose value lies above 6.273%;
+# SLIVER_HIGH is the upper-edge twin, whose `becomes` holds just above the edge
+# and not one printed step up; THREE_OPTION_RUNNER_UP reads an upper edge's
+# `becomes` in the solved span next to it (the mutant that read two spans on
+# printed "from condo to rent"); REFERENCE_BESIDE_CROSSING printed the
+# contracted rate, 4.3973% on this axis, as "4.40%" beside a solved "4.3985%",
+# and its stated 4.40%, a float just below 4.40%, beside a sampled crossing
+# at 4.4057% that floored to the same "4.40%".
+_FIGURE_WITNESSES = {
+    "sliver_low": (SLIVER_LOW, (
+        "      sampled on 400 paths at seed 42: as it rises past 6.277%, the decisiveness "
+        "verdict changes from not decisive to decisive for rent (and changes again below "
+        "it, inside the bracket)",)),
+    "solved_sliver": (SOLVED_SLIVER, (
+        "      solved on the central case: as it rises past 6.27248%, the runner-up changes "
+        "from house to condo (and changes again below it, inside the bracket)",)),
+    "stated_beside_crossing": (STATED_BESIDE_CROSSING, (
+        "  house.mortgage_rate, stated 6.273% [unattributed]",
+        "      solved on the central case: as it rises past 6.2724%, the central case's "
+        "winner changes from house to rent",
+        "      sampled on 400 paths at seed 42: as it rises past 6.278%, the option most "
+        "futures call cheapest changes from house to rent")),
+    "sliver_high": (SLIVER_HIGH, (
+        "      sampled on 400 paths at seed 42: as it rises past 6.27%, the decisiveness "
+        "verdict changes from decisive for house to not decisive (and changes again above "
+        "it, inside the bracket)",)),
+    "three_option_runner_up": (THREE_OPTION_RUNNER_UP, (
+        "      solved on the central case: as it rises past 3.7997%, the runner-up changes "
+        "from condo to house (and changes again above it, inside the bracket)",)),
+    "reference_beside_crossing": (REFERENCE_BESIDE_CROSSING, (
+        "  house.mortgage_rate, stated 4.40% [unattributed]",
+        "      solved on the central case: as it rises past 4.3985%, the central case's "
+        "winner changes from house to rent",
+        "      sampled on 400 paths at seed 42: as it rises past 4.405%, the option most "
+        "futures call cheapest changes from house to rent",
+        "      on the same axis: contracted 5y uninsured 4.397% "
+        "[mortgage_rate.contracted_5y_uninsured] — published as 4.35% compounded "
+        "semi-annually; contracted 5y insured 4.05% [mortgage_rate.contracted_5y_insured] "
+        "— published as 4.01% compounded semi-annually; posted 5y 6.18% "
+        "[mortgage_rate.posted_5y] — published as 6.09% compounded semi-annually")),
+}
+
+
+def _percent(text):
+    return float(decimal.Decimal(text.rstrip("%")).scaleb(-2))
+
+
+def _splits(printed, value, figures):
+    """Whether a stated or cited figure below `value` prints, at the finest
+    precision it may be given, at or above the printed crossing: then no
+    rounding of it prints it below the crossing, where it is."""
+    shown = decimal.Decimal(printed.rstrip("%"))
+    finest = be.PRINTED_RATE_MAX_PLACES
+    return any(shown <= decimal.Decimal(f"{f:.{finest}%}".rstrip("%"))
+               for f in figures if f < value)
+
+
+@claims("Its rate is `formatted`: `value` floored,",
+        "So the field says `was` at the printed rate because that is checked",
+        "A stated figure and a reference's `formatted` print at two decimals")
+def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(tmp_path):
+    """§0.1 item 54, on its witnesses. Every crossing's figure is its value
+    floored, at its kind's precision or more; at the printed figure `--sweep`
+    says `was`, and just above the unrounded value `becomes` — never one
+    printed step up, where on a sliver a third state lies; one decimal fewer
+    would fail (the field says something else there, or a stated or cited
+    figure lies between), so it widened no further than it had to; and the
+    stated figure and every reference order against every printed crossing as
+    the unrounded values do.
+    *Kills it:* printing at a fixed precision (the witnesses' lines revert),
+    checking the field at the value instead of at the printed figure, widening
+    past need, or a stated figure rounded without looking at the crossings."""
+    live = 0
+    for name, (raw, lines) in _FIGURE_WITNESSES.items():
+        got = Run(raw).materialise(tmp_path / name)
+        printed_lines = got.text.splitlines()
+        for line in lines:
+            assert line in printed_lines, (name, line)
+        for row in got.block["reversal"]["exact"]:
+            option, leaf = row["key"].split(".", 1)
+            stated = raw[option][leaf]
+            figures = ([float(v) for v in (stated if isinstance(stated, list) else [stated])]
+                       + [r["value"] for r in row["references"]])
+            for boundary in row["boundaries"]:
+                field, sampled = boundary["verdict_field"], "curve_paths" in boundary
+                places = len(boundary["formatted"].rstrip("%").split(".")[1])
+                assert places >= (2 if sampled else 4), boundary
+                assert boundary["formatted"] == be.floored_rate(boundary["value"], places)
+                at, above = _sweep_states(got.path, row["key"],
+                                          [_percent(boundary["formatted"]),
+                                           boundary["value"] + 1e-9], sampled)
+                assert at[field] == boundary["was"], (name, boundary, at)
+                assert above[field] == boundary["becomes"], (name, boundary, above)
+                if places > (2 if sampled else 4):
+                    fewer = be.floored_rate(boundary["value"], places - 1)
+                    (there,) = _sweep_states(got.path, row["key"], [_percent(fewer)], sampled)
+                    assert (there[field] != boundary["was"]
+                            or _splits(fewer, boundary["value"], figures)), (name, fewer)
+                    live += 1
+            shown = row["stated_formatted"].split(", ")
+            values = stated if isinstance(stated, list) else [stated]
+            pairs = list(zip(shown, [float(v) for v in values])) + [
+                (r["formatted"], r["value"]) for r in row["references"]]
+            for figure, value in pairs:
+                def ordered(text):
+                    return all(
+                        sentences._order(decimal.Decimal(text.rstrip("%")),
+                                         decimal.Decimal(b["formatted"].rstrip("%")))
+                        == sentences._order(value, b["value"]) for b in row["boundaries"])
+                assert ordered(figure), (name, figure)
+                # two decimals, or more only where fewer would mis-order it
+                places = len(figure.rstrip("%").split(".")[1])
+                assert places >= 2 and figure == f"{value:.{places}%}", (name, figure)
+                if places > 2:
+                    assert not ordered(f"{value:.{places - 1}%}"), (name, figure)
+                    live += 1
+    assert live >= 4       # the widening is exercised, not only its absence
+
+
+@claims("`--decompose` stops with an error naming the check rather than print the line")
+def test_a_check_that_cannot_pass_stops_the_block_by_name(monkeypatch):
+    """A fail-safe inside the block or the reversal solver reaches the user
+    as an error naming its check and exit 1, never as a traceback. Three are
+    forced at 40 futures.
+
+    The nine-point check (§0.1 item 47) with no solved crossing handed back:
+    the ranking changes across the bracket, and the check reads it at each of
+    the nine points (a check that read the bracket's low end at every point
+    would find the run's own answer there and pass, while its reason says
+    "at every one of 9 points"). The printed-rate check (§0.1 item 54) with
+    no precision allowed past the one it starts at. The width check (§0.1
+    item 53) with no tag for any key.
+    *Kills it:* the CLI no longer catching the raise, the nine-point check
+    reading one point, or any of the three checks deleted."""
+    def no_crossings(key, pair, lo, hi, totals_at, **kwargs):
+        return {"break_evens": []}
+
+    with monkeypatch.context() as patched:
+        patched.setattr(be, "solve_crossings", no_crossings)
+        code, out, err = _cli(MORTGAGE, "--decompose=40")
+    assert code == 1 and "Traceback" not in err and "which risk decides it" not in out
+    assert ("Error: --decompose stopped, a check failed: the 9-point scan check: on "
+            "house.mortgage_rate no solved crossing moves best, and at the 9 scan points "
+            "it reads ['house', ") in err
+    # the ranking the check read differs across the grid, and the run's own
+    # answer is the one at the bracket's low end
+    grid = [be._ranking_at(_load(MORTGAGE), "house.mortgage_rate", x)["best"]
+            for x in be._scan_grid(0.01, 0.10, be.CROSSING_SCAN_POINTS)]
+    assert grid[0] == "house" and set(grid) == {"house", "rent"}
+
+    with monkeypatch.context() as patched:
+        patched.setattr(be, "PRINTED_RATE_MAX_PLACES", 3)
+        code, out, err = _cli(MORTGAGE, "--decompose=40")
+    assert code == 1 and "Traceback" not in err and "which risk decides it" not in out
+    assert ("Error: --decompose stopped, a check failed: the printed-rate check: "
+            "house.mortgage_rate's best crossing at ") in err
+
+    # the width check (§0.1 item 53): a width whose key the source lines give
+    # no tag stops the block, on `--json` too, where no formatter would have
+    # refused the untagged width
+    import hde.serialization as serialization
+    with monkeypatch.context() as patched:
+        patched.setattr(serialization, "read_back_tag", lambda spec, key: None)
+        code, out, err = _cli(FIXTURE, "--decompose=40", "--json")
+    assert code == 1 and "Traceback" not in err and out == ""
+    assert "Error: --decompose stopped, a check failed: the width check: " in err
+    assert "sizes a draw on this run and the read-back gives it no tag" in err
+
+
+def test_the_figure_checks_raise_where_nothing_passes():
+    """Each check, alone: a crossing whose field never says `was` at any
+    floored figure, and a stated figure equal to a crossing's value, which a
+    rounding upward never prints equal to that crossing's floored figure."""
+    with pytest.raises(ValueError, match="the printed-rate check"):
+        be.printed_crossing("house.mortgage_rate", "decisive", 0.0627, "not decisive",
+                            lambda v: "decisive for rent", 0.01)
+    assert be.printed_crossing("house.mortgage_rate", "decisive", 0.0627123, "x",
+                               lambda v: "x" if v >= 0.06271 else "y", 0.01) == "6.271%"
+    with pytest.raises(ValueError, match="the figure-order check"):
+        be.ordered_figure("house.mortgage_rate", 0.0627126,
+                          [(0.0627126, be.floored_rate(0.0627126, 4))])
+    assert be.ordered_figure("house.mortgage_rate", 0.06273,
+                             [(0.0627246, "6.2724%")]) == "6.273%"
+    # a floored figure below the bracket is off the axis searched, and passed
+    # over for a finer one
+    assert be.printed_crossing("house.mortgage_rate", "best", 0.0100003, "x",
+                               lambda v: "x", 0.0100001) == "1.00003%"
+    # a stated figure between a printed crossing and its value holds the
+    # crossing's figure above it
+    assert be.printed_crossing("house.mortgage_rate", "mc_best", 0.06278, "house",
+                               lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
 
 
 # ---------------------------------------------------------------------------
@@ -1889,16 +2269,30 @@ def test_the_partition_of_the_numbers_is_whole(runs, tmp_path):
     assert one.block["refusal"]["channel_id"] in many.block["live_channel_ids"]
     assert len(many.block["live_channel_ids"]) > 1
     # the words the contract files with the config
-    for key in ("stated_formatted", "stated_source", "bracket_source", "path_note"):
+    for key in ("stated_source", "stated_tag", "bracket_source"):
         assert ([r[key] for r in a_run.block["reversal"]["exact"]]
                 == [r[key] for r in b_run.block["reversal"]["exact"]]), key
+    assert a_run.block["reversal"]["no_distance_code"] == b_run.block["reversal"][
+        "no_distance_code"]
     assert [r["widths"] for r in a_run.block["spread"]["rows"]] == [
         r["widths"] for r in b_run.block["spread"]["rows"]]
     for x, y in zip(a_run.block["reversal"]["exact"], b_run.block["reversal"]["exact"]):
-        assert ([(b["verdict_field"], b["was"], b["becomes"], b["further_changes"])
-                 for b in x["boundaries"] if "seed" not in b]
-                == [(b["verdict_field"], b["was"], b["becomes"], b["further_changes"])
-                    for b in y["boundaries"] if "seed" not in b])
+        assert ([(b["verdict_field"], b["formatted"], b["was"], b["becomes"],
+                  b["further_changes"]) for b in x["boundaries"] if "seed" not in b]
+                == [(b["verdict_field"], b["formatted"], b["was"], b["becomes"],
+                     b["further_changes"]) for b in y["boundaries"] if "seed" not in b])
+    # the config's figures at a precision a sampled crossing can widen: each
+    # printed figure is the stated or cited value itself, at the decimals it
+    # prints with
+    for row in a_run.block["reversal"]["exact"] + b_run.block["reversal"]["exact"]:
+        option, leaf = row["key"].split(".", 1)
+        stated = a_run.raw[option][leaf]
+        pairs = list(zip(row["stated_formatted"].split(", "),
+                         stated if isinstance(stated, list) else [stated]))
+        pairs += [(r["formatted"], r["value"]) for r in row["references"]]
+        for figure, value in pairs:
+            places = len(figure.rstrip("%").split(".")[1])
+            assert figure == f"{float(value):.{places}%}", (figure, value)
 
 
 @claims("A figure that changes with `simulation.random_seed` or with `N` is a property")
@@ -1968,9 +2362,10 @@ def _between(text, start, stop):
     return text[begin:] if end == -1 else text[begin:end]
 
 
-# gates.md §10, whole: its opening paragraph and every one of its bullets
-# (§0.1 item 52). Text appended after a pinned fragment was invisible to a
-# fragment test, so the section is enumerated.
+# gates.md §10, whole: its heading, its opening paragraph and every one of its
+# bullets (§0.1 item 52). Text appended after a pinned fragment was invisible
+# to a fragment test, so the section is enumerated, its heading included.
+_GATES_10_HEADING = "## 10. `--decompose`: quote the block, and read its meaning in the contract"
 _GATES_10_OPENING = (
     "What the block prints, line by line, is written in "
     "`docs/reference/API_CONTRACT.md` § The `decomposition` block, under \"The text "
@@ -1978,24 +2373,24 @@ _GATES_10_OPENING = (
     "them from. So:")
 _GATES_10_BULLETS = (
     "Quote the block's lines verbatim, with their figures and their `[...]` tags.",
-    "Never quote a row from THE SPREAD without the same channel's row from THE LEVEL "
-    "beside it.",
+    "Never quote a row of THE SPREAD's table without the same channel's row from THE "
+    "LEVEL beside it.",
     "Where the block prints `not resolved`, say it is not resolved, and quote what the "
     "block prints after the words.",
     "Read what a figure, a refusal code or a path count means in the contract section "
     "above before you explain it; never explain it from memory or from this file.",
     "Name a share by the column it is printed under, never \"importance\" or a "
     "\"contribution to the answer\".",
-    "A refusal, of the whole block or of the spread alone, is that run's finding: quote "
-    "its line as printed.",
+    "A refusal, of the whole block, of the spread, of a boundary or of the search for "
+    "one, is that run's finding: quote its line as printed.",
 )
 
 
 def _gates_10(text):
-    """`(opening, bullets)` of gates.md §10, each whitespace-normalised, and
-    anything else the section holds."""
+    """`(heading, opening, bullets)` of gates.md §10, each
+    whitespace-normalised, and anything else the section holds."""
     section = _between(text, "## 10. `--decompose`", "\n## ")
-    body = section.split("\n", 1)[1]
+    heading, body = section.split("\n", 1)
     blocks = [block for block in re.split(r"\n\s*\n", body) if block.strip()]
     opening = " ".join(blocks[0].split())
     bullets, rest = [], []
@@ -2005,7 +2400,7 @@ def _gates_10(text):
                 bullets.append(" ".join(item[2:].split()))
             else:
                 rest.append(" ".join(item.split()))
-    return opening, tuple(bullets), rest
+    return " ".join(heading.split()), opening, tuple(bullets), rest
 
 
 def test_the_skill_is_behavioural_and_restates_nothing():
@@ -2021,13 +2416,15 @@ def test_the_skill_is_behavioural_and_restates_nothing():
     bullet or a clause — both appended below fail it."""
     text = _GATES.read_text(encoding="utf-8")
     section = _between(text, "## 10. `--decompose`", "\n## ")
-    assert _gates_10(text) == (_GATES_10_OPENING, _GATES_10_BULLETS, [])
+    assert _gates_10(text) == (_GATES_10_HEADING, _GATES_10_OPENING, _GATES_10_BULLETS, [])
     appended_bullet = text.replace(
-        "  quote its line as printed.\n",
-        "  quote its line as printed.\n"
+        "  for one, is that run's finding: quote its line as printed.\n",
+        "  for one, is that run's finding: quote its line as printed.\n"
         "- When every future names the same winner, only the spread table refuses.\n")
-    qualified = text.replace("  LEVEL beside it.\n", "  LEVEL beside it, unless the share resolved.\n")
-    for mutant in (appended_bullet, qualified):
+    qualified = text.replace("  THE LEVEL beside it.\n",
+                             "  THE LEVEL beside it, unless the share resolved.\n")
+    headed = text.replace(_GATES_10_HEADING, _GATES_10_HEADING + ", unless a share resolved")
+    for mutant in (appended_bullet, qualified, headed):
         assert mutant != text and _gates_10(mutant) != _gates_10(text)
     assert not _FIGURE.search(section), _FIGURE.search(section)
     for restated in ("Sobol", "variance", "s.e.", "standard error", "bootstrap",

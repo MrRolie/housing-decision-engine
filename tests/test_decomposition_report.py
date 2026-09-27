@@ -57,7 +57,7 @@ which risk decides it — 2,000 futures, 7 channels live on them
   the renter's portfolio  0.88 [0.78, 0.999]                    0.84 [0.75, 0.95]                     40.6% [38.4, 42.8]
       sized by simulation.investment_return_vol=10% [assistant]
   the housing market      0.14 [0.11, 0.17]                     0.13 [0.10, 0.16]                     13.0% [11.5, 14.5]
-      sized by simulation.value_growth_vol=7% [assistant]; condo.price_shock.annual_hazard=3% [assistant]; house.price_shock.annual_hazard=3% [assistant]; condo.price_shock.severity_vol=10% [anchor: price_shock.severity_vol]; house.price_shock.severity_vol=10% [anchor: price_shock.severity_vol]
+      sized by simulation.value_growth_vol=7% [assistant]; condo.price_shock.annual_hazard=3% [assistant]; house.price_shock.annual_hazard=3% [assistant]; condo.price_shock.severity_vol=10% [price_shock.severity_vol]; house.price_shock.severity_vol=10% [price_shock.severity_vol]
   your tenancy            0.10 [0.08, 0.12]                     0.09 [0.07, 0.11]                     13.0% [11.5, 14.5]
       sized by rent.reset_hazard=7%/yr [assistant]; simulation.rent_escalation_vol=6% [assistant]; simulation.other_cost_vol=10% [assistant]; rent.events.moving_costs.cost_vol=20% [assistant]
   the population          0.03 [0.02, 0.05]                     0.03 [0.02, 0.05]                     6.0% [5.0, 7.0]
@@ -99,7 +99,7 @@ which risk decides it — 2,000 futures, 7 channels live on them
       sampled on 2,000 paths at seed 42: as it rises past 2.71%, the option most futures call cheapest changes from house to condo
       no boundary printed for the decisiveness verdict (unchanged): decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%
       on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y]
-  house.mortgage_rate, stated 4.35% [anchor]
+  house.mortgage_rate, stated 4.35% [mortgage_rate.contracted_5y_uninsured]
       bracket searched: 1.00%–10.00% [set in the engine]
       solved on the central case: as it rises past 1.9171%, the runner-up changes from house to condo
       sampled on 2,000 paths at seed 42: as it rises past 1.59%, the option most futures call cheapest changes from house to condo
@@ -414,7 +414,8 @@ class TestTheDraftDefectsOfItem18:
         not as an absence.
         *Kills it:* rendering only the first reversal row."""
         lines = _render().splitlines()
-        head = lines.index("  house.mortgage_rate, stated 4.35% [anchor]")
+        head = lines.index("  house.mortgage_rate, stated 4.35% "
+                           "[mortgage_rate.contracted_5y_uninsured]")
         row = lines[head:]
         assert ("      solved on the central case: as it rises past 1.9171%, the "
                 "runner-up changes from house to condo") in row
@@ -577,11 +578,51 @@ class TestTheFormatterRules:
             assert lines[start + 1].startswith("      sized by "), label
             for width in row.widths:
                 assert width.key in lines[start + 1], (label, width.key)
-                assert f"[{width.source}" in lines[start + 1]
+                assert f"[{width.tag}]" in lines[start + 1]
 
     def test_an_anchored_width_names_its_anchor(self):
-        assert ("condo.price_shock.severity_vol=10% [anchor: price_shock.severity_vol]"
+        """§0.1 item 53: a width's tag is the read-back's for that key, and the
+        read-back's `anchor-sourced:` line brackets the anchor's name alone.
+        *Kills it:* a class prefix before the name, or the class in its place."""
+        assert ("condo.price_shock.severity_vol=10% [price_shock.severity_vol]"
                 in _render())
+
+    def test_a_width_prints_the_tag_it_carries_and_refuses_to_print_without_one(self):
+        """The formatter prints the producer's tag as it is, and a width with
+        none raises rather than print a figure with nobody's name on it.
+        *Kills it:* rebuilding the tag from `source` and `anchor` (the cite
+        below then vanishes), or printing an untagged width."""
+        cite = dc.Width(key="condo.price_shock.severity_mean", formatted="25.0%",
+                        source="default", anchor="price_shock.severity_mean",
+                        tag="TREB 1989–96")
+        assert dt._width_cell(cite) == "condo.price_shock.severity_mean=25.0% [TREB 1989–96]"
+        with pytest.raises(ValueError, match="carries no tag"):
+            dt._width_cell(dataclasses.replace(cite, tag=None))
+
+    def test_an_exact_zero_shift_prints_unsigned_and_a_rounded_one_keeps_its_sign(self):
+        """An exact zero has no direction: it prints as `_faithful` prints a
+        zero, without a sign, where `+$0` read as a shift upward. A shift that
+        rounds to zero dollars is not zero, and keeps the sign it has.
+        *Kills it:* the zero branch deleted (`+$0` again), or widened to take
+        in a shift that only rounds to zero (`$0` over a real one)."""
+        assert (dt._shift(0.0), dt._shift(-0.0)) == ("$0", "$0")
+        assert (dt._shift(0.3), dt._shift(-0.3)) == ("+$0", "-$0")
+        assert (dt._shift(1234.4), dt._shift(-1234.6)) == ("+$1,234", "-$1,235")
+        dec = uncertainty_surface()
+        rows = tuple(
+            dataclasses.replace(row, level=dc.IndistinguishableLevel(
+                provisional_delta=delta, se=0.0, prob_best_frozen=0.5))
+            if row.channel_id in (3, 4) else row
+            for row, delta in zip(dec.level.rows, [0.0 if r.channel_id == 3 else 0.3
+                                                   for r in dec.level.rows]))
+        lines = format_decomposition(dataclasses.replace(
+            dec, level=dataclasses.replace(dec.level, rows=rows))).splitlines()
+        condo = next(line for line in lines if line.startswith("  the condo's costs ")
+                     and "± $" in line)
+        house = next(line for line in lines if line.startswith("  the house's costs ")
+                     and "± $" in line)
+        assert "not resolved: $0 (± $0)" in condo
+        assert "not resolved: +$0 (± $0)" in house
 
     def test_a_width_with_no_figure_prints_its_key_alone(self):
         assert "market_scenario.path [assistant]" in _render()
@@ -721,15 +762,20 @@ class TestTheCrossings:
         assert "decisive for condo to not decisive" in block
         assert "True" not in block and "False" not in block
 
-    @pytest.mark.parametrize("source", ["user", "assistant", "anchor", "unattributed"])
-    def test_a_reversal_row_tags_whose_figure_the_stated_value_is(self, source):
+    @pytest.mark.parametrize("tag", ["user", "assistant", "mortgage_rate.posted_5y",
+                                     "unattributed"])
+    def test_a_reversal_row_tags_whose_figure_the_stated_value_is(self, tag):
         """"a path you stated … solved on your own figures" was printed over
         the fixture's renewal ladder, which its own read-back calls
-        assistant-typed. The row's head carries `ExactReversal.stated_source`
-        as a tag and says nothing about who typed it.
-        *Kills it:* a fixed tag, or "you stated" anywhere."""
+        assistant-typed. The row's head carries `ExactReversal.stated_tag`,
+        the read-back's own tag for the key, and says nothing about who typed
+        it (§0.1 item 53: an anchored key's tag is its anchor's name, which
+        `[anchor]` had dropped).
+        *Kills it:* a fixed tag, the class in place of the tag, or "you
+        stated" anywhere."""
         dec = uncertainty_surface()
-        renewal = dataclasses.replace(dec.reversal.exact[0], stated_source=source)
+        renewal = dataclasses.replace(dec.reversal.exact[0], stated_tag=tag)
+        source = tag
         block = format_decomposition(dataclasses.replace(
             dec, reversal=dataclasses.replace(dec.reversal,
                                               exact=(renewal,) + dec.reversal.exact[1:])))
@@ -745,9 +791,12 @@ class TestTheCrossings:
         is a config property — this feature's cardinal error committed by its
         own output.
 
-        TWO distinctions, so it survives losing either: four decimals against
-        two, and a line head naming the sample.
-        *Kills it:* one shape for both, or dropping either."""
+        The line head names the kind, and a sampled line its sample: either
+        kind widens its decimals until the field says `was` at its figure
+        (§0.1 item 54), so the number of decimals tells them apart no more, and
+        the head is what is pinned. The figure is the one the boundary carries.
+        *Kills it:* one head for both, a sampled line without its sample, or a
+        figure the formatter re-derives instead of the one carried."""
         lines = _render().splitlines()
         assert ("      solved on the central case: as it rises past 1.6052%, the central "
                 "case's winner changes from house to rent") in lines
@@ -756,10 +805,18 @@ class TestTheCrossings:
                 "inside the bracket)") in lines
         assert ("      sampled on 2,000 paths at seed 42: as it rises past 2.71%, the "
                 "option most futures call cheapest changes from house to condo") in lines
-        block = "\n".join(lines)
-        assert "2.7164%" not in block          # the sampled figure at solved precision
-        assert not any(line.startswith("      solved") and "mc_best" in line
+        assert not any(line.startswith("      solved") and "most futures" in line
                        for line in lines)
+        # the figure printed is the one carried, whatever its decimals
+        dec = uncertainty_surface()
+        renewal = dec.reversal.exact[0]
+        wider = tuple(dataclasses.replace(b, formatted="2.7164%")
+                      if isinstance(b, dc.SampledBoundary) else b for b in renewal.boundaries)
+        lines = format_decomposition(dataclasses.replace(dec, reversal=dataclasses.replace(
+            dec.reversal, exact=(dataclasses.replace(renewal, boundaries=wider),)
+            + dec.reversal.exact[1:]))).splitlines()
+        assert ("      sampled on 2,000 paths at seed 42: as it rises past 2.7164%, the "
+                "option most futures call cheapest changes from house to condo") in lines
 
     def test_one_key_carries_both_kinds_and_decisive_is_a_sampled_one(self):
         """A licensed key carries both at once (contract, 2026-09-22). `decisive`
@@ -826,8 +883,8 @@ class TestTheCrossings:
         than printing in the estimated row's vocabulary."""
         dec = seven_channel_other_household()
         row = dec.reversal.estimated[0]
-        solved = dc.SolvedBoundary(verdict_field="best", value=0.044, was="condo",
-                                   becomes="house", further_changes=None,
+        solved = dc.SolvedBoundary(verdict_field="best", value=0.044, formatted="4.4000%",
+                                   was="condo", becomes="house", further_changes=None,
                                    confirming_probabilities=())
         odd = dataclasses.replace(row, boundaries=row.boundaries + (solved,))
         with pytest.raises(TypeError, match="estimated reversal row carries a "
@@ -836,7 +893,7 @@ class TestTheCrossings:
                 dec, reversal=dataclasses.replace(dec.reversal, estimated=(odd,))))
 
     def test_a_level_row_of_neither_kind_raises_rather_than_vanishing(self):
-        """The level rows are dispatched by type; a row of a third type would
+        """The level rows are told apart by type; a row of a third type would
         print in neither vocabulary."""
         dec = uncertainty_surface()
         stray = dc.LevelRow(channel_id=0, level=dc.Interval(low=0.0, high=1.0))
@@ -893,9 +950,11 @@ class TestRefusalsAreRenderedWithTheirReason:
     def test_a_refused_boundary_prints_its_code_before_its_reason(self):
         """§0.1 item 50: every refusal has one shape, its code and the one
         measured fact. Two fields refused with the same fact under different
-        codes are two refusals, and print as two lines.
-        *Kills it:* the code dropped from the line, or refusals grouped by
-        their reason alone."""
+        codes are two refusals, and print as two lines. A code that refuses
+        one boundary prints behind a head that says a boundary was not printed,
+        never that none was (`decomposition.EDGE_REFUSAL_CODES`).
+        *Kills it:* the code dropped from the line, refusals grouped by their
+        reason alone, or one head for both kinds of code."""
         dec = seven_channel_other_household()
         row = dec.reversal.estimated[0]
         gated = dataclasses.replace(row, boundaries=(), refused_boundaries=(
@@ -907,7 +966,7 @@ class TestRefusalsAreRenderedWithTheirReason:
             dec, reversal=dataclasses.replace(dec.reversal, estimated=(gated,)))).splitlines()
         assert ("      no boundary printed for the central case's winner or the "
                 "runner-up (unchanged): r") in lines
-        assert ("      no boundary printed for the decisiveness verdict "
+        assert ("      a boundary not printed for the decisiveness verdict "
                 "(not_identified): r") in lines
 
     def test_one_reason_refusing_several_fields_prints_once_naming_them_all(self):

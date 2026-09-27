@@ -210,7 +210,7 @@ STATE = r"(?:decisive for \w+|not decisive|condo|house|rent)"
 SHARE = r"-?\d+\.\d+"
 CI = rf"\[{SHARE}, {SHARE}\]"
 MONEY = r"-?\$[\d,]+"
-SHIFT = r"[+-]\$[\d,]+"
+SHIFT = r"(?:[+-]\$[\d,]+|\$0)"
 PROB = r"\d+\.\d+"
 PCT = r"\d+\.\d+%"
 N = r"[\d,]+"
@@ -218,8 +218,11 @@ N = r"[\d,]+"
 _CROSS = (rf"as it rises past (?P<value>{{value}}), (?P<field>{BOUND}) changes from "
           rf"(?P<was>{STATE}) to (?P<becomes>{STATE})(?: \(and changes again "
           rf"(?P<further>above|below) it, inside the bracket\))?")
-_CROSS_SOLVED = _CROSS.format(value=r"\d+\.\d{4}%")
-_CROSS_SAMPLED = _CROSS.format(value=r"\d+\.\d{2}%")
+# Either kind widens its precision until the field says `was` at the figure
+# (§0.1 item 54), so a figure's decimals do not tell the kinds apart: the
+# line's prefix does, and the claims below pin the prefix to the kind.
+_CROSS_SOLVED = _CROSS.format(value=r"\d+\.\d{4,}%")
+_CROSS_SAMPLED = _CROSS.format(value=r"\d+\.\d{2,}%")
 _CROSS_ESTIMATED = _CROSS.format(value=rf"\d+\.\d{{2}}% \(inside (?P<lo>{PCT})–(?P<hi>{PCT})\)")
 
 LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in {
@@ -267,7 +270,7 @@ LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in
     "NO_DISTANCE": (r"^  WHAT WOULD HAVE TO CHANGE — not solved \((?P<code>\w+)\): "
                     r"(?P<reason>.+)$"),
     "ROW_HEAD": (r"^  (?P<key>[a-z_]+(?:\.[a-z_]+)+), stated (?P<stated>.+) "
-                 r"\[(?P<source>\w+)\]$"),
+                 r"\[(?P<tag>[\w.]+)\]$"),
     "BRACKET": (rf"^      bracket searched: (?P<lo>{PCT})–(?P<hi>{PCT}) "
                 rf"\[(?P<src>[\w ]+)\]$"),
     "PATH_NOTE": (r"^      (?P<note>each crossing on this key is priced with the stated "
@@ -387,6 +390,34 @@ def _width_cells(widths) -> str:
 
 def _priced(raw) -> List[str]:
     return [o for o in ("condo", "house", "rent") if o in raw]
+
+
+# The read-back's source lines, by the label each opens with, and the class
+# the echo files each under; a key listed there carries no bracket of its own.
+_CLASS_LINES = {"user-stated": "user", "assistant-typed": "assistant",
+                "unattributed": "unattributed", "swept": "sweep"}
+
+
+def _read_back_tag(doc, key) -> Optional[str]:
+    """The tag the source lines give `key`, read off their TEXT in
+    `assumptions.lines` (the lines the read-back is cut from, which also list
+    the user's own figures the read-back leaves out): the bracket beside it
+    on the `anchor-sourced:` or `defaults applied:` line, character for
+    character, or the class of the source line that lists it. With no
+    `sources:` block no line lists a stated key, and the echo's own class
+    stands for it. None when no line carries a tag for the key."""
+    for line in doc["assumptions"]["lines"]:
+        line = line.strip()
+        label, _, rest = line.partition(": ")
+        if label in ("anchor-sourced", "defaults applied"):
+            m = re.search(rf"(?:^|, ){re.escape(key)}=[^\[]*? \[(?P<tag>[^\]]+)\]", rest)
+            if m:
+                return m["tag"]
+        elif label in _CLASS_LINES and re.search(rf"(?:^|, ){re.escape(key)}=", rest):
+            return _CLASS_LINES[label]
+    if not doc["assumptions"]["sources"]["declared"]:
+        return _echo_class(doc, key)
+    return None
 
 
 def _echo_class(doc, key) -> Optional[str]:
@@ -515,6 +546,9 @@ def _widths(line):
     assert line.m["cells"] == _width_cells(line.spread_row["widths"])
     if line.render.engine:
         for width in line.spread_row["widths"]:
+            # the tag printed is the read-back's for that key, character for
+            # character (§0.1 item 53)
+            assert width["tag"] == _read_back_tag(line.render.doc, width["key"]), width
             # whose figure it is: the read-back's class for a stated key, and
             # for a key the engine filled in, its `defaults applied` entry
             default = _defaulted(line.render.doc, width["key"])
@@ -751,13 +785,40 @@ def _no_distance(line):
     assert _NO_DISTANCE_REASON[line.m["code"]].fullmatch(line.m["reason"])
 
 
+def _order(a, b) -> int:
+    return (a > b) - (a < b)
+
+
+def _printed_crossings(row):
+    """`(unrounded value, printed figure)` of every crossing the row prints."""
+    return [(b["value"], b["formatted"]) for b in row["boundaries"] if "formatted" in b]
+
+
+def _orders_as_the_values_do(figure, value, row):
+    """A figure printed on a crossing's axis orders against every printed
+    crossing as the unrounded values order (§0.1 item 54)."""
+    shown = decimal.Decimal(figure.rstrip("%"))
+    for crossing, printed in _printed_crossings(row):
+        assert (_order(shown, decimal.Decimal(printed.rstrip("%")))
+                == _order(value, crossing)), (figure, value, printed, crossing)
+
+
 def _row_head(line):
     m, row = line.m, line.reversal_row
-    assert (m["key"], m["stated"], m["source"]) == (row["key"], row["stated_formatted"],
-                                                    row["stated_source"])
+    assert (m["key"], m["stated"], m["tag"]) == (row["key"], row["stated_formatted"],
+                                                 row["stated_tag"])
     if line.render.engine:
-        # whose figure it is: the read-back's own class for the same key
+        # whose figure it is: the read-back's own class for the same key, and
+        # its own tag, character for character (§0.1 item 53)
         assert _echo_class(line.render.doc, row["key"]) == row["stated_source"]
+        assert row["stated_tag"] == _read_back_tag(line.render.doc, row["key"])
+        option, leaf = row["key"].split(".", 1)
+        stated = line.render.raw[option][leaf]
+        values = stated if isinstance(stated, list) else [stated]
+        figures = m["stated"].split(", ")
+        assert len(figures) == len(values)
+        for figure, value in zip(figures, values):
+            _orders_as_the_values_do(figure, float(value), row)
 
 
 def _bracket(line):
@@ -776,10 +837,12 @@ def _solved(row):
 
 
 def _boundary(line, fmt):
+    """The row's boundary the line prints: its field and words, and its
+    figure as `fmt` reads it off the boundary."""
     m, row = line.m, line.reversal_row
     field = next(f for f, label in FIELD_WORDS.items() if label == m["field"])
     found = [b for b in row["boundaries"] if b["verdict_field"] == field
-             and fmt(b["value"]) == m["value"].split(" ")[0] and b["was"] == m["was"]
+             and fmt(b) == m["value"].split(" ")[0] and b["was"] == m["was"]
              and b["becomes"] == m["becomes"]]
     assert len(found) == 1, (m.group(0), row["boundaries"])
     boundary = found[0]
@@ -787,27 +850,43 @@ def _boundary(line, fmt):
     return boundary
 
 
+# Just above a crossing's unrounded value, where its `becomes` is read: past
+# the bracket each boundary converged in, and inside `_sweep_states`' own ten
+# decimals. Never one printed step up, where on a sliver a third state lies.
+_JUST_ABOVE = 1e-9
+
+
+def _printed(boundary):
+    return boundary["formatted"]
+
+
+def _was_at_printed_becomes_just_above(line, boundary, futures):
+    """"as it rises past X": at the PRINTED X the field says `was`, and just
+    above the unrounded value it says `becomes` — read on `--sweep`, with the
+    run's own futures for a sampled crossing (§0.1 items 42 and 54)."""
+    printed = float(decimal.Decimal(line.m["value"].rstrip("%")).scaleb(-2))
+    field = boundary["verdict_field"]
+    at, above = _sweep_states(line.render.path, line.reversal_row["key"],
+                              [printed, boundary["value"] + _JUST_ABOVE], futures=futures)
+    assert at[field] == boundary["was"], (line.m.group(0), at)
+    assert above[field] == boundary["becomes"], (line.m.group(0), above)
+
+
 def _cross_solved(line):
-    boundary = _boundary(line, dt._solved_rate)
+    boundary = _boundary(line, _printed)
+    # the prefix names the kind: a solved line carries a solved boundary
     assert boundary in _solved(line.reversal_row)
     if line.render.engine:
-        # "as it rises past X", solved on the central case: at the PRINTED X the
-        # deterministic verdict still says `was`, and one printed step up it
-        # says `becomes` (§0.1 item 42: the figure swept is the one printed)
-        printed = float(line.m["value"].rstrip("%")) / 100.0
-        field = boundary["verdict_field"]
-        at, above = _sweep_states(line.render.path, line.reversal_row["key"],
-                                  [printed, printed + 1e-6], futures=False)
-        assert at[field] == boundary["was"], (line.m.group(0), at)
-        assert above[field] == boundary["becomes"], (line.m.group(0), above)
+        _was_at_printed_becomes_just_above(line, boundary, futures=False)
 
 
 def test_a_printed_crossing_is_a_rate_the_field_still_says_was():
     """§0.1 item 42's witness. The mortgage example's rate crossing is solved
     at 6.784887%; printed to the nearest it read 6.7849%, a rate at which
-    `--sweep` already says `becomes`. Both crossing kinds print through one
-    floor, each at its own precision, so the printed figure is one the field
-    still says `was` at.
+    `--sweep` already says `becomes`. Both kinds print through one floor,
+    starting at their own precision, and widen it only where the field does
+    not say `was` there (§0.1 item 54's witnesses are in
+    `test_decomposition_contract_doc.py`).
     *Kills it:* rounding either kind to the nearest, or flooring at a
     precision other than its own."""
     got = run("mortgage")
@@ -815,7 +894,8 @@ def test_a_printed_crossing_is_a_rate_the_field_still_says_was():
     solved = [b for b in _solved(row)]
     assert solved
     for boundary in solved:
-        printed = dt._solved_rate(boundary["value"])
+        printed = boundary["formatted"]
+        assert printed == be.floored_rate(boundary["value"], 4)
         assert f"as it rises past {printed}, " in got.text
         nearest = f"{boundary['value'] * 100:.4f}%"
         field = boundary["verdict_field"]
@@ -826,12 +906,12 @@ def test_a_printed_crossing_is_a_rate_the_field_still_says_was():
         if nearest != printed:
             assert rounded[field] == boundary["becomes"], (nearest, rounded)
     # the witness is live: this crossing is one the nearest figure mis-states
-    assert any(f"{b['value'] * 100:.4f}%" != dt._solved_rate(b["value"]) for b in solved)
-    # the two kinds share the rule, each at its own precision
+    assert any(f"{b['value'] * 100:.4f}%" != be.floored_rate(b["value"], 4) for b in solved)
+    # the floor itself, at any precision: never above the value, and within
+    # one step of it
     for value in (0.06784887, 0.0499999999, 0.05, 0.123456789):
-        for places, fmt in ((4, dt._solved_rate), (2, dt._sampled_rate)):
-            printed = fmt(value)
-            assert printed == dt._floored_rate(value, places)
+        for places in (2, 3, 4, 7):
+            printed = be.floored_rate(value, places)
             assert len(printed.split(".")[1]) == places + 1
             assert decimal.Decimal(printed.rstrip("%")) <= decimal.Decimal(value) * 100
             assert decimal.Decimal(printed.rstrip("%")) + decimal.Decimal(1).scaleb(-places) \
@@ -839,7 +919,8 @@ def test_a_printed_crossing_is_a_rate_the_field_still_says_was():
 
 
 def _cross_sampled(line):
-    boundary = _boundary(line, dt._sampled_rate)
+    boundary = _boundary(line, _printed)
+    # the prefix names the kind: a sampled line carries a sampled boundary
     assert "curve_paths" in boundary
     assert _whole(line.m["paths"]) == boundary["curve_paths"]
     assert int(line.m["seed"]) == boundary["seed"]
@@ -847,18 +928,11 @@ def _cross_sampled(line):
         # the sample it was bisected on is this run's own
         assert boundary["seed"] == line.render.spec.simulation.random_seed
         assert boundary["curve_paths"] == line.render.spec.simulation.num_sims
-        # "as it rises past X": at the printed X the field still says `was`,
-        # and one printed step up it says `becomes`, on this run's own futures
-        printed = float(line.m["value"].rstrip("%")) / 100.0
-        field = boundary["verdict_field"]
-        at, above = _sweep_states(line.render.path, line.reversal_row["key"],
-                                  [printed, printed + 1e-4], futures=True)
-        assert at[field] == boundary["was"], (line.m.group(0), at)
-        assert above[field] == boundary["becomes"], (line.m.group(0), above)
+        _was_at_printed_becomes_just_above(line, boundary, futures=True)
 
 
 def _cross_estimated(line):
-    boundary = _boundary(line, dt._rate)
+    boundary = _boundary(line, lambda b: dt._rate(b["value"]))
     assert line.m["lo"] == dt._rate(boundary["value_ci"]["low"])
     assert line.m["hi"] == dt._rate(boundary["value_ci"]["high"])
     assert _whole(line.m["n"]) == boundary["resimulation_paths"]
@@ -908,7 +982,9 @@ def _references(line):
                                    f"compounded semi-annually")
         else:
             assert ref["value"] == published and ref["note"] is None
-        assert ref["formatted"] == _fmt_value(row["key"], ref["value"])
+        # on the axis, it orders against every printed crossing as the
+        # unrounded values do (§0.1 item 54)
+        _orders_as_the_values_do(ref["formatted"], ref["value"], row)
 
 
 LINE_CLAIMS: Dict[str, Callable[[Line], None]] = {

@@ -276,24 +276,24 @@ class TestTheTwoBoundaryKinds:
         """
         entry = {"value": 0.0271, "was": "house", "becomes": "condo", "further": None}
         probs = {"condo": 0.44, "house": 0.51, "rent": None}
-        kinds = {field: type(_typed_boundary(field, entry, curve=probs, confirmed=probs,
-                                             curve_paths=1234, seed=7))
+        kinds = {field: type(_typed_boundary(field, entry, formatted="2.71%", curve=probs,
+                                             confirmed=probs, curve_paths=1234, seed=7))
                  for field in BOUNDARY_FIELDS}
         assert kinds == {"best": SolvedBoundary, "runner_up": SolvedBoundary,
                          "mc_best": SampledBoundary, "decisive": SampledBoundary}
         # The sample travels from the caller rather than from a constant.
-        sampled = _typed_boundary("decisive", entry, curve=probs, confirmed=probs,
-                                  curve_paths=1234, seed=7)
+        sampled = _typed_boundary("decisive", entry, formatted="2.71%", curve=probs,
+                                  confirmed=probs, curve_paths=1234, seed=7)
         assert (sampled.curve_paths, sampled.seed) == (1234, 7)
         with pytest.raises(ValueError, match="neither"):
-            _typed_boundary("margin_pv", entry, curve=probs, confirmed=probs,
-                            curve_paths=1234, seed=7)
+            _typed_boundary("margin_pv", entry, formatted="2.71%", curve=probs,
+                            confirmed=probs, curve_paths=1234, seed=7)
         # And a sampled field with no curve to belong to refuses rather than
         # inventing a sample: this is the call the no-futures branch must never
         # be able to make.
         with pytest.raises(ValueError, match="no sample|has none"):
-            _typed_boundary("mc_best", entry, curve=None, confirmed=None,
-                            curve_paths=1234, seed=7)
+            _typed_boundary("mc_best", entry, formatted="2.71%", curve=None,
+                            confirmed=None, curve_paths=1234, seed=7)
         # And the router passes `was` / `becomes` through UNCOERCED, so a raw
         # boolean decisiveness reaches the type's own check and refuses there.
         # A `str()` in the router is what once printed "True to False".
@@ -301,7 +301,8 @@ class TestTheTwoBoundaryKinds:
             with pytest.raises(TypeError, match="not words"):
                 _typed_boundary(field, {"value": 0.05, "was": True, "becomes": False,
                                         "further": None},
-                                curve=probs, confirmed=probs, curve_paths=1234, seed=7)
+                                formatted="5.00%", curve=probs, confirmed=probs,
+                                curve_paths=1234, seed=7)
 
     def test_the_two_field_lists_partition_the_four_kinds(self):
         """The router reads these lists, so a fifth field added to

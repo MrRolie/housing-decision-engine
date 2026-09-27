@@ -713,6 +713,16 @@ NO_BLOCK_LINE = ("sources: none declared — the read-back cannot tell the user'
                  "numbers from the assistant's")
 
 
+def stated_tag(entry: SourceEntry) -> str:
+    """The tag the read-back gives one STATED key: the anchor it names in
+    brackets on the `anchor-sourced:` line, and otherwise the class the echo
+    files it under (`user`, `assistant`, `unattributed`, `sweep`), the line
+    that lists it carrying no bracket of its own. The one home of that tag:
+    `source_lines` prints it, and so does every other surface that tags a
+    stated figure (`serialization.read_back_tag`)."""
+    return entry.anchor if entry.source == "anchor" else entry.source
+
+
 def source_lines(echo: Optional[SourceEcho]) -> List[str]:
     """The assumption-block lines for the source echo (pure presentation)."""
     if echo is None or not echo.entries:
@@ -727,7 +737,7 @@ def source_lines(echo: Optional[SourceEcho]) -> List[str]:
             lines.append(f"{label}: {joined}")
     anchored = echo.of_class("anchor")
     if anchored:
-        joined = ", ".join(f"{e.key}={e.formatted} [{e.anchor}]" for e in anchored)
+        joined = ", ".join(f"{e.key}={e.formatted} [{stated_tag(e)}]" for e in anchored)
         lines.append(f"anchor-sourced: {joined}")
     return lines
 

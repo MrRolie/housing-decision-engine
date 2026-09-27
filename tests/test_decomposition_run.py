@@ -860,8 +860,9 @@ class TestTheIncomeStreamIsReDrawn:
             return result
 
         monkeypatch.setattr(dr, "_run", moving_income)
-        with pytest.raises(ValueError, match=r"^re-drawing the income stream moved an "
-                                             r"option's present value by \$1, above"):
+        with pytest.raises(ValueError, match=r"^the income-stream check: re-drawing the "
+                                             r"income stream moved an option's present "
+                                             r"value by \$1, above"):
             decompose(spec, paths=40, **inputs)
 
 

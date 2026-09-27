@@ -139,8 +139,8 @@ class TestTheBinding:
     def test_a_sampled_boundary_cannot_be_built_without_its_sample(self):
         """Asserted in BOTH directions: the full call builds, and dropping
         either the path count or the seed refuses."""
-        full = dict(verdict_field="mc_best", value=0.0271, was="house", becomes="condo",
-                    further_changes=None,
+        full = dict(verdict_field="mc_best", value=0.0271, formatted="2.71%", was="house",
+                    becomes="condo", further_changes=None,
                     curve_probabilities=(("condo", 0.44),),
                     confirming_probabilities=(("condo", 0.44),),
                     curve_paths=2000, seed=42)
@@ -155,8 +155,8 @@ class TestTheBinding:
         so its producer must state it. Asserted in BOTH directions: an explicit
         empty tuple builds, and leaving the field out refuses rather than
         defaulting the claim into existence."""
-        full = dict(verdict_field="best", value=0.016052, was="house", becomes="rent",
-                    further_changes=None, confirming_probabilities=())
+        full = dict(verdict_field="best", value=0.016052, formatted="1.6052%", was="house",
+                    becomes="rent", further_changes=None, confirming_probabilities=())
         assert dc.SolvedBoundary(**full).confirming_probabilities == ()
         with pytest.raises(TypeError):
             dc.SolvedBoundary(**{k: v for k, v in full.items()
@@ -173,9 +173,9 @@ class TestABoundaryStatesBothSidesInWords:
     """
 
     _BUILDS = {
-        dc.SolvedBoundary: dict(verdict_field="best", value=0.016052,
+        dc.SolvedBoundary: dict(verdict_field="best", value=0.016052, formatted="1.6052%",
                                 further_changes=None, confirming_probabilities=()),
-        dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674,
+        dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674, formatted="6.74%",
                                  further_changes="above",
                                  curve_probabilities=(("house", 0.65),),
                                  confirming_probabilities=(("house", 0.65),),
@@ -290,7 +290,7 @@ class TestAStatedValueSaysWhoseFigureItIs:
     happened to favour."""
 
     _EXACT = dict(key="house.mortgage_renewal_rates", option="house",
-                  stated_formatted="4.60%, 5.00%", bracket_low=0.01,
+                  stated_formatted="4.60%, 5.00%", stated_tag="assistant", bracket_low=0.01,
                   bracket_high=0.10, bracket_source="assistant", probe_paths=200,
                   max_path_deviation_over_sd=9.5e-16, boundaries=(),
                   refused_boundaries=(), references=())
@@ -308,9 +308,10 @@ class TestAStatedValueSaysWhoseFigureItIs:
 
     def test_it_has_no_default_anywhere(self):
         for cls in (dc.ExactReversal, dc.EstimatedReversal):
-            field = next(f for f in dataclasses.fields(cls) if f.name == "stated_source")
-            assert field.default is dataclasses.MISSING
-            assert field.default_factory is dataclasses.MISSING
+            for name in ("stated_source", "stated_tag"):
+                field = next(f for f in dataclasses.fields(cls) if f.name == name)
+                assert field.default is dataclasses.MISSING
+                assert field.default_factory is dataclasses.MISSING
 
 
 class TestAnEmptyRegisterSaysWhatItSearched:

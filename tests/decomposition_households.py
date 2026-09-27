@@ -29,10 +29,9 @@ household's own value is on), and a `decisive` crossing names its states in
 decisive" — never a boolean.
 """
 from hde import decomposition as _contract
+from hde.break_even import floored_rate
 from hde.decomposition import (
     EstimatedBoundary,
-    EstimatedReversal,
-    ExactReversal,
     IndistinguishableLevel,
     Interval,
     LevelRegister,
@@ -42,8 +41,6 @@ from hde.decomposition import (
     ResolvedInteraction,
     ResolvedLevel,
     ResolvedShares,
-    SampledBoundary,
-    SolvedBoundary,
     StructuralZero,
     UnresolvedShares,
     Width,
@@ -51,10 +48,16 @@ from hde.decomposition import (
 )
 from hde.decomposition_run import largest_affordable_paths
 from hde.models import Verdict
+from hde.sources import SourceEntry, stated_tag
 
 
 def _w(key, formatted, source, anchor=None, note=None):
-    return Width(key=key, formatted=formatted, source=source, anchor=anchor, note=note)
+    """A stated width, tagged as the read-back tags a stated key
+    (`sources.stated_tag`, the one home of that tag)."""
+    tag = stated_tag(SourceEntry(key=key, value=None, formatted=formatted or "",
+                                 source=source, anchor=anchor))
+    return Width(key=key, formatted=formatted, source=source, anchor=anchor, note=note,
+                 tag=tag)
 
 
 # The contract's four containers, built through factories that FILL the fields
@@ -102,6 +105,35 @@ def ReversalRegister(*, no_distance_code=None, no_distance_reason=None, **fields
         no_distance_code, no_distance_reason = NO_DISTANCE_TWO_OPTIONS
     return _contract.ReversalRegister(no_distance_code=no_distance_code,
                                       no_distance_reason=no_distance_reason, **fields)
+
+
+def SolvedBoundary(*, formatted=None, **fields):
+    """A solved crossing whose printed figure, unless stated, is its value
+    floored at the solved kind's first precision (`break_even.floored_rate`):
+    a hand-built household has no field to check a wider one on."""
+    if formatted is None:
+        formatted = floored_rate(fields["value"], 4)
+    return _contract.SolvedBoundary(formatted=formatted, **fields)
+
+
+def SampledBoundary(*, formatted=None, **fields):
+    """The same for a sampled crossing, at the sampled kind's first precision."""
+    if formatted is None:
+        formatted = floored_rate(fields["value"], 2)
+    return _contract.SampledBoundary(formatted=formatted, **fields)
+
+
+def ExactReversal(*, stated_tag=None, **fields):
+    """A row whose head's tag, unless stated, is its class: the read-back's tag
+    for a key it files under a class (an anchored key states its anchor)."""
+    return _contract.ExactReversal(
+        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
+
+
+def EstimatedReversal(*, stated_tag=None, **fields):
+    """The same for an estimated row."""
+    return _contract.EstimatedReversal(
+        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
 
 
 def Decomposition(*, max_paths=None, **fields):
@@ -388,6 +420,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         option="house",
         stated_formatted="4.35%",
         stated_source="anchor",
+        stated_tag="mortgage_rate.contracted_5y_uninsured",
         bracket_low=0.01,
         bracket_high=0.10,
         bracket_source="set in the engine",

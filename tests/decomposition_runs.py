@@ -259,6 +259,130 @@ OWNED_EVENT["house"]["events"] = [
     {"name": "roof_replacement", "base_cost": 20000, "expected_year": 12, "cost_vol": 0.15}]
 OWNED_EVENT["rent"]["monthly_rent"] = 1500
 
+# A width is a structural fact (spec §0.1 item 53): a sizing input of a
+# channel's draws, for an option the run prices, as the read-back states or
+# defaults it — whether or not the draw fires. Each config below states an
+# input whose draw never fires on the run, and its width prints all the same.
+# The condo's one event has a hazard that starts after the horizon.
+EV_LATE_START = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "nominal", "inflation_rate": 0.02, "inflation_vol": 0.02},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200, "value_growth_rate": 0.02,
+              "events": [{"name": "roof_replacement", "base_cost": 15000, "cost_vol": 0.2,
+                          "expected_year": 20, "timing_model": "hazard",
+                          "hazard_base": 0.05, "hazard_growth": 0.01,
+                          "hazard_start_year": 25}]},
+    "rent": {"monthly_rent": 1400, "rent_escalation_rate": 0.0,
+             "invested_down_payment": 355200, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 400, "random_seed": 42, "condo_fee_vol": 0.1,
+                   "value_growth_vol": 0.05, "investment_return_vol": 0.05,
+                   "rent_escalation_vol": 0.05, "corr_inflation_event_cost": 0.5},
+}
+# A cost line on the condo and none on the house, one other-cost volatility.
+LINES_CONDO_ONLY = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200, "value_growth_rate": 0.01,
+              "other_recurring_costs": [{"name": "property_tax", "annual_amount": 2600,
+                                         "escalation_rate": 0.0}]},
+    "house": {"initial_value": 400000, "value_growth_rate": 0.01,
+              "annual_maintenance_rate": 0.012, "all_cash": True, "purchase_costs": 6000},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.30,
+                   "condo_fee_vol": 0.1, "other_cost_vol": 0.1},
+}
+# The same condo against rent, the house's volatility still stated: the one
+# owned option priced is the condo, so which channel is whose option shows.
+LINES_CONDO_NO_HOUSE = copy.deepcopy(LINES_CONDO_ONLY)
+del LINES_CONDO_NO_HOUSE["house"]
+LINES_CONDO_NO_HOUSE["condo"]["events"] = []     # an events list with no entry
+LINES_CONDO_NO_HOUSE["rent"] = {"monthly_rent": 1300, "rent_escalation_rate": 0.01,
+                                "invested_down_payment": 355200,
+                                "investment_return_rate": 0.03}
+LINES_CONDO_NO_HOUSE["simulation"]["investment_return_vol"] = 0.05
+# A crash hazard of zero, and its two severities defaulted.
+HAZARD_ZERO = copy.deepcopy(HAZARD_ONLY)
+HAZARD_ZERO["condo"]["price_shock"] = {"annual_hazard": 0.0}
+HAZARD_ZERO["simulation"]["value_growth_vol"] = 0.05
+HAZARD_ZERO["sources"]["simulation.value_growth_vol"] = "assistant"
+# A lease-reset hazard of zero.
+RESET_ZERO = copy.deepcopy(HAZARD_ONLY)
+RESET_ZERO["rent"]["reset_hazard"] = 0.0
+RESET_ZERO["simulation"]["rent_escalation_vol"] = 0.03
+# A value volatility of zero beside a live crash.
+VALUE_VOL_ZERO = copy.deepcopy(HAZARD_ONLY)
+VALUE_VOL_ZERO["simulation"]["value_growth_vol"] = 0.0
+# M28 with a value volatility, which sizes the house's draws with no condo
+# priced, and a correlation of zero onto the house's maintenance: the rho and
+# the shock it pulls are widths at rho squared 0, on a row whose re-draw moves
+# nothing.
+UNPRICED_CONDO_ZERO_RHO = copy.deepcopy(CORRELATION_UNPRICED_CONDO)
+UNPRICED_CONDO_ZERO_RHO["simulation"].update({"corr_inflation_house": 0.0,
+                                              "value_growth_vol": 0.05})
+# A house price shock stating its hazard alone, beside the condo's: all four
+# defaulted severities, each with the cite the read-back gives it.
+BOTH_SHOCKS_DEFAULTED = copy.deepcopy(HAZARD_ONLY)
+BOTH_SHOCKS_DEFAULTED["house"]["price_shock"] = {"annual_hazard": 0.04}
+BOTH_SHOCKS_DEFAULTED["sources"]["house.price_shock.annual_hazard"] = "assistant"
+
+# A printed figure on a crossing's axis is checked on its side (spec §0.1
+# item 54). A five-year house against rent whose decisiveness goes decisive
+# for house, not decisive, decisive for rent inside one printed step of a
+# sampled crossing: the lower edge's `was` is a sliver narrower than 0.01%.
+SLIVER_LOW = {
+    "years": 5,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.08,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300.5, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.015,
+                   "rent_escalation_vol": 0.004},
+}
+# Its upper-edge twin: the run is decisive for house, and the stretch that is
+# not decisive lies above the edge, narrower than one printed step.
+SLIVER_HIGH = copy.deepcopy(DECISIVE_STEP)
+SLIVER_HIGH["simulation"].update({"house_maintenance_vol": 0.008,
+                                  "rent_escalation_vol": 0.002})
+# A stated rate between a solved crossing and the next printed step up.
+STATED_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
+STATED_BESIDE_CROSSING["house"]["mortgage_rate"] = 0.06273
+# A rent at which the central case's winner changes just above the
+# contracted rate as it sits on this axis: the reference printed at two
+# decimals would read above the crossing it lies below.
+REFERENCE_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
+REFERENCE_BESIDE_CROSSING["rent"]["monthly_rent"] = 1696.44
+# Three options, the condo's central present value fifty cents above rent's:
+# the runner-up is the house on a stretch narrower than one solved step.
+SOLVED_SLIVER = copy.deepcopy(DECISIVE_STEP_LOWER)
+SOLVED_SLIVER["condo"] = {"initial_value": 400000, "down_payment": 80000,
+                          "mortgage_rate": 0.05,
+                          "mortgage_rate_compounding": "effective_annual",
+                          "mortgage_term_years": 25, "purchase_costs": 6000,
+                          "monthly_fee": 1254.1807, "fee_escalation_rate": 0.03,
+                          "value_growth_rate": 0.031}
+SOLVED_SLIVER["simulation"].update({"house_maintenance_vol": 0.02,
+                                    "rent_escalation_vol": 0.005, "condo_fee_vol": 0.3})
+# Three options on which the runner-up changes twice above the central case's
+# winner's crossing: the deterministic edge reads the span next to it.
+THREE_OPTION_RUNNER_UP = {
+    "years": 20,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.021, "initial_value": 420000,
+              "all_cash": True, "purchase_costs": 6000, "value_growth_rate": 0.031},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.03,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.2,
+                   "rent_escalation_vol": 0.05, "condo_fee_vol": 0.1},
+}
+
 # A crash in every year of every future, at one fixed severity: the margin is
 # one figure on every future, and below zero, so the identical-margin
 # reason's sign has a witness (spec §0.1 item 44).
