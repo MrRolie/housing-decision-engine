@@ -1069,17 +1069,22 @@ def _spread_row_to_dict(row: "SpreadRow") -> Dict[str, Any]:
 def _spread_to_dict(spread: Any) -> Dict[str, Any]:
     """The spread register, or its refusal in the same slot (§0.1 item 7).
 
-    A refused spread serializes as `{"refusal": {"code", "reason"}}` and
-    carries NO `rows` key: an empty list beside printed level rows would let a
-    consumer read "no rows" as "nothing to report", the inference the named
-    refusal exists to prevent. Anything that is neither type raises rather
-    than being emitted in whichever shape it happens to resemble.
+    A refused spread serializes as `{"refusal": {"code", "reason"},
+    "structural_zeros": [...]}` and carries NO `rows` key: an empty list beside
+    printed level rows would let a consumer read "no rows" as "nothing to
+    report", the inference the named refusal exists to prevent. Its
+    `structural_zeros` are measured on the same futures whether or not it
+    refuses, so both forms carry them (§0.1 item 48). Anything that is neither
+    type raises rather than being emitted in whichever shape it happens to
+    resemble.
     """
-    if isinstance(spread, RefusedSpread):
-        return {"refusal": {"code": spread.code, "reason": spread.reason}}
-    if not isinstance(spread, SpreadRegister):
+    if not isinstance(spread, (RefusedSpread, SpreadRegister)):
         raise TypeError(f"the spread register is a {type(spread).__name__}, "
                         f"neither a SpreadRegister nor a RefusedSpread")
+    zeros = [dataclasses.asdict(zero) for zero in spread.structural_zeros]
+    if isinstance(spread, RefusedSpread):
+        return {"refusal": {"code": spread.code, "reason": spread.reason},
+                "structural_zeros": zeros}
     interaction: Dict[str, Any] = {
         "resolved": isinstance(spread.interaction, ResolvedInteraction)
     }
@@ -1093,6 +1098,7 @@ def _spread_to_dict(spread: Any) -> Dict[str, Any]:
         "leading_channel_id": spread.leading_channel_id,
         "unresolved_top_channel_id": spread.unresolved_top_channel_id,
         "interaction_channel_ids": list(spread.interaction_channel_ids),
+        "structural_zeros": zeros,
     }
 
 
@@ -1181,6 +1187,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
             "structural_zeros": [dataclasses.asdict(zero)
                                  for zero in reversal.structural_zeros],
+            "no_distance_code": reversal.no_distance_code,
             "no_distance_reason": reversal.no_distance_reason,
         },
     })

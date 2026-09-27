@@ -11,6 +11,7 @@ reversal kinds are not interchangeable (§5 mechanism 5, §0.1 item 7, §6).
 """
 import dataclasses
 import os
+import re
 import subprocess
 import sys
 
@@ -114,7 +115,7 @@ class TestTheBinding:
     def test_a_refused_spread_is_named_and_carries_no_rows(self):
         # §0.1 item 7: a refused spread beside a printed level is the honest
         # shape, and `rows=()` is exactly what that ruling rejects.
-        assert _fields(dc.RefusedSpread) == {"code", "reason"}
+        assert _fields(dc.RefusedSpread) == {"code", "reason", "structural_zeros"}
         assert "no_sign_variation" in dc.SPREAD_REFUSAL_CODES
 
     def test_the_two_reversal_kinds_are_not_interchangeable(self):
@@ -246,7 +247,7 @@ class TestARegisterHasOneTopRow:
         fields = dict(rows=(), interaction=dc.RefusedInteraction(
                           first_order_sum=1.1, first_order_sum_ci=dc.Interval(1.0, 1.2)),
                       leading_channel_id=6, unresolved_top_channel_id=None,
-                      interaction_channel_ids=())
+                      interaction_channel_ids=(), structural_zeros=())
         fields.update(over)
         return dc.SpreadRegister(**fields)
 
@@ -272,7 +273,7 @@ class TestARegisterHasOneTopRow:
     @pytest.mark.parametrize("build", ["_spread", "_level"])
     def test_a_leader_and_an_unresolved_top_together_refuse(self, build):
         """*Kills it:* deleting `_require_one_top`."""
-        with pytest.raises(ValueError, match="exactly one of the two"):
+        with pytest.raises(ValueError, match="at most one of the two"):
             getattr(self, build)(leading_channel_id=4, unresolved_top_channel_id=3)
 
     @pytest.mark.parametrize("register", [dc.SpreadRegister, dc.LevelRegister])
@@ -322,20 +323,99 @@ class TestAnEmptyRegisterSaysWhatItSearched:
 
     def test_the_legal_shapes_build(self):
         dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                            no_distance_code="no_candidate",
                             no_distance_reason="nothing was searched")
         dc.ReversalRegister(exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
-                            estimated=(), structural_zeros=(), no_distance_reason=None)
+                            estimated=(), structural_zeros=(), no_distance_code=None,
+                            no_distance_reason=None)
 
     def test_an_empty_register_without_a_reason_refuses(self):
         with pytest.raises(ValueError, match="no_distance_reason"):
             dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
-                                no_distance_reason=None)
+                                no_distance_code=None, no_distance_reason=None)
 
     def test_a_reason_beside_rows_refuses(self):
         with pytest.raises(ValueError, match="no_distance_reason"):
             dc.ReversalRegister(
                 exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
-                estimated=(), structural_zeros=(), no_distance_reason="none searched")
+                estimated=(), structural_zeros=(), no_distance_code="no_candidate",
+                no_distance_reason="none searched")
+
+
+class TestARefusalCarriesACodeFromItsSet:
+    """§0.1 item 50: the refused-boundary and no-distance lines print a code
+    before their reason, so each type takes a code from its own set and no
+    other: a code outside it prints a word the contract does not define.
+    *Kills it:* deleting either check (an undefined code builds), or pointing
+    it at the other set (a defined code refuses)."""
+
+    @pytest.mark.parametrize("code", dc.BOUNDARY_REFUSAL_CODES)
+    def test_a_refused_boundary_takes_each_boundary_code(self, code):
+        assert dc.RefusedBoundary(verdict_field="best", code=code, reason="r").code == code
+
+    @pytest.mark.parametrize("code", [None, "throughout", "no_candidate"])
+    def test_a_refused_boundary_refuses_any_other(self, code):
+        with pytest.raises(ValueError, match="RefusedBoundary.code"):
+            dc.RefusedBoundary(verdict_field="best", code=code, reason="r")
+
+    @pytest.mark.parametrize("code", dc.NO_DISTANCE_CODES)
+    def test_an_empty_register_takes_each_no_distance_code(self, code):
+        assert dc.ReversalRegister(
+            exact=(), estimated=(), structural_zeros=(), no_distance_code=code,
+            no_distance_reason="r").no_distance_code == code
+
+    @pytest.mark.parametrize("code", ["unchanged", "nothing"])
+    def test_an_empty_register_refuses_any_other(self, code):
+        with pytest.raises(ValueError, match="ReversalRegister.no_distance.code"):
+            dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                                no_distance_code=code, no_distance_reason="r")
+
+
+class TestEachRegisterHoldsTheRowsOfItsOwnSample:
+    """§0.1 item 48: a `dead_draw` row is measured on the block's own futures,
+    so it lives in the spread register, refused or not; a `stated_path` row is
+    measured on none, and it lives in the reversal register, which reads no
+    figure that moves with `N`.
+    *Kills it:* deleting either register's kind check (a row of the other
+    kind builds), or widening it (a row of its own kind refuses)."""
+
+    _DEAD = dict(kind="dead_draw", label="your tenancy", keys=("rent.events",),
+                 channel_id=5, measured_paths=400, move_threshold=1e-9)
+    _STATED = dict(kind="stated_path", label="the contract rate",
+                   keys=("house.mortgage_rate",), reversal_key="house.mortgage_rate")
+
+    @staticmethod
+    def _spread(zeros):
+        return TestARegisterHasOneTopRow._spread(structural_zeros=zeros)
+
+    @staticmethod
+    def _refused(zeros):
+        return dc.RefusedSpread(code="no_sign_variation", reason="r", structural_zeros=zeros)
+
+    @staticmethod
+    def _reversal(zeros):
+        return dc.ReversalRegister(exact=(), estimated=(), structural_zeros=zeros,
+                                   no_distance_code="no_candidate",
+                                   no_distance_reason="nothing was searched")
+
+    @pytest.mark.parametrize("build", ["_spread", "_refused"])
+    def test_the_spread_holds_the_dead_draw_rows_and_no_other(self, build):
+        dead, stated = dc.StructuralZero(**self._DEAD), dc.StructuralZero(**self._STATED)
+        assert getattr(self, build)((dead, dead)).structural_zeros == (dead, dead)
+        with pytest.raises(ValueError, match="stated_path"):
+            getattr(self, build)((dead, stated))
+
+    def test_the_reversal_holds_the_stated_path_rows_and_no_other(self):
+        dead, stated = dc.StructuralZero(**self._DEAD), dc.StructuralZero(**self._STATED)
+        assert self._reversal((stated,)).structural_zeros == (stated,)
+        with pytest.raises(ValueError, match="dead_draw"):
+            self._reversal((stated, dead))
+
+    @pytest.mark.parametrize("register", [dc.SpreadRegister, dc.RefusedSpread,
+                                          dc.ReversalRegister])
+    def test_no_register_defaults_its_rows(self, register):
+        field = next(f for f in dataclasses.fields(register) if f.name == "structural_zeros")
+        assert field.default is dataclasses.MISSING
 
 
 class TestABlockPricesNoMoreThanTheBudgetAdmits:
@@ -358,6 +438,83 @@ class TestABlockPricesNoMoreThanTheBudgetAdmits:
     def test_outside_the_range_refuses(self, paths, max_paths):
         with pytest.raises(ValueError, match="largest affordable"):
             self._build(paths, max_paths)
+
+
+# What a pointer in the types module may say, whole: the contract section, or
+# the design record with an optional section and ruling. Nothing else.
+_POINTER_LINE = re.compile(
+    r"Fields: docs/reference/API_CONTRACT\.md § The `decomposition` block\."
+    r"|Design: docs/specs/2026-09-22-which-risk-decides-it\.md"
+    r"(?: §\d+(?:\.\d+)?(?: items? \d+(?: and \d+)?)?)?\.")
+_RULE_LINE = re.compile(r"-{20,}")
+
+
+def _prose_of_the_types_module(source):
+    """`(where, text)` for every docstring — the module's, each class's and
+    each function's — and every comment in `source`, each comment by line."""
+    import ast
+    import io
+    import tokenize
+    tree = ast.parse(source)
+    nodes = [tree] + [n for n in ast.walk(tree) if isinstance(
+        n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))]
+    out = []
+    for node in nodes:
+        doc = ast.get_docstring(node, clean=True)
+        if doc is not None:
+            out.append((f"docstring of {getattr(node, 'name', '<module>')}", doc))
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == tokenize.COMMENT:
+            out.append((f"comment at line {token.start[0]}", token.string.lstrip("#").strip()))
+    return out
+
+
+def _not_a_pointer(source):
+    wrong = []
+    for where, text in _prose_of_the_types_module(source):
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines or not all(_POINTER_LINE.fullmatch(line) or _RULE_LINE.fullmatch(line)
+                                for line in lines):
+            wrong.append((where, text))
+    return wrong
+
+
+_SIDE_HEAD = ("def _require_side(kind: str, verdict_field: str, further_changes: object) "
+              "-> None:\n    \"\"\"Fields: docs/reference/API_CONTRACT.md § The "
+              "`decomposition` block.")
+
+
+def test_every_docstring_and_every_comment_is_a_pointer():
+    """§0.1 item 52: the types module carries no prose but pointers, in
+    docstrings and comments alike. What a field means, when a refusal fires and
+    why a shape is what it is are written in the contract and the design
+    record; a sentence here would be a second home with nothing to keep it
+    true. Every docstring of the module, its classes and its functions, and
+    every comment, is a pointer line (or a rule of dashes), whole.
+    *Kills it:* a sentence appended to any docstring or any comment — the
+    ones appended below, to a function docstring and to a comment, fail it —
+    or one put in place of a pointer."""
+    import pathlib
+    source = pathlib.Path(dc.__file__).read_text(encoding="utf-8")
+    found = _prose_of_the_types_module(source)
+    assert sum(where.startswith("docstring") for where, _ in found) >= 25
+    assert sum(where.startswith("comment") for where, _ in found) >= 10
+    assert _not_a_pointer(source) == []
+    # the test fails on a restatement, in a function docstring and in a comment
+    restated = "`mean_margin` is the mean of `f` over the block's own futures."
+    appended = source.replace(_SIDE_HEAD, _SIDE_HEAD + "\n    " + restated)
+    assert appended != source
+    assert _not_a_pointer(appended) == [
+        ("docstring of _require_side",
+         "Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.\n" + restated)]
+    pointer = "# Design: docs/specs/2026-09-22-which-risk-decides-it.md §0.1 items 39 and 40.\n"
+    comment = "A dead_draw row is a stream that drew and moved no present value."
+    commented = source.replace(pointer, pointer + "# " + comment + "\n")
+    assert commented != source
+    assert [text for _, text in _not_a_pointer(commented)] == [comment]
+    positions = "# Design: docs/specs/2026-09-22-which-risk-decides-it.md §3.2.\n"
+    same_line = source.replace(positions, positions[:-1] + " Ids are positions.\n")
+    assert same_line != source and len(_not_a_pointer(same_line)) == 1
 
 
 def test_every_class_docstring_is_the_pointer_and_nothing_more():

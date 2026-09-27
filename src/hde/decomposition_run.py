@@ -30,7 +30,8 @@ WHAT IT DOES, in the order it does it, because the order is the cost model:
      paths — and the all-frozen run whose identity, failing, refuses the whole
      block (`freeze_leak`, `identity_failed`);
   7. the reversal register: `break_even.reversal_register`'s rows and
-     structural zeros, plus a row for every stream that drew and is not live.
+     structural zeros, unchanged. A row for every stream that drew and is not
+     live is measured on the block's futures, so it is the spread register's.
 
 Every refusal is a judgment about the DATA and so is this module's; the
 formatter renders a refusal and never decides one.
@@ -374,6 +375,11 @@ def _refusal_before_pricing(spec, mc, verdict, paths: int) -> Optional[Decomposi
     """
     if mc is None or single_path_run(spec):
         return _refuse("no_futures", "this run has no futures")
+    priced = sum(getattr(spec, option) is not None for option in ("condo", "house", "rent"))
+    if verdict is None and priced != 1:
+        # The refusal below says the run prices one option; a caller that
+        # passed no verdict for any other run is told nothing rather than that.
+        raise ValueError(f"no verdict was passed for a run that prices {priced} options")
     if verdict is None or verdict.rule == "single_option":
         return _refuse("single_option", "this run prices one option")
     if paths < MIN_INTERVALLED_FUTURES:
@@ -436,20 +442,34 @@ def _priced(spec) -> Tuple[str, ...]:
 
 
 def _width(spec, raw, key: str, note: Optional[str] = None) -> Optional[Width]:
-    """One sizing key as a `Width`, or None when this config does not state it.
+    """One sizing key as a `Width`, or None when it sized no draw on this run
+    (§0.1 item 49).
 
-    An unstated sizing key is not a width: every volatility, hazard and
-    correlation in the model defaults to 0.0, so a key the config leaves out
-    sizes nothing and has no figure to print. The source class comes from
-    `spec.sources` — `SourceEcho.classify`'s own answer, never inferred from the
-    key's name (test T14) — and `unattributed` is what the echo itself calls a
-    stated key on a config with no `sources:` block.
+    A key the config states is a width with the source class `spec.sources`
+    gives it — `SourceEcho.classify`'s own answer, never inferred from the
+    key's name (test T14); `unattributed` is what the echo itself calls a
+    stated key on a config with no `sources:` block. A key the config leaves
+    out is a width only when the engine filled it from an anchor
+    (`spec.defaults_applied`, the loader's one record of that): a price
+    shock's severity defaults to its anchored figure, and sizes the shock's
+    draws as a stated one would. Any other unstated sizing key defaults to
+    zero and has no figure to print. An events list with no entry sizes no
+    draw, stated or not.
     """
+    if key.endswith(".events"):
+        option = getattr(spec, key.split(".", 1)[0], None)
+        if option is None or not option.events:
+            return None
     echo = getattr(spec, "sources", None)
     entry = echo.get(key) if echo is not None else None
     if entry is not None:
         return Width(key=key, formatted=entry.formatted, source=entry.source,
                      anchor=entry.anchor, note=note)
+    if key in getattr(spec, "defaults_applied", ()):
+        from .serialization import default_anchor, echo_value
+        anchor = default_anchor(spec, key)
+        return Width(key=key, formatted=echo_value(spec, key), source="default",
+                     anchor=anchor.name if anchor is not None else None, note=note)
     if raw is None:
         return None
     # A spec built from a config always carries an echo; this path is the
@@ -463,6 +483,16 @@ def _width(spec, raw, key: str, note: Optional[str] = None) -> Optional[Width]:
                  source="unattributed", anchor=None, note=note)
 
 
+# The economy's sizing keys that are correlations: each sizes a draw only
+# through the option shock it pulls (`_inflation_pulls`).
+_CORRELATION_KEYS: Tuple[str, ...] = (
+    "simulation.corr_inflation_condo",
+    "simulation.corr_inflation_house",
+    "simulation.corr_inflation_other",
+    "simulation.corr_inflation_event_cost",
+)
+
+
 def _inflation_pulls(spec) -> List[Tuple[str, str, float]]:
     """The (rho key, pulled key, rho) triples the economy's row names.
 
@@ -470,10 +500,15 @@ def _inflation_pulls(spec) -> List[Tuple[str, str, float]]:
     `corr_inflation_*` keys AND THE OPTION VOLS THEY PULL FROM, because which
     vols are pulled depends on which rho is non-zero — so they cannot be static
     sizing keys and arrive as extra width entries from the code that reads the
-    config. This is that code, and it reads STRUCTURE only: a non-zero rho, and
-    a priced option whose shock it composes into (`_correlated_z` at the draw
-    site). Whether the pulled shock then moves a present value is not asked
-    here — that is measured, on the run, by the liveness the row stands on.
+    config. This is that code, and it reads STRUCTURE only: a non-zero rho,
+    and a shock of a priced option it composes into (`_correlated_z` at the
+    draw site) — the condo's fee, the house's maintenance, an owned option's
+    other cost lines (a renter's only while `other_cost_vol` draws them), a
+    priced option's events. It is also the ONE rule for
+    the correlation key itself (§0.1 item 49): a rho that pulls no shock of
+    this run sized no draw, and is not a width. Whether the pulled shock then
+    moves a present value is not asked here — that is measured, on the run,
+    by the liveness the row stands on.
     """
     sim = spec.simulation
     priced = _priced(spec)
@@ -484,7 +519,9 @@ def _inflation_pulls(spec) -> List[Tuple[str, str, float]]:
     if sim.corr_inflation_house != 0 and "house" in priced:
         out.append(("simulation.corr_inflation_house",
                     "simulation.house_maintenance_vol", sim.corr_inflation_house))
-    if sim.corr_inflation_other != 0 and priced:
+    if sim.corr_inflation_other != 0 and any(
+            getattr(spec, name).other_recurring_costs
+            and (name != "rent" or sim.other_cost_vol > 0) for name in priced):
         out.append(("simulation.corr_inflation_other",
                     "simulation.other_cost_vol", sim.corr_inflation_other))
     if sim.corr_inflation_event_cost != 0:
@@ -495,23 +532,40 @@ def _inflation_pulls(spec) -> List[Tuple[str, str, float]]:
     return out
 
 
+# The option whose cost lines a cost channel's `simulation.other_cost_vol`
+# multiplies (`monte_carlo`'s loop over `other_recurring_costs`).
+_CHANNEL_OPTION: Dict[int, str] = {3: "condo", 4: "house", 5: "rent"}
+
+
 def _widths_for(spec, raw, entry: Channel) -> Tuple[Width, ...]:
-    """The widths on one channel's row: its sizing keys, plus §4's extras.
+    """The widths on one channel's row: its sizing keys that sized a draw on
+    this run (§0.1 item 49), plus §4's extras.
 
     §0.1 item 6: the `economy` row must name the option vols its correlations
     pull from, and which those are depends on which rho is non-zero, so they
     cannot be static sizing keys. Each arrives with the rho that pulls it and
-    rho squared, as figures; what rho squared is, is the contract's.
+    rho squared, as figures; what rho squared is, is the contract's. A
+    correlation that pulls no shock of this run is left out with the shock,
+    and so is the other-cost volatility on the row of an option holding no
+    other-cost line: the loop it multiplies draws nothing.
     """
     widths: List[Width] = []
     seen: set = set()
+    pulls = _inflation_pulls(spec) if entry.id == 0 else []
+    pulling = {rho_key for rho_key, _, _ in pulls}
+    option = getattr(spec, _CHANNEL_OPTION.get(entry.id, ""), None)
     for key in entry.sizing_keys:
+        if key in _CORRELATION_KEYS and key not in pulling:
+            continue
+        if (key == "simulation.other_cost_vol" and entry.id in _CHANNEL_OPTION
+                and not (option is not None and option.other_recurring_costs)):
+            continue
         got = _width(spec, raw, key)
         if got is not None and got.key not in seen:
             widths.append(got)
             seen.add(got.key)
     if entry.id == 0:
-        for rho_key, vol_key, rho in _inflation_pulls(spec):
+        for rho_key, vol_key, rho in pulls:
             note = f"pulled by {rho_key} = {rho:g}; rho squared {rho * rho:g}"
             got = _width(spec, raw, vol_key, note=note)
             if got is not None and (got.key, note) not in seen:
@@ -533,8 +587,8 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
     """A `dead_draw` row for every stream that drew on these futures and is not
     live on them: both facts MEASURED, and scoped to the futures and the
     threshold they were measured on. The row names its stream; the keys it
-    carries are the stated keys that size that stream's draws, and nothing the
-    row says is said of a key (§0.1 item 40)."""
+    carries are the keys of that stream's widths (`_widths_for`), and nothing
+    the row says is said of a key (§0.1 items 40 and 49)."""
     rows: List[StructuralZero] = []
     for stream_id in drawn:
         if stream_id in live:
@@ -553,33 +607,27 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
     return rows
 
 
-def _reversal_register(raw, det, mc, dead: List[StructuralZero]) -> ReversalRegister:
-    """§6's register: `break_even.reversal_register`, plus the `dead_draw` rows
-    it cannot see.
+def _reversal_register(raw, det, mc) -> ReversalRegister:
+    """§6's register: `break_even.reversal_register`, and nothing added to it.
 
     The solved rows, the per-boundary refusals of §8 item 7 and the stated-path
     zeros are all `break_even.reversal_register`'s by ruling (§0.1 items 5 and
-    17) — the assembler calls it and adds nothing to what it returns except the
-    rows only this module's measurement knows about. It is handed THIS run's
-    own `det` and `mc`, so the register and the block cannot disagree about the
-    base case.
+    17). It is handed THIS run's own `det` and `mc` and never the block's own
+    futures, so the register reads no figure that moves with `N` (§0.1 item
+    48): the rows measured on those futures are the spread register's.
 
     Without a raw mapping there is nothing to solve on: every candidate in §6
     is a key the CONFIG states, and `reversal_register` re-loads the config to
-    probe it. A directly-constructed spec therefore gets the measured rows and
-    no solved rows — an empty tuple that says the assembler found no
-    candidate, never that none exists.
+    probe it. A directly-constructed spec therefore gets no solved rows — an
+    empty tuple that says the assembler found no candidate, never that none
+    exists.
     """
-    register = ReversalRegister(
-        exact=(), estimated=(), structural_zeros=(),
-        no_distance_reason="this block was handed no config mapping")
-    if raw is not None:
-        from .break_even import reversal_register as solve_reversal_register
-        register = solve_reversal_register(raw, det, mc)
-    if not dead:
-        return register
-    return dataclasses.replace(
-        register, structural_zeros=register.structural_zeros + tuple(dead))
+    if raw is None:
+        return ReversalRegister(
+            exact=(), estimated=(), structural_zeros=(), no_distance_code="no_mapping",
+            no_distance_reason="this block was handed no config mapping")
+    from .break_even import reversal_register as solve_reversal_register
+    return solve_reversal_register(raw, det, mc)
 
 
 
@@ -634,6 +682,7 @@ def _top_row(points: Sequence[Tuple[int, float, bool]]) -> Tuple[Optional[int], 
 def _spread_register(
     f_a: Array, f_b: Array, f_ab: Array, live: Tuple[int, ...],
     widths_by_channel: Dict[int, Tuple[Width, ...]], seed: int,
+    dead: Tuple[StructuralZero, ...],
 ) -> SpreadRegister:
     """The spread register: two Sobol shares, the flip fraction and the gap
     between the shares per channel, and the interaction residual.
@@ -712,7 +761,8 @@ def _spread_register(
     return SpreadRegister(rows=tuple(rows), interaction=interaction,
                           leading_channel_id=leading,
                           unresolved_top_channel_id=unresolved_top,
-                          interaction_channel_ids=interacting)
+                          interaction_channel_ids=interacting,
+                          structural_zeros=dead)
 
 
 def _one_side_of_the_line(best_cheapest: float) -> bool:
@@ -724,7 +774,8 @@ def _one_side_of_the_line(best_cheapest: float) -> bool:
     return best_cheapest in (0.0, 1.0)
 
 
-def _no_sign_variation(best: str, futures: int, best_cheapest: float) -> RefusedSpread:
+def _no_sign_variation(best: str, futures: int, best_cheapest: float,
+                       dead: Tuple[StructuralZero, ...]) -> RefusedSpread:
     """The spread register's refusal in its own slot; the level and reversal
     registers still print. Its reason is the measured fact alone (§0.1 item
     36)."""
@@ -735,7 +786,7 @@ def _no_sign_variation(best: str, futures: int, best_cheapest: float) -> Refused
     reason = (f"{best} is cheapest in all {futures:,} of these futures"
               if best_cheapest == 1.0 else
               f"{best} is cheapest in none of these {futures:,} futures")
-    return RefusedSpread(code="no_sign_variation", reason=reason)
+    return RefusedSpread(code="no_sign_variation", reason=reason, structural_zeros=dead)
 
 
 # ---------------------------------------------------------------------------
@@ -984,11 +1035,13 @@ def decompose(spec, *, det, mc, verdict, raw=None,
     refusal = _channel_refusal(live, requested)
     if refusal is not None:
         return refusal
+    # Measured on these futures, so the spread register's (§0.1 item 48).
+    dead = tuple(_dead_draw_rows(spec, raw, drawn, live, requested, threshold))
 
     spread: Union[SpreadRegister, RefusedSpread]
     best_cheapest = float(np.mean(f_a > 0.0))
     if _one_side_of_the_line(best_cheapest):
-        spread = _no_sign_variation(best, int(f_a.size), best_cheapest)
+        spread = _no_sign_variation(best, int(f_a.size), best_cheapest, dead)
     else:
         f_b = margin_per_path(_run(spec_at_paths, MATRIX_B), best)
         # The table is CHANNEL-MAJOR: row c is that channel's `A_B^(c)`, the
@@ -1001,15 +1054,14 @@ def decompose(spec, *, det, mc, verdict, raw=None,
             channel_id: _widths_for(spec, raw, channel(channel_id))
             for channel_id in live
         }
-        spread = _spread_register(f_a, f_b, f_ab, live, widths_by_channel, seed)
+        spread = _spread_register(f_a, f_b, f_ab, live, widths_by_channel, seed, dead)
 
     level = _level_register(spec, verdict, best, f_a, live, seed, level_paths)
     if level.all_frozen_path_spread != 0.0:
         return _freeze_leak(level)
     if not dm.identity_holds(level.all_frozen_deviation, threshold):
         return _identity_failed(level, verdict, threshold)
-    dead = _dead_draw_rows(spec, raw, drawn, live, requested, threshold)
-    reversal = _reversal_register(raw, det, mc, dead)
+    reversal = _reversal_register(raw, det, mc)
 
     return Decomposition(
         paths=int(f_a.size),

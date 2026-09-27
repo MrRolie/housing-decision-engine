@@ -42,6 +42,7 @@ import functools
 import importlib
 import math
 import pathlib
+import types
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -64,9 +65,9 @@ from hde.sweep import _fmt_value
 from tests import decomposition_households as hh
 from tests.decomposition_oracles import oracle_drawn, oracle_moves
 from tests.decomposition_runs import (
-    _SCRATCH, CONDO_ONLY, FIXTURE, INCOME, INCOME_ONLY, MONTREAL, MORTGAGE, NO_REACH,
-    THIRD_FAR, THIRD_FAR_ONE, _block_text, _cli, _load, _strict, _sweep_states, corpus,
-    run)
+    _SCRATCH, CONDO_ONLY, CRASH_EVERY_YEAR, FIXTURE, INCOME, INCOME_ONLY, MONTREAL,
+    MORTGAGE, NO_REACH, THIRD_FAR, THIRD_FAR_ONE, _block_text, _cli, _load, _strict,
+    _sweep_states, corpus, run)
 from tests.test_decomposition_liveness import RESET_TO_OWN_RENT_ALONE
 
 # Two owners that price identically on every future: the market and the
@@ -146,6 +147,8 @@ REFUSALS = {
     # the margin differs in its last bits only, and no channel is live
     "no_spread_unreached": (RESET_TO_OWN_RENT_ALONE,),
     "no_spread_constant": (TWINS,),
+    # the same, on a margin below zero
+    "no_spread_constant_below_zero": (CRASH_EVERY_YEAR,),
     # two channels move rent, which never enters the margin (§0.1 item 37)
     "no_spread_third_far": (THIRD_FAR,),
     # the fixture's eight streams draw, and 23,201 futures are one past the
@@ -261,7 +264,8 @@ LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in
                    rf"[\w.]+)*))?$"),
     "EXACT_HEAD": r"^  WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly$",
     "ESTIMATED_HEAD": r"^  WHAT WOULD HAVE TO CHANGE — keys the engine cannot re-price exactly$",
-    "NO_DISTANCE": r"^  WHAT WOULD HAVE TO CHANGE — not solved: (?P<reason>.+)$",
+    "NO_DISTANCE": (r"^  WHAT WOULD HAVE TO CHANGE — not solved \((?P<code>\w+)\): "
+                    r"(?P<reason>.+)$"),
     "ROW_HEAD": (r"^  (?P<key>[a-z_]+(?:\.[a-z_]+)+), stated (?P<stated>.+) "
                  r"\[(?P<source>\w+)\]$"),
     "BRACKET": (rf"^      bracket searched: (?P<lo>{PCT})–(?P<hi>{PCT}) "
@@ -274,7 +278,7 @@ LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in
     "CROSS_ESTIMATED": (rf"^      estimated on (?P<n>{N}) re-simulated paths: "
                         rf"{_CROSS_ESTIMATED}$"),
     "REFUSED_BOUNDARY": (rf"^      no boundary printed for (?P<fields>{BOUND}(?:(?:, | or )"
-                         rf"{BOUND})*) — (?P<reason>.+)$"),
+                         rf"{BOUND})*) \((?P<code>\w+)\): (?P<reason>.+)$"),
     "REFERENCES": r"^      on the same axis: (?P<refs>.+)$",
 }.items()}
 
@@ -477,7 +481,7 @@ def _margin(line):
 
 def _spread_refused(line):
     spread = line.render.block["spread"]
-    assert set(spread) == {"refusal"}
+    assert set(spread) == {"refusal", "structural_zeros"}
     assert line.m["code"] == spread["refusal"]["code"] == "no_sign_variation"
     assert line.m["reason"] == spread["refusal"]["reason"]
 
@@ -501,11 +505,26 @@ def _spread_row(line):
     assert m["flip"] == dt._flip_cell(row["flip"], _ci(row["flip_ci"]))
 
 
+def _defaulted(doc, key):
+    """The read-back's `defaults applied` entry for `key`, or None."""
+    return next((e for e in doc["assumptions"]["defaults_applied"] if e["key"] == key),
+                None)
+
+
 def _widths(line):
     assert line.m["cells"] == _width_cells(line.spread_row["widths"])
     if line.render.engine:
         for width in line.spread_row["widths"]:
-            assert width["source"] == _echo_class(line.render.doc, width["key"]), width
+            # whose figure it is: the read-back's class for a stated key, and
+            # for a key the engine filled in, its `defaults applied` entry
+            default = _defaulted(line.render.doc, width["key"])
+            if width["source"] == "default":
+                assert default is not None and _echo_class(line.render.doc,
+                                                           width["key"]) is None
+                assert (width["anchor"], width["formatted"]) == (
+                    default["anchor"]["name"], default["formatted"]), width
+            else:
+                assert width["source"] == _echo_class(line.render.doc, width["key"]), width
             if width["note"] is not None:
                 # "(pulled by KEY = rho; rho squared rho²)", figures from the config
                 note = re.fullmatch(r"pulled by (?P<key>[\w.]+) = (?P<rho>[-\d.e]+); rho "
@@ -629,19 +648,26 @@ def _level_top(line):
 
 
 def _zero_head(line):
-    block = line.render.block
-    zeros = block["reversal"]["structural_zeros"]
-    assert zeros
-    for zero in zeros:
-        assert zero["channel_id"] not in block["live_channel_ids"]
+    """The reversal register's rows with no place in the spread or the level:
+    the stated paths, which no sample measured (§0.1 item 48)."""
+    zeros = line.render.block["reversal"]["structural_zeros"]
+    assert zeros and {z["kind"] for z in zeros} == {"stated_path"}
+
+
+# Which register holds each kind of row, and the section of the text it
+# prints in: a row measured on the block's futures is the spread register's
+# (§0.1 item 48).
+_ZERO_HOME = {"stated_path": ("reversal", "zero"), "dead_draw": ("spread", "spread")}
 
 
 def _zero_row_of(line, kind):
     m, render = line.m, line.render
-    zeros = [z for z in render.block["reversal"]["structural_zeros"]
-             if z["kind"] == kind and z["label"] == m["label"]
+    register, section = _ZERO_HOME[kind]
+    assert line.section == section, (m.group(0), line.section)
+    held = render.block[register]["structural_zeros"]
+    zeros = [z for z in held if z["kind"] == kind and z["label"] == m["label"]
              and ", ".join(z["keys"]) == (m["keys"] or "")]
-    assert len(zeros) == 1, (m.group(0), render.block["reversal"]["structural_zeros"])
+    assert len(zeros) == 1, (m.group(0), held)
     return zeros[0]
 
 
@@ -703,7 +729,8 @@ def _zero_drawn(line):
     sizing = (("income.pay_drop_events",) if stream == dc.INCOME_STREAM_ID
               else dc.channel(stream).sizing_keys)
     for key in zero["keys"]:
-        assert _echo_class(render.doc, key) is not None, key
+        assert (_echo_class(render.doc, key) is not None
+                or _defaulted(render.doc, key) is not None), key
         pulled = stream == 0 and key.endswith(("_vol", ".events"))
         assert key in sizing or pulled, key
 
@@ -720,6 +747,8 @@ def _no_distance(line):
     reversal = line.render.block["reversal"]
     assert reversal["exact"] == [] and reversal["estimated"] == []
     assert line.m["reason"] == reversal["no_distance_reason"]
+    assert line.m["code"] == reversal["no_distance_code"]
+    assert _NO_DISTANCE_REASON[line.m["code"]].fullmatch(line.m["reason"])
 
 
 def _row_head(line):
@@ -854,7 +883,9 @@ def _path_note(line):
 
 def _refused_boundary(line):
     m, row = line.m, line.reversal_row
-    named = [r for r in row["refused_boundaries"] if r["reason"] == m["reason"]]
+    assert _BOUNDARY_REASON[m["code"]].fullmatch(m["reason"]), m.group(0)
+    named = [r for r in row["refused_boundaries"]
+             if (r["code"], r["reason"]) == (m["code"], m["reason"])]
     labels = [FIELD_WORDS[r["verdict_field"]] for r in named]
     expected = labels[0] if len(labels) == 1 else f"{', '.join(labels[:-1])} or {labels[-1]}"
     assert m["fields"] == expected
@@ -991,12 +1022,11 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
     "NO_SIGN_VARIATION": (rf"^(?P<best>{OPTION}) is cheapest in (?:all (?P<n1>[\d,]+) of these "
                           rf"futures|none of these (?P<n2>[\d,]+) futures)$"),
     # a boundary field that prints no crossing
-    "UNCHANGED": (rf"^(?P<field>best|runner_up) is '(?P<value>\w+)' throughout "
-                  rf"(?P<lo>{PCT})–(?P<hi>{PCT})$"),
-    "FUTURES_UNCHANGED": (rf"^(?P<field>mc_best|decisive) says '(?P<value>[^']+)' at every "
-                          rf"one of (?P<n>\d+) points across (?P<lo>{PCT})–(?P<hi>{PCT})$"),
-    "SAYS_SO_NOWHERE": (rf"^(?P<field>\w+) says '[^']+' in this run and nowhere in "
-                        rf"{PCT}–{PCT}(?: \(scanned at \d+ points\))?$"),
+    "UNCHANGED": (rf"^(?P<field>best|runner_up|mc_best|decisive) says '(?P<value>[^']+)' "
+                  rf"at every one of (?P<n>\d+) points across (?P<lo>{PCT})–(?P<hi>{PCT})$"),
+    "SAYS_SO_NOWHERE": (rf"^(?P<field>best|runner_up|mc_best|decisive) says "
+                        rf"'(?P<value>[^']+)' in this run and at none of (?P<n>\d+) points "
+                        rf"across (?P<lo>{PCT})–(?P<hi>{PCT})$"),
     "NOT_IDENTIFIED": (r"^across the bracket the probabilities this boundary turns on move "
                        r"by \d\.\d{4}, not more than 2 s\.e\. at the boundary \(\d\.\d{4}\) "
                        r"on \d+ paths$"),
@@ -1013,12 +1043,13 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
     "WITHOUT_FUTURES": (r"^this run has no futures, and this solver reads "
                         r"(?P<field>mc_best|decisive) only off futures$"),
     # the empty reversal register
-    "NO_DISTANCE": (r"^(?:this config states no mortgage_renewal_rates or mortgage_rate"
-                    r"|this config states [\w.]+, and (?:moving it to the far end of its "
-                    r"bracket moves no option's present value|the loader refuses it at the "
-                    r"far end of its bracket)(?:; this config states [\w.]+, and (?:moving it "
-                    r"to the far end of its bracket moves no option's present value|the "
-                    r"loader refuses it at the far end of its bracket))*)$"),
+    "NO_DISTANCE": r"^this config states no mortgage_renewal_rates or mortgage_rate$",
+    "NO_DISTANCE_NOT_ADMITTED": (
+        r"^this config states [\w.]+, and (?:moving it to the far end of its "
+        r"bracket moves no option's present value|the loader refuses it at the "
+        r"far end of its bracket)(?:; this config states [\w.]+, and (?:moving it "
+        r"to the far end of its bracket moves no option's present value|the "
+        r"loader refuses it at the far end of its bracket))*$"),
     "NO_DISTANCE_NO_MAPPING": r"^this block was handed no config mapping$",
     "NO_DISTANCE_ONE_OPTION": r"^fewer than two options are priced$",
     # the path note: how the axis was built (§0.1 item 41)
@@ -1047,6 +1078,39 @@ _REFUSAL_REASON = {
     "freeze_leak": REASONS["FREEZE_LEAK"],
     "identity_failed": REASONS["IDENTITY_FAILED"],
 }
+
+# Which reason each code of a refused boundary writes, and each code of an
+# empty reversal register (§0.1 item 50: every refusal is a code and one fact).
+_BOUNDARY_REASON = {
+    "unchanged": REASONS["UNCHANGED"],
+    "not_on_axis": REASONS["SAYS_SO_NOWHERE"],
+    "not_identified": _AnyOf(REASONS["NOT_IDENTIFIED"], REASONS["NO_PROBABILITY"]),
+    "unconfirmed": REASONS["RESIMULATION_DISAGREES"],
+    "not_exact": _AnyOf(REASONS["GATE_NOT_FINITE"], REASONS["GATE_MOVES_OTHERS"],
+                        REASONS["GATE_NOT_CONSTANT"]),
+    "no_futures": REASONS["WITHOUT_FUTURES"],
+}
+_NO_DISTANCE_REASON = {
+    "no_candidate": REASONS["NO_DISTANCE"],
+    "not_admitted": REASONS["NO_DISTANCE_NOT_ADMITTED"],
+    "no_mapping": REASONS["NO_DISTANCE_NO_MAPPING"],
+    "single_option": REASONS["NO_DISTANCE_ONE_OPTION"],
+}
+
+
+def test_every_code_names_one_set_of_reasons():
+    """The code maps are whole: every code the types allow has its reason
+    templates, and no reason template is written under two codes.
+    *Kills it:* a code with no template, or one template filed twice."""
+    assert set(_BOUNDARY_REASON) == set(dc.BOUNDARY_REFUSAL_CODES)
+    assert set(_NO_DISTANCE_REASON) == set(dc.NO_DISTANCE_CODES)
+    filed = []
+    for mapping in (_REFUSAL_REASON, _BOUNDARY_REASON, _NO_DISTANCE_REASON):
+        for got in mapping.values():
+            filed.extend(got.patterns if isinstance(got, _AnyOf) else (got,))
+    names = [next(n for n, p in REASONS.items() if p is pattern) for pattern in filed]
+    assert len(names) == len(set(names))
+    assert set(REASONS) - set(names) == {"NO_SIGN_VARIATION", "PATH_NOTE"}
 
 
 def _engine_reasons(render):
@@ -1212,31 +1276,30 @@ def _r_no_sign_variation(render, m, node):
 
 
 def _r_unchanged(render, m, node):
-    """"throughout": at the solver's own nine scan points and at a finer grid,
-    the deterministic verdict reads the one value."""
+    """"at every one of N points across lo–hi" (§0.1 item 47: the scan the
+    refusal rests on, never "throughout"). N is the solver's own scan: nine
+    points per pair for a field solved on the central case, read here by a
+    `--sweep` without futures at those nine points; 65 for a field bisected on
+    the futures, read off the same free curve the register read. Each point
+    reads the one value, and the count is the scan's."""
     row, refused = node
-    assert m["field"] == refused["verdict_field"]
-    assert (m["lo"], m["hi"]) == (dt._rate(row["bracket_low"]), dt._rate(row["bracket_high"]))
-    grid = sorted(set(np.linspace(row["bracket_low"], row["bracket_high"], 9))
-                  | set(np.linspace(row["bracket_low"], row["bracket_high"], 25)))
-    states = _sweep_states(render.path, row["key"], grid, futures=False)
-    assert {s[m["field"]] for s in states} == {m["value"]}
-
-
-def _r_futures_unchanged(render, m, node):
-    """"at every one of N points": every point of the solver's own scan, read
-    off the same free curve the register read."""
-    row, refused = node
-    assert m["field"] == refused["verdict_field"]
+    field = m["field"]
+    assert field == refused["verdict_field"]
     n = int(m["n"])
-    assert n == be.REVERSAL_SCAN_POINTS
     lo, hi = row["bracket_low"], row["bracket_high"]
     assert (m["lo"], m["hi"]) == (dt._rate(lo), dt._rate(hi))
-    det, mc, _ = _run_inputs(render)
-    free = be._free_curve(render.raw, row["key"], be._priced_options(render.raw), det, mc,
-                          single_path=False)
     xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
-    assert {be.field_state(free(x)[0], m["field"]) for x in xs} == {m["value"]}
+    if field in ("best", "runner_up"):
+        assert n == be.CROSSING_SCAN_POINTS == 9
+        states = [s[field] for s in _sweep_states(render.path, row["key"], xs,
+                                                  futures=False)]
+    else:
+        assert n == be.REVERSAL_SCAN_POINTS == 65
+        det, mc, _ = _run_inputs(render)
+        free = be._free_curve(render.raw, row["key"], be._priced_options(render.raw), det,
+                              mc, single_path=False)
+        states = [be.field_state(free(x)[0], field) for x in xs]
+    assert set(states) == {m["value"]}, (field, states)
 
 
 def _r_no_distance(render, m, node):
@@ -1276,8 +1339,8 @@ REASON_CLAIMS: Dict[str, Callable[..., None]] = {
     "BUDGET_N": _r_budget,
     "NO_SIGN_VARIATION": _r_no_sign_variation,
     "UNCHANGED": _r_unchanged,
-    "FUTURES_UNCHANGED": _r_futures_unchanged,
     "NO_DISTANCE": _r_no_distance,
+    "NO_DISTANCE_NOT_ADMITTED": _r_no_distance,
     "PATH_NOTE": _r_path_note,
 }
 
@@ -1341,11 +1404,26 @@ def test_no_reason_explains_or_routes():
 # ---------------------------------------------------------------------------
 
 def test_a_field_the_axis_never_reproduces_says_so():
-    """"nowhere": the run's own state appears in none of the regions."""
-    found, anomaly = be._region_boundaries(
-        "house.mortgage_rate", "best", "rent", ["condo", "house"],
-        [(0.01, 0.05), (0.05, 0.10)], lambda i, step: 0.05, (0.01, 0.10))
-    assert found == [] and REASONS["SAYS_SO_NOWHERE"].match(anomaly["why"])
+    """"in this run and at none of N points": the run's own state is read at
+    no point of the scan. A futures field on a free curve that never names the
+    run's own answer, and a solved field on an axis whose nine points never
+    read the run's own winner, each state the scan the refusal rests on."""
+    xs = []
+
+    def free(x):
+        xs.append(x)
+        return types.SimpleNamespace(mc_best="condo" if x < 0.05 else "house"), {}
+
+    found, why = be._futures_field_boundaries(
+        {}, "house.mortgage_rate", "mc_best", free,
+        types.SimpleNamespace(mc_best="rent"), 0.01, 0.10,
+        scan_points=be.REVERSAL_SCAN_POINTS)
+    assert found == [] and why[0] == "not_on_axis"
+    m = REASONS["SAYS_SO_NOWHERE"].match(why[1])
+    assert m and (m["field"], m["value"], int(m["n"])) == ("mc_best", "rent", 65)
+    assert sorted(set(xs)) == pytest.approx(
+        [0.01 + 0.09 * i / 64 for i in range(65)])
+    assert "rent" not in {free(x)[0].mc_best for x in list(xs)}
 
 
 def test_a_boundary_with_no_probability_is_not_identified():
@@ -1408,7 +1486,8 @@ def test_a_key_the_loader_refuses_at_the_far_end_is_named_as_that(monkeypatch):
     spec = load_config_dict(raw)
     register = be.reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
     reason = register.no_distance_reason
-    assert REASONS["NO_DISTANCE"].match(reason)
+    assert register.no_distance_code == "not_admitted"
+    assert REASONS["NO_DISTANCE_NOT_ADMITTED"].match(reason)
     assert reason == ("this config states condo.mortgage_rate, and the loader refuses it "
                       "at the far end of its bracket")
 

@@ -189,7 +189,7 @@ def test_the_block_prints_what_the_instruments_measure(name):
     if outcome == "header":
         assert first == f"which risk decides it — {n:,} futures, {len(live)} channels live on them"
         assert tuple(block["live_channel_ids"]) == live
-        dead = [z for z in block["reversal"]["structural_zeros"] if z["kind"] == "dead_draw"]
+        dead = [z for z in block["spread"]["structural_zeros"] if z["kind"] == "dead_draw"]
         assert tuple(sorted(z["channel_id"] for z in dead)) == tuple(
             sorted(set(drawn) - set(live)))
         assert all(z["measured_paths"] == n for z in dead)
@@ -238,7 +238,8 @@ def test_the_income_stream_draws_only_with_a_volatility_on_it():
     block, text = _render("fixed_pay_drop_row", FIXED_PAY_DROP)
     assert "your pay drops" not in text
     assert all(z["channel_id"] != INCOME_STREAM_ID
-               for z in block["reversal"]["structural_zeros"])
+               for z in block["spread"]["structural_zeros"]
+               + block["reversal"]["structural_zeros"])
     spec = load_config_dict(copy.deepcopy(FIXED_PAY_DROP))
     assert INCOME_STREAM_ID not in oracle_drawn(spec)
 

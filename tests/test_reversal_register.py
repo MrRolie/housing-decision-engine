@@ -55,6 +55,8 @@ from hde.deterministic import compute_deterministic
 from hde.monte_carlo import run_monte_carlo
 from hde.sweep import load_at, run_sweep
 
+from tests.decomposition_runs import DECISIVE_STEP, DECISIVE_STEP_LOWER, THIRD_IN_ONE_CELL
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
 # A SHIPPED config with every uncertainty input off, so every path it prices is
@@ -217,7 +219,8 @@ class TestTheThreeFiguresOnTheFixture:
         renewal finding is a number with nothing to compare it to."""
         row = _row(register, CONTRACT)
         assert [b.verdict_field for b in row.boundaries] == ["runner_up", "mc_best"]
-        assert _refusal(row, "best").reason == "best is 'rent' throughout 1.00%–10.00%"
+        assert _refusal(row, "best").reason == (
+            "best says 'rent' at every one of 9 points across 1.00%–10.00%")
 
 
 # ---------------------------------------------------------------------------
@@ -438,6 +441,115 @@ class TestEveryBoundaryReadsTheKeyUpward:
         assert [b.further_changes for b in decisive] == [None, None]
 
 
+class TestTheStatePastAnEdgeIsReadAtTheEdge:
+    """§0.1 item 47. `was` and `becomes` are the field's states at the two
+    ends of the bracket its edge converged in, and `further_changes` is read
+    from there onward. Read at the next scan point instead, a state lying
+    wholly between the edge and that point was skipped: on `DECISIVE_STEP`
+    the decisiveness verdict goes decisive for house, not decisive, decisive
+    for rent, all inside one step of the 65-point scan, and the row said it
+    changed straight from the first to the third."""
+
+    @staticmethod
+    def _decisive(raw):
+        raw = copy.deepcopy(raw)
+        spec = load_config_dict(raw)
+        register = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
+        (row,) = register.exact
+        (edge,) = [b for b in row.boundaries if b.verdict_field == "decisive"]
+        return raw, edge
+
+    def test_an_upper_edge_becomes_the_state_just_above_it(self):
+        """*Kills it:* `becomes` read at the next scan group, or `further`
+        read from it."""
+        raw, edge = self._decisive(DECISIVE_STEP)
+        assert (edge.was, edge.becomes, edge.further_changes) == (
+            "decisive for house", "not decisive", "above")
+        # the scan points either side of the edge read the first and third states
+        xs = be._scan_grid(0.01, 0.10, be.REVERSAL_SCAN_POINTS)
+        below = max(x for x in xs if x < edge.value)
+        above = min(x for x in xs if x > edge.value)
+        states = [_sweep_says(r, "decisive") for r in run_sweep(
+            raw, CONTRACT, [below, edge.value + 1e-4, above])["rows"]]
+        assert states == ["decisive for house", "not decisive", "decisive for rent"]
+
+    def test_a_lower_edge_was_the_state_just_below_it(self):
+        """The same stretch below a lower edge: the run states 8.00%, decisive
+        for rent, and the edge out of its region is read downward from itself.
+        *Kills it:* `was` read at the scan group below."""
+        raw, edge = self._decisive(DECISIVE_STEP_LOWER)
+        assert (edge.was, edge.becomes, edge.further_changes) == (
+            "not decisive", "decisive for rent", "below")
+        xs = be._scan_grid(0.01, 0.10, be.REVERSAL_SCAN_POINTS)
+        below = max(x for x in xs if x < edge.value)
+        states = [_sweep_says(r, "decisive") for r in run_sweep(
+            raw, CONTRACT, [below, edge.value - 1e-4, edge.value + 1e-4])["rows"]]
+        assert states == ["decisive for house", "not decisive", "decisive for rent"]
+
+    def test_a_third_option_inside_one_cell_is_the_state_past_the_edge(self):
+        """Three options, through the real solver on a ten-point scan: the
+        option most futures call cheapest goes house, condo, rent, and the
+        condo's stretch holds no scan point. The edge reads condo past it and
+        says the range changes again above.
+        *Kills it:* the three-option `becomes` read at the next scan group."""
+        raw = copy.deepcopy(THIRD_IN_ONE_CELL)
+        spec = load_config_dict(raw)
+        det, mc = compute_deterministic(spec), run_monte_carlo(spec)
+        free = be._free_curve(raw, CONTRACT, be._priced_options(raw), det, mc,
+                              single_path=False)
+        scan = [be.field_state(free(x)[0], "mc_best") for x in be._scan_grid(0.01, 0.10, 10)]
+        assert "condo" not in scan and scan[0] == "house" and scan[-1] == "rent"
+        register = reversal_register(raw, det, mc, scan_points=10)
+        (row,) = register.exact
+        (edge,) = [b for b in row.boundaries if b.verdict_field == "mc_best"]
+        assert (edge.was, edge.becomes, edge.further_changes) == ("house", "condo", "above")
+        assert be.field_state(free(edge.value)[0], "mc_best") == "house"
+        assert be.field_state(free(edge.value + 1e-6)[0], "mc_best") == "condo"
+
+    def test_a_field_no_crossing_moves_is_read_at_the_nine_points(self, raw, monkeypatch):
+        """A solved field with no edge refuses with the scan it rests on, read
+        at the pair scan's own nine points; points that disagree with the
+        crossings raise rather than print "at every one of 9 points".
+        *Kills it:* deleting the check, or raising on a field every point
+        agrees on."""
+        found = deterministic_boundaries(raw, CONTRACT, 0.01, 0.10)
+        (unchanged,) = [u for u in found["unchanged"] if u["attribute"] == "best"]
+        assert (unchanged["value"], unchanged["points"]) == ("rent", 9)
+        real = be._ranking_at
+
+        def lying(doc, key, value):
+            got = real(doc, key, value)
+            return {**got, "best": "house"} if value == 0.01 else got
+
+        monkeypatch.setattr(be, "_ranking_at", lying)
+        with pytest.raises(ValueError, match="no solved crossing moves best"):
+            deterministic_boundaries(raw, CONTRACT, 0.01, 0.10)
+
+    def test_a_run_whose_winner_no_point_reads_says_so_with_its_scan(self, raw, monkeypatch):
+        """The run's own winner read at none of the nine points: its refusal
+        says so, and a point that reads it raises.
+        *Kills it:* deleting the check, or the reason losing its scan."""
+        dearer_rent = copy.deepcopy(raw)
+        dearer_rent["rent"]["monthly_rent"] *= 3
+        other = compute_deterministic(load_config_dict(dearer_rent))
+        found = deterministic_boundaries(raw, CONTRACT, 0.01, 0.10, base=other)
+        (anomaly,) = [a for a in found["anomalies"] if a["attribute"] == "best"]
+        assert (anomaly["value"], anomaly["points"]) == ("condo", 9)
+        assert be._scan_reason(CONTRACT, "best", "condo", 9, 0.01, 0.10,
+                               in_this_run_only=True) == (
+            "not_on_axis",
+            "best says 'condo' in this run and at none of 9 points across 1.00%–10.00%")
+        real = be._ranking_at
+
+        def lying(doc, key, value):
+            got = real(doc, key, value)
+            return {**got, "best": "condo"} if value == 0.01 else got
+
+        monkeypatch.setattr(be, "_ranking_at", lying)
+        with pytest.raises(ValueError, match="no solved crossing moves best"):
+            deterministic_boundaries(raw, CONTRACT, 0.01, 0.10, base=other)
+
+
 class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
     """A row reports the NEAREST edge of the region in which the field says
     what this run says (§6). On the two-option example `decisive` changes from
@@ -494,7 +606,8 @@ class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
         span = [(float(i), float(i + 1)) for i in range(len(values))]
         found, anomaly = be._region_boundaries(
             "house.mortgage_rate", "best", says_now, values, span,
-            lambda i, step: float(i) if step < 0 else float(i + 1), (0.0, 1.0))
+            lambda i, step: ((float(i), values[i - 1]) if step < 0
+                             else (float(i + 1), values[i + 1])), (0.0, 1.0))
         assert anomaly is None
         assert [(b["direction"], b["further"]) for b in found] == expected
 

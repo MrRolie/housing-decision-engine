@@ -88,17 +88,20 @@ def SpreadRegister(*, interaction_channel_ids=None, **fields):
                                     **fields)
 
 
-# The empty register's fact as the engine writes it for a config with no
-# financing key (`break_even._no_distance_reason`), copied as data.
-NO_DISTANCE_TWO_OPTIONS = "this config states no mortgage_renewal_rates or mortgage_rate"
+# The empty register's code and fact as the engine writes them for a config
+# with no financing key (`break_even._no_distance`), copied as data.
+NO_DISTANCE_TWO_OPTIONS = ("no_candidate",
+                           "this config states no mortgage_renewal_rates or mortgage_rate")
 
 
-def ReversalRegister(*, no_distance_reason=None, **fields):
+def ReversalRegister(*, no_distance_code=None, no_distance_reason=None, **fields):
     """An empty register says what it searched: filled with the engine's own
-    two-option sentence when the household states none."""
+    code and sentence for a config with no financing key when the household
+    states none."""
     if no_distance_reason is None and not (fields["exact"] or fields["estimated"]):
-        no_distance_reason = NO_DISTANCE_TWO_OPTIONS
-    return _contract.ReversalRegister(no_distance_reason=no_distance_reason, **fields)
+        no_distance_code, no_distance_reason = NO_DISTANCE_TWO_OPTIONS
+    return _contract.ReversalRegister(no_distance_code=no_distance_code,
+                                      no_distance_reason=no_distance_reason, **fields)
 
 
 def Decomposition(*, max_paths=None, **fields):
@@ -270,6 +273,16 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         ),
         leading_channel_id=6,
         unresolved_top_channel_id=None,
+        structural_zeros=(
+            StructuralZero(
+                kind="dead_draw",
+                label="your pay drops",
+                keys=("income.pay_drop_events",),
+                channel_id=7,
+                measured_paths=2000,
+                move_threshold=1.862645149230957e-09,
+            ),
+        ),
     )
     # §3.4's rule is |Δ| > 2·SE. The house's costs at -$886 ± $179 is 4.95 SE,
     # so it is a RESOLVED row — §7's draft filed it under "indistinguishable
@@ -322,7 +335,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                       anchor="mortgage_rate.posted_5y"),
     )
     no_decisive_crossing = RefusedBoundary(
-        verdict_field="decisive",
+        verdict_field="decisive", code="unchanged",
         reason="decisive says 'not decisive' at every one of 65 points across "
                "1.00%–10.00%")
     renewal = ExactReversal(
@@ -397,8 +410,9 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                                       ("rent", 0.3090))),
         ),
         refused_boundaries=(
-            RefusedBoundary(verdict_field="best",
-                            reason="best is 'rent' throughout 1.00%–10.00%"),
+            RefusedBoundary(verdict_field="best", code="unchanged",
+                            reason="best says 'rent' at every one of 9 points across "
+                                   "1.00%–10.00%"),
             no_decisive_crossing,
         ),
         references=references,
@@ -418,14 +432,6 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                 label="the contract rate",
                 keys=("house.mortgage_rate",),
                 reversal_key="house.mortgage_rate",
-            ),
-            StructuralZero(
-                kind="dead_draw",
-                label="your pay drops",
-                keys=("income.pay_drop_events",),
-                channel_id=7,
-                measured_paths=2000,
-                move_threshold=1.862645149230957e-09,
             ),
         ),
     )
@@ -525,6 +531,18 @@ def seven_channel_other_household() -> Decomposition:
         # row, resolved or not — here the economy's unresolved 1.004.
         leading_channel_id=None,
         unresolved_top_channel_id=0,
+        # Every channel is live in this household, so its one measured row is
+        # the income stream's (`decomposition_run._dead_draw_rows`).
+        structural_zeros=(
+            StructuralZero(
+                kind="dead_draw",
+                label="your pay drops",
+                keys=("income.pay_drop_events",),
+                channel_id=7,
+                measured_paths=6000,
+                move_threshold=3.725290298461914e-09,
+            ),
+        ),
     )
     level = LevelRegister(
         rows=(
@@ -595,8 +613,9 @@ def seven_channel_other_household() -> Decomposition:
                                                              ("rent", 0.3020))),
                 ),
                 refused_boundaries=(
-                    RefusedBoundary(verdict_field="best",
-                                    reason="best is 'condo' throughout 2.00%–12.00%"),
+                    RefusedBoundary(verdict_field="best", code="unchanged",
+                                    reason="best says 'condo' at every one of 9 points across "
+                                           "2.00%–12.00%"),
                 ),
                 references=(
                     AxisReference(label="contracted 5y insured", value=0.0401,
@@ -634,18 +653,7 @@ def seven_channel_other_household() -> Decomposition:
                 references=(),
             ),
         ),
-        # Every channel is live in this household, so its one measured row is
-        # the income stream's (`decomposition_run._dead_draw_rows`).
-        structural_zeros=(
-            StructuralZero(
-                kind="dead_draw",
-                label="your pay drops",
-                keys=("income.pay_drop_events",),
-                channel_id=7,
-                measured_paths=6000,
-                move_threshold=3.725290298461914e-09,
-            ),
-        ),
+        structural_zeros=(),
     )
     return Decomposition(
         paths=6000,
@@ -695,6 +703,19 @@ def two_channel_option_state() -> Decomposition:
         ),
         leading_channel_id=3,
         unresolved_top_channel_id=None,
+        # The renter's channel draws here (a moving event with no cost
+        # volatility), and re-drawing it moves no present value, so it is a
+        # dead-draw row and not a live one.
+        structural_zeros=(
+            StructuralZero(
+                kind="dead_draw",
+                label="your tenancy",
+                keys=("rent.events",),
+                channel_id=5,
+                measured_paths=4000,
+                move_threshold=1.862645149230957e-09,
+            ),
+        ),
     )
     level = LevelRegister(
         rows=(
@@ -720,17 +741,5 @@ def two_channel_option_state() -> Decomposition:
         sd_margin=96420.0,
         spread=spread,
         level=level,
-        # The renter's channel draws here (a moving event with no cost
-        # volatility), and re-drawing it moves no present value, so it is a
-        # dead-draw row and not a live one.
-        reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=(
-            StructuralZero(
-                kind="dead_draw",
-                label="your tenancy",
-                keys=("rent.events",),
-                channel_id=5,
-                measured_paths=4000,
-                move_threshold=1.862645149230957e-09,
-            ),
-        )),
+        reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=()),
     )

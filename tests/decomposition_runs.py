@@ -147,6 +147,149 @@ INCOME_ONLY = {
 }
 
 
+def _rare_reset(*, one_channel: bool) -> dict:
+    """The three-option example with a lease reset so rare that the tenancy
+    is live on 5,000 futures and not on 40 (spec §0.1 item 48's witnesses).
+    With `one_channel`, the house and the condo event's cost volatility are
+    gone, so on 40 futures the condo's costs are the one live channel."""
+    raw = yaml.safe_load(THREE.read_text(encoding="utf-8"))
+    raw["rent"].update({"reset_hazard": 0.0005, "reset_to_monthly_rent": 3600})
+    raw["sources"].update({"rent.reset_hazard": "assistant",
+                           "rent.reset_to_monthly_rent": "user"})
+    if one_channel:
+        del raw["house"]
+        del raw["simulation"]["house_maintenance_vol"]
+        del raw["condo"]["events"][0]["cost_vol"]
+        raw["sources"] = {key: source for key, source in raw["sources"].items()
+                          if not key.startswith("house.")
+                          and key != "simulation.house_maintenance_vol"}
+    return raw
+
+
+RARE_RESET_THREE = _rare_reset(one_channel=False)
+RARE_RESET_ONE = _rare_reset(one_channel=True)
+
+# A five-year house against rent on which the decisiveness verdict goes
+# decisive for house, then not decisive, then decisive for rent, all between
+# two neighbouring points of the 65-point scan (spec §0.1 item 47's witness).
+# At the stated 4.40% the run is decisive for house, so the crossing out of
+# its region is an upper edge; `DECISIVE_STEP_LOWER` states 8.00%, where the
+# run is decisive for rent and the same stretch lies below a lower edge.
+DECISIVE_STEP = {
+    "years": 5,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.044,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.2,
+                   "rent_escalation_vol": 0.05},
+}
+DECISIVE_STEP_LOWER = copy.deepcopy(DECISIVE_STEP)
+DECISIVE_STEP_LOWER["house"]["mortgage_rate"] = 0.08
+# The same house and rent with a condo priced near rent: as the house's rate
+# rises, the option most futures call cheapest goes house, then condo, then
+# rent, and the condo's stretch lies inside one cell of a ten-point scan.
+THIRD_IN_ONE_CELL = copy.deepcopy(DECISIVE_STEP)
+THIRD_IN_ONE_CELL["condo"] = {"monthly_fee": 1350, "fee_escalation_rate": 0.031,
+                              "initial_value": 400000, "all_cash": True,
+                              "purchase_costs": 6000, "value_growth_rate": 0.031}
+THIRD_IN_ONE_CELL["simulation"].update({"condo_fee_vol": 0.3, "value_growth_vol": 0.02})
+
+# What a width names (spec §0.1 item 49): every input that sized a draw on the
+# run, and nothing else.
+# A price shock stating only its hazard: the severity it draws is sized by the
+# two anchored defaults the read-back lists under `defaults applied`.
+HAZARD_ONLY = yaml.safe_load(THREE.read_text(encoding="utf-8"))
+HAZARD_ONLY["condo"]["price_shock"] = {"annual_hazard": 0.05}
+HAZARD_ONLY["sources"]["condo.price_shock.annual_hazard"] = "assistant"
+HAZARD_ONLY["simulation"]["num_sims"] = 400
+# A correlation onto the condo's fee on a run that prices no condo.
+CORRELATION_UNPRICED_CONDO = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0, "inflation_vol": 0.02},
+    "house": {"initial_value": 450000, "all_cash": True, "purchase_costs": 5000,
+              "annual_maintenance_rate": 0.01, "value_growth_rate": 0.0},
+    "rent": {"monthly_rent": 1500, "rent_escalation_rate": 0.01,
+             "invested_down_payment": 455000, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.2,
+                   "condo_fee_vol": 0.1, "corr_inflation_condo": 0.5,
+                   "corr_inflation_house": 0.5, "rent_escalation_vol": 0.05},
+}
+# Its mirror: a correlation onto the house's maintenance with no house priced.
+CORRELATION_UNPRICED_HOUSE = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0, "inflation_vol": 0.02},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200, "value_growth_rate": 0.0},
+    "rent": {"monthly_rent": 1400, "rent_escalation_rate": 0.01,
+             "invested_down_payment": 355200, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 200, "random_seed": 42, "condo_fee_vol": 0.1,
+                   "house_maintenance_vol": 0.2, "corr_inflation_condo": 0.5,
+                   "corr_inflation_house": 0.5, "rent_escalation_vol": 0.05},
+}
+# Correlations onto other cost lines and events that no draw of this run
+# reaches: the renter's one cost line is not drawn at an other-cost volatility
+# of zero, the house holds no cost line, and no option holds an event. The
+# variants give each correlation a shock it does pull.
+CORRELATIONS_PULL_NOTHING = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0, "inflation_vol": 0.02},
+    "house": {"initial_value": 450000, "all_cash": True, "purchase_costs": 5000,
+              "annual_maintenance_rate": 0.01, "value_growth_rate": 0.0},
+    "rent": {"monthly_rent": 1450, "rent_escalation_rate": 0.01,
+             "invested_down_payment": 455000, "investment_return_rate": 0.03,
+             "other_recurring_costs": [{"name": "tenant_insurance", "annual_amount": 300,
+                                        "escalation_rate": 0.0}]},
+    "simulation": {"num_sims": 200, "random_seed": 42, "house_maintenance_vol": 0.2,
+                   "rent_escalation_vol": 0.05, "other_cost_vol": 0.0,
+                   "corr_inflation_house": 0.5, "corr_inflation_other": 0.4,
+                   "corr_inflation_event_cost": 0.3},
+}
+RENTER_LINE_DRAWN = copy.deepcopy(CORRELATIONS_PULL_NOTHING)
+RENTER_LINE_DRAWN["simulation"]["other_cost_vol"] = 0.1
+OWNED_LINE = copy.deepcopy(CORRELATIONS_PULL_NOTHING)
+OWNED_LINE["house"]["other_recurring_costs"] = [
+    {"name": "property_tax", "annual_amount": 3000, "escalation_rate": 0.0}]
+OWNED_LINE["rent"]["monthly_rent"] = 1700
+OWNED_EVENT = copy.deepcopy(CORRELATIONS_PULL_NOTHING)
+OWNED_EVENT["house"]["events"] = [
+    {"name": "roof_replacement", "base_cost": 20000, "expected_year": 12, "cost_vol": 0.15}]
+OWNED_EVENT["rent"]["monthly_rent"] = 1500
+
+# A crash in every year of every future, at one fixed severity: the margin is
+# one figure on every future, and below zero, so the identical-margin
+# reason's sign has a witness (spec §0.1 item 44).
+CRASH_EVERY_YEAR = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "real", "inflation_rate": 0.0},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200, "value_growth_rate": 0.02,
+              "price_shock": {"annual_hazard": 1.0, "severity_mean": 0.3,
+                              "severity_vol": 0.0}},
+    "rent": {"monthly_rent": 1400, "rent_escalation_rate": 0.0,
+             "invested_down_payment": 355200, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 400, "random_seed": 42},
+}
+
+# Rent cheapest in 1,998 of the level's 2,000 futures, and in 1,999 of them with
+# the tenancy frozen: probabilities a hair under one (spec §0.1 item 51).
+NEAR_ONE = {
+    "years": 20, "discount_rate": 0.03,
+    "economic": {"mode": "nominal", "inflation_rate": 0.0, "inflation_vol": 0.02},
+    "condo": {"monthly_fee": 450, "fee_escalation_rate": 0.0, "initial_value": 350000,
+              "all_cash": True, "purchase_costs": 5200,
+              "other_recurring_costs": [{"name": "property_tax", "annual_amount": 2600,
+                                         "escalation_rate": 0.0}]},
+    "rent": {"monthly_rent": 1400, "rent_escalation_rate": 0.0,
+             "invested_down_payment": 355200, "investment_return_rate": 0.03},
+    "simulation": {"num_sims": 2000, "random_seed": 42, "condo_fee_vol": 0.05,
+                   "rent_escalation_vol": 0.10},
+}
+
+
 # ---------------------------------------------------------------------------
 # Instruments
 # ---------------------------------------------------------------------------
@@ -266,6 +409,8 @@ CORPUS = {
     "sampled_only": (SAMPLED_ONLY, "200"),
     "near_none": (NEAR_NONE, "2000"),
     "near_all": (NEAR_ALL, "2000"),
+    "decisive_step": (DECISIVE_STEP,),
+    "decisive_step_lower": (DECISIVE_STEP_LOWER,),
 }
 
 

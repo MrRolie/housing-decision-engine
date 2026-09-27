@@ -46,6 +46,11 @@ from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant
                     join_notes, load_at, point_label, price_scan_note,
                     real_equivalent_inflation, stated_path, with_value)
 
+# How many points `solve_crossings` reads each pair's gap at before it bisects
+# a sign change (an integer key: at most this many). The reversal register
+# reads a deterministic field at the same points when no crossing moves it.
+CROSSING_SCAN_POINTS = 9
+
 # The default bracket for a money input, as multiples of its base value; any
 # other key needs lo:hi. The story's act 6 solves the rent threshold on this
 # same bracket, so the act and `--break-even rent.monthly_rent` search alike.
@@ -216,7 +221,8 @@ def solve_crossings(
         return 0.5 * (x0 + x1)
 
     def scan(x_lo: float, x_hi: float) -> Tuple[List[float], List[Optional[float]]]:
-        n = 9 if not is_int else max(2, min(9, int(x_hi - x_lo) + 1))
+        n = (CROSSING_SCAN_POINTS if not is_int
+             else max(2, min(CROSSING_SCAN_POINTS, int(x_hi - x_lo) + 1)))
         pts = [x_lo + (x_hi - x_lo) * i / (n - 1) for i in range(n)]
         return pts, [gap_or_none(x) for x in pts]
 
@@ -1582,10 +1588,32 @@ def _matching_runs(values: Sequence[Any], target: Any) -> List[List[int]]:
     return runs
 
 
+def _scan_grid(lo: float, hi: float, points: int) -> List[float]:
+    """The `points` evenly spaced values of `[lo, hi]` a scan reads, ends
+    included — the one formula for both scans."""
+    return [lo + (hi - lo) * i / (points - 1) for i in range(points)]
+
+
+def _scan_reason(key: str, field: str, says: Any, points: int, lo: float, hi: float,
+                 *, in_this_run_only: bool) -> Tuple[str, str]:
+    """`(code, reason)` for a field on which no boundary is printed, stated as
+    the scan it rests on (§0.1 items 47 and 50): what the field read at each of
+    the `points` scanned, never a claim about the values between them."""
+    across = f"{points} points across {_fmt_value(key, lo)}–{_fmt_value(key, hi)}"
+    if in_this_run_only:
+        return "not_on_axis", f"{field} says {says!r} in this run and at none of {across}"
+    return "unchanged", f"{field} says {says!r} at every one of {across}"
+
+
+def _changes(states: Sequence[Any]) -> bool:
+    """Whether a run of states, read in order, holds more than one state."""
+    return any(a != b for a, b in zip(states, states[1:]))
+
+
 def _region_boundaries(
     key: str, field: str, says_now: Any, region_values: Sequence[Any],
     region_span: Sequence[Tuple[float, float]],
-    edge_at: Callable[[int, int], Optional[float]],
+    edge_at: Callable[[int, int], Tuple[float, Any]],
     bracket: Tuple[float, float],
 ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """The boundaries of the region(s) in which `field` still says what this
@@ -1595,17 +1623,22 @@ def _region_boundaries(
     config states the input as a path. What is well defined, and what the
     output prints, is the edge of the region whose answer matches the run's.
 
-    EVERY EDGE READS THE KEY UPWARD: `was` is what `field` says just below the
-    edge and `becomes` what it says just above, whichever side the run's own
-    region lies on — so `--sweep` at a point either side prints `was` below
-    and `becomes` above. An edge below which the house wins and above which
-    rent does is `was="house"`, `becomes="rent"` even when the run itself says
-    rent. Labelling each edge
-    from inside the run's region instead made the lower edge read downward and
-    the upper one upward, so no single reading direction made both true.
-    `direction` still says which side of the run's region the edge bounds.
-    `([], record)` comes back when the run's own answer appears nowhere on the
-    axis — reported, never dropped.
+    EVERY EDGE READS THE KEY UPWARD, whichever side the run's own region lies
+    on, so `--sweep` at a point either side prints `was` below and `becomes`
+    above: an edge below which the house wins and above which rent does is
+    `was="house"`, `becomes="rent"` even when the run itself says rent.
+    `direction` says which side of the run's region the edge bounds.
+    `([], record)` comes back when the run's own answer is in no region —
+    reported, never dropped.
+
+    THE STATE PAST AN EDGE IS READ AT THE EDGE (§0.1 item 47). `edge_at(index,
+    step)` returns `(value, state)`: the edge, and what the field says at the
+    far end of the bracket that edge converged in. That state is the edge's
+    `becomes` (an upper edge) or `was` (a lower one), and `further` is read
+    from it onward. Read at the next region instead, a state lying wholly
+    between the edge and the next scan point was skipped: decisive for house
+    printed as changing straight to decisive for rent across a stretch where
+    `--sweep` says not decisive.
 
     ONLY THE NEAREST EDGE IS AN EDGE HERE (§6), so `further` says what lies
     past it: the side ("above" or "below") on which the searched range changes
@@ -1613,45 +1646,36 @@ def _region_boundaries(
     run's answer is the next region's own edge and is reported; a change
     between two other states is reported nowhere, and a reader handed only
     the nearest edge takes its `becomes` to hold to the end of the bracket.
-    When `decisive` changes from decisive for one option to not decisive and,
-    further up, into decisive for the other, only the first is an edge of the
-    run's region, so it carries "above".
     """
     runs = _matching_runs(region_values, says_now)
     if not runs:
-        return [], {
-            "attribute": field, "says_now": says_now, "bracket": list(bracket),
-            "why": (f"{field} says {says_now!r} in this run and nowhere in "
-                    f"{_fmt_value(key, bracket[0])}–{_fmt_value(key, bracket[1])}"),
-        }
+        return [], {"attribute": field, "says_now": says_now, "bracket": list(bracket)}
     if len(runs) == 1 and len(runs[0]) == len(region_values):
         return [], None                       # unchanged across the whole bracket
-    def changes_again(start: int, stop: int) -> bool:
-        """Whether `region_values[start:stop]` — the stretch between this
-        run's edge and the next region of the run's own answer — holds more
-        than one state, i.e. a change no edge reports."""
-        stretch = region_values[start:stop]
-        return any(a != b for a, b in zip(stretch, stretch[1:]))
 
     out: List[Dict[str, Any]] = []
     for index, run in enumerate(runs):
         first, last = run[0], run[-1]
         low = edge_at(first, -1) if first > 0 else None
         high = edge_at(last, +1) if last < len(region_values) - 1 else None
-        holds = [low if low is not None else region_span[first][0],
-                 high if high is not None else region_span[last][1]]
+        holds = [low[0] if low is not None else region_span[first][0],
+                 high[0] if high is not None else region_span[last][1]]
         if low is not None:
+            value, was = low
             floor = runs[index - 1][-1] + 1 if index > 0 else 0
-            out.append({"attribute": field, "was": region_values[first - 1],
-                        "becomes": says_now, "value": low, "direction": "below",
-                        "holds": holds,
-                        "further": "below" if changes_again(floor, first) else None})
+            # read downward from the edge to the next region of the run's own
+            # answer, or to the bracket's end
+            past = [was] + list(reversed(region_values[floor:first]))
+            out.append({"attribute": field, "was": was, "becomes": says_now,
+                        "value": value, "direction": "below", "holds": holds,
+                        "further": "below" if _changes(past) else None})
         if high is not None:
+            value, becomes = high
             ceiling = runs[index + 1][0] if index + 1 < len(runs) else len(region_values)
-            out.append({"attribute": field, "was": says_now,
-                        "becomes": region_values[last + 1], "value": high,
-                        "direction": "above", "holds": holds,
-                        "further": "above" if changes_again(last + 1, ceiling) else None})
+            past = [becomes] + list(region_values[last + 1:ceiling])
+            out.append({"attribute": field, "was": says_now, "becomes": becomes,
+                        "value": value, "direction": "above", "holds": holds,
+                        "further": "above" if _changes(past) else None})
     return out, None
 
 
@@ -1719,15 +1743,34 @@ def deterministic_boundaries(
         "regions": [{"from": x0, "to": x1, **rank} for (x0, x1), rank in zip(span, ranks)],
         "boundaries": [], "unchanged": [], "anomalies": [], "refused": refused,
     }
+    grid: List[Dict[str, Any]] = []
     for field in _DETERMINISTIC_FIELDS:
+        values = [rank[field] for rank in ranks]
+
+        def edge_at(i: int, step: int, values: List[Any] = values) -> Tuple[float, Any]:
+            # The spans are cut at every solved crossing, so the span beyond
+            # an edge is what the field says from that edge's converged
+            # bracket to the next crossing.
+            return (edges[i - 1], values[i - 1]) if step < 0 else (edges[i], values[i + 1])
+
         found, anomaly = _region_boundaries(
-            key, field, getattr(stated, field), [rank[field] for rank in ranks], span,
-            lambda i, step: edges[i - 1] if step < 0 else edges[i], (lo, hi))
-        if anomaly is not None:
-            out["anomalies"].append(anomaly)
-        elif not found:
-            out["unchanged"].append({"attribute": field, "value": getattr(stated, field),
-                                     "bracket": [lo, hi]})
+            key, field, getattr(stated, field), values, span, edge_at, (lo, hi))
+        if anomaly is not None or not found:
+            # No edge: what the field reads at each point the pairs were
+            # scanned at, measured here, so the refusal states its scan.
+            if not grid:
+                grid = [_ranking_at(raw, key, x)
+                        for x in _scan_grid(lo, hi, CROSSING_SCAN_POINTS)]
+            readings = [point[field] for point in grid]
+            says = getattr(stated, field)
+            if (says in readings) if anomaly is not None else (set(readings) != {says}):
+                raise ValueError(
+                    f"{key}: no solved crossing moves {field}, and at the "
+                    f"{CROSSING_SCAN_POINTS} scan points it reads {readings}, against "
+                    f"{says!r} in this run")
+            record = {"attribute": field, "value": says, "bracket": [lo, hi],
+                      "points": CROSSING_SCAN_POINTS}
+            out["anomalies" if anomaly is not None else "unchanged"].append(record)
         else:
             for entry in found:
                 crossing = next((c for c in crossings if c["value"] == entry["value"]), None)
@@ -1745,9 +1788,12 @@ def deterministic_boundaries(
 def _step_edge(
     attribute: Callable[[float], Any], says_now: Any, x_matching: float, x_other: float,
     *, iterations: int = 90,
-) -> float:
-    """The extreme value at which `attribute` still equals `says_now`, bisected
-    between a value that matches and one that does not.
+) -> Tuple[float, float]:
+    """`(inside, outside)`: the bracket a step of `attribute` away from
+    `says_now` converges in, bisected between a value that matches and one
+    that does not. `inside` is the extreme value at which `attribute` still
+    equals `says_now`; `outside` is the nearest value bisected at which it
+    does not, where the state past the edge is read (§0.1 item 47).
 
     Not `solve_crossings`' bisection and deliberately not folded into it: that
     one brackets a SIGN CHANGE of a continuous gap and reports the value where
@@ -1765,7 +1811,7 @@ def _step_edge(
             lo = mid
         if abs(hi - lo) < 1e-12 * max(1.0, abs(hi)):
             break
-    return hi
+    return hi, lo
 
 
 def _identification(
@@ -1811,17 +1857,22 @@ def _identification(
 def _futures_field_boundaries(
     raw: Dict[str, Any], key: str, field: str, free: Callable[[float], Any],
     stated: Verdict, lo: float, hi: float, *, scan_points: int,
-) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """`([boundary, ...], None)` or `([], reason)` for one FUTURES field.
+) -> Tuple[List[Dict[str, Any]], Optional[Tuple[str, str]]]:
+    """`([boundary, ...], None)` or `([], (code, reason))` for one FUTURES
+    field.
 
     `mc_best` and `decisive` are step functions of the axis with no sign to
     bracket, so the bracket is scanned and each edge of the run that matches
     what this run says is bisected. A flip lying entirely inside one scan cell
     is not seen, which is why `scan_points` rides with every row.
     """
-    xs = [lo + (hi - lo) * i / (scan_points - 1) for i in range(scan_points)]
+    xs = _scan_grid(lo, hi, scan_points)
     says_now = field_state(stated, field)
-    values = [field_state(free(x)[0], field) for x in xs]
+
+    def attribute(v: float) -> Any:
+        return field_state(free(v)[0], field)
+
+    values = [attribute(x) for x in xs]
     groups: List[Tuple[int, int, Any]] = []
     start = 0
     for i in range(1, len(values) + 1):
@@ -1830,20 +1881,18 @@ def _futures_field_boundaries(
             start = i
     span = [(xs[a], xs[b]) for a, b, _ in groups]
 
-    def edge_at(index: int, step: int) -> float:
+    def edge_at(index: int, step: int) -> Tuple[float, Any]:
         a, b, _ = groups[index]
         inside = xs[a] if step < 0 else xs[b]
         outside = xs[groups[index - 1][1]] if step < 0 else xs[groups[index + 1][0]]
-        return _step_edge(lambda v: field_state(free(v)[0], field),
-                          says_now, inside, outside)
+        edge, beyond = _step_edge(attribute, says_now, inside, outside)
+        return edge, attribute(beyond)
 
     found, anomaly = _region_boundaries(
         key, field, says_now, [g[2] for g in groups], span, edge_at, (lo, hi))
-    if anomaly is not None:
-        return [], anomaly["why"] + f" (scanned at {scan_points} points)"
-    if not found:
-        return [], (f"{field} says {says_now!r} at every one of {scan_points} "
-                    f"points across {_fmt_value(key, lo)}–{_fmt_value(key, hi)}")
+    if anomaly is not None or not found:
+        return [], _scan_reason(key, field, says_now, scan_points, lo, hi,
+                                in_this_run_only=anomaly is not None)
     return found, None
 
 
@@ -2017,7 +2066,7 @@ def reversal_register(
     options = _priced_options(raw)
     if len(options) < 2:
         return ReversalRegister(
-            exact=(), estimated=(), structural_zeros=(),
+            exact=(), estimated=(), structural_zeros=(), no_distance_code="single_option",
             no_distance_reason="fewer than two options are priced")
 
     # One flag, read in both places that care: whether THIS run has futures for
@@ -2069,7 +2118,8 @@ def reversal_register(
                 references=common["references"],
                 boundaries=(),
                 refused_boundaries=tuple(
-                    RefusedBoundary(verdict_field=field, reason=gate["why"])
+                    RefusedBoundary(verdict_field=field, code="not_exact",
+                                    reason=gate["why"])
                     for field in BOUNDARY_FIELDS)))
             continue
         boundaries, refused = _confirmed_boundaries(
@@ -2080,10 +2130,11 @@ def reversal_register(
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
         zeros.append(_stated_path_zero(key))
 
+    no_distance = None if (exact or estimated) else _no_distance(skipped)
     return ReversalRegister(
         exact=tuple(exact), estimated=tuple(estimated), structural_zeros=tuple(zeros),
-        no_distance_reason=(None if (exact or estimated)
-                            else _no_distance_reason(options, skipped)))
+        no_distance_code=None if no_distance is None else no_distance[0],
+        no_distance_reason=None if no_distance is None else no_distance[1])
 
 
 def _stated_source(spec: ComparisonSpec, key: str) -> str:
@@ -2148,25 +2199,24 @@ def _axis_references(key: str, compounding: str) -> Tuple[AxisReference, ...]:
     return tuple(out)
 
 
-def _no_distance_reason(options: Sequence[str],
-                        skipped: Sequence[Tuple[str, bool]]) -> str:
-    """What an empty reversal register found, as the measured fact (§0.1
-    items 31 and 35): the candidate SET is what is empty, never the verdict's
-    reversibility, and no route to another command is named. `skipped` are the
-    candidate keys this config states that were not admitted, each with
-    whether the far end of its bracket was priced (and moved no option's
-    present value) or refused by the loader."""
+def _no_distance(skipped: Sequence[Tuple[str, bool]]) -> Tuple[str, str]:
+    """`(code, reason)` for an empty reversal register, the reason the
+    measured fact (§0.1 items 31, 35 and 50): the candidate SET is what is
+    empty, never the verdict's reversibility, and no route to another command
+    is named. `skipped` are the candidate keys this config states that were
+    not admitted, each with whether the far end of its bracket was priced (and
+    moved no option's present value) or refused by the loader."""
     if skipped:
-        return "; ".join(
+        return "not_admitted", "; ".join(
             f"this config states {key}, and "
             + ("moving it to the far end of its bracket moves no option's present value"
                if priced else
                "the loader refuses it at the far end of its bracket")
             for key, priced in skipped)
-    return f"this config states no {' or '.join(REVERSAL_LEAVES)}"
+    return "no_candidate", f"this config states no {' or '.join(REVERSAL_LEAVES)}"
 
 
-def _unsolved_without_futures(field: str) -> str:
+def _unsolved_without_futures(field: str) -> Tuple[str, str]:
     """Why a futures-side field is not solved on a run WITHOUT futures — one
     sentence per field, because the true reason differs.
 
@@ -2179,8 +2229,8 @@ def _unsolved_without_futures(field: str) -> str:
     """
     if field not in _FUTURES_FIELDS:
         raise ValueError(f"{field} is solved on the central case, not on futures")
-    return (f"this run has no futures, and this solver reads {field} only off "
-            f"futures")
+    return "no_futures", (f"this run has no futures, and this solver reads {field} "
+                          f"only off futures")
 
 
 def _confirmed_boundaries(
@@ -2210,7 +2260,7 @@ def _confirmed_boundaries(
     free = (_free_curve(raw, key, options, det, mc, single_path=False)
             if mc is not None else None)
     solved = deterministic_boundaries(raw, key, lo, hi, base=det, iterations=iterations)
-    per_field: Dict[str, Tuple[List[Dict[str, Any]], Optional[str]]] = {}
+    per_field: Dict[str, Tuple[List[Dict[str, Any]], Optional[Tuple[str, str]]]] = {}
     for field in _DETERMINISTIC_FIELDS:
         found = [b for b in solved["boundaries"] if b["attribute"] == field]
         if found:
@@ -2221,13 +2271,11 @@ def _confirmed_boundaries(
             # the reason and no third sentence is written for a case it cannot
             # produce.
             anomaly = next((a for a in solved["anomalies"] if a["attribute"] == field), None)
-            if anomaly is not None:
-                per_field[field] = ([], anomaly["why"])
-            else:
-                unchanged = [u for u in solved["unchanged"] if u["attribute"] == field][0]
-                per_field[field] = ([], (
-                    f"{field} is {unchanged['value']!r} throughout "
-                    f"{_fmt_value(key, lo)}–{_fmt_value(key, hi)}"))
+            record = anomaly if anomaly is not None else [
+                u for u in solved["unchanged"] if u["attribute"] == field][0]
+            per_field[field] = ([], _scan_reason(
+                key, field, record["value"], record["points"], lo, hi,
+                in_this_run_only=anomaly is not None))
     for field in _FUTURES_FIELDS:
         per_field[field] = ((
             _futures_field_boundaries(
@@ -2237,9 +2285,10 @@ def _confirmed_boundaries(
     reported: List[Union[SolvedBoundary, SampledBoundary]] = []
     refused: List[RefusedBoundary] = []
     for field in BOUNDARY_FIELDS:
-        found, reason = per_field[field]
-        if reason is not None:
-            refused.append(RefusedBoundary(verdict_field=field, reason=reason))
+        found, refusal = per_field[field]
+        if refusal is not None:
+            refused.append(RefusedBoundary(verdict_field=field, code=refusal[0],
+                                           reason=refusal[1]))
             continue
         for entry in found:
             value = entry["value"]
@@ -2256,6 +2305,7 @@ def _confirmed_boundaries(
                     {"lo": free(lo)[1], "hi": free(hi)[1], "at": curve}, stated.best, paths)
                 if not identified["identified"]:
                     refused.append(RefusedBoundary(verdict_field=field,
+                                                   code="not_identified",
                                                    reason=identified["why"]))
                     continue
             confirming = simulate(load_at(raw, key, value))
@@ -2265,7 +2315,7 @@ def _confirmed_boundaries(
                 def said(probs: Dict[str, Optional[float]]) -> str:
                     return ", ".join(f"{name} {p:.4f}" for name, p in probs.items()
                                      if p is not None)
-                refused.append(RefusedBoundary(verdict_field=field, reason=(
+                refused.append(RefusedBoundary(verdict_field=field, code="unconfirmed", reason=(
                     f"the re-simulation at {_fmt_value(key, value)} gives {said(confirmed)}, "
                     f"and the free curve gives {said(curve)}")))
                 continue

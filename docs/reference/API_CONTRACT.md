@@ -183,9 +183,9 @@ config. `--decompose` with `--read-back` refuses before anything is priced
 **How many futures each register prices.** `--decompose N` (or
 `--decompose=N`) sets `N`; bare, `N` is `simulation.num_sims`.
 
-- The spread register, `mean_margin`, `sd_margin`, which streams draw and
-  which channels are live are taken on `N` futures the block draws for itself
-  (`paths`).
+- The spread register, its `structural_zeros` included, `mean_margin`,
+  `sd_margin`, which streams draw and which channels are live are taken on `N`
+  futures the block draws for itself (`paths`).
 - The level register prices the first `min(N, 2000)` of those futures
   (`level.paths`).
 - The reversal register prices none of them. It reads the run's own Monte
@@ -234,8 +234,8 @@ option's present value, on some future, differs between the two by more than
 `decomposition_run.identity_budget`, the allowance `identity_failed` holds the
 all-frozen margin to. `live_channel_ids` are the live channels, in id order.
 Both facts are measured on these futures and on no others, and neither is read
-off the config. A live channel can move only an option that never enters the
-margin, so `f` can be identical on every future while channels move present
+off the config. A channel can be live while every option it moves stays out of
+the margin, so `f` can be identical on every future while channels move present
 values.
 
 **The block** carries `paths`, `max_paths`, `live_channel_ids`, `mean_margin`,
@@ -245,8 +245,8 @@ not copied in; the document's top-level `verdict` is its one home.
 - `paths` is `N`. `max_paths` is the largest `N` the budget admits at the number
   of streams that drew on the block's futures — the live channels and the
   streams of the `dead_draw` rows — so `paths` never exceeds it.
-- The block's figures are taken on `f`, the decision margin on each future: the
-  cheapest other option's present value minus that of `verdict.best`
+- `f` is the decision margin on each future: the cheapest other option's
+  present value minus that of `verdict.best`
   (`decomposition_run.margin_per_path`). `f > 0` on a future is `verdict.best`
   cheapest there.
 - `mean_margin` and `sd_margin` are the mean and population standard deviation
@@ -255,11 +255,11 @@ not copied in; the document's top-level `verdict` is its one home.
   the `monte_carlo` block's means.
 
 `spread` — how the variance of `f` splits across the live channels. It carries
-`rows`, `interaction`, `leading_channel_id`, `unresolved_top_channel_id` and
-`interaction_channel_ids`. When `f > 0` on every one of the block's futures, or
-on none of them, it is instead one key, `refusal`, with code
-`no_sign_variation` and a `reason` stating which, and no `rows`; `level` and
-`reversal` are still present.
+`rows`, `interaction`, `leading_channel_id`, `unresolved_top_channel_id`,
+`interaction_channel_ids` and `structural_zeros`. When `f > 0` on every one of
+the block's futures, or on none of them, it instead carries `refusal`, with
+code `no_sign_variation` and a `reason` stating which, and `structural_zeros`,
+and no `rows`; `level` and `reversal` are still present.
 
 - Each row carries `channel_id`, `channel`, `label`, `resolved`, `flip`,
   `flip_ci`, `widths`, `interaction_gap`, `interaction_gap_ci`, and EITHER
@@ -288,12 +288,18 @@ on none of them, it is instead one key, `refusal`, with code
 - The TOP ROW is the row with the largest `alone` point estimate, resolved or
   not. It is `leading_channel_id` when it resolved and
   `unresolved_top_channel_id` when it did not; the other is `null`.
-- `widths[]`: `key`, `formatted`, `source` (`user`, `assistant`, `anchor` or
-  `unattributed`, the read-back's own classes), `anchor` and `note`. A width is
-  a stated input that sizes the row's draws. On the economy row a `note` names
-  the correlation key that pulls an option's shock onto that row, its value
-  `rho`, and `rho` squared: the fraction of that shock's variance that comes
-  from the economy's draw.
+- `widths[]`: `key`, `formatted`, `source`, `anchor` and `note`. A width is an
+  input that sized the row's draws on this run. One the config states carries
+  its read-back class as `source` (`user`, `assistant`, `anchor` or
+  `unattributed`); one the engine filled in carries `default`, with `anchor`
+  naming the registry entry it came from, as the read-back's `defaults
+  applied` line does. A correlation is a width only when it pulls a shock this
+  run draws, an events list only when it holds an event, and
+  `simulation.other_cost_vol` on an option's row only when that option holds
+  an other-cost line. On the economy
+  row a `note` names the correlation key that pulls an option's shock onto
+  that row, its value `rho`, and `rho` squared: the fraction of that shock's
+  variance that comes from the economy's draw.
 - `interaction`: `resolved`, `first_order_sum` (the sum of every row's `alone`
   point estimate, resolved or not, before rounding) and `first_order_sum_ci`.
   When that interval lies entirely below 1 it is resolved and adds `residual`
@@ -324,15 +330,19 @@ on none of them, it is instead one key, `refusal`, with code
 
 `reversal` — what would have to change for the verdict to change, on inputs
 the config states that carry no distribution. It carries `exact`, `estimated`,
-`structural_zeros` and `no_distance_reason`; the two row lists are never ranked
-against each other.
+`structural_zeros`, `no_distance_code` and `no_distance_reason`; the two row
+lists are never ranked against each other.
 
 - The search covers a financed option's `mortgage_rate` and
   `mortgage_renewal_rates`, when the config states them and moving one to the
   far end of its bracket moves an option's present value.
-- `no_distance_reason` is set exactly when `exact` and `estimated` are both
-  empty, and states what this config states of the searched keys. It is `null`
-  otherwise.
+- `no_distance_code` and `no_distance_reason` are set exactly when `exact` and
+  `estimated` are both empty, and are `null` otherwise. `no_distance_reason` is
+  the measured fact, and `no_distance_code` is `no_candidate` when the config
+  states none of the searched keys, `not_admitted` when every one it states
+  moves no option's present value at the far end of its bracket or is refused
+  there by the loader, `no_mapping` when the block was handed no config
+  mapping, and `single_option` when fewer than two options are priced.
 - `exact[]` rows: `key`, `option`, `stated_formatted`, `stated_source` (whose
   figure the stated value is, in the read-back's classes), `bracket_low`,
   `bracket_high`, `bracket_source`, `probe_paths`, `max_path_deviation_over_sd`,
@@ -366,8 +376,9 @@ against each other.
   `curve_probabilities` is the same read off the run's own futures shifted to
   `value`. A boundary is reported only where the two are equal. Each is a list
   of `[option, probability]` pairs.
-- `was` is what the field says just below `value` and `becomes` what it says
-  just above it. For `decisive` they read `decisive for <option>` or
+- `was` is what the field says at the lower end of the bracket the boundary
+  converged in, and `becomes` what it says at the upper end; `value` is inside
+  that bracket. For `decisive` they read `decisive for <option>` or
   `not decisive`.
 - Boundaries are the edges of every stretch of the bracket in which the field
   says what this run says. `best` and `runner_up` are found by scanning each
@@ -375,19 +386,29 @@ against each other.
   their gap; `mc_best` and `decisive` by scanning 65 points and bisecting each
   edge of such a stretch. A change and its reversal inside one scan step are
   not seen.
-- `further_changes` is `"above"` when, past the edge and before the field says
-  what this run says again or the bracket ends, it changes once more, so
-  `becomes` does not hold up to there; `"below"` is the same below the edge, so
-  `was` does not hold down to there; `null` is neither.
-- `refused_boundaries[]`: `verdict_field` and `reason`, for a field on which no
-  boundary is printed; `reason` is the measured fact.
+- `further_changes` is `"above"` when, read upward from the upper end of that
+  bracket and before the field says what this run says again or the bracket
+  ends, it changes once more, so `becomes` does not hold up to there;
+  `"below"` is the same read downward from the lower end, so `was` does not
+  hold down to there; `null` is neither.
+- `refused_boundaries[]`: `verdict_field`, `code` and `reason`, for a field on
+  which no boundary is printed; `reason` is the measured fact, and `code` is
+  `unchanged` when the field says what this run says at every point its scan
+  read, `not_on_axis` when it says that at none of them, `not_identified` when
+  a futures boundary's probabilities do not move by more than two standard
+  errors across the bracket or none is attached to it, `unconfirmed` when the
+  re-simulation at the boundary disagrees with the curve, `not_exact` on every
+  field of an `estimated[]` row, and `no_futures` for a futures field on a run
+  without futures.
 - `references[]`: `label`, `value`, `formatted`, `anchor` and `note`: an
   anchored rate on the key's own quoting axis. On an `effective_annual` config
   the semi-annual anchor passes through `rates.effective_mortgage_rate` and
   `note` names the figure as published; `note` is `null` otherwise.
-- `structural_zeros[]`: `kind`, `label`, `keys`, `channel_id`,
-  `reversal_key`, `measured_paths` and `move_threshold` — a row for each thing
-  with no row in `spread` or `level`, of one of two kinds:
+- `structural_zeros[]`, in `reversal` and in `spread`: `kind`, `label`,
+  `keys`, `channel_id`, `reversal_key`, `measured_paths` and `move_threshold`
+  — a row for each thing with no row in `spread.rows` or `level`, of one of
+  two kinds. `reversal.structural_zeros` holds the `stated_path` rows and
+  `spread.structural_zeros` the `dead_draw` rows:
   - `stated_path`: a key the config states that no draw touches, in `keys` and
     as `reversal_key`, which names its `exact` row. Decided by the model's
     structure; `channel_id`, `measured_paths` and `move_threshold` are `null`.
@@ -396,9 +417,9 @@ against each other.
     re-draw moved no priced option's present value on them by more than
     `move_threshold` (`decomposition_run.identity_budget`). Both facts are
     measured, on those futures, and both are facts about the stream. `keys`
-    are the stated keys that size its draws, and nothing is said of them: a
-    key there can carry a cash flow of its own, as a stated event's
-    deterministic cost does. `reversal_key` is `null`.
+    are the keys of the stream's widths, and nothing is said of them: a key
+    there can carry a cash flow of its own, as a stated event's deterministic
+    cost does. `reversal_key` is `null`.
 
 **The text block** prints these figures and no sentence about them. Every line
 is one of six kinds: a heading; a figure row with its intervals and source
@@ -406,13 +427,16 @@ tags; a crossing; a path note; a refusal with its code and `reason`; or a row
 of `structural_zeros`. A crossing line names whether it was solved or sampled,
 and a sampled one its `curve_paths` and `seed`, and its rate is floored at its
 printed precision, so the field still says `was` at the printed rate. A path
-note is a row's `path_note`, printed after its bracket. A `stated_path` row
+note is a row's `path_note`, printed after its bracket. A refused boundary
+prints as `no boundary printed for <fields> (<code>): <reason>`, one line per
+code and reason, and an empty reversal register as `WHAT WOULD HAVE TO CHANGE —
+not solved (<code>): <reason>`. A `stated_path` row
 prints its label, its keys and that no draw touches them; a `dead_draw` row
-prints its stream's label, that it drew on these `measured_paths` futures and
-that re-drawing it moved no option's present value by more than
-`move_threshold`, printed at three significant figures and taken upward so the
-sentence holds at the printed figure, then the keys that size its draws. A
-figure that did not
+prints, under the spread register's heading after its figures or its refusal,
+its stream's label, that it drew on these `measured_paths` futures and that
+re-drawing it moved no option's present value by more than `move_threshold`,
+printed at three significant figures and taken upward so the sentence holds at
+the printed figure, then the keys that size its draws. A figure that did not
 resolve prints behind `not resolved:`, each row's interaction gap included.
 `not resolved` with no colon and no figure after it stands where the residual
 would print when `interaction.resolved` is false, a branch that carries no
@@ -425,7 +449,7 @@ taken over the printed dollars.
 **Which figures move with the sample.** A figure that changes with
 `simulation.random_seed` or with `N` is a property of this run's sample and
 must never be quoted as a property of the user's config. Every number in the
-block is in exactly one of these four lists:
+block, and in a whole-block refusal, is in exactly one of these four lists:
 
 - The same at any seed and any `N`, properties of the config: `bracket_low`,
   `bracket_high`, each reference's `value`, `probe_paths`, `curve_paths`, a
@@ -441,14 +465,17 @@ block is in exactly one of these four lists:
   and `max_path_deviation_over_sd`.
 - Ids and counts measured on these futures, which two samples can share:
   `live_channel_ids`, `max_paths`, every row's and every `structural_zeros`
-  row's `channel_id`, `leading_channel_id`, `unresolved_top_channel_id` and
-  `interaction_channel_ids`.
+  row's `channel_id`, `leading_channel_id`, `unresolved_top_channel_id`,
+  `interaction_channel_ids`, and a whole-block refusal's `channel_id`.
 
 Of the fields that are words, the widths with their sources,
 `stated_formatted`, `stated_source`, `bracket_source`, `path_note`,
-`no_distance_reason`, and a solved boundary's `was`, `becomes` and
+`no_distance_code`, `no_distance_reason`, and a solved boundary's `was`, `becomes` and
 `further_changes` are the config's too; a sampled boundary's are the
-sample's, and so is whether `spread` refuses with `no_sign_variation`.
+sample's, and so is whether `spread` refuses with `no_sign_variation`. So is a
+whole-block refusal that fires once the block's futures are priced
+(`no_spread`, `budget` on `k`, `one_channel`, `freeze_leak` and
+`identity_failed`), with its `code`, `reason`, `channel` and `label`.
 
 ## Provenance
 

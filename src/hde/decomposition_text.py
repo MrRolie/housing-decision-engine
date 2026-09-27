@@ -7,16 +7,15 @@ block. Nothing here computes a statistic: every figure printed is a field, a
 count of a field's entries (the live channels, the level rows), or a
 subtraction or sum of PRINTED figures performed where it is printed.
 
-WHAT THE BLOCK PRINTS (spec §0.1 items 35 and 41): figures, not
-interpretation. Every line is exactly one of the six kinds the contract lists
-(`docs/reference/API_CONTRACT.md`, "The text block"): a heading, a figure row,
-a crossing, a path note, a refusal, or a row with no place in either
-register. A refusal's reason and a path note are written by the party that
-produced them and printed verbatim.
+WHAT THE BLOCK PRINTS (spec §0.1 items 35, 41 and 52): figures, not
+interpretation. The kinds of line it may print, and what every field means,
+are `docs/reference/API_CONTRACT.md`'s, under "The text block" and the
+field bullets of its `decomposition` section; this module restates neither.
+A refusal's reason and a path note are written by the party that produced
+them and printed verbatim.
 
 No line says why a figure is what it is, which figure matters, or what to run
-next. What a figure means is `docs/reference/API_CONTRACT.md`'s, and
-interpreting the block is the assistant's, bound by the skill.
+next. Interpreting the block is the assistant's, bound by the skill.
 
 THE BINDING, and why this file has exactly one public function. The spread
 table may never be emitted without the level register beside it: its top row
@@ -89,17 +88,20 @@ def _faithful(value: float, places: int, scale: float = 1.0) -> str:
     """`value × scale` at `places` decimals, or at as many more as it takes for
     the printed figure not to say something the value does not.
 
-    Two things a rounding may never do, and they are one defect (no share is
+    Three things a rounding may never do, and they are one defect (no share is
     ever clamped into [0, 1], in either direction):
 
       - print a figure that is not zero AS zero — a small negative share at two
         or three places reads as a signed zero, a measured nothing, the cheap
         all-clear in the costume of a rounding;
+      - print a figure that is not one AS one — all but one future of
+        thousands read as "P(rent cheapest) 1.00", every one of them (§0.1
+        item 51);
       - print a figure outside [0, 1] inside it, or one inside it outside — an
         unresolved share a hair above one reads as "all of the spread" on the
         row that did not resolve BECAUSE it is above one.
 
-    So the decimals grow until neither happens. One rule for every share, flip
+    So the decimals grow until none happens. One rule for every share, flip
     and probability, so one figure never prints at two roundings. An exact zero
     is a zero and prints as one, without a sign.
     """
@@ -110,13 +112,14 @@ def _faithful(value: float, places: int, scale: float = 1.0) -> str:
     for extra in range(10):
         text = f"{number * scale:.{places + extra}f}"
         shown = float(text) / scale
-        if shown != 0.0 and (0.0 <= shown <= 1.0) == inside:
+        if (shown != 0.0 and (shown == 1.0) == (number == 1.0)
+                and (0.0 <= shown <= 1.0) == inside):
             return text
     return repr(number * scale)
 
 
 def _share(value: float) -> str:
-    """A Sobol share: two decimals, or more where two would lie (`_faithful`)."""
+    """A share: two decimals, or more where two would lie (`_faithful`)."""
     return _faithful(value, 2)
 
 
@@ -125,16 +128,16 @@ def _interval(interval: Interval) -> str:
 
 
 def _flip(value: float) -> str:
-    """A fraction of futures, one decimal: a flip in a few futures out of
-    thousands is not zero, and does not print as one (`_faithful`)."""
+    """The flip column as a percentage at one decimal, or more where one would
+    lie (`_faithful`)."""
     return f"{_faithful(value, 1, 100.0)}%"
 
 
 def _flip_cell(value: float, interval: Interval) -> str:
-    """The flip column WITH its width (§3.3, §0.1 item 10): the one figure here
-    stated in decision space, so a point estimate with no width, beside
-    neighbours that all carry one, would read as the most certain number in
-    the table. The bracket takes its unit from the point estimate it follows."""
+    """The flip column WITH its interval (§3.3, §0.1 item 10): a point
+    estimate with no width, beside neighbours that all carry one, would read
+    as the most certain number in the table. The bracket takes its unit from
+    the point estimate it follows."""
     return (f"{_flip(value)} [{_faithful(interval.low, 1, 100.0)}, "
             f"{_faithful(interval.high, 1, 100.0)}]")
 
@@ -165,14 +168,13 @@ def _floored_rate(value: float, places: int) -> str:
 
 
 def _solved_rate(value: float) -> str:
-    """A crossing solved on the DETERMINISTIC verdict, at four decimals: a
-    property of the config as it stands, the same at any seed. A sampled
-    crossing prints at two, so the two never share a typography."""
+    """A solved crossing's rate, at four decimals. A sampled crossing prints
+    at two, so the two never share a typography."""
     return _floored_rate(value, 4)
 
 
 def _sampled_rate(value: float) -> str:
-    """A crossing bisected on the futures, at two decimals."""
+    """A sampled crossing's rate, at two decimals."""
     return _floored_rate(value, 2)
 
 
@@ -208,9 +210,8 @@ def _not_resolved(figure: str, resolved: bool) -> str:
 # ---------------------------------------------------------------------------
 
 def _width_cell(width: Width) -> str:
-    """One sizing figure with whose figure it is, inline on its own row.
-    `formatted` is None for a key whose value is not a figure
-    (`market_scenario.path`), and then the key stands alone."""
+    """One width with its tag, inline on its own row; a width with no
+    `formatted` prints its key alone."""
     head = width.key if width.formatted is None else f"{width.key}={width.formatted}"
     tag = width.source if width.anchor is None else f"{width.source}: {width.anchor}"
     note = "" if width.note is None else f" ({width.note})"
@@ -315,14 +316,10 @@ _BOUNDARY_ORDER = {field: index for index, field in enumerate(BOUNDARY_FIELDS)}
 
 def _crossing(boundary, where: str) -> str:
     """"as it rises past <where>, <field> changes from <was> to <becomes>", and,
-    when the searched range changes that field AGAIN on one side, a clause
-    saying so (`further_changes`): without it a reader takes the state past the
-    crossing to hold to the end of the bracket.
-
-    EVERY boundary reads its key UPWARD: `was` is what the field says just below
-    the value and `becomes` just above it. `was` and `becomes` are WORDS; this
-    line refuses anything else where it is printed, because a boolean that
-    reached a household once read "changes from True to False"."""
+    when the boundary's `further_changes` names a side, a clause saying so.
+    What the three fields mean is the contract's. They are printed as WORDS;
+    this line refuses anything else where it is printed, because a boolean
+    that reached a household once read "changes from True to False"."""
     label = _BOUNDARY_LABEL.get(boundary.verdict_field, boundary.verdict_field)
     for name in ("was", "becomes"):
         words = getattr(boundary, name)
@@ -358,21 +355,23 @@ def _estimated_boundary_line(boundary: EstimatedBoundary) -> str:
 def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
     """Boundaries that are not printed, recorded rather than dropped: a boundary
     that vanishes with no row is an absence a reader reads as "nothing here".
-    One line per REASON, naming every field it refuses."""
-    reasons: List[str] = []
+    One line per code and reason, naming every field it refuses, in the one
+    shape every refusal prints in: its code, then its reason (§0.1 item 50)."""
+    refusals: List[Tuple[str, str]] = []
     fields: dict = {}
     for item in refused:
-        if item.reason not in fields:
-            reasons.append(item.reason)
-            fields[item.reason] = []
-        fields[item.reason].append(
+        refusal = (item.code, item.reason)
+        if refusal not in fields:
+            refusals.append(refusal)
+            fields[refusal] = []
+        fields[refusal].append(
             _BOUNDARY_LABEL.get(item.verdict_field, item.verdict_field))
     lines: List[str] = []
-    for reason in reasons:
-        labels = fields[reason]
+    for code, reason in refusals:
+        labels = fields[(code, reason)]
         named = (labels[0] if len(labels) == 1
                  else f"{', '.join(labels[:-1])} or {labels[-1]}")
-        lines.append(f"      no boundary printed for {named} — {reason}")
+        lines.append(f"      no boundary printed for {named} {_refusal(code, reason)}")
     return lines
 
 
@@ -441,13 +440,9 @@ def _reversal_detail_lines(reversal) -> List[str]:
 
 
 def _structural_zero_line(zero: StructuralZero) -> str:
-    """One row with no place in either register, in its kind's words.
-
-    A `stated_path` row's fact is about the key it names: no draw touches it. A
-    `dead_draw` row's facts are about its STREAM, measured on the block's own
-    futures, and are said of the stream by name; the keys that size the
-    stream's draws follow as what they are, and nothing is said of a key
-    (§0.1 items 39 and 40)."""
+    """One row of `structural_zeros`, in the words the contract gives its kind.
+    A `dead_draw` row's words are said of its stream by name, and its keys
+    follow with nothing said of them (§0.1 items 39 and 40)."""
     if zero.kind == "stated_path":
         return f"  {zero.label} — {', '.join(zero.keys)}: no draw touches it"
     if zero.kind == "dead_draw":
@@ -464,7 +459,7 @@ def _refusal(code: str, reason: str) -> str:
     """A refusal as printed: its code, then the reason its producer wrote,
     verbatim. The formatter appends nothing — the party that declines owns
     the sentence."""
-    return f"not split ({code}): {reason}"
+    return f"({code}): {reason}"
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +478,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         return ""
 
     if isinstance(outcome, DecompositionRefusal):
-        return f"which risk decides it — {_refusal(outcome.code, outcome.reason)}"
+        return f"which risk decides it — not split {_refusal(outcome.code, outcome.reason)}"
 
     dec: Decomposition = outcome
     verdict = dec.verdict
@@ -504,7 +499,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     if isinstance(spread, RefusedSpread):
         # The level and reversal registers still print below: the binding
         # runs one way.
-        lines.append(f"  {_refusal(spread.code, spread.reason)}")
+        lines.append(f"  not split {_refusal(spread.code, spread.reason)}")
     elif isinstance(spread, SpreadRegister):
         if not spread.rows:
             raise ValueError(
@@ -554,6 +549,9 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         raise TypeError(
             f"the spread register is a {type(spread).__name__}, which is neither "
             f"a SpreadRegister nor a RefusedSpread")
+    # The rows measured on these same futures, under this register's heading
+    # whether or not it refused (§0.1 item 48).
+    lines.extend(_structural_zero_line(zero) for zero in spread.structural_zeros)
 
     # --- THE LEVEL. Emitted by these same lines, unconditionally: there is no
     # branch above that can skip it, which is the binding.
@@ -585,7 +583,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
     if top is not None:
         lines.append(top)
 
-    # --- THE REVERSAL REGISTER: the structural zeros, then the rows grouped BY
+    # --- THE REVERSAL REGISTER: its structural zeros, then the rows grouped BY
     # EXACTNESS — never ranked across that split.
     if reversal.structural_zeros:
         lines.append("")
@@ -606,7 +604,7 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
             lines.extend(_reversal_detail_lines(row))
     if not (reversal.exact or reversal.estimated):
         lines.append("")
-        lines.append(f"  WHAT WOULD HAVE TO CHANGE — not solved: "
-                     f"{reversal.no_distance_reason}")
+        lines.append(f"  WHAT WOULD HAVE TO CHANGE — not solved "
+                     f"{_refusal(reversal.no_distance_code, reversal.no_distance_reason)}")
 
     return "\n".join(lines)

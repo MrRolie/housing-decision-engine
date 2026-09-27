@@ -503,6 +503,25 @@ class TestRefusals:
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "single_option"
 
+    def test_no_verdict_on_a_one_option_run_refuses_as_single_option(self):
+        """A library caller that passes no verdict: on a run that prices one
+        option the refusal's fact holds, so it refuses; on a run that prices
+        three it would not, so it raises (§0.1 item 44: a guard only a library
+        caller reaches is pinned with a constructed call).
+        *Kills it:* narrowing the guard to a verdict that is present, which
+        reads `verdict.best` off None; or refusing the three-option call with
+        "this run prices one option"."""
+        spec = _single_option_spec()
+        got = decompose(spec, **{**_inputs(spec), "verdict": None})
+        assert isinstance(got, DecompositionRefusal)
+        assert (got.code, got.reason) == ("single_option", "this run prices one option")
+        assert format_decomposition(got).endswith(
+            "not split (single_option): this run prices one option")
+        spec = _fixture_spec(num_sims=40)
+        with pytest.raises(ValueError, match="^no verdict was passed for a run that "
+                                             "prices 3 options$"):
+            decompose(spec, **{**_inputs(spec), "verdict": None})
+
     def test_two_options_do_not_refuse_as_single(self):
         spec = _drawing_but_dead_house_spec()
         got = decompose(spec, **_inputs(spec))
@@ -700,7 +719,7 @@ class TestEveryFutureAgrees:
         # live channels are known), the level register's freezes and the
         # all-frozen run, and nothing else.
         k = len(got.live_channel_ids)
-        drawn = k + len([z for z in got.reversal.structural_zeros
+        drawn = k + len([z for z in got.spread.structural_zeros
                          if z.kind == "dead_draw"])
         assert sum(1 for _, freeze in spy.runs if not freeze) == 1 + drawn
         assert len(spy.runs) == 1 + drawn + k + 1
@@ -716,10 +735,10 @@ class TestEveryFutureAgrees:
 
     def test_every_future_on_the_other_side_refuses_with_that_fact(self):
         """The P(f > 0) == 0 side, worded for it."""
-        refusal = dr._no_sign_variation("rent", 400, 0.0)
+        refusal = dr._no_sign_variation("rent", 400, 0.0, ())
         assert refusal.reason == "rent is cheapest in none of these 400 futures"
         with pytest.raises(ValueError):
-            dr._no_sign_variation("rent", 400, 0.5)
+            dr._no_sign_variation("rent", 400, 0.5, ())
 
     def test_a_disagreeing_future_prints_the_shares(self):
         """The nearest legal call: one future on the other side of zero."""
@@ -771,6 +790,24 @@ class TestTheFreezeIdentity:
         spread = float(got.reason.rsplit("$", 1)[1].replace(",", ""))
         assert spread > 0.0
 
+    def test_a_leak_of_a_few_hundred_millionths_of_a_dollar_refuses(self, monkeypatch):
+        """The same escaped draw site, on a channel sized so small that the
+        paths differ by less than a millionth of a dollar: any difference
+        refuses, not a large one. There is no real leak to witness it, so it
+        is constructed (§0.1 item 44).
+        *Kills it:* narrowing the check to a spread above $1 or above $1e-6,
+        either of which prints the level register over this run."""
+        spec = _fixture_spec(num_sims=40)
+        spec = dataclasses.replace(spec, simulation=dataclasses.replace(
+            spec.simulation, investment_return_vol=1e-14))
+        inputs = _inputs(spec)
+        self._leaky_mask(monkeypatch, escaped=channel_by_key("portfolio").id)
+        got = decompose(spec, paths=40, **inputs)
+        assert isinstance(got, DecompositionRefusal) and got.code == "freeze_leak"
+        spread = float(got.reason.rsplit("$", 1)[1].replace(",", ""))
+        assert 0.0 < spread < 1e-6, spread
+        assert format_decomposition(got).endswith(f"not split (freeze_leak): {got.reason}")
+
     def test_an_exact_mask_does_not_refuse(self):
         """The nearest legal call: the same run with the mask whole.
         *Kills it:* widening the check to fire on a spread of exactly 0.0."""
@@ -778,6 +815,54 @@ class TestTheFreezeIdentity:
         got = decompose(spec, paths=40, **_inputs(spec))
         assert isinstance(got, Decomposition)
         assert got.level.all_frozen_path_spread == 0.0
+
+
+class TestTheIncomeStreamIsReDrawn:
+    """The income stream is re-drawn and measured like every other stream that
+    drew, on the block's own futures: its `dead_draw` row says re-drawing it
+    moved nothing, and a re-draw that moved something raises. Both rest on the
+    re-draw being priced."""
+
+    def test_every_stream_that_drew_is_re_drawn_including_the_income_stream(
+            self, monkeypatch):
+        """*Kills it:* re-drawing every drawing stream but the income stream,
+        which leaves its row's clause asserted from structure (§0.1 item 39)."""
+        spec = _fixture_spec(num_sims=40)
+        inputs = _inputs(spec)
+        inner, swaps = dr._run, []
+
+        def spy(spec_at_paths, matrix_id, swapped=None, freeze=()):
+            if swapped:
+                swaps.append(dict(swapped))
+            return inner(spec_at_paths, matrix_id, swapped, freeze)
+
+        monkeypatch.setattr(dr, "_run", spy)
+        got = decompose(spec, paths=40, **inputs)
+        assert isinstance(got, Decomposition)
+        assert swaps == [{stream: dr.MATRIX_B} for stream in range(8)]
+        income = [z for z in got.spread.structural_zeros
+                  if z.channel_id == dc_income()]
+        assert [z.kind for z in income] == ["dead_draw"]
+
+    def test_a_re_draw_of_the_income_stream_that_moves_a_value_raises(self, monkeypatch):
+        """The income stream feeds the affordability report only, so no real
+        run moves a present value with it; the move is constructed on the one
+        re-draw, through `decompose` itself (§0.1 item 44).
+        *Kills it:* skipping the income stream's re-draw, or the raise."""
+        spec = _fixture_spec(num_sims=40)
+        inputs = _inputs(spec)
+        inner = dr._run
+
+        def moving_income(spec_at_paths, matrix_id, swapped=None, freeze=()):
+            result = inner(spec_at_paths, matrix_id, swapped, freeze)
+            if swapped == {dc_income(): dr.MATRIX_B}:
+                result.rent.pvs = result.rent.pvs + 1.0
+            return result
+
+        monkeypatch.setattr(dr, "_run", moving_income)
+        with pytest.raises(ValueError, match=r"^re-drawing the income stream moved an "
+                                             r"option's present value by \$1, above"):
+            decompose(spec, paths=40, **inputs)
 
 
 class TestTheIdentityIsGated:
@@ -884,7 +969,7 @@ class TestStructuralZeros:
         spec = _drawing_but_dead_house_spec()
         inputs = _inputs(spec)
         got = decompose(spec, **inputs)
-        dead = [z for z in got.reversal.structural_zeros if z.kind == "dead_draw"]
+        dead = [z for z in got.spread.structural_zeros if z.kind == "dead_draw"]
         assert [z.channel_id for z in dead] == [4]
         assert dead[0].measured_paths == spec.simulation.num_sims
         assert dead[0].move_threshold == dr.identity_budget(inputs["det"],
@@ -900,7 +985,7 @@ class TestStructuralZeros:
         spec = _drawing_but_dead_house_spec()
         got = decompose(spec, paths=2100, **_inputs(spec))
         assert (got.paths, got.level.paths) == (2100, 2000)
-        (dead,) = [z for z in got.reversal.structural_zeros if z.kind == "dead_draw"]
+        (dead,) = [z for z in got.spread.structural_zeros if z.kind == "dead_draw"]
         assert dead.measured_paths == 2100
         assert ("  the house's costs: drawn on these 2,100 futures, and re-drawing it "
                 "moved no option's present value by more than $"
@@ -916,7 +1001,7 @@ class TestStructuralZeros:
             house=dataclasses.replace(spec.house, annual_maintenance_rate=0.01))
         got = decompose(spec, **_inputs(spec))
         assert 4 in got.live_channel_ids
-        assert not [z for z in got.reversal.structural_zeros
+        assert not [z for z in got.spread.structural_zeros
                     if z.kind == "dead_draw"]
 
     def test_one_stream_never_gets_two_rows(self):
@@ -933,7 +1018,7 @@ class TestStructuralZeros:
         got = decompose(spec, paths=40, raw=_fixture_raw(), **{
             k: v for k, v in _inputs(spec).items() if k != "raw"})
         assert 0 not in got.live_channel_ids
-        ids = [z.channel_id for z in got.reversal.structural_zeros
+        ids = [z.channel_id for z in got.spread.structural_zeros
                if z.channel_id is not None]
         assert ids.count(0) == 1, f"the economy is named {ids.count(0)} times"
 
@@ -952,7 +1037,7 @@ class TestStructuralZeros:
                 corr_inflation_house=0.0, corr_inflation_other=0.0,
                 corr_inflation_event_cost=0.0))
         got = decompose(spec, **_inputs(spec))
-        dead = [z for z in got.reversal.structural_zeros if z.channel_id == 0]
+        dead = [z for z in got.spread.structural_zeros if z.channel_id == 0]
         assert len(dead) == 1 and dead[0].kind == "dead_draw"
         assert spec.economic.mode == "real"
 
@@ -993,7 +1078,7 @@ class TestCost:
         got = decompose(spec, paths=40, **inputs)
         assert isinstance(got.spread, SpreadRegister)
         k_live = len(got.live_channel_ids)
-        k_draw = k_live + len([z for z in got.reversal.structural_zeros
+        k_draw = k_live + len([z for z in got.spread.structural_zeros
                                if z.kind == "dead_draw"])
         assert (k_live, k_draw) == (2, 3)
         level = dr._level_paths(40)
@@ -1028,7 +1113,7 @@ class TestCost:
         got = decompose(spec, **inputs)
         assert isinstance(got.spread, RefusedSpread)
         n, k = spec.simulation.num_sims, len(got.live_channel_ids)
-        assert not got.reversal.structural_zeros
+        assert not got.spread.structural_zeros
         level = dr._level_paths(n)
         assert spy.evaluations == planned_evaluations(n, k, level, spread_priced=False)
         assert spy.evaluations == n * (k + 1) + level * (k + 1)
@@ -1082,7 +1167,7 @@ class TestInteractionBranches:
         f_a, f_b, f_ab = self._interacting_tables()
         widths = {0: (Width("economic.inflation_vol", "1%", "assistant"),),
                   1: (Width("simulation.value_growth_vol", "7%", "user"),)}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42)
+        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=42, dead=())
         assert isinstance(register.interaction, ResolvedInteraction)
         assert register.interaction.first_order_sum_ci.high < 1.0
         assert register.interaction.residual > 0.0
@@ -1109,7 +1194,7 @@ class TestInteractionBranches:
         f_a, f_b = a1 + a2, b1 + b2
         f_ab = np.stack([b1 + a2, a1 + b2], axis=0)
         widths = {0: (), 1: ()}
-        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=7)
+        register = dr._spread_register(f_a, f_b, f_ab, (0, 1), widths, seed=7, dead=())
         assert isinstance(register.interaction, RefusedInteraction)
         assert not hasattr(register.interaction, "residual")
 
@@ -1125,7 +1210,7 @@ class TestInteractionBranches:
         f_a, f_b = a1, b1
         f_ab = np.stack([b1, a1 - 1e-9 * b2], axis=0)
         register = dr._spread_register(f_a, f_b, f_ab, (0, 1), {0: (), 1: ()},
-                                       seed=13)
+                                       seed=13, dead=())
         dead = next(r for r in register.rows if r.channel_id == 1)
         assert isinstance(dead.shares, UnresolvedShares) or dead.shares.alone >= 0.0
 
