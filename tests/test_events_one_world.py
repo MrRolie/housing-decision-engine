@@ -393,3 +393,19 @@ def test_the_facts_ride_the_json_read_back(tmp_path, monkeypatch, capsys):
     assert main() == 0
     doc = json.loads(capsys.readouterr().out)
     assert _best_guess(FLAT)[0] in doc["assumptions"]["read_back"]
+
+
+def test_the_schema_states_every_refusal_and_the_hazard_window():
+    from hde.input_schema import input_schema
+    schema = input_schema()
+    for option in ("condo", "house", "rent"):
+        note = schema[option]["events"]["note"]
+        assert ("A hazard (timing_model: hazard) fires only from max(min_year, "
+                "hazard_start_year) to min(max_year, years)") in note
+        for fact in ("two events with one name", "min_year past years or above max_year",
+                     "expected_year outside [min_year, max_year]",
+                     "a negative timing_std_years or cost_vol",
+                     "a hazard whose hazard_start_year is past years or max_year, or that is 0 "
+                     "in every year it can fire"):
+            assert fact in note, (option, fact)
+    assert "a year outside [1, years] is REFUSED" in schema["income"]["pay_drop_events"]["note"]

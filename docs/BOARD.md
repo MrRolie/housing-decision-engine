@@ -325,13 +325,20 @@ hosted. Parked deliberately, not forgotten.
 - Under `shock_model: normal` a shock multiplier is clipped at zero, so a large volatility can
   drive a value track to exactly $0 where it stays for the rest of the run. The schema note
   now says so; whether the engine should refuse the combination instead is open.
-- The central case charges a hazard-timed event at its `expected_year` even when its hazard
-  is 0, while Monte Carlo never fires it. On a 20-year all-cash condo with one $15,000
-  hazard-timed event at hazard 0, the central case carries `events_pv` $11,841
-  (15,000/1.03^8) and the futures carry none: the condo's central PV is $173,821 against a
-  Monte Carlo mean of $161,855. The two halves of the three-state verdict then disagree about a
-  cost that one of them models and the other cannot. Measured 2026-09-27; it predates the
-  `--decompose` stack.
+- One-time events, priced once by the best guess and per path by the futures
+  (`docs/specs/2026-09-27-events-in-one-world.md`). Landed: the loader refuses an event no
+  future can fire (a hazard of 0 throughout, which the best guess charged at $11,841 on a
+  $15,000 event), a window that contradicts itself, two events with one name, a negative
+  event vol and a pay drop outside the horizon; a hazard fires only inside its window; the
+  single-path gate asks whether an event's futures can differ; each future's affordability
+  ratio charges an event in that future's year; and the read-back says where the futures time
+  an event, the lease reset or the price crash differently from the best guess. Still here,
+  as conventions of one path against a mean: the jitter clamp at a window's edge (−$310 on a
+  $15,000 event at the horizon, std 3), discount convexity under jitter (−$45 at std 3), and
+  condo reserve netting of a drawn cost ($1,438 at `cost_vol` 0.3). The one a user can pull
+  far is `cost_distribution: normal`, whose zero floor lifts the mean cost by +0.42% at
+  `cost_vol` 0.5, +8.3% at 1.0 and +39.6% at 2.0: on a $15,000 event in year 8 the futures
+  carry $1,144 more than the best guess at 1.0 and $4,945 more at 2.0. Measured 2026-09-27.
 
 ## 11. Measure the engine again
 

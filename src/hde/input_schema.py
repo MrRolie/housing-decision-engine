@@ -20,6 +20,14 @@ _UNSOURCED_JURISDICTIONS = ", ".join(
     if name.startswith("property_tax.") and anchor.kind == "unsourced"
 )
 
+# What the loader refuses in an events list, said once for the three options.
+_EVENT_REFUSALS = (
+    ". A hazard (timing_model: hazard) fires only from max(min_year, hazard_start_year) to "
+    "min(max_year, years). REFUSED: two events with one name; min_year past years or above "
+    "max_year; expected_year outside [min_year, max_year]; a negative timing_std_years or "
+    "cost_vol; a hazard whose hazard_start_year is past years or max_year, or that is 0 in "
+    "every year it can fire")
+
 # key -> (required?, note[, required_if]) per section; top-level scalars AND the
 # section blocks themselves live under "top". `required` means "required when the
 # block is present"; `required_if` states a conditional requirement in the
@@ -248,7 +256,7 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                      "the world"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
-                          "costs belong in purchase_costs"),
+                          "costs belong in purchase_costs" + _EVENT_REFUSALS),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
                                          "owner pays; escalation_rate is AS QUOTED like every "
@@ -439,7 +447,7 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                      "the world"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs during "
                           "the horizon (roof, appliances, special assessment); purchase-time "
-                          "costs belong in purchase_costs"),
+                          "costs belong in purchase_costs" + _EVENT_REFUSALS),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "property tax, home/unit insurance, utilities the "
                                          "owner pays; escalation_rate is AS QUOTED like every "
@@ -489,7 +497,7 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                             "DEFAULT 0.03 real (FP Canada 2026 PAG 60/40, ≈ 5.1% "
                                             "quoted)"),
         "events": (False, "list of {name, base_cost, expected_year, ...} — one-offs such as "
-                          "moving costs"),
+                          "moving costs" + _EVENT_REFUSALS),
         "other_recurring_costs": (False, "list of {name, annual_amount, escalation_rate} — "
                                          "tenant insurance, parking, utilities the tenant pays. "
                                          "The home_insurance.* anchors are HOMEOWNER premiums "
@@ -554,7 +562,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                              "32%, below CMHC's 39% cap)"),
         "pay_drop_events": (False, "list of {year, magnitude, year_jitter_std, magnitude_vol}; "
                                     "magnitude = retained-income fraction in (0, 1] (0.8 = 20% "
-                                    "cut); shocked draws are clamped to [0.01, 1.0]"),
+                                    "cut); shocked draws are clamped to [0.01, 1.0]; a year "
+                                    "outside [1, years] is REFUSED"),
     },
     "simulation": {
         "num_sims": (False, "Monte Carlo paths; default 10,000"),
