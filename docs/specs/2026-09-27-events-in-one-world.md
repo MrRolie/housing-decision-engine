@@ -1,13 +1,13 @@
 # Events in one world — design (2026-09-27)
 
-**Status:** ruled; the fix is being built.
+**Status:** ruled, amended 2026-09-27 after the first review of the fix (E7-E9).
 **Anchored by:** board item 10, the central case charging a hazard-timed event whose hazard is 0.
 
 ## 1. What was measured
 
 The engine prices one-time events (`condo.events`, `house.events`, `rent.events`) twice. The
 central case (`deterministic.py`) prices them on one path. The futures (`monte_carlo.py`) price
-them on every simulated path. An audit mapped every rule by which each engine places or charges
+them on every simulated path. A measurement mapped every rule by which each engine places or charges
 an event, built a config for each place the two could disagree, and measured it at 4,000 or more
 paths on two seeds. It found fifteen disagreements. A second, independent check tried to refute
 each one, and none was refuted. Grouped by what the user meets:
@@ -42,7 +42,7 @@ facts, computed exactly from the hazard schedule:
 - the year by which half of the futures have fired it, or that fewer than half ever do.
 
 When `rent.reset_hazard > 0` the read-back also says that the central case prices a tenancy that
-never resets, and when a `price_shock` is stated, that it prices no crash. These are facts about
+never resets, and when `price_shock.annual_hazard > 0`, that it prices no crash. These are facts about
 the run, with no dollar gap and no advice.
 
 **E2. A config whose event cannot happen, or whose window contradicts itself, is refused at
@@ -78,11 +78,40 @@ the difference between one path and a mean, and each is small against its margin
 measured household. The normal cost distribution's truncation bias is the one a user can pull
 far with a large vol, so the board records it with its measured sizes.
 
+**E7. E1's lines state the model's schedule, not a count of futures, and every rate is the one
+the model applies.** The first build printed "X% of futures fire it" and "the futures reset it" on
+runs with no futures at all (`--no-monte-carlo`, or a single-path run), where the contract itself
+says the run has none. The facts are properties of the model's schedule and hold whether or not
+the run draws paths, so the lines say so: the chance the event fires within the horizon, and
+the year by which that chance reaches one half. The crash line printed `annual_hazard` while the
+futures draw at `min(annual_hazard × drawdown_weight_tilt, 1)` under a demographic prior. A
+rate the line prints is the rate the model applies after every multiplier, and it prints as a
+range when that rate varies by year. Every rate and probability follows item 51 of the
+`--decompose` spec: it prints 0.0% or 100.0% only when it is exactly 0 or 1. A probability
+whose complement underflows float therefore prints as below 100%, never as 100.0%.
+
+**E8. E4 corrected: the futures are consulted whenever they can differ from the central case,
+not only when they differ among themselves.** Consider an event whose hazard is certain in its
+first window year. Every future fires it in that year, so its fire-year distribution is a single
+point. If that year is not the one the central case charges, every future disagrees with the
+central case. E4 as first written called that event deterministic. The gate then skipped the
+futures and printed a decisive verdict that every future contradicts, where main had printed "the
+two disagree, not decisive". An event is stochastic exactly when some future can place or cost it
+differently from the central case. `sources.uncertainty_inputs` reads the same predicate, so the
+engine keeps one definition of "widens the distribution".
+
+**E9. E2 extended: a hazard-timed event's `expected_year` lies in the years its hazard can fire.**
+With `expected_year` 3 and `hazard_start_year` 10, the central case charges the event in a year
+no future can fire it. That is the same contradiction E2 refuses for the stated window. For a
+hazard-timed event, the window checked is `[max(min_year, hazard_start_year),
+min(max_year, years)]`.
+
 ## 3. What must stay true
 
 - The seven shipped examples still load. `examples/advanced_config.yaml` states two hazard-timed
-  events with windows, so its futures and its read-back change, as E1 and E3 intend. Every other
-  example is byte-identical on `--json`.
+  events with windows, so its futures and its read-back change, as E1 and E3 intend.
+  `examples/showcase_demographic_prior.yaml` states a price shock on both owned options, so its
+  read-back gains E1's crash lines. Every other example is byte-identical on `--json`.
 - Every refusal names the key and the fact, and a test pins it, both for the refusal and for the
   legal config one step away from it.
 - The read-back lines of E1 are pinned against the hazard schedule, computed independently in the
