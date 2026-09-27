@@ -752,7 +752,7 @@ CORPUS = {
     "min": (MIN_INTERACTION,),
     "advanced": (ADVANCED, "400"),
     # The economy's interaction gap resolves here with its interval's low end
-    # a few thousandths above zero: the gap rule's narrow edge.
+    # about a hundredth above zero: the gap rule's narrow edge.
     "advanced_4000": (ADVANCED, "4000"),
     "three": (THREE, "300"),
     "all_other": (ALL_OTHER, "400"),

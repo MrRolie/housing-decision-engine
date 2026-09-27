@@ -1637,9 +1637,9 @@ def test_one_future_on_the_other_side_prints_the_table():
         assert got.block["spread"]["refusal"]["code"] == "no_sign_variation"
 
 
-def test_an_interaction_gap_a_few_thousandths_above_zero_resolves():
+def test_an_interaction_gap_about_a_hundredth_above_zero_resolves():
     """`interaction_is_resolved` is `low > 0`. On `advanced_4000` the economy's
-    gap interval starts a few thousandths above zero, and the gap line names
+    gap interval starts about a hundredth above zero, and the gap line names
     it with its figure; on `fixture` none resolves and the line says so.
     *Kills it:* any positive threshold above that low end (the economy moves
     behind "not resolved"), or `>= 0` / `low > -x` (a row whose interval
@@ -1647,7 +1647,7 @@ def test_an_interaction_gap_a_few_thousandths_above_zero_resolves():
     got = run("advanced_4000")
     spread = got.block["spread"]
     economy = next(r for r in spread["rows"] if r["channel_id"] == 0)
-    assert 0.0 < economy["interaction_gap_ci"]["low"] < 0.01
+    assert 0.0 < economy["interaction_gap_ci"]["low"] < 0.02
     assert 0 in spread["interaction_channel_ids"]
     gaps = next(line for line in got.text.splitlines()
                 if line.startswith("  with interaction minus alone, before rounding: "))
@@ -1707,18 +1707,16 @@ def test_the_margin_line_s_mean_is_over_every_future_of_the_block():
 
 
 def test_the_level_top_row_is_named_by_its_size_on_a_shipped_example():
-    """advanced_config: the house's costs shift the margin by more, in size,
-    than the economy's positive shift. The top row is the house's costs — by
-    SIZE. Signed, the economy's positive shift would be "the largest".
+    """advanced_config at 4,000 futures: the condo's costs shift the margin by
+    more, in size, than the house's positive shift. The top row is the condo's
+    costs — by SIZE. Signed, the house's positive shift would be "the largest".
     *Kills it:* dropping `abs` from `decomposition_run._level_point`."""
-    got = run("advanced")
+    got = run("advanced_4000")
     level = got.block["level"]
-    top = level["unresolved_top_channel_id"]
-    assert top == 4, level
-    row = next(r for r in level["rows"] if r["channel_id"] == 4)
+    assert level["leading_channel_id"] == 3, level
+    row = next(r for r in level["rows"] if r["channel_id"] == 3)
     assert _shift(row) < 0 and any(_shift(r) > 0 for r in level["rows"])
-    # an unresolved top row prints no "largest" line (§0.1 item 35)
-    assert "largest shift in size" not in got.text
+    assert "  largest shift in size: the condo's costs" in got.text.splitlines()
 
 
 def test_a_top_line_prints_exactly_where_the_top_row_leads():

@@ -409,3 +409,14 @@ def test_the_schema_states_every_refusal_and_the_hazard_window():
                      "in every year it can fire"):
             assert fact in note, (option, fact)
     assert "a year outside [1, years] is REFUSED" in schema["income"]["pay_drop_events"]["note"]
+
+
+@pytest.mark.parametrize("hazard, share", [
+    (1.0, "100.0%"),       # certain in year 1: exactly all
+    (0.4, "over 99.9%"),   # 1 - 0.6**20 = 0.99996: not all
+    (1e-6, "under 0.1%"),  # 1 - (1 - 1e-6)**20 = 0.00002: not none
+])
+def test_a_share_never_prints_as_certain_or_as_none_when_it_is_not(hazard, share):
+    (line,) = _best_guess(_cfg(_roof(expected_year=1, timing_model="hazard",
+                                     hazard_base=hazard)))
+    assert f"on its hazard {share} of futures fire it" in line
