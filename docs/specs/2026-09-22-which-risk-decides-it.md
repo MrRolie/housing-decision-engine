@@ -551,8 +551,8 @@ figure, not the unrounded value.
 **43. A FIGURE THE ENGINE SETS IS TAGGED `[set in the engine]`, ONE LABEL.** The reversal bracket
 (`RATE_BRACKETS`) printed `[assistant]` while the budget ceiling printed `[set in the engine]`.
 In the read-back classes, `[assistant]` means a figure typed on the household's behalf for this
-run. A bracket written into the engine's code is not that. It has been left standing since
-round 3; it is ruled now.
+run. A bracket written into the engine's code is not that. It stood through three earlier
+reviews; it is ruled now.
 
 **44. "CANNOT BE WITNESSED" IS NOT A DISPOSITION FOR A SURVIVING MUTANT.** Two dispositions were
 false:
@@ -576,6 +576,59 @@ enumerating every X in the output and checking each one, not by sampling. Where 
 be enumerated, the sentence is cut. The same holds for docstrings: the types module restates no
 field's meaning, and a test that fails on a restatement enforces it, because two "one home" passes
 that relied on reading did not hold.
+
+**47. A CROSSING'S `was` AND `becomes` ARE READ AT THE ENDS OF ITS CONVERGED BRACKET, NEVER AT THE
+SCAN GRID** *(2026-09-26, on the measured-liveness build)*. `_region_boundaries` took `becomes`
+from the next scan point, and `further_changes` from there onward. A state lying wholly between
+the bisected edge and the next scan point was therefore skipped. Witness: a five-year nominal
+house-vs-rent config goes decisive for house → not decisive (6.2321% to about 6.32%) → decisive
+for rent, all inside one 0.14% scan step. The block printed "changes from decisive for house to
+decisive for rent" at 6.23%, with no "changes again" clause. `--sweep` at 6.24% says not decisive.
+The figure was right and the words were false.
+
+- `was` is the field's state at the bracket's lower end and `becomes` its state at the upper end.
+  `further_changes` is read from the upper end onward. The lower edge's `was` and a three-option
+  `mc_best` follow the same rule, through one function.
+- A refused boundary's reason states the scan it rests on ("at every one of n points across
+  lo–hi"), never "throughout". "Throughout" claims continuity the scan did not measure, and this
+  item's witness is exactly how that claim fails.
+
+**48. A ROW MEASURED ON THE BLOCK'S N FUTURES LIVES IN THE REGISTER WHOSE SAMPLE IT IS.** Item 39's
+`dead_draw` rows are measured from the spread register's re-draws, but they were emitted under
+`reversal.structural_zeros`. That made two sentences false: the contract's "the reversal register
+prices none of them" and `--help`'s "the reversal register reads the run's own num_sims paths
+whatever N is". Correcting the sentences would leave one object holding two samples, so the rows
+move to the spread register instead, in `--json` and in the text. The reversal register keeps
+the structural zeros that no sample measured (`stated_path`). The partition of what moves with
+the seed or N (item 46) enumerates the refusal forms too, `one_channel`'s `channel_id` included.
+
+**49. A WIDTH LINE NAMES EVERY INPUT THAT SIZED THAT DRAW ON THIS RUN, AND NOTHING ELSE.** On a
+config stating only `condo.price_shock.annual_hazard`, the market row read "sized by
+condo.price_shock.annual_hazard=5.0% [assistant]". The read-back showed `severity_mean` 25% and
+`severity_vol` 10% landing as anchored defaults, and both size that draw. The honesty contract
+gives every number its source class, so a defaulted sizing input prints with its anchor's cite,
+and a stated one prints with its tag. Conversely, an input that sized nothing on this run is not
+a width. Examples are a correlation pulling an option the run does not price
+(`simulation.corr_inflation_condo` with no condo) and an empty events list
+(`condo.events=0 entries`). Every widening of that guard is pinned with a constructed witness.
+
+**50. EVERY REFUSAL HAS ONE SHAPE: A CODE AND ONE MEASURED FACT.** The refused-boundary line and
+the no-distance line printed a reason with no code, in the text and in `--json`. Three reviews
+filed that as nonblocking against the contract's six kinds. Both lines gain codes, so the
+contract's refusal kind has no exceptions to state.
+
+**51. A PROBABILITY PRINTS 1.00 ONLY WHEN IT IS 1, AS IT ALREADY PRINTS 0.00 ONLY WHEN IT IS 0.**
+1,999 of 2,000 futures printed as "P(rent cheapest) 1.00". The existing protection against a
+non-zero figure rounding to 0 is made symmetric.
+
+**52. THE TYPES MODULE CARRIES NO PROSE BUT POINTERS, IN DOCSTRINGS AND COMMENTS ALIKE.** Item 46's
+enforcing test covered class docstrings only. `_require_side`'s docstring and two inline comments
+still restated what a field means, and the test could not fail on them. The test now covers
+every docstring and every comment in `decomposition.py`. Implementing modules
+(`decomposition_text.py`, `decomposition_run.py`) point at the contract for the six kinds and for
+field meanings, and do not restate them. The skill's references/gates.md §10 is pinned by
+enumerating its bullets, because text appended after a pinned fragment was invisible to the
+fragment test.
 
 ---
 
