@@ -630,6 +630,63 @@ field meanings, and do not restate them. The skill's references/gates.md §10 is
 enumerating its bullets, because text appended after a pinned fragment was invisible to the
 fragment test.
 
+**53. A WIDTH IS A STRUCTURAL FACT, NOT A PREDICTION: ITEM 49'S SECOND HALF IS WITHDRAWN**
+*(2026-09-27, on the crossing-edges build)*. Item 49 said a width line names nothing that sized
+no draw on this run. Implementing that meant deciding from the config whether each input's
+draws fire, which is item 39's defect again: a second copy of the simulator's logic. This
+document introduced it. One review found three siblings, each printing a false width on a
+reachable config:
+- a hazard of 0, which switches the crash draw off while its hazard and defaulted severities still
+  print;
+- an event whose hazard starts after the horizon;
+- a mutant on the option-to-channel map that no witness could see.
+
+The claim goes, not the predicate's precision. A width is **a sizing input of that channel's
+draws, for an option this run prices, as the read-back states or defaults it**, printed with its
+value and with the read-back's own tag for that key. A hazard of 0.0% prints as 0.0%, and that
+figure is itself the information. The one filter kept is "an option this run prices", which is
+read exactly from the config and predicts nothing about the simulator. Item 49's first half
+stands, so defaulted inputs print with their source. A tag is the read-back's tag for that key,
+character for character, because the read-back is the one home of a figure's source (the exact
+row's `[anchor]` and a width's `[default: <registry key>]` had drifted from it). Membership has
+one home, and the read-back is not a second one: a row's widths are `CHANNELS[c].sizing_keys` ∩
+(keys the config states ∪ defaults the run applied), restricted to options this run prices. The
+read-back supplies only the tag. A sizing key in that set with no read-back tag fails the
+enumeration test; it is never silently left out. The contract defines a width this way, and a
+test enumerates every width on every corpus row against `CHANNELS` and the read-back.
+
+**54. A PRINTED FIGURE ON A CROSSING'S AXIS IS CHECKED ON ITS SIDE, AND ITS PRECISION WIDENS
+UNTIL IT IS THERE.** Flooring at a fixed precision assumed every state is wider than one printed
+step. When two verdict changes fall inside one step, a lower edge's floored rate lands in the
+state below `was`. On a five-year house-vs-rent config the block printed "as it rises past 6.27%
+… from not decisive to decisive for rent", while `--sweep` at 6.27% says decisive for house. The
+same holds for a stated figure printed beside a crossing: a stated 6.273% printed as 6.27%, below
+a solved crossing printed as 6.2724%, reads on the `was` side while the run is on the `becomes`
+side.
+- A crossing's printed rate is measured: the field is evaluated at the printed figure (a
+  deterministic evaluation for a solved crossing, and the same seeded curve for a sampled one).
+  Precision widens until the field says `was` there. If no precision within the bracket works,
+  the check raises.
+- A stated figure on an axis with printed crossings is printed at a precision that orders it
+  against each printed crossing as the unrounded values order.
+- This replaces "floored at its printed precision" as the contract's reason why the field says
+  `was` at the printed rate. The sentence becomes true by construction and is checked at print
+  time.
+- Precision no longer tells a solved crossing from a sampled one, since either can widen. The
+  prefix does that ("solved on the central case:" against "sampled on N paths at seed S:"), and
+  the prefix is what gets pinned. The sentence pins check `was` AT the printed figure, and
+  `becomes` just above the unrounded value, never one printed step up, because on a sliver the
+  state one step up is a third one.
+
+**55. OUTSIDE THE TYPES MODULE, A TRUE COMMENT IS NOT A FINDING, AND A FALSE ONE ALWAYS IS.**
+Three reviews found residue of item 52's ban on restatement in the implementing modules. No
+mechanical test can tell a prose restatement from a description of what a function does, so the
+ban was enforced by reading, and reading does not converge. The pointer-only rule stays
+mechanical where it can be, in `decomposition.py`. In `decomposition_text.py`,
+`decomposition_run.py`, `decomposition_math.py` and `break_even.py`, a comment or docstring is
+judged on one axis: is it true of the code at this commit. A module claims nothing about its own
+restatements ("this module restates neither" is cut), because no test backs that claim.
+
 ---
 
 ## 1. Why

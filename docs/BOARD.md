@@ -314,6 +314,13 @@ hosted. Parked deliberately, not forgotten.
 - Under `shock_model: normal` a shock multiplier is clipped at zero, so a large volatility can
   drive a value track to exactly $0 where it stays for the rest of the run. The schema note
   now says so; whether the engine should refuse the combination instead is open.
+- The central case charges a hazard-timed event at its `expected_year` even when its hazard
+  is 0, while Monte Carlo never fires it. On a 20-year all-cash condo with one $15,000
+  hazard-timed event at hazard 0, the central case carries `events_pv` $11,841
+  (15,000/1.03^8) and the futures carry none: the condo's central PV is $173,821 against a
+  Monte Carlo mean of $161,855. The two halves of the three-state verdict then disagree about a
+  cost that one of them models and the other cannot. Measured 2026-09-27; it predates the
+  `--decompose` stack.
 
 ## 11. Measure the engine again
 
