@@ -436,3 +436,15 @@ def test_a_share_of_exactly_none_prints_as_none():
     spec.house.events[0].hazard_base = 0.0
     (line,) = [x for x in read_back_lines(spec) if x.startswith("best guess:")]
     assert "on its hazard 0.0% of futures fire it" in line
+
+
+def test_the_contract_lists_the_best_guess_lines_after_decisiveness():
+    from pathlib import Path
+    contract = " ".join((Path(__file__).parent.parent / "docs/reference/API_CONTRACT.md")
+                        .read_text().split())
+    assert ("the `decisiveness:` line; the `best guess:` lines — for each hazard-timed event "
+            "the year the best guess charges it, the share of futures that fire it within the "
+            "horizon and the year by which half of all futures have (or that fewer than half "
+            "ever do), exact from its hazard schedule, and, when the futures draw them, that "
+            "the best guess prices a tenancy that never resets and no price crash; each "
+            "`<option> financing:` line") in contract
