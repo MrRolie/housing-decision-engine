@@ -1363,8 +1363,8 @@ def _oracle_options(channel_id, key):
 
 
 def _given_by_the_read_back(doc):
-    """Every key the read-back carries: each stated key the source echo lists,
-    and each key the run defaulted."""
+    """Every key given on the run: each key the source echo lists, and each
+    key the run defaulted."""
     echo = doc["assumptions"]["sources"]
     given = {e["key"] for source in ("user", "assistant", "unattributed", "sweep")
              for e in echo.get(source) or ()}

@@ -444,7 +444,7 @@ def interaction_gaps(f_a: object, f_b: object, f_ab: object) -> Array:
 
     Section 4 names this, per channel, as the measurement of model
     non-linearity. It is the difference of the two estimators above and
-    nothing else, so a gap read off the printed columns is this figure."""
+    nothing else."""
     return total_order_indices(f_a, f_ab) - first_order_indices(f_a, f_b, f_ab)
 
 
@@ -526,8 +526,6 @@ def level_shift(f_base: object, f_frozen: object) -> Tuple[float, float]:
 
     The standard error is taken on the DIFFERENCE, not on the two samples: the
     pairing is what makes a shift readable against a spread many times its size.
-    An unpaired error on the same tables is larger by orders of magnitude and
-    would report every channel as unresolved.
     """
     base = _futures("f (base)", f_base)
     frozen = _futures("f (frozen)", f_frozen)

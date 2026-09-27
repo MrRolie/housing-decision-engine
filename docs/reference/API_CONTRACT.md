@@ -335,7 +335,7 @@ the block's futures, or on none of them, it instead carries `refusal`, whose
   (`decomposition_run.identity_budget`); `kind` is `dead_draw` on every row.
   Both facts are measured, on those futures, and both are facts about the
   stream. `keys` are the keys of the stream's widths (the income stream's,
-  the keys the read-back carries of its pay drops), and the row says nothing
+  its pay-drop keys that the config states or the run defaulted), and the row says nothing
   of their cash flows: a key there can carry a cash flow of its own, as a
   stated event's deterministic cost does. `decomposition.StructuralZero` also
   has a `stated_path` kind and a `reversal_key` field; both are the reversal

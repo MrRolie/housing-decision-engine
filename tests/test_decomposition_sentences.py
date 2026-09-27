@@ -341,7 +341,7 @@ def _read_back_tag(doc, key) -> Optional[str]:
     and otherwise the class it files the key under (`user`, `assistant` or
     `unattributed`); for a key the run defaulted, the cite the `defaults
     applied:` line brackets beside it, read off that line's TEXT, character
-    for character. None when the read-back carries the key nowhere."""
+    for character. None otherwise."""
     echo = doc["assumptions"]["sources"]
     anchored = echo.get("anchor") or {}
     if key in anchored:

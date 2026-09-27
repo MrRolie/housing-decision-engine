@@ -714,7 +714,7 @@ NO_BLOCK_LINE = ("sources: none declared — the read-back cannot tell the user'
 
 
 def stated_tag(entry: SourceEntry) -> str:
-    """The tag the read-back gives one STATED key: the anchor it names, and
+    """The tag of one STATED key: the anchor it names, and
     otherwise the class the echo files it under (`user`, `assistant`,
     `unattributed`, `sweep`). The one home of that tag: `source_lines` prints
     an anchor's in brackets on the `anchor-sourced:` line, and every surface

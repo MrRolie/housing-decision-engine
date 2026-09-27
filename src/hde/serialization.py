@@ -645,10 +645,10 @@ def default_tag(spec: ComparisonSpec, key: str) -> Optional[str]:
 
 
 def read_back_tag(spec: ComparisonSpec, key: str) -> Optional[str]:
-    """The tag the read-back gives `key` — the ONE home of whose figure a key
-    is, for every surface that prints a tag beside one: `sources.stated_tag`
-    for a key the config states, `default_tag` for one the engine filled in,
-    and None for a key the read-back does not carry at all."""
+    """The tag of `key` — the ONE home of whose figure a key is, for every
+    surface that prints a tag beside one: `sources.stated_tag` for a key the
+    source echo lists, `default_tag` for one the engine filled in, and None
+    for a key the echo does not list and the run did not default."""
     echo = spec.sources
     entry = echo.get(key) if echo is not None else None
     if entry is not None:

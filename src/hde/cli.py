@@ -188,8 +188,8 @@ def main() -> int:
     # whatever it is, so the config path arrives HERE and the positional is
     # left empty. A whole number is the path count; anything else, with no
     # config given, is the config and the flag was bare. With a config given
-    # as well, it can only be a malformed count, and argparse's own error for
-    # one is the answer.
+    # as well, a whole number in the config's place means the two were swapped,
+    # and anything else is a malformed count; each gets its own error.
     if isinstance(args.decompose, str):
         token = args.decompose
         if re.fullmatch(r"[+-]?[0-9]+", token):
@@ -403,8 +403,8 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
         # A check inside the block that cannot pass comes back as the block's
-        # refusal (§0.1 item 58); nothing else is caught here, so an engine
-        # defect is never printed as a failed check.
+        # refusal (§0.1 item 58), so no exception is caught here as a failed
+        # check.
 
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []

@@ -538,8 +538,8 @@ def _echo_of(spec, raw):
 
 
 def _given(spec, key: str) -> bool:
-    """Whether the read-back carries `key`: the config states it (the source
-    echo's entry) or the run defaulted it (`spec.defaults_applied`)."""
+    """Whether `key` is given on this run: the source echo lists it, or the run
+    defaulted it (`spec.defaults_applied`)."""
     echo = spec.sources
     return (echo is not None and echo.get(key) is not None) or key in spec.defaults_applied
 
@@ -569,9 +569,8 @@ def width_keys(spec, channel_id: int) -> Tuple[Tuple[str, Optional[str]], ...]:
 
 def _width(spec, key: str, pulled_by: Optional[str], label: str) -> Width:
     """One member of `width_keys` on the row of `label` as a `Width`: its
-    figure and its tag as the read-back gives them
-    (`serialization.read_back_tag`, character for character), and for a pulled
-    key the correlation's figure and its square. A member with no read-back
+    figure and its tag (`serialization.read_back_tag`), and for a pulled
+    key the correlation's figure and its square. A member with no
     tag fails the check (`untagged_width`): nothing can say whose figure it
     is, and a width left out would be an absence nobody reported."""
     from .serialization import default_anchor, echo_value, read_back_tag
@@ -615,7 +614,7 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
     live on them: both facts MEASURED, and scoped to the futures and the
     threshold they were measured on. The row names its stream, and the keys it
     carries are the keys of that stream's widths (`width_keys`; for the income
-    stream, its keys the read-back carries). Its words are said of the stream,
+    stream, those of its keys `_given` holds). Its words are said of the stream,
     never of a key's cash flow (§0.1 items 40 and 53)."""
     spec = _echo_of(spec, raw)
     rows: List[StructuralZero] = []

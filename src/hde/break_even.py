@@ -2272,8 +2272,7 @@ def _stated_source(spec: ComparisonSpec, key: str) -> str:
 
 
 def _stated_tag(spec: ComparisonSpec, key: str) -> str:
-    """The tag the read-back gives the stated `key`, character for character
-    (`sources.stated_tag`, the read-back's own). Every candidate is stated, so
+    """The tag of the stated `key` (`sources.stated_tag`). Every candidate is stated, so
     the echo carries it; `_stated_source` has already raised where it does
     not."""
     return stated_tag(spec.sources.get(key))
