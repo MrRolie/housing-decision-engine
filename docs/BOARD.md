@@ -152,6 +152,15 @@ item rather than a quiet default.
 
 **doing** · designed 2026-09-22, all forks ruled · spec `docs/specs/2026-09-22-which-risk-decides-it.md`
 
+**Landed 2026-09-27:** `--decompose` prints two registers. The spread register gives
+the share of the verdict's variance each channel carries. The level register gives how
+far freezing each channel moves the expected margin. Each has intervals and source tags,
+and liveness is measured on the run.
+
+**Open:** the reversal register, which states "the conditions under which the verdict
+reverses", including the renewal-rate crossing. It is the next piece (§0.1 item 56), and
+its solver library is in `break_even.py` with no command reaching it yet.
+
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a
 first-class output, not a one-off study, and state the conditions under which the verdict
