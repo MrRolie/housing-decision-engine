@@ -687,6 +687,43 @@ mechanical where it can be, in `decomposition.py`. In `decomposition_text.py`,
 judged on one axis: is it true of the code at this commit. A module claims nothing about its own
 restatements ("this module restates neither" is cut), because no test backs that claim.
 
+**56. THE FIRST LANDING IS THE SPREAD AND THE LEVEL; THE REVERSAL REGISTER IS THE NEXT SLICE**
+*(operator ruling 2026-09-27, taken after four more reviews; it supersedes §13's inclusion of the
+reversal register in slice 1)*. The spread and level registers have been sound since the
+measured-liveness build (item 39). Their later findings were unpinned guards and false internal
+comments. The reversal register produced three of the four new kinds of defect across the last
+three reviews. Each fix to how it prints a crossing exposed the next layer: the words read at
+the scan grid (item 47), printed precision against a sliver (item 54), then the solver's own
+tolerance against the precision item 54 widens to. The part that is still changing ships
+separately from the part that has settled:
+- `--decompose` prints the spread and the level. `--json` carries `decomposition` with no
+  `reversal`, and the contract, `--help` and the skill describe two registers.
+- The reversal library in `break_even.py` stays as the stack left it, and no CLI surface reaches
+  it, as was already true on main before this stack.
+- The stated-path structural zeros belong to the reversal register and leave with it. The
+  spread register's `dead_draw` rows stay.
+- The next slice builds the reversal surface from the last full build, with the last review's
+  reversal findings as its opening list: the solver tolerance against printed precision, the
+  printed-rate check's false message, the path note's stated figures, and the partition of
+  edge refusal codes.
+
+**57. A PIN PROTECTS A CLAIM THAT EXISTS; APPENDING NEW PROSE IS NOT A MUTATION.** Two reviews
+filed surviving "mutants" that append text: a new section with a false sentence in the skill,
+and sentences appended to a module docstring. No test can fail on every sentence someone might
+add, so the bar has no bottom. Mutation review of prose covers editing or removing text that
+exists; text that exists is judged by reading. The one mechanical exception is the types module,
+where the pointer-only rule (item 52) covers every string statement (attribute docstrings and
+bare strings included) and every comment.
+
+**58. A CHECK THAT CANNOT PASS REFUSES THE BLOCK; IT NEVER LOSES THE REPORT.** An earlier change
+turned fail-safe raises into a clean exit. On a legal config, that exit still printed nothing: no
+central case, no Monte Carlo, only an error. A config with two rare-hazard channels made the
+bootstrap draw a resample whose futures all carry one value of f, and the whole run exited 1 at
+400 futures, while the same config prints a full block at 2,000. A check inside the block that
+cannot pass now refuses the block with a code and the check's measured fact, and the report
+above it prints as usual. The bootstrap's degenerate resample is one such refusal. A formatter
+check that duplicates a check the assembler already runs is deleted rather than caught twice.
+
 ---
 
 ## 1. Why
