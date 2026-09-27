@@ -1089,12 +1089,18 @@ def _spread_row_to_dict(row: "SpreadRow") -> Dict[str, Any]:
 
 
 def _dead_draw_to_dict(zero: "StructuralZero") -> Dict[str, Any]:
-    """One `dead_draw` row, the one kind the spread register holds. The
-    type's `reversal_key` belongs to the `stated_path` kind, which no block
-    carries, so it is not emitted."""
+    """One `dead_draw` row, the one kind the spread register holds; the
+    type's `reversal_key` is the `stated_path` kind's, and is not emitted."""
     return {"kind": zero.kind, "label": zero.label, "keys": list(zero.keys),
             "channel_id": zero.channel_id, "measured_paths": zero.measured_paths,
             "move_threshold": zero.move_threshold}
+
+
+def _stated_path_to_dict(zero: "StructuralZero") -> Dict[str, Any]:
+    """One `stated_path` row, the one kind the reversal register holds; the
+    type's measured fields are the `dead_draw` kind's, and are not emitted."""
+    return {"kind": zero.kind, "label": zero.label, "keys": list(zero.keys),
+            "reversal_key": zero.reversal_key}
 
 
 def _spread_to_dict(spread: Any) -> Dict[str, Any]:
@@ -1170,7 +1176,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
 
     A refusal serializes as `{"refusal": {...}}` with NO register keys at all:
     an empty `spread` beside a refusal would let a consumer read "no rows" as
-    "nothing to report" (§8). The two registers are emitted together or not
+    "nothing to report" (§8). The three registers are emitted together or not
     at all, which is the binding (§5 mechanism 5) in this surface's own terms.
 
     `verdict` is deliberately absent: the document's top-level `verdict` key is
@@ -1187,7 +1193,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             refusal.update(_channel_id_fields(outcome.channel_id))
         return {"refusal": refusal}
 
-    level = outcome.level
+    level, reversal = outcome.level, outcome.reversal
     return _finite_or_null({
         "paths": outcome.paths,
         "max_paths": outcome.max_paths,
@@ -1206,6 +1212,17 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
             "accounted_for": level.accounted_for,
             "leading_channel_id": level.leading_channel_id,
             "unresolved_top_channel_id": level.unresolved_top_channel_id,
+        },
+        # The two reversal kinds stay two lists, never one with a flag: the
+        # split is a property of the model and no ranking crosses it, which a
+        # single ordered list would invite (spec §0).
+        "reversal": {
+            "exact": [dataclasses.asdict(row) for row in reversal.exact],
+            "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
+            "structural_zeros": [_stated_path_to_dict(zero)
+                                 for zero in reversal.structural_zeros],
+            "no_distance_code": reversal.no_distance_code,
+            "no_distance_reason": reversal.no_distance_reason,
         },
     })
 

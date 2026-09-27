@@ -10,8 +10,9 @@ characters, 98.3% of them identical between two different households.
 
 PROVENANCE OF EVERY FIGURE. `uncertainty_surface()` carries the figures spec
 §7 measured on `tests/fixtures/uncertainty_surface.yaml` at seed 42 and its own
-2,000 paths, and every sizing key's value is read from that fixture file.
-Four kinds of figure are NOT measured and are marked `# filled`
+2,000 paths, and every sizing key's value is read from that fixture file; its
+reversal rows are that fixture's as the engine prints them (see the comment
+above them). Four kinds of figure are NOT measured and are marked `# filled`
 at their line: the `with_interaction` intervals (§7's draft prints one
 interval per row and calls the one it shows for `economy` illustrative), the
 flip intervals (§7's draft prints none), the frozen probabilities of the two
@@ -20,13 +21,25 @@ indistinguishable rows (§7 prints no probability for them), and everything in
 `seven_channel_other_household()` — households invented to exercise the other
 branches. Nothing here is evidence about a market; it is evidence about a
 formatter.
+
+Invented or not, every crossing obeys the engine's contract: it reads the key
+UPWARD (`was` at its `value`, `becomes` at its `upper_end`, whichever side the
+household's own value is on), and a `decisive` crossing names its states in
+`break_even.decisive_state`'s words — "decisive for <option>" or "not
+decisive" — never a boolean.
 """
+import math
+
 from hde import decomposition as _contract
+from hde.break_even import floored_rate
 from hde.decomposition import (
+    AxisReference,
+    EstimatedBoundary,
     IndistinguishableLevel,
     Interval,
     LevelRegister,
     LevelRow,
+    RefusedBoundary,
     RefusedInteraction,
     ResolvedInteraction,
     ResolvedLevel,
@@ -86,6 +99,56 @@ def Decomposition(*, max_paths=None, **fields):
     if max_paths is None:
         max_paths = largest_affordable_paths(len(fields["live_channel_ids"]))
     return _contract.Decomposition(max_paths=max_paths, **fields)
+
+
+# The empty register's code and fact as the engine writes them for a config
+# with no financing key (`break_even._no_distance`), copied as data.
+NO_DISTANCE_TWO_OPTIONS = ("no_candidate",
+                           "this config states no mortgage_renewal_rates or mortgage_rate")
+
+
+def ReversalRegister(*, no_distance_code=None, no_distance_reason=None, **fields):
+    """An empty register says what it searched: filled with the engine's own
+    code and sentence for a config with no financing key when the household
+    states none."""
+    if no_distance_reason is None and not (fields["exact"] or fields["estimated"]):
+        no_distance_code, no_distance_reason = NO_DISTANCE_TWO_OPTIONS
+    return _contract.ReversalRegister(no_distance_code=no_distance_code,
+                                      no_distance_reason=no_distance_reason, **fields)
+
+
+def SolvedBoundary(*, upper_end=None, formatted=None, **fields):
+    """A solved crossing whose bracket, unless stated, ends at the float
+    above its value, and whose printed figure is its value floored at the
+    solved kind's first precision (`break_even.floored_rate`): a hand-built
+    household has no field to check a wider one on."""
+    if upper_end is None:
+        upper_end = math.nextafter(fields["value"], 1.0)
+    if formatted is None:
+        formatted = floored_rate(fields["value"], 4)
+    return _contract.SolvedBoundary(upper_end=upper_end, formatted=formatted, **fields)
+
+
+def SampledBoundary(*, upper_end=None, formatted=None, **fields):
+    """The same for a sampled crossing, at the sampled kind's first precision."""
+    if upper_end is None:
+        upper_end = math.nextafter(fields["value"], 1.0)
+    if formatted is None:
+        formatted = floored_rate(fields["value"], 2)
+    return _contract.SampledBoundary(upper_end=upper_end, formatted=formatted, **fields)
+
+
+def ExactReversal(*, stated_tag=None, **fields):
+    """A row whose head's tag, unless stated, is its class: the read-back's tag
+    for a key it files under a class (an anchored key states its anchor)."""
+    return _contract.ExactReversal(
+        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
+
+
+def EstimatedReversal(*, stated_tag=None, **fields):
+    """The same for an estimated row."""
+    return _contract.EstimatedReversal(
+        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
 
 
 # The verdict of the fixture run, as `models.compute_verdict` produces it. The
@@ -292,6 +355,122 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         leading_channel_id=5,
         unresolved_top_channel_id=None,
     )
+    # The two reversal rows are the fixture's as `hde tests/fixtures/
+    # uncertainty_surface.yaml --decompose --json` prints them at seed 42:
+    # every figure, and every sentence the ENGINE writes (the path note, the
+    # refusals, the axis references), is copied from it. Every crossing reads
+    # the key UPWARD: `was` at `value`, `becomes` at `upper_end` — so where
+    # this run's own value sits above a crossing, as the stated 4.35%–5.00%
+    # sit above all of these, `becomes` is the run's state.
+    references = (
+        AxisReference(label="contracted 5y uninsured", value=0.0435,
+                      formatted="4.35%",
+                      anchor="mortgage_rate.contracted_5y_uninsured"),
+        AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
+                      anchor="mortgage_rate.contracted_5y_insured"),
+        AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
+                      anchor="mortgage_rate.posted_5y"),
+    )
+    no_decisive_crossing = RefusedBoundary(
+        verdict_field="decisive", code="unchanged",
+        reason="decisive says 'not decisive' at every one of 65 points across "
+               "1.00%–10.00%")
+    renewal = ExactReversal(
+        key="house.mortgage_renewal_rates",
+        option="house",
+        stated_formatted="4.60%, 5.00%, 4.80%, 4.40%",
+        # The fixture's `sources:` block declares the ladder `assistant`, and
+        # the read-back of the same run says so.
+        stated_source="assistant",
+        bracket_low=0.01,
+        bracket_high=0.10,
+        bracket_source="set in the engine",
+        probe_paths=200,
+        max_path_deviation_over_sd=9.524697909411047e-16,
+        boundaries=(
+            SolvedBoundary(verdict_field="best", value=0.016052260243662575,
+                           upper_end=0.01605226024366258, formatted="1.6052%",
+                           was="house", becomes="rent", further_changes=None,
+                           confirming_probabilities=(("condo", 0.1915),
+                                                     ("house", 0.5185),
+                                                     ("rent", 0.29))),
+            SolvedBoundary(verdict_field="runner_up", value=0.02954943580452318,
+                           upper_end=0.029549435804523183, formatted="2.9549%",
+                           was="house", becomes="condo", further_changes="below",
+                           confirming_probabilities=(("condo", 0.379),
+                                                     ("house", 0.309),
+                                                     ("rent", 0.312))),
+            SampledBoundary(verdict_field="mc_best", value=0.02716403080637974,
+                            upper_end=0.027164030807034577, formatted="2.71%",
+                            was="house", becomes="condo", further_changes=None,
+                            curve_paths=2000, seed=42,
+                            curve_probabilities=(("condo", 0.345),
+                                                 ("house", 0.346),
+                                                 ("rent", 0.309)),
+                            confirming_probabilities=(("condo", 0.345),
+                                                      ("house", 0.346),
+                                                      ("rent", 0.309))),
+        ),
+        refused_boundaries=(no_decisive_crossing,),
+        references=references,
+        path_note="each crossing on this key is priced with the stated path (4.60%, "
+                  "5.00%, 4.80%, 4.40%) replaced by one rate at every renewal",
+    )
+    contract_rate = ExactReversal(
+        key="house.mortgage_rate",
+        option="house",
+        stated_formatted="4.35%",
+        stated_source="anchor",
+        stated_tag="mortgage_rate.contracted_5y_uninsured",
+        bracket_low=0.01,
+        bracket_high=0.10,
+        bracket_source="set in the engine",
+        probe_paths=200,
+        max_path_deviation_over_sd=9.524697909411047e-16,
+        boundaries=(
+            SolvedBoundary(verdict_field="runner_up", value=0.01917119920541066,
+                           upper_end=0.019171199205410664, formatted="1.9171%",
+                           was="house", becomes="condo", further_changes=None,
+                           confirming_probabilities=(("condo", 0.379),
+                                                     ("house", 0.309),
+                                                     ("rent", 0.312))),
+            SampledBoundary(verdict_field="mc_best", value=0.015998586938076185,
+                            upper_end=0.01599858693873102, formatted="1.59%",
+                            was="house", becomes="condo", further_changes=None,
+                            curve_paths=2000, seed=42,
+                            curve_probabilities=(("condo", 0.345),
+                                                 ("house", 0.346),
+                                                 ("rent", 0.309)),
+                            confirming_probabilities=(("condo", 0.345),
+                                                      ("house", 0.346),
+                                                      ("rent", 0.309))),
+        ),
+        refused_boundaries=(
+            RefusedBoundary(verdict_field="best", code="unchanged",
+                            reason="best says 'rent' at every one of 9 points across "
+                                   "1.00%–10.00%"),
+            no_decisive_crossing,
+        ),
+        references=references,
+    )
+    reversal = ReversalRegister(
+        exact=(renewal, contract_rate),
+        estimated=(),
+        structural_zeros=(
+            StructuralZero(
+                kind="stated_path",
+                label="the renewal rate",
+                keys=("house.mortgage_renewal_rates",),
+                reversal_key="house.mortgage_renewal_rates",
+            ),
+            StructuralZero(
+                kind="stated_path",
+                label="the contract rate",
+                keys=("house.mortgage_rate",),
+                reversal_key="house.mortgage_rate",
+            ),
+        ),
+    )
     return Decomposition(
         paths=2000,
         live_channel_ids=(0, 1, 2, 3, 4, 5, 6),
@@ -300,6 +479,7 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
         sd_margin=286506.0,
         spread=spread,
         level=level,
+        reversal=reversal,
     )
 
 
@@ -313,11 +493,13 @@ def resolved_interaction() -> ResolvedInteraction:
 
 def seven_channel_other_household() -> Decomposition:
     """A DIFFERENT household of the same shape: seven live channels, a
-    disagreement, and nothing else in common — its own keys and source
-    classes, and a `dead_draw` structural zero.
+    disagreement, and nothing else in common — a financed condo rather than a
+    financed house, its own keys and source classes, its own stated renewal
+    path, an ESTIMATED reversal row and a `dead_draw` structural zero.
 
     It exists for the harsher invariant-fraction measurement (same shape is
-    where restated prose hides). Every figure is invented.
+    where restated prose hides) and because it is the only fixture that
+    exercises the estimated-reversal branch. Every figure is invented.
     """
     verdict = Verdict(
         best="condo", runner_up="house", margin_pv=88114.0, margin_frac=0.142,
@@ -426,6 +608,85 @@ def seven_channel_other_household() -> Decomposition:
         leading_channel_id=1,
         unresolved_top_channel_id=None,
     )
+    reversal = ReversalRegister(
+        exact=(
+            ExactReversal(
+                key="condo.mortgage_renewal_rates",
+                option="condo",
+                stated_formatted="5.20%, 5.40%",
+                stated_source="user",
+                bracket_low=0.02, bracket_high=0.12, bracket_source="set in the engine",
+                probe_paths=200, max_path_deviation_over_sd=3.1e-15,
+                # A key carries BOTH kinds at once, on ONE row: `decisive`
+                # turns on `prob_best` against the anchored floor, a figure of
+                # the sample, so it is sampled. Upward from a cheap renewal:
+                # decisive for the condo below 3.12%, the condo still the
+                # majority's to 3.84%, rent's above; this household's own
+                # 5.20%/5.40% sit above every crossing.
+                boundaries=(
+                    SampledBoundary(verdict_field="mc_best", value=0.03841262,
+                                    was="condo", becomes="rent",
+                                    further_changes=None,
+                                    curve_paths=6000, seed=42,
+                                    curve_probabilities=(("condo", 0.4510),
+                                                         ("rent", 0.4505)),
+                                    confirming_probabilities=(("condo", 0.4510),
+                                                              ("rent", 0.4505))),
+                    SampledBoundary(verdict_field="decisive", value=0.03120411,
+                                    was="decisive for condo", becomes="not decisive",
+                                    further_changes=None,
+                                    curve_paths=6000, seed=42,
+                                    curve_probabilities=(("condo", 0.6520),
+                                                         ("rent", 0.2610)),
+                                    confirming_probabilities=(("condo", 0.6520),
+                                                              ("rent", 0.2610))),
+                    SolvedBoundary(verdict_field="runner_up", value=0.05004182,
+                                   was="rent", becomes="house",
+                                   further_changes=None,
+                                   confirming_probabilities=(("condo", 0.5910),
+                                                             ("rent", 0.3020))),
+                ),
+                refused_boundaries=(
+                    RefusedBoundary(verdict_field="best", code="unchanged",
+                                    reason="best says 'condo' at every one of 9 points across "
+                                           "2.00%–12.00%"),
+                ),
+                references=(
+                    AxisReference(label="contracted 5y insured", value=0.0401,
+                                  formatted="4.01%",
+                                  anchor="mortgage_rate.contracted_5y_insured"),
+                ),
+                path_note="each crossing on this key is priced with the stated path "
+                          "(5.20%, 5.40%) replaced by one rate at every renewal",
+            ),
+        ),
+        # RATE-SHAPED ON PURPOSE. The contract carries `bracket_low`,
+        # `bracket_high` and `Boundary.value` as bare floats with no unit, and
+        # the formatter renders them as rates — right for every key the
+        # register searches today (the financing leg), wrong for a dollar
+        # level or a multiplier.
+        estimated=(
+            EstimatedReversal(
+                key="house.value_growth_rate",
+                option="house",
+                stated_formatted="3.10%",
+                stated_source="assistant",
+                bracket_low=0.0, bracket_high=0.06, bracket_source="set in the engine",
+                max_path_deviation_over_sd=1.8e00,
+                # Upward from the stated 3.10%: the condo holds until growth
+                # this fast makes the house cheaper.
+                boundaries=(
+                    EstimatedBoundary(verdict_field="best", value=0.0442,
+                                      value_ci=Interval(0.0419, 0.0468), was="condo",
+                                      becomes="house", further_changes=None,
+                                      resimulation_paths=3000),
+                ),
+                refused_boundaries=(),
+                references=(),
+            ),
+        ),
+        structural_zeros=(),
+    )
     return Decomposition(
         paths=6000,
         live_channel_ids=(0, 1, 2, 3, 4, 5, 6),
@@ -434,13 +695,14 @@ def seven_channel_other_household() -> Decomposition:
         sd_margin=402115.0,
         spread=spread,
         level=level,
+        reversal=reversal,
     )
 
 
 def two_channel_option_state() -> Decomposition:
     """A second household, sharing nothing with the first: two live channels, a
     decisive `option` verdict, the condo winning, widths the USER stated, one
-    dead-draw structural zero.
+    dead-draw structural zero and no reversal row.
 
     Every figure here is invented for the formatter's other branches — it is
     the control in the invariant-fraction measurement, not a measurement.
@@ -511,4 +773,5 @@ def two_channel_option_state() -> Decomposition:
         sd_margin=96420.0,
         spread=spread,
         level=level,
+        reversal=ReversalRegister(exact=(), estimated=(), structural_zeros=()),
     )

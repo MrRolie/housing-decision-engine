@@ -1,12 +1,12 @@
 """Every sentence the `--decompose` block prints, and a test of what it claims.
 
 The block is built from sentence TEMPLATES: the lines `hde.decomposition_text`
-writes, and the reason strings the assembler (`hde.decomposition_run`) writes
-for it. Every template is one of the six KINDS of spec §0.1 items 35 and 41
-(`SIX_KINDS`), and `KINDS` records which, so a template that is none of them
-has nowhere to go. Since item 56 the block prints four of them — a heading, a
-figure row, a refusal (its code and the one measured fact that fired it) or a
-structural-zero row.
+writes, and the reason strings the assembler (`hde.decomposition_run`) and the
+reversal register (`hde.break_even`) write for it. Every template is one of
+the six KINDS of spec §0.1 items 35 and 41 (`SIX_KINDS`) — a heading, a figure
+row, a crossing, a path note, a refusal (its code and the one measured fact
+that fired it) or a structural-zero row — and `KINDS` records which, so a
+template that is none of them has nowhere to go.
 
 `LINES` holds every line template as one pattern over one printed line;
 `REASONS` holds every engine-written reason as one pattern over the reason
@@ -20,8 +20,9 @@ string. The inventory is closed in both directions:
 
 Each template's CLAIM is checked where it prints: its figures and words
 against the same run's `--json`, and what it says about the run — which side
-of a threshold, which row is on top, what a draw reaches — against the
-JSON's own fields, the read-back's source echo, or the instruments in
+of a threshold, which row is on top, what a key reads either side of a
+crossing, what a draw reaches — against the JSON's own fields, the
+read-back's source echo, a `--sweep`, the free curve, or the instruments in
 `tests/decomposition_oracles.py`, never the engine's own measurement. The
 JSON's figures are re-derived from the block's own matrices in
 `test_decomposition_contract_doc.py`, so a printed sentence is tied to what is
@@ -42,26 +43,31 @@ import importlib
 import math
 import pathlib
 import re
+import types
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pytest
 import yaml
 
+import hde.break_even as be
 import hde.decomposition as dc
 import hde.decomposition_math as dm
 import hde.decomposition_run as dr
 import hde.decomposition_text as dt
+from hde.anchors import ANCHORS
 from hde.config import load_config_dict, single_path_run
 from hde.decomposition_math import LEVEL_RESOLUTION_SIGMAS
+from hde.rates import effective_mortgage_rate
 from hde.serialization import decomposition_to_dict
+from hde.sweep import _fmt_value
 
 from tests import decomposition_households as hh
 from tests.decomposition_oracles import oracle_drawn, oracle_moves
 from tests.decomposition_runs import (
     _SCRATCH, CONDO_ONLY, CRASH_EVERY_YEAR, FIXTURE, INCOME, INCOME_ONLY, MONTREAL,
-    MORTGAGE, NO_REACH, RARE2, THIRD_FAR, THIRD_FAR_ONE, _block_text, _cli, _load,
-    _strict, corpus, run)
+    MORTGAGE, NO_REACH, RARE2, THIRD_FAR, THIRD_FAR_ONE, CONTRACT, _block_text, _cli, _load,
+    _strict, _sweep_states, corpus, run)
 from tests.test_decomposition_liveness import RESET_TO_OWN_RENT_ALONE
 
 # Two owners that price identically on every future: the market and the
@@ -190,15 +196,40 @@ def renders() -> Tuple[Render, ...]:
 # The line templates
 # ---------------------------------------------------------------------------
 
+# The words the block must print for each verdict field — written here, not
+# read from the formatter, so a mapping changed there is caught here rather
+# than agreed with.
+FIELD_WORDS = {
+    "best": "the central case's winner",
+    "runner_up": "the runner-up",
+    "mc_best": "the option most futures call cheapest",
+    "decisive": "the decisiveness verdict",
+}
+
 LABEL = "(?:" + "|".join(re.escape(c.label) for c in dc.CHANNELS) + ")"
 OPTION = r"(?:condo|house|rent)"
+BOUND = "(?:" + "|".join(re.escape(v) for v in FIELD_WORDS.values()) + ")"
+STATE = r"(?:decisive for \w+|not decisive|condo|house|rent)"
 SHARE = r"-?\d+\.\d+"
 CI = rf"\[{SHARE}, {SHARE}\]"
 MONEY = r"-?\$[\d,]+"
-SHIFT = r"(?:[+-]\$[\d,]+|\$0)"
+# A level row's dollars carry cents or more where the row's judgment needs
+# them (§0.1 item 62).
+DOLLARS = r"\$[\d,]+(?:\.\d+)?"
+SHIFT = rf"(?:[+-]{DOLLARS}|\$0(?:\.0+)?)"
 PROB = r"\d+\.\d+"
 PCT = r"\d+\.\d+%"
 N = r"[\d,]+"
+
+_CROSS = (rf"as it rises past (?P<value>{{value}}), (?P<field>{BOUND}) changes from "
+          rf"(?P<was>{STATE}) to (?P<becomes>{STATE})(?: \(and changes again "
+          rf"(?P<further>above|below) it, inside the bracket\))?")
+# Either kind widens its precision until the field says `was` at the figure
+# (§0.1 item 54), so a figure's decimals do not tell the kinds apart: the
+# line's prefix does, and the claims below pin the prefix to the kind.
+_CROSS_SOLVED = _CROSS.format(value=r"\d+\.\d{4,}%")
+_CROSS_SAMPLED = _CROSS.format(value=r"\d+\.\d{2,}%")
+_CROSS_ESTIMATED = _CROSS.format(value=rf"\d+\.\d{{2}}% \(inside (?P<lo>{PCT})–(?P<hi>{PCT})\)")
 
 LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in {
     "BLANK": r"^$",
@@ -230,32 +261,57 @@ LINES: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern in
     "LEVEL_COLS": (rf"^  channel +margin shift, channel frozen \(± 1 s\.e\.\) +"
                    rf"P\((?P<best>{OPTION}) cheapest\), channel frozen$"),
     "LEVEL_ROW": (rf"^  (?P<label>{LABEL}) +(?P<unresolved>not resolved: )?(?P<delta>{SHIFT}) "
-                  rf"\(± (?P<se>\$[\d,]+)\) +(?P<p>{PROB})$"),
-    "LEVEL_SUM": rf"^  the (?P<n>\d+) shifts above, summed: (?P<sum>{MONEY})$",
+                  rf"\(± (?P<se>{DOLLARS})\) +(?P<p>{PROB})$"),
+    "LEVEL_SUM": rf"^  the (?P<n>\d+) shifts above, summed: (?P<sum>-?{DOLLARS})$",
     "LEVEL_TOP": rf"^  largest shift in size: (?P<label>{LABEL})$",
     "ZERO_DRAWN": (rf"^  (?P<label>[^—:]+?): drawn on these (?P<n>{N}) futures, and "
                    rf"re-drawing it moved no option's present value by more than "
                    rf"\$(?P<threshold>[\d.e+-]+)(?:; sized by (?P<keys>[\w.]+(?:, "
                    rf"[\w.]+)*))?$"),
+    "ZERO_HEAD": r"^  NO ROW IN THE SPREAD OR THE LEVEL$",
+    "ZERO_STATED": (r"^  (?P<label>[^—:]+?) — (?P<keys>[\w.]+(?:, [\w.]+)*): no draw "
+                    r"touches it$"),
+    "EXACT_HEAD": r"^  WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly$",
+    "ESTIMATED_HEAD": r"^  WHAT WOULD HAVE TO CHANGE — keys the engine cannot re-price exactly$",
+    "NO_DISTANCE": (r"^  WHAT WOULD HAVE TO CHANGE — not solved \((?P<code>\w+)\): "
+                    r"(?P<reason>.+)$"),
+    "ROW_HEAD": (r"^  (?P<key>[a-z_]+(?:\.[a-z_]+)+), stated (?P<stated>.+) "
+                 r"\[(?P<tag>[\w.]+)\]$"),
+    "BRACKET": (rf"^      bracket searched: (?P<lo>{PCT})–(?P<hi>{PCT}) "
+                rf"\[(?P<src>[\w ]+)\]$"),
+    "PATH_NOTE": (r"^      (?P<note>each crossing on this key is priced with the stated "
+                  r"path \((?P<stated>[^)]+)\) replaced by one rate at every renewal)$"),
+    "CROSS_SOLVED": rf"^      solved on the central case: {_CROSS_SOLVED}$",
+    "CROSS_SAMPLED": (rf"^      sampled on (?P<paths>{N}) paths at seed (?P<seed>\d+): "
+                      rf"{_CROSS_SAMPLED}$"),
+    "CROSS_ESTIMATED": (rf"^      estimated on (?P<n>{N}) re-simulated paths: "
+                        rf"{_CROSS_ESTIMATED}$"),
+    "REFUSED_BOUNDARY": (rf"^      (?P<head>no boundary printed|a boundary not printed) for "
+                         rf"(?P<fields>{BOUND}(?:(?:, | or ){BOUND})*) \((?P<code>\w+)\): "
+                         rf"(?P<reason>.+)$"),
+    "REFERENCES": r"^      on the same axis: (?P<refs>.+)$",
 }.items()}
 
 # The six kinds a line may be (spec §0.1 items 35 and 41). A line that is none
-# of them is interpretation, and interpretation is the assistant's. The
-# crossing and the path note left the block with the reversal register (§0.1
-# item 56): no template below is of either kind.
+# of them is interpretation, and interpretation is the assistant's.
 SIX_KINDS = {"header", "figure row", "crossing", "path note", "refusal", "structural zero"}
 
 # What each template IS.
 KINDS = {
     "BLANK": "layout",
     "HEADER": "header", "SPREAD_HEAD": "header", "SPREAD_COLS": "header",
-    "LEVEL_HEAD": "header", "LEVEL_COLS": "header",
+    "LEVEL_HEAD": "header", "LEVEL_COLS": "header", "ZERO_HEAD": "header",
+    "EXACT_HEAD": "header", "ESTIMATED_HEAD": "header",
     "MARGIN": "figure row", "SPREAD_ROW": "figure row", "WIDTHS": "figure row",
     "SPREAD_SUMS": "figure row", "SPREAD_GAPS": "figure row", "SPREAD_TOP": "figure row",
     "LEVEL_BASE": "figure row", "LEVEL_ROW": "figure row", "LEVEL_SUM": "figure row",
-    "LEVEL_TOP": "figure row",
-    "REFUSAL": "refusal", "SPREAD_REFUSED": "refusal",
-    "ZERO_DRAWN": "structural zero",
+    "LEVEL_TOP": "figure row", "ROW_HEAD": "figure row", "BRACKET": "figure row",
+    "REFERENCES": "figure row",
+    "CROSS_SOLVED": "crossing", "CROSS_SAMPLED": "crossing", "CROSS_ESTIMATED": "crossing",
+    "PATH_NOTE": "path note",
+    "REFUSAL": "refusal", "SPREAD_REFUSED": "refusal", "REFUSED_BOUNDARY": "refusal",
+    "NO_DISTANCE": "refusal",
+    "ZERO_STATED": "structural zero", "ZERO_DRAWN": "structural zero",
 }
 
 
@@ -270,6 +326,7 @@ class Line:
     m: "re.Match"
     section: str
     spread_row: Optional[Dict[str, Any]]
+    reversal_row: Optional[Dict[str, Any]]
 
 
 def _hits(text):
@@ -284,7 +341,7 @@ def _by_label(rows, label):
 @functools.lru_cache(maxsize=None)
 def _lines(render: Render) -> Tuple[Line, ...]:
     out: List[Line] = []
-    section, spread_row = "head", None
+    section, spread_row, reversal_row = "head", None, None
     block = render.block
     for text in render.text.splitlines():
         hits = _hits(text)
@@ -296,7 +353,17 @@ def _lines(render: Render) -> Tuple[Line, ...]:
             spread_row = _by_label(block["spread"]["rows"], m["label"])
         elif name == "LEVEL_HEAD":
             section = "level"
-        out.append(Line(render, name, m, section, spread_row))
+        elif name == "ZERO_HEAD":
+            section = "zero"
+        elif name == "EXACT_HEAD":
+            section = "exact"
+        elif name == "ESTIMATED_HEAD":
+            section = "estimated"
+        elif name == "ROW_HEAD":
+            reversal_row = next(r for r in block["reversal"][section] if r["key"] == m["key"])
+        elif name == "NO_DISTANCE":
+            section = "empty"
+        out.append(Line(render, name, m, section, spread_row, reversal_row))
     return tuple(out)
 
 
@@ -613,22 +680,66 @@ def _level_cols(line):
     assert line.m["best"] == line.render.verdict["best"]
 
 
+def _dollars(text):
+    """The figure a printed dollar amount names, with its sign."""
+    return decimal.Decimal(text.replace("$", "").replace(",", "").replace("+", ""))
+
+
+def _places(text):
+    digits = text.replace("$", "").replace(",", "").lstrip("+-")
+    return len(digits.split(".")[1]) if "." in digits else 0
+
+
+# The precisions a level row may print at (§0.1 item 62): whole dollars, then
+# cents, then one more decimal at a time.
+_LEVEL_PLACES = (0, *range(2, 30))
+
+
+def _shows(shift, se, resolved):
+    """Whether a printed pair shows the row's judgment: the shift's size
+    above twice the s.e. exactly when the row resolved."""
+    return (abs(shift) > 2 * se) == resolved
+
+
 def _level_row(line):
+    """The row's figures are the JSON's, rounded to the nearest at the
+    decimals printed; those decimals are the least of whole dollars, cents,
+    then one more at a time at which the printed pair shows the judgment
+    (§0.1 item 62)."""
     m = line.m
     row = _by_label(line.render.block["level"]["rows"], m["label"])
     assert (m["unresolved"] is None) == row["resolved"]
     # the resolution rule, both ways
     assert row["resolved"] == (abs(_shift(row)) > LEVEL_RESOLUTION_SIGMAS * row["se"])
-    assert m["delta"] == dt._shift(_shift(row))
-    assert m["se"] == f"${row['se']:,.0f}"
+    places = _places(m["se"])
+    assert _places(m["delta"]) == places, m.group(0)
+    shift, se = _dollars(m["delta"]), _dollars(m["se"])
+    exact = decimal.Decimal(_shift(row))
+    step = decimal.Decimal(1).scaleb(-places)
+    assert abs(abs(shift) - abs(exact)) <= step / 2, (m["delta"], _shift(row))
+    assert abs(se - decimal.Decimal(row["se"])) <= step / 2, (m["se"], row["se"])
+    # a printed zero carries no sign, and any other shift carries its own
+    assert (m["delta"][0] in "+-") == (shift != 0)
+    if shift != 0:
+        assert (m["delta"][0] == "-") == (_shift(row) < 0)
+    assert _shows(shift, se, row["resolved"]), m.group(0)
+    for fewer in _LEVEL_PLACES[:_LEVEL_PLACES.index(places)]:
+        at = decimal.Decimal(f"{_shift(row):.{fewer}f}")
+        at_se = decimal.Decimal(f"{row['se']:.{fewer}f}")
+        assert not _shows(at, at_se, row["resolved"]), (m.group(0), fewer)
     assert m["p"] == dt._prob(row["prob_best_frozen"])
 
 
 def _level_sum(line):
+    """The sum of the printed shifts, at the most decimals a row prints."""
     level = line.render.block["level"]
     assert int(line.m["n"]) == len(level["rows"])
-    printed = [_whole(dt._shift(_shift(r))) for r in level["rows"]]
-    assert _whole(line.m["sum"]) == sum(printed)
+    rows = [l for l in _lines(line.render) if l.template == "LEVEL_ROW"]
+    assert len(rows) == len(level["rows"])
+    total = sum((_dollars(l.m["delta"]) for l in rows), decimal.Decimal(0))
+    places = max(_places(l.m["delta"]) for l in rows)
+    assert _places(line.m["sum"]) == places
+    assert _dollars(line.m["sum"]) == total, (line.m["sum"], total)
 
 
 def _level_top(line):
@@ -637,17 +748,55 @@ def _level_top(line):
          level["unresolved_top_channel_id"], lambda r: abs(_shift(r)))
 
 
-def _zero_row_of(line):
-    """The spread register's row the line prints: a row measured on the
-    block's futures is the spread register's, and prints in its section
-    (§0.1 item 48)."""
+def _zero_head(line):
+    """The reversal register's rows with no place in the spread or the level:
+    the stated paths, which no sample measured (§0.1 item 48)."""
+    zeros = line.render.block["reversal"]["structural_zeros"]
+    assert zeros and {z["kind"] for z in zeros} == {"stated_path"}
+
+
+# Which register holds each kind of row, and the section of the text it
+# prints in: a row measured on the block's futures is the spread register's
+# (§0.1 item 48).
+_ZERO_HOME = {"stated_path": ("reversal", "zero"), "dead_draw": ("spread", "spread")}
+
+
+def _zero_row_of(line, kind):
     m, render = line.m, line.render
-    assert line.section == "spread", (m.group(0), line.section)
-    held = render.block["spread"]["structural_zeros"]
-    zeros = [z for z in held if z["kind"] == "dead_draw" and z["label"] == m["label"]
+    register, section = _ZERO_HOME[kind]
+    assert line.section == section, (m.group(0), line.section)
+    held = render.block[register]["structural_zeros"]
+    zeros = [z for z in held if z["kind"] == kind and z["label"] == m["label"]
              and ", ".join(z["keys"]) == (m["keys"] or "")]
     assert len(zeros) == 1, (m.group(0), held)
     return zeros[0]
+
+
+def _zero_stated(line):
+    """"no draw touches it": moving the stated key moves no generator's state."""
+    render = line.render
+    zero = _zero_row_of(line, "stated_path")
+    assert set(zero) == {"kind", "label", "keys", "reversal_key"}
+    assert list(zero["keys"]) == [zero["reversal_key"]]
+    leaf = zero["reversal_key"].rsplit(".", 1)[-1]
+    assert zero["label"] == {"mortgage_renewal_rates": "the renewal rate",
+                             "mortgage_rate": "the contract rate"}[leaf]
+    if not render.engine:
+        return
+    from hde.monte_carlo import run_monte_carlo
+    spec = render.spec
+    assert zero["reversal_key"] in {r["key"] for r in render.block["reversal"]["exact"]}
+    moved = copy.deepcopy(render.raw)
+    option, leaf = zero["reversal_key"].split(".", 1)
+    value = moved[option][leaf]
+    moved[option][leaf] = ([v + 0.01 for v in value] if isinstance(value, list)
+                           else value + 0.01)
+    moved.get("sources", {}).pop(zero["reversal_key"], None)
+    before, after = _held(), _held()
+    run_monte_carlo(dr._spec_at(spec, 40), before)
+    run_monte_carlo(dr._spec_at(load_config_dict(moved), 40), after)
+    assert ({c: g.bit_generator.state for c, g in before.items()}
+            == {c: g.bit_generator.state for c, g in after.items()})
 
 
 def _zero_drawn(line):
@@ -658,7 +807,7 @@ def _zero_drawn(line):
     is the identity's budget on this run. Of each key: it is a stated key that
     sizes that stream's draws — and nothing else is said of it."""
     m, render = line.m, line.render
-    zero = _zero_row_of(line)
+    zero = _zero_row_of(line, "dead_draw")
     stream = zero["channel_id"]
     block = render.block
     assert stream not in block["live_channel_ids"]
@@ -690,6 +839,223 @@ def _zero_drawn(line):
         assert key in sizing or pulled, key
 
 
+def _exact_head(line):
+    assert line.render.block["reversal"]["exact"]
+
+
+def _estimated_head(line):
+    assert line.render.block["reversal"]["estimated"]
+
+
+def _no_distance(line):
+    reversal = line.render.block["reversal"]
+    assert reversal["exact"] == [] and reversal["estimated"] == []
+    assert line.m["reason"] == reversal["no_distance_reason"]
+    assert line.m["code"] == reversal["no_distance_code"]
+    assert _NO_DISTANCE_REASON[line.m["code"]].fullmatch(line.m["reason"])
+
+
+def _brackets(row):
+    """`(value, upper_end, printed figure)` of every crossing the row prints."""
+    return [(b["value"], b["upper_end"], b["formatted"]) for b in row["boundaries"]
+            if "formatted" in b]
+
+
+def on_its_side(figure, value, row):
+    """A figure printed on a crossing's axis reads on its side of every
+    printed crossing (§0.1 item 60): at or below the crossing's figure when it
+    lies at or below the crossing's `value`, equal to it inside the bracket,
+    above it at or above `upper_end`."""
+    shown = decimal.Decimal(figure.rstrip("%"))
+    for lower, upper, printed in _brackets(row):
+        crossing = decimal.Decimal(printed.rstrip("%"))
+        if value <= lower:
+            assert shown <= crossing, (figure, value, printed, lower)
+        elif value >= upper:
+            assert shown > crossing, (figure, value, printed, upper)
+        else:
+            assert shown == crossing, (figure, value, printed, lower, upper)
+
+
+def _stated_figures(line, row):
+    """The figures the config states for the row's key, and the figures the
+    row prints for them."""
+    option, leaf = row["key"].split(".", 1)
+    stated = line.render.raw[option][leaf]
+    values = stated if isinstance(stated, list) else [stated]
+    figures = row["stated_formatted"].split(", ")
+    assert len(figures) == len(values)
+    return [float(v) for v in values], figures
+
+
+def _row_head(line):
+    m, row = line.m, line.reversal_row
+    assert (m["key"], m["stated"], m["tag"]) == (row["key"], row["stated_formatted"],
+                                                 row["stated_tag"])
+    if line.render.engine:
+        # whose figure it is: the read-back's own class for the same key, and
+        # its own tag, character for character (§0.1 item 53)
+        assert _echo_class(line.render.doc, row["key"]) == row["stated_source"]
+        assert row["stated_tag"] == _read_back_tag(line.render.doc, row["key"])
+        for value, figure in zip(*_stated_figures(line, row)):
+            # each figure is the stated value at some number of decimals of a
+            # percent, within one of its steps, and reads on its side
+            places = len(figure.rstrip("%").split(".")[1])
+            assert abs(decimal.Decimal(figure.rstrip("%"))
+                       - decimal.Decimal(value) * 100) < decimal.Decimal(1).scaleb(-places)
+            on_its_side(figure, value, row)
+
+
+def _bracket(line):
+    m, row = line.m, line.reversal_row
+    assert m["lo"] == dt._rate(row["bracket_low"]) and m["hi"] == dt._rate(row["bracket_high"])
+    assert m["src"] == row["bracket_source"]
+    if line.render.engine:
+        assert (row["bracket_low"], row["bracket_high"]) == be.reversal_bracket(row["key"])
+        # §0.1 item 43: a range the engine sets carries the budget ceiling's label
+        assert row["bracket_source"] == "set in the engine" == be.BRACKET_SOURCE
+
+
+def _solved(row):
+    return [b for b in row["boundaries"] if b["verdict_field"] in ("best", "runner_up")
+            and "curve_paths" not in b and "value_ci" not in b]
+
+
+def _boundary(line, fmt):
+    """The row's boundary the line prints: its field and words, and its
+    figure as `fmt` reads it off the boundary."""
+    m, row = line.m, line.reversal_row
+    field = next(f for f, label in FIELD_WORDS.items() if label == m["field"])
+    found = [b for b in row["boundaries"] if b["verdict_field"] == field
+             and fmt(b) == m["value"].split(" ")[0] and b["was"] == m["was"]
+             and b["becomes"] == m["becomes"]]
+    assert len(found) == 1, (m.group(0), row["boundaries"])
+    boundary = found[0]
+    assert m["further"] == boundary["further_changes"]
+    return boundary
+
+
+def _printed(boundary):
+    return boundary["formatted"]
+
+
+def was_at_printed_becomes_above(path, key, boundary, printed, futures):
+    """"as it rises past X": at the PRINTED X and at the bracket's lower end
+    the field says `was`, and at its upper end it says `becomes` — read on
+    `--sweep`, with the run's own futures for a sampled crossing (§0.1 items
+    42, 54 and 60). The upper end is just above the unrounded value: a
+    solved bracket's two ends have no float between them, and a sampled
+    one's are less than 1e-12 apart."""
+    at = float(decimal.Decimal(printed.rstrip("%")).scaleb(-2))
+    values = [at, boundary["value"], boundary["upper_end"]]
+    if boundary["verdict_field"] in ("best", "runner_up"):
+        assert boundary["upper_end"] in (boundary["value"],
+                                         math.nextafter(boundary["value"], 1.0))
+    else:
+        assert 0.0 < boundary["upper_end"] - boundary["value"] < 1e-12
+    distinct = list(dict.fromkeys(values))
+    states = dict(zip(distinct, _sweep_states(path, key, distinct, futures=futures)))
+    field = boundary["verdict_field"]
+    assert states[at][field] == boundary["was"], (printed, states[at])
+    assert states[boundary["value"]][field] == boundary["was"], boundary
+    assert states[boundary["upper_end"]][field] == boundary["becomes"], boundary
+
+
+def _cross_solved(line):
+    boundary = _boundary(line, _printed)
+    # the prefix names the kind: a solved line carries a solved boundary
+    assert boundary in _solved(line.reversal_row)
+    if line.render.engine:
+        was_at_printed_becomes_above(line.render.path, line.reversal_row["key"], boundary,
+                                     line.m["value"], futures=False)
+
+
+def _cross_sampled(line):
+    boundary = _boundary(line, _printed)
+    # the prefix names the kind: a sampled line carries a sampled boundary
+    assert "curve_paths" in boundary
+    assert _whole(line.m["paths"]) == boundary["curve_paths"]
+    assert int(line.m["seed"]) == boundary["seed"]
+    if line.render.engine:
+        # the sample it was bisected on is this run's own
+        assert boundary["seed"] == line.render.spec.simulation.random_seed
+        assert boundary["curve_paths"] == line.render.spec.simulation.num_sims
+        was_at_printed_becomes_above(line.render.path, line.reversal_row["key"], boundary,
+                                     line.m["value"], futures=True)
+
+
+def _cross_estimated(line):
+    boundary = _boundary(line, lambda b: dt._rate(b["value"]))
+    assert line.m["lo"] == dt._rate(boundary["value_ci"]["low"])
+    assert line.m["hi"] == dt._rate(boundary["value_ci"]["high"])
+    assert _whole(line.m["n"]) == boundary["resimulation_paths"]
+
+
+def _path_note(line):
+    """How the axis was built: the stated path, as the row's own
+    `stated_formatted` prints it, replaced by one rate at every renewal —
+    which is what the register's crossings price, since each is solved or
+    bisected on `sweep.load_at`, one leaf set to one figure."""
+    row = line.reversal_row
+    assert line.m["note"] == row["path_note"]
+    # the path's figures are the row's own ordered ones (§0.1 item 60)
+    assert line.m["stated"] == row["stated_formatted"]
+    if line.render.engine:
+        option, leaf = row["key"].split(".", 1)
+        stated = line.render.raw[option][leaf]
+        # a path of more than one rate, which one rate at every renewal is not
+        assert isinstance(stated, list) and len(set(stated)) > 1
+        flat = be.load_at(line.render.raw, row["key"], 0.05)
+        ladder = getattr(flat, option).mortgage_renewal_rates
+        assert len(set(ladder)) == 1
+
+
+def edge_codes_in_the_contract():
+    """The codes the contract says refuse one boundary of a field, read off
+    its own sentence, never off `decomposition.EDGE_REFUSAL_CODES`."""
+    text = " ".join(CONTRACT.read_text(encoding="utf-8").split())
+    m = re.search(r"while another of that field's may be, the codes (?P<codes>.+?) "
+                  r"\(`decomposition\.EDGE_REFUSAL_CODES`\)", text)
+    assert m, "the contract's edge-code sentence"
+    return set(re.findall(r"`(\w+)`", m["codes"]))
+
+
+def _refused_boundary(line):
+    m, row = line.m, line.reversal_row
+    assert _BOUNDARY_REASON[m["code"]].fullmatch(m["reason"]), m.group(0)
+    named = [r for r in row["refused_boundaries"]
+             if (r["code"], r["reason"]) == (m["code"], m["reason"])]
+    labels = [FIELD_WORDS[r["verdict_field"]] for r in named]
+    expected = labels[0] if len(labels) == 1 else f"{', '.join(labels[:-1])} or {labels[-1]}"
+    assert m["fields"] == expected
+    # the head is the contract's: "a boundary not printed" for a code that
+    # refuses one boundary of a field, "no boundary printed" otherwise
+    assert (m["head"] == "a boundary not printed") == (
+        m["code"] in edge_codes_in_the_contract()), m.group(0)
+
+
+def _references(line):
+    row = line.reversal_row
+    refs = [dc.AxisReference(**r) for r in row["references"]]
+    assert line.m["refs"] == "; ".join(dt._reference_clause(r) for r in refs)
+    if not line.render.engine:
+        return
+    option = row["option"]
+    compounding = line.render.raw[option].get("mortgage_rate_compounding", "semi_annual")
+    for ref in row["references"]:
+        published = float(ANCHORS[ref["anchor"]].value)
+        assert ref["label"] == ref["anchor"].rsplit(".", 1)[-1].replace("_", " ")
+        if compounding == "effective_annual":
+            # on this axis the semi-annual quote is converted by the loader's rule
+            assert math.isclose(ref["value"], effective_mortgage_rate(published, "semi_annual"))
+            assert ref["note"] == (f"published as {_fmt_value(row['key'], published)} "
+                                   f"compounded semi-annually")
+        else:
+            assert ref["value"] == published and ref["note"] is None
+        # on the axis, it reads on its side of every printed crossing
+        on_its_side(ref["formatted"], ref["value"], row)
+
+
 LINE_CLAIMS: Dict[str, Callable[[Line], None]] = {
     "BLANK": lambda line: None,
     "HEADER": _header,
@@ -709,11 +1075,27 @@ LINE_CLAIMS: Dict[str, Callable[[Line], None]] = {
     "LEVEL_ROW": _level_row,
     "LEVEL_SUM": _level_sum,
     "LEVEL_TOP": _level_top,
+    "ZERO_HEAD": _zero_head,
+    "ZERO_STATED": _zero_stated,
     "ZERO_DRAWN": _zero_drawn,
+    "EXACT_HEAD": _exact_head,
+    "ESTIMATED_HEAD": _estimated_head,
+    "NO_DISTANCE": _no_distance,
+    "ROW_HEAD": _row_head,
+    "BRACKET": _bracket,
+    "CROSS_SOLVED": _cross_solved,
+    "CROSS_SAMPLED": _cross_sampled,
+    "CROSS_ESTIMATED": _cross_estimated,
+    "PATH_NOTE": _path_note,
+    "REFUSED_BOUNDARY": _refused_boundary,
+    "REFERENCES": _references,
 }
 
-# Line templates only a hand-built outcome reaches: none.
-HOUSEHOLD_ONLY: set = set()
+# Line templates only a hand-built outcome reaches, and why the engine cannot:
+# a financing key always passes the exactness gate (`_financing_pv` shifts
+# every path by one constant), so no engine row is estimated, and an estimated
+# row carries no boundary.
+HOUSEHOLD_ONLY = {"CROSS_ESTIMATED", "ESTIMATED_HEAD"}
 
 
 # ---------------------------------------------------------------------------
@@ -722,9 +1104,7 @@ HOUSEHOLD_ONLY: set = set()
 
 def test_every_template_has_a_claim_check_and_a_kind():
     assert set(LINE_CLAIMS) == set(LINES) == set(KINDS)
-    assert set(KINDS.values()) <= SIX_KINDS | {"layout"}
-    assert set(KINDS.values()) == {"layout", "header", "figure row", "refusal",
-                                   "structural zero"}
+    assert set(KINDS.values()) == SIX_KINDS | {"layout"}
     assert set(REASON_CLAIMS) | set(SEAM_ONLY) == set(REASONS)
     assert not set(REASON_CLAIMS) & set(SEAM_ONLY)
 
@@ -794,6 +1174,52 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
     # the spread register's own refusal
     "NO_SIGN_VARIATION": (rf"^(?P<best>{OPTION}) is cheapest in (?:all (?P<n1>[\d,]+) of these "
                           rf"futures|none of these (?P<n2>[\d,]+) futures)$"),
+    # a boundary field that prints no crossing
+    "UNCHANGED": (rf"^(?P<field>best|runner_up|mc_best|decisive) says '(?P<value>[^']+)' "
+                  rf"at every one of (?P<n>\d+) points across (?P<lo>{PCT})–(?P<hi>{PCT})$"),
+    "SAYS_SO_NOWHERE": (rf"^(?P<field>best|runner_up|mc_best|decisive) says "
+                        rf"'(?P<value>[^']+)' in this run and at none of (?P<n>\d+) points "
+                        rf"across (?P<lo>{PCT})–(?P<hi>{PCT})$"),
+    "SCAN_MISMATCH": (rf"^(?P<field>best|runner_up) says '(?P<value>[^']+)' in this run and "
+                      rf"on (?:every|no) stretch between the solved crossings, read at its "
+                      rf"middle, and at the (?P<n>\d+) points across (?P<lo>{PCT})–"
+                      rf"(?P<hi>{PCT}) it reads '\w+'(?:, '\w+')*$"),
+    "NOT_IDENTIFIED": (r"^across the bracket the probabilities this boundary turns on move "
+                       r"by \d\.\d{4}, not more than 2 s\.e\. at the boundary \(\d\.\d{4}\) "
+                       r"on \d+ paths$"),
+    "NO_PROBABILITY": r"^no probability is attached to this boundary$",
+    "RESIMULATION_DISAGREES": (rf"^the re-simulation at (?P<rate>{PCT}) gives .+, and the "
+                               rf"free curve gives .+$"),
+    "NOT_PRINTABLE": (r"^the crossing of (?P<field>best|runner_up|mc_best|decisive) from "
+                      r"'(?P<was>[^']+)' whose bracket starts at (?P<value>\S+), floored "
+                      r"(?:at \d+ to \d+ decimals of a percent: .+|at no precision: its "
+                      r"bracket is wider than one step at \d+ decimals of a percent)$"),
+    "NOT_ORDERABLE": (r"^(?P<figure>\S+), a figure on this axis (?:at or below the lower end "
+                      r"of|inside|at or above the upper end of) its bracket \[\S+, \S+\], reads "
+                      r"on its side of .+ rounded to the nearest at none of 2 to 12 decimals "
+                      r"of a percent, nor as the figure of a crossing whose bracket holds it$"),
+    "GATE_NOT_FINITE": r"^a present value this gate compares is not a finite number: .+$",
+    "GATE_MOVES_OTHERS": r"^moving \S+ moves .+, which it does not name$",
+    "GATE_NOT_CONSTANT": (r"^moving \S+ shifts (?P<option>\w+) by a different amount on "
+                          r"different paths \((?:worst \d\.\d\de[+-]\d\d of its own s\.d\., "
+                          r"against 1e-09|(?P=option) is priced the same on every path as "
+                          r"stated, and its shift differs across paths|its deviation over its "
+                          r"own s\.d\. is not a number)\)$"),
+    "WITHOUT_FUTURES": (r"^this run has no futures, and this solver reads "
+                        r"(?P<field>mc_best|decisive) only off futures$"),
+    # the empty reversal register
+    "NO_DISTANCE": r"^this config states no mortgage_renewal_rates or mortgage_rate$",
+    "NO_DISTANCE_NOT_ADMITTED": (
+        r"^this config states [\w.]+, and (?:moving it to the far end of its "
+        r"bracket moves no option's present value|the loader refuses it at the "
+        r"far end of its bracket)(?:; this config states [\w.]+, and (?:moving it "
+        r"to the far end of its bracket moves no option's present value|the "
+        r"loader refuses it at the far end of its bracket))*$"),
+    "NO_DISTANCE_NO_MAPPING": r"^this block was handed no config mapping$",
+    "NO_DISTANCE_ONE_OPTION": r"^fewer than two options are priced$",
+    # the path note: how the axis was built (§0.1 item 41)
+    "PATH_NOTE": (r"^each crossing on this key is priced with the stated path "
+                  r"\((?P<stated>[^)]+)\) replaced by one rate at every renewal$"),
 }.items()}
 
 class _AnyOf:
@@ -821,19 +1247,43 @@ _REFUSAL_REASON = {
     "degenerate_resample": REASONS["DEGENERATE_RESAMPLE"],
 }
 
+# Which reason each code of a refused boundary writes, and each code of an
+# empty reversal register (§0.1 item 50: every refusal is a code and one fact).
+_BOUNDARY_REASON = {
+    "unchanged": REASONS["UNCHANGED"],
+    "not_on_axis": REASONS["SAYS_SO_NOWHERE"],
+    "scan_mismatch": REASONS["SCAN_MISMATCH"],
+    "not_identified": _AnyOf(REASONS["NOT_IDENTIFIED"], REASONS["NO_PROBABILITY"]),
+    "unconfirmed": REASONS["RESIMULATION_DISAGREES"],
+    "not_printable": REASONS["NOT_PRINTABLE"],
+    "not_orderable": REASONS["NOT_ORDERABLE"],
+    "not_exact": _AnyOf(REASONS["GATE_NOT_FINITE"], REASONS["GATE_MOVES_OTHERS"],
+                        REASONS["GATE_NOT_CONSTANT"]),
+    "no_futures": REASONS["WITHOUT_FUTURES"],
+}
+_NO_DISTANCE_REASON = {
+    "no_candidate": REASONS["NO_DISTANCE"],
+    "not_admitted": REASONS["NO_DISTANCE_NOT_ADMITTED"],
+    "no_mapping": REASONS["NO_DISTANCE_NO_MAPPING"],
+    "single_option": REASONS["NO_DISTANCE_ONE_OPTION"],
+}
+
 
 
 def test_every_code_names_one_set_of_reasons():
-    """The code map is whole: every whole-block code the types allow has its
-    reason templates, and no reason template is written under two codes.
+    """The code maps are whole: every code the types allow has its reason
+    templates, and no reason template is written under two codes.
     *Kills it:* a code with no template, or one template filed twice."""
     assert set(_REFUSAL_REASON) == set(dc.REFUSAL_CODES)
+    assert set(_BOUNDARY_REASON) == set(dc.BOUNDARY_REFUSAL_CODES)
+    assert set(_NO_DISTANCE_REASON) == set(dc.NO_DISTANCE_CODES)
     filed = []
-    for got in _REFUSAL_REASON.values():
-        filed.extend(got.patterns if isinstance(got, _AnyOf) else (got,))
+    for mapping in (_REFUSAL_REASON, _BOUNDARY_REASON, _NO_DISTANCE_REASON):
+        for got in mapping.values():
+            filed.extend(got.patterns if isinstance(got, _AnyOf) else (got,))
     names = [next(n for n, p in REASONS.items() if p is pattern) for pattern in filed]
     assert len(names) == len(set(names))
-    assert set(REASONS) - set(names) == {"NO_SIGN_VARIATION"}
+    assert set(REASONS) - set(names) == {"NO_SIGN_VARIATION", "PATH_NOTE"}
 
 
 def _engine_reasons(render):
@@ -845,6 +1295,15 @@ def _engine_reasons(render):
     spread = block["spread"]
     if "refusal" in spread:
         out.append(("spread", spread["refusal"]["reason"], None))
+    reversal = block["reversal"]
+    for kind in ("exact", "estimated"):
+        for row in reversal[kind]:
+            for refused in row["refused_boundaries"]:
+                out.append(("refused", refused["reason"], (row, refused)))
+            if row["path_note"] is not None:
+                out.append(("path_note", row["path_note"], row))
+    if reversal["no_distance_reason"] is not None:
+        out.append(("no_distance", reversal["no_distance_reason"], reversal))
     return out
 
 
@@ -871,6 +1330,26 @@ SEAM_ONLY = {
                        "test_a_margin_off_the_central_case_refuses_the_whole_block",
     "INCOME_MOVED": "tests/test_decomposition_contract_doc.py::test_income_moved",
     "UNTAGGED_WIDTH": "tests/test_decomposition_contract_doc.py::test_untagged_width",
+    "NOT_IDENTIFIED": "tests/test_reversal_register.py::TestTheConfirmingResimulation::"
+                      "test_a_futures_boundary_inside_monte_carlo_noise_is_not_reported",
+    "RESIMULATION_DISAGREES": "tests/test_reversal_register.py::TestTheConfirmingResimulation::"
+                              "test_the_rate_a_disagreeing_re_simulation_names_prints_on_its_side",
+    "SCAN_MISMATCH": "tests/test_reversal_register.py::TestTheStatePastAnEdgeIsReadAtTheEdge::"
+                     "test_a_field_no_crossing_moves_is_read_at_the_nine_points",
+    "GATE_NOT_FINITE": "tests/test_reversal_register.py::TestTheExactnessGate::"
+                       "test_a_non_finite_present_value_in_the_named_option_refuses_by_name",
+    "GATE_MOVES_OTHERS": "tests/test_reversal_register.py::TestTheExactnessGate::"
+                         "test_a_key_that_moves_the_draw_stream_is_refused_by_clause_a",
+    "GATE_NOT_CONSTANT": "tests/test_reversal_register.py::TestTheExactnessGate::"
+                         "test_a_key_whose_shift_is_not_constant_is_refused",
+    "WITHOUT_FUTURES": "tests/test_reversal_register.py::TestRefusals::"
+                       "test_without_futures_the_register_still_carries_its_solved_half",
+    "NO_PROBABILITY": "tests/test_reversal_register.py::"
+                      "test_a_boundary_with_no_probability_is_not_identified",
+    "NO_DISTANCE_NO_MAPPING": "tests/test_decomposition_sentences.py::"
+                              "test_a_block_handed_no_config_mapping_searched_no_key",
+    "NO_DISTANCE_ONE_OPTION": "tests/test_reversal_register.py::"
+                              "test_a_register_on_one_option_has_no_verdict_to_reverse",
 }
 
 
@@ -984,6 +1463,184 @@ def _r_no_sign_variation(render, m, node):
         assert share == 0.0 and _whole(m["n2"]) == block["paths"] == f_a.size
 
 
+def _run_inputs_of(render):
+    from hde.deterministic import compute_deterministic
+    from hde.models import compute_verdict
+    from hde.monte_carlo import run_monte_carlo
+    spec = render.spec
+    det = compute_deterministic(spec)
+    mc = run_monte_carlo(spec)
+    verdict = compute_verdict(det, mc, years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate)
+    return det, mc, verdict
+
+
+def _scan_states(render, m, node):
+    """What the refused field reads at each point of the scan its reason
+    names (§0.1 item 47: the scan the refusal rests on, never "throughout").
+    N is the solver's own scan: nine points per pair for a field solved on the
+    central case, read here by a `--sweep` without futures at those nine
+    points; 65 for a field bisected on the futures, read off the same free
+    curve the register read."""
+    row, refused = node
+    field = m["field"]
+    assert field == refused["verdict_field"]
+    n = int(m["n"])
+    lo, hi = row["bracket_low"], row["bracket_high"]
+    assert (m["lo"], m["hi"]) == (dt._rate(lo), dt._rate(hi))
+    xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    if field in ("best", "runner_up"):
+        assert n == be.CROSSING_SCAN_POINTS == 9
+        return [s[field] for s in _sweep_states(render.path, row["key"], xs, futures=False)]
+    assert n == be.REVERSAL_SCAN_POINTS == 65
+    det, mc, _ = _run_inputs_of(render)
+    free = be._free_curve(render.raw, row["key"], be._priced_options(render.raw), det,
+                          mc, single_path=False)
+    return [be.field_state(free(x)[0], field) for x in xs]
+
+
+def _run_says(render, field):
+    verdict = render.doc["verdict"]
+    if field == "decisive":
+        return f"decisive for {verdict['best']}" if verdict["decisive"] else "not decisive"
+    return verdict[field]
+
+
+def _r_unchanged(render, m, node):
+    """"at every one of N points": each point of the scan reads the one value."""
+    states = _scan_states(render, m, node)
+    assert set(states) == {m["value"]}, (m["field"], states)
+
+
+def _r_says_so_nowhere(render, m, node):
+    """"in this run and at none of N points": the run's own verdict says it,
+    and no point of the scan does."""
+    assert _run_says(render, m["field"]) == m["value"]
+    states = _scan_states(render, m, node)
+    assert m["value"] not in states, (m["field"], states)
+
+
+_NOT_PRINTABLE = re.compile(
+    r"the crossing of (?P<field>\w+) from '(?P<was>[^']+)' whose bracket starts at "
+    r"(?P<value>\S+), floored at (?P<start>\d+) to (?P<finest>\d+) decimals of a percent: "
+    r"(?P<parts>.+)")
+
+
+def _r_not_printable(render, m, node):
+    """Each floored figure the reason names, one per precision from the
+    kind's own to the finest tried, is what it says it was: a figure at which
+    `--sweep` reads another state, one below the bracket searched, or one
+    below a figure on the axis that lies below the crossing, at twelve
+    decimals."""
+    row, refused = node
+    got = _NOT_PRINTABLE.fullmatch(m.group(0))
+    field, value = got["field"], float(got["value"])
+    assert field == refused["verdict_field"]
+    futures = field not in ("best", "runner_up")
+    start, finest = int(got["start"]), int(got["finest"])
+    assert start == (2 if futures else 4) and start <= finest <= be.PRINTED_RATE_MAX_PLACES
+    (at,) = _sweep_states(render.path, row["key"], [value], futures=futures)
+    assert at[field] == got["was"]
+    option, leaf = row["key"].split(".", 1)
+    stated = render.raw[option][leaf]
+    figures = [float(v) for v in (stated if isinstance(stated, list) else [stated])] + [
+        r["value"] for r in row["references"]]
+    parts = got["parts"].split("; ")
+    assert len(parts) == finest - start + 1
+    for places, part in zip(range(start, finest + 1), parts):
+        text = be.floored_rate(value, places)
+        shown = decimal.Decimal(text.rstrip("%"))
+        if part == f"{text} is below the bracket searched":
+            assert float(shown.scaleb(-2)) < row["bracket_low"]
+            continue
+        below = re.fullmatch(rf"{re.escape(text)} is below (?P<fig>\S+), a figure on this axis",
+                             part)
+        if below:
+            assert below["fig"] in {f"{f:.12%}" for f in figures if f < value}, part
+            assert shown < decimal.Decimal(below["fig"].rstrip("%"))
+            continue
+        reads = re.fullmatch(rf"{re.escape(text)} reads '(?P<says>[^']+)'", part)
+        assert reads, part
+        (there,) = _sweep_states(render.path, row["key"], [float(shown.scaleb(-2))],
+                                 futures=futures)
+        assert there[field] == reads["says"] != got["was"], part
+
+
+def _r_no_distance(render, m, node):
+    candidates = be.reversal_candidates(render.raw)
+    reason = m.group(0)
+    if reason == "this config states no mortgage_renewal_rates or mortgage_rate":
+        assert candidates == []
+        return
+    named = re.findall(r"this config states ([\w.]+), and (moving it to the far end of its "
+                       r"bracket moves no option's present value|the loader refuses it at "
+                       r"the far end of its bracket)", reason)
+    assert [k for k, _ in named] == [k for k, _ in candidates]
+    for key, words in named:
+        admitted, record = be.reversal_admission(render.raw, key, be.reversal_bracket(key)[1])
+        assert not admitted
+        if words.startswith("moving it"):
+            assert record["deltas"] and all(d == 0.0 for d in record["deltas"].values())
+        else:
+            assert record["why"].startswith("the loader refuses")
+
+
+def _r_path_note(render, m, node):
+    option, leaf = node["key"].split(".", 1)
+    stated = render.raw[option][leaf]
+    assert isinstance(stated, list) and len(set(stated)) > 1
+    assert m["stated"] == node["stated_formatted"]
+
+
+_NOT_ORDERABLE = re.compile(
+    r"(?P<figure>\S+), a figure on this axis (?P<side>at or below the lower end of|inside|at "
+    r"or above the upper end of) its bracket \[(?P<lower>\S+), (?P<upper>\S+)\], reads on its "
+    r"side of (?P<tried>.+) rounded to the nearest at none of 2 to 12 decimals of a percent, "
+    r"nor as the figure of a crossing whose bracket holds it")
+
+
+def _r_not_orderable(render, m, node):
+    """The figure is one the row prints on its axis; its side of the refused
+    crossing's bracket is the one named; the crossings it was tried beside are
+    the row's printed ones, in order, then the refused one at its own floored
+    figure; and no rounding at 2 to 12 decimals, nor any tried crossing's
+    figure whose bracket holds it, reads on its side of all of them."""
+    row, refused = node
+    got = _NOT_ORDERABLE.fullmatch(m.group(0))
+    figure, lower, upper = float(got["figure"]), float(got["lower"]), float(got["upper"])
+    option, leaf = row["key"].split(".", 1)
+    stated = render.raw[option][leaf]
+    on_axis = [float(v) for v in (stated if isinstance(stated, list) else [stated])] + [
+        r["value"] for r in row["references"]]
+    assert figure in on_axis, figure
+    side = -1 if figure <= lower else (1 if figure >= upper else 0)
+    assert got["side"] == {-1: "at or below the lower end of", 0: "inside",
+                           1: "at or above the upper end of"}[side]
+    tried = got["tried"].split(", ")
+    printed = [(b["value"], b["upper_end"], b["formatted"]) for b in row["boundaries"]]
+    assert [t for _, _, t in printed[:len(tried) - 1]] == tried[:-1]
+    places = len(tried[-1].rstrip("%").split(".")[1])
+    assert tried[-1] == be.floored_rate(lower, places)
+    assert 0.0 < upper - lower < 1e-12 or upper == math.nextafter(lower, 1.0)
+    brackets = printed[:len(tried) - 1] + [(lower, upper, tried[-1])]
+
+    def placed(text):
+        shown = decimal.Decimal(text.rstrip("%"))
+        for low, high, crossing in brackets:
+            at = decimal.Decimal(crossing.rstrip("%"))
+            if figure <= low and not shown <= at:
+                return False
+            if low < figure < high and shown != at:
+                return False
+            if figure >= high and figure > low and not shown > at:
+                return False
+        return True
+
+    assert not any(placed(f"{figure:.{k}%}") for k in range(2, 13))
+    assert not any(placed(crossing) for low, high, crossing in brackets
+                   if low <= figure <= high)
+
+
 REASON_CLAIMS: Dict[str, Callable[..., None]] = {
     "NO_FUTURES": _r_no_futures,
     "TOO_FEW": _r_too_few,
@@ -995,6 +1652,13 @@ REASON_CLAIMS: Dict[str, Callable[..., None]] = {
     "BUDGET_N": _r_budget,
     "DEGENERATE_RESAMPLE": _r_degenerate_resample,
     "NO_SIGN_VARIATION": _r_no_sign_variation,
+    "UNCHANGED": _r_unchanged,
+    "SAYS_SO_NOWHERE": _r_says_so_nowhere,
+    "NOT_PRINTABLE": _r_not_printable,
+    "NOT_ORDERABLE": _r_not_orderable,
+    "NO_DISTANCE": _r_no_distance,
+    "NO_DISTANCE_NOT_ADMITTED": _r_no_distance,
+    "PATH_NOTE": _r_path_note,
 }
 
 
@@ -1032,14 +1696,15 @@ def test_the_reason_says_what_is_so(template):
 
 
 def test_no_reason_explains_or_routes():
-    """A reason is the one measured fact that fired it (§0.1 items 35-37): no
+    """A reason is the one measured fact that fired it (§0.1 items 35-37), and
+    a path note the one construction fact of its axis (§0.1 item 41): no
     clause saying why it holds, predicting a run the block did not price, or
     naming another command, and no `--sweep` vocabulary with nothing in the
-    block to refer to. Every reason the engine wrote on every render, and
-    every template, is free of the words those clauses were built from.
+    block to refer to. Every reason and note the engine wrote on every render,
+    and every template, is free of the words those clauses were built from.
     *Kills it:* any of the cut clauses — "so ...", "rather than", "which is
     why", a route to `--break-even`, `--sweep` or `--decompose`, "raise", a
-    grid or a threshold reported — back in a reason."""
+    grid or a threshold reported — back in a reason or a note."""
     banned = re.compile(r"\bso\b|\brather than\b|\bwhich is why\b|\bbecause\b|"
                         r"--break-even|--sweep|--decompose|\braise\b|\bcould\b|\bwould\b|"
                         r"\binstead\b|\bgrid\b|\bthreshold reported\b")
@@ -1049,6 +1714,54 @@ def test_no_reason_explains_or_routes():
                 assert not banned.search(text), (render.name, text)
     for name, pattern in REASONS.items():
         assert not banned.search(pattern.pattern), name
+
+
+def test_a_block_handed_no_config_mapping_searched_no_key():
+    got = run("fixture")
+    det, mc, verdict = got.inputs()
+    spec = dr._spec_at(got.spec, 40)
+    outcome = dr.decompose(spec, det=det, mc=mc, verdict=verdict, raw=None, paths=40)
+    reversal = outcome.reversal
+    assert reversal.exact == () and reversal.estimated == ()
+    assert reversal.no_distance_code == "no_mapping"
+    assert REASONS["NO_DISTANCE_NO_MAPPING"].match(reversal.no_distance_reason)
+
+
+def test_a_printed_crossing_is_a_rate_the_field_still_says_was():
+    """§0.1 item 42's witness. The mortgage example's rate crossing lies at
+    6.784887%; printed to the nearest it read 6.7849%, a rate at which
+    `--sweep` already says `becomes`. Both kinds print through one floor of
+    the bracket's lower end, starting at their own precision, and widen it
+    only where the field does not say `was` there (§0.1 items 54 and 60).
+    *Kills it:* rounding either kind to the nearest, flooring at a precision
+    other than its own, or flooring any point but the lower end."""
+    got = run("mortgage")
+    (row,) = [r for r in got.block["reversal"]["exact"] if r["key"] == "house.mortgage_rate"]
+    solved = [b for b in _solved(row)]
+    assert solved
+    for boundary in solved:
+        printed = boundary["formatted"]
+        assert printed == be.floored_rate(boundary["value"], 4)
+        assert f"as it rises past {printed}, " in got.text
+        nearest = f"{boundary['value'] * 100:.4f}%"
+        field = boundary["verdict_field"]
+        at, rounded = _sweep_states(got.path, row["key"],
+                                    [float(printed.rstrip("%")) / 100.0,
+                                     float(nearest.rstrip("%")) / 100.0], futures=False)
+        assert at[field] == boundary["was"], (printed, at)
+        if nearest != printed:
+            assert rounded[field] == boundary["becomes"], (nearest, rounded)
+    # the witness is live: this crossing is one the nearest figure mis-states
+    assert any(f"{b['value'] * 100:.4f}%" != be.floored_rate(b["value"], 4) for b in solved)
+    # the floor itself, at any precision: never above the value, and within
+    # one step of it
+    for value in (0.06784887, 0.0499999999, 0.05, 0.123456789):
+        for places in (2, 3, 4, 7):
+            printed = be.floored_rate(value, places)
+            assert len(printed.split(".")[1]) == places + 1
+            assert decimal.Decimal(printed.rstrip("%")) <= decimal.Decimal(value) * 100
+            assert decimal.Decimal(printed.rstrip("%")) + decimal.Decimal(1).scaleb(-places) \
+                > decimal.Decimal(value) * 100
 
 
 # ---------------------------------------------------------------------------

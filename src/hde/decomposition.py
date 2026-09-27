@@ -356,7 +356,7 @@ def _require_words(kind: str, verdict_field: str, was: object, becomes: object) 
 
 @dataclass(frozen=True)
 class AxisReference:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     label: str
     value: float
@@ -367,10 +367,11 @@ class AxisReference:
 
 @dataclass(frozen=True)
 class SolvedBoundary:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
+    upper_end: float
     formatted: str
     was: str
     becomes: str
@@ -384,10 +385,11 @@ class SolvedBoundary:
 
 @dataclass(frozen=True)
 class SampledBoundary:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
+    upper_end: float
     formatted: str
     was: str
     becomes: str
@@ -410,12 +412,17 @@ BOUNDARY_REFUSAL_CODES: Tuple[str, ...] = (
     "unconfirmed",
     "not_exact",
     "no_futures",
+    "scan_mismatch",
+    "not_printable",
+    "not_orderable",
 )
 
-# Design: docs/specs/2026-09-22-which-risk-decides-it.md §6.
+# Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.
 EDGE_REFUSAL_CODES: Tuple[str, ...] = (
     "not_identified",
     "unconfirmed",
+    "not_printable",
+    "not_orderable",
 )
 
 NO_DISTANCE_CODES: Tuple[str, ...] = (
@@ -426,6 +433,15 @@ NO_DISTANCE_CODES: Tuple[str, ...] = (
 )
 
 
+def _require_types(where: str, items: Tuple[object, ...],
+                   allowed: Tuple[type, ...]) -> None:
+    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §0.1 item 24."""
+    for item in items:
+        if not isinstance(item, allowed):
+            raise TypeError(f"{where} holds a {type(item).__name__}, not one of "
+                            f"{tuple(t.__name__ for t in allowed)}")
+
+
 def _require_code(kind: str, code: object, codes: Tuple[str, ...]) -> None:
     """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
     if code not in codes:
@@ -434,7 +450,7 @@ def _require_code(kind: str, code: object, codes: Tuple[str, ...]) -> None:
 
 @dataclass(frozen=True)
 class RefusedBoundary:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     code: str
@@ -446,7 +462,7 @@ class RefusedBoundary:
 
 @dataclass(frozen=True)
 class ExactReversal:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     key: str
     option: str
@@ -464,10 +480,14 @@ class ExactReversal:
     references: Tuple[AxisReference, ...]
     path_note: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        _require_types("ExactReversal.boundaries", self.boundaries,
+                       (SolvedBoundary, SampledBoundary))
+
 
 @dataclass(frozen=True)
 class EstimatedBoundary:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     verdict_field: str
     value: float
@@ -484,7 +504,7 @@ class EstimatedBoundary:
 
 @dataclass(frozen=True)
 class EstimatedReversal:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     key: str
     option: str
@@ -499,6 +519,10 @@ class EstimatedReversal:
     refused_boundaries: Tuple[RefusedBoundary, ...]
     references: Tuple[AxisReference, ...]
     path_note: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        _require_types("EstimatedReversal.boundaries", self.boundaries,
+                       (EstimatedBoundary,))
 
 
 @dataclass(frozen=True)
@@ -533,7 +557,7 @@ class StructuralZero:
 
 @dataclass(frozen=True)
 class ReversalRegister:
-    """Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."""
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
     exact: Tuple[ExactReversal, ...]
     estimated: Tuple[EstimatedReversal, ...]
@@ -596,6 +620,7 @@ class Decomposition:
     sd_margin: float
     spread: Union[SpreadRegister, RefusedSpread]
     level: LevelRegister
+    reversal: ReversalRegister
 
     def __post_init__(self) -> None:
         if not 0 < self.paths <= self.max_paths:

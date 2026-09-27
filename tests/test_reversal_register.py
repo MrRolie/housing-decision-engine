@@ -58,7 +58,7 @@ from hde.monte_carlo import run_monte_carlo
 from hde.sweep import load_at, run_sweep
 
 from tests.decomposition_runs import (CONDO_ONLY, DECISIVE_STEP, DECISIVE_STEP_LOWER, INERT,
-                                      THIRD_IN_ONE_CELL)
+                                      STATED_BETWEEN, THIRD_IN_ONE_CELL)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
@@ -277,7 +277,8 @@ class TestTheTwoBoundaryKinds:
         would be typed as whichever kind the branch happened to be, and that is
         the one error no downstream reader could detect.
         """
-        entry = {"value": 0.0271, "was": "house", "becomes": "condo", "further": None}
+        entry = {"value": 0.0271, "upper_end": 0.0271, "was": "house", "becomes": "condo",
+                 "further": None}
         probs = {"condo": 0.44, "house": 0.51, "rent": None}
         kinds = {field: type(_typed_boundary(field, entry, formatted="2.71%", curve=probs,
                                              confirmed=probs, curve_paths=1234, seed=7))
@@ -302,8 +303,8 @@ class TestTheTwoBoundaryKinds:
         # A `str()` in the router is what once printed "True to False".
         for field in BOUNDARY_FIELDS:
             with pytest.raises(TypeError, match="not words"):
-                _typed_boundary(field, {"value": 0.05, "was": True, "becomes": False,
-                                        "further": None},
+                _typed_boundary(field, {"value": 0.05, "upper_end": 0.05, "was": True,
+                                        "becomes": False, "further": None},
                                 formatted="5.00%", curve=probs, confirmed=probs,
                                 curve_paths=1234, seed=7)
 
@@ -513,12 +514,15 @@ class TestTheStatePastAnEdgeIsReadAtTheEdge:
     def test_a_field_no_crossing_moves_is_read_at_the_nine_points(self, raw, monkeypatch):
         """A solved field with no edge refuses with the scan it rests on, read
         at the pair scan's own nine points; points that disagree with the
-        crossings raise rather than print "at every one of 9 points".
-        *Kills it:* deleting the check, or raising on a field every point
+        crossings file the field under `mismatched` rather than print "at
+        every one of 9 points", and the register refuses that field alone
+        (`scan_mismatch`, §0.1 item 61), stating what each of the two read.
+        *Kills it:* deleting the check, or firing it on a field every point
         agrees on."""
         found = deterministic_boundaries(raw, CONTRACT, 0.01, 0.10)
         (unchanged,) = [u for u in found["unchanged"] if u["attribute"] == "best"]
         assert (unchanged["value"], unchanged["points"]) == ("rent", 9)
+        assert found["mismatched"] == []
         real = be._ranking_at
 
         def lying(doc, key, value):
@@ -526,12 +530,30 @@ class TestTheStatePastAnEdgeIsReadAtTheEdge:
             return {**got, "best": "house"} if value == 0.01 else got
 
         monkeypatch.setattr(be, "_ranking_at", lying)
-        with pytest.raises(ValueError, match="no solved crossing moves best"):
-            deterministic_boundaries(raw, CONTRACT, 0.01, 0.10)
+        found = deterministic_boundaries(raw, CONTRACT, 0.01, 0.10)
+        (mismatch,) = found["mismatched"]
+        assert (mismatch["attribute"], mismatch["value"], mismatch["anomaly"]) == (
+            "best", "rent", False)
+        assert mismatch["readings"][0] == "house" and set(mismatch["readings"][1:]) == {"rent"}
+        assert not [u for u in found["unchanged"] if u["attribute"] == "best"]
+        assert be._mismatch_reason(CONTRACT, "best", mismatch) == (
+            "scan_mismatch",
+            "best says 'rent' in this run and on every stretch between the solved "
+            "crossings, read at its middle, and at the 9 points across 1.00%–10.00% it "
+            "reads 'house', " + ", ".join(["'rent'"] * 8))
+        spec = load_config_dict(raw)
+        register = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
+        row = _row(register, CONTRACT)
+        (refused,) = [r for r in row.refused_boundaries if r.verdict_field == "best"]
+        assert (refused.code, refused.reason) == be._mismatch_reason(CONTRACT, "best", mismatch)
+        # the field's refusal is its own: the other fields still answer
+        assert {r.verdict_field for r in row.refused_boundaries if r.code == "scan_mismatch"} \
+            == {"best"}
+        assert row.boundaries or row.refused_boundaries
 
     def test_a_run_whose_winner_no_point_reads_says_so_with_its_scan(self, raw, monkeypatch):
         """The run's own winner read at none of the nine points: its refusal
-        says so, and a point that reads it raises.
+        says so, and a point that reads it files the field as mismatched.
         *Kills it:* deleting the check, or the reason losing its scan."""
         dearer_rent = copy.deepcopy(raw)
         dearer_rent["rent"]["monthly_rent"] *= 3
@@ -550,8 +572,14 @@ class TestTheStatePastAnEdgeIsReadAtTheEdge:
             return {**got, "best": "condo"} if value == 0.01 else got
 
         monkeypatch.setattr(be, "_ranking_at", lying)
-        with pytest.raises(ValueError, match="no solved crossing moves best"):
-            deterministic_boundaries(raw, CONTRACT, 0.01, 0.10, base=other)
+        found = deterministic_boundaries(raw, CONTRACT, 0.01, 0.10, base=other)
+        (mismatch,) = found["mismatched"]
+        assert (mismatch["attribute"], mismatch["value"], mismatch["anomaly"]) == (
+            "best", "condo", True)
+        assert not found["anomalies"] or all(a["attribute"] != "best"
+                                             for a in found["anomalies"])
+        assert be._mismatch_reason(CONTRACT, "best", mismatch)[1].startswith(
+            "best says 'condo' in this run and on no stretch between the solved crossings")
 
 
 class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
@@ -610,8 +638,8 @@ class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
         span = [(float(i), float(i + 1)) for i in range(len(values))]
         found, anomaly = be._region_boundaries(
             "house.mortgage_rate", "best", says_now, values, span,
-            lambda i, step: ((float(i), values[i - 1]) if step < 0
-                             else (float(i + 1), values[i + 1])), (0.0, 1.0))
+            lambda i, step: (((float(i), float(i)), values[i - 1]) if step < 0
+                             else ((float(i + 1), float(i + 1)), values[i + 1])), (0.0, 1.0))
         assert anomaly is None
         assert [(b["direction"], b["further"]) for b in found] == expected
 
@@ -672,32 +700,66 @@ class TestOneSolverTwoConsumers:
 
     def test_the_solved_boundary_is_solve_crossings_own_figure(self, raw, register):
         """Re-solved here through `solve_crossings` with this test's own
-        `totals_at`: EXACT equality, because the register reports that solver's
-        figure rather than a bisection of its own."""
+        `totals_at`: EXACT equality of both ends, because the register reports
+        that solver's bracket rather than a bisection of its own; and the two
+        ends are adjacent floats (§0.1 item 60).
+        *Kills it:* the register stopping at `solve_crossings`' own tolerance,
+        or bisecting on its own."""
         lo, hi = RATE_BRACKETS["mortgage_rate"]
 
         def totals_at(v):
             det = compute_deterministic(load_at(raw, RENEWAL, v))
             return det.house.total_pv, det.rent.total_pv
 
-        mine = solve_crossings(RENEWAL, ("house", "rent"), lo, hi, totals_at)
+        mine = solve_crossings(RENEWAL, ("house", "rent"), lo, hi, totals_at,
+                               to_adjacent_floats=True)
         assert len(mine["break_evens"]) == 1
-        assert _boundary(_row(register, RENEWAL), "best").value == \
-            mine["break_evens"][0]["value"]
+        best = _boundary(_row(register, RENEWAL), "best")
+        assert [best.value, best.upper_end] == mine["break_evens"][0]["bracket"]
+        assert best.value == mine["break_evens"][0]["value"]
+        assert best.upper_end == math.nextafter(best.value, 1.0)
+        # the verdict itself reads `was` at one end and `becomes` at the other
+        assert be._ranking_at(raw, RENEWAL, best.value)["best"] == best.was
+        assert be._ranking_at(raw, RENEWAL, best.upper_end)["best"] == best.becomes
+
+    def test_a_tie_counts_with_the_first_option_as_the_verdict_ranks_it(self):
+        """A gap of exactly zero is a tie, and `compute_verdict`'s stable sort
+        ranks the pair's first option first on one — so the bracket's lower end
+        is the tie and its upper end the first float past it.
+        *Kills it:* counting zero with the positive end, which puts the tie at
+        the upper end, where the verdict still says `was`."""
+        at = 0.05
+        solved = solve_crossings("house.mortgage_rate", ("house", "rent"), 0.01, 0.10,
+                                 lambda v: (v, at), to_adjacent_floats=True)
+        (entry,) = solved["break_evens"]
+        assert entry["bracket"] == [at, math.nextafter(at, 1.0)]
+        assert (entry["cheaper_below"], entry["cheaper_above"]) == ("house", "rent")
+        # and a tie that falls on a point of the scan itself is still found
+        on_grid = be._scan_grid(0.01, 0.10, be.CROSSING_SCAN_POINTS)[2]
+        solved = solve_crossings("house.mortgage_rate", ("house", "rent"), 0.01, 0.10,
+                                 lambda v: (v, on_grid), to_adjacent_floats=True)
+        (entry,) = solved["break_evens"]
+        assert entry["bracket"] == [on_grid, math.nextafter(on_grid, 1.0)]
 
     def test_it_is_also_break_evens_own_figure_on_a_two_option_config(self, raw):
         """`--break-even` refuses a three-option config, so the two surfaces are
         compared where both can speak. `deterministic_boundaries` needs no Monte
-        Carlo at all, which is also the shape the unpriced-dimensions
-        renewal-flip line is planned to call it in (that slice is not built)."""
+        Carlo at all. The register carries the same bisection on to adjacent
+        floats, so its bracket lies inside the cell `--break-even` stopped in:
+        within that solver's tolerance of the figure `--break-even` prints."""
         two = _without(raw, "condo")
         lo, hi = RATE_BRACKETS["mortgage_rate"]
         cli = solve_break_even(two, RENEWAL, None, None)
         mine = deterministic_boundaries(two, RENEWAL, lo, hi)
-        assert [b["value"] for b in cli["break_evens"]] == \
-            [c["value"] for c in mine["crossings"]]
+        assert len(cli["break_evens"]) == len(mine["crossings"]) == 1
+        (theirs,), (ours,) = cli["break_evens"], mine["crossings"]
+        tolerance = 1e-9 * max(1.0, abs(theirs["value"]))
+        assert abs(ours["bracket"][0] - theirs["value"]) < tolerance
+        assert abs(ours["bracket"][1] - theirs["value"]) < tolerance
         best = [b for b in mine["boundaries"] if b["attribute"] == "best"]
-        assert [b["value"] for b in best] == [cli["break_evens"][0]["value"]]
+        assert [(b["value"], b["upper_end"]) for b in best] == [tuple(ours["bracket"])]
+        # and `--break-even`'s own figure is untouched by the register's mode
+        assert "bracket" not in theirs
 
     def test_the_two_reversal_kinds_share_no_field_set(self, register):
         """§0's ruling, encoded: `list(exact) + list(estimated)` must not render
@@ -1015,6 +1077,32 @@ class TestTheConfirmingResimulation:
         gave, curve = reason.split(" gives ", 1)[1].split(", and the free curve gives ")
         assert gave != curve
 
+    def test_the_rate_a_disagreeing_re_simulation_names_prints_on_its_side(self):
+        """The rate an `unconfirmed` reason names is a figure on the axis,
+        printed by `ordered_figure` beside the crossings that do print (§0.1
+        item 60). The witness's central-case crossing lies below its sampled
+        one, printed 3.79502%; rounded on its own to two decimals it reads
+        3.80%, above that figure.
+        *Kills it:* the reason's rate rounded on its own."""
+        raw = copy.deepcopy(STATED_BETWEEN)
+        spec = load_config_dict(raw)
+        det, mc = compute_deterministic(spec), run_monte_carlo(spec)
+        best = _boundary(_row(reversal_register(raw, det, mc), CONTRACT), "best")
+
+        def disagreeing(at):
+            result = run_monte_carlo(at)
+            if at.house.mortgage_rate == best.value:
+                result.prob_house_cheapest = (result.prob_house_cheapest or 0.0) + 0.05
+            return result
+
+        row = _row(reversal_register(raw, det, mc, simulate=disagreeing), CONTRACT)
+        reason = _refusal(row, "best").reason
+        rate = reason.split("the re-simulation at ", 1)[1].split(" gives ", 1)[0]
+        sampled = _boundary(row, "mc_best")
+        assert best.value < sampled.value and sampled.formatted == "3.79502%"
+        assert f"{best.value:.2%}" == "3.80%"
+        assert rate == "3.795%"
+
     def test_a_futures_boundary_inside_monte_carlo_noise_is_not_reported(self, raw, register):
         """Refusal (i), asserted in BOTH directions so neither half can pass
         vacuously. At the fixture's 2,000 paths the majority boundary is
@@ -1317,28 +1405,82 @@ class TestRefusals:
         assert (register.exact, register.estimated, register.structural_zeros) == ((), (), ())
 
 
-def test_the_figure_checks_raise_where_nothing_passes():
-    """Each check, alone: a crossing whose field never says `was` at any
-    floored figure, and a stated figure equal to a crossing's value, which a
-    rounding upward never prints equal to that crossing's floored figure."""
-    with pytest.raises(ValueError, match="the printed-rate check"):
-        be.printed_crossing("house.mortgage_rate", "decisive", 0.0627, "not decisive",
+def test_the_figure_checks_refuse_where_nothing_passes():
+    """Each check, alone (§0.1 items 54, 60 and 61). A crossing whose field
+    never says `was` at any floored figure refuses with `not_printable` and
+    what the field read at each figure tried; a figure with no printing on its
+    side of a crossing is None, and the axis drops that crossing
+    (`not_orderable`) rather than print the figure on the wrong side.
+    *Kills it:* printing where a check fails, or a reason naming a precision
+    it did not try."""
+    key = "house.mortgage_rate"
+    with pytest.raises(be.CrossingRefused) as refused:
+        be.printed_crossing(key, "decisive", 0.0627, 0.0627, "not decisive",
                             lambda v: "decisive for rent", 0.01)
-    assert be.printed_crossing("house.mortgage_rate", "decisive", 0.0627123, "x",
+    assert refused.value.code == "not_printable"
+    assert refused.value.reason == (
+        "the crossing of decisive from 'not decisive' whose bracket starts at 0.0627, "
+        "floored at 2 to 12 decimals of a percent: "
+        + "; ".join(f"{be.floored_rate(0.0627, p)} reads 'decisive for rent'"
+                    for p in range(2, 13)))
+    assert be.printed_crossing(key, "decisive", 0.0627123, 0.0627123, "x",
                                lambda v: "x" if v >= 0.06271 else "y", 0.01) == "6.271%"
-    with pytest.raises(ValueError, match="the figure-order check"):
-        be.ordered_figure("house.mortgage_rate", 0.0627126,
-                          [(0.0627126, be.floored_rate(0.0627126, 4))])
-    assert be.ordered_figure("house.mortgage_rate", 0.06273,
-                             [(0.0627246, "6.2724%")]) == "6.273%"
     # a floored figure below the bracket is off the axis searched, and passed
     # over for a finer one
-    assert be.printed_crossing("house.mortgage_rate", "best", 0.0100003, "x",
+    assert be.printed_crossing(key, "best", 0.0100003, 0.0100003, "x",
                                lambda v: "x", 0.0100001) == "1.00003%"
-    # a stated figure between a printed crossing and its value holds the
-    # crossing's figure above it
-    assert be.printed_crossing("house.mortgage_rate", "mc_best", 0.06278, "house",
+    # the floor is taken from the bracket's lower end, never from its middle,
+    # which here lies above 6.28%
+    assert be.printed_crossing(key, "mc_best", 0.0627999999999, 0.0628000000003, "house",
+                               lambda v: "house", 0.01) == "6.27%"
+    # a figure on the axis below the crossing, rounded above a floored figure,
+    # holds the crossing's figure above it
+    assert be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
                                lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
+    # and the reason says so, figure by figure
+    with pytest.raises(be.CrossingRefused) as refused:
+        be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
+                            lambda v: "rent", 0.0627801, figures=(0.06273,))
+    assert refused.value.reason.split(": ", 1)[1].split("; ")[:3] == [
+        "6.27% is below 6.273000000000%, a figure on this axis",
+        "6.278% is below the bracket searched",
+        "6.2780% is below the bracket searched"]
+    # A sampled crossing's precision stops at its bracket's width: one printed
+    # step at 7 decimals of a percent is 1e-9, no narrower than a bracket
+    # 5e-10 wide, and one at 8 is.
+    assert be._places_within(0.0627, 0.0627 + 5e-10) == 7
+    assert be._places_within(0.0627, 0.0627) == be.PRINTED_RATE_MAX_PLACES
+    with pytest.raises(be.CrossingRefused) as refused:
+        be.printed_crossing(key, "mc_best", 0.0627, 0.0627 + 5e-10, "house",
+                            lambda v: "rent", 0.01)
+    assert "at 2 to 7 decimals of a percent" in refused.value.reason
+    assert refused.value.reason.count(" reads ") == 6
+    # The ordering: at or below the lower end, at or below the crossing's
+    # figure; inside the bracket, equal to it; at or above the upper end,
+    # above it.
+    crossing = (0.0627246, 0.06272461, "6.2724%")
+    assert be.ordered_figure(0.06273, [crossing]) == "6.273%"
+    assert be.ordered_figure(0.0627, [crossing]) == "6.27%"
+    assert be.ordered_figure(0.0627246, [crossing]) == "6.27%"
+    assert be.ordered_figure(0.062724605, [crossing]) == "6.2724%"
+    assert be.ordered_figure(0.06272461, [crossing]) == "6.2725%"
+    # a figure above a crossing that no rounding prints above it, and inside
+    # no bracket, is None; and so is one below a crossing that no rounding
+    # prints at or below it, though the crossing's own figure would
+    assert be.ordered_figure(math.nextafter(0.062724, 1.0),
+                             [(0.062724, 0.062724, "6.2724%")]) is None
+    assert be.ordered_figure(0.06279995, [(0.0627999999, 0.0627999999, "6.2799%")]) is None
+    # and the axis drops that crossing, naming the figure, its side and the
+    # crossings it was tried beside
+    above = math.nextafter(0.062724, 1.0)
+    texts, kept, dropped = be._ordered_axis(
+        [0.0601, above], [(0.0601, 0.06011, "6.01%"), (0.062724, 0.062724, "6.2724%")])
+    assert (texts, kept) == (["6.01%", "6.27%"], [0])
+    assert dropped == [(1, (
+        f"{above!r}, a figure on this axis at or above the upper end of its bracket "
+        "[0.062724, 0.062724], reads on its side of 6.01%, 6.2724% rounded to the nearest "
+        "at none of 2 to 12 decimals of a percent, nor as the figure of a crossing whose "
+        "bracket holds it"))]
 
 # ---------------------------------------------------------------------------
 # The library's own seams, reached by a direct call

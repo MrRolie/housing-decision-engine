@@ -167,9 +167,10 @@ def main() -> int:
         default=None,
         metavar="N",
         help="Which risk decides it. The spread register prices N futures of the "
-             "block's own (N defaults to simulation.num_sims), and the level register "
-             "the first min(N, 2000) of them. What each figure means: "
-             "docs/reference/API_CONTRACT.md, the decomposition block",
+             "block's own (N defaults to simulation.num_sims), the level register "
+             "the first min(N, 2000) of them, and the reversal register reads the "
+             "run's own simulation.num_sims paths whatever N is. What each figure "
+             "means: docs/reference/API_CONTRACT.md, the decomposition block",
     )
     parser.add_argument(
         "--break-even",

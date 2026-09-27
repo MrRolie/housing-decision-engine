@@ -499,9 +499,9 @@ Present only with an `income` block.
 
 ### Which risk decides it — `decomposition` (`--decompose`)
 
-The block's two registers are the spread and the level. What every figure
-in them means and how it is computed, when it is `null` and which figures
-move with the sample: `docs/reference/API_CONTRACT.md`
+The block's three registers are the spread, the level and the reversal
+register. What every figure in them means and how it is computed, when it is
+`null` and which figures move with the sample: `docs/reference/API_CONTRACT.md`
 § The `decomposition` block. That section is the block's one prose home, and
 `tests/test_decomposition_contract_doc.py` checks its sentences against runs;
 this glossary does not restate them.

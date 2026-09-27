@@ -6,10 +6,8 @@ hash seeds, since a set-derived table moves only between processes and an id
 feeds the stream key (§3.1, §3.2); a resolved figure and an unresolved one
 share no attribute name, so a formatter cannot print the second as though it
 resolved (§4, §7 rule 6); and the spread register cannot be built without its
-level register, and a refused spread is NAMED rather than empty (§5 mechanism
-5, §0.1 item 7). The reversal library's types (§6) stay here for
-`break_even.reversal_register`, which no block carries (§0.1 item 56); the
-two reversal kinds are not interchangeable.
+level register, a refused spread is NAMED rather than empty, and the two
+reversal kinds are not interchangeable (§5 mechanism 5, §0.1 item 7, §6).
 """
 import dataclasses
 import os
@@ -112,10 +110,7 @@ class TestTheBinding:
             if f.default is dataclasses.MISSING
             and f.default_factory is dataclasses.MISSING
         }
-        assert {"spread", "level"} <= required
-        # §0.1 item 56: the block carries two registers, and the reversal
-        # register is not one of them.
-        assert "reversal" not in {f.name for f in dataclasses.fields(dc.Decomposition)}
+        assert {"spread", "level", "reversal"} <= required
 
     def test_a_refused_spread_is_named_and_carries_no_rows(self):
         # §0.1 item 7: a refused spread beside a printed level is the honest
@@ -128,6 +123,22 @@ class TestTheBinding:
         exact, estimated = _fields(dc.ExactReversal), _fields(dc.EstimatedReversal)
         assert exact != estimated
         assert "probe_paths" in exact and "probe_paths" not in estimated
+
+    def test_a_row_holds_only_its_own_kind_of_boundary(self):
+        """Both ways: an exact row builds with solved and sampled boundaries
+        and refuses an estimated one; an estimated row builds with an
+        estimated boundary and refuses a solved one.
+        *Kills it:* deleting the check, or narrowing it to refuse a legal kind."""
+        from tests.decomposition_households import (seven_channel_other_household,
+                                                    uncertainty_surface)
+        exact = uncertainty_surface().reversal.exact[0]
+        estimated = seven_channel_other_household().reversal.estimated[0]
+        assert {type(b) for b in exact.boundaries} == {dc.SolvedBoundary, dc.SampledBoundary}
+        assert {type(b) for b in estimated.boundaries} == {dc.EstimatedBoundary}
+        with pytest.raises(TypeError, match="EstimatedBoundary"):
+            dataclasses.replace(exact, boundaries=exact.boundaries + estimated.boundaries)
+        with pytest.raises(TypeError, match="SolvedBoundary"):
+            dataclasses.replace(estimated, boundaries=exact.boundaries[:1])
 
     def test_a_solved_crossing_and_a_sampled_one_are_not_one_type(self):
         # §0.1 item 24: one type for both was the cardinal error, because
@@ -144,7 +155,8 @@ class TestTheBinding:
     def test_a_sampled_boundary_cannot_be_built_without_its_sample(self):
         """Asserted in BOTH directions: the full call builds, and dropping
         either the path count or the seed refuses."""
-        full = dict(verdict_field="mc_best", value=0.0271, formatted="2.71%", was="house",
+        full = dict(verdict_field="mc_best", value=0.0271, upper_end=0.0271 + 5e-13,
+                    formatted="2.71%", was="house",
                     becomes="condo", further_changes=None,
                     curve_probabilities=(("condo", 0.44),),
                     confirming_probabilities=(("condo", 0.44),),
@@ -160,8 +172,9 @@ class TestTheBinding:
         so its producer must state it. Asserted in BOTH directions: an explicit
         empty tuple builds, and leaving the field out refuses rather than
         defaulting the claim into existence."""
-        full = dict(verdict_field="best", value=0.016052, formatted="1.6052%", was="house",
-                    becomes="rent", further_changes=None, confirming_probabilities=())
+        full = dict(verdict_field="best", value=0.016052, upper_end=0.016052,
+                    formatted="1.6052%", was="house", becomes="rent", further_changes=None,
+                    confirming_probabilities=())
         assert dc.SolvedBoundary(**full).confirming_probabilities == ()
         with pytest.raises(TypeError):
             dc.SolvedBoundary(**{k: v for k, v in full.items()
@@ -178,9 +191,11 @@ class TestABoundaryStatesBothSidesInWords:
     """
 
     _BUILDS = {
-        dc.SolvedBoundary: dict(verdict_field="best", value=0.016052, formatted="1.6052%",
-                                further_changes=None, confirming_probabilities=()),
-        dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674, formatted="6.74%",
+        dc.SolvedBoundary: dict(verdict_field="best", value=0.016052, upper_end=0.016052,
+                                formatted="1.6052%", further_changes=None,
+                                confirming_probabilities=()),
+        dc.SampledBoundary: dict(verdict_field="decisive", value=0.0674,
+                                 upper_end=0.0674 + 5e-13, formatted="6.74%",
                                  further_changes="above",
                                  curve_probabilities=(("house", 0.65),),
                                  confirming_probabilities=(("house", 0.65),),
@@ -555,22 +570,12 @@ def test_every_docstring_and_every_comment_is_a_pointer():
             "string"], restatement
 
 
-# The reversal library's types (§6): `break_even.reversal_register` builds
-# them and no block carries them (§0.1 item 56), so the contract describes none
-# of their fields and each points at the design record instead.
-REVERSAL_LIBRARY = {"AxisReference", "SolvedBoundary", "SampledBoundary",
-                    "RefusedBoundary", "ExactReversal", "EstimatedBoundary",
-                    "EstimatedReversal", "ReversalRegister"}
-DESIGN_6 = "Design: docs/specs/2026-09-22-which-risk-decides-it.md §6."
-
 
 def test_every_class_docstring_is_the_pointer_and_nothing_more():
     """What each field means is written once, in the contract. A class
     docstring that restated it would be a second home with nothing to keep it
-    true, so every class the block carries carries exactly `POINTER`, and the
-    pointer names a section the contract has; the reversal library's classes
-    carry the design record's §6 pointer, and the block's contract names none
-    of their own keys.
+    true, so every class the module defines carries exactly `POINTER`, and the
+    pointer names a section the contract has.
     *Kills it:* any sentence added to, or put in place of, a class docstring."""
     import ast
     import pathlib
@@ -578,21 +583,13 @@ def test_every_class_docstring_is_the_pointer_and_nothing_more():
     tree = ast.parse(source.read_text(encoding="utf-8"))
     classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
     assert len(classes) >= 20
-    assert REVERSAL_LIBRARY <= {node.name for node in classes}
     wrong = [(node.name, ast.get_docstring(node, clean=False)) for node in classes
-             if ast.get_docstring(node, clean=False)
-             != (DESIGN_6 if node.name in REVERSAL_LIBRARY else dc.POINTER)]
+             if ast.get_docstring(node, clean=False) != dc.POINTER]
     assert not wrong, wrong
     for node in classes:
-        assert getattr(dc, node.name).__doc__ == (
-            DESIGN_6 if node.name in REVERSAL_LIBRARY else dc.POINTER), node.name
+        assert getattr(dc, node.name).__doc__ == dc.POINTER, node.name
     contract = (pathlib.Path(__file__).resolve().parents[1] / "docs" / "reference"
                 / "API_CONTRACT.md").read_text(encoding="utf-8")
     assert dc.POINTER.startswith("Fields: docs/reference/API_CONTRACT.md § ")
     heading = dc.POINTER.split(" § ", 1)[1].rstrip(".")
     assert any(line.startswith(f"## {heading}") for line in contract.splitlines())
-    start = contract.index("## The `decomposition` block")
-    section = contract[start:contract.index("\n## ", start + 1)]
-    for name in ("stated_formatted", "bracket_low", "probe_paths", "path_note",
-                 "confirming_probabilities", "no_distance_code", "reversal"):
-        assert f"`{name}`" not in section, name

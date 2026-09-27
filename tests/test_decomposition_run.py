@@ -1397,11 +1397,16 @@ class TestThePublishedFigures:
                 assert width.source in ("user", "assistant", "anchor",
                                         "unattributed")
 
-    def test_the_two_registers_arrive_together_and_no_third(self, fixture_block):
-        """§0.1 item 56: the block is the spread and the level, and carries
-        no reversal register."""
+    def test_the_three_registers_arrive_together(self, fixture_block):
+        """The spread, the level and the reversal register arrive together,
+        and the structural zero names the row that carries its solved rates."""
         assert fixture_block.spread.rows and fixture_block.level.rows
-        assert not hasattr(fixture_block, "reversal")
+        register = fixture_block.reversal
+        assert register.exact, "the fixture states a renewal ladder"
+        keys = {row.key for row in register.exact}
+        assert "house.mortgage_renewal_rates" in keys
+        zeros = {z.reversal_key for z in register.structural_zeros}
+        assert "house.mortgage_renewal_rates" in zeros
 
 
 # ---------------------------------------------------------------------------

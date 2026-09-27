@@ -1,7 +1,8 @@
 """Which risk decides it — THE ASSEMBLER (spec §0.1 item 17).
 
 It turns one spec into the `DecompositionOutcome` the other pieces exchange:
-the estimators (`decomposition_math`) take arrays, and the formatter
+the estimators (`decomposition_math`) take arrays, the reversal solver
+(`break_even`) answers about stated inputs, and the formatter
 (`decomposition_text`) renders what this module builds. Its surface is
 
     decompose(spec, *, det, mc, verdict, raw, paths) -> DecompositionOutcome
@@ -28,14 +29,17 @@ WHAT IT DOES, in the order it does it, because the order is the cost model:
      over the live channels' `A_B^(c)`;
   6. the level register — the freeze mask, paired against `A`'s own first
      paths — and the all-frozen run whose identity, failing, refuses the whole
-     block (`freeze_leak`, `identity_failed`).
+     block (`freeze_leak`, `identity_failed`);
+  7. the reversal register, `break_even.reversal_register`'s, handed this
+     run's own `det` and `mc`.
 
-Every refusal the block carries, the whole block's and the spread's, is
-decided here; the formatter renders a refusal and never decides one. A check
-on the way that cannot pass raises `CheckFailed` with its code and the one
-fact it measured, and `decompose` returns that as the block's refusal (§0.1
-item 58). Nothing else is caught: an exception that is no check is an engine
-defect, and reaches the caller as one.
+Every refusal the whole block and the spread carry is decided here, and every
+refusal the reversal register carries, per field and per boundary, is
+`break_even.reversal_register`'s; the formatter renders a refusal and never
+decides one. A check on the way that cannot pass raises `CheckFailed` with its
+code and the one fact it measured, and `decompose` returns that as the block's
+refusal (§0.1 item 58). Nothing else is caught: an exception that is no check
+is an engine defect, and reaches the caller as one.
 
 It is not a second verdict: `verdict` is carried through untouched. The
 probabilities this module takes itself are frequencies of `f`'s sign on
@@ -85,6 +89,7 @@ from .decomposition import (
     ResolvedInteraction,
     ResolvedLevel,
     ResolvedShares,
+    ReversalRegister,
     Shares,
     SpreadRegister,
     SpreadRow,
@@ -634,6 +639,24 @@ def _dead_draw_rows(spec, raw, drawn: Tuple[int, ...], live: Tuple[int, ...],
     return rows
 
 
+def _reversal_register(raw, det, mc) -> ReversalRegister:
+    """§6's register: `break_even.reversal_register`, and nothing added to it.
+
+    It is handed THIS run's own `det` and `mc` and never the block's own
+    futures, so the register reads no figure that moves with `N` (§0.1 item
+    48). Without a raw mapping there is nothing to solve on: every candidate
+    is a key the CONFIG states, and `reversal_register` re-loads the config to
+    probe it. A directly-constructed spec therefore gets an empty register
+    with the code `no_mapping`.
+    """
+    if raw is None:
+        return ReversalRegister(
+            exact=(), estimated=(), structural_zeros=(), no_distance_code="no_mapping",
+            no_distance_reason="this block was handed no config mapping")
+    from .break_even import reversal_register as solve_reversal_register
+    return solve_reversal_register(raw, det, mc)
+
+
 # ---------------------------------------------------------------------------
 # §3.3 — the spread register
 # ---------------------------------------------------------------------------
@@ -994,7 +1017,8 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         det, mc, verdict: THIS run's deterministic result, Monte Carlo result
             and verdict. They are read, never recomputed: the verdict stays
             `models.compute_verdict`'s; `mc` says whether the run has futures;
-            `det` and `verdict` size the identity's budget.
+            `det` and `verdict` size the identity's budget; the reversal
+            register reads `det` and `mc` as its base case.
         raw: the mapping the config came from, from which a spec that carries
             no source echo gets the read-back's tags for its widths.
         paths: `--decompose=N`'s sample-size override, consumed here because N
@@ -1035,18 +1059,19 @@ def decompose(spec, *, det, mc, verdict, raw=None,
         return refusal
 
     try:
-        return _priced_block(spec, det, verdict, raw, requested, seed, best, level_paths,
-                             spec_at_paths, base, drawn, f_a)
+        return _priced_block(spec, det, mc, verdict, raw, requested, seed, best,
+                             level_paths, spec_at_paths, base, drawn, f_a)
     except CheckFailed as failed:
         return _refuse(failed.code, failed.reason)
 
 
-def _priced_block(spec, det, verdict, raw, requested: int, seed: int, best: str,
+def _priced_block(spec, det, mc, verdict, raw, requested: int, seed: int, best: str,
                   level_paths: int, spec_at_paths, base, drawn: Tuple[int, ...],
                   f_a: Array) -> DecompositionOutcome:
     """`decompose` from the re-draws on: the channel refusals, the spread and
-    level registers and the identity's refusals. A check that cannot pass on
-    the way raises `CheckFailed`, which `decompose` returns as the refusal."""
+    level registers, the identity's refusals and the reversal register. A
+    check that cannot pass on the way raises `CheckFailed`, which `decompose`
+    returns as the refusal."""
     # Which channels are live, on THESE futures: each drawing stream re-drawn.
     threshold = identity_budget(det, verdict)
     redraws = _redraws(spec_at_paths, drawn)
@@ -1080,6 +1105,7 @@ def _priced_block(spec, det, verdict, raw, requested: int, seed: int, best: str,
         return _freeze_leak(level)
     if not dm.identity_holds(level.all_frozen_deviation, threshold):
         return _identity_failed(level, verdict, threshold)
+    reversal = _reversal_register(raw, det, mc)
 
     return Decomposition(
         paths=int(f_a.size),
@@ -1090,4 +1116,5 @@ def _priced_block(spec, det, verdict, raw, requested: int, seed: int, best: str,
         sd_margin=float(np.std(f_a)),
         spread=spread,
         level=level,
+        reversal=reversal,
     )

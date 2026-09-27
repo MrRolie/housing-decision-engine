@@ -79,12 +79,29 @@ DEAD["condo"]["price_shock"] = {"annual_hazard": 0.05, "severity_mean": 0.0,
                                 "severity_vol": 0.1}
 DEAD["simulation"].update({"condo_fee_vol": 0.10, "value_growth_vol": 0.0,
                            "corr_inflation_house": 0.5})
+# A financed condo far enough ahead that no crossing of the central case's
+# verdict lies anywhere in its contract rate's bracket.
+FAR = copy.deepcopy(ALL_OTHER)
+del FAR["condo"]["all_cash"]
+FAR["condo"].update({"down_payment": 100000, "mortgage_rate": 0.045,
+                     "mortgage_term_years": 25})
+FAR["rent"].update({"monthly_rent": 4000, "reset_hazard": 0.0,
+                    "rent_escalation_rate": 0.02})
+del FAR["rent"]["reset_to_monthly_rent"]
+FAR["simulation"]["rent_escalation_vol"] = 0.05
 # A financed condo with nothing borrowed: its contract rate is stated and moves
 # no present value, so the reversal register searches it and finds it inert.
 INERT = copy.deepcopy(ALL_OTHER)
 del INERT["condo"]["all_cash"]
 INERT["condo"].update({"down_payment": 350000, "mortgage_rate": 0.045,
                        "mortgage_term_years": 25})
+# The same financed condo nearer rent, with the renter's portfolio drawn: the
+# central case's winner holds across the contract rate's whole bracket and its
+# decisiveness does not, so the only crossing on the row is bisected.
+SAMPLED_ONLY = copy.deepcopy(FAR)
+SAMPLED_ONLY["rent"]["monthly_rent"] = 2400
+SAMPLED_ONLY["simulation"].update({"rent_escalation_vol": 0.10,
+                                   "investment_return_vol": 0.12})
 # The one-side-of-the-line guard's two edges, each one future away from it:
 # rent (the central case's winner) cheapest in exactly one of 2,000 futures,
 # and the house cheapest in all but one. The spread register prints a table
@@ -186,6 +203,95 @@ THIRD_IN_ONE_CELL["condo"] = {"monthly_fee": 1350, "fee_escalation_rate": 0.031,
                               "initial_value": 400000, "all_cash": True,
                               "purchase_costs": 6000, "value_growth_rate": 0.031}
 THIRD_IN_ONE_CELL["simulation"].update({"condo_fee_vol": 0.3, "value_growth_vol": 0.02})
+
+# A figure on a crossing's axis, printed on its side of the crossing (spec §0.1
+# items 54 and 60). The decisiveness of `DECISIVE_STEP` goes decisive for house,
+# not decisive, decisive for rent inside one printed step of a sampled
+# crossing: the lower edge's `was` is a sliver narrower than 0.01%.
+SLIVER_LOW = copy.deepcopy(DECISIVE_STEP_LOWER)
+SLIVER_LOW["rent"]["monthly_rent"] = 2300.5
+SLIVER_LOW["simulation"].update({"house_maintenance_vol": 0.015,
+                                 "rent_escalation_vol": 0.004})
+# Its upper-edge twin: the run is decisive for house, and the stretch that is
+# not decisive lies above the edge, narrower than one printed step.
+SLIVER_HIGH = copy.deepcopy(DECISIVE_STEP)
+SLIVER_HIGH["simulation"].update({"house_maintenance_vol": 0.008,
+                                  "rent_escalation_vol": 0.002})
+# A stated rate above a solved crossing and below a sampled one, both within
+# one printed step of it.
+STATED_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
+STATED_BESIDE_CROSSING["house"]["mortgage_rate"] = 0.06273
+
+
+def _near_ones(rate: float, rent: float, vols=(0.2, 0.05)) -> dict:
+    """`DECISIVE_STEP` at a stated contract rate and a rent that puts the
+    central case's crossing within a few billionths of a percent of it."""
+    raw = copy.deepcopy(DECISIVE_STEP)
+    raw["house"]["mortgage_rate"] = rate
+    raw["rent"]["monthly_rent"] = rent
+    raw["simulation"].update({"house_maintenance_vol": vols[0],
+                              "rent_escalation_vol": vols[1]})
+    return raw
+
+
+# A stated rate below the central case's crossing by less than the old
+# solver's tolerance, which left the crossing's figure below the stated one.
+STATED_JUST_BELOW = _near_ones(0.0379, 1503.230397975693, (0.0002, 0.00005))
+STATED_JUST_BELOW_B = _near_ones(0.06275, 2300.825245734851)
+# A crossing just below a four-decimal figure: floored from a point above it,
+# every figure read the other state.
+CROSSING_BELOW_A_STEP = _near_ones(0.044, 2299.849758979105)
+# A stated rate between the floored figures of a solved and a sampled crossing.
+STATED_BETWEEN = _near_ones(0.03795, 1504.817709, (0.0002, 0.00005))
+# A stated rate a hundred-trillionth of a percent below the mortgage example's
+# central-case crossing: rounded at twelve decimals it lies above every
+# floored figure of that crossing, so the crossing is not printed.
+STATED_UNDER_A_CROSSING = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
+STATED_UNDER_A_CROSSING["house"]["mortgage_rate"] = 0.0678488725623162
+# The fixture with its first renewal rate just below the renewal key's
+# central-case crossing: rounded to the nearest at two decimals, it would
+# print above that crossing's figure.
+# A stated rate at the lower end of the bracket of `DECISIVE_STEP`'s sampled
+# crossing, which that crossing's own floored figure prints below and the
+# solved crossing's above: no rounding of it prints on its side of both, so
+# the sampled crossing is not printed.
+STATED_AT_A_SAMPLED_CROSSING = copy.deepcopy(DECISIVE_STEP)
+STATED_AT_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06278717945831885
+# The same crossing with the stated rate 1e-13 under its lower end: every
+# floored figure up to ten decimals, the finest its bracket allows, lies below
+# the stated figure, so the crossing is not printed.
+STATED_JUST_UNDER_A_SAMPLED_CROSSING = copy.deepcopy(DECISIVE_STEP)
+STATED_JUST_UNDER_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06278717945821885
+# The same house against a rent so low that the house is the central case's
+# winner only below about 1.02%, a few hundredths of a percent inside the
+# bracket's low end.
+CROSSING_NEAR_THE_LOW_END = copy.deepcopy(DECISIVE_STEP)
+CROSSING_NEAR_THE_LOW_END["rent"]["monthly_rent"] = 646
+# A rent that puts the central case's crossing at 6.24441%, and a stated rate
+# at the upper end of its bracket, whose four-decimal figure is the crossing's
+# own, so it prints at five.
+STATED_JUST_ABOVE_A_CROSSING = copy.deepcopy(DECISIVE_STEP)
+STATED_JUST_ABOVE_A_CROSSING["rent"]["monthly_rent"] = 2290.88
+STATED_JUST_ABOVE_A_CROSSING["house"]["mortgage_rate"] = 0.062444104452362044
+PATH_NOTE_BELOW_A_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+PATH_NOTE_BELOW_A_CROSSING["house"]["mortgage_renewal_rates"][0] = 0.016051
+# Level rows a fraction of a dollar each (spec §0.1 item 62's witness): at
+# whole dollars no row's pair shows its judgment.
+LEVEL_UNDER_A_DOLLAR = {
+    "years": 5,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "condo": {"monthly_fee": 380.296648, "fee_escalation_rate": 0.021,
+              "initial_value": 420000, "all_cash": True, "purchase_costs": 6000,
+              "value_growth_rate": 0.031},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.038,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 1506.398161, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 42, "house_maintenance_vol": 0.0002,
+                   "rent_escalation_vol": 0.00005, "condo_fee_vol": 0.0002},
+}
 
 # What a width names (spec §0.1 item 49): every input that sized a draw on the
 # run, and nothing else.
@@ -432,6 +538,22 @@ def _strict(text):
     return json.loads(text, parse_constant=refuse)
 
 
+def _sweep_states(path, key, values, futures):
+    """What `--sweep <key>=<values>` says at each value, field by field, in
+    the words a boundary uses; `futures` runs the sweep with Monte Carlo. Each
+    value is typed at its full `repr`, so two adjacent floats stay two."""
+    argv = [path, "--sweep", f"{key}=" + ",".join(repr(float(v)) for v in values), "--json"]
+    if not futures:
+        argv.insert(1, "--no-monte-carlo")
+    code, out, _ = _cli(*argv)
+    assert code == 0
+    rows = _strict(out)["sweeps"][0]["rows"]
+    assert [row["value"] for row in rows] == [float(v) for v in values], rows
+    return [{"best": r["best"], "runner_up": r["runner_up"], "mc_best": r["mc_best"],
+             "decisive": f"decisive for {r['best']}" if r["decisive"] else "not decisive"}
+            for r in rows]
+
+
 def _block_text(out):
     lines = out.splitlines()
     start = next(i for i, line in enumerate(lines)
@@ -539,6 +661,9 @@ CORPUS = {
     "all_other": (ALL_OTHER, "400"),
     "basic": (EXAMPLES / "basic_config.yaml", "300"),
     "dead": (DEAD, "300"),
+    "far": (FAR, "200"),
+    "inert": (INERT, "200"),
+    "sampled_only": (SAMPLED_ONLY, "200"),
     "near_none": (NEAR_NONE, "2000"),
     "near_all": (NEAR_ALL, "2000"),
     # The fixture at its own count of futures: the interval on the alone
@@ -546,6 +671,26 @@ CORPUS = {
     "fixture_own": (FIXTURE,),
     "rare2": (RARE2, "2000"),
     "together_above_one": (TOGETHER_ABOVE_ONE, "200"),
+    "decisive_step": (DECISIVE_STEP,),
+    "decisive_step_lower": (DECISIVE_STEP_LOWER,),
+    "path_note_below": (PATH_NOTE_BELOW_A_CROSSING, "300"),
+    # A figure on a crossing's axis beside the crossing (spec §0.1 items 54
+    # and 60), and a crossing no figure prints for (§0.1 item 61).
+    "stated_just_below": (STATED_JUST_BELOW,),
+    "stated_just_below_b": (STATED_JUST_BELOW_B,),
+    "crossing_below_a_step": (CROSSING_BELOW_A_STEP,),
+    "stated_between": (STATED_BETWEEN,),
+    "stated_beside_crossing": (STATED_BESIDE_CROSSING,),
+    "sliver_low": (SLIVER_LOW,),
+    "sliver_high": (SLIVER_HIGH,),
+    "stated_under_a_crossing": (STATED_UNDER_A_CROSSING, "200"),
+    "stated_at_a_sampled_crossing": (STATED_AT_A_SAMPLED_CROSSING,),
+    "stated_just_under_a_sampled_crossing": (STATED_JUST_UNDER_A_SAMPLED_CROSSING,),
+    "crossing_near_the_low_end": (CROSSING_NEAR_THE_LOW_END,),
+    "stated_just_above_a_crossing": (STATED_JUST_ABOVE_A_CROSSING,),
+    # A level row's digits (spec §0.1 item 62).
+    "pull_nothing": (CORRELATIONS_PULL_NOTHING,),
+    "level_under_a_dollar": (LEVEL_UNDER_A_DOLLAR,),
 }
 
 

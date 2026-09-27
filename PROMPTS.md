@@ -102,8 +102,8 @@ form; the block still comes, because it is what lets you check the short answer.
 - *"Use my actual property-tax bill: $3,400."*
 - *"What did you assume for price growth, and what if it's zero?"*
 - *"Which of these risks actually decides it?"* — Claude adds `--decompose` and quotes the
-  block it prints, its spread and its level, as printed, refusals included; what each part
-  of it can and cannot tell you is in
+  block it prints, its spread, its level and its reversal register, as printed,
+  refusals included; what each part of it can and cannot tell you is in
   `docs/reference/API_CONTRACT.md` § The `decomposition` block.
 - *"Show me the story"* — six plots: the verdict, the cost race, uncertainty, home-value
   futures, the demographic signal, the break-even line.
