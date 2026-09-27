@@ -273,7 +273,7 @@ def main() -> int:
             print("Error: --decompose is not part of the read-back — --read-back "
                   "prints the read-back lines alone, so this run would price the "
                   "decomposition and show none of it. Run --decompose without "
-                  "--read-back: the block prints under the report, or rides --json "
+                  "--read-back: the block prints in the text, or rides --json "
                   "as 'decomposition'", file=sys.stderr)
             return 1
 
@@ -403,8 +403,8 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
         # A check inside the block that cannot pass comes back as the block's
-        # refusal, under the report (§0.1 item 58); nothing else is caught
-        # here, so an engine defect is never printed as a failed check.
+        # refusal (§0.1 item 58); nothing else is caught here, so an engine
+        # defect is never printed as a failed check.
 
     # Parameter sweeps (flip points) — through the same loader and verdict rule.
     sweeps = []

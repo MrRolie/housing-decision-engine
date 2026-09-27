@@ -864,7 +864,7 @@ class TestTheIncomeStreamIsReDrawn:
         allowance = dr.identity_budget(inputs["det"], inputs["verdict"])
         assert (got.code, got.reason) == ("income_moved", (
             f"re-drawing the income stream moved an option's present value on these 40 "
-            f"futures by up to $1, above ${allowance:.3g}"))
+            f"futures by up to $1, above ${dr.floored_figure(allowance, 3)}"))
 
 
 class TestTheIdentityIsGated:
@@ -902,12 +902,14 @@ class TestTheIdentityIsGated:
         assert isinstance(got, DecompositionRefusal)
         assert got.code == "identity_failed" and got.code in REFUSAL_CODES
         budget = dr.identity_budget(inputs["det"], inputs["verdict"])
+        frozen = dr.margin_per_path(
+            dr._run(dr._spec_at(spec, 40), dr.MATRIX_A, freeze=dr.ALL_CHANNEL_IDS), "rent")
+        apart = abs(float(frozen[0]) - inputs["verdict"].margin_pv)
         assert got.reason == (
             f"with every channel frozen, the 40 paths price a margin of "
             f"${inputs['verdict'].margin_pv - 0.01:,.2f} against the central case's "
-            f"${inputs['verdict'].margin_pv:,.2f}, $"
-            f"{abs(inputs['verdict'].margin_pv - 0.01 - inputs['verdict'].margin_pv):.3g}"
-            f" apart, above the ${budget:.3g} this check allows")
+            f"${inputs['verdict'].margin_pv:,.2f}, ${dr.ceiled_figure(apart, 3)}"
+            f" apart, above the ${dr.floored_figure(budget, 3)} this check allows")
 
     def test_at_the_budget_it_holds_and_one_step_past_it_refuses(self, monkeypatch):
         """Both sides of the boundary, on the run's own measured deviation:
@@ -955,6 +957,30 @@ class TestTheIdentityIsGated:
         assert got.level.all_frozen_deviation > 8.0 * np.spacing(net), (
             "the precondition: this run's deviation is beyond a budget scaled by "
             "the net total, so the test fails if the gate is ever scaled that way")
+
+
+def test_the_level_rule_decides_which_level_rows_print_as_resolved(monkeypatch):
+    """`decomposition_math.level_is_resolved` decides each level row: with the
+    rule inverted, every row on the fixture turns the other way, in the
+    register and in the text, where a row prints behind `not resolved:`
+    exactly when the rule says no.
+    *Kills it:* the table's mask computing the rule a second time, which the
+    inverted rule leaves as it was."""
+    spec = _fixture_spec(num_sims=40)
+    inputs = _inputs(spec)
+    as_is = decompose(spec, paths=40, **inputs)
+    original = dm.level_is_resolved
+    monkeypatch.setattr(dm, "level_is_resolved",
+                        lambda delta, error: not original(delta, error))
+    inverted = decompose(spec, paths=40, **inputs)
+    before = [isinstance(row.level, ResolvedLevel) for row in as_is.level.rows]
+    after = [isinstance(row.level, ResolvedLevel) for row in inverted.level.rows]
+    assert before and after == [not resolved for resolved in before]
+    text = format_decomposition(inverted).split("THE LEVEL", 1)[1]
+    for row, resolved in zip(inverted.level.rows, after):
+        (line,) = [line for line in text.splitlines()
+                   if line.startswith(f"  {channel(row.channel_id).label} ")]
+        assert ("not resolved:" in line) == (not resolved), line
 
 
 # ---------------------------------------------------------------------------

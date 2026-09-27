@@ -462,9 +462,7 @@ def bootstrap_interaction_gap_intervals(
     Read off the SAME resample table as `bootstrap_spread_intervals` (same
     seed, same salt, same path indices), so the gap is paired inside every
     resample: both of a channel's indices are re-estimated on one resample and
-    subtracted there. That pairing is what the interval is for — the two
-    columns' own intervals overlap on a gap that resolves. It costs no model
-    evaluation.
+    subtracted there. It costs no model evaluation.
     """
     a, b = _matched(f_a, f_b)
     ab = _channel_table("the f(A_B) table", f_ab, a.size)
@@ -563,14 +561,17 @@ def level_is_resolved(delta: float, standard_error: float) -> bool:
 
 
 def level_resolved_mask(deltas: object, standard_errors: object) -> npt.NDArray[np.bool_]:
-    """`level_is_resolved` across a table — one home for the factor of 2."""
+    """`level_is_resolved` on each row of a table."""
     delta_arr = np.asarray(deltas, dtype=np.float64)
     error_arr = np.asarray(standard_errors, dtype=np.float64)
     if delta_arr.shape != error_arr.shape:
         raise ValueError(
             f"{delta_arr.shape} level shifts against {error_arr.shape} standard errors"
         )
-    mask: npt.NDArray[np.bool_] = np.abs(delta_arr) > LEVEL_RESOLUTION_SIGMAS * error_arr
+    mask: npt.NDArray[np.bool_] = np.array(
+        [level_is_resolved(delta, error)
+         for delta, error in zip(delta_arr.ravel(), error_arr.ravel())],
+        dtype=np.bool_).reshape(delta_arr.shape)
     return mask
 
 

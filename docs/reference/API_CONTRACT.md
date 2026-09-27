@@ -197,9 +197,12 @@ reads it: a figure that is not a finite number is emitted as `null`, never as
 with no register keys beside it; `one_channel` also carries `channel_id`,
 `channel` and `label`. `reason` is the measured fact that fired the refusal,
 and the text block prints `which risk decides it — not split (<code>):
-<reason>`. The run's report still prints in full, with exit 0: in the text
-above it, except the `READ-BACK` block, which prints below it, last; under
-`--json`, as the rest of the document beside it. `code` is one of:
+<reason>`. Nothing else the run prints or returns changes: in the text, a
+blank line and the refusal line print where the block would, and every other
+line prints exactly as it does without `--decompose`; the exit code is the
+one the run returns without it, 0 on a run that completes; under `--json`,
+the document is the one the run prints without it, with `decomposition`
+added. `code` is one of:
 
 | `code` | Fires when | `reason` states |
 |---|---|---|
@@ -211,7 +214,7 @@ above it, except the `READ-BACK` block, which prints below it, last; under
 | `no_spread` | `f` is identical on every one of the block's futures, or no channel is live on them | which of the two, with the count of futures; the first with that figure |
 | `one_channel` | exactly one channel is live on the block's futures | the count of futures and that channel |
 | `untagged_width` | a width's key has no tag in the read-back (`serialization.read_back_tag`) | the key and the channel whose row it is on |
-| `degenerate_resample` | one of the 300 resamples the spread register's bootstrap draws from the block's futures holds one value of `f` | the count of futures, which resample of how many, and that value |
+| `degenerate_resample` | one of the 300 resamples the spread register's bootstrap draws from the block's futures holds one value of `f` | the count of the resample's draws, which resample of how many, and that value |
 | `freeze_leak` | with every channel frozen, the paths price different margins | the path count and how far apart they are |
 | `identity_failed` | with every channel frozen, the paths price one margin, and it is further from `verdict.margin_pv` than `decomposition_run.identity_budget` allows | the path count, both margins, how far apart they are, and the allowance |
 
@@ -299,7 +302,7 @@ the block's futures, or on none of them, it instead carries `refusal`, whose
   `decomposition.CHANNELS`) that the config states or that the run defaulted
   (`assumptions.defaults_applied`, the read-back's `defaults applied:` line),
   for an option this run prices (`decomposition_run.width_keys`). `key` names
-  that input, and `formatted` is its figure as the read-back prints it.
+  that input, and `formatted` is what the block prints after `<key>=`.
   Whether its draw fires on the run is not asked: a hazard of 0 prints as its
   figure. On the economy row the row's own widths come first, then the widths
   of the option shocks its correlations pull, by the same rule, in the order
@@ -317,7 +320,8 @@ the block's futures, or on none of them, it instead carries `refusal`, whose
   applied:` line brackets beside it, character for character. On the economy
   row a `note` names the correlation key that pulls an option's shock onto
   that row, its value `rho`, and `rho` squared: the fraction of that shock's
-  variance that comes from the economy's draw.
+  variance that comes from the economy's draw. A width no correlation pulls
+  carries `note` `null`.
 - `interaction`, the alone shares' sum and what it leaves that no single
   channel owns: `resolved`, `first_order_sum` (the sum of every row's `alone`
   point estimate, resolved or not, before rounding) and `first_order_sum_ci`.
@@ -402,10 +406,12 @@ in the spread, by the shift's size in the level. A figure that did not resolve
 prints behind `not resolved:`, each row's interaction gap included. `largest
 alone share:` and `largest shift in size:` name a register's top row when it
 is `leading_channel_id`; when a register's top row did not resolve, that
-register's line does not print. `move_threshold` and the largest move an
-`income_moved` reason states print at three significant figures, and how far
-apart a `freeze_leak` reason says the paths are at six, each taken upward so
-the sentence holds at the printed figure. Each printed
+register's line does not print. `move_threshold`, the largest move an
+`income_moved` reason states and how far apart an `identity_failed` reason
+says the margins are print at three significant figures, and how far apart a
+`freeze_leak` reason says the paths are at six, each taken upward; the
+allowance an `income_moved` or `identity_failed` reason states prints at
+three, taken downward; so each sentence holds at the printed figures. Each printed
 figure is rounded on its own from the unrounded field, except the level
 register's difference (`<gap>`) and sum, which are taken over the printed
 dollars. A dollar figure prints its sign before the dollar sign, and a shift

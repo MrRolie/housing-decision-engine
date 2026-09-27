@@ -788,7 +788,7 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
                      r"\$(?P<allowance>\S+)$"),
     "UNTAGGED_WIDTH": (rf"^(?P<key>[\w.]+), a width on the row of (?P<label>{LABEL}), has "
                        rf"no tag in the read-back$"),
-    "DEGENERATE_RESAMPLE": (r"^the margin is identical on all (?P<n>[\d,]+) futures of "
+    "DEGENERATE_RESAMPLE": (r"^the margin is identical on all (?P<n>[\d,]+) draws of "
                             r"bootstrap resample (?P<r>[\d,]+) of (?P<of>[\d,]+) "
                             r"\((?P<value>-?\$[\d,]+\.\d\d)\)$"),
     # the spread register's own refusal
@@ -955,7 +955,7 @@ def _r_budget(render, m, node):
 
 
 def _r_degenerate_resample(render, m, node):
-    """"the margin is identical on all N futures of bootstrap resample r of R
+    """"the margin is identical on all N draws of bootstrap resample r of R
     (v)": N is the count asked for, and on the resample table the spread
     register's intervals are read off (`bootstrap_path_indices`, the run's own
     seed), resample r is the first whose futures carry one margin, v."""

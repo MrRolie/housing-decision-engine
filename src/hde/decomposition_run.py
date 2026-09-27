@@ -34,9 +34,8 @@ Every refusal the block carries, the whole block's and the spread's, is
 decided here; the formatter renders a refusal and never decides one. A check
 on the way that cannot pass raises `CheckFailed` with its code and the one
 fact it measured, and `decompose` returns that as the block's refusal (§0.1
-item 58), so the report the block sits under still prints. Nothing else is
-caught: an exception that is no check is an engine defect, and reaches the
-caller as one.
+item 58). Nothing else is caught: an exception that is no check is an engine
+defect, and reaches the caller as one.
 
 It is not a second verdict: `verdict` is carried through untouched. The
 probabilities this module takes itself are frequencies of `f`'s sign on
@@ -57,6 +56,7 @@ there is none.
 from __future__ import annotations
 
 import dataclasses
+import math
 from decimal import ROUND_CEILING, Decimal
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
@@ -177,10 +177,21 @@ def ceiled_figure(value: float, digits: int, grouping: str = "") -> str:
     on the float's exact decimal value, so the printed figure is never below
     the value it stands for and a sentence that says no move exceeded it, or
     that a move was up to it, holds at the figure printed. `grouping` is the
-    format's thousands separator (`","`), or none."""
+    format's thousands separator (`","`), or none. A figure that is not finite
+    prints as Python formats it (`inf`, `nan`), so the refusal stating it still
+    returns."""
+    if not math.isfinite(value):
+        return f"{value:{grouping}.{digits}g}"
     exact = Decimal(value)
     step = Decimal(1).scaleb(exact.adjusted() - (digits - 1))
     return f"{float(exact.quantize(step, rounding=ROUND_CEILING)):{grouping}.{digits}g}"
+
+
+def floored_figure(value: float, digits: int) -> str:
+    """`ceiled_figure`'s mirror for a positive lower bound: taken DOWNWARD, so
+    the printed figure is never above the value it stands for, and a sentence
+    that says a figure lies above it holds at the figure printed."""
+    return ceiled_figure(-value, digits).lstrip("-")
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +313,7 @@ def _liveness(base, redraws: Dict[int, object], threshold: float,
             "income_moved",
             f"re-drawing the income stream moved an option's present value on these "
             f"{int(paths):,} futures by up to ${ceiled_figure(moves[INCOME_STREAM_ID], 3)}, "
-            f"above ${threshold:.3g}")
+            f"above ${floored_figure(threshold, 3)}")
     return moves, moving
 
 
@@ -540,11 +551,7 @@ def width_keys(spec, channel_id: int) -> Tuple[Tuple[str, Optional[str]], ...]:
     option this run prices (`sized_options`), in `CHANNELS`' order; then, on
     the economy's row, after all of those, the keys of the shocks its
     correlations among them pull, under the same rule, in the order of the
-    correlations that pull them. `pulled by` is that correlation, or None.
-
-    Nothing here asks whether a draw fires: a hazard of zero, an events list
-    with no entry, a cost line no option holds are all sizing inputs as the
-    config states them, and their figures say so."""
+    correlations that pull them. `pulled by` is that correlation, or None."""
     priced = set(_priced(spec))
 
     def member(key: str) -> bool:
@@ -708,7 +715,7 @@ def _spread_register(
     except dm.DegenerateResample as flat:
         raise CheckFailed(
             "degenerate_resample",
-            f"the margin is identical on all {flat.n_futures:,} futures of bootstrap "
+            f"the margin is identical on all {flat.n_futures:,} draws of bootstrap "
             f"resample {flat.resample:,} of {flat.n_resamples:,} "
             f"({signed_dollars(flat.value, 2)})") from flat
     gap_ci = dm.bootstrap_interaction_gap_intervals(f_a, f_b, f_ab, seed=seed)
@@ -874,8 +881,7 @@ def _freeze_leak(level: LevelRegister) -> DecompositionRefusal:
     else means a draw site escaped the freeze mask. Then each frozen run differs
     from `A` in more than the channel it froze, every shift is measured against a
     baseline that is not the central case, and the level line would print the
-    all-frozen margin as the central case's over a run where it is not. The
-    spread cannot print without the level, so nothing prints.
+    all-frozen margin as the central case's over a run where it is not.
 
     `all_frozen_deviation` is NOT gated here but by `_identity_failed`: it is
     held to a ULP budget scaled to the totals subtracted, never to zero.
@@ -929,8 +935,9 @@ def _identity_failed(level: LevelRegister, verdict, budget: float) -> Decomposit
         "identity_failed",
         f"with every channel frozen, the {level.paths:,} paths price a margin of "
         f"{signed_dollars(level.all_frozen_margin, 2)} against the central case's "
-        f"{signed_dollars(verdict.margin_pv, 2)}, ${level.all_frozen_deviation:.3g} apart, "
-        f"above the ${budget:.3g} this check allows",
+        f"{signed_dollars(verdict.margin_pv, 2)}, "
+        f"${ceiled_figure(level.all_frozen_deviation, 3)} apart, "
+        f"above the ${floored_figure(budget, 3)} this check allows",
     )
 
 

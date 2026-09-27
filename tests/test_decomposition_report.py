@@ -1141,7 +1141,7 @@ class TestTheFlag:
             assert ("Error: --decompose is not part of the read-back — --read-back "
                     "prints the read-back lines alone, so this run would price the "
                     "decomposition and show none of it. Run --decompose without "
-                    "--read-back: the block prints under the report, or rides --json "
+                    "--read-back: the block prints in the text, or rides --json "
                     "as 'decomposition'") in captured.err
             assert captured.out == ""
             assert "spec" not in seam

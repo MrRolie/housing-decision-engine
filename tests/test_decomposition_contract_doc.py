@@ -22,6 +22,7 @@ import math
 import pathlib
 import re
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -177,8 +178,8 @@ _SPREAD_REFUSAL = ("it instead carries `refusal`, whose `code` is `no_sign_varia
                    "`reason` states which")
 _PROVISIONAL = ("OR the same four figures as `provisional_alone`, `provisional_alone_ci`, "
                 "`provisional_with_interaction`")
-_WIDTH_FIGURE = ("`key` names that input, and `formatted` is its figure as the read-back "
-                 "prints it.")
+_WIDTH_FIGURE = ("`key` names that input, and `formatted` is what the block prints after "
+                 "`<key>=`.")
 _SHIFT = ("and the shift, as `delta` (`resolved: true`) or `provisional_delta` "
           "(`resolved: false`).", "The shift is the mean over those futures")
 _MEANINGS = {
@@ -626,16 +627,20 @@ def test_too_few_futures(tmp_path):
 
 
 @claims("| `freeze_leak` |", "| `identity_failed` |",
-        "how far apart a `freeze_leak` reason says the paths are at six")
+        "how far apart a `freeze_leak` reason says the paths are at six",
+        "how far apart an `identity_failed` reason says the margins are")
 def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
     """Neither fires on a correct engine, so each is forced through the CLI on
     the fixture at 40 paths with the real engine and one run moved: a mask
     that lets one channel escape (the paths then differ), and the all-frozen
     run shifted by one constant (they agree, off the central case). Each
     reason is re-derived from that same run; the leak's spread prints at six
-    significant figures, taken upward.
+    significant figures, taken upward, with its thousands separator; how far
+    apart the margins are prints at three, taken upward, and the allowance at
+    three, taken downward.
     *Kills it:* that spread printed to nearest, which lands below it here, or
-    a step above its ceiling."""
+    a step above its ceiling, or with no separator; either figure of the
+    identity's reason printed the other way."""
     from tests.test_decomposition_run import TestTheFreezeIdentity, TestTheIdentityIsGated
     fixture = runs["fixture"]
     det, _, verdict = fixture.inputs()
@@ -653,6 +658,7 @@ def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
     printed = re.fullmatch(r"with every channel frozen, the margins of the 40 paths differ "
                            r"by up to \$(?P<spread>[\d,.]+(?:e[+-]\d+)?)", reason)["spread"]
     _taken_upward(printed, spread, 6)
+    assert spread >= 1000.0 and printed == f"{float(printed.replace(',', '')):,.6g}"
     # a spread whose nearest figure at six places lies below it
     assert decimal.Decimal(f"{spread:.6g}") < decimal.Decimal(spread)
     with monkeypatch.context() as patched:
@@ -664,10 +670,15 @@ def test_the_identity_refusals_forced_on_a_real_run(runs, monkeypatch):
     assert float(np.ptp(frozen)) == 0.0
     apart = abs(float(frozen[0]) - verdict.margin_pv)
     assert apart > budget
-    assert _strict(out)["decomposition"] == {"refusal": {"code": "identity_failed", "reason": (
-        f"with every channel frozen, the 40 paths price a margin of ${frozen[0]:,.2f} "
-        f"against the central case's ${verdict.margin_pv:,.2f}, ${apart:.3g} apart, "
-        f"above the ${budget:.3g} this check allows")}}
+    refusal = _strict(out)["decomposition"]["refusal"]
+    assert refusal["code"] == "identity_failed"
+    got = re.fullmatch(
+        rf"with every channel frozen, the 40 paths price a margin of "
+        rf"{re.escape(f'${frozen[0]:,.2f}')} against the central case's "
+        rf"{re.escape(f'${verdict.margin_pv:,.2f}')}, \$(?P<apart>\S+) apart, "
+        rf"above the \$(?P<budget>\S+) this check allows", refusal["reason"])
+    _taken_upward(got["apart"], apart, 3)
+    _taken_downward(got["budget"], budget, 3)
 
 
 def _taken_upward(printed, value, digits):
@@ -680,13 +691,82 @@ def _taken_upward(printed, value, digits):
         < decimal.Decimal(value), (printed, value)
 
 
-@claims("| `income_moved` |", "`income_moved` reason states print at three significant figures")
+def _taken_downward(printed, value, digits):
+    """`printed` is `value` at `digits` significant figures, taken downward:
+    no more digits, never above it, and less than one printed step below it."""
+    figure = decimal.Decimal(printed.replace(",", ""))
+    assert len(figure.normalize().as_tuple().digits) <= digits, printed
+    assert figure <= decimal.Decimal(value), (printed, value)
+    assert figure + decimal.Decimal(1).scaleb(figure.adjusted() - (digits - 1)) \
+        > decimal.Decimal(value), (printed, value)
+
+
+@claims("the allowance an `income_moved` or `identity_failed` reason states prints at")
+def test_each_reason_says_above_of_a_larger_printed_figure():
+    """An allowance of 2^-28, which prints 3.73e-09 to nearest, and a move and
+    a deviation of 3.7314e-09 above it, which print 3.73e-09 to nearest too:
+    each reason, written by the engine's own check from these figures, prints
+    the allowance taken downward (3.72e-09) and the figure above it taken
+    upward (3.74e-09), so its "above" holds at the printed figures.
+    *Kills it:* the allowance printed to nearest, or the move or the deviation
+    printed to nearest; either leaves a figure said to be above one it equals."""
+    allowance, above = 2.0 ** -28, 3.7314e-09
+    assert above > allowance
+    assert f"{allowance:.3g}" == f"{above:.3g}" == "3.73e-09"
+    _taken_downward("3.72e-09", allowance, 3)
+    _taken_upward("3.74e-09", above, 3)
+
+    def priced(pvs):
+        return types.SimpleNamespace(condo=None, house=None,
+                                     rent=types.SimpleNamespace(pvs=np.full(40, pvs)))
+
+    with pytest.raises(dr.CheckFailed) as failed:
+        dr._liveness(priced(0.0), {dc.INCOME_STREAM_ID: priced(above)}, allowance, 40)
+    assert (failed.value.code, failed.value.reason) == ("income_moved", (
+        "re-drawing the income stream moved an option's present value on these 40 "
+        "futures by up to $3.74e-09, above $3.72e-09"))
+    level = types.SimpleNamespace(paths=40, all_frozen_margin=1000.0,
+                                  all_frozen_deviation=above)
+    got = dr._identity_failed(level, types.SimpleNamespace(margin_pv=1000.0), allowance)
+    assert (got.code, got.reason) == ("identity_failed", (
+        "with every channel frozen, the 40 paths price a margin of $1,000.00 against the "
+        "central case's $1,000.00, $3.74e-09 apart, above the $3.72e-09 this check "
+        "allows"))
+
+
+def test_a_move_that_is_not_finite_still_refuses_the_block(tmp_path, monkeypatch):
+    """The income stream's re-draw forced to move a present value by an
+    infinite amount, and by one that is not a number: the block refuses with
+    `income_moved`, its reason stating the figure as measured, and the rest
+    of the run's output is what the run prints without `--decompose`, exit 0.
+    *Kills it:* a figure that is not finite raising while the reason is
+    written, which loses the report."""
+    path = tmp_path / "fixture.yaml"
+    path.write_text(yaml.safe_dump(_load(FIXTURE), sort_keys=False), encoding="utf-8")
+    plain = _cli(path, "-q")
+    for forced, printed in ((math.inf, "inf"), (math.nan, "nan")):
+        with monkeypatch.context() as patched:
+            force_income_move(patched, forced)
+            status, text, err = _cli(path, "--decompose=40", "-q")
+        assert status == 0 and err == plain[2]
+        allowance = re.search(r"above \$(\S+)$", text.rstrip("\n"))[1]
+        assert _inserted(plain[1], text)[1] == ["", (
+            f"which risk decides it — not split (income_moved): re-drawing the income "
+            f"stream moved an option's present value on these 40 futures by up to "
+            f"${printed}, above ${allowance}")]
+    assert dr.ceiled_figure(math.inf, 3) == "inf" and dr.floored_figure(math.inf, 3) == "inf"
+    assert dr.ceiled_figure(160831.2, 6, ",") == "160,832"
+    assert dr.ceiled_figure(160831.2, 6) == "160832"
+
+
+@claims("| `income_moved` |", "the largest move an `income_moved` reason states")
 def test_income_moved(tmp_path, monkeypatch):
     """Forced, as no correct engine moves a present value by re-drawing the
     income stream: its re-draw handed back as `A`'s own present values moved
     by one figure (`force_income_move`). Past the allowance the block refuses,
     stating the count of futures, that move taken upward at three significant
-    figures, and the allowance; at half the allowance it does not, and the
+    figures, and the allowance taken downward; at half the allowance it does
+    not, and the
     block is the one the run prints unforced. The move forced is one whose
     nearest figure at three places lies below it.
     *Kills it:* the check deleted, or widened to a move inside the allowance,
@@ -705,8 +785,10 @@ def test_income_moved(tmp_path, monkeypatch):
         with monkeypatch.context() as patched:
             force_income_move(patched, forced)
             doc, text, _, _ = _refusal(tmp_path, raw, "40")
+        printed_allowance = re.fullmatch(r".*, above \$(\S+)", doc["refusal"]["reason"])[1]
+        _taken_downward(printed_allowance, allowance, 3)
         reason = (f"re-drawing the income stream moved an option's present value on these "
-                  f"40 futures by up to ${printed}, above ${allowance:.3g}")
+                  f"40 futures by up to ${printed}, above ${printed_allowance}")
         assert doc == {"refusal": {"code": "income_moved", "reason": reason}}
         assert text == f"which risk decides it — not split (income_moved): {reason}"
         moved = max(float(np.max(np.abs((np.asarray(getattr(base, o).pvs) + forced)
@@ -739,8 +821,9 @@ def test_degenerate_resample(tmp_path, runs):
     """Two rare hazards on 400 futures: the margin differs across them, and a
     resample of the table the spread register's intervals are read off (the
     run's seed, `bootstrap_path_indices`) holds one margin. The reason names
-    the first such resample, of how many, and that margin. On 2,000 futures of
-    the same config no resample does, and the block prints.
+    the first such resample, the 400 draws it holds, which repeat futures, of
+    how many resamples, and that margin. On 2,000 futures of the same config
+    no resample does, and the block prints.
     *Kills it:* the check deleted, or a reason naming another resample or
     another figure."""
     doc, _, _, full = _refusal(tmp_path, RARE2, "400")
@@ -751,53 +834,95 @@ def test_degenerate_resample(tmp_path, runs):
     table = dm.bootstrap_path_indices(400, dm.DEFAULT_RESAMPLES,
                                       int(spec.simulation.random_seed))
     flat = [i for i, rows in enumerate(table) if float(np.ptp(f[rows])) == 0.0]
+    assert len(table[flat[0]]) == 400 > len(set(table[flat[0]].tolist()))
     value = float(f[table[flat[0]][0]])
     assert value > 0.0 and dm.DEFAULT_RESAMPLES == 300
     assert doc == {"refusal": {"code": "degenerate_resample", "reason": (
-        f"the margin is identical on all 400 futures of bootstrap resample {flat[0] + 1} "
+        f"the margin is identical on all 400 draws of bootstrap resample {flat[0] + 1} "
         f"of 300 (${value:,.2f})")}}
     assert "refusal" not in runs["rare2"].block and runs["rare2"].block["paths"] == 2000
 
 
-@claims("The run's report still prints in full, with exit 0: in the text")
-def test_a_whole_block_refusal_prints_beside_the_report(tmp_path):
-    """On a refusal decided before pricing, one decided by the re-draws, and
-    one a check that cannot pass returns (a bootstrap resample holding one
-    margin): the text is the run's own report, unchanged, with the refusal
-    line inserted above its `READ-BACK` block, which still prints last; under
-    `--quiet`, which prints no `READ-BACK` block, the refusal line follows the
-    report; and the document is the run's own with `decomposition` added,
-    each with exit 0.
-    *Kills it:* a refusal that stops the report, exits non-zero, or drops a
-    key of the document, or a refusal line printed below the `READ-BACK`
-    block."""
+def _inserted(plain, text):
+    """`(at, lines)`: `text` is the output `plain` with `lines` put in before
+    its line `at` and nothing else changed. They start with a blank line and
+    the block's first line."""
+    base, lines = plain.split("\n"), text.split("\n")
+    head = next(i for i, line in enumerate(lines) if line.startswith("which risk decides it"))
+    at, size = head - 1, len(lines) - len(base)
+    assert size >= 2 and lines[at] == "", lines[at:head + 1]
+    assert lines[:at] + lines[at + size:] == base
+    return at, lines[at:at + size]
+
+
+def _above_the_read_back(plain, at):
+    """Where the run prints a `READ-BACK` block, `at` is above it, so the
+    block still prints last."""
     from hde.serialization import READ_BACK_HEADER
+    base = plain.split("\n")
+    return READ_BACK_HEADER not in base or at <= base.index(READ_BACK_HEADER)
+
+
+@claims("Nothing else the run prints or returns changes")
+def test_a_whole_block_refusal_leaves_every_other_line_as_the_run_prints_it(tmp_path):
+    """Diffed against the run without `--decompose`, on a shipped example,
+    bare and beside every flag that prints lines of its own (`-q`, `--sweep`,
+    `--break-even`, `--story`, `--plots`): at one future the block refuses,
+    and the output is the run's own, stdout and stderr, with a blank line and
+    the refusal line put in, exit 0; at 40 futures the block prints, put in at
+    the same line; and both sit above the `READ-BACK` block where one prints.
+    Under `--json`, bare and beside `--sweep`, the document is the run's own
+    with `decomposition` added. The same holds of a refusal decided by the
+    re-draws and of one a check that cannot pass returns. Beside a `--sweep`
+    the run cannot parse, the run prints nothing on stdout and exits 1 with or
+    without the flag.
+    *Kills it:* a refusal that stops the report, exits non-zero or drops a
+    key of the document; a refusal line printed anywhere the block is not
+    (below the sweep's table, the break-even's line or the story's lines, or
+    below the `READ-BACK` block); or any other line moved or changed."""
+    story, plots = tmp_path / "story", tmp_path / "plots"
+    sweep = ("--sweep", "house.mortgage_rate=0.05,0.06")
+    too_few = ("which risk decides it — not split (too_few_futures): 1 future was asked "
+               "for, below the minimum of 40")
+    for flags in ((), ("-q",), sweep, ("-q", *sweep), ("--break-even", "house.mortgage_rate"),
+                  ("--story", story), ("--plots", plots)):
+        plain = _cli(MORTGAGE, *flags)
+        refused = _cli(MORTGAGE, "--decompose=1", *flags)
+        printed = _cli(MORTGAGE, "--decompose=40", *flags)
+        assert plain[0] == refused[0] == printed[0] == 0, flags
+        assert plain[2] == refused[2] == printed[2], flags
+        at, lines = _inserted(plain[1], refused[1])
+        assert lines == ["", too_few], flags
+        block_at, block = _inserted(plain[1], printed[1])
+        assert block[1].startswith("which risk decides it — 40 futures, "), flags
+        assert block_at == at and _above_the_read_back(plain[1], at), flags
+    for flags in ((), sweep):
+        bare = _strict(_cli(MORTGAGE, "--json", *flags)[1])
+        status, out, _ = _cli(MORTGAGE, "--decompose=1", "--json", *flags)
+        doc = _strict(out)
+        assert status == 0 and doc.pop("decomposition") == {"refusal": {
+            "code": "too_few_futures", "reason": too_few.split(": ", 1)[1]}}
+        assert doc == bare, flags
+    broken = ("--sweep", "house.mortgage_rate")
+    plain, refused = _cli(MORTGAGE, *broken), _cli(MORTGAGE, "--decompose=1", *broken)
+    assert refused == plain and plain[0] == 1 and plain[1] == ""
     path = tmp_path / "rare2.yaml"
     path.write_text(yaml.safe_dump(RARE2, sort_keys=False), encoding="utf-8")
     for source, extra, code in ((MONTREAL, (), "no_futures"), (INCOME, (), "one_channel"),
                                 (path, ("400",), "degenerate_resample")):
-        status, report, _ = _cli(source)
-        assert status == 0
-        status, text, _ = _cli(source, "--decompose", *extra)
-        assert status == 0
-        status, quiet_report, _ = _cli(source, "-q")
-        assert status == 0
-        status, quiet_text, _ = _cli(source, "--decompose", *extra, "-q")
-        assert status == 0
-        status, bare, _ = _cli(source, "--json")
-        assert status == 0
         status, out, _ = _cli(source, "--decompose", *extra, "--json")
-        assert status == 0
         doc = _strict(out)
         refusal = doc.pop("decomposition")["refusal"]
-        assert refusal["code"] == code
-        assert doc == _strict(bare)
-        line = f"which risk decides it — not split ({code}): {refusal['reason']}"
-        above, header, below = report.partition(f"\n{READ_BACK_HEADER}\n")
-        assert header and below.strip(), code
-        assert text == f"{above}\n{line}\n{header}{below}"
-        assert READ_BACK_HEADER not in quiet_report
-        assert quiet_text == f"{quiet_report}\n{line}\n"
+        assert status == 0 and refusal["code"] == code
+        assert doc == _strict(_cli(source, "--json")[1])
+        for flags in ((), ("-q",)):
+            plain = _cli(source, *flags)
+            refused = _cli(source, "--decompose", *extra, *flags)
+            assert plain[0] == refused[0] == 0 and plain[2] == refused[2], (code, flags)
+            at, lines = _inserted(plain[1], refused[1])
+            assert lines == ["", f"which risk decides it — not split ({code}): "
+                                 f"{refusal['reason']}"], (code, flags)
+            assert _above_the_read_back(plain[1], at), (code, flags)
 
 
 def test_an_exception_that_is_no_check_reaches_the_caller(monkeypatch):
@@ -1265,9 +1390,8 @@ def _expected_widths(doc, raw, channel_id):
 
 
 def _pulled_by(width):
-    if width["note"] is None:
-        return None
-    return re.match(r"pulled by (?P<key>[\w.]+) = ", width["note"])["key"]
+    match = re.match(r"pulled by (?P<key>[\w.]+) = ", width["note"] or "")
+    return None if match is None else match["key"]
 
 
 def _read_back_figure(doc, key):
@@ -1302,11 +1426,21 @@ def _read_back_anchor(doc, width):
     return None
 
 
-def _assert_widths_enumerated(name, doc, raw):
+def _printed_widths(text, label):
+    """The `sized by` line printed under the spread row of `label`, whole."""
+    lines = text.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.startswith(f"  {label} "))
+    assert lines[at + 1].startswith("      sized by "), lines[at + 1]
+    return lines[at + 1][len("      sized by "):]
+
+
+def _assert_widths_enumerated(name, doc, raw, text):
     """Every width on every row of one run, and every dead row's keys,
     against `CHANNELS`, the read-back and the oracle's option map: the same
     keys in the same order, set equality both ways, and for each the
-    read-back's own tag and figure, character for character."""
+    read-back's own tag and figure, character for character; `note` only
+    where a correlation pulls the width; and the line the text prints under
+    the row is each width's `<key>=<formatted> [<tag>]`, its note after it."""
     block = doc["decomposition"]
     if "refusal" in block:
         return 0
@@ -1315,6 +1449,12 @@ def _assert_widths_enumerated(name, doc, raw):
         want = _expected_widths(doc, raw, row["channel_id"])
         got = [(w["key"], _pulled_by(w)) for w in row["widths"]]
         assert got == want, (name, row["channel"], got, want)
+        assert [w["note"] is None for w in row["widths"]] == \
+            [pulled is None for _, pulled in want], (name, row["channel"])
+        assert _printed_widths(text, row["label"]) == "; ".join(
+            f"{w['key']}={w['formatted']} [{w['tag']}]"
+            + ("" if w["note"] is None else f" ({w['note']})")
+            for w in row["widths"]), (name, row["channel"])
         for width in row["widths"]:
             tag = sentences._read_back_tag(doc, width["key"])
             # a key in the set with no read-back tag fails here, never silently
@@ -1402,7 +1542,8 @@ _WIDTH_WITNESSES = {
         "Whether its draw fires on the run is not asked",
         "On the economy row the row's own widths come first, then the widths of the",
         "One the config states carries its read-back class as `source`",
-        "`key` names that input, and `formatted` is its figure as the read-back",
+        _WIDTH_FIGURE,
+        "A width no correlation pulls carries `note` `null`.",
         "`tag` is the read-back's tag for the key (`serialization.read_back_tag`)")
 def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carries(tmp_path,
                                                                                  runs):
@@ -1429,7 +1570,7 @@ def test_every_width_on_every_witness_row_is_a_sizing_input_the_read_back_carrie
     seen = 0
     for name, (raw, lines) in _WIDTH_WITNESSES.items():
         got = Run(raw, "400").materialise(tmp_path / name)
-        seen += _assert_widths_enumerated(name, got.doc, got.raw)
+        seen += _assert_widths_enumerated(name, got.doc, got.raw, got.text)
         for label, cells in lines.items():
             assert _sized_by(got, label) == cells.split("; "), (name, label)
     assert seen
@@ -1486,7 +1627,7 @@ def test_every_width_on_every_corpus_row_is_a_sizing_input_the_read_back_carries
     the dead rows' keys included."""
     seen = 0
     for name, run in runs.items():
-        seen += _assert_widths_enumerated(name, run.doc, run.raw)
+        seen += _assert_widths_enumerated(name, run.doc, run.raw, run.text)
     assert seen
 
 
@@ -1785,7 +1926,7 @@ def _moved_streams(spec):
 
 @claims("**The text block** prints these figures and no sentence about them.",
         "Every line is one of four kinds: a heading; a figure row",
-        "`move_threshold` and the largest move an")
+        "`move_threshold`, the largest move an")
 def test_the_text_block_holds_four_kinds_of_line(runs):
     """Every line of every render is one template of the sentence tests, and
     every template is a blank or one of four of the six kinds (§0.1 items 35
