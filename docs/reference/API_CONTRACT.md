@@ -392,14 +392,10 @@ row lists are never ranked against each other.
   `no_candidate` when the config states none of the searched keys, `no_mapping`
   when the block was handed no config mapping, and `single_option` when fewer
   than two options are priced; on the last two no key is searched.
-- `exact[]` rows: `key`, `option`, `stated_formatted`, `stated_source`,
-  `stated_tag`, `bracket_low`, `bracket_high`, `bracket_source`,
-  `probe_paths`, `max_path_deviation_over_sd`, `boundaries`,
-  `refused_boundaries`, `references` and `path_note`. `key` is the key
-  searched and `option` the option it belongs to. `stated_formatted` is each
-  figure the config states for the key, `, `-joined, as a figure on the axis
-  prints; `stated_source` is whose figure that is, in the read-back's classes,
-  and `stated_tag` the key's tag, as a width's `tag` is.
+- `exact[]` rows: `key`, `option`, `bracket_low`, `bracket_high`,
+  `bracket_source`, `probe_paths`, `max_path_deviation_over_sd`,
+  `boundaries`, `refused_boundaries` and `path_note`. `key` is the key
+  searched and `option` the option it belongs to.
 - A key is exact when moving it to the far end of its bracket leaves every
   other option's present value bit-identical and shifts the one it names by the
   same amount on every path, to within `break_even.REVERSAL_GATE_TOLERANCE` of
@@ -410,9 +406,9 @@ row lists are never ranked against each other.
   range written into the engine (`break_even.RATE_BRACKETS`).
 - `path_note` is set when the config states the key as a path of two or more
   different rates, and says how the axis was built: each crossing on the key is
-  priced with the stated path, as `stated_formatted` prints it, replaced by one
-  rate at every renewal (`break_even.reversal_path_note`). It is `null`
-  otherwise, a path of one repeated rate included.
+  priced with the stated path replaced by one rate at every renewal
+  (`break_even.reversal_path_note`). It is `null` otherwise, a path of one
+  repeated rate included.
 - `estimated[]` rows carry the same keys without `probe_paths`. A key there
   failed that test, and this engine locates no boundary on it: `boundaries` is
   empty and `refused_boundaries` carries the reason on every field. The
@@ -449,7 +445,7 @@ row lists are never ranked against each other.
 - `refused_boundaries[]`: `verdict_field`, `code` and `reason`: one for a field
   on which no boundary is printed, or one for a boundary of a field that is not
   printed while another of that field's may be, the codes `not_identified`,
-  `unconfirmed`, `not_printable`, `not_orderable` and `not_bracketed`
+  `unconfirmed`, `not_printable` and `not_bracketed`
   (`decomposition.EDGE_REFUSAL_CODES`). `reason` is the measured fact, and
   `code` is `unchanged` when the field says what this run says at every point
   its scan read, `not_on_axis` when it says that at none of them,
@@ -457,26 +453,16 @@ row lists are never ranked against each other.
   points the pairs were scanned at read otherwise than the stretches between
   the crossings, `not_identified` when a probability a futures boundary's two
   sides are computed from moves across the bracket by no more than two of its
-  standard errors at the boundary, or none is attached to it, `unconfirmed`
-  when the re-simulation at the boundary disagrees with the curve,
-  `not_printable` when no precision prints the boundary's figure (below),
-  `not_orderable` when a figure on the axis is not placed beside the boundary's
-  figure, or the stated figure reads beside it a state other than the one the
-  field says in this run, or another figure between its `value` and `upper_end`
-  reads neither `was` nor `becomes` there (below), `not_bracketed` when on the
-  central case a solved boundary's field does not say its `was` at `value` or
-  its `becomes` at `upper_end`, `not_exact` on every field of an
+  standard errors at the boundary, unless it is a `decisive` boundary at which
+  every such standard error is 0, or when none is attached to it,
+  `unconfirmed` when the re-simulation at the boundary disagrees with the
+  curve, `not_printable` when no precision prints the boundary's figure
+  (below), `not_bracketed` when the boundary's field does not say its `was` at
+  `value` or its `becomes` at `upper_end`, `not_exact` on every field of an
   `estimated[]` row, and `no_futures` for a futures field on a run without
   futures. The sides of an `mc_best` boundary are computed from P(cheapest) of
   the options it names, and the sides of a `decisive` one from P(cheapest) of
   the central case's winner at each end of the bracket it converged in.
-- `references[]`: `label`, `value`, `formatted`, `anchor` and `note`: an
-  anchored rate on the key's own quoting axis, `anchor` its registry entry,
-  `label` the last part of that entry's name with its underscores as spaces,
-  and `value` the rate; `formatted` is `value` as a figure on the axis
-  prints. On an `effective_annual` config the semi-annual anchor passes
-  through `rates.effective_mortgage_rate` and `note` names the figure as
-  published; `note` is `null` otherwise.
 - `structural_zeros[]`: `kind`, `label`, `keys` and `reversal_key`, one row per
   `exact` row: `kind` is `stated_path` on every row, `keys` holds that row's
   key, which the config states and no draw touches, `reversal_key` names that
@@ -521,9 +507,9 @@ a figure or a label, and a table's cells are padded with spaces to line up:
   SPREAD OR THE LEVEL`, and for each row `<label> — <keys>: no draw touches
   it`.
 - When `exact` has rows, a blank line and `WHAT WOULD HAVE TO CHANGE — keys the
-  engine re-prices exactly`, and for each row: `<key>, stated
-  <stated_formatted> [<stated_tag>]`; `bracket searched: <bracket_low>–<bracket_high>
-  [<bracket_source>]`; its `path_note` when it is set; each solved boundary as
+  engine re-prices exactly`, and for each row: `<key>`; `bracket searched:
+  <bracket_low>–<bracket_high> [<bracket_source>]`; its `path_note` when it is
+  set; each solved boundary as
   `solved on the central case: as it rises past <formatted>, <field> changes
   from <was> to <becomes>`, then each bisected one as `sampled on
   <curve_paths> paths at seed <seed>: as it rises past <formatted>, <field>
@@ -532,10 +518,8 @@ a figure or a label, and a table's cells are padded with spaces to line up:
   followed by ` (and changes again <further_changes> it, inside the
   bracket)`; for each code and reason among `refused_boundaries`, `no boundary
   printed for <fields> (<code>): <reason>`, or `a boundary not printed for
-  <fields> (<code>): <reason>` for a code in `decomposition.EDGE_REFUSAL_CODES`;
-  and `on the same axis: <label> <formatted> [<anchor>] — <note>`, one clause
-  per reference, `; `-joined, the ` — <note>` only where `note` is set. A
-  `<field>` is `the central case's winner` (`best`), `the runner-up`
+  <fields> (<code>): <reason>` for a code in `decomposition.EDGE_REFUSAL_CODES`.
+  A `<field>` is `the central case's winner` (`best`), `the runner-up`
   (`runner_up`), `the option most futures call cheapest` (`mc_best`) or `the
   decisiveness verdict` (`decisive`), and `<fields>` names each field the
   refusal refuses.
@@ -557,38 +541,12 @@ A crossing's rate is `formatted`: `value` floored, at four decimals of a
 percent for a solved crossing and two for a sampled one, and at one more
 decimal at a time where the field, evaluated at the printed figure (on the
 central case for a solved crossing, on the run's own seeded curve for a
-sampled one), does not say `was`, where the floored figure lies below
-`bracket_low`, or where a figure on the same axis that lies below `value`,
-rounded at twelve decimals, lies above it, the stated figure below excepted
-where the field says the crossing's `becomes` in this run. It never widens
-past twelve decimals, nor past the precision at which one printed step would
-be narrower than `upper_end − value`. Where no precision passes, the boundary
-refuses with `not_printable`, and its reason names each figure tried and what
-the field read there, or which of the other two conditions passed it over. A
-figure on the axis is each stated figure, each reference's `value` and the
-rate an `unconfirmed` reason names, which is its boundary's `value`. It prints
-as `--sweep` prints it, at two decimals of a percent to the nearest, and at
-one more decimal at a time where needed to print on its side of every printed
-crossing. Its side is at or below the crossing's figure when it lies at or
-below `value`, equal to it when it lies between `value` and `upper_end`, and
-above it when it lies at or above `upper_end`; printed at or below a
-crossing's figure it reads that crossing's `was`, and above it its `becomes`.
-The stated figure, where the config states the key as one figure, a path of
-one repeated rate included, takes those sides on a field where it reads what
-the field says in this run beside the nearest crossing whose bracket it lies
-at or below or inside and beside the nearest whose bracket it lies at or
-above. Otherwise its side of the first of those two is above it, or else its
-side of the second is at or below it, where it then reads what the field says
-beside that crossing and the next one past it; and otherwise the first of the
-two beside which it reads another state refuses with `not_orderable`. Any
-other figure that lies between a crossing's `value` and `upper_end` is above
-that crossing's figure instead where the field, evaluated at it as at the
-crossing's figure, says `becomes` there. A figure
-no such rounding places, which lies at or between a crossing's two ends,
-prints as that crossing's figure where that places it. Otherwise the first
-figure not placed beside every printed crossing is taken, and the first
-crossing in order beside which, with the crossings before it, that figure is
-not placed refuses with `not_orderable`, until every figure is placed.
+sampled one), does not say `was`, or where the floored figure lies below
+`bracket_low`. It never widens past twelve decimals, nor past the precision at
+which one printed step would be narrower than `upper_end − value`. Where no
+precision passes, the boundary refuses with `not_printable`, and its reason
+names each figure tried and what the field read there, or that it lies below
+the bracket searched.
 A figure that did not resolve prints behind `not resolved:`, each row's
 interaction gap included. `largest
 alone share:` and `largest shift in size:` name a register's top row when it
@@ -611,9 +569,9 @@ must never be quoted as a property of the user's config. Every number in the
 block, and in a whole-block refusal, is in exactly one of these four lists:
 
 - The same at any seed and any `N`, properties of the config: `bracket_low`,
-  `bracket_high`, each reference's `value`, `probe_paths`, `curve_paths`, a
-  solved boundary's `value` and `upper_end`, `all_frozen_margin`,
-  `all_frozen_deviation` and `move_threshold`.
+  `bracket_high`, `probe_paths`, `curve_paths`, a solved boundary's `value`
+  and `upper_end`, `all_frozen_margin`, `all_frozen_deviation` and
+  `move_threshold`.
 - The same on every block emitted: `all_frozen_path_spread`, which is `0.0`.
 - Figures that change with the seed or with `N`: `paths`, `level.paths` and
   `measured_paths`, which are `N` or read off it; `seed`, which is the seed;
@@ -628,12 +586,9 @@ block, and in a whole-block refusal, is in exactly one of these four lists:
   `interaction_channel_ids`, and a whole-block refusal's `channel_id`.
 
 Of the fields that are words, the widths with their sources and tags,
-`stated_source`, `stated_tag`, `bracket_source`, `no_distance_code`,
-`no_distance_reason`, and a solved boundary's `was`, `becomes` and
-`further_changes` are the config's; a sampled boundary's are the sample's;
-`stated_formatted`, `path_note`, a reference's `formatted` and a solved
-boundary's `formatted` are the config's figures at a precision a sampled
-figure can widen, so their decimals are the sample's; a refused boundary's
+`bracket_source`, `no_distance_code`, `no_distance_reason`, `path_note`, and
+a solved boundary's `was`, `becomes`, `further_changes` and `formatted` are
+the config's; a sampled boundary's are the sample's; a refused boundary's
 `code` and `reason` are the config's where its field is `best` or `runner_up`
 and its code `unchanged`, `not_on_axis`, `scan_mismatch` or `not_bracketed`,
 and the sample's otherwise; whether `spread` refuses with

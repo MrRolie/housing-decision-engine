@@ -33,7 +33,6 @@ import math
 from hde import decomposition as _contract
 from hde.break_even import floored_rate
 from hde.decomposition import (
-    AxisReference,
     EstimatedBoundary,
     IndistinguishableLevel,
     Interval,
@@ -136,19 +135,6 @@ def SampledBoundary(*, upper_end=None, formatted=None, **fields):
     if formatted is None:
         formatted = floored_rate(fields["value"], 2)
     return _contract.SampledBoundary(upper_end=upper_end, formatted=formatted, **fields)
-
-
-def ExactReversal(*, stated_tag=None, **fields):
-    """A row whose head's tag, unless stated, is its class: the read-back's tag
-    for a key it files under a class (an anchored key states its anchor)."""
-    return _contract.ExactReversal(
-        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
-
-
-def EstimatedReversal(*, stated_tag=None, **fields):
-    """The same for an estimated row."""
-    return _contract.EstimatedReversal(
-        stated_tag=fields["stated_source"] if stated_tag is None else stated_tag, **fields)
 
 
 # The verdict of the fixture run, as `models.compute_verdict` produces it. The
@@ -357,31 +343,18 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
     )
     # The two reversal rows are the fixture's as `hde tests/fixtures/
     # uncertainty_surface.yaml --decompose --json` prints them at seed 42:
-    # every figure, and every sentence the ENGINE writes (the path note, the
-    # refusals, the axis references), is copied from it. Every crossing reads
-    # the key UPWARD: `was` at `value`, `becomes` at `upper_end` — so where
-    # this run's own value sits above a crossing, as the stated 4.35%–5.00%
-    # sit above all of these, `becomes` is the run's state.
-    references = (
-        AxisReference(label="contracted 5y uninsured", value=0.0435,
-                      formatted="4.35%",
-                      anchor="mortgage_rate.contracted_5y_uninsured"),
-        AxisReference(label="contracted 5y insured", value=0.0401, formatted="4.01%",
-                      anchor="mortgage_rate.contracted_5y_insured"),
-        AxisReference(label="posted 5y", value=0.0609, formatted="6.09%",
-                      anchor="mortgage_rate.posted_5y"),
-    )
+    # every figure, and every sentence the ENGINE writes (the path note and
+    # the refusals), is copied from it. Every crossing reads the key UPWARD:
+    # `was` at `value`, `becomes` at `upper_end` — so where this run's own
+    # value sits above a crossing, as the stated 4.35%–5.00% sit above all of
+    # these, `becomes` is the run's state.
     no_decisive_crossing = RefusedBoundary(
         verdict_field="decisive", code="unchanged",
         reason="decisive says 'not decisive' at every one of 65 points across "
                "1.00%–10.00%")
-    renewal = ExactReversal(
+    renewal = _contract.ExactReversal(
         key="house.mortgage_renewal_rates",
         option="house",
-        stated_formatted="4.60%, 5.00%, 4.80%, 4.40%",
-        # The fixture's `sources:` block declares the ladder `assistant`, and
-        # the read-back of the same run says so.
-        stated_source="assistant",
         bracket_low=0.01,
         bracket_high=0.10,
         bracket_source="set in the engine",
@@ -412,16 +385,12 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                                       ("rent", 0.309))),
         ),
         refused_boundaries=(no_decisive_crossing,),
-        references=references,
-        path_note="each crossing on this key is priced with the stated path (4.60%, "
-                  "5.00%, 4.80%, 4.40%) replaced by one rate at every renewal",
+        path_note="each crossing on this key is priced with the stated path replaced by "
+                  "one rate at every renewal",
     )
-    contract_rate = ExactReversal(
+    contract_rate = _contract.ExactReversal(
         key="house.mortgage_rate",
         option="house",
-        stated_formatted="4.35%",
-        stated_source="anchor",
-        stated_tag="mortgage_rate.contracted_5y_uninsured",
         bracket_low=0.01,
         bracket_high=0.10,
         bracket_source="set in the engine",
@@ -451,7 +420,6 @@ def uncertainty_surface(*, interaction=None, mean_margin=-67194.0) -> Decomposit
                                    "1.00%–10.00%"),
             no_decisive_crossing,
         ),
-        references=references,
     )
     reversal = ReversalRegister(
         exact=(renewal, contract_rate),
@@ -610,11 +578,9 @@ def seven_channel_other_household() -> Decomposition:
     )
     reversal = ReversalRegister(
         exact=(
-            ExactReversal(
+            _contract.ExactReversal(
                 key="condo.mortgage_renewal_rates",
                 option="condo",
-                stated_formatted="5.20%, 5.40%",
-                stated_source="user",
                 bracket_low=0.02, bracket_high=0.12, bracket_source="set in the engine",
                 probe_paths=200, max_path_deviation_over_sd=3.1e-15,
                 # A key carries BOTH kinds at once, on ONE row: `decisive`
@@ -651,13 +617,8 @@ def seven_channel_other_household() -> Decomposition:
                                     reason="best says 'condo' at every one of 9 points across "
                                            "2.00%–12.00%"),
                 ),
-                references=(
-                    AxisReference(label="contracted 5y insured", value=0.0401,
-                                  formatted="4.01%",
-                                  anchor="mortgage_rate.contracted_5y_insured"),
-                ),
                 path_note="each crossing on this key is priced with the stated path "
-                          "(5.20%, 5.40%) replaced by one rate at every renewal",
+                          "replaced by one rate at every renewal",
             ),
         ),
         # RATE-SHAPED ON PURPOSE. The contract carries `bracket_low`,
@@ -666,11 +627,9 @@ def seven_channel_other_household() -> Decomposition:
         # register searches today (the financing leg), wrong for a dollar
         # level or a multiplier.
         estimated=(
-            EstimatedReversal(
+            _contract.EstimatedReversal(
                 key="house.value_growth_rate",
                 option="house",
-                stated_formatted="3.10%",
-                stated_source="assistant",
                 bracket_low=0.0, bracket_high=0.06, bracket_source="set in the engine",
                 max_path_deviation_over_sd=1.8e00,
                 # Upward from the stated 3.10%: the condo holds until growth
@@ -682,7 +641,6 @@ def seven_channel_other_household() -> Decomposition:
                                       resimulation_paths=3000),
                 ),
                 refused_boundaries=(),
-                references=(),
             ),
         ),
         structural_zeros=(),

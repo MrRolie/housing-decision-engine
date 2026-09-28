@@ -656,7 +656,8 @@ enumeration test; it is never silently left out. The contract defines a width th
 test enumerates every width on every corpus row against `CHANNELS` and the read-back.
 
 **54. A PRINTED FIGURE ON A CROSSING'S AXIS IS CHECKED ON ITS SIDE, AND ITS PRECISION WIDENS
-UNTIL IT IS THERE.** Flooring at a fixed precision assumed every state is wider than one printed
+UNTIL IT IS THERE.** *(Superseded by item 67 where it places a figure other than the crossing's
+own.)* Flooring at a fixed precision assumed every state is wider than one printed
 step. When two verdict changes fall inside one step, a lower edge's floored rate lands in the
 state below `was`. On a five-year house-vs-rent config the block printed "as it rises past 6.27%
 … from not decisive to decisive for rent", while `--sweep` at 6.27% says decisive for house. The
@@ -788,11 +789,12 @@ renewal ladder that no crossing moves (its renewals fall past the horizon) vanis
 another key was admitted: no row, no refusal, no zero. Each stated reversal key now appears as
 exactly one of: an exact row, an estimated row, or a refused row. The
 refused row carries the `not_admitted` code and the measured fact that already exists: moving
-the key across its bracket moves no priced option's present value. A test enumerates the
+the key to the far end of its bracket moves no priced option's present value. A test enumerates the
 config's stated reversal keys against the block.
 
 **65. ITEM 60'S THIRD BULLET IS REPLACED: THE RUN'S OWN STATE AT THE STATED VALUE DECIDES ITS
-SIDE.** Near a solved crossing the central-case gap changes sign within a few ULPs, because its
+SIDE.** *(Superseded by item 67.)*
+Near a solved crossing the central-case gap changes sign within a few ULPs, because its
 float error exceeds its slope there. A stated rate one or two ULPs below a bracket can therefore
 read `becomes`, which made "at or below the `was` end it lies on the `was` side" false. The run
 has already priced the stated value, and the report above the block prints that answer, so it

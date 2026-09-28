@@ -91,21 +91,19 @@ which risk decides it — 2,000 futures, 7 channels live on them
   the contract rate — house.mortgage_rate: no draw touches it
 
   WHAT WOULD HAVE TO CHANGE — keys the engine re-prices exactly
-  house.mortgage_renewal_rates, stated 4.60%, 5.00%, 4.80%, 4.40% [assistant]
+  house.mortgage_renewal_rates
       bracket searched: 1.00%–10.00% [set in the engine]
-      each crossing on this key is priced with the stated path (4.60%, 5.00%, 4.80%, 4.40%) replaced by one rate at every renewal
+      each crossing on this key is priced with the stated path replaced by one rate at every renewal
       solved on the central case: as it rises past 1.6052%, the central case's winner changes from house to rent
       solved on the central case: as it rises past 2.9549%, the runner-up changes from house to condo (and changes again below it, inside the bracket)
       sampled on 2,000 paths at seed 42: as it rises past 2.71%, the option most futures call cheapest changes from house to condo
       no boundary printed for the decisiveness verdict (unchanged): decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%
-      on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y]
-  house.mortgage_rate, stated 4.35% [mortgage_rate.contracted_5y_uninsured]
+  house.mortgage_rate
       bracket searched: 1.00%–10.00% [set in the engine]
       solved on the central case: as it rises past 1.9171%, the runner-up changes from house to condo
       sampled on 2,000 paths at seed 42: as it rises past 1.59%, the option most futures call cheapest changes from house to condo
       no boundary printed for the central case's winner (unchanged): best says 'rent' at every one of 9 points across 1.00%–10.00%
-      no boundary printed for the decisiveness verdict (unchanged): decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%
-      on the same axis: contracted 5y uninsured 4.35% [mortgage_rate.contracted_5y_uninsured]; contracted 5y insured 4.01% [mortgage_rate.contracted_5y_insured]; posted 5y 6.09% [mortgage_rate.posted_5y]"""
+      no boundary printed for the decisiveness verdict (unchanged): decisive says 'not decisive' at every one of 65 points across 1.00%–10.00%"""
 
 
 def _render(**kwargs) -> str:
@@ -783,8 +781,7 @@ class TestTheReversalRows:
         source class is the honesty contract's own breach.
         *Kills it:* printing the solved rates without the bracket."""
         lines = _render().splitlines()
-        head = lines.index("  house.mortgage_renewal_rates, stated 4.60%, 5.00%, 4.80%, "
-                           "4.40% [assistant]")
+        head = lines.index("  house.mortgage_renewal_rates")
         assert lines[head + 1] == "      bracket searched: 1.00%–10.00% [set in the engine]"
 
     def test_the_contract_rate_gets_its_own_row(self):
@@ -792,8 +789,7 @@ class TestTheReversalRows:
         refusal, not as an absence.
         *Kills it:* rendering only the first reversal row."""
         lines = _render().splitlines()
-        head = lines.index("  house.mortgage_rate, stated 4.35% "
-                           "[mortgage_rate.contracted_5y_uninsured]")
+        head = lines.index("  house.mortgage_rate")
         row = lines[head:]
         assert ("      solved on the central case: as it rises past 1.9171%, the "
                 "runner-up changes from house to condo") in row
@@ -804,23 +800,6 @@ class TestTheReversalRows:
         block = format_decomposition(seven_channel_other_household())
         assert "decisive for condo to not decisive" in block
         assert "True" not in block and "False" not in block
-
-    @pytest.mark.parametrize("tag", ["user", "assistant", "mortgage_rate.posted_5y",
-                                     "unattributed"])
-    def test_a_reversal_row_tags_whose_figure_the_stated_value_is(self, tag):
-        """The row's head carries `ExactReversal.stated_tag`, the read-back's
-        own tag for the key, and says nothing about who typed it (§0.1 item
-        53).
-        *Kills it:* a fixed tag, the class in place of the tag, or "you
-        stated" anywhere."""
-        dec = uncertainty_surface()
-        renewal = dataclasses.replace(dec.reversal.exact[0], stated_tag=tag)
-        block = format_decomposition(dataclasses.replace(
-            dec, reversal=dataclasses.replace(dec.reversal,
-                                              exact=(renewal,) + dec.reversal.exact[1:])))
-        assert (f"  house.mortgage_renewal_rates, stated 4.60%, 5.00%, 4.80%, 4.40% "
-                f"[{tag}]") in block.splitlines()
-        assert "you stated" not in block and "your own figures" not in block
 
     def test_a_sampled_crossing_never_reads_as_a_solved_one(self):
         """§0.1 item 24, one level down: the line head names the kind, and a
@@ -850,7 +829,7 @@ class TestTheReversalRows:
         *Kills it:* filing `decisive` with the solved kinds, or interleaving
         the two groups."""
         lines = format_decomposition(seven_channel_other_household()).splitlines()
-        head = lines.index("  condo.mortgage_renewal_rates, stated 5.20%, 5.40% [user]")
+        head = lines.index("  condo.mortgage_renewal_rates")
         solved = lines.index("      solved on the central case: as it rises past "
                              "5.0041%, the runner-up changes from rent to house")
         majority = lines.index("      sampled on 6,000 paths at seed 42: as it rises past "
@@ -888,8 +867,8 @@ class TestTheReversalRows:
                                "re-prices exactly")
         estimated_at = block.index("  WHAT WOULD HAVE TO CHANGE — keys the engine "
                                    "cannot re-price exactly")
-        assert exact_at < block.index("condo.mortgage_renewal_rates, stated") < estimated_at
-        assert estimated_at < block.index("house.value_growth_rate, stated")
+        assert exact_at < block.index("\n  condo.mortgage_renewal_rates\n") < estimated_at
+        assert estimated_at < block.index("\n  house.value_growth_rate\n")
 
     def test_a_refused_boundary_prints_its_code_before_its_reason(self):
         """§0.1 item 50: every refusal has one shape, its code and the one
@@ -1138,8 +1117,8 @@ class TestTheJsonBlock:
                         dc.DecompositionRefusal(code="one_channel", reason="r",
                                                 channel_id=3)):
             # Walked as a consumer reads it, after JSON: the serializer's
-            # tuples (a row's widths, its boundaries, references and refused
-            # fields) are lists there, and a walk of the dict alone skipped
+            # tuples (a row's widths, its boundaries and its refused fields)
+            # are lists there, and a walk of the dict alone skipped
             # every key inside them.
             walk(json.loads(json.dumps(decomposition_to_dict(outcome))))
         assert {"anchor", "move_threshold", "tag", "note", "value_ci",

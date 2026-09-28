@@ -16,7 +16,6 @@ reads "A is cheaper below X, too close to call between L and H, B above H".
 from __future__ import annotations
 
 import copy
-import dataclasses
 import math
 from decimal import ROUND_FLOOR, Decimal
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -25,7 +24,7 @@ import numpy as np
 
 from .anchors import ANCHORS
 from .config import ConfigValidationError, load_config_dict, single_path_run
-from .decomposition import (BOUNDARY_FIELDS, AxisReference,
+from .decomposition import (BOUNDARY_FIELDS,
                             EstimatedReversal, ExactReversal, RefusedBoundary,
                             RefusedReversal, ReversalRegister, SampledBoundary,
                             SolvedBoundary, StructuralZero)
@@ -38,11 +37,10 @@ from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, 
 # that figure stale and the free curve then disagrees with a true re-simulation
 # at the same value (spec §6, T11).
 from .monte_carlo import _summarize_array, run_monte_carlo
-from .rates import (MORTGAGE_COMPOUNDING, RateConventionError, compose, deflate,
-                    effective_mortgage_rate, mortgage_compounding_of, resolve_convention)
+from .rates import RateConventionError, compose, deflate, resolve_convention
 from .market_scenario import (LoadedScenarioPrior, band_horizon_for_calendar_year,
                               calendar_year_for_sim_year)
-from .sources import MONEY_LEAVES, stated_tag
+from .sources import MONEY_LEAVES
 from .sweep import (INT_KEYS, _fmt_value, affordability_of, base_value, constant_options,
                     flattened_path_note,
                     join_notes, load_at, point_label, price_scan_note,
@@ -1224,9 +1222,9 @@ def format_break_even(result: Dict[str, Any]) -> str:
 # whenever the run has futures to re-simulate, and live in `ExactReversal`;
 # slice 1 REFUSES an unlicensed key rather than estimating it (§6), so
 # `EstimatedReversal` stays empty on a correct engine.
-# All four of `BOUNDARY_FIELDS` are answered on every row, and a kind this
-# solver cannot reach comes back as a `RefusedBoundary` naming why (§0.1
-# ruling 4) — an absent row and a refused row are different claims.
+# All four of `BOUNDARY_FIELDS` are answered on every exact or estimated row,
+# and a kind this solver cannot reach comes back as a `RefusedBoundary` naming
+# why (§0.1 ruling 4) — an absent row and a refused row are different claims.
 #
 # TWO KINDS OF BOUNDARY, AND THE CONTRACT CARRIES WHICH, because they are not
 # one thing: a `best` or `runner_up` boundary is solved on the central case and
@@ -1251,12 +1249,12 @@ def format_break_even(result: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 # The financing-leg keys, per owned option. Candidates are inputs the config
-# STATES that carry no distribution and move an owned option's deterministic
-# PV; a sizing key of a drawn channel (`*_vol`, a hazard, a correlation) is
-# never one, by construction rather than by omission — `compute_deterministic`
-# reads no dispersion input, so a deterministic curve over a vol key is a flat
-# line, and a flat line under this heading would print "this risk does not
-# affect the verdict" about every risk (spec §6).
+# STATES that carry no distribution; a sizing key of a drawn channel (`*_vol`,
+# a hazard, a correlation) is never one, by construction rather than by
+# omission — `compute_deterministic` reads no dispersion input, so a
+# deterministic curve over a vol key is a flat line, and a flat line under this
+# heading would print "this risk does not affect the verdict" about every risk
+# (spec §6).
 REVERSAL_LEAVES: Tuple[str, ...] = ("mortgage_renewal_rates", "mortgage_rate")
 
 # The exactness gate's tolerance, as a multiple of the option's own PV standard
@@ -1295,25 +1293,9 @@ _FUTURES_FIELDS: Tuple[str, ...] = ("mc_best", "decisive")
 # At 65 points a cell is 1/64 of the bracket.
 REVERSAL_SCAN_POINTS = 65
 
-# The finest precision, in decimals of a percent, a printed crossing or a
-# figure beside one may widen to (§0.1 item 54).
+# The finest precision, in decimals of a percent, a printed crossing may widen
+# to (§0.1 item 54).
 PRINTED_RATE_MAX_PLACES = 12
-
-# The anchors that sit on a mortgage-rate axis — the published figures a reader
-# can put beside a guess. Named here rather than in a formatter so the axis and
-# the anchors on it have one home. A posted rate is a LIST PRICE that brackets a
-# guess from above; it is never a ceiling on a future renewal.
-_RATE_AXIS_ANCHORS: Tuple[str, ...] = (
-    "mortgage_rate.contracted_5y_uninsured",
-    "mortgage_rate.contracted_5y_insured",
-    "mortgage_rate.posted_5y",
-)
-# How every one of those anchors is quoted — each record's `unit` says
-# semi-annually compounded, the Canadian convention. A reversal axis is quoted
-# the way its config quotes `mortgage_rate_compounding`, so a reference is put
-# on that axis through `rates.effective_mortgage_rate`, the engine's one
-# conversion, before it is printed beside a crossing on it.
-_RATE_AXIS_ANCHOR_COMPOUNDING = "semi_annual"
 
 
 def reversal_bracket(key: str) -> Optional[Tuple[float, float]]:
@@ -1877,12 +1859,14 @@ def _step_edge(
 def _identification(
     boundary: Dict[str, Any], probs: Dict[str, Dict[str, Optional[float]]], paths: int,
 ) -> Dict[str, Any]:
-    """Whether a futures boundary is identified INSIDE Monte Carlo noise
-    (spec §6, refusal i; §0.1 item 63): the bracket-wide `|ΔP|` of
+    """Whether a futures boundary is identified outside Monte Carlo noise
+    (spec §6, refusal i; §0.1 items 63 and 67): the bracket-wide `|ΔP|` of
     P(cheapest) for each option in the boundary's `computed_from`, each
     against `2·SE` of that probability at the boundary itself, where
     `SE = sqrt(p(1−p)/N)`. The first that does not clear its own is the one
-    the reason names.
+    the reason names. A decisiveness boundary whose two states differ, and
+    at which every one of those probabilities has an `SE` of 0, has no noise
+    to lie inside, and is identified.
     """
     watched = list(dict.fromkeys(boundary["computed_from"]))
     rows = []
@@ -1896,7 +1880,10 @@ def _identification(
     if not rows:
         return {"identified": False, "paths": paths, "watched": [],
                 "why": "no probability is attached to this boundary"}
-    short = next((row for row in rows if not row["delta_p"] > row["two_se"]), None)
+    exact = (all(row["two_se"] == 0.0 for row in rows)
+             and boundary["attribute"] == "decisive" and boundary["was"] != boundary["becomes"])
+    short = None if exact else next(
+        (row for row in rows if not row["delta_p"] > row["two_se"]), None)
     record = {"identified": short is None, "paths": paths, "watched": rows, "why": None}
     if short is not None:
         record["why"] = (
@@ -1957,7 +1944,7 @@ def _futures_field_boundaries(
 
 
 # ---------------------------------------------------------------------------
-# A figure printed on a crossing's axis (§0.1 items 42 and 54)
+# The figure a crossing prints (§0.1 items 42, 54 and 60)
 # ---------------------------------------------------------------------------
 
 # The precision each kind of crossing starts at, in decimals of a percent.
@@ -2002,15 +1989,8 @@ def _places_within(value: float, upper_end: float) -> int:
     return places
 
 
-def _at_places(value: float, places: int) -> Decimal:
-    """`value` as a percent rounded to the nearest at `places` decimals, the
-    way `ordered_figure` prints it."""
-    return Decimal(f"{value:.{places}%}".rstrip("%"))
-
-
 def printed_crossing(key: str, field: str, value: float, upper_end: float, was: Any,
-                     says_at: Callable[[float], Any], lo: float,
-                     figures: Sequence[float] = ()) -> str:
+                     says_at: Callable[[float], Any], lo: float) -> str:
     """The figure a crossing prints (§0.1 items 54 and 60): `value`, the lower
     end of the bracket the crossing converged in, floored at its kind's
     starting precision and widened one decimal at a time, up to
@@ -2020,23 +2000,13 @@ def printed_crossing(key: str, field: str, value: float, upper_end: float, was: 
     seeded curve for a sampled one.
 
     A floored figure below `lo`, the low end of the bracket searched, is
-    passed over, and so is one below a figure in `figures` (the other figures
-    printed on this axis) that lies below `value`, that figure rounded at
-    `PRINTED_RATE_MAX_PLACES`. Where no precision passes, it raises
-    `CrossingRefused` with the code `not_printable` and what it found at
-    each floored figure."""
+    passed over. Where no precision passes, it raises `CrossingRefused` with
+    the code `not_printable` and what it found at each floored figure."""
     start = _START_PLACES[field]
     finest = _places_within(value, upper_end)
-    below = [(_at_places(figure, PRINTED_RATE_MAX_PLACES), figure)
-             for figure in figures if figure < value]
     found: List[str] = []
     for places in range(start, finest + 1):
         text = floored_rate(value, places)
-        shown = Decimal(text.rstrip("%"))
-        over = [f"{at}%" for at, _ in below if at > shown]
-        if over:
-            found.append(f"{text} is below {over[0]}, a figure on this axis")
-            continue
         at = _percent_value(text)
         if at < lo:
             found.append(f"{text} is below the bracket searched")
@@ -2055,189 +2025,6 @@ def printed_crossing(key: str, field: str, value: float, upper_end: float, was: 
     raise CrossingRefused(
         "not_printable",
         f"{head} at {start} to {finest} decimals of a percent: " + "; ".join(found))
-
-
-def _side(value: float, lower: float, upper: float) -> int:
-    """Where `value` lies against a crossing's bracket: -1 at or below its
-    lower end, 1 at or above its upper end, 0 inside it."""
-    if value <= lower:
-        return -1
-    return 1 if value >= upper else 0
-
-
-def _on_its_side(shown: Decimal, side: int, printed: str) -> bool:
-    """Whether a figure printed as `shown` reads on `side` of a crossing
-    printed as `printed` (§0.1 item 60): at or below it, equal to it, or
-    above it."""
-    crossing = Decimal(printed.rstrip("%"))
-    return {-1: shown <= crossing, 0: shown == crossing, 1: shown > crossing}[side]
-
-
-def ordered_figure(value: float, crossings: Sequence[Tuple[float, float, str]],
-                   sides: Optional[Sequence[int]] = None) -> Optional[str]:
-    """A stated or cited rate on a crossing's axis, printed as `--sweep`
-    prints it (`sweep._fmt_value`, two decimals of a percent, to the
-    nearest) and widened one decimal at a time until it prints on its side
-    of every printed crossing (§0.1 item 60). `crossings` holds each
-    crossing's bracket and its printed figure, and `sides` the side of each
-    it prints on (`_on_its_side`), where that is not the side its value lies
-    on (`_side`). A figure no rounding places, which lies at or between a
-    crossing's two ends, prints as that crossing's figure where that places
-    it; otherwise None."""
-    if sides is None:
-        sides = [_side(value, lower, upper) for lower, upper, _ in crossings]
-    pairs = list(zip(sides, (printed for _, _, printed in crossings)))
-
-    def placed(text: str) -> bool:
-        shown = Decimal(text.rstrip("%"))
-        return all(_on_its_side(shown, side, printed) for side, printed in pairs)
-
-    for places in range(2, PRINTED_RATE_MAX_PLACES + 1):
-        text = f"{value:.{places}%}"
-        if placed(text):
-            return text
-    for lower, upper, printed in crossings:
-        if lower <= value <= upper and placed(printed):
-            return printed
-    return None
-
-
-_SIDE_WORDS = {-1: "at or below the lower end of", 0: "inside",
-               1: "at or above the upper end of"}
-_PRINTED_SIDE = {-1: "at or below", 0: "equal to", 1: "above"}
-
-
-def _run_sides(value: float, crossings: Dict[int, Tuple[str, float, float, Any, Any]],
-               says: Dict[str, Any]) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
-    """`(sides, wrong)` for the figure a config states as a key's one
-    figure, `value`, beside `crossings`, each `(field, lower, upper, was,
-    becomes)` by its index (§0.1 item 65): the side of each crossing it
-    prints on, and `(index, reason)` of the crossing it refuses, or None.
-    The rule is the one docs/reference/API_CONTRACT.md states for the stated
-    figure, `up` and `down` its two nearest crossings on each field."""
-    sides = {index: _side(value, lower, upper)
-             for index, (_, lower, upper, _, _) in crossings.items()}
-    wrong: Optional[Tuple[int, str]] = None
-    for field in dict.fromkeys(crossing[0] for crossing in crossings.values()):
-        own = [index for index, crossing in crossings.items() if crossing[0] == field]
-        above = sorted((i for i in own if sides[i] < 1), key=lambda i: crossings[i][1])
-        below = sorted((i for i in own if sides[i] == 1), key=lambda i: crossings[i][2])
-        up = above[0] if above else None
-        down = below[-1] if below else None
-        says_now = says[field]
-
-        def was(index: Optional[int]) -> Any:
-            return says_now if index is None else crossings[index][3]
-
-        def becomes(index: Optional[int]) -> Any:
-            return says_now if index is None else crossings[index][4]
-
-        if was(up) == says_now and becomes(down) == says_now:
-            continue
-        if up is not None and becomes(up) == says_now and was(
-                above[1] if len(above) > 1 else None) == says_now:
-            sides[up] = 1
-        elif down is not None and was(down) == says_now and becomes(
-                below[-2] if len(below) > 1 else None) == says_now:
-            sides[down] = -1
-        elif wrong is None:
-            index = up if was(up) != says_now else down
-            _, lower, upper, _, _ = crossings[index]
-            reads = was(index) if index == up else becomes(index)
-            wrong = (index, (
-                f"{value!r}, the stated figure, lies {_SIDE_WORDS[sides[index]]} its bracket "
-                f"[{lower!r}, {upper!r}] and reads {reads!r} beside it, and {field} says "
-                f"{says_now!r} in this run"))
-    return sides, wrong
-
-
-def _inside_sides(value: float, crossings: Dict[int, Tuple[str, float, float, Any, Any]],
-                  reads: Callable[[str], Any],
-                  ) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
-    """`(sides, wrong)` for a figure on the axis other than the key's one
-    stated figure, `value`, beside `crossings`, each `(field, lower, upper,
-    was, becomes)` by its index: the side of each crossing it lies on, except
-    beside a crossing whose bracket holds it, where what `reads(field)` says
-    at `value` decides it, equal to its figure on `was` and above it on
-    `becomes`; and `(index, reason)` of the first crossing beside which it
-    reads neither, or None."""
-    sides = {index: _side(value, lower, upper)
-             for index, (_, lower, upper, _, _) in crossings.items()}
-    wrong: Optional[Tuple[int, str]] = None
-    for index, (field, lower, upper, was, becomes) in crossings.items():
-        if sides[index] != 0:
-            continue
-        there = reads(field)
-        if there == becomes:
-            sides[index] = 1
-        elif there != was and wrong is None:
-            wrong = (index, (
-                f"{value!r}, a figure on this axis inside its bracket [{lower!r}, "
-                f"{upper!r}], reads {there!r} there, and the crossing changes from "
-                f"{was!r} to {becomes!r}"))
-    return sides, wrong
-
-
-def _ordered_axis(figures: Sequence[float],
-                  crossings: Sequence[Tuple[float, float, str]],
-                  stated: int = 0,
-                  run_sides: Optional[Callable[[List[int]], Tuple[
-                      Dict[int, int], Optional[Tuple[int, str]]]]] = None,
-                  other_sides: Optional[Callable[[int, List[int]], Tuple[
-                      Dict[int, int], Optional[Tuple[int, str]]]]] = None,
-                  ) -> Tuple[List[str], List[int], List[Tuple[int, str]]]:
-    """`(texts, kept, refused)`: every figure in `figures` printed by
-    `ordered_figure` beside the crossings that stay printed (`kept`, their
-    indices), and `(index, reason)` for each crossing refused
-    (`not_orderable`, §0.1 items 61 and 65), one at a time until none is.
-    `run_sides(kept)` gives the first `stated` figures' side of each kept
-    crossing, and `other_sides(figure, kept)` each later figure's; a crossing
-    either names is refused first, the stated figures' before the others'.
-    Otherwise the first figure not placed beside every kept crossing is
-    taken, and the first crossing, in order, beside which with the crossings
-    before it that figure is not placed is refused."""
-    kept = list(range(len(crossings)))
-    refused: List[Tuple[int, str]] = []
-    while True:
-        sides, wrong = run_sides(kept) if run_sides is not None else ({}, None)
-        others = ({figure: other_sides(figure, kept) for figure in range(stated, len(figures))}
-                  if other_sides is not None else {})
-        wrong = wrong or next((w for _, w in others.values() if w is not None), None)
-        if wrong is not None:
-            refused.append(wrong)
-            kept.remove(wrong[0])
-            continue
-
-        def given(figure: int, indices: Sequence[int]) -> Optional[List[int]]:
-            own = sides if figure < stated else others.get(figure, ({}, None))[0]
-            return [own[i] for i in indices] if own else None
-
-        def place(figure: int, indices: Sequence[int]) -> Optional[str]:
-            return ordered_figure(figures[figure], [crossings[i] for i in indices],
-                                  given(figure, indices))
-
-        stuck = next((figure for figure in range(len(figures))
-                      if place(figure, kept) is None), None)
-        if stuck is None:
-            return [place(figure, kept) for figure in range(len(figures))], kept, refused
-        tried: List[int] = []
-        for index in kept:
-            if place(stuck, tried + [index]) is None:
-                value = figures[stuck]
-                lower, upper, _ = crossings[index]
-                shown = given(stuck, tried + [index]) or [
-                    _side(value, crossings[i][0], crossings[i][1]) for i in tried + [index]]
-                refused.append((index, (
-                    f"{value!r}, a figure on this axis {_SIDE_WORDS[_side(value, lower, upper)]} "
-                    f"its bracket [{lower!r}, {upper!r}], prints "
-                    + ", ".join(f"{_PRINTED_SIDE[side]} {crossings[i][2]}"
-                                for side, i in zip(shown, tried + [index]))
-                    + f" rounded to the nearest at none of 2 to {PRINTED_RATE_MAX_PLACES} "
-                      f"decimals of a percent, nor as the figure of a crossing whose bracket "
-                      f"holds it")))
-                kept.remove(index)
-                break
-            tried.append(index)
 
 
 def _probability_pairs(probs: Dict[str, Optional[float]]) -> Tuple[Tuple[str, float], ...]:
@@ -2316,25 +2103,20 @@ def _stated_path_zero(key: str) -> StructuralZero:
                           keys=(key,), reversal_key=key)
 
 
-def reversal_path_note(raw: Dict[str, Any], key: str,
-                       figures: Optional[Sequence[str]] = None) -> Optional[str]:
+def reversal_path_note(raw: Dict[str, Any], key: str) -> Optional[str]:
     """How the reversal axis of `key` is built, for a key the config states as
-    a path of two or more different rates (§0.1 item 41), or None.
+    a path of two or more different rates (§0.1 items 41 and 67), or None.
 
-    A construction fact about the figures printed beside it, and nothing
-    more: every point on the axis is the config with that one leaf set to one
-    figure (`sweep.load_at`), so the whole stated path is replaced by one rate
-    at every renewal. Which configs get it is `sweep.stated_path`'s answer, the
-    same one `--sweep`'s own note reads, so the two cannot disagree about what
-    is a path.
+    A construction fact, and nothing more: every point on the axis is the
+    config with that one leaf set to one figure (`sweep.load_at`), so the
+    whole stated path is replaced by one rate at every renewal. Which configs
+    get it is `sweep.stated_path`'s answer, the same one `--sweep`'s own note
+    reads, so the two cannot disagree about what is a path.
     """
-    path = stated_path(raw, key)
-    if path is None:
+    if stated_path(raw, key) is None:
         return None
-    stated = ", ".join(figures if figures is not None
-                       else [_fmt_value(key, value) for value in path])
-    return (f"each crossing on this key is priced with the stated path ({stated}) "
-            f"replaced by one rate at every renewal")
+    return ("each crossing on this key is priced with the stated path replaced by one "
+            "rate at every renewal")
 
 
 # Every `RATE_BRACKETS` entry is a span written into the engine's code, never a
@@ -2365,10 +2147,10 @@ def reversal_register(
     boundary refuse, without which "confirmed on the fixture" would be a check
     that cannot fail.
 
-    ALL FOUR of `decomposition.BOUNDARY_FIELDS` are answered on every row, and
-    a kind this solver cannot reach on this config comes back as a
-    `RefusedBoundary` naming why (§0.1 ruling 4). An absent row and a refused
-    row are different claims and a reader cannot tell them apart.
+    ALL FOUR of `decomposition.BOUNDARY_FIELDS` are answered on every exact or
+    estimated row, and a kind this solver cannot reach on this config comes
+    back as a `RefusedBoundary` naming why (§0.1 ruling 4). An absent row and
+    a refused row are different claims and a reader cannot tell them apart.
 
     RETURNS AN EMPTY REGISTER, and that is data rather than an error, on the one
     config where no margin exists at all: fewer than two options priced
@@ -2441,44 +2223,31 @@ def reversal_register(
                 reason=_not_admitted_reason(key, priced=bool(record["deltas"]))))
             continue
         gate = reversal_gate(raw, key, far, paths=gate_paths, simulate=simulate)
-        compounding = mortgage_compounding_of(raw[option])
 
         common = {
             "key": key, "option": option,
-            "stated_source": _stated_source(spec, key),
-            "stated_tag": _stated_tag(spec, key),
             "bracket_low": lo, "bracket_high": hi, "bracket_source": BRACKET_SOURCE,
             "max_path_deviation_over_sd": gate["worst_deviation_over_sd"],
+            "path_note": reversal_path_note(raw, key),
         }
-        # The figures the row prints on the key's own axis: the stated value,
-        # never flattened (the schedule is what the axis replaces, so one
-        # figure would erase the trap), then the cited references.
-        stated_values = [float(v) for v in _stated_values(raw, key)]
-        references = _axis_references(key, compounding)
-        figures = stated_values + [r.value for r in references]
         if not gate["licensed"]:
             # Unreachable for a financing-leg key on a correct engine —
             # `_financing_pv` shifts every path by one constant — so arriving
             # here means the licence evidence failed and the row exists to say
             # so by name rather than vanish. The row refuses rather than
             # estimating (§6), so it carries no boundary at all.
-            texts = [ordered_figure(figure, ()) for figure in figures]
             estimated.append(EstimatedReversal(
-                **common, **_on_axis(raw, key, references, texts, len(stated_values)),
-                boundaries=(),
+                **common, boundaries=(),
                 refused_boundaries=tuple(
                     RefusedBoundary(verdict_field=field, code="not_exact",
                                     reason=gate["why"])
                     for field in BOUNDARY_FIELDS)))
             continue
-        boundaries, refused, texts = _confirmed_boundaries(
+        boundaries, refused = _confirmed_boundaries(
             raw, key, options, det, futures, stated, lo, hi, paths=paths, seed=seed,
-            scan_points=scan_points, simulate=simulate, iterations=iterations,
-            figures=figures, stated_figures=len(stated_values),
-            one_figure=stated_values[0] if stated_path(raw, key) is None else None)
+            scan_points=scan_points, simulate=simulate, iterations=iterations)
         exact.append(ExactReversal(
-            **common, **_on_axis(raw, key, references, texts, len(stated_values)),
-            probe_paths=gate["paths"],
+            **common, probe_paths=gate["paths"],
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
         zeros.append(_stated_path_zero(key))
 
@@ -2491,86 +2260,10 @@ def reversal_register(
         refused=tuple(not_admitted))
 
 
-def _stated_source(spec: ComparisonSpec, key: str) -> str:
-    """Whose figure the stated `key` is: `SourceEcho.classify`'s own answer —
-    the classifier the read-back's source echo prints — and no second one.
-
-    Every candidate is a key the config STATES, and the echo carries an entry
-    for every stated value (the undeclared ones as `unattributed`), so a
-    missing entry means the candidate rule and the echo disagree about what
-    the config says. That RAISES rather than printing a guessed class.
-    """
-    echo = spec.sources
-    source = echo.classify(key) if echo is not None else None
-    if source is None:
-        raise ValueError(
-            f"{key} is a reversal candidate, so this config states it, yet the source "
-            f"echo has no entry for it — nothing can say whose figure it is")
-    return source
-
-
-def _stated_tag(spec: ComparisonSpec, key: str) -> str:
-    """The tag of the stated `key` (`sources.stated_tag`). Every candidate is stated, so
-    the echo carries it; `_stated_source` has already raised where it does
-    not."""
-    return stated_tag(spec.sources.get(key))
-
-
 def _stated_values(raw: Dict[str, Any], key: str) -> List[Any]:
     """Each figure the config states for `key`: one, or each rate of a path."""
     value = base_value(raw, key)
     return list(value) if isinstance(value, list) else [value]
-
-
-def _on_axis(raw: Dict[str, Any], key: str, references: Sequence[AxisReference],
-             texts: Sequence[str], stated: int) -> Dict[str, Any]:
-    """A row's `stated_formatted`, `references` and `path_note`, from `texts`:
-    the printed figure of each stated value (the first `stated` of them) and
-    then of each reference, in the order `_confirmed_boundaries` printed them
-    (`ordered_figure`). The path note prints the same stated figures."""
-    stated_texts = list(texts[:stated])
-    return {"stated_formatted": ", ".join(stated_texts),
-            "references": tuple(dataclasses.replace(reference, formatted=text)
-                                for reference, text in zip(references, texts[stated:])),
-            "path_note": reversal_path_note(raw, key, stated_texts)}
-
-
-def _axis_references(key: str, compounding: str) -> Tuple[AxisReference, ...]:
-    """The published figures that sit on this axis, so a solved rate has
-    something cited to be read against — expressed ON THE AXIS the crossings
-    are solved on, which is the key's own quoting convention (`compounding`,
-    the option's `mortgage_rate_compounding`).
-
-    Every anchor here is a semi-annual quote. On an `effective_annual` axis it
-    goes through `rates.effective_mortgage_rate`, the conversion the loader
-    applies to the config's own rate, and the note names the figure as
-    published; printed raw, a semi-annual quote beside effective-annual
-    crossings misstated every gap between them. What a reference licenses is
-    not said here: that is interpretation, and the block prints figures (spec
-    §0.1 item 35). Each `formatted` here is its two-decimal figure; a row
-    replaces it with the one `ordered_figure` prints (`_on_axis`)."""
-    leaf = key.rsplit(".", 1)[-1]
-    if leaf not in ("mortgage_rate", "mortgage_renewal_rates"):
-        return ()
-    if compounding not in MORTGAGE_COMPOUNDING:
-        raise ValueError(f"{key} is quoted {compounding!r}, which is none of "
-                         f"{MORTGAGE_COMPOUNDING}: no reference can be put on its axis")
-    out: List[AxisReference] = []
-    for name in _RATE_AXIS_ANCHORS:
-        anchor = ANCHORS.get(name)
-        if anchor is None:
-            continue
-        published = float(anchor.value)
-        if compounding == _RATE_AXIS_ANCHOR_COMPOUNDING:
-            on_axis, converted = published, None
-        else:
-            on_axis = effective_mortgage_rate(published, _RATE_AXIS_ANCHOR_COMPOUNDING)
-            converted = (f"published as {_fmt_value(key, published)} compounded "
-                         f"semi-annually")
-        out.append(AxisReference(
-            label=name.rsplit(".", 1)[-1].replace("_", " "), value=on_axis,
-            formatted=ordered_figure(on_axis, ()), anchor=name, note=converted))
-    return tuple(out)
 
 
 def _not_admitted_reason(key: str, *, priced: bool) -> str:
@@ -2604,27 +2297,22 @@ def _confirmed_boundaries(
     stated: Verdict, lo: float, hi: float, *,
     paths: int, seed: int, scan_points: int,
     simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult], iterations: int,
-    figures: Sequence[float] = (), stated_figures: int = 0,
-    one_figure: Optional[float] = None,
-) -> Tuple[List[Union[SolvedBoundary, SampledBoundary]], List[RefusedBoundary], List[str]]:
-    """`(boundaries, refused, texts)`: every one of `BOUNDARY_FIELDS`
-    answered, the boundary's own type where one exists, was confirmed and
-    prints, a `RefusedBoundary` naming why everywhere else; and `texts`, each
-    of `figures` as `ordered_figure` prints it beside the printed crossings.
-    Nothing is ever silently absent — an absent row and a refused row are
-    different claims and a reader cannot tell them apart.
+) -> Tuple[List[Union[SolvedBoundary, SampledBoundary]], List[RefusedBoundary]]:
+    """`(boundaries, refused)`: every one of `BOUNDARY_FIELDS` answered, the
+    boundary's own type where one exists, was confirmed and prints, a
+    `RefusedBoundary` naming why everywhere else. Nothing is ever silently
+    absent — an absent row and a refused row are different claims and a
+    reader cannot tell them apart.
 
-    Each reported boundary is confirmed by ONE FULL RE-SIMULATION at its
-    `value`, compared against the free curve's own probabilities at that same
-    value. A boundary of a futures field is additionally required to be
-    identified outside Monte Carlo noise before it is confirmed at all —
-    re-simulating an unidentified boundary would dress noise in a measurement.
-    A confirmed boundary then prints its figure (`printed_crossing`), and
-    every figure on the axis, the rate of an `unconfirmed` reason included,
-    is placed beside the printed crossings (`_ordered_axis`). Where the key
-    is stated as `one_figure`, the first `stated_figures` of `figures`
-    print on the side where this run reads it (`_run_sides`). A check that
-    cannot pass refuses that one boundary (§0.1 item 61).
+    A boundary whose field does not say its `was` at its `value` and its
+    `becomes` at its `upper_end` refuses first (§0.1 item 67). Each reported
+    boundary is confirmed by ONE FULL RE-SIMULATION at its `value`, compared
+    against the free curve's own probabilities at that same value. A boundary
+    of a futures field is additionally required to be identified outside
+    Monte Carlo noise before it is confirmed at all — re-simulating an
+    unidentified boundary would dress noise in a measurement. A confirmed
+    boundary then prints its figure (`printed_crossing`). A check that cannot
+    pass refuses that one boundary (§0.1 item 61).
 
     `mc` IS None WHEN THIS RUN HAS NO FUTURES, and then there is no free curve
     to build: the deterministic pair is still solved, comes back as
@@ -2661,16 +2349,17 @@ def _confirmed_boundaries(
     def says_at(field: str) -> Callable[[float], Any]:
         """The field's own evaluation at one value of the axis: the
         deterministic verdict for a solved kind, the seeded curve for a
-        sampled one — what `printed_crossing` checks the printed figure on."""
+        sampled one — what a boundary's two ends and its printed figure are
+        checked on."""
         if field in _DETERMINISTIC_FIELDS:
             return lambda v: _ranking_at(raw, key, v)[field]
         return lambda v: field_state(free(v)[0], field)
 
+    def said(probs: Dict[str, Optional[float]]) -> str:
+        return ", ".join(f"{name} {p:.4f}" for name, p in probs.items() if p is not None)
+
     refused: List[RefusedBoundary] = []
-    # (field, entry, curve, confirmed) of each boundary confirmed, and of each
-    # whose re-simulation disagreed with the curve.
-    confirmed_ones: List[Tuple[str, Dict[str, Any], Any, Any]] = []
-    unconfirmed: List[Tuple[str, Dict[str, Any], Any, Any]] = []
+    reported: List[Union[SolvedBoundary, SampledBoundary]] = []
     for field in BOUNDARY_FIELDS:
         found, refusal = per_field[field]
         if refusal is not None:
@@ -2679,88 +2368,46 @@ def _confirmed_boundaries(
             continue
         for entry in found:
             value = entry["value"]
-            if field in _DETERMINISTIC_FIELDS:
-                ends = [_ranking_at(raw, key, end)[field] for end in (value, entry["upper_end"])]
-                if ends != [entry["was"], entry["becomes"]]:
-                    refused.append(RefusedBoundary(
-                        verdict_field=field, code="not_bracketed", reason=(
-                            f"{field} says {ends[0]!r} at {value!r} and {ends[1]!r} at "
-                            f"{entry['upper_end']!r}, the two ends of the bracket its "
-                            f"crossing from {entry['was']!r} to {entry['becomes']!r} "
-                            f"converged in")))
-                    continue
-            if free is None:
-                # No futures: the solved value stands on its own and nothing
-                # re-simulates it, which is what the empty corroboration says.
-                confirmed_ones.append((field, entry, None, None))
+            ends = [says_at(field)(end) for end in (value, entry["upper_end"])]
+            if ends != [entry["was"], entry["becomes"]]:
+                refused.append(RefusedBoundary(
+                    verdict_field=field, code="not_bracketed", reason=(
+                        f"{field} says {ends[0]!r} at {value!r} and {ends[1]!r} at "
+                        f"{entry['upper_end']!r}, the two ends of the bracket its "
+                        f"crossing from {entry['was']!r} to {entry['becomes']!r} "
+                        f"converged in")))
                 continue
-            curve = free(value)[1]
-            if field in _FUTURES_FIELDS:
-                identified = _identification(
-                    entry, {"lo": free(lo)[1], "hi": free(hi)[1], "at": curve}, paths)
-                if not identified["identified"]:
-                    refused.append(RefusedBoundary(verdict_field=field,
-                                                   code="not_identified",
-                                                   reason=identified["why"]))
+            # No futures: the solved value stands on its own and nothing
+            # re-simulates it, which is what the empty corroboration says.
+            curve = confirmed = None
+            if free is not None:
+                curve = free(value)[1]
+                if field in _FUTURES_FIELDS:
+                    identified = _identification(
+                        entry, {"lo": free(lo)[1], "hi": free(hi)[1], "at": curve}, paths)
+                    if not identified["identified"]:
+                        refused.append(RefusedBoundary(verdict_field=field,
+                                                       code="not_identified",
+                                                       reason=identified["why"]))
+                        continue
+                confirming = simulate(load_at(raw, key, value))
+                confirmed = {name: getattr(confirming, f"prob_{name}_cheapest")
+                             for name in ("condo", "house", "rent")}
+                if confirmed != curve:
+                    refused.append(RefusedBoundary(
+                        verdict_field=field, code="unconfirmed", reason=(
+                            f"the re-simulation at {value!r} gives {said(confirmed)}, and "
+                            f"the free curve gives {said(curve)}")))
                     continue
-            confirming = simulate(load_at(raw, key, value))
-            confirmed = {name: getattr(confirming, f"prob_{name}_cheapest")
-                         for name in ("condo", "house", "rent")}
-            (confirmed_ones if confirmed == curve else unconfirmed).append(
-                (field, entry, curve, confirmed))
-
-    # Every figure on the axis: the row's own, then the rate of each
-    # `unconfirmed` reason.
-    on_axis = list(figures) + [entry["value"] for _, entry, _, _ in unconfirmed]
-    # The first `stated_count` of them are the key's one stated figure, which
-    # prints on the side where this run reads it (§0.1 item 65), so it does
-    # not hold up the figure of a crossing whose `becomes` this run reads.
-    stated_count = stated_figures if one_figure is not None else 0
-    says = {field: field_state(stated, field) for field in BOUNDARY_FIELDS}
-
-    printed: List[Tuple[str, Dict[str, Any], Any, Any, str]] = []
-    for field, entry, curve, confirmed in confirmed_ones:
-        beside = on_axis[stated_count:] if says[field] == entry["becomes"] else on_axis
-        try:
-            text = printed_crossing(key, field, entry["value"], entry["upper_end"],
-                                    entry["was"], says_at(field), lo, beside)
-        except CrossingRefused as no:
-            refused.append(RefusedBoundary(verdict_field=field, code=no.code,
-                                           reason=no.reason))
-            continue
-        printed.append((field, entry, curve, confirmed, text))
-
-    def kept_crossings(kept: List[int]) -> Dict[int, Tuple[str, float, float, Any, Any]]:
-        return {i: (printed[i][0], printed[i][1]["value"], printed[i][1]["upper_end"],
-                    printed[i][1]["was"], printed[i][1]["becomes"]) for i in kept}
-
-    def run_sides(kept: List[int]) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
-        if not stated_count:
-            return {}, None
-        return _run_sides(one_figure, kept_crossings(kept), says)
-
-    def other_sides(figure: int,
-                    kept: List[int]) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
-        value = on_axis[figure]
-        return _inside_sides(value, kept_crossings(kept), lambda field: says_at(field)(value))
-
-    texts, kept, dropped = _ordered_axis(
-        on_axis, [(entry["value"], entry["upper_end"], text)
-                  for _, entry, _, _, text in printed], stated_count, run_sides, other_sides)
-    for index, reason in dropped:
-        refused.append(RefusedBoundary(verdict_field=printed[index][0], code="not_orderable",
-                                       reason=reason))
-
-    def said(probs: Dict[str, Optional[float]]) -> str:
-        return ", ".join(f"{name} {p:.4f}" for name, p in probs.items() if p is not None)
-
-    for (field, _, curve, confirmed), rate in zip(unconfirmed, texts[len(figures):]):
-        refused.append(RefusedBoundary(verdict_field=field, code="unconfirmed", reason=(
-            f"the re-simulation at {rate} gives {said(confirmed)}, and the free curve "
-            f"gives {said(curve)}")))
-    reported = [_typed_boundary(field, entry, curve=curve, confirmed=confirmed,
-                                curve_paths=paths, seed=seed, formatted=text)
-                for field, entry, curve, confirmed, text in (printed[i] for i in kept)]
+            try:
+                text = printed_crossing(key, field, value, entry["upper_end"],
+                                        entry["was"], says_at(field), lo)
+            except CrossingRefused as no:
+                refused.append(RefusedBoundary(verdict_field=field, code=no.code,
+                                               reason=no.reason))
+                continue
+            reported.append(_typed_boundary(field, entry, curve=curve, confirmed=confirmed,
+                                            curve_paths=paths, seed=seed, formatted=text))
     reported.sort(key=lambda b: (BOUNDARY_FIELDS.index(b.verdict_field), b.value))
     refused.sort(key=lambda r: BOUNDARY_FIELDS.index(r.verdict_field))
-    return reported, refused, texts[:len(figures)]
+    return reported, refused

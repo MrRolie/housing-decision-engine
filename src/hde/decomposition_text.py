@@ -11,7 +11,7 @@ WHAT THE BLOCK PRINTS (spec §0.1 items 35, 41, 52 and 59): figures, not
 interpretation. The kinds of line it may print, and what every field means,
 are `docs/reference/API_CONTRACT.md`'s, under "The text block" and the
 field bullets of its `decomposition` section. A refusal's reason, a path
-note, a width's tag and a figure on a crossing's axis are written by the
+note, a width's tag and a crossing's figure are written by the
 party that produced them and printed verbatim.
 
 No line says why a figure is what it is, which figure matters, or what to run
@@ -362,12 +362,6 @@ def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
     return lines
 
 
-def _reference_clause(reference) -> str:
-    anchor = "" if reference.anchor is None else f" [{reference.anchor}]"
-    note = "" if reference.note is None else f" — {reference.note}"
-    return f"{reference.label} {reference.formatted}{anchor}{note}"
-
-
 def _bracket_line(low: float, high: float, source: str) -> str:
     """The bracket the key was searched inside, with WHOSE range it is (§6's
     correction, §0.1 item 43)."""
@@ -375,15 +369,14 @@ def _bracket_line(low: float, high: float, source: str) -> str:
 
 
 def _reversal_head(reversal) -> str:
-    """The row's subject: the key, what the config states for it, and its
-    tag (`stated_tag`)."""
-    return f"  {reversal.key}, stated {reversal.stated_formatted} [{reversal.stated_tag}]"
+    """The row's subject: its key, and no figure (§0.1 item 67)."""
+    return f"  {reversal.key}"
 
 
 def _reversal_detail_lines(reversal) -> List[str]:
     """ONE reversal row's figures: its bracket, its path note, its crossings —
-    solved ones first, each typed on its own line — the fields it refused, and
-    the cited figures on its axis."""
+    solved ones first, each typed on its own line — and the fields it
+    refused."""
     lines: List[str] = [_bracket_line(reversal.bracket_low, reversal.bracket_high,
                                       reversal.bracket_source)]
     if reversal.path_note is not None:
@@ -401,9 +394,6 @@ def _reversal_detail_lines(reversal) -> List[str]:
     else:
         lines.extend(_estimated_boundary_line(b) for b in ordered)
     lines.extend(_refused_boundary_lines(reversal.refused_boundaries))
-    if reversal.references:
-        lines.append("      on the same axis: "
-                     + "; ".join(_reference_clause(r) for r in reversal.references))
     return lines
 
 

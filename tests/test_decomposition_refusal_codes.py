@@ -30,9 +30,8 @@ from hde.monte_carlo import run_monte_carlo
 
 from tests import decomposition_households as hh
 from tests.decomposition_runs import (
-    ALL_OTHER, CONDO_ONLY, FIXTURE, INCOME, MONTREAL, MORTGAGE, RARE2,
-    STATED_BESIDE_CROSSING, STATED_UNDER_A_CROSSING, _block_text, _cli, _load, _strict,
-    force_income_move, run, untag)
+    ALL_OTHER, CONDO_ONLY, FIXTURE, INCOME, MONTREAL, MORTGAGE, RARE2, _block_text, _cli,
+    _load, _strict, force_income_move, not_printable_at_every_figure, run, untag)
 from tests.test_decomposition_sentences import TWINS
 
 
@@ -114,7 +113,6 @@ HEADS = {
     "no_futures": "no boundary printed",
     "scan_mismatch": "no boundary printed",
     "not_printable": "a boundary not printed",
-    "not_orderable": "a boundary not printed",
     "not_bracketed": "a boundary not printed",
 }
 
@@ -146,8 +144,8 @@ def _unchanged(tmp_path, monkeypatch):
 
 
 def _not_on_axis(tmp_path, monkeypatch):
-    block, text = _render(_write(tmp_path, "stated", STATED_BESIDE_CROSSING))
-    return _printed_refusal(block, text, "house.mortgage_rate", "decisive",
+    got = run("not_decisive_off_the_scan")
+    return _printed_refusal(got.block, got.text, "house.mortgage_rate", "decisive",
                             "decisive says 'not decisive' in this run and at none of")
 
 
@@ -221,15 +219,13 @@ def _scan_mismatch(tmp_path, monkeypatch):
 
 
 def _not_printable(tmp_path, monkeypatch):
-    block, text = _render(_write(tmp_path, "under", STATED_UNDER_A_CROSSING))
+    """A solved crossing whose field reads another state at every floored
+    figure of it, which no corpus run reaches: the central case read at
+    those figures is moved, and the crossing refuses, printed."""
+    not_printable_at_every_figure(monkeypatch, "best")
+    block, text = _render(MORTGAGE, "200")
     return _printed_refusal(block, text, "house.mortgage_rate", "best",
                             "the crossing of best from 'house'")
-
-
-def _not_orderable(tmp_path, monkeypatch):
-    got = run("stated_at_a_sampled_crossing")
-    return _printed_refusal(got.block, got.text, "house.mortgage_rate", "mc_best",
-                            "0.06278717945831885, a figure on this axis")
 
 
 def _not_bracketed(tmp_path, monkeypatch):
@@ -294,7 +290,6 @@ WITNESSES = {
         "no_futures": _boundary_no_futures,
         "scan_mismatch": _scan_mismatch,
         "not_printable": _not_printable,
-        "not_orderable": _not_orderable,
         "not_bracketed": _not_bracketed,
     },
     "NO_DISTANCE_CODES": {

@@ -355,17 +355,6 @@ def _require_words(kind: str, verdict_field: str, was: object, becomes: object) 
 
 
 @dataclass(frozen=True)
-class AxisReference:
-    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
-
-    label: str
-    value: float
-    formatted: str
-    anchor: Optional[str] = None
-    note: Optional[str] = None
-
-
-@dataclass(frozen=True)
 class SolvedBoundary:
     """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
@@ -414,7 +403,6 @@ BOUNDARY_REFUSAL_CODES: Tuple[str, ...] = (
     "no_futures",
     "scan_mismatch",
     "not_printable",
-    "not_orderable",
     "not_bracketed",
 )
 
@@ -423,7 +411,6 @@ EDGE_REFUSAL_CODES: Tuple[str, ...] = (
     "not_identified",
     "unconfirmed",
     "not_printable",
-    "not_orderable",
     "not_bracketed",
 )
 
@@ -470,9 +457,6 @@ class ExactReversal:
 
     key: str
     option: str
-    stated_formatted: str
-    stated_source: str
-    stated_tag: str
     bracket_low: float
     bracket_high: float
     bracket_source: str
@@ -481,7 +465,6 @@ class ExactReversal:
     # Design: docs/specs/2026-09-22-which-risk-decides-it.md §0.1 item 24.
     boundaries: Tuple[Union[SolvedBoundary, SampledBoundary], ...]
     refused_boundaries: Tuple[RefusedBoundary, ...]
-    references: Tuple[AxisReference, ...]
     path_note: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -512,16 +495,12 @@ class EstimatedReversal:
 
     key: str
     option: str
-    stated_formatted: str
-    stated_source: str
-    stated_tag: str
     bracket_low: float
     bracket_high: float
     bracket_source: str
     max_path_deviation_over_sd: float
     boundaries: Tuple[EstimatedBoundary, ...]
     refused_boundaries: Tuple[RefusedBoundary, ...]
-    references: Tuple[AxisReference, ...]
     path_note: Optional[str] = None
 
     def __post_init__(self) -> None:

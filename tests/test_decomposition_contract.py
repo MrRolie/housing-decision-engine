@@ -303,50 +303,22 @@ class TestARegisterHasOneTopRow:
         assert field.default is dataclasses.MISSING
 
 
-class TestAStatedValueSaysWhoseFigureItIs:
-    """`stated_source` has no default on either reversal kind: a row whose
-    producer did not say whose figure the stated value is must not build, or
-    the words keyed on it would fall back to whichever reading the default
-    happened to favour."""
-
-    _EXACT = dict(key="house.mortgage_renewal_rates", option="house",
-                  stated_formatted="4.60%, 5.00%", stated_tag="assistant", bracket_low=0.01,
-                  bracket_high=0.10, bracket_source="assistant", probe_paths=200,
-                  max_path_deviation_over_sd=9.5e-16, boundaries=(),
-                  refused_boundaries=(), references=())
-
-    def test_both_kinds_build_with_it_and_refuse_without_it(self):
-        exact = dc.ExactReversal(**self._EXACT, stated_source="assistant")
-        assert exact.stated_source == "assistant"
-        estimated_kwargs = {k: v for k, v in self._EXACT.items() if k != "probe_paths"}
-        estimated = dc.EstimatedReversal(**estimated_kwargs, stated_source="user")
-        assert estimated.stated_source == "user"
-        with pytest.raises(TypeError, match="stated_source"):
-            dc.ExactReversal(**self._EXACT)
-        with pytest.raises(TypeError, match="stated_source"):
-            dc.EstimatedReversal(**estimated_kwargs)
-
-    def test_it_has_no_default_anywhere(self):
-        for cls in (dc.ExactReversal, dc.EstimatedReversal):
-            for name in ("stated_source", "stated_tag"):
-                field = next(f for f in dataclasses.fields(cls) if f.name == name)
-                assert field.default is dataclasses.MISSING
-                assert field.default_factory is dataclasses.MISSING
-
-
 class TestAnEmptyRegisterSaysWhatItSearched:
     """`no_distance_reason` is set exactly when no row carries a distance: an
     empty register with no reason leaves the reader to take the absence for a
     finding, and a reason beside rows explains an emptiness that is not there.
     *Kills it:* deleting the guard, or widening it to refuse a legal register."""
 
-    _ROW = TestAStatedValueSaysWhoseFigureItIs._EXACT
+    _ROW = dict(key="house.mortgage_renewal_rates", option="house", bracket_low=0.01,
+                bracket_high=0.10, bracket_source="assistant", probe_paths=200,
+                max_path_deviation_over_sd=9.5e-16, boundaries=(),
+                refused_boundaries=())
 
     def test_the_legal_shapes_build(self):
         dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
                             no_distance_code="no_candidate",
                             no_distance_reason="nothing was searched")
-        dc.ReversalRegister(exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
+        dc.ReversalRegister(exact=(dc.ExactReversal(**self._ROW),),
                             estimated=(), structural_zeros=(), no_distance_code=None,
                             no_distance_reason=None)
 
@@ -358,7 +330,7 @@ class TestAnEmptyRegisterSaysWhatItSearched:
     def test_a_reason_beside_rows_refuses(self):
         with pytest.raises(ValueError, match="no_distance_reason"):
             dc.ReversalRegister(
-                exact=(dc.ExactReversal(**self._ROW, stated_source="user"),),
+                exact=(dc.ExactReversal(**self._ROW),),
                 estimated=(), structural_zeros=(), no_distance_code="no_candidate",
                 no_distance_reason="none searched")
 

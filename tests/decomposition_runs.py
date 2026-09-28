@@ -217,10 +217,11 @@ SLIVER_LOW["simulation"].update({"house_maintenance_vol": 0.015,
 SLIVER_HIGH = copy.deepcopy(DECISIVE_STEP)
 SLIVER_HIGH["simulation"].update({"house_maintenance_vol": 0.008,
                                   "rent_escalation_vol": 0.002})
-# A stated rate above a solved crossing and below a sampled one, both within
-# one printed step of it.
-STATED_BESIDE_CROSSING = copy.deepcopy(DECISIVE_STEP)
-STATED_BESIDE_CROSSING["house"]["mortgage_rate"] = 0.06273
+# A stated rate inside the stretch of `DECISIVE_STEP` that is not decisive,
+# narrower than one step of the 65-point scan, which no point of that scan
+# reads (`not_on_axis`).
+NOT_DECISIVE_OFF_THE_SCAN = copy.deepcopy(DECISIVE_STEP)
+NOT_DECISIVE_OFF_THE_SCAN["house"]["mortgage_rate"] = 0.06273
 
 
 def _near_ones(rate: float, rent: float, vols=(0.2, 0.05)) -> dict:
@@ -234,81 +235,17 @@ def _near_ones(rate: float, rent: float, vols=(0.2, 0.05)) -> dict:
     return raw
 
 
-# A stated rate below the central case's crossing by less than the old
-# solver's tolerance, which left the crossing's figure below the stated one.
-STATED_JUST_BELOW = _near_ones(0.0379, 1503.230397975693, (0.0002, 0.00005))
-STATED_JUST_BELOW_B = _near_ones(0.06275, 2300.825245734851)
 # A crossing just below a four-decimal figure: floored from a point above it,
 # every figure read the other state.
 CROSSING_BELOW_A_STEP = _near_ones(0.044, 2299.849758979105)
-# A stated rate between the floored figures of a solved and a sampled crossing.
-STATED_BETWEEN = _near_ones(0.03795, 1504.817709, (0.0002, 0.00005))
-# A stated rate a hundred-trillionth of a percent below the mortgage example's
-# central-case crossing: rounded at twelve decimals it lies above every
-# floored figure of that crossing, so the crossing is not printed.
-STATED_UNDER_A_CROSSING = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
-STATED_UNDER_A_CROSSING["house"]["mortgage_rate"] = 0.0678488725623162
-# A stated rate at the lower end of the bracket of `DECISIVE_STEP`'s sampled
-# crossing, which that crossing's own floored figure prints below and the
-# solved crossing's above: no rounding of it prints on its side of both, so
-# the sampled crossing is not printed.
-STATED_AT_A_SAMPLED_CROSSING = copy.deepcopy(DECISIVE_STEP)
-STATED_AT_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06278717945831885
-# The same crossing with the stated rate 1e-13 under its lower end: every
-# floored figure up to ten decimals, the finest its bracket allows, lies below
-# the stated figure, so the crossing is not printed.
-STATED_JUST_UNDER_A_SAMPLED_CROSSING = copy.deepcopy(DECISIVE_STEP)
-STATED_JUST_UNDER_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06278717945821885
 # The same house against a rent so low that the house is the central case's
 # winner only below about 1.02%, a few hundredths of a percent inside the
 # bracket's low end.
 CROSSING_NEAR_THE_LOW_END = copy.deepcopy(DECISIVE_STEP)
 CROSSING_NEAR_THE_LOW_END["rent"]["monthly_rent"] = 646
-# A rent that puts the central case's crossing at 6.24441%, and a stated rate
-# at the upper end of its bracket, whose four-decimal figure is the crossing's
-# own, so it prints at five.
-STATED_JUST_ABOVE_A_CROSSING = copy.deepcopy(DECISIVE_STEP)
-STATED_JUST_ABOVE_A_CROSSING["rent"]["monthly_rent"] = 2290.88
-STATED_JUST_ABOVE_A_CROSSING["house"]["mortgage_rate"] = 0.062444104452362044
-# A stated rate at the lower end of the mortgage example's sampled
-# decisiveness crossing, which only that crossing's own figure prints beside.
-STATED_AT_A_CROSSING_S_LOWER_END = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
-STATED_AT_A_CROSSING_S_LOWER_END["house"]["mortgage_rate"] = 0.06736205021603381
-# The same crossing with the stated rate inside its bracket, where the run is
-# not decisive.
-STATED_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
-STATED_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06736205021662316
-# A stated rate two floats under the central case's crossing, where the
-# central case's winner is already rent.
-STATED_TWO_FLOATS_UNDER_A_CROSSING = _near_ones(0.06582347916331133, 2400.9, (0.002, 0.05))
-STATED_TWO_FLOATS_UNDER_A_CROSSING["simulation"]["random_seed"] = 7
 # A stated rate at the high end of its bracket.
 STATED_AT_THE_BRACKET_HIGH_END = copy.deepcopy(DECISIVE_STEP)
 STATED_AT_THE_BRACKET_HIGH_END["house"]["mortgage_rate"] = 0.10
-# The fixture with its first renewal rate just below the renewal key's
-# central-case crossing: rounded to the nearest at two decimals, it would
-# print above that crossing's figure.
-PATH_NOTE_BELOW_A_CROSSING =yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
-PATH_NOTE_BELOW_A_CROSSING["house"]["mortgage_renewal_rates"][0] = 0.016051
-# A renewal ladder of one repeated rate one float under the central case's
-# crossing, where this run's winner is already rent (spec §0.1 item 65).
-LADDER_JUST_UNDER_A_CROSSING = {
-    "years": 10,
-    "economic": {"mode": "nominal", "inflation_rate": 0.021},
-    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.0527,
-              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
-              "mortgage_renewal_years": 5,
-              "mortgage_renewal_rates": [0.06715813612987188, 0.06715813612987188],
-              "purchase_costs": 8200, "value_growth_rate": 0.031,
-              "annual_maintenance_rate": 0.01},
-    "rent": {"monthly_rent": 1837.96, "rent_escalation_rate": 0.031,
-             "invested_down_payment": 110000, "investment_return_rate": 0.051},
-    "simulation": {"num_sims": 400, "random_seed": 7, "house_maintenance_vol": 0.002,
-                   "rent_escalation_vol": 0.05},
-}
-# A reference just below the central case's crossing (spec §0.1 item 66).
-REFERENCE_BESIDE_A_CROSSING = copy.deepcopy(DECISIVE_STEP)
-REFERENCE_BESIDE_A_CROSSING["rent"]["monthly_rent"] = 1696.44
 # Three options, where a decisiveness crossing is decisive for another option
 # than this run's winner (spec §0.1 item 63): on the contract rate of a
 # financed house beside a financed condo whose fee is drawn wide.
@@ -328,6 +265,12 @@ DECISIVE_FOR_ANOTHER = {
     "simulation": {"num_sims": 400, "random_seed": 7, "condo_fee_vol": 4.0,
                    "house_maintenance_vol": 0.02, "rent_escalation_vol": 0.005},
 }
+# The same three options with the condo's fee drawn wider, at another seed:
+# on the condo's contract rate the decisiveness crossing is one at which
+# every future names the condo cheapest on one side, so no probability it
+# turns on has any noise (spec §0.1 item 67).
+DECISIVE_WITHOUT_NOISE = copy.deepcopy(DECISIVE_FOR_ANOTHER)
+DECISIVE_WITHOUT_NOISE["simulation"].update({"condo_fee_vol": 6.0, "random_seed": 42})
 # The same three options with the condo's contract rate two floats under its
 # own solved crossing: on the house's contract rate, the central case's winner
 # at the lower end of a solved crossing's bracket is not the one the stretch
@@ -345,16 +288,6 @@ del DECISIVE_FOR_THE_HOUSE["sources"]["house.other_recurring_costs.property_tax.
 # states moves no present value (spec §0.1 item 64).
 INERT_LADDER = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
 INERT_LADDER["house"]["mortgage_renewal_years"] = 25
-# A figure on the axis other than the stated one, inside a sampled crossing's
-# bracket where the futures read that crossing's `becomes` (spec §0.1 item
-# 60): the contracted rate the fixture states and cites, beside renewals at one
-# rate, and the first rate of a ladder.
-REFERENCE_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
-REFERENCE_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_renewal_rates"] = [
-    0.027164030806393624] * 4
-PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
-PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_renewal_rates"] = [
-    0.02716403080667974, 0.05, 0.048, 0.02954943580452318]
 # A house bought outright beside a ladder it states: neither of its two
 # financing keys moves a present value, so both are refused rows.
 TWO_REFUSED = {
@@ -756,6 +689,24 @@ def force_income_move(monkeypatch, move):
     monkeypatch.setattr(dr, "_redraws", redraws)
 
 
+def not_printable_at_every_figure(monkeypatch, field):
+    """The central case moved to the mortgage example's `field` crossing's
+    `becomes` at every floored figure of that crossing and nowhere else, so
+    no precision prints it (`not_printable`): a check no correct engine
+    fails. Returns the crossing as the run prints it."""
+    import hde.break_even as be
+    (row,) = run("mortgage").block["reversal"]["exact"]
+    (boundary,) = [b for b in row["boundaries"] if b["verdict_field"] == field]
+    figures = {be._percent_value(be.floored_rate(boundary["value"], places))
+               for places in range(4, be.PRINTED_RATE_MAX_PLACES + 1)}
+    assert boundary["value"] not in figures
+    real = be._ranking_at
+    monkeypatch.setattr(be, "_ranking_at", lambda raw, key, value: (
+        {**real(raw, key, value), field: boundary["becomes"]} if value in figures
+        else real(raw, key, value)))
+    return boundary
+
+
 def untag(monkeypatch, key=None):
     """The read-back's tag withheld from `key`, or from every key."""
     import hde.serialization as serialization
@@ -791,30 +742,20 @@ CORPUS = {
     "together_above_one": (TOGETHER_ABOVE_ONE, "200"),
     "decisive_step": (DECISIVE_STEP,),
     "decisive_step_lower": (DECISIVE_STEP_LOWER,),
-    "path_note_below": (PATH_NOTE_BELOW_A_CROSSING, "300"),
-    # A figure on a crossing's axis beside the crossing (spec §0.1 items 54
-    # and 60), and a crossing no figure prints for (§0.1 item 61).
-    "stated_just_below": (STATED_JUST_BELOW,),
-    "stated_just_below_b": (STATED_JUST_BELOW_B,),
+    # A crossing's figure beside a state its bracket does not hold (spec §0.1
+    # items 54 and 60), and the far end of a key stated at the bracket's high
+    # end.
     "crossing_below_a_step": (CROSSING_BELOW_A_STEP,),
-    "stated_between": (STATED_BETWEEN,),
-    "stated_beside_crossing": (STATED_BESIDE_CROSSING,),
     "sliver_low": (SLIVER_LOW,),
     "sliver_high": (SLIVER_HIGH,),
-    "stated_under_a_crossing": (STATED_UNDER_A_CROSSING, "200"),
-    "stated_at_a_sampled_crossing": (STATED_AT_A_SAMPLED_CROSSING,),
-    "stated_just_under_a_sampled_crossing": (STATED_JUST_UNDER_A_SAMPLED_CROSSING,),
     "crossing_near_the_low_end": (CROSSING_NEAR_THE_LOW_END,),
-    "stated_just_above_a_crossing": (STATED_JUST_ABOVE_A_CROSSING,),
-    "stated_at_a_crossing_s_lower_end": (STATED_AT_A_CROSSING_S_LOWER_END, "200"),
-    "stated_inside_a_sampled_crossing": (STATED_INSIDE_A_SAMPLED_CROSSING, "200"),
-    "stated_two_floats_under_a_crossing": (STATED_TWO_FLOATS_UNDER_A_CROSSING, "100"),
     "stated_at_the_bracket_high_end": (STATED_AT_THE_BRACKET_HIGH_END,),
-    "ladder_just_under_a_crossing": (LADDER_JUST_UNDER_A_CROSSING,),
-    "reference_beside_a_crossing": (REFERENCE_BESIDE_A_CROSSING,),
+    "not_decisive_off_the_scan": (NOT_DECISIVE_OFF_THE_SCAN,),
     # A decisiveness crossing identified on its own option (spec §0.1 item
-    # 63), and a stated key no crossing moves (item 64).
+    # 63) and one with no noise (item 67), and a stated key no crossing moves
+    # (item 64).
     "decisive_for_another": (DECISIVE_FOR_ANOTHER, "100"),
+    "decisive_without_noise": (DECISIVE_WITHOUT_NOISE, "100"),
     "three_way_tie": (THREE_WAY_TIE, "100"),
     "decisive_for_the_house": (DECISIVE_FOR_THE_HOUSE,),
     "inert_ladder": (INERT_LADDER, "300"),
@@ -825,8 +766,6 @@ CORPUS = {
     "solved_just_above_its_figure": (SOLVED_JUST_ABOVE_ITS_FIGURE,),
     "sampled_was_just_under_its_figure": (SAMPLED_WAS_JUST_UNDER_ITS_FIGURE,),
     "solved_was_just_under_its_figure": (SOLVED_WAS_JUST_UNDER_ITS_FIGURE,),
-    "reference_inside_a_sampled_crossing": (REFERENCE_INSIDE_A_SAMPLED_CROSSING, "300"),
-    "path_figure_inside_a_sampled_crossing": (PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING, "300"),
     # A level row's digits (spec §0.1 item 62).
     "pull_nothing": (CORRELATIONS_PULL_NOTHING,),
     "level_under_a_dollar": (LEVEL_UNDER_A_DOLLAR,),

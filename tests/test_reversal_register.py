@@ -58,7 +58,7 @@ from hde.monte_carlo import run_monte_carlo
 from hde.sweep import load_at, run_sweep
 
 from tests.decomposition_runs import (CONDO_ONLY, DECISIVE_STEP, DECISIVE_STEP_LOWER, INERT,
-                                      STATED_BETWEEN, THIRD_IN_ONE_CELL)
+                                      THIRD_IN_ONE_CELL)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
@@ -645,54 +645,6 @@ class TestTheNearestEdgeSaysWhenTheRangeChangesAgain:
 
 
 # ---------------------------------------------------------------------------
-# Whose figure the stated value is (the read-back's own classifier)
-# ---------------------------------------------------------------------------
-
-class TestWhoseFigureTheStatedValueIs:
-    """A row's boundaries are solved on the config's figures whoever typed
-    them, so "solved on your own figures" is true only of a figure the user
-    stated. The fixture's renewal ladder is assistant-typed and its contract
-    rate an anchor's, and the read-back of the same run says so; each row now
-    carries that class, from the same classifier, for the words to key on."""
-
-    def test_each_fixture_row_carries_the_echo_s_own_class(self, raw, register):
-        echo = load_config_dict(raw).sources
-        assert _row(register, RENEWAL).stated_source == "assistant"
-        assert _row(register, CONTRACT).stated_source == "anchor"
-        for row in register.exact:
-            assert row.stated_source == echo.classify(row.key)
-
-    def test_a_config_with_no_sources_block_reads_unattributed(self, two_option):
-        """Silence is reported, never read as the user's answer."""
-        _, register = two_option
-        assert _row(register, CONTRACT).stated_source == "unattributed"
-
-    @pytest.mark.parametrize("declared,expected", [
-        ("user", "user"), ("assistant", "assistant"), (None, "unattributed")],
-        ids=["user", "assistant", "undeclared"])
-    def test_one_sources_entry_moves_the_class(self, raw, declared, expected):
-        """Change one `sources:` entry and the class follows it — the test §5
-        names for the provenance gate, applied to the stated value."""
-        doc = copy.deepcopy(raw)
-        if declared is None:
-            del doc["sources"][RENEWAL]
-        else:
-            doc["sources"][RENEWAL] = declared
-        assert be._stated_source(load_config_dict(doc), RENEWAL) == expected
-
-    def test_the_stated_path_rows_carry_no_sentence_about_who_stated_it(self, register):
-        """A structural zero carries its kind and no sentence (§0.1 item 35):
-        whose figure the stated value is travels as the exact row's
-        `stated_source`, the read-back's own class."""
-        zeros = [z for z in register.structural_zeros if z.kind == "stated_path"]
-        assert len(zeros) == 2
-        for zero in zeros:
-            assert not hasattr(zero, "reason")
-            assert _row(register, zero.reversal_key).stated_source in (
-                "user", "assistant", "anchor", "unattributed")
-
-
-# ---------------------------------------------------------------------------
 # One solver, two consumers (spec §0; T12)
 # ---------------------------------------------------------------------------
 
@@ -1022,7 +974,6 @@ class TestTheExactnessGate:
         assert all("a different amount on different paths" in r.reason
                    for r in row.refused_boundaries)
         assert row.max_path_deviation_over_sd > 1e-9
-        assert row.stated_source == "assistant"   # whose figure travels with either kind
 
 
 # ---------------------------------------------------------------------------
@@ -1053,11 +1004,13 @@ class TestTheConfirmingResimulation:
             else:
                 assert not hasattr(boundary, "curve_probabilities")
 
-    def test_a_disagreeing_re_simulation_withholds_every_boundary(self, raw, base):
+    def test_a_disagreeing_re_simulation_withholds_every_boundary(self, raw, base, register):
         """The check that can fail. `simulate` is the seam: a re-simulation that
         disagrees with the free curve moves each boundary out of `boundaries`
-        and into `refused_boundaries` with its reason. Without this, "confirmed"
-        would be a flag that cannot come out false."""
+        and into `refused_boundaries` with its reason, which names the
+        boundary's `value` in full. Without this, "confirmed" would be a flag
+        that cannot come out false.
+        *Kills it:* the reason's rate cut to fewer digits, or another boundary's."""
         _, det, mc = base
 
         def disagreeing(spec):
@@ -1067,41 +1020,16 @@ class TestTheConfirmingResimulation:
             result.prob_condo_cheapest = (result.prob_condo_cheapest or 0.0) + 0.05
             return result
 
-        register = reversal_register(raw, det, mc, simulate=disagreeing)
-        row = _row(register, RENEWAL)
+        row = _row(reversal_register(raw, det, mc, simulate=disagreeing), RENEWAL)
         assert row.boundaries == ()
         assert {r.verdict_field for r in row.refused_boundaries} == set(BOUNDARY_FIELDS)
         reason = _refusal(row, "best").reason
-        assert reason.startswith("the re-simulation at ") and ", and the free curve gives " in reason
+        best = _boundary(_row(register, RENEWAL), "best")
+        assert reason.startswith(f"the re-simulation at {best.value!r} gives ")
+        assert ", and the free curve gives " in reason
         # the two sets of figures it names are the two that disagreed
         gave, curve = reason.split(" gives ", 1)[1].split(", and the free curve gives ")
         assert gave != curve
-
-    def test_the_rate_a_disagreeing_re_simulation_names_prints_on_its_side(self):
-        """The rate an `unconfirmed` reason names is a figure on the axis,
-        printed by `ordered_figure` beside the crossings that do print (§0.1
-        item 60). The witness's central-case crossing lies below its sampled
-        one, printed 3.79502%; rounded on its own to two decimals it reads
-        3.80%, above that figure.
-        *Kills it:* the reason's rate rounded on its own."""
-        raw = copy.deepcopy(STATED_BETWEEN)
-        spec = load_config_dict(raw)
-        det, mc = compute_deterministic(spec), run_monte_carlo(spec)
-        best = _boundary(_row(reversal_register(raw, det, mc), CONTRACT), "best")
-
-        def disagreeing(at):
-            result = run_monte_carlo(at)
-            if at.house.mortgage_rate == best.value:
-                result.prob_house_cheapest = (result.prob_house_cheapest or 0.0) + 0.05
-            return result
-
-        row = _row(reversal_register(raw, det, mc, simulate=disagreeing), CONTRACT)
-        reason = _refusal(row, "best").reason
-        rate = reason.split("the re-simulation at ", 1)[1].split(" gives ", 1)[0]
-        sampled = _boundary(row, "mc_best")
-        assert best.value < sampled.value and sampled.formatted == "3.79502%"
-        assert f"{best.value:.2%}" == "3.80%"
-        assert rate == "3.795%"
 
     def test_a_futures_boundary_inside_monte_carlo_noise_is_not_reported(self, raw, register):
         """Refusal (i), asserted in BOTH directions so neither half can pass
@@ -1165,18 +1093,10 @@ class TestTheFlatteningTrap:
         and no grid, threshold or sweep the block does not print."""
         note = _row(register, RENEWAL).path_note
         assert note == ("each crossing on this key is priced with the stated path "
-                        "(4.60%, 5.00%, 4.80%, 4.40%) replaced by one rate at every "
-                        "renewal")
-
-    def test_the_stated_path_is_reported_whole_and_unflattened(self, register):
-        """A row that printed one figure where the user stated four would have
-        erased the trap it exists to name."""
-        assert _row(register, RENEWAL).stated_formatted == "4.60%, 5.00%, 4.80%, 4.40%"
+                        "replaced by one rate at every renewal")
 
     def test_a_scalar_key_carries_no_flattening_note(self, register):
-        row = _row(register, CONTRACT)
-        assert row.path_note is None
-        assert row.stated_formatted == "4.35%"
+        assert _row(register, CONTRACT).path_note is None
 
 
 # ---------------------------------------------------------------------------
@@ -1210,27 +1130,6 @@ class TestTheBracket:
             for boundary in row.boundaries:
                 assert row.bracket_low <= boundary.value <= row.bracket_high
 
-    def test_the_axis_carries_its_published_references(self, register):
-        """The anchored rates on the axis, as figures with their anchors: on
-        this semi-annual axis no note, because nothing was converted and what
-        a reference licenses is interpretation (§0.1 item 35)."""
-        for key in (RENEWAL, CONTRACT):
-            refs = {r.anchor: r for r in _row(register, key).references}
-            assert set(refs) == {"mortgage_rate.contracted_5y_uninsured",
-                                 "mortgage_rate.contracted_5y_insured",
-                                 "mortgage_rate.posted_5y"}
-            assert refs["mortgage_rate.posted_5y"].formatted == "6.09%"
-            assert all(r.note is None for r in refs.values())
-
-    def test_a_converted_reference_names_the_figure_as_published(self):
-        """The one note a reference carries: on an effective-annual axis the
-        semi-annual anchor is converted, and the note names it as published."""
-        refs = {r.anchor: r for r in be._axis_references(CONTRACT, "effective_annual")}
-        posted = refs["mortgage_rate.posted_5y"]
-        assert posted.note == "published as 6.09% compounded semi-annually"
-        assert posted.formatted != "6.09%"
-
-
 # ---------------------------------------------------------------------------
 # Admission — a measurement, and what it is allowed to exclude
 # ---------------------------------------------------------------------------
@@ -1263,6 +1162,30 @@ class TestAdmission:
         admitted, record = reversal_admission(raw, RENEWAL, 0.10, base=det)
         assert admitted and record["moves"] == ["house"]
         assert record["deltas"]["house"] > 0
+
+    @pytest.mark.parametrize("before,after", [
+        (412345.67, math.nextafter(412345.67, math.inf)),
+        (1.0, math.nextafter(1.0, 0.0)),
+        (0.0, 5e-324),
+    ], ids=["one_float_up", "one_float_down", "smallest_subnormal"])
+    def test_a_far_end_that_moves_a_present_value_at_all_admits_the_key(
+            self, raw, monkeypatch, before, after):
+        """§0.1 item 64's partition is exactly zero: a far end that moves one
+        option's present value by a single float, the smallest there is
+        included, admits the key, and one that moves none does not.
+        *Kills it:* any threshold above zero on the move, or the move of one
+        option read as another's."""
+        def pvs(house):
+            return types.SimpleNamespace(**{
+                name: types.SimpleNamespace(total_pv=house if name == "house" else 7.0)
+                for name in ("condo", "house", "rent")})
+
+        monkeypatch.setattr(be, "compute_deterministic", lambda spec: pvs(after))
+        admitted, record = reversal_admission(raw, CONTRACT, 0.10, base=pvs(before))
+        assert admitted and record["moves"] == ["house"]
+        assert record["deltas"] == {"house": after - before} and after - before != 0.0
+        admitted, record = reversal_admission(raw, CONTRACT, 0.10, base=pvs(after))
+        assert not admitted and record["deltas"] == {"condo": 0.0, "house": 0.0, "rent": 0.0}
 
     def test_a_dispersion_key_is_never_a_candidate(self, raw):
         """By construction, not by omission: `compute_deterministic` reads no
@@ -1428,11 +1351,9 @@ class TestRefusals:
 
 
 def test_the_figure_checks_refuse_where_nothing_passes():
-    """Each check, alone (§0.1 items 54, 60 and 61). A crossing whose field
-    never says `was` at any floored figure refuses with `not_printable` and
-    what the field read at each figure tried; a figure with no printing on its
-    side of a crossing is None, and the axis drops that crossing
-    (`not_orderable`) rather than print the figure on the wrong side.
+    """The crossing's own figure (§0.1 items 54, 60 and 61): a crossing whose
+    field never says `was` at any floored figure refuses with `not_printable`
+    and what the field read at each figure tried.
     *Kills it:* printing where a check fails, or a reason naming a precision
     it did not try."""
     key = "house.mortgage_rate"
@@ -1448,26 +1369,21 @@ def test_the_figure_checks_refuse_where_nothing_passes():
     assert be.printed_crossing(key, "decisive", 0.0627123, 0.0627123, "x",
                                lambda v: "x" if v >= 0.06271 else "y", 0.01) == "6.271%"
     # a floored figure below the bracket is off the axis searched, and passed
-    # over for a finer one
+    # over for a finer one; one at its low end is on it
     assert be.printed_crossing(key, "best", 0.0100003, 0.0100003, "x",
                                lambda v: "x", 0.0100001) == "1.00003%"
+    assert be.printed_crossing(key, "best", 0.0100003, 0.0100003, "x",
+                               lambda v: "x", 0.01) == "1.0000%"
     # the floor is taken from the bracket's lower end, never from its middle,
     # which here lies above 6.28%
     assert be.printed_crossing(key, "mc_best", 0.0627999999999, 0.0628000000003, "house",
                                lambda v: "house", 0.01) == "6.27%"
-    # a figure on the axis below the crossing, rounded above a floored figure,
-    # holds the crossing's figure above it
-    assert be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
-                               lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
-    # and one rounded equal to it does not
-    assert be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
-                               lambda v: "house", 0.01, figures=(0.0627,)) == "6.27%"
     # and the reason says so, figure by figure
     with pytest.raises(be.CrossingRefused) as refused:
         be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
-                            lambda v: "rent", 0.0627801, figures=(0.06273,))
+                            lambda v: "rent", 0.0627801)
     assert refused.value.reason.split(": ", 1)[1].split("; ")[:3] == [
-        "6.27% is below 6.273000000000%, a figure on this axis",
+        "6.27% is below the bracket searched",
         "6.278% is below the bracket searched",
         "6.2780% is below the bracket searched"]
     # A sampled crossing's precision stops at its bracket's width: one printed
@@ -1480,54 +1396,6 @@ def test_the_figure_checks_refuse_where_nothing_passes():
                             lambda v: "rent", 0.01)
     assert "at 2 to 7 decimals of a percent" in refused.value.reason
     assert refused.value.reason.count(" reads ") == 6
-    # The ordering: at or below the lower end, at or below the crossing's
-    # figure; inside the bracket, equal to it; at or above the upper end,
-    # above it.
-    crossing = (0.0627246, 0.06272461, "6.2724%")
-    assert be.ordered_figure(0.06273, [crossing]) == "6.273%"
-    assert be.ordered_figure(0.0627, [crossing]) == "6.27%"
-    assert be.ordered_figure(0.0627246, [crossing]) == "6.27%"
-    assert be.ordered_figure(0.062724605, [crossing]) == "6.2724%"
-    assert be.ordered_figure(0.06272461, [crossing]) == "6.2725%"
-    # a figure above a crossing that no rounding prints above it, and inside
-    # no bracket, is None; and so is one below a crossing that no rounding
-    # prints at or below it, though the crossing's own figure would
-    assert be.ordered_figure(math.nextafter(0.062724, 1.0),
-                             [(0.062724, 0.062724, "6.2724%")]) is None
-    assert be.ordered_figure(0.06279995, [(0.0627999999, 0.0627999999, "6.2799%")]) is None
-    # and the axis drops that crossing, naming the figure, its side and the
-    # crossings it was tried beside
-    above = math.nextafter(0.062724, 1.0)
-    texts, kept, dropped = be._ordered_axis(
-        [0.0601, above], [(0.0601, 0.06011, "6.01%"), (0.062724, 0.062724, "6.2724%")])
-    assert (texts, kept) == (["6.01%", "6.27%"], [0])
-    assert dropped == [(1, (
-        f"{above!r}, a figure on this axis at or above the upper end of its bracket "
-        "[0.062724, 0.062724], prints above 6.01%, above 6.2724% rounded to the nearest "
-        "at none of 2 to 12 decimals of a percent, nor as the figure of a crossing whose "
-        "bracket holds it"))]
-    # the first figure not placed is taken, and the first crossing beside
-    # which, with those before it, it is not placed is refused: here the
-    # second, and then the first, for the other figure
-    first, second = (0.05009, 0.05009 + 1e-13, "5.00%"), (0.05005, 0.05005 + 1e-13, "5.00%")
-    texts, kept, dropped = be._ordered_axis([0.05009, 0.050052], [first, second])
-    assert (kept, [index for index, _ in dropped]) == ([], [1, 0])
-    assert [reason.split(",")[0] for _, reason in dropped] == ["0.05009", "0.050052"]
-    # a figure handed its sides prints on them; one no rounding places prints
-    # as the figure of a crossing whose bracket holds it, at either end; and
-    # the reason names each side it was tried on
-    assert be.ordered_figure(0.0627246, [crossing], [1]) == "6.2725%"
-    at_upper = [(0.06279995, 0.0628, "6.2799%")]
-    assert be.ordered_figure(0.06279995, at_upper) == "6.2799%"
-    assert be.ordered_figure(0.0628, at_upper) == "6.28%"
-    assert be.ordered_figure(0.0628, at_upper, [-1]) == "6.2799%"
-    texts, kept, dropped = be._ordered_axis(
-        [0.0601], [(0.0601, 0.06011, "6.01%")], 1, lambda kept: ({0: 1}, None))
-    assert (texts, kept) == (["6.01%"], [])
-    assert dropped == [(0, (
-        "0.0601, a figure on this axis at or below the lower end of its bracket "
-        "[0.0601, 0.06011], prints above 6.01% rounded to the nearest at none of 2 to 12 "
-        "decimals of a percent, nor as the figure of a crossing whose bracket holds it"))]
 
 
 def test_only_a_refused_crossing_becomes_a_refused_boundary(raw, base, monkeypatch):
@@ -1541,127 +1409,6 @@ def test_only_a_refused_crossing_becomes_a_refused_boundary(raw, base, monkeypat
     monkeypatch.setattr(be, "printed_crossing", broken)
     with pytest.raises(ValueError, match="an error the test put there"):
         reversal_register(raw, det, mc)
-
-
-def test_the_stated_figure_prints_on_the_side_this_run_reads_it():
-    """`_run_sides`, constructed (§0.1 item 65): on each field the figure the
-    config states as one keeps the sides it lies on where it reads the run's
-    state beside the nearest crossing whose bracket it lies at or below or
-    inside and the nearest it lies at or above; otherwise it prints above
-    the first, or else at or below the second, where it then reads the run's
-    state beside that crossing and the next one past it; and otherwise the
-    first it reads another state beside is refused, naming what it measured.
-    *Kills it:* holding every crossing to the sides the figure lies on,
-    moving a figure off the side of a crossing it reads the run's state
-    beside, moving it past a crossing whose far side does not read that
-    state, or a reason naming another side than the one measured."""
-    def sides_of(value, crossings, says):
-        sides, wrong = be._run_sides(value, dict(enumerate(crossings)), says)
-        return [sides[index] for index in range(len(crossings))], wrong
-
-    # house below 5%, rent from 5% to 6%, house from 6% to 7%, rent above
-    crossings = [("best", 0.05, 0.0500001, "house", "rent"),
-                 ("best", 0.06, 0.0600001, "rent", "house"),
-                 ("best", 0.07, 0.0700001, "house", "rent"),
-                 ("runner_up", 0.05, 0.0500001, "rent", "house")]
-    house = {"best": "house", "runner_up": "house"}
-    # where it reads the run's state, on the sides it lies on
-    assert sides_of(0.065, crossings, house) == ([1, 1, -1, 1], None)
-    assert sides_of(0.04, crossings, {"best": "house", "runner_up": "rent"}) == (
-        [-1, -1, -1, -1], None)
-    assert sides_of(0.0700001, crossings, {"best": "rent", "runner_up": "house"}) == (
-        [1, 1, 1, 1], None)
-    assert sides_of(0.05000005, crossings, {"best": "house", "runner_up": "rent"}) == (
-        [0, -1, -1, 0], None)
-    # at a crossing's lower end or inside it, where the run reads its
-    # `becomes`: above it
-    assert sides_of(0.06, crossings, house) == ([1, 1, -1, 1], None)
-    assert sides_of(0.06000005, crossings, house) == ([1, 1, -1, 1], None)
-    # at its upper end, where the run reads its `was`: at or below it
-    assert sides_of(0.0700001, crossings, house) == ([1, 1, -1, 1], None)
-    assert sides_of(0.065, crossings, {"best": "house", "runner_up": "rent"}) == (
-        [1, 1, -1, -1], None)
-    # at or below the crossing below it, with none past it, where only that
-    # reads the run's state
-    assert sides_of(0.06, [crossings[0], crossings[2]], house) == ([-1, -1], None)
-    # not past a crossing whose far side reads another state: refused, as
-    # measured
-    past = [crossings[1], ("best", 0.065, 0.0650001, "condo", "rent")]
-    assert sides_of(0.059, past, house) == ([-1, -1], (0, (
-        "0.059, the stated figure, lies at or below the lower end of its bracket "
-        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
-    # each crossing keeps its own index, the axis's, in the sides and the refusal
-    assert be._run_sides(0.059, {3: past[0], 7: past[1]}, house) == ({3: -1, 7: -1}, (3, (
-        "0.059, the stated figure, lies at or below the lower end of its bracket "
-        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
-    # nor below one: at or below the crossing below it only where the next
-    # one below reads the run's state above it
-    below = [("best", 0.05, 0.0500001, "house", "condo"),
-             ("best", 0.06, 0.0600001, "house", "rent")]
-    assert sides_of(0.061, below, house) == ([1, 1], (1, (
-        "0.061, the stated figure, lies at or above the upper end of its bracket "
-        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
-    below[0] = ("best", 0.05, 0.0500001, "condo", "house")
-    assert sides_of(0.061, below, house) == ([1, -1], None)
-    three = [("mc_best", 0.05, 0.0500001, "house", "condo"),
-             ("mc_best", 0.06, 0.0600001, "condo", "house")]
-    assert sides_of(0.055, three, {"mc_best": "rent"}) == ([1, -1], (1, (
-        "0.055, the stated figure, lies at or below the lower end of its bracket "
-        "[0.06, 0.0600001] and reads 'condo' beside it, and mc_best says 'rent' in this run")))
-    assert sides_of(0.045, three, {"mc_best": "condo"}) == ([1, -1], None)
-    # a refusal comes before the placing: the axis refuses the crossing the
-    # sides name, with their reason, though no figure is placed beside it
-    wrong = (0, "the reason the sides give")
-    texts, kept, dropped = be._ordered_axis(
-        [0.0601], [(0.0601, 0.06011, "6.01%")], 1,
-        lambda kept: ({0: 1}, wrong) if kept else ({}, None))
-    assert (texts, kept, dropped) == (["6.01%"], [], [wrong])
-
-
-def test_another_figure_inside_a_bracket_prints_on_the_side_it_reads():
-    """`_inside_sides`, constructed: a figure on the axis other than the
-    key's one stated figure keeps the side it lies on beside every crossing
-    whose bracket does not hold it, and the field is not read there; inside
-    one, it is equal to the crossing's figure where the field reads `was` at
-    it and above it where it reads `becomes`, and where it reads neither
-    that crossing is refused, naming what it read. On the axis, the figure
-    prints on those sides, and a refusal comes before the placing.
-    *Kills it:* a figure inside a bracket placed by where it lies alone, the
-    field read beside a crossing whose bracket does not hold it, or a
-    figure that reads neither state printed as the crossing's `was`."""
-    crossings = {2: ("mc_best", 0.0434, 0.0436, "house", "condo"),
-                 5: ("best", 0.05, 0.0500001, "house", "rent")}
-
-    def reads(states):
-        def field_at(field):
-            assert field == "mc_best", field
-            return states
-        return field_at
-
-    assert be._inside_sides(0.0435, crossings, reads("condo")) == ({2: 1, 5: -1}, None)
-    assert be._inside_sides(0.0435, crossings, reads("house")) == ({2: 0, 5: -1}, None)
-    assert be._inside_sides(0.0435, crossings, reads("rent")) == ({2: 0, 5: -1}, (2, (
-        "0.0435, a figure on this axis inside its bracket [0.0434, 0.0436], reads 'rent' "
-        "there, and the crossing changes from 'house' to 'condo'")))
-
-    def never(field):
-        raise AssertionError(f"{field} read beside a bracket that does not hold the figure")
-
-    assert be._inside_sides(0.0434, crossings, never) == ({2: -1, 5: -1}, None)
-    assert be._inside_sides(0.0436, crossings, never) == ({2: 1, 5: -1}, None)
-    assert be._inside_sides(0.0500001, crossings, never) == ({2: 1, 5: 1}, None)
-    axis = [(0.0434, 0.0436, "4.34%")]
-
-    def on_axis(states):
-        return be._ordered_axis([0.0435], axis, 0, None, lambda figure, kept: be._inside_sides(
-            0.0435, {i: crossings[2] for i in kept}, reads(states)))
-
-    assert on_axis("condo") == (["4.35%"], [0], [])
-    assert on_axis("house") == (["4.34%"], [0], [])
-    assert be._ordered_axis([0.0435], axis) == (["4.34%"], [0], [])
-    assert on_axis("rent") == (["4.35%"], [], [(0, (
-        "0.0435, a figure on this axis inside its bracket [0.0434, 0.0436], reads 'rent' "
-        "there, and the crossing changes from 'house' to 'condo'"))])
 
 
 @pytest.mark.parametrize("end", ["value", "upper_end"])
@@ -1696,6 +1443,40 @@ def test_a_solved_boundary_whose_bracket_reads_another_state_is_refused(
         f"best says {reads[0]!r} at {best.value!r} and {reads[1]!r} at {best.upper_end!r}, "
         f"the two ends of the bracket its crossing from {best.was!r} to {best.becomes!r} "
         f"converged in")
+
+
+def test_a_sampled_boundary_whose_bracket_reads_another_state_is_refused(
+        two_option, monkeypatch):
+    """The same check on a sampled boundary, read on this run's own curve: a
+    `decisive` boundary handed back with its `upper_end` moved onto its
+    `value` reads its `was` at both ends, is refused by name, and leaves the
+    rest of the row.
+    *Kills it:* the check read on the solved kinds alone."""
+    raw, register = two_option
+    (row,) = register.exact
+    first = next(b for b in row.boundaries if b.verdict_field == "decisive")
+    real = be._futures_field_boundaries
+
+    def moved(*args, **kwargs):
+        found, why = real(*args, **kwargs)
+        return [dict(entry, upper_end=entry["value"]) if entry["value"] == first.value
+                else entry for entry in found], why
+
+    monkeypatch.setattr(be, "_futures_field_boundaries", moved)
+    spec = load_config_dict(raw)
+    (again,) = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec)).exact
+
+    def others(boundaries):
+        return [b for b in boundaries if (b.verdict_field, b.value) != ("decisive", first.value)]
+
+    assert others(again.boundaries) == others(row.boundaries)
+    assert len(again.boundaries) == len(row.boundaries) - 1
+    (refused,) = [r for r in again.refused_boundaries if r.code == "not_bracketed"]
+    assert refused.verdict_field == "decisive"
+    assert refused.reason == (
+        f"decisive says {first.was!r} at {first.value!r} and {first.was!r} at "
+        f"{first.value!r}, the two ends of the bracket its crossing from {first.was!r} to "
+        f"{first.becomes!r} converged in")
 
 
 def test_the_far_end_is_the_end_the_stated_figures_are_not_all_at():
@@ -1795,6 +1576,36 @@ def test_a_futures_boundary_names_the_options_its_sides_are_computed_from():
             scan_points=be.REVERSAL_SCAN_POINTS)
         assert why is None and boundary["value"] < 0.05 <= boundary["upper_end"]
         assert boundary["computed_from"] == sides, field
+
+
+def test_a_decisiveness_step_with_no_noise_is_identified():
+    """§0.1 item 67, constructed: a `decisive` boundary whose two states
+    differ, at which every probability its sides are computed from has an
+    s.e. of 0, is identified, however little those probabilities move across
+    the bracket. The same figures on an `mc_best` boundary, on a boundary
+    whose two states are one, or with one of them off 0 or 1, are held to the
+    noise rule and refused by it.
+    *Kills it:* the rule deleted, or widened to any field, to states that
+    agree, or to one s.e. of 0 among several."""
+    flat = {"lo": {"condo": 1.0, "rent": 0.0}, "hi": {"condo": 1.0, "rent": 0.0},
+            "at": {"condo": 1.0, "rent": 0.0}}
+
+    def record(field="decisive", was="decisive for condo", becomes="not decisive",
+               probs=flat):
+        return be._identification({"attribute": field, "computed_from": ("condo", "rent"),
+                                   "was": was, "becomes": becomes}, probs, 400)
+
+    got = record()
+    assert got["identified"] is True and got["why"] is None
+    assert [row["two_se"] for row in got["watched"]] == [0.0, 0.0]
+    assert record(field="mc_best", was="condo", becomes="rent")["identified"] is False
+    assert record(becomes="decisive for condo")["identified"] is False
+    noisy = record(probs={**flat, "at": {"condo": 0.99, "rent": 0.0}})
+    assert noisy["identified"] is False
+    assert noisy["why"].startswith("across the bracket P(condo cheapest) moves by 0.0000")
+    # the least s.e. above 0 a float carries is noise all the same
+    least = record(probs={**flat, "at": {"condo": 1.0, "rent": 2.0 ** -1022}})
+    assert 0.0 < least["watched"][1]["two_se"] and least["identified"] is False
 
 
 def test_a_boundary_with_no_probability_is_not_identified():
