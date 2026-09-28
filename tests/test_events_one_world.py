@@ -217,6 +217,35 @@ def test_the_refusals_reach_every_option():
                 "and no future fires it then; the futures fire it only in year 1") in message
 
 
+# Neither the best guess nor the futures read a hazard start under fixed or
+# jitter timing, so one past the horizon, past max_year or after expected_year
+# refuses nothing, and the run prints the same text as without it.
+_STRAY_START = {
+    "fixed, carrying a hazard start past the horizon": _roof(hazard_start_year=25),
+    "fixed, carrying a hazard start past max_year": _roof(max_year=10, hazard_start_year=11),
+    "jitter carrying a hazard start after its expected year": _roof(
+        expected_year=5, timing_std_years=1.0, hazard_start_year=15),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_STRAY_START))
+def test_a_hazard_start_under_fixed_or_jitter_timing_changes_nothing(
+        case, tmp_path, monkeypatch, capsys):
+    event = _STRAY_START[case]
+    bare = {k: v for k, v in event.items() if k != "hazard_start_year"}
+    assert (_stdout(tmp_path, monkeypatch, capsys, _cfg(event, sims=400))
+            == _stdout(tmp_path, monkeypatch, capsys, _cfg(bare, sims=400)))
+
+
+def test_a_hazard_below_1_is_never_read_as_certain(tmp_path, monkeypatch, capsys):
+    """At 0.995 a year, a future outlives each year with a chance of 0.005, so
+    a future can fire the roof in year 5, where the best guess charges it."""
+    cfg = _cfg(_roof(expected_year=5, timing_model="hazard", hazard_base=0.995), sims=400)
+    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+    assert [x for x in out.splitlines() if x.startswith("best guess:")] == [
+        _event_line("roof", 5, "over 99.9%", 1)]
+
+
 # The rent futures indexed past the horizon on this config and crashed with a
 # traceback (C8). The loader refuses it now, and the CLI says why.
 C8_CRASH = {"years": 20, "discount_rate": 0.03, "rates": "real",
