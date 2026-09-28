@@ -31,8 +31,8 @@ shock. It fires every event with certainty at `expected_year`.
 
 ## 2. Rulings
 
-**E1. The central case keeps its meaning, and the read-back names where the futures time an
-event differently.** An event is charged once, in the year the config places it. That is the
+**E1. The central case keeps its meaning.**
+An event is charged once, in the year the config places it. That is the
 user's own statement of when it happens. The futures time it by its model. That difference is a
 modelled uncertainty, which the three-state verdict already names; it is not a defect. What was
 missing is the sentence that says so. For every hazard-timed event the read-back prints the
