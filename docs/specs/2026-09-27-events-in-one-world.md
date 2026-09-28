@@ -12,7 +12,7 @@ an event, built a config for each place the two could disagree, and measured it 
 paths on two seeds. It found fifteen disagreements. A second, independent check tried to refute
 each one, and none was refuted. Grouped by what the user meets:
 
-| # | Disagreement | Measured |
+| # | Disagreement | What was found (dollar gaps are best guess minus futures unless marked) |
 |---|---|---|
 | C8 | `min_year` beyond the horizon: the futures sampler has no final bound when `timing_std_years` is 0 | the rent futures index past the horizon and **crash** with a traceback. The owned futures silently charge $0 while the central case charges the event in the final year |
 | C1 | `timing_model: hazard` with zero hazard | the central case charges the event (a $15,000 event is $11,841 at 3%, year 8), and no future ever fires it. The single-path gate classes the event as deterministic, so the futures are never consulted |
@@ -20,7 +20,7 @@ each one, and none was refuted. Grouped by what the user meets:
 | C3, C4 | a hazard that fires on fewer than all futures, or whose typical year is far from `expected_year` | a gap of $4.5k to $5.9k on the measured configs. It moves the winner on a near-tie household |
 | C5 | the hazard sampler ignores `min_year` and `max_year` | the futures fire the event outside the window the config states |
 | C9 | `min_year > max_year` | the central case resolves the window to `max_year` and the futures to `min_year` |
-| C13 | two events with the same name in one option | the owned options and the rent futures keep only the last one, while the rent central case keeps both. On the measured config the gap is $3,311 |
+| C13 | two events with the same name in one option | the owned options and the rent futures charge both, each in the last one's year, while the rent central case charges each in its own year. On the measured config the gap is $3,311 |
 | C12 | the futures' affordability arrays | every path uses the central case's event years, while the reset already gets per-path arrays |
 | C15 | a pay drop whose year lies outside the horizon | the central case and the futures disagree about the affordability flag |
 | C14 | the lease reset | the central case prices a tenancy that never resets. It is always an extreme of the futures, never their centre: the best tail when the rent is below what a comparable unit asks, and the worst tail when it is above (measured on both sides) |
@@ -39,7 +39,8 @@ missing is the sentence that says so. For every hazard-timed event the read-back
 facts, computed exactly from the hazard schedule:
 - the year the central case charges it;
 - the probability that it fires within the horizon;
-- the year by which half of the futures have fired it, or that fewer than half ever do.
+- the year by which half of the futures have fired it, or that fewer than half ever do
+  (superseded by E7: the line states the model's schedule, not a count of futures).
 
 When `rent.reset_hazard > 0` the read-back also says that the central case prices a tenancy that
 never resets, and when `price_shock.annual_hazard > 0`, that it prices no crash. These are facts about
@@ -66,7 +67,7 @@ years that lie in both the hazard's range and the stated window: from
 `max(min_year, hazard_start_year)` to `min(max_year, years)`. Jitter timing already respects the
 window.
 
-**E4. The single-path gate asks whether the futures' timing can differ, not which field is
+**E4 (superseded by E8 and E11). The single-path gate asks whether the futures' timing can differ, not which field is
 non-zero.** An event is stochastic exactly when its fire-year distribution across futures is not
 a single point, or its cost is drawn. The refusals of E2 remove the two cases that were misclassed.
 
@@ -105,6 +106,35 @@ With `expected_year` 3 and `hazard_start_year` 10, the central case charges the 
 no future can fire it. That is the same contradiction E2 refuses for the stated window. For a
 hazard-timed event, the window checked is `[max(min_year, hazard_start_year),
 min(max_year, years)]`.
+
+**E10. E9 made exact: the year the central case charges an event is a year in which some future
+can fire it** *(2026-09-28, on the second review of the fix)*. E9's window is a proxy, and it let
+two contradictions through:
+- a hazard that is zero in its first window year (a zero base that grows), with `expected_year`
+  in that year;
+- a hazard that is certain in an earlier year, which every future fires before the central year.
+
+The exact statement is one predicate, read from the one home of where the futures can fire an
+event: `_event_year_deterministic(event, years) ∈ event.fire_years(years)`. It holds for jitter
+timing by E2, and the loader refuses a hazard-timed event for which it fails, naming the year
+the central case would charge and the years the futures can fire it. E8's witnesses of a hazard
+that is certain in another year now fail at load, which is E9's own contradiction. A spec built
+in code, bypassing the loader, can still break the predicate, so the library functions that
+assume it say so.
+
+**E11. With E10, "some future can differ" and "the futures disperse" are one predicate.** The
+first fix gated the futures on "some future can differ from the central case", and used the
+same test to name a side "stochastic" in the one-sided-uncertainty warning. On a hazard certain
+in another year, every future is one point, so the warning's "stochastic" and "OVERconfident"
+were false. Under E10 the central year is always one of the fire years. The fire-year set
+therefore differs from `{central year}` exactly when it holds more than one outcome, which is
+when the futures disperse. The gate, `dispersion_sources` and `sources.uncertainty_inputs` read
+that one predicate, and a test pins the three against each other by enumeration over event
+shapes.
+
+**E12. Superseded wording is marked where it stands.** E1's third bullet ("the year by which
+half of the futures have fired it") is superseded by E7, and E4 by E8 and E11. Each carries a
+one-line pointer to the ruling that replaced it, so no reader takes the older text as current.
 
 ## 3. What must stay true
 
