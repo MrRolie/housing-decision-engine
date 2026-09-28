@@ -331,8 +331,11 @@ hosted. Parked deliberately, not forgotten.
   $15,000 event), an event the best guess charges in a year no future fires it, a window
   that contradicts itself, two events with one name, a negative event vol and a pay drop
   outside the horizon; a hazard fires only inside its window; each future's affordability
-  ratio charges an event in that future's year; and the read-back says where the futures time
-  an event, the lease reset or the price crash differently from the best guess. Still here,
+  ratio charges an event in that future's year; and the read-back states, beside the best
+  guess, each hazard-timed event's schedule and the annual chance of the lease reset and the
+  price crash. The single-path gate still reads the event's fields, so a point mass such as a
+  hazard certain in the year the best guess charges it still gets the one-sided warning,
+  until the gate measures whether every future's present value is one number. Still here,
   as conventions of one path against a mean, each figure the futures' mean cost minus the
   best guess's: the jitter clamp at a window's edge (+$310 analytic, on a $15,000 event at
   the horizon, std 3), discount convexity under jitter (+$44 analytic, at std 3), and condo

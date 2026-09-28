@@ -67,7 +67,7 @@ years that lie in both the hazard's range and the stated window: from
 `max(min_year, hazard_start_year)` to `min(max_year, years)`. Jitter timing already respects the
 window.
 
-**E4 (superseded by E8 and E11). The single-path gate asks whether the futures' timing can differ, not which field is
+**E4 (withdrawn from this change by E13). The single-path gate asks whether the futures' timing can differ, not which field is
 non-zero.** An event is stochastic exactly when its fire-year distribution across futures is not
 a single point, or its cost is drawn. The refusals of E2 remove the two cases that were misclassed.
 
@@ -90,7 +90,7 @@ range when that rate varies by year. Every rate and probability follows item 51 
 `--decompose` spec: it prints 0.0% or 100.0% only when it is exactly 0 or 1. A probability
 whose complement underflows float therefore prints as below 100%, never as 100.0%.
 
-**E8. E4 corrected: the futures are consulted whenever they can differ from the central case,
+**E8 (withdrawn from this change by E13). E4 corrected: the futures are consulted whenever they can differ from the central case,
 not only when they differ among themselves.** Consider an event whose hazard is certain in its
 first window year. Every future fires it in that year, so its fire-year distribution is a single
 point. If that year is not the one the central case charges, every future disagrees with the
@@ -135,8 +135,9 @@ other by enumeration over event shapes. With an income block, the gate and
 year, because the affordability ratios read the year.
 
 **E12. Superseded wording is marked where it stands.** E1's third bullet ("the year by which
-half of the futures have fired it") is superseded by E7, and E4 by E8 and E11. Each carries a
-one-line pointer to the ruling that replaced it, so no reader takes the older text as current.
+half of the futures have fired it") is superseded by E7, and E4, E8 and E11 are withdrawn by E13.
+Each carries a one-line pointer to the ruling that replaced or withdrew it, so no reader takes the
+older text as current.
 
 **E13. The gate is split out; this change lands what holds** *(operator ruling 2026-09-28, taken on
 the second review of the fix)*. The rulings that decide whether a run is single-path (E4, E8,
