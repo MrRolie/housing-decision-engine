@@ -102,7 +102,7 @@ def Decomposition(*, max_paths=None, **fields):
 
 
 # The empty register's code and fact as the engine writes them for a config
-# with no financing key (`break_even._no_distance`), copied as data.
+# with no financing key, copied as data.
 NO_DISTANCE_TWO_OPTIONS = ("no_candidate",
                            "this config states no mortgage_renewal_rates or mortgage_rate")
 

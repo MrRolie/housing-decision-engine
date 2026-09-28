@@ -5,7 +5,7 @@ A code is a word the contract defines, and a reader keys on it. A literal
 swapped for another code of the same set still builds, since both are in the
 set, and the reason beside it still reads as it did, so the only test that can
 fail on the swap is one that asserts the code on a run where that code fires.
-The four sets are enumerated here, not sampled: a code with no witness in
+The five sets are enumerated here, not sampled: a code with no witness in
 `WITNESSES` fails `test_every_code_of_every_set_has_a_witness`, and each
 witness names a run — real where the engine reaches the code, constructed where
 it cannot — and the exact code that run carries at one place. Where the run is
@@ -241,6 +241,14 @@ def _no_distance(name):
     return witness
 
 
+def _not_admitted(tmp_path, monkeypatch):
+    got = run("inert_ladder")
+    (row,) = got.block["reversal"]["refused"]
+    assert (f"  WHAT WOULD HAVE TO CHANGE — not solved ({row['code']}): "
+            f"{row['reason']}") in got.text.splitlines()
+    return row["code"]
+
+
 def _no_mapping(tmp_path, monkeypatch):
     raw = _load(MORTGAGE)
     spec, det, mc, verdict = _inputs(raw)
@@ -283,9 +291,11 @@ WITNESSES = {
     },
     "NO_DISTANCE_CODES": {
         "no_candidate": _no_distance("three"),
-        "not_admitted": _no_distance("inert"),
         "no_mapping": _no_mapping,
         "single_option": _no_distance_single_option,
+    },
+    "REVERSAL_REFUSAL_CODES": {
+        "not_admitted": _not_admitted,
     },
 }
 

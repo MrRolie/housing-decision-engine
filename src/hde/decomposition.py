@@ -427,10 +427,12 @@ EDGE_REFUSAL_CODES: Tuple[str, ...] = (
 
 NO_DISTANCE_CODES: Tuple[str, ...] = (
     "no_candidate",
-    "not_admitted",
     "no_mapping",
     "single_option",
 )
+
+# Design: docs/specs/2026-09-22-which-risk-decides-it.md §0.1 item 64.
+REVERSAL_REFUSAL_CODES: Tuple[str, ...] = ("not_admitted",)
 
 
 def _require_types(where: str, items: Tuple[object, ...],
@@ -556,6 +558,19 @@ class StructuralZero:
 
 
 @dataclass(frozen=True)
+class RefusedReversal:
+    """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
+
+    key: str
+    option: str
+    code: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        _require_code("RefusedReversal", self.code, REVERSAL_REFUSAL_CODES)
+
+
+@dataclass(frozen=True)
 class ReversalRegister:
     """Fields: docs/reference/API_CONTRACT.md § The `decomposition` block."""
 
@@ -564,14 +579,17 @@ class ReversalRegister:
     structural_zeros: Tuple[StructuralZero, ...]
     no_distance_code: Optional[str]
     no_distance_reason: Optional[str]
+    refused: Tuple[RefusedReversal, ...] = ()
 
     def __post_init__(self) -> None:
         _require_kind("ReversalRegister", self.structural_zeros, "stated_path")
-        empty = not (self.exact or self.estimated)
+        _require_types("ReversalRegister.refused", self.refused, (RefusedReversal,))
+        rows = len(self.exact) + len(self.estimated) + len(self.refused)
+        empty = not rows
         if not (empty == (self.no_distance_reason is not None)
                 == (self.no_distance_code is not None)):
             raise ValueError(
-                f"ReversalRegister has {len(self.exact) + len(self.estimated)} rows, "
+                f"ReversalRegister has {rows} rows, "
                 f"no_distance_code {self.no_distance_code!r} and no_distance_reason "
                 f"{self.no_distance_reason!r}: both are set exactly when there is no row")
         if empty:

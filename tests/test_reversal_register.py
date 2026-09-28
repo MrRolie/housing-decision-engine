@@ -1459,6 +1459,9 @@ def test_the_figure_checks_refuse_where_nothing_passes():
     # holds the crossing's figure above it
     assert be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
                                lambda v: "house", 0.01, figures=(0.06273,)) == "6.278%"
+    # and one rounded equal to it does not
+    assert be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
+                               lambda v: "house", 0.01, figures=(0.0627,)) == "6.27%"
     # and the reason says so, figure by figure
     with pytest.raises(be.CrossingRefused) as refused:
         be.printed_crossing(key, "mc_best", 0.06278, 0.06278, "house",
@@ -1500,45 +1503,119 @@ def test_the_figure_checks_refuse_where_nothing_passes():
     assert (texts, kept) == (["6.01%", "6.27%"], [0])
     assert dropped == [(1, (
         f"{above!r}, a figure on this axis at or above the upper end of its bracket "
-        "[0.062724, 0.062724], reads on its side of 6.01%, 6.2724% rounded to the nearest "
+        "[0.062724, 0.062724], prints above 6.01%, above 6.2724% rounded to the nearest "
         "at none of 2 to 12 decimals of a percent, nor as the figure of a crossing whose "
         "bracket holds it"))]
+    # the first figure not placed is taken, and the first crossing beside
+    # which, with those before it, it is not placed is refused: here the
+    # second, and then the first, for the other figure
+    first, second = (0.05009, 0.05009 + 1e-13, "5.00%"), (0.05005, 0.05005 + 1e-13, "5.00%")
+    texts, kept, dropped = be._ordered_axis([0.05009, 0.050052], [first, second])
+    assert (kept, [index for index, _ in dropped]) == ([], [1, 0])
+    assert [reason.split(",")[0] for _, reason in dropped] == ["0.05009", "0.050052"]
+    # a figure handed its sides prints on them; one no rounding places prints
+    # as the figure of a crossing whose bracket holds it, at either end; and
+    # the reason names each side it was tried on
+    assert be.ordered_figure(0.0627246, [crossing], [1]) == "6.2725%"
+    at_upper = [(0.06279995, 0.0628, "6.2799%")]
+    assert be.ordered_figure(0.06279995, at_upper) == "6.2799%"
+    assert be.ordered_figure(0.0628, at_upper) == "6.28%"
+    assert be.ordered_figure(0.0628, at_upper, [-1]) == "6.2799%"
+    texts, kept, dropped = be._ordered_axis(
+        [0.0601], [(0.0601, 0.06011, "6.01%")], 1, lambda kept: ({0: 1}, None))
+    assert (texts, kept) == (["6.01%"], [])
+    assert dropped == [(0, (
+        "0.0601, a figure on this axis at or below the lower end of its bracket "
+        "[0.0601, 0.06011], prints above 6.01% rounded to the nearest at none of 2 to 12 "
+        "decimals of a percent, nor as the figure of a crossing whose bracket holds it"))]
 
-def test_a_stated_figure_reads_the_nearest_crossing_on_each_side():
-    """`_misread`, constructed: on each field a stated figure reads the `was`
-    of the nearest crossing whose bracket it lies at or below or inside, and
-    the `becomes` of the nearest whose bracket it lies at or above; a crossing
-    further off bounds another stretch, and a run that says house between
-    two stretches of rent reads house there.
-    *Kills it:* holding every crossing to the run's state, reading `becomes`
-    from a crossing at or above the figure or `was` from one below, or a
-    reason naming another side than the one measured."""
+
+def test_only_a_refused_crossing_becomes_a_refused_boundary(raw, base, monkeypatch):
+    """Any other error in printing a crossing reaches the caller.
+    *Kills it:* the catch widened past `CrossingRefused`."""
+    _, det, mc = base
+
+    def broken(*args, **kwargs):
+        raise ValueError("an error the test put there")
+
+    monkeypatch.setattr(be, "printed_crossing", broken)
+    with pytest.raises(ValueError, match="an error the test put there"):
+        reversal_register(raw, det, mc)
+
+
+def test_the_stated_figure_prints_on_the_side_this_run_reads_it():
+    """`_run_sides`, constructed (§0.1 item 65): on each field the figure the
+    config states as one keeps the sides it lies on where it reads the run's
+    state beside the nearest crossing whose bracket it lies at or below or
+    inside and the nearest it lies at or above; otherwise it prints above
+    the first, or else at or below the second, where it then reads the run's
+    state beside that crossing and the next one past it; and otherwise the
+    first it reads another state beside is refused, naming what it measured.
+    *Kills it:* holding every crossing to the sides the figure lies on,
+    moving a figure off the side of a crossing it reads the run's state
+    beside, moving it past a crossing whose far side does not read that
+    state, or a reason naming another side than the one measured."""
+    def sides_of(value, crossings, says):
+        sides, wrong = be._run_sides(value, dict(enumerate(crossings)), says)
+        return [sides[index] for index in range(len(crossings))], wrong
+
     # house below 5%, rent from 5% to 6%, house from 6% to 7%, rent above
     crossings = [("best", 0.05, 0.0500001, "house", "rent"),
                  ("best", 0.06, 0.0600001, "rent", "house"),
                  ("best", 0.07, 0.0700001, "house", "rent"),
                  ("runner_up", 0.05, 0.0500001, "rent", "house")]
     house = {"best": "house", "runner_up": "house"}
-    assert be._misread(0.065, crossings, house) is None
-    assert be._misread(0.04, crossings, {"best": "house", "runner_up": "rent"}) is None
-    assert be._misread(0.0700001, crossings, {"best": "rent", "runner_up": "house"}) is None
-    assert be._misread(0.05000005, crossings, {"best": "house", "runner_up": "rent"}) is None
-    assert be._misread(0.06, crossings, house) == (1, (
-        "0.06, the stated figure, lies at or below the lower end of its bracket "
-        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run"))
-    assert be._misread(0.06000005, crossings, house)[1].startswith(
-        "0.06000005, the stated figure, lies inside its bracket [0.06, 0.0600001] and reads "
-        "'rent' beside it")
-    assert be._misread(0.0700001, crossings, house) == (2, (
-        "0.0700001, the stated figure, lies at or above the upper end of its bracket "
-        "[0.07, 0.0700001] and reads 'rent' beside it, and best says 'house' in this run"))
-    assert be._misread(0.065, crossings, {"best": "house", "runner_up": "rent"}) == (3, (
-        "0.065, the stated figure, lies at or above the upper end of its bracket "
-        "[0.05, 0.0500001] and reads 'house' beside it, and runner_up says 'rent' in this run"))
-    # read beside the crossing below it, though the one above reads the run's state
-    assert be._misread(0.06, [crossings[0], crossings[2]], house) == (0, (
-        "0.06, the stated figure, lies at or above the upper end of its bracket "
-        "[0.05, 0.0500001] and reads 'rent' beside it, and best says 'house' in this run"))
+    # where it reads the run's state, on the sides it lies on
+    assert sides_of(0.065, crossings, house) == ([1, 1, -1, 1], None)
+    assert sides_of(0.04, crossings, {"best": "house", "runner_up": "rent"}) == (
+        [-1, -1, -1, -1], None)
+    assert sides_of(0.0700001, crossings, {"best": "rent", "runner_up": "house"}) == (
+        [1, 1, 1, 1], None)
+    assert sides_of(0.05000005, crossings, {"best": "house", "runner_up": "rent"}) == (
+        [0, -1, -1, 0], None)
+    # at a crossing's lower end or inside it, where the run reads its
+    # `becomes`: above it
+    assert sides_of(0.06, crossings, house) == ([1, 1, -1, 1], None)
+    assert sides_of(0.06000005, crossings, house) == ([1, 1, -1, 1], None)
+    # at its upper end, where the run reads its `was`: at or below it
+    assert sides_of(0.0700001, crossings, house) == ([1, 1, -1, 1], None)
+    assert sides_of(0.065, crossings, {"best": "house", "runner_up": "rent"}) == (
+        [1, 1, -1, -1], None)
+    # at or below the crossing below it, with none past it, where only that
+    # reads the run's state
+    assert sides_of(0.06, [crossings[0], crossings[2]], house) == ([-1, -1], None)
+    # not past a crossing whose far side reads another state: refused, as
+    # measured
+    past = [crossings[1], ("best", 0.065, 0.0650001, "condo", "rent")]
+    assert sides_of(0.059, past, house) == ([-1, -1], (0, (
+        "0.059, the stated figure, lies at or below the lower end of its bracket "
+        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
+    # each crossing keeps its own index, the axis's, in the sides and the refusal
+    assert be._run_sides(0.059, {3: past[0], 7: past[1]}, house) == ({3: -1, 7: -1}, (3, (
+        "0.059, the stated figure, lies at or below the lower end of its bracket "
+        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
+    # nor below one: at or below the crossing below it only where the next
+    # one below reads the run's state above it
+    below = [("best", 0.05, 0.0500001, "house", "condo"),
+             ("best", 0.06, 0.0600001, "house", "rent")]
+    assert sides_of(0.061, below, house) == ([1, 1], (1, (
+        "0.061, the stated figure, lies at or above the upper end of its bracket "
+        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run")))
+    below[0] = ("best", 0.05, 0.0500001, "condo", "house")
+    assert sides_of(0.061, below, house) == ([1, -1], None)
+    three = [("mc_best", 0.05, 0.0500001, "house", "condo"),
+             ("mc_best", 0.06, 0.0600001, "condo", "house")]
+    assert sides_of(0.055, three, {"mc_best": "rent"}) == ([1, -1], (1, (
+        "0.055, the stated figure, lies at or below the lower end of its bracket "
+        "[0.06, 0.0600001] and reads 'condo' beside it, and mc_best says 'rent' in this run")))
+    assert sides_of(0.045, three, {"mc_best": "condo"}) == ([1, -1], None)
+    # a refusal comes before the placing: the axis refuses the crossing the
+    # sides name, with their reason, though no figure is placed beside it
+    wrong = (0, "the reason the sides give")
+    texts, kept, dropped = be._ordered_axis(
+        [0.0601], [(0.0601, 0.06011, "6.01%")], 1,
+        lambda kept: ({0: 1}, wrong) if kept else ({}, None))
+    assert (texts, kept, dropped) == (["6.01%"], [], [wrong])
 
 
 def test_the_far_end_is_the_end_the_stated_figures_are_not_all_at():
@@ -1551,12 +1628,14 @@ def test_the_far_end_is_the_end_the_stated_figures_are_not_all_at():
     gate measured anywhere but that far end."""
     lo, hi = reversal_bracket(CONTRACT)
     raw = copy.deepcopy(DECISIVE_STEP)
-    for stated, far in ((0.044, hi), (lo, hi), (hi, lo)):
+    # a figure above the bracket is not its high end
+    for stated, far in ((0.044, hi), (lo, hi), (hi, lo), (0.12, hi)):
         raw["house"]["mortgage_rate"] = stated
         assert be.reversal_probe(raw, CONTRACT) == far, stated
     fixture = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
     low, high = reversal_bracket(RENEWAL)
-    for path, far in (([high, high], low), ([high], low), ([high, 0.05], high)):
+    for path, far in (([high, high], low), ([high], low), ([high, 0.05], high),
+                      ([high, 0.12], high)):
         fixture["house"]["mortgage_renewal_rates"] = path
         assert be.reversal_probe(fixture, RENEWAL) == far, path
     raw["house"]["mortgage_rate"] = lo
@@ -1617,9 +1696,30 @@ def test_a_field_the_axis_never_reproduces_says_so():
     assert "rent" not in {free(x)[0].mc_best for x in list(xs)}
 
 
+def test_a_futures_boundary_names_the_options_its_sides_are_computed_from():
+    """§0.1 item 63, constructed: an `mc_best` boundary's sides are computed
+    from the options it names, and a `decisive` one's from the central case's
+    winner at each end of its bracket, read off the curve there.
+    *Kills it:* the run's own winner, one end read for both, or the option
+    read off the other field."""
+    def free(x):
+        best = "house" if x < 0.05 else "rent"
+        verdict = types.SimpleNamespace(best=best, decisive=x < 0.05,
+                                        mc_best="house" if x < 0.05 else "condo")
+        return verdict, {}
+
+    stated = types.SimpleNamespace(best="house", decisive=True, mc_best="house")
+    for field, sides in (("decisive", ("house", "rent")), ("mc_best", ("house", "condo"))):
+        (boundary,), why = be._futures_field_boundaries(
+            {}, "house.mortgage_rate", field, free, stated, 0.01, 0.10,
+            scan_points=be.REVERSAL_SCAN_POINTS)
+        assert why is None and boundary["value"] < 0.05 <= boundary["upper_end"]
+        assert boundary["computed_from"] == sides, field
+
+
 def test_a_boundary_with_no_probability_is_not_identified():
-    record = be._identification("mc_best", {"was": "condo", "becomes": "house"},
-                                {"lo": {}, "hi": {}, "at": {}}, "condo", 100)
+    record = be._identification({"computed_from": ("condo", "house")},
+                                {"lo": {}, "hi": {}, "at": {}}, 100)
     assert not record["identified"] and record["watched"] == []
     assert record["why"] == "no probability is attached to this boundary"
 
@@ -1648,8 +1748,8 @@ def test_a_register_on_one_option_has_no_verdict_to_reverse():
 
 
 def test_a_key_the_loader_refuses_at_the_far_end_is_named_as_that(monkeypatch):
-    """The empty register never calls a refused probe a key that moved
-    nothing: the loader's refusal is named as the loader's."""
+    """A refused row never calls a refused probe a key that moved nothing:
+    the loader's refusal is named as the loader's."""
     raw = copy.deepcopy(INERT)
     real_load_at = be.load_at
 
@@ -1661,10 +1761,11 @@ def test_a_key_the_loader_refuses_at_the_far_end_is_named_as_that(monkeypatch):
     monkeypatch.setattr(be, "load_at", refuse_far_end)
     spec = load_config_dict(raw)
     register = be.reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec))
-    reason = register.no_distance_reason
-    assert register.no_distance_code == "not_admitted"
-    assert reason == ("this config states condo.mortgage_rate, and the loader refuses it "
-                      "at the far end of its bracket")
+    assert (register.no_distance_code, register.no_distance_reason) == (None, None)
+    (row,) = register.refused
+    assert (row.key, row.option, row.code) == ("condo.mortgage_rate", "condo", "not_admitted")
+    assert row.reason == ("this config states condo.mortgage_rate, and the loader refuses it "
+                          "at the far end of its bracket")
 
 
 
@@ -1678,16 +1779,18 @@ def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the
     probability with its own two figures.
     *Kills it:* comparing against any multiple of the noise but one (a move
     of 1.5 noise refused, or one of 0.75 noise admitted), or `>=`; one
-    option's move held against another option's noise; or a reason naming
-    an option that moved by more than its own noise."""
+    option's move held against another option's noise; a reason naming an
+    option that moved by more than its own noise, or another than the first
+    of `computed_from` that did not; or watching an option no side is
+    computed from."""
     paths = 400
     at = 0.5
     noise = 2.0 * math.sqrt(at * (1.0 - at) / paths)
 
     def record(low, high):
-        probs = {"lo": {"condo": low}, "hi": {"condo": high}, "at": {"condo": at}}
-        return be._identification("best", {"was": "condo", "becomes": "house"},
-                                  probs, "condo", paths)
+        probs = {"lo": {"condo": low, "house": 0.5}, "hi": {"condo": high, "house": 0.5},
+                 "at": {"condo": at, "house": 0.5}}
+        return be._identification({"computed_from": ("condo", "condo")}, probs, paths)
 
     for factor in (1.5, 1.01, 1.99):
         got = record(0.2, 0.2 + factor * noise)
@@ -1704,14 +1807,13 @@ def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the
     # Two probabilities, each held against its own noise: rent's move of 0.10
     # clears its own 2 s.e. of 0.09 though not condo's 0.12, and the boundary
     # is identified; with rent's move under its own, the reason names rent.
-    def pair(rent_move, condo_move):
+    def pair(rent_move, condo_move, computed_from=("rent", "condo")):
         rent_at = 0.5 - math.sqrt(0.25 - 0.09 ** 2 * 50 / 4)
         condo_at = 0.5 - math.sqrt(0.25 - 0.12 ** 2 * 50 / 4)
         probs = {"lo": {"rent": 0.3, "condo": 0.1},
                  "hi": {"rent": 0.3 + rent_move, "condo": 0.1 + condo_move},
                  "at": {"rent": rent_at, "condo": condo_at}}
-        return be._identification("mc_best", {"was": "rent", "becomes": "condo"},
-                                  probs, "rent", 50)
+        return be._identification({"computed_from": computed_from}, probs, 50)
 
     got = pair(0.10, 0.50)
     assert [f"{row['two_se']:.12f}" for row in got["watched"]] == ["0.090000000000",
@@ -1721,3 +1823,19 @@ def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the
     assert got["identified"] is False
     assert got["why"] == ("across the bracket P(rent cheapest) moves by 0.0800, not more than "
                           "2 s.e. of it at the boundary (0.0900) on 50 paths")
+    # the first clears its own and the second does not: the second is named
+    got = pair(0.50, 0.10)
+    assert got["identified"] is False
+    assert got["why"] == ("across the bracket P(condo cheapest) moves by 0.1000, not more than "
+                          "2 s.e. of it at the boundary (0.1200) on 50 paths")
+    # neither clears its own: the first of `computed_from` is named
+    assert pair(0.08, 0.10)["why"].startswith("across the bracket P(rent cheapest) moves by "
+                                              "0.0800")
+    assert pair(0.08, 0.10, ("condo", "rent"))["why"].startswith(
+        "across the bracket P(condo cheapest) moves by 0.1000")
+    # exactly the options the sides are computed from are watched, each once:
+    # a `decisive` boundary whose central-case winner is the condo on both
+    # sides watches the condo alone, however rent moves
+    got = pair(0.0, 0.50, ("condo", "condo"))
+    assert [row["option"] for row in got["watched"]] == ["condo"]
+    assert got["identified"] is True

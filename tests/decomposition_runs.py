@@ -248,9 +248,6 @@ STATED_BETWEEN = _near_ones(0.03795, 1504.817709, (0.0002, 0.00005))
 # floored figure of that crossing, so the crossing is not printed.
 STATED_UNDER_A_CROSSING = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
 STATED_UNDER_A_CROSSING["house"]["mortgage_rate"] = 0.0678488725623162
-# The fixture with its first renewal rate just below the renewal key's
-# central-case crossing: rounded to the nearest at two decimals, it would
-# print above that crossing's figure.
 # A stated rate at the lower end of the bracket of `DECISIVE_STEP`'s sampled
 # crossing, which that crossing's own floored figure prints below and the
 # solved crossing's above: no rounding of it prints on its side of both, so
@@ -288,8 +285,60 @@ STATED_TWO_FLOATS_UNDER_A_CROSSING["simulation"]["random_seed"] = 7
 # A stated rate at the high end of its bracket.
 STATED_AT_THE_BRACKET_HIGH_END = copy.deepcopy(DECISIVE_STEP)
 STATED_AT_THE_BRACKET_HIGH_END["house"]["mortgage_rate"] = 0.10
-PATH_NOTE_BELOW_A_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+# The fixture with its first renewal rate just below the renewal key's
+# central-case crossing: rounded to the nearest at two decimals, it would
+# print above that crossing's figure.
+PATH_NOTE_BELOW_A_CROSSING =yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
 PATH_NOTE_BELOW_A_CROSSING["house"]["mortgage_renewal_rates"][0] = 0.016051
+# A renewal ladder of one repeated rate one float under the central case's
+# crossing, where this run's winner is already rent (spec §0.1 item 65).
+LADDER_JUST_UNDER_A_CROSSING = {
+    "years": 10,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.0527,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "mortgage_renewal_years": 5,
+              "mortgage_renewal_rates": [0.06715813612987188, 0.06715813612987188],
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 1837.96, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 7, "house_maintenance_vol": 0.002,
+                   "rent_escalation_vol": 0.05},
+}
+# A reference just below the central case's crossing (spec §0.1 item 66).
+REFERENCE_BESIDE_A_CROSSING = copy.deepcopy(DECISIVE_STEP)
+REFERENCE_BESIDE_A_CROSSING["rent"]["monthly_rent"] = 1696.44
+# Three options, where a decisiveness crossing is decisive for another option
+# than this run's winner (spec §0.1 item 63): on the contract rate of a
+# financed house beside a financed condo whose fee is drawn wide.
+DECISIVE_FOR_ANOTHER = {
+    "years": 5,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "condo": {"initial_value": 400000, "down_payment": 80000, "mortgage_rate": 0.05,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "monthly_fee": 1254.1807, "fee_escalation_rate": 0.03, "purchase_costs": 6000,
+              "value_growth_rate": 0.031},
+    "house": {"initial_value": 550000, "down_payment": 110000, "mortgage_rate": 0.08,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 110000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 400, "random_seed": 7, "condo_fee_vol": 4.0,
+                   "house_maintenance_vol": 0.02, "rent_escalation_vol": 0.005},
+}
+# The fixture with a dearer house on 60 futures: the renewal ladder's
+# decisiveness crossing is decisive for the house while this run's winner is
+# rent.
+DECISIVE_FOR_THE_HOUSE = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+DECISIVE_FOR_THE_HOUSE["simulation"]["num_sims"] = 60
+DECISIVE_FOR_THE_HOUSE["house"].update({"initial_value": 580000, "down_payment": 116000})
+del DECISIVE_FOR_THE_HOUSE["sources"]["house.other_recurring_costs.property_tax.annual_amount"]
+# The fixture with its renewals at or past the amortization: the ladder it
+# states moves no present value (spec §0.1 item 64).
+INERT_LADDER = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+INERT_LADDER["house"]["mortgage_renewal_years"] = 25
 # Level rows a fraction of a dollar each (spec §0.1 item 62's witness): at
 # whole dollars no row's pair shows its judgment.
 LEVEL_UNDER_A_DOLLAR = {
@@ -707,6 +756,13 @@ CORPUS = {
     "stated_inside_a_sampled_crossing": (STATED_INSIDE_A_SAMPLED_CROSSING, "200"),
     "stated_two_floats_under_a_crossing": (STATED_TWO_FLOATS_UNDER_A_CROSSING, "100"),
     "stated_at_the_bracket_high_end": (STATED_AT_THE_BRACKET_HIGH_END,),
+    "ladder_just_under_a_crossing": (LADDER_JUST_UNDER_A_CROSSING,),
+    "reference_beside_a_crossing": (REFERENCE_BESIDE_A_CROSSING,),
+    # A decisiveness crossing identified on its own option (spec §0.1 item
+    # 63), and a stated key no crossing moves (item 64).
+    "decisive_for_another": (DECISIVE_FOR_ANOTHER, "100"),
+    "decisive_for_the_house": (DECISIVE_FOR_THE_HOUSE,),
+    "inert_ladder": (INERT_LADDER, "300"),
     # A level row's digits (spec §0.1 item 62).
     "pull_nothing": (CORRELATIONS_PULL_NOTHING,),
     "level_under_a_dollar": (LEVEL_UNDER_A_DOLLAR,),

@@ -848,33 +848,39 @@ def _estimated_head(line):
 
 
 def _no_distance(line):
+    """A `refused` row's line, or the line of a register with no row."""
     reversal = line.render.block["reversal"]
+    got = (line.m["code"], line.m["reason"])
+    if reversal["refused"]:
+        assert got in [(row["code"], row["reason"]) for row in reversal["refused"]]
+        assert _REVERSAL_REFUSAL_REASON[got[0]].fullmatch(got[1])
+        return
     assert reversal["exact"] == [] and reversal["estimated"] == []
-    assert line.m["reason"] == reversal["no_distance_reason"]
-    assert line.m["code"] == reversal["no_distance_code"]
-    assert _NO_DISTANCE_REASON[line.m["code"]].fullmatch(line.m["reason"])
+    assert got == (reversal["no_distance_code"], reversal["no_distance_reason"])
+    assert _NO_DISTANCE_REASON[got[0]].fullmatch(got[1])
 
 
-def _brackets(row):
-    """`(value, upper_end, printed figure)` of every crossing the row prints."""
-    return [(b["value"], b["upper_end"], b["formatted"]) for b in row["boundaries"]
-            if "formatted" in b]
-
-
-def on_its_side(figure, value, row):
+def on_its_side(figure, value, row, render=None):
     """A figure printed on a crossing's axis reads on its side of every
     printed crossing (§0.1 item 60): at or below the crossing's figure when it
     lies at or below the crossing's `value`, equal to it inside the bracket,
-    above it at or above `upper_end`."""
+    above it at or above `upper_end`. With `render`, it is the key's one
+    stated figure, and where it prints off that side it reads there what the
+    crossing's field says in this run (§0.1 item 65)."""
     shown = decimal.Decimal(figure.rstrip("%"))
-    for lower, upper, printed in _brackets(row):
-        crossing = decimal.Decimal(printed.rstrip("%"))
+    for boundary in (b for b in row["boundaries"] if "formatted" in b):
+        lower, upper = boundary["value"], boundary["upper_end"]
+        crossing = decimal.Decimal(boundary["formatted"].rstrip("%"))
         if value <= lower:
-            assert shown <= crossing, (figure, value, printed, lower)
+            held = shown <= crossing
         elif value >= upper:
-            assert shown > crossing, (figure, value, printed, upper)
+            held = shown > crossing
         else:
-            assert shown == crossing, (figure, value, printed, lower, upper)
+            held = shown == crossing
+        if not held and render is not None:
+            reads = boundary["was"] if shown <= crossing else boundary["becomes"]
+            held = reads == _run_says(render, boundary["verdict_field"])
+        assert held, (figure, value, boundary)
 
 
 def _stated_figures(line, row):
@@ -897,14 +903,15 @@ def _row_head(line):
         # its own tag, character for character (§0.1 item 53)
         assert _echo_class(line.render.doc, row["key"]) == row["stated_source"]
         assert row["stated_tag"] == _read_back_tag(line.render.doc, row["key"])
+        one = stated_path(line.render.raw, row["key"]) is None
         for value, figure in zip(*_stated_figures(line, row)):
             # each figure is the stated value at some number of decimals of a
             # percent, within one of its steps, and reads on its side
             places = len(figure.rstrip("%").split(".")[1])
             assert abs(decimal.Decimal(figure.rstrip("%"))
                        - decimal.Decimal(value) * 100) < decimal.Decimal(1).scaleb(-places)
-            on_its_side(figure, value, row)
-        if stated_path(line.render.raw, row["key"]) is None:
+            on_its_side(figure, value, row, line.render if one else None)
+        if one:
             reads_what_this_run_says(line.render, row)
 
 
@@ -1218,8 +1225,9 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
                       r"(?:at \d+ to \d+ decimals of a percent: .+|at no precision: its "
                       r"bracket is wider than one step at \d+ decimals of a percent)$"),
     "NOT_ORDERABLE": (r"^(?P<figure>\S+), a figure on this axis (?:at or below the lower end "
-                      r"of|inside|at or above the upper end of) its bracket \[\S+, \S+\], reads "
-                      r"on its side of .+ rounded to the nearest at none of 2 to 12 decimals "
+                      r"of|inside|at or above the upper end of) its bracket \[\S+, \S+\], prints "
+                      r"(?:at or below|equal to|above) \d+\.\d+%(?:, (?:at or below|equal to|"
+                      r"above) \d+\.\d+%)* rounded to the nearest at none of 2 to 12 decimals "
                       r"of a percent, nor as the figure of a crossing whose bracket holds it$"),
     "MISREAD": (r"^\S+, the stated figure, lies (?:at or below the lower end of|inside|at or "
                 r"above the upper end of) its bracket \[\S+, \S+\] and reads '[^']+' beside "
@@ -1233,14 +1241,12 @@ REASONS: Dict[str, "re.Pattern"] = {name: re.compile(pattern) for name, pattern 
                           r"own s\.d\. is not a number)\)$"),
     "WITHOUT_FUTURES": (r"^this run has no futures, and this solver reads "
                         r"(?P<field>mc_best|decisive) only off futures$"),
+    # a stated key the reversal register refuses
+    "NOT_ADMITTED": (r"^this config states (?P<key>[\w.]+), and (?P<fact>moving it to the far "
+                     r"end of its bracket moves no option's present value|the loader refuses "
+                     r"it at the far end of its bracket)$"),
     # the empty reversal register
     "NO_DISTANCE": r"^this config states no mortgage_renewal_rates or mortgage_rate$",
-    "NO_DISTANCE_NOT_ADMITTED": (
-        r"^this config states [\w.]+, and (?:moving it to the far end of its "
-        r"bracket moves no option's present value|the loader refuses it at the "
-        r"far end of its bracket)(?:; this config states [\w.]+, and (?:moving it "
-        r"to the far end of its bracket moves no option's present value|the "
-        r"loader refuses it at the far end of its bracket))*$"),
     "NO_DISTANCE_NO_MAPPING": r"^this block was handed no config mapping$",
     "NO_DISTANCE_ONE_OPTION": r"^fewer than two options are priced$",
     # the path note: how the axis was built (§0.1 item 41)
@@ -1289,11 +1295,12 @@ _BOUNDARY_REASON = {
 }
 _NO_DISTANCE_REASON = {
     "no_candidate": REASONS["NO_DISTANCE"],
-    "not_admitted": REASONS["NO_DISTANCE_NOT_ADMITTED"],
     "no_mapping": REASONS["NO_DISTANCE_NO_MAPPING"],
     "single_option": REASONS["NO_DISTANCE_ONE_OPTION"],
 }
-
+_REVERSAL_REFUSAL_REASON = {
+    "not_admitted": REASONS["NOT_ADMITTED"],
+}
 
 
 def test_every_code_names_one_set_of_reasons():
@@ -1303,8 +1310,10 @@ def test_every_code_names_one_set_of_reasons():
     assert set(_REFUSAL_REASON) == set(dc.REFUSAL_CODES)
     assert set(_BOUNDARY_REASON) == set(dc.BOUNDARY_REFUSAL_CODES)
     assert set(_NO_DISTANCE_REASON) == set(dc.NO_DISTANCE_CODES)
+    assert set(_REVERSAL_REFUSAL_REASON) == set(dc.REVERSAL_REFUSAL_CODES)
     filed = []
-    for mapping in (_REFUSAL_REASON, _BOUNDARY_REASON, _NO_DISTANCE_REASON):
+    for mapping in (_REFUSAL_REASON, _BOUNDARY_REASON, _NO_DISTANCE_REASON,
+                    _REVERSAL_REFUSAL_REASON):
         for got in mapping.values():
             filed.extend(got.patterns if isinstance(got, _AnyOf) else (got,))
     names = [next(n for n, p in REASONS.items() if p is pattern) for pattern in filed]
@@ -1328,6 +1337,8 @@ def _engine_reasons(render):
                 out.append(("refused", refused["reason"], (row, refused)))
             if row["path_note"] is not None:
                 out.append(("path_note", row["path_note"], row))
+    for row in reversal["refused"]:
+        out.append(("refused_key", row["reason"], row))
     if reversal["no_distance_reason"] is not None:
         out.append(("no_distance", reversal["no_distance_reason"], reversal))
     return out
@@ -1372,6 +1383,8 @@ SEAM_ONLY = {
                        "test_without_futures_the_register_still_carries_its_solved_half",
     "NO_PROBABILITY": "tests/test_reversal_register.py::"
                       "test_a_boundary_with_no_probability_is_not_identified",
+    "MISREAD": "tests/test_reversal_register.py::"
+               "test_the_stated_figure_prints_on_the_side_this_run_reads_it",
     "NO_DISTANCE_NO_MAPPING": "tests/test_decomposition_sentences.py::"
                               "test_a_block_handed_no_config_mapping_searched_no_key",
     "NO_DISTANCE_ONE_OPTION": "tests/test_reversal_register.py::"
@@ -1593,23 +1606,20 @@ def _r_not_printable(render, m, node):
 
 
 def _r_no_distance(render, m, node):
-    candidates = be.reversal_candidates(render.raw)
-    reason = m.group(0)
-    if reason == "this config states no mortgage_renewal_rates or mortgage_rate":
-        assert candidates == []
-        return
-    named = re.findall(r"this config states ([\w.]+), and (moving it to the far end of its "
-                       r"bracket moves no option's present value|the loader refuses it at "
-                       r"the far end of its bracket)", reason)
-    assert [k for k, _ in named] == [k for k, _ in candidates]
-    for key, words in named:
-        admitted, record = be.reversal_admission(render.raw, key,
-                                                 be.reversal_probe(render.raw, key))
-        assert not admitted
-        if words.startswith("moving it"):
-            assert record["deltas"] and all(d == 0.0 for d in record["deltas"].values())
-        else:
-            assert record["why"].startswith("the loader refuses")
+    assert be.reversal_candidates(render.raw) == []
+
+
+def _r_not_admitted(render, m, node):
+    """The row's own key, one the config states, moved to the far end of its
+    bracket: no option's present value moves, or the loader refuses it."""
+    key = m["key"]
+    assert key == node["key"] and key in [k for k, _ in be.reversal_candidates(render.raw)]
+    admitted, record = be.reversal_admission(render.raw, key, be.reversal_probe(render.raw, key))
+    assert not admitted
+    if m["fact"].startswith("moving it"):
+        assert record["deltas"] and all(d == 0.0 for d in record["deltas"].values())
+    else:
+        assert record["why"].startswith("the loader refuses")
 
 
 def _r_path_note(render, m, node):
@@ -1621,81 +1631,62 @@ def _r_path_note(render, m, node):
 
 _NOT_ORDERABLE = re.compile(
     r"(?P<figure>\S+), a figure on this axis (?P<side>at or below the lower end of|inside|at "
-    r"or above the upper end of) its bracket \[(?P<lower>\S+), (?P<upper>\S+)\], reads on its "
-    r"side of (?P<tried>.+) rounded to the nearest at none of 2 to 12 decimals of a percent, "
-    r"nor as the figure of a crossing whose bracket holds it")
+    r"or above the upper end of) its bracket \[(?P<lower>\S+), (?P<upper>\S+)\], prints "
+    r"(?P<tried>.+) rounded to the nearest at none of 2 to 12 decimals of a percent, nor as "
+    r"the figure of a crossing whose bracket holds it")
+_TRIED = re.compile(r"(at or below|equal to|above) (\d+\.\d+%)")
+_PRINTS = {"at or below": -1, "equal to": 0, "above": 1}
 
 
 def _r_not_orderable(render, m, node):
     """The figure is one the row prints on its axis; its side of the refused
     crossing's bracket is the one named; the crossings it was tried beside are
     the row's printed ones, in order, then the refused one at its own floored
-    figure; and no rounding at 2 to 12 decimals, nor any tried crossing's
-    figure whose bracket holds it, reads on its side of all of them."""
+    figure, each on the side named: the side the figure lies on, or, for the
+    key's one stated figure beside a printed crossing, one on which it reads
+    what that crossing's field says in this run; and no rounding at 2 to 12
+    decimals, nor any tried crossing's figure whose bracket holds it, prints
+    on those sides of all of them."""
     row, refused = node
     got = _NOT_ORDERABLE.fullmatch(m.group(0))
     figure, lower, upper = float(got["figure"]), float(got["lower"]), float(got["upper"])
     option, leaf = row["key"].split(".", 1)
     stated = render.raw[option][leaf]
-    on_axis = [float(v) for v in (stated if isinstance(stated, list) else [stated])] + [
-        r["value"] for r in row["references"]]
-    assert figure in on_axis, figure
+    values = [float(v) for v in (stated if isinstance(stated, list) else [stated])]
+    assert figure in values + [r["value"] for r in row["references"]], figure
+    one = stated_path(render.raw, row["key"]) is None and figure in values
     side = -1 if figure <= lower else (1 if figure >= upper else 0)
     assert got["side"] == {-1: "at or below the lower end of", 0: "inside",
                            1: "at or above the upper end of"}[side]
-    tried = got["tried"].split(", ")
-    printed = [(b["value"], b["upper_end"], b["formatted"]) for b in row["boundaries"]]
-    assert [t for _, _, t in printed[:len(tried) - 1]] == tried[:-1]
-    places = len(tried[-1].rstrip("%").split(".")[1])
-    assert tried[-1] == be.floored_rate(lower, places)
+    tried = _TRIED.findall(got["tried"])
+    assert ", ".join(f"{word} {text}" for word, text in tried) == got["tried"]
+    printed = [(b["value"], b["upper_end"], b["formatted"], b) for b in row["boundaries"]]
+    assert [p[2] for p in printed[:len(tried) - 1]] == [text for _, text in tried[:-1]]
+    places = len(tried[-1][1].rstrip("%").split(".")[1])
+    assert tried[-1][1] == be.floored_rate(lower, places)
     assert 0.0 < upper - lower < 1e-12 or upper == math.nextafter(lower, 1.0)
-    brackets = printed[:len(tried) - 1] + [(lower, upper, tried[-1])]
+    brackets = [p[:3] for p in printed[:len(tried) - 1]] + [(lower, upper, tried[-1][1])]
+    sides = [_PRINTS[word] for word, _ in tried]
+    for at, ((low, high, _), named) in enumerate(zip(brackets, sides)):
+        lies = -1 if figure <= low else (1 if figure >= high else 0)
+        if named != lies:
+            assert one, (figure, low, high, named)
+            if at < len(tried) - 1:
+                boundary = printed[at][3]
+                assert boundary["was" if named < 1 else "becomes"] == _run_says(
+                    render, boundary["verdict_field"])
 
     def placed(text):
         shown = decimal.Decimal(text.rstrip("%"))
-        for low, high, crossing in brackets:
+        for (_, _, crossing), named in zip(brackets, sides):
             at = decimal.Decimal(crossing.rstrip("%"))
-            if figure <= low and not shown <= at:
-                return False
-            if low < figure < high and shown != at:
-                return False
-            if figure >= high and figure > low and not shown > at:
+            if not {-1: shown <= at, 0: shown == at, 1: shown > at}[named]:
                 return False
         return True
 
     assert not any(placed(f"{figure:.{k}%}") for k in range(2, 13))
     assert not any(placed(crossing) for low, high, crossing in brackets
                    if low <= figure <= high)
-
-
-_MISREAD = re.compile(
-    r"(?P<figure>\S+), the stated figure, lies (?P<side>at or below the lower end of|inside|at "
-    r"or above the upper end of) its bracket \[(?P<lower>\S+), (?P<upper>\S+)\] and reads "
-    r"'(?P<reads>[^']+)' beside it, and (?P<field>\w+) says '(?P<says>[^']+)' in this run")
-
-
-def _r_misread(render, m, node):
-    """The figure is the one the config states for the key; its side of the
-    refused crossing's bracket is the one named; what it reads beside it is
-    the field's state at the bracket's lower end, or at its upper end from
-    at or above it, on `--sweep`; and this run's own verdict says the other
-    state named."""
-    row, refused = node
-    got = _MISREAD.fullmatch(m.group(0))
-    figure, lower, upper = float(got["figure"]), float(got["lower"]), float(got["upper"])
-    assert stated_path(render.raw, row["key"]) is None
-    option, leaf = row["key"].split(".", 1)
-    stated = render.raw[option][leaf]
-    assert {float(v) for v in (stated if isinstance(stated, list) else [stated])} == {figure}
-    side = -1 if figure <= lower else (1 if figure >= upper else 0)
-    assert got["side"] == {-1: "at or below the lower end of", 0: "inside",
-                           1: "at or above the upper end of"}[side]
-    field = got["field"]
-    assert field == refused["verdict_field"]
-    (there,) = _sweep_states(render.path, row["key"], [upper if side == 1 else lower],
-                             futures=field in ("mc_best", "decisive"))
-    assert there[field] == got["reads"]
-    assert _run_says(render, field) == got["says"] != got["reads"]
 
 
 REASON_CLAIMS: Dict[str, Callable[..., None]] = {
@@ -1713,9 +1704,8 @@ REASON_CLAIMS: Dict[str, Callable[..., None]] = {
     "SAYS_SO_NOWHERE": _r_says_so_nowhere,
     "NOT_PRINTABLE": _r_not_printable,
     "NOT_ORDERABLE": _r_not_orderable,
-    "MISREAD": _r_misread,
+    "NOT_ADMITTED": _r_not_admitted,
     "NO_DISTANCE": _r_no_distance,
-    "NO_DISTANCE_NOT_ADMITTED": _r_no_distance,
     "PATH_NOTE": _r_path_note,
 }
 

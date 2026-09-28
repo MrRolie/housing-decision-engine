@@ -1219,6 +1219,7 @@ def decomposition_to_dict(outcome: "DecompositionOutcome") -> Optional[Dict[str,
         "reversal": {
             "exact": [dataclasses.asdict(row) for row in reversal.exact],
             "estimated": [dataclasses.asdict(row) for row in reversal.estimated],
+            "refused": [dataclasses.asdict(row) for row in reversal.refused],
             "structural_zeros": [_stated_path_to_dict(zero)
                                  for zero in reversal.structural_zeros],
             "no_distance_code": reversal.no_distance_code,

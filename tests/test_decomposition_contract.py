@@ -362,6 +362,23 @@ class TestAnEmptyRegisterSaysWhatItSearched:
                 estimated=(), structural_zeros=(), no_distance_code="no_candidate",
                 no_distance_reason="none searched")
 
+    def test_a_refused_row_is_a_row(self):
+        """§0.1 item 64: a register whose one row is a refused key carries no
+        no-distance reason, and one beside it refuses."""
+        refused = (dc.RefusedReversal(key="condo.mortgage_rate", option="condo",
+                                      code="not_admitted", reason="r"),)
+        dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(), no_distance_code=None,
+                            no_distance_reason=None, refused=refused)
+        with pytest.raises(ValueError, match="no_distance_reason"):
+            dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                                no_distance_code="no_candidate", no_distance_reason="r",
+                                refused=refused)
+        with pytest.raises(TypeError, match="ReversalRegister.refused"):
+            dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
+                                no_distance_code=None, no_distance_reason=None,
+                                refused=(dc.RefusedBoundary(verdict_field="best",
+                                                            code="unchanged", reason="r"),))
+
 
 class TestARefusalCarriesACodeFromItsSet:
     """§0.1 item 50: the refused-boundary and no-distance lines print a code
@@ -385,11 +402,20 @@ class TestARefusalCarriesACodeFromItsSet:
             exact=(), estimated=(), structural_zeros=(), no_distance_code=code,
             no_distance_reason="r").no_distance_code == code
 
-    @pytest.mark.parametrize("code", ["unchanged", "nothing"])
+    @pytest.mark.parametrize("code", ["unchanged", "nothing", "not_admitted"])
     def test_an_empty_register_refuses_any_other(self, code):
         with pytest.raises(ValueError, match="ReversalRegister.no_distance.code"):
             dc.ReversalRegister(exact=(), estimated=(), structural_zeros=(),
                                 no_distance_code=code, no_distance_reason="r")
+
+    @pytest.mark.parametrize("code", dc.REVERSAL_REFUSAL_CODES)
+    def test_a_refused_key_takes_each_of_its_codes(self, code):
+        assert dc.RefusedReversal(key="k", option="condo", code=code, reason="r").code == code
+
+    @pytest.mark.parametrize("code", ["no_candidate", "unchanged", None])
+    def test_a_refused_key_refuses_any_other(self, code):
+        with pytest.raises(ValueError, match="RefusedReversal.code"):
+            dc.RefusedReversal(key="k", option="condo", code=code, reason="r")
 
 
 class TestEachRegisterHoldsTheRowsOfItsOwnSample:

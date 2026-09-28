@@ -572,9 +572,12 @@ def format_decomposition(outcome: DecompositionOutcome) -> str:
         for row in reversal.estimated:
             lines.append(_reversal_head(row))
             lines.extend(_reversal_detail_lines(row))
-    if not (reversal.exact or reversal.estimated):
+    refusals = [(row.code, row.reason) for row in reversal.refused]
+    if not (reversal.exact or reversal.estimated or refusals):
+        refusals = [(reversal.no_distance_code, reversal.no_distance_reason)]
+    if refusals:
         lines.append("")
-        lines.append(f"  WHAT WOULD HAVE TO CHANGE — not solved "
-                     f"{_refusal(reversal.no_distance_code, reversal.no_distance_reason)}")
+    lines.extend(f"  WHAT WOULD HAVE TO CHANGE — not solved {_refusal(code, reason)}"
+                 for code, reason in refusals)
 
     return "\n".join(lines)

@@ -373,22 +373,25 @@ the block's futures, or on none of them, it instead carries `refusal`, whose
 
 `reversal` — what would have to change for the verdict to change, on inputs
 the config states that carry no distribution. It carries `exact`, `estimated`,
-`structural_zeros`, `no_distance_code` and `no_distance_reason`; the two row
-lists are never ranked against each other.
+`refused`, `structural_zeros`, `no_distance_code` and `no_distance_reason`; the
+row lists are never ranked against each other.
 
-- `exact` and `estimated` hold one row per key searched: a financed option's
-  `mortgage_rate` and `mortgage_renewal_rates`, when the config states them and
-  moving one to the far end of its bracket moves an option's present value. The
+- The keys searched are a financed option's `mortgage_rate` and
+  `mortgage_renewal_rates`, where the config states them, and each is the key
+  of exactly one row of `exact`, `estimated` or `refused`. A key is in
+  `refused` when moving it to the far end of its bracket moves no option's
+  present value or the loader refuses it there, and otherwise in `exact` when
+  it passes the exactness test below and in `estimated` when it does not. The
   far end is `bracket_high`, or `bracket_low` where every figure the config
-  states for the key is `bracket_high`. A row is in `exact` when its key passes
-  the exactness test below, and in `estimated` when it does not.
-- `no_distance_code` and `no_distance_reason` are set exactly when `exact` and
-  `estimated` are both empty, and are `null` otherwise. `no_distance_reason` is
-  the measured fact, and `no_distance_code` is `no_candidate` when the config
-  states none of the searched keys, `not_admitted` when every one it states
-  moves no option's present value at the far end of its bracket or is refused
-  there by the loader, `no_mapping` when the block was handed no config
-  mapping, and `single_option` when fewer than two options are priced.
+  states for the key is `bracket_high`.
+- `refused[]` rows: `key` and `option`, as an `exact[]` row's, `code` and
+  `reason`. `code` is `not_admitted`, and `reason` is the measured fact.
+- `no_distance_code` and `no_distance_reason` are set exactly when `exact`,
+  `estimated` and `refused` are all empty, and are `null` otherwise.
+  `no_distance_reason` is the measured fact, and `no_distance_code` is
+  `no_candidate` when the config states none of the searched keys, `no_mapping`
+  when the block was handed no config mapping, and `single_option` when fewer
+  than two options are priced; on the last two no key is searched.
 - `exact[]` rows: `key`, `option`, `stated_formatted`, `stated_source`,
   `stated_tag`, `bracket_low`, `bracket_high`, `bracket_source`,
   `probe_paths`, `max_path_deviation_over_sd`, `boundaries`,
@@ -452,14 +455,18 @@ lists are never ranked against each other.
   its scan read, `not_on_axis` when it says that at none of them,
   `scan_mismatch` when no solved crossing moves `best` or `runner_up` and the 9
   points the pairs were scanned at read otherwise than the stretches between
-  the crossings, `not_identified` when a probability a futures boundary turns
-  on moves across the bracket by no more than two of its standard errors at the
-  boundary, or none is attached to it, `unconfirmed` when the re-simulation at
-  the boundary disagrees with the curve, `not_printable` when no precision
-  prints the boundary's figure (below), `not_orderable` when a figure on the
-  axis is not placed beside the boundary's figure (below), `not_exact` on every
-  field of an `estimated[]` row, and `no_futures` for a futures field on a run
-  without futures.
+  the crossings, `not_identified` when a probability a futures boundary's two
+  sides are computed from moves across the bracket by no more than two of its
+  standard errors at the boundary, or none is attached to it, `unconfirmed`
+  when the re-simulation at the boundary disagrees with the curve,
+  `not_printable` when no precision prints the boundary's figure (below),
+  `not_orderable` when a figure on the axis is not placed beside the boundary's
+  figure, or the stated figure reads beside it a state other than the one the
+  field says in this run (below), `not_exact` on every field of an
+  `estimated[]` row, and `no_futures` for a futures field on a run without
+  futures. The sides of an `mc_best` boundary are computed from P(cheapest) of
+  the options it names, and the sides of a `decisive` one from P(cheapest) of
+  the central case's winner at each end of the bracket it converged in.
 - `references[]`: `label`, `value`, `formatted`, `anchor` and `note`: an
   anchored rate on the key's own quoting axis, `anchor` its registry entry,
   `label` the last part of that entry's name with its underscores as spaces,
@@ -532,8 +539,10 @@ a figure or a label, and a table's cells are padded with spaces to line up:
   refusal refuses.
 - When `estimated` has rows, the same under a blank line and `WHAT WOULD HAVE
   TO CHANGE — keys the engine cannot re-price exactly`.
-- When neither has rows, a blank line and `WHAT WOULD HAVE TO CHANGE — not
-  solved (<no_distance_code>): <no_distance_reason>`.
+- When `refused` has rows, a blank line and, for each row, `WHAT WOULD HAVE
+  TO CHANGE — not solved (<code>): <reason>`.
+- When none of the three has rows, a blank line and that line, its `<code>`
+  and `<reason>` the register's `no_distance_code` and `no_distance_reason`.
 
 A table's rows print resolved rows first, each group largest first: by `alone`
 in the spread, by the shift's size in the level. A level row prints its shift
@@ -548,26 +557,33 @@ decimal at a time where the field, evaluated at the printed figure (on the
 central case for a solved crossing, on the run's own seeded curve for a
 sampled one), does not say `was`, where the floored figure lies below
 `bracket_low`, or where a figure on the same axis that lies below `value`,
-rounded at twelve decimals, lies above it. It never widens past twelve
-decimals, nor past the precision at which one printed step would be narrower
-than `upper_end − value`. Where no precision passes, the boundary refuses with
-`not_printable`, and its reason names each figure tried and what the field
-read there, or which of the other two conditions passed it over. A figure on
-the axis is each stated figure, each reference's `value` and the rate an
-`unconfirmed` reason names, which is its boundary's `value`. It prints as
-`--sweep` prints it, at two decimals of a percent to the nearest, and at one
-more decimal at a time where needed to print on its side of every printed
-crossing: at or below the crossing's figure when it lies at or below `value`,
-equal to it when it lies between `value` and `upper_end`, and above it when it
-lies at or above `upper_end`. A figure no such rounding places, which lies at
-or between a crossing's two ends, prints as that crossing's figure where that
-places it. A crossing a figure is still not placed beside refuses with
-`not_orderable`, the crossings taken in order until every figure is placed.
-Where the config states the key as one figure, a path of one repeated rate
-included, that figure reads, on each field, the `was` of the nearest crossing
-whose bracket it lies at or below or inside, and the `becomes` of the nearest
-whose bracket it lies at or above. A crossing beside which it reads other than
-what the field says in this run refuses with `not_orderable`.
+rounded at twelve decimals, lies above it, the stated figure below excepted
+where the field says the crossing's `becomes` in this run. It never widens
+past twelve decimals, nor past the precision at which one printed step would
+be narrower than `upper_end − value`. Where no precision passes, the boundary
+refuses with `not_printable`, and its reason names each figure tried and what
+the field read there, or which of the other two conditions passed it over. A
+figure on the axis is each stated figure, each reference's `value` and the
+rate an `unconfirmed` reason names, which is its boundary's `value`. It prints
+as `--sweep` prints it, at two decimals of a percent to the nearest, and at
+one more decimal at a time where needed to print on its side of every printed
+crossing. Its side is at or below the crossing's figure when it lies at or
+below `value`, equal to it when it lies between `value` and `upper_end`, and
+above it when it lies at or above `upper_end`; printed at or below a
+crossing's figure it reads that crossing's `was`, and above it its `becomes`.
+The stated figure, where the config states the key as one figure, a path of
+one repeated rate included, takes those sides on a field where it reads what
+the field says in this run beside the nearest crossing whose bracket it lies
+at or below or inside and beside the nearest whose bracket it lies at or
+above. Otherwise its side of the first of those two is above it, or else its
+side of the second is at or below it, where it then reads what the field says
+beside that crossing and the next one past it; and otherwise the first of the
+two beside which it reads another state refuses with `not_orderable`. A figure
+no such rounding places, which lies at or between a crossing's two ends,
+prints as that crossing's figure where that places it. Otherwise the first
+figure not placed beside every printed crossing is taken, and the first
+crossing in order beside which, with the crossings before it, that figure is
+not placed refuses with `not_orderable`, until every figure is placed.
 A figure that did not resolve prints behind `not resolved:`, each row's
 interaction gap included. `largest
 alone share:` and `largest shift in size:` name a register's top row when it

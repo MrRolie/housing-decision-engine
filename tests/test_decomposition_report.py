@@ -987,7 +987,7 @@ class TestTheJsonBlock:
         assert set(doc) == {"paths", "max_paths", "live_channel_ids", "mean_margin",
                             "sd_margin", "spread", "level", "reversal"}
         assert doc["spread"]["rows"] and doc["level"]["rows"]
-        assert set(doc["reversal"]) == {"exact", "estimated", "structural_zeros",
+        assert set(doc["reversal"]) == {"exact", "estimated", "refused", "structural_zeros",
                                         "no_distance_code", "no_distance_reason"}
 
     def test_the_two_reversal_kinds_stay_two_lists(self):
@@ -1128,8 +1128,12 @@ class TestTheJsonBlock:
             uncertainty_surface(),
             spread=dc.RefusedSpread(code="no_sign_variation", reason="r",
                                     structural_zeros=uncertainty_surface().spread.structural_zeros))
+        refused = dataclasses.replace(uncertainty_surface(), reversal=dataclasses.replace(
+            uncertainty_surface().reversal, refused=(dc.RefusedReversal(
+                key="condo.mortgage_rate", option="condo", code="not_admitted",
+                reason="r"),)))
         for outcome in (uncertainty_surface(), seven_channel_other_household(),
-                        two_channel_option_state(), agreed,
+                        two_channel_option_state(), agreed, refused,
                         uncertainty_surface(interaction=resolved_interaction()),
                         dc.DecompositionRefusal(code="one_channel", reason="r",
                                                 channel_id=3)):
@@ -1142,7 +1146,7 @@ class TestTheJsonBlock:
                 "resimulation_paths", "curve_paths", "upper_end", "reversal_key"} <= keys
         assert sorted(k for k in keys if f"`{k}`" not in section) == []
         for code in (dc.REFUSAL_CODES + dc.SPREAD_REFUSAL_CODES + dc.BOUNDARY_REFUSAL_CODES
-                     + dc.NO_DISTANCE_CODES):
+                     + dc.NO_DISTANCE_CODES + dc.REVERSAL_REFUSAL_CODES):
             assert f"`{code}`" in section, code
         # A whole-block code is documented by its own ROW of the refusal table,
         # which says what its reason states; a mention in passing elsewhere in
