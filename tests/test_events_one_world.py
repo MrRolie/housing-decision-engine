@@ -5,8 +5,8 @@ futures time it by its model. These tests pin what the spec ruled: a config
 whose event cannot happen, or whose window contradicts itself, is refused at
 load (E2), and so is one whose best guess charges it in a year no future fires
 it (E10); a hazard fires only inside its window (E3); the single-path gate, the
-one-sided warning and the uncertainty inputs ask one question, whether the
-futures disperse (E11); the futures' affordability arrays place each event on
+one-sided warning and the uncertainty inputs ask whether the futures disperse
+(E11); the futures' affordability arrays place each event on
 each path (E5); and the read-back states, for every hazard-timed event, the
 facts of its schedule (E1).
 """
@@ -28,7 +28,7 @@ from hde.models import (
 from hde.monte_carlo import run_monte_carlo
 from hde.pv import pv_single
 from hde.serialization import read_back_lines
-from hde.sources import uncertainty_keys
+from hde.sources import uncertainty_inputs, uncertainty_keys
 
 YEARS = 20
 RATE = 0.03
@@ -140,6 +140,13 @@ REFUSALS = {
         "future fires it then; the futures fire it only in year 2",
         _cfg(_roof(expected_year=2, timing_model="hazard", hazard_base=1.0,
                    hazard_start_year=2))),
+    "hazard that grows to certain before the year the best guess charges it": (
+        _cfg(_roof(expected_year=10, timing_model="hazard", hazard_base=0.5,
+                   hazard_growth=0.5)),
+        "house.events['roof']: the best guess charges it in year 10 (expected_year), and no "
+        "future fires it then; the futures fire it only in years 1 to 2",
+        _cfg(_roof(expected_year=2, timing_model="hazard", hazard_base=0.5,
+                   hazard_growth=0.5))),
     "hazard-timed min_year beyond the horizon": (
         _cfg(_roof(expected_year=20, min_year=21, timing_model="hazard", hazard_base=0.1)),
         "house.events['roof'].min_year (21) > years (20)",
@@ -299,8 +306,8 @@ def test_a_hazard_that_starts_inside_the_window_fires_from_its_start():
 
 
 # ---------------------------------------------------------------------------
-# E11 — the gate, the one-sided warning and the uncertainty inputs ask one
-# question: whether the futures disperse
+# E11 — the gate, the one-sided warning and the uncertainty inputs ask whether
+# the futures disperse
 # ---------------------------------------------------------------------------
 
 GATE = {
@@ -326,6 +333,20 @@ GATE = {
         _roof(max_year=10, hazard_start_year=11), True),
     "fixed": (_roof(), True),
     "fixed with a drawn cost": (_roof(cost_vol=0.2), False),
+    "a hazard that grows to certain by year 2": (
+        _roof(expected_year=2, timing_model="hazard", hazard_base=0.5, hazard_growth=0.5), False),
+    "a $0 event under a hazard": (_roof(base_cost=0, timing_model="hazard", hazard_base=0.1),
+                                  True),
+    "a $0 event with a drawn cost": (_roof(base_cost=0, cost_vol=0.3), True),
+}
+
+# The same shapes at a discount rate of 0, where a cost is worth the same in
+# every year it can be charged.
+GATE_AT_NO_DISCOUNT = {
+    "jitter across a window": True,
+    "a hazard that grows to certain by year 2": True,
+    "hazard below certainty": False,
+    "fixed with a drawn cost": False,
 }
 
 
@@ -338,27 +359,91 @@ def _stdout(tmp_path, monkeypatch, capsys, cfg, *flags):
     return capsys.readouterr().out
 
 
-@pytest.mark.parametrize("case", sorted(GATE))
+_GATE_CASES = ([(case, event, single, RATE) for case, (event, single) in GATE.items()]
+               + [(case, GATE[case][0], single, 0.0)
+                  for case, single in GATE_AT_NO_DISCOUNT.items()])
+
+
+@pytest.mark.parametrize("option", ["condo", "house", "rent"])
+@pytest.mark.parametrize("case, event, single, rate", _GATE_CASES,
+                         ids=[f"{c[0]} at {c[3]:.0%}" for c in _GATE_CASES])
 def test_the_gate_the_warning_and_the_inputs_read_whether_the_futures_disperse(
-        case, tmp_path, monkeypatch, capsys):
-    """A single-path run is one whose futures are all one path, the best guess;
-    the owned side is named stochastic, in the one-sided warning and in the
-    uncertainty inputs, exactly when its futures disperse."""
-    event, single = GATE[case]
-    cfg = _cfg(event)
+        option, case, event, single, rate, tmp_path, monkeypatch, capsys):
+    """On each shape, on each option: a single-path run is one whose futures
+    are all one path, the best guess; the event's side is named stochastic, in
+    the one-sided warning and in the uncertainty inputs, exactly when its
+    futures disperse."""
+    cfg = {**_cfg(event, option=option), "discount_rate": rate}
+    key = f"{option}.events"
     spec = load_config_dict(copy.deepcopy(cfg))
     assert single_path_run(spec) is single
-    owned, _, _ = dispersion_sources(spec)
-    assert ("house.events" in owned) is not single
-    assert ("house.events" in uncertainty_keys(cfg)) is not single
-    pvs = run_monte_carlo(spec).house.pvs
+    owned, renter, _ = dispersion_sources(spec)
+    assert (key in (renter if option == "rent" else owned)) is not single
+    assert key not in (owned if option == "rent" else renter)
+    assert (key in uncertainty_keys(cfg)) is not single
+    pvs = getattr(run_monte_carlo(spec), option).pvs
     assert bool(np.ptp(pvs) > 1e-6) is not single
     if single:
-        assert np.all(np.abs(pvs - compute_deterministic(spec).house.total_pv) < 1e-6)
+        assert np.all(np.abs(pvs - getattr(compute_deterministic(spec), option).total_pv) < 1e-6)
     out = _stdout(tmp_path, monkeypatch, capsys, cfg)
     assert ("one-sided uncertainty" in out) is not single
+    side = "the renter's PV" if option == "rent" else "the owned option's PV"
     if not single:
-        assert "the owned option's PV is the only stochastic side (house.events)" in out
+        assert f"{side} is the only stochastic side ({key})" in out
+
+
+def test_the_inputs_name_only_what_the_dispersing_events_draw(tmp_path, monkeypatch, capsys):
+    """A jitter in a one-year window moves nothing, so the detail beside
+    house.events names the roof's hazard and not the furnace's jitter."""
+    furnace = {"name": "furnace", "base_cost": 6000, "expected_year": 12,
+               "timing_std_years": 3.0, "min_year": 12, "max_year": 12}
+    cfg = _cfg(_roof(timing_model="hazard", hazard_base=0.1), furnace, sims=1000)
+    cfg["rent"]["monthly_rent"] = 850
+    assert dict(uncertainty_inputs(cfg))["house.events"] == "hazard_base 0.1"
+    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+    assert "house.events=2 entries (hazard_base 0.1) (unattributed)" in out
+
+
+def test_the_inputs_discount_at_the_rate_the_loader_puts_in_use(tmp_path, monkeypatch, capsys):
+    """2% as quoted after 2% inflation is 0% in use, where the roof's jitter
+    moves nothing, so the inputs name the renter's hazard alone."""
+    move = {"name": "move", "base_cost": 5000, "expected_year": 6, "timing_model": "hazard",
+            "hazard_base": 0.08}
+    cfg = _cfg(move, option="rent", sims=400)
+    cfg["house"]["events"] = [_roof(timing_std_years=2.0, min_year=7, max_year=8)]
+    del cfg["rates"]
+    cfg.update(discount_rate=0.02, economic={"inflation_rate": 0.02})
+    assert load_config_dict(copy.deepcopy(cfg)).simulation.discount_rate == 0.0
+    assert [k for k in uncertainty_keys(cfg) if k.endswith(".events")] == ["rent.events"]
+    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+    assert ": rent.events=1 entry (hazard_base 0.08) (unattributed) — the deterministic" in out
+
+
+def _afford_at_no_discount(event):
+    cfg = {**_cfg(event), "discount_rate": 0.0}
+    cfg["income"] = {"annual_income": 45000, "income_growth_rate": 0.05,
+                     "affordability_threshold": 0.245}
+    return cfg
+
+
+def test_an_income_reads_the_year_a_cost_lands_in_where_the_present_value_does_not(
+        tmp_path, monkeypatch, capsys):
+    """At a discount rate of 0 the roof is worth the same in year 7 and year 8,
+    and only year 7's income is low enough for it to breach: the futures differ
+    in their affordability and not in their present values."""
+    cfg = _afford_at_no_discount(_roof(timing_std_years=2.0, min_year=7, max_year=8))
+    spec = load_config_dict(copy.deepcopy(cfg))
+    assert not single_path_run(spec)
+    assert "house.events" in uncertainty_keys(cfg)
+    assert dispersion_sources(spec) == ([], [], [])
+    mc = run_monte_carlo(spec)
+    assert np.ptp(mc.house.pvs) < 1e-6
+    assert 0 < mc.affordability_mc.prob_house_exceeds < 1
+    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+    assert "single-path run" not in out and "one-sided uncertainty" not in out
+    free = _afford_at_no_discount(_roof(base_cost=0, timing_std_years=2.0, min_year=7, max_year=8))
+    assert single_path_run(load_config_dict(free))
+    assert "house.events" not in uncertainty_keys(free)
 
 
 def test_a_certain_hazard_in_another_year_is_refused_on_the_cli(tmp_path, monkeypatch, capsys):

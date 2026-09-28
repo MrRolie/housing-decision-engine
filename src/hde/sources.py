@@ -282,14 +282,20 @@ def _entry_detail(entries: Sequence[Any], fields: Sequence[str],
     return ", ".join(found) if found else None
 
 
-def _widening_events(events: Sequence[Any], years: Any) -> List[Any]:
+def _widening_events(events: Sequence[Any], data: Dict[str, Any]) -> List[Any]:
     """The entries `config.event_widens` reads as drawn, parsed by the loader's
     own parser; an entry the loader cannot parse is refused there."""
-    from .config import ConfigValidationError, _parse_event, event_widens
+    from .config import ConfigValidationError, _parse_event, _rate_context, event_widens
+    try:
+        years = int(data["years"])
+        rate = _rate_context(data)[3]
+    except (ConfigValidationError, KeyError, TypeError, ValueError):
+        return []
     out = []
     for entry in events:
         try:
-            if event_widens(_parse_event(entry, int(years)), int(years)):
+            if event_widens(_parse_event(entry, years), years, rate,
+                            affordability="income" in data):
                 out.append(entry)
         except (ConfigValidationError, KeyError, TypeError, ValueError):
             continue
@@ -324,7 +330,7 @@ def uncertainty_inputs(data: Dict[str, Any]) -> List[Tuple[str, Optional[str]]]:
                     out.append((f"rent.{sub}", None))
         events = block.get("events")
         if isinstance(events, list):
-            widening = _widening_events(events, data.get("years"))
+            widening = _widening_events(events, data)
             if widening:
                 out.append((f"{option}.events", _entry_detail(
                     widening, _EVENT_WIDENERS, hazard_only=("hazard_base", "hazard_growth"))))
