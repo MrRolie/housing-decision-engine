@@ -1,6 +1,6 @@
 # Events in one world — design (2026-09-27)
 
-**Status:** ruled, amended 2026-09-27 after the first review of the fix (E7-E9).
+**Status:** ruled, amended 2026-09-27 (E7-E9) and 2026-09-28 (E10-E13); E13 splits the gate out.
 **Anchored by:** board item 10, the central case charging a hazard-timed event whose hazard is 0.
 
 ## 1. What was measured
@@ -121,7 +121,7 @@ that is certain in another year now fail at load, which is E9's own contradictio
 in code, bypassing the loader, can still break the predicate, so the library functions that
 assume it say so.
 
-**E11. With E10, "some future can differ" and "the futures disperse" are one predicate.** The
+**E11 (withdrawn from this change by E13). With E10, "some future can differ" and "the futures disperse" are one predicate.** The
 first fix gated the futures on "some future can differ from the central case", and used the
 same test to name a side "stochastic" in the one-sided-uncertainty warning. On a hazard certain
 in another year, every future is one point, so the warning's "stochastic" and "OVERconfident"
@@ -137,6 +137,29 @@ year, because the affordability ratios read the year.
 **E12. Superseded wording is marked where it stands.** E1's third bullet ("the year by which
 half of the futures have fired it") is superseded by E7, and E4 by E8 and E11. Each carries a
 one-line pointer to the ruling that replaced it, so no reader takes the older text as current.
+
+**E13. The gate is split out; this change lands what holds** *(operator ruling 2026-09-28, taken on
+the second review of the fix)*. The rulings that decide whether a run is single-path (E4, E8,
+E11) predict from event fields whether the futures' present values disperse. Present value
+depends on more than those fields, and the prediction failed on each of these:
+- a 0% discount rate;
+- condo reserve netting, whether the reserve always covers the event or accrues;
+- a hazard schedule that sums in float to one ULP under 1;
+- an income block.
+
+On an accruing reserve at 0% it is worse than main. It dropped futures that disperse. That is
+the defect item 39 of the `--decompose` spec removed from liveness, a second copy of the
+simulator's logic.
+- This change lands E1 (with E7), E2, E3, E5, E9 and E10: the refusals including the crash,
+  the window-bounded hazard, per-path affordability, and the schedule lines in the read-back.
+- `config.single_path_run`, `config.dispersion_sources` and `sources.uncertainty_inputs` return
+  to origin/main's field rule. E4, E8 and E11 are withdrawn from this change. With E2 and E10
+  refusing the events that cannot fire, main's rule never calls a run single-path when an event
+  can move a future. It still over-counts some point masses as uncertain. The one-sided warning
+  main already prints on those stays until the next change, and the board says so.
+- The next change measures it: a run is single-path exactly when every priced option's present
+  value is the same number on every simulated path (`ptp == 0`). The one-sided warning fires on
+  a side whose present values measurably disperse.
 
 ## 3. What must stay true
 
