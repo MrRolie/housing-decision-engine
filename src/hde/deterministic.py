@@ -602,9 +602,8 @@ def _annual_costs_for_option(
     Un-discounted annual housing cost by year, used for affordability ratios.
 
     `event_years` gives the year each of `params.events` fires on one Monte
-    Carlo path, in list order (None: it never does), so the ratio charges the
-    events that path's present value charges. Omitted, each event is at its
-    best-guess year.
+    Carlo path, in list order (None: it never does). Omitted, each event is at
+    its best-guess year.
 
     Note: these are nominal/undiscounted cash outflows (not PVs); they are
     divided by the year's income to form an affordability ratio.

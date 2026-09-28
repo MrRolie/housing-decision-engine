@@ -333,12 +333,13 @@ hosted. Parked deliberately, not forgotten.
   single-path gate asks whether an event's futures can differ; each future's affordability
   ratio charges an event in that future's year; and the read-back says where the futures time
   an event, the lease reset or the price crash differently from the best guess. Still here,
-  as conventions of one path against a mean: the jitter clamp at a window's edge (−$310 on a
-  $15,000 event at the horizon, std 3), discount convexity under jitter (−$45 at std 3), and
-  condo reserve netting of a drawn cost ($1,438 at `cost_vol` 0.3). The one a user can pull
-  far is `cost_distribution: normal`, whose zero floor lifts the mean cost by +0.42% at
-  `cost_vol` 0.5, +8.3% at 1.0 and +39.6% at 2.0: on a $15,000 event in year 8 the futures
-  carry $1,144 more than the best guess at 1.0 and $4,945 more at 2.0. Measured 2026-09-27.
+  as conventions of one path against a mean: the jitter clamp at a window's edge (−$310
+  analytic, on a $15,000 event at the horizon, std 3), discount convexity under jitter (−$44
+  analytic, at std 3), and condo reserve netting of a drawn cost ($1,438 measured, at
+  `cost_vol` 0.3). The one a user can pull far is `cost_distribution: normal`, whose zero
+  floor lifts the mean cost by +0.42% at `cost_vol` 0.5, +8.3% at 1.0 and +39.6% at 2.0
+  (analytic): on a $15,000 event in year 8 the futures carry $987 more than the best guess
+  at 1.0 and $4,684 more at 2.0 (analytic).
 
 ## 11. Measure the engine again
 
