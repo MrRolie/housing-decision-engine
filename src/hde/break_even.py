@@ -1354,14 +1354,22 @@ def reversal_candidates(raw: Dict[str, Any]) -> List[Tuple[str, str]]:
     return out
 
 
+def reversal_probe(raw: Dict[str, Any], key: str) -> float:
+    """The far end of `key`'s bracket, where the admission test and the
+    exactness gate move it: `bracket_high`, or `bracket_low` where every
+    figure the config states for the key is `bracket_high`."""
+    lo, hi = reversal_bracket(key)
+    return lo if all(float(v) == hi for v in _stated_values(raw, key)) else hi
+
+
 def reversal_admission(
-    raw: Dict[str, Any], key: str, hi: float,
+    raw: Dict[str, Any], key: str, far: float,
     *, base: Optional[ComparisonDeterministicResult] = None,
 ) -> Tuple[bool, Dict[str, Any]]:
     """`(admitted, record)` — the admission test, which is a MEASUREMENT and
-    not a list (spec §6): one `load_at` + `compute_deterministic` at the far
-    end of the key's bracket, and the key is admitted only if some option's
-    deterministic PV moves.
+    not a list (spec §6): one `load_at` + `compute_deterministic` at `far`,
+    the far end of the key's bracket (`reversal_probe`), and the key is
+    admitted only if some option's deterministic PV moves.
 
     A key that moves nothing is not printed as a flat curve; it is not a
     candidate. The screen still has work to do on a key the config states — a
@@ -1372,10 +1380,10 @@ def reversal_admission(
     base = base if base is not None else compute_deterministic(load_config_dict(raw))
     options = _priced_options(raw)
     try:
-        probe = compute_deterministic(load_at(raw, key, hi))
+        probe = compute_deterministic(load_at(raw, key, far))
     except (ConfigValidationError, ValueError, RateConventionError) as e:
-        return False, {"probe": hi, "moves": [], "deltas": {},
-                       "why": (f"the loader refuses {_fmt_value(key, hi)} — "
+        return False, {"probe": far, "moves": [], "deltas": {},
+                       "why": (f"the loader refuses {_fmt_value(key, far)} — "
                                f"{str(e).strip().splitlines()[-1].strip()}")}
     deltas = {
         option: getattr(probe, option).total_pv - getattr(base, option).total_pv
@@ -1385,11 +1393,11 @@ def reversal_admission(
     moves = [option for option, delta in deltas.items() if delta != 0.0]
     if not moves:
         return False, {
-            "probe": hi, "moves": [], "deltas": deltas,
-            "why": (f"no option's present value moves at {_fmt_value(key, hi)}, the far end "
+            "probe": far, "moves": [], "deltas": deltas,
+            "why": (f"no option's present value moves at {_fmt_value(key, far)}, the far end "
                     f"of its bracket — the config states it and this run prices nothing by it"),
         }
-    return True, {"probe": hi, "moves": moves,
+    return True, {"probe": far, "moves": moves,
                   "deltas": {option: deltas[option] for option in moves}, "why": None}
 
 
@@ -1905,15 +1913,13 @@ def _identification(
     if not rows:
         return {"identified": False, "paths": paths, "watched": [],
                 "why": "no probability is attached to this boundary"}
-    worst = min(row["delta_p"] for row in rows)
-    noise = max(row["two_se"] for row in rows)
-    record = {"identified": worst > noise, "paths": paths, "watched": rows,
-              "delta_p": worst, "two_se": noise, "why": None}
-    if not record["identified"]:
+    short = next((row for row in rows if not row["delta_p"] > row["two_se"]), None)
+    record = {"identified": short is None, "paths": paths, "watched": rows, "why": None}
+    if short is not None:
         record["why"] = (
-            f"across the bracket the probabilities this boundary turns on move by "
-            f"{worst:.4f}, not more than 2 s.e. at the boundary ({noise:.4f}) on "
-            f"{paths} paths")
+            f"across the bracket P({short['option']} cheapest) moves by "
+            f"{short['delta_p']:.4f}, not more than 2 s.e. of it at the boundary "
+            f"({short['two_se']:.4f}) on {paths} paths")
     return record
 
 
@@ -2107,18 +2113,51 @@ _SIDE_WORDS = {-1: "at or below the lower end of", 0: "inside",
                1: "at or above the upper end of"}
 
 
+def _misread(value: float, crossings: Sequence[Tuple[str, float, float, Any, Any]],
+             says: Dict[str, Any]) -> Optional[Tuple[int, str]]:
+    """`(index, reason)` of the first of `crossings`, each `(field, lower,
+    upper, was, becomes)`, beside which a figure stated as `value` reads a
+    state other than `says[field]`, or None. On each field the figure reads
+    the `was` of the nearest crossing whose bracket it lies at or below or
+    inside, and the `becomes` of the nearest whose bracket it lies at or
+    above."""
+    for field in dict.fromkeys(crossing[0] for crossing in crossings):
+        own = [(index, crossing) for index, crossing in enumerate(crossings)
+               if crossing[0] == field]
+        up = [pair for pair in own if _side(value, pair[1][1], pair[1][2]) < 1]
+        down = [pair for pair in own if _side(value, pair[1][1], pair[1][2]) == 1]
+        nearest = ([min(up, key=lambda pair: pair[1][1])] if up else []) + (
+            [max(down, key=lambda pair: pair[1][2])] if down else [])
+        for index, (_, lower, upper, was, becomes) in nearest:
+            side = _side(value, lower, upper)
+            reads = becomes if side == 1 else was
+            if reads != says[field]:
+                return index, (
+                    f"{value!r}, the stated figure, lies {_SIDE_WORDS[side]} its bracket "
+                    f"[{lower!r}, {upper!r}] and reads {reads!r} beside it, and {field} "
+                    f"says {says[field]!r} in this run")
+    return None
+
+
 def _ordered_axis(figures: Sequence[float],
                   crossings: Sequence[Tuple[float, float, str]],
+                  misread: Callable[[List[int]], Optional[Tuple[int, str]]] = lambda kept: None,
                   ) -> Tuple[List[str], List[int], List[Tuple[int, str]]]:
     """`(texts, kept, refused)`: every figure in `figures` printed by
     `ordered_figure` against the crossings that stay printed (`kept`, their
-    indices), and `(index, reason)` for each crossing refused because a
-    figure could not be printed on its side of it (`not_orderable`, §0.1
-    item 61). The crossings are taken in order, and the first one that
-    leaves a figure unplaced is dropped, until every figure is placed."""
+    indices), and `(index, reason)` for each crossing refused
+    (`not_orderable`, §0.1 item 61), one at a time until none is: the one
+    `misread` names among those kept, or else, the crossings taken in order,
+    the first beside which, with those before it, some figure is not
+    placed."""
     kept = list(range(len(crossings)))
     refused: List[Tuple[int, str]] = []
     while True:
+        wrong = misread(kept)
+        if wrong is not None:
+            refused.append(wrong)
+            kept.remove(wrong[0])
+            continue
         stuck = next((figure for figure in figures
                       if ordered_figure(figure, [crossings[i] for i in kept]) is None), None)
         if stuck is None:
@@ -2199,9 +2238,7 @@ def _typed_boundary(
 # The label each candidate leaf prints under in the zero-spread section. Two
 # entries rather than a derivation because the two rows are not the same claim:
 # one is a schedule of future rates, the other the rate on the mortgage as
-# quoted. NEUTRAL on whose figure it is — the row's next line says that from
-# `stated_source`, and "your renewal rate" headed a row whose next line said
-# the assistant typed it.
+# quoted. NEUTRAL on whose figure it is.
 _STATED_PATH_LABELS: Dict[str, str] = {
     "mortgage_renewal_rates": "the renewal rate",
     "mortgage_rate": "the contract rate",
@@ -2333,17 +2370,15 @@ def reversal_register(
 
     for key, option in reversal_candidates(raw):
         lo, hi = reversal_bracket(key)
-        admitted, record = reversal_admission(raw, key, hi, base=det)
+        far = reversal_probe(raw, key)
+        admitted, record = reversal_admission(raw, key, far, base=det)
         if not admitted:
             # §6: a key that moves nothing is not printed as a flat curve; it
             # is not a candidate. Absence is the ruled answer here, not a
-            # refusal — the flat curve is what must never appear. It is named
-            # in the empty register's reason, so "searched and inert" never
-            # reads as "not searched", and a key the loader refused at the far
-            # end is named as that, never as one that moved nothing.
+            # refusal — the flat curve is what must never appear.
             skipped.append((key, bool(record["deltas"])))
             continue
-        gate = reversal_gate(raw, key, hi, paths=gate_paths, simulate=simulate)
+        gate = reversal_gate(raw, key, far, paths=gate_paths, simulate=simulate)
         compounding = mortgage_compounding_of(raw[option])
 
         common = {
@@ -2377,7 +2412,8 @@ def reversal_register(
         boundaries, refused, texts = _confirmed_boundaries(
             raw, key, options, det, futures, stated, lo, hi, paths=paths, seed=seed,
             scan_points=scan_points, simulate=simulate, iterations=iterations,
-            figures=figures)
+            figures=figures,
+            one_figure=stated_values[0] if stated_path(raw, key) is None else None)
         exact.append(ExactReversal(
             **common, **_on_axis(raw, key, references, texts, len(stated_values)),
             probe_paths=gate["paths"],
@@ -2512,7 +2548,7 @@ def _confirmed_boundaries(
     stated: Verdict, lo: float, hi: float, *,
     paths: int, seed: int, scan_points: int,
     simulate: Callable[[ComparisonSpec], ComparisonMonteCarloResult], iterations: int,
-    figures: Sequence[float] = (),
+    figures: Sequence[float] = (), one_figure: Optional[float] = None,
 ) -> Tuple[List[Union[SolvedBoundary, SampledBoundary]], List[RefusedBoundary], List[str]]:
     """`(boundaries, refused, texts)`: every one of `BOUNDARY_FIELDS`
     answered, the boundary's own type where one exists, was confirmed and
@@ -2528,8 +2564,10 @@ def _confirmed_boundaries(
     re-simulating an unidentified boundary would dress noise in a measurement.
     A confirmed boundary then prints its figure (`printed_crossing`), and
     every figure on the axis, the rate of an `unconfirmed` reason included,
-    is placed beside the printed crossings (`_ordered_axis`); a check that
-    cannot pass refuses that one boundary (§0.1 item 61).
+    is placed beside the printed crossings (`_ordered_axis`), where
+    `one_figure`, the key's stated figure when the config states one, is to
+    read what this run says (`_misread`); a check that cannot pass refuses
+    that one boundary (§0.1 item 61).
 
     `mc` IS None WHEN THIS RUN HAS NO FUTURES, and then there is no free curve
     to build: the deterministic pair is still solved, comes back as
@@ -2618,9 +2656,19 @@ def _confirmed_boundaries(
                                            reason=no.reason))
             continue
         printed.append((field, entry, curve, confirmed, text))
+
+    def misread(kept: List[int]) -> Optional[Tuple[int, str]]:
+        if one_figure is None:
+            return None
+        wrong = _misread(one_figure, [
+            (printed[i][0], printed[i][1]["value"], printed[i][1]["upper_end"],
+             printed[i][1]["was"], printed[i][1]["becomes"]) for i in kept],
+            {field: field_state(stated, field) for field in BOUNDARY_FIELDS})
+        return None if wrong is None else (kept[wrong[0]], wrong[1])
+
     texts, kept, dropped = _ordered_axis(
         on_axis, [(entry["value"], entry["upper_end"], text)
-                  for _, entry, _, _, text in printed])
+                  for _, entry, _, _, text in printed], misread)
     for index, reason in dropped:
         refused.append(RefusedBoundary(verdict_field=printed[index][0], code="not_orderable",
                                        reason=reason))

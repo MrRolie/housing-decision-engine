@@ -40,7 +40,7 @@ from hde.config import load_config_dict, single_path_run
 from hde.deterministic import renewal_segments_for
 from hde.monte_carlo import run_monte_carlo
 from hde.rates import effective_mortgage_rate
-from hde.sweep import _fmt_value, flattened_path_note
+from hde.sweep import _fmt_value, flattened_path_note, stated_path
 
 from tests import decomposition_households as hh
 from tests import test_decomposition_sentences as sentences
@@ -1016,7 +1016,8 @@ def test_an_exception_that_is_no_check_reaches_the_caller(monkeypatch):
     check raised — reaches the caller as itself, never as a refusal and never
     as a message that a check failed.
     *Kills it:* the CLI or the assembler catching more than the check's own
-    exception."""
+    exception, or the reversal register catching more than a crossing
+    check's."""
     for error in (KeyError("a defect"), ValueError("a defect"), TypeError("a defect")):
         def broken(*args, **kwargs):
             raise error
@@ -1024,6 +1025,10 @@ def test_an_exception_that_is_no_check_reaches_the_caller(monkeypatch):
             patched.setattr(dr, "_top_row", broken)
             with pytest.raises(type(error)):
                 _cli(FIXTURE, "--decompose=40", "--json")
+        with monkeypatch.context() as patched:
+            patched.setattr(be, "_percent_value", broken)
+            with pytest.raises(type(error)):
+                _cli(MORTGAGE, "--decompose=200", "--json")
 
 
 @claims("They are checked in this order, and the first that fires is the one returned")
@@ -1903,6 +1908,7 @@ def test_the_reversal_register_is_break_even_s_and_nothing_added(monkeypatch, ru
 @claims("`reversal` — what would have to change for the verdict to change",
         "It carries `exact`, `estimated`, `structural_zeros`, `no_distance_code` and",
         "`exact` and `estimated` hold one row per key searched",
+        "The far end is `bracket_high`, or `bracket_low` where every figure the config",
         "A row is in `exact` when its key passes the exactness test below")
 def test_what_the_reversal_register_searches(runs):
     fixture = runs["fixture"].block["reversal"]
@@ -1912,11 +1918,20 @@ def test_what_the_reversal_register_searches(runs):
                                                     "house.mortgage_rate"]
     assert [r["key"] for r in runs["mortgage"].block["reversal"]["exact"]] == [
         "house.mortgage_rate"]
-    for name in ("fixture", "mortgage"):
+    for name in ("fixture", "mortgage", "stated_at_the_bracket_high_end"):
         run = runs[name]
         for row in run.block["reversal"]["exact"]:
-            admitted, _ = reversal_admission(run.raw, row["key"], row["bracket_high"])
+            admitted, _ = reversal_admission(run.raw, row["key"],
+                                             be.reversal_probe(run.raw, row["key"]))
             assert admitted
+    # stated at the high end, the key is moved to the low end, where it moves
+    # the house's present value; at the high end it prices the config itself
+    run = runs["stated_at_the_bracket_high_end"]
+    (row,) = run.block["reversal"]["exact"]
+    assert run.raw["house"]["mortgage_rate"] == row["bracket_high"]
+    assert be.reversal_probe(run.raw, row["key"]) == row["bracket_low"]
+    assert not reversal_admission(run.raw, row["key"], row["bracket_high"])[0]
+    assert row["boundaries"]
     for name in ("advanced", "showcase", "three", "min"):
         block = runs[name].block["reversal"]
         assert block["exact"] == [] and block["estimated"] == []
@@ -1952,7 +1967,7 @@ def test_the_empty_register_states_what_the_config_states(runs):
             for key, _ in stated:
                 assert f"this config states {key}, and " in reversal["no_distance_reason"]
                 assert not be.reversal_admission(run.raw, key,
-                                                 be.reversal_bracket(key)[1])[0]
+                                                 be.reversal_probe(run.raw, key))[0]
         assert sentences._NO_DISTANCE_REASON[reversal["no_distance_code"]].fullmatch(
             reversal["no_distance_reason"])
     assert seen == {"no_candidate", "not_admitted"}
@@ -2002,7 +2017,7 @@ def _on_the_axis(value, crossings):
 
 @claims("`exact[]` rows:", "`key` is the key searched and `option` the option it belongs to.",
         "`stated_formatted` is each figure the config states for the key",
-        "A key is exact when moving it to `bracket_high` leaves")
+        "A key is exact when moving it to the far end of its bracket leaves")
 def test_the_exact_rows_and_their_licence(runs):
     """The row's keys; its stated figures printed as figures on the axis,
     re-derived from the config and the row's printed crossings; whose figure
@@ -2029,14 +2044,15 @@ def test_the_exact_rows_and_their_licence(runs):
             assert row["stated_source"] == run.spec.sources.classify(row["key"])
             assert row["stated_tag"] == sentences._read_back_tag(run.doc, row["key"])
             checked += 1
-    run = runs["mortgage"]
-    for row in run.block["reversal"]["exact"]:
-        gate = reversal_gate(run.raw, row["key"], row["bracket_high"],
-                             paths=row["probe_paths"])
-        assert gate["licensed"] and gate["others_bit_identical"]
-        assert gate["paths"] == row["probe_paths"]
-        assert gate["worst_deviation_over_sd"] == row["max_path_deviation_over_sd"]
-        assert row["max_path_deviation_over_sd"] <= REVERSAL_GATE_TOLERANCE
+    for name in ("mortgage", "stated_at_the_bracket_high_end"):
+        run = runs[name]
+        for row in run.block["reversal"]["exact"]:
+            gate = reversal_gate(run.raw, row["key"], be.reversal_probe(run.raw, row["key"]),
+                                 paths=row["probe_paths"])
+            assert gate["licensed"] and gate["others_bit_identical"]
+            assert gate["paths"] == row["probe_paths"]
+            assert gate["worst_deviation_over_sd"] == row["max_path_deviation_over_sd"]
+            assert row["max_path_deviation_over_sd"] <= REVERSAL_GATE_TOLERANCE
     assert checked
 
 
@@ -2314,9 +2330,9 @@ def test_the_refused_fields_and_the_references(runs):
     renewal = hh.uncertainty_surface()
     row = renewal.reversal.exact[0]
     edge = dc.RefusedBoundary(verdict_field="mc_best", code="not_identified",
-                              reason="across the bracket the probabilities this boundary "
-                                     "turns on move by 0.0100, not more than 2 s.e. at the "
-                                     "boundary (0.0400) on 2000 paths")
+                              reason="across the bracket P(condo cheapest) moves by 0.0100, "
+                                     "not more than 2 s.e. of it at the boundary (0.0400) on "
+                                     "2000 paths")
     both = dataclasses.replace(row, refused_boundaries=row.refused_boundaries + (edge,))
     text = dt.format_decomposition(dataclasses.replace(
         renewal, reversal=dataclasses.replace(renewal.reversal,
@@ -2904,7 +2920,11 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
     for name in _CROSSING_RUNS + ("level_under_a_dollar", "path_note_below",
                                   "stated_under_a_crossing", "stated_at_a_sampled_crossing",
                                   "stated_just_under_a_sampled_crossing",
-                                  "crossing_near_the_low_end", "stated_just_above_a_crossing"):
+                                  "crossing_near_the_low_end", "stated_just_above_a_crossing",
+                                  "stated_at_a_crossing_s_lower_end",
+                                  "stated_inside_a_sampled_crossing",
+                                  "stated_two_floats_under_a_crossing",
+                                  "stated_at_the_bracket_high_end"):
         run = runs[name]
         for row in run.block["reversal"]["exact"]:
             option, leaf = row["key"].split(".", 1)
@@ -2956,6 +2976,14 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
     (best,) = [b for b in row["boundaries"] if b["verdict_field"] == "best"]
     assert stated == best["upper_end"] and f"{stated:.4%}" == best["formatted"]
     assert row["stated_formatted"] == f"{stated:.5%}"
+    # a stated rate at a sampled crossing's lower end, which prints at or
+    # below that crossing's figure only as that figure, prints as it
+    run = runs["stated_at_a_crossing_s_lower_end"]
+    (row,) = run.block["reversal"]["exact"]
+    stated = run.raw["house"]["mortgage_rate"]
+    (decisive,) = [b for b in row["boundaries"] if b["verdict_field"] == "decisive"]
+    assert stated == decisive["value"] and row["stated_formatted"] == decisive["formatted"]
+    assert not row["refused_boundaries"]
     # a figure no rounding places, inside a crossing's bracket, prints as that
     # crossing's figure: the engine's function and this test's reading agree
     inside = (0.0627246, 0.06272461, "6.2724%")
@@ -3048,6 +3076,48 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
                                         f"lower end of its bracket [{stated!r}, ")
     assert {b["verdict_field"] for b in row["boundaries"]} == {"best", "runner_up"}
     assert row["stated_formatted"] == _on_the_axis(stated, _printed_crossings(row))
+
+
+@claims("Where the config states the key as one figure, a path of one repeated rate",
+        "A crossing beside which it reads other than what the field says in this run")
+def test_a_stated_figure_reads_what_this_run_says(runs):
+    """On every corpus row whose key the config states as one figure, the
+    stated figure reads each field's state in this run beside that field's
+    printed crossings. On the witnesses a crossing it reads otherwise beside
+    refuses by name: two floats under the central case's crossing, where the
+    run's winner is already rent, and inside a sampled crossing's bracket,
+    where the run is no longer decisive; and the crossings it reads the run's
+    state beside still print.
+    *Kills it:* no such check, or a crossing refused that the figure reads
+    the run's state beside."""
+    checked = 0
+    for run in runs.values():
+        for row in run.block["reversal"]["exact"]:
+            if stated_path(run.raw, row["key"]) is None:
+                sentences.reads_what_this_run_says(run, row)
+                checked += 1
+    assert checked
+    (row,) = runs["stated_two_floats_under_a_crossing"].block["reversal"]["exact"]
+    stated = runs["stated_two_floats_under_a_crossing"].raw["house"]["mortgage_rate"]
+    refused = {r["verdict_field"]: r for r in row["refused_boundaries"]
+               if r["code"] == "not_orderable"}
+    assert set(refused) == {"best", "runner_up"}
+    assert refused["best"]["reason"].startswith(
+        f"{stated!r}, the stated figure, lies at or below the lower end of its bracket [")
+    assert refused["best"]["reason"].endswith(
+        " and reads 'house' beside it, and best says 'rent' in this run")
+    assert [b["verdict_field"] for b in row["boundaries"]] == ["mc_best"]
+    (row,) = runs["stated_inside_a_sampled_crossing"].block["reversal"]["exact"]
+    stated = runs["stated_inside_a_sampled_crossing"].raw["house"]["mortgage_rate"]
+    (refused,) = row["refused_boundaries"]
+    assert (refused["verdict_field"], refused["code"]) == ("decisive", "not_orderable")
+    assert refused["reason"].startswith(f"{stated!r}, the stated figure, lies inside its bracket")
+    assert refused["reason"].endswith(
+        " and reads 'decisive for house' beside it, and decisive says 'not decisive' in this "
+        "run")
+    assert [(b["verdict_field"], b["was"]) for b in row["boundaries"]] == [
+        ("best", "house"), ("runner_up", "rent"), ("mc_best", "house"),
+        ("decisive", "not decisive")]
 
 
 @claims("A table's rows print resolved rows first, each group largest first")

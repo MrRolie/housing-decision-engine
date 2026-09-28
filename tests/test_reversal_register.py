@@ -1107,8 +1107,8 @@ class TestTheConfirmingResimulation:
         """Refusal (i), asserted in BOTH directions so neither half can pass
         vacuously. At the fixture's 2,000 paths the majority boundary is
         resolved by a wide margin and reported; at 100 paths the same boundary
-        moves the probabilities it turns on by 0.0800 against a 2·SE of 0.0960
-        and is refused by name. The deterministic pair reads no path at all, so
+        moves P(rent cheapest) by 0.0800 against its 2·SE of 0.0960 and is
+        refused by name. The deterministic pair reads no path at all, so
         it reports identically at both counts — which is what makes this a test
         of the identification rule rather than of the solver."""
         assert _boundary(_row(register, RENEWAL), "mc_best")
@@ -1125,11 +1125,33 @@ class TestTheConfirmingResimulation:
         # could not have moved: the solved kind carries no sample to move with.
         assert all(isinstance(b, SolvedBoundary) for b in row.boundaries)
         reason = _refusal(row, "mc_best").reason
-        assert reason.startswith("across the bracket the probabilities this boundary "
-                                 "turns on move by ")
-        assert reason.endswith(" on 100 paths")
-        moved, noise = (float(x) for x in re.findall(r"\d\.\d{4}", reason))
+        m = re.fullmatch(r"across the bracket P\((\w+) cheapest\) moves by (\d\.\d{4}), not "
+                         r"more than 2 s\.e\. of it at the boundary \((\d\.\d{4})\) on 100 "
+                         r"paths", reason)
+        option, moved, noise = m[1], float(m[2]), float(m[3])
         assert moved <= noise
+        # Each figure re-derived by full re-simulations: the option named is
+        # one the boundary turns on, and its probability moves between the
+        # bracket's two ends by the figure printed, and is at the boundary
+        # the probability whose 2 s.e. is printed.
+        lo, hi = reversal_bracket(RENEWAL)
+        det, mc = compute_deterministic(spec), run_monte_carlo(spec)
+        free = be._free_curve(thin, RENEWAL, ["condo", "house", "rent"], det, mc,
+                              single_path=False)
+        verdict = be.compute_verdict(det, mc, years=spec.simulation.years,
+                                     discount_rate=spec.simulation.discount_rate)
+        found, _ = be._futures_field_boundaries(thin, RENEWAL, "mc_best", free, verdict, lo, hi,
+                                                scan_points=be.REVERSAL_SCAN_POINTS)
+        (boundary,) = found
+        assert option in (boundary["was"], boundary["becomes"])
+
+        def p(value):
+            return getattr(run_monte_carlo(load_at(thin, RENEWAL, value)),
+                           f"prob_{option}_cheapest")
+
+        assert f"{abs(p(hi) - p(lo)):.4f}" == m[2]
+        at = p(boundary["value"])
+        assert f"{2.0 * math.sqrt(at * (1.0 - at) / 100):.4f}" == m[3]
 
 
 # ---------------------------------------------------------------------------
@@ -1482,6 +1504,85 @@ def test_the_figure_checks_refuse_where_nothing_passes():
         "at none of 2 to 12 decimals of a percent, nor as the figure of a crossing whose "
         "bracket holds it"))]
 
+def test_a_stated_figure_reads_the_nearest_crossing_on_each_side():
+    """`_misread`, constructed: on each field a stated figure reads the `was`
+    of the nearest crossing whose bracket it lies at or below or inside, and
+    the `becomes` of the nearest whose bracket it lies at or above; a crossing
+    further off bounds another stretch, and a run that says house between
+    two stretches of rent reads house there.
+    *Kills it:* holding every crossing to the run's state, reading `becomes`
+    from a crossing at or above the figure or `was` from one below, or a
+    reason naming another side than the one measured."""
+    # house below 5%, rent from 5% to 6%, house from 6% to 7%, rent above
+    crossings = [("best", 0.05, 0.0500001, "house", "rent"),
+                 ("best", 0.06, 0.0600001, "rent", "house"),
+                 ("best", 0.07, 0.0700001, "house", "rent"),
+                 ("runner_up", 0.05, 0.0500001, "rent", "house")]
+    house = {"best": "house", "runner_up": "house"}
+    assert be._misread(0.065, crossings, house) is None
+    assert be._misread(0.04, crossings, {"best": "house", "runner_up": "rent"}) is None
+    assert be._misread(0.0700001, crossings, {"best": "rent", "runner_up": "house"}) is None
+    assert be._misread(0.05000005, crossings, {"best": "house", "runner_up": "rent"}) is None
+    assert be._misread(0.06, crossings, house) == (1, (
+        "0.06, the stated figure, lies at or below the lower end of its bracket "
+        "[0.06, 0.0600001] and reads 'rent' beside it, and best says 'house' in this run"))
+    assert be._misread(0.06000005, crossings, house)[1].startswith(
+        "0.06000005, the stated figure, lies inside its bracket [0.06, 0.0600001] and reads "
+        "'rent' beside it")
+    assert be._misread(0.0700001, crossings, house) == (2, (
+        "0.0700001, the stated figure, lies at or above the upper end of its bracket "
+        "[0.07, 0.0700001] and reads 'rent' beside it, and best says 'house' in this run"))
+    assert be._misread(0.065, crossings, {"best": "house", "runner_up": "rent"}) == (3, (
+        "0.065, the stated figure, lies at or above the upper end of its bracket "
+        "[0.05, 0.0500001] and reads 'house' beside it, and runner_up says 'rent' in this run"))
+    # read beside the crossing below it, though the one above reads the run's state
+    assert be._misread(0.06, [crossings[0], crossings[2]], house) == (0, (
+        "0.06, the stated figure, lies at or above the upper end of its bracket "
+        "[0.05, 0.0500001] and reads 'rent' beside it, and best says 'house' in this run"))
+
+
+def test_the_far_end_is_the_end_the_stated_figures_are_not_all_at():
+    """`reversal_probe`: the bracket's high end, unless every figure the
+    config states for the key is that end, where the probe would price the
+    config itself; then the low end. A key stated at the low end is admitted
+    and solved like any other.
+    *Kills it:* the low end always, the high end always, or the low end
+    where only some of a path's rates are at the high end; or the exactness
+    gate measured anywhere but that far end."""
+    lo, hi = reversal_bracket(CONTRACT)
+    raw = copy.deepcopy(DECISIVE_STEP)
+    for stated, far in ((0.044, hi), (lo, hi), (hi, lo)):
+        raw["house"]["mortgage_rate"] = stated
+        assert be.reversal_probe(raw, CONTRACT) == far, stated
+    fixture = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    low, high = reversal_bracket(RENEWAL)
+    for path, far in (([high, high], low), ([high], low), ([high, 0.05], high)):
+        fixture["house"]["mortgage_renewal_rates"] = path
+        assert be.reversal_probe(fixture, RENEWAL) == far, path
+    raw["house"]["mortgage_rate"] = lo
+    spec = load_config_dict(raw)
+    (row,) = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec)).exact
+    assert row.key == CONTRACT
+    assert [b.verdict_field for b in row.boundaries][:2] == ["best", "runner_up"]
+    # the exactness gate is measured at that far end too: stated at the high
+    # end, a house priced a different amount on each path at any other rate
+    # is refused there
+    raw["house"]["mortgage_rate"] = hi
+    spec = load_config_dict(raw)
+
+    def varying(at):
+        result = run_monte_carlo(at)
+        if at.house.mortgage_rate != spec.house.mortgage_rate:
+            result.house.pvs = result.house.pvs + np.arange(result.house.pvs.size)
+        return result
+
+    register = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec),
+                                 simulate=varying)
+    (row,) = register.estimated
+    assert row.key == CONTRACT and register.exact == ()
+    assert {r.code for r in row.refused_boundaries} == {"not_exact"}
+
+
 # ---------------------------------------------------------------------------
 # The library's own seams, reached by a direct call
 # ---------------------------------------------------------------------------
@@ -1569,13 +1670,16 @@ def test_a_key_the_loader_refuses_at_the_far_end_is_named_as_that(monkeypatch):
 
 
 def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the_noise():
-    """`_identification` names a boundary identified when the smallest
-    bracket-wide move of a watched probability exceeds `2·SE` at the
-    boundary, and not otherwise. Constructed on both sides of the line: a
-    move between 1 and 2 times the noise is identified, a move at or under
-    it is not, and the reason printed for the latter carries both figures.
+    """`_identification` names a boundary identified when every probability
+    it turns on moves across the bracket by more than `2·SE` of that
+    probability at the boundary, and not otherwise. Constructed on both sides
+    of the line: a move between 1 and 2 times the noise is identified, a move
+    at or under it is not, and the reason printed for the latter names that
+    probability with its own two figures.
     *Kills it:* comparing against any multiple of the noise but one (a move
-    of 1.5 noise refused, or one of 0.75 noise admitted), or `>=`."""
+    of 1.5 noise refused, or one of 0.75 noise admitted), or `>=`; one
+    option's move held against another option's noise; or a reason naming
+    an option that moved by more than its own noise."""
     paths = 400
     at = 0.5
     noise = 2.0 * math.sqrt(at * (1.0 - at) / paths)
@@ -1588,10 +1692,32 @@ def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the
     for factor in (1.5, 1.01, 1.99):
         got = record(0.2, 0.2 + factor * noise)
         assert got["identified"] is True, factor
-        assert got["two_se"] == noise and got["why"] is None
+        assert got["watched"][0]["two_se"] == noise and got["why"] is None
     for factor in (0.75, 0.5, 0.0):
         got = record(0.2, 0.2 + factor * noise)
         assert got["identified"] is False, factor
-        assert (f"move by {got['delta_p']:.4f}, not more than 2 s.e. at the boundary "
-                f"({noise:.4f}) on {paths} paths") in got["why"]
+        assert got["why"] == (
+            f"across the bracket P(condo cheapest) moves by {got['watched'][0]['delta_p']:.4f}, "
+            f"not more than 2 s.e. of it at the boundary ({noise:.4f}) on {paths} paths")
     assert record(0.0, noise)["identified"] is False
+
+    # Two probabilities, each held against its own noise: rent's move of 0.10
+    # clears its own 2 s.e. of 0.09 though not condo's 0.12, and the boundary
+    # is identified; with rent's move under its own, the reason names rent.
+    def pair(rent_move, condo_move):
+        rent_at = 0.5 - math.sqrt(0.25 - 0.09 ** 2 * 50 / 4)
+        condo_at = 0.5 - math.sqrt(0.25 - 0.12 ** 2 * 50 / 4)
+        probs = {"lo": {"rent": 0.3, "condo": 0.1},
+                 "hi": {"rent": 0.3 + rent_move, "condo": 0.1 + condo_move},
+                 "at": {"rent": rent_at, "condo": condo_at}}
+        return be._identification("mc_best", {"was": "rent", "becomes": "condo"},
+                                  probs, "rent", 50)
+
+    got = pair(0.10, 0.50)
+    assert [f"{row['two_se']:.12f}" for row in got["watched"]] == ["0.090000000000",
+                                                                   "0.120000000000"]
+    assert got["identified"] is True and got["why"] is None
+    got = pair(0.08, 0.50)
+    assert got["identified"] is False
+    assert got["why"] == ("across the bracket P(rent cheapest) moves by 0.0800, not more than "
+                          "2 s.e. of it at the boundary (0.0900) on 50 paths")

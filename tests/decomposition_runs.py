@@ -273,6 +273,21 @@ CROSSING_NEAR_THE_LOW_END["rent"]["monthly_rent"] = 646
 STATED_JUST_ABOVE_A_CROSSING = copy.deepcopy(DECISIVE_STEP)
 STATED_JUST_ABOVE_A_CROSSING["rent"]["monthly_rent"] = 2290.88
 STATED_JUST_ABOVE_A_CROSSING["house"]["mortgage_rate"] = 0.062444104452362044
+# A stated rate at the lower end of the mortgage example's sampled
+# decisiveness crossing, which only that crossing's own figure prints beside.
+STATED_AT_A_CROSSING_S_LOWER_END = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
+STATED_AT_A_CROSSING_S_LOWER_END["house"]["mortgage_rate"] = 0.06736205021603381
+# The same crossing with the stated rate inside its bracket, where the run is
+# not decisive.
+STATED_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(MORTGAGE.read_text(encoding="utf-8"))
+STATED_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_rate"] = 0.06736205021662316
+# A stated rate two floats under the central case's crossing, where the
+# central case's winner is already rent.
+STATED_TWO_FLOATS_UNDER_A_CROSSING = _near_ones(0.06582347916331133, 2400.9, (0.002, 0.05))
+STATED_TWO_FLOATS_UNDER_A_CROSSING["simulation"]["random_seed"] = 7
+# A stated rate at the high end of its bracket.
+STATED_AT_THE_BRACKET_HIGH_END = copy.deepcopy(DECISIVE_STEP)
+STATED_AT_THE_BRACKET_HIGH_END["house"]["mortgage_rate"] = 0.10
 PATH_NOTE_BELOW_A_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
 PATH_NOTE_BELOW_A_CROSSING["house"]["mortgage_renewal_rates"][0] = 0.016051
 # Level rows a fraction of a dollar each (spec §0.1 item 62's witness): at
@@ -688,6 +703,10 @@ CORPUS = {
     "stated_just_under_a_sampled_crossing": (STATED_JUST_UNDER_A_SAMPLED_CROSSING,),
     "crossing_near_the_low_end": (CROSSING_NEAR_THE_LOW_END,),
     "stated_just_above_a_crossing": (STATED_JUST_ABOVE_A_CROSSING,),
+    "stated_at_a_crossing_s_lower_end": (STATED_AT_A_CROSSING_S_LOWER_END, "200"),
+    "stated_inside_a_sampled_crossing": (STATED_INSIDE_A_SAMPLED_CROSSING, "200"),
+    "stated_two_floats_under_a_crossing": (STATED_TWO_FLOATS_UNDER_A_CROSSING, "100"),
+    "stated_at_the_bracket_high_end": (STATED_AT_THE_BRACKET_HIGH_END,),
     # A level row's digits (spec §0.1 item 62).
     "pull_nothing": (CORRELATIONS_PULL_NOTHING,),
     "level_under_a_dollar": (LEVEL_UNDER_A_DOLLAR,),

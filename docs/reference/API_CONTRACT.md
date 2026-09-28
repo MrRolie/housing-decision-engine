@@ -378,9 +378,10 @@ lists are never ranked against each other.
 
 - `exact` and `estimated` hold one row per key searched: a financed option's
   `mortgage_rate` and `mortgage_renewal_rates`, when the config states them and
-  moving one to the far end of its bracket moves an option's present value. A
-  row is in `exact` when its key passes the exactness test below, and in
-  `estimated` when it does not.
+  moving one to the far end of its bracket moves an option's present value. The
+  far end is `bracket_high`, or `bracket_low` where every figure the config
+  states for the key is `bracket_high`. A row is in `exact` when its key passes
+  the exactness test below, and in `estimated` when it does not.
 - `no_distance_code` and `no_distance_reason` are set exactly when `exact` and
   `estimated` are both empty, and are `null` otherwise. `no_distance_reason` is
   the measured fact, and `no_distance_code` is `no_candidate` when the config
@@ -396,11 +397,11 @@ lists are never ranked against each other.
   figure the config states for the key, `, `-joined, as a figure on the axis
   prints; `stated_source` is whose figure that is, in the read-back's classes,
   and `stated_tag` the key's tag, as a width's `tag` is.
-- A key is exact when moving it to `bracket_high` leaves every other option's
-  present value bit-identical and shifts the one it names by the same amount on
-  every path, to within `break_even.REVERSAL_GATE_TOLERANCE` of that option's
-  standard deviation, over `probe_paths` paths; `max_path_deviation_over_sd` is
-  the largest departure measured.
+- A key is exact when moving it to the far end of its bracket leaves every
+  other option's present value bit-identical and shifts the one it names by the
+  same amount on every path, to within `break_even.REVERSAL_GATE_TOLERANCE` of
+  that option's standard deviation, over `probe_paths` paths;
+  `max_path_deviation_over_sd` is the largest departure measured.
 - `bracket_low` and `bracket_high` bound the search, on the key's own quoting
   axis, and `bracket_source` is whose range that is: `set in the engine`, for a
   range written into the engine (`break_even.RATE_BRACKETS`).
@@ -451,14 +452,14 @@ lists are never ranked against each other.
   its scan read, `not_on_axis` when it says that at none of them,
   `scan_mismatch` when no solved crossing moves `best` or `runner_up` and the 9
   points the pairs were scanned at read otherwise than the stretches between
-  the crossings, `not_identified` when a futures boundary's probabilities do
-  not move by more than two standard errors across the bracket or none is
-  attached to it, `unconfirmed` when the re-simulation at the boundary
-  disagrees with the curve, `not_printable` when no precision prints the
-  boundary's figure (below), `not_orderable` when a figure on the axis prints
-  on its side of the boundary's figure at no precision (below), `not_exact` on
-  every field of an `estimated[]` row, and `no_futures` for a futures field on
-  a run without futures.
+  the crossings, `not_identified` when a probability a futures boundary turns
+  on moves across the bracket by no more than two of its standard errors at the
+  boundary, or none is attached to it, `unconfirmed` when the re-simulation at
+  the boundary disagrees with the curve, `not_printable` when no precision
+  prints the boundary's figure (below), `not_orderable` when a figure on the
+  axis is not placed beside the boundary's figure (below), `not_exact` on every
+  field of an `estimated[]` row, and `no_futures` for a futures field on a run
+  without futures.
 - `references[]`: `label`, `value`, `formatted`, `anchor` and `note`: an
   anchored rate on the key's own quoting axis, `anchor` its registry entry,
   `label` the last part of that entry's name with its underscores as spaces,
@@ -562,6 +563,11 @@ lies at or above `upper_end`. A figure no such rounding places, which lies at
 or between a crossing's two ends, prints as that crossing's figure where that
 places it. A crossing a figure is still not placed beside refuses with
 `not_orderable`, the crossings taken in order until every figure is placed.
+Where the config states the key as one figure, a path of one repeated rate
+included, that figure reads, on each field, the `was` of the nearest crossing
+whose bracket it lies at or below or inside, and the `becomes` of the nearest
+whose bracket it lies at or above. A crossing beside which it reads other than
+what the field says in this run refuses with `not_orderable`.
 A figure that did not resolve prints behind `not resolved:`, each row's
 interaction gap included. `largest
 alone share:` and `largest shift in size:` name a register's top row when it

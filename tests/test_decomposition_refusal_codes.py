@@ -158,7 +158,7 @@ def _not_identified(tmp_path, monkeypatch):
     raw["simulation"]["num_sims"] = 100
     block, text = _render(_write(tmp_path, "fixture_100", raw), "400")
     return _printed_refusal(block, text, "house.mortgage_renewal_rates", "mc_best",
-                            "across the bracket the probabilities this boundary turns on")
+                            "across the bracket P(rent cheapest) moves by ")
 
 
 def _two_option_register(raw=None, **kwargs):
