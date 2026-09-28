@@ -1330,12 +1330,7 @@ def reversal_candidates(raw: Dict[str, Any]) -> List[Tuple[str, str]]:
     engine's own option order.
 
     A key the config does not state is not a candidate and never reaches the
-    admission measurement. That is what excludes an ALL-CASH option, and the
-    measurement could not have done it: measured on the fixture's `condo`, the
-    loader refuses `condo.mortgage_rate` outright (`all_cash: true is set
-    together with mortgage fields`) and refuses `condo.mortgage_renewal_rates`
-    for want of a renewal term — so probing either would report a loader
-    refusal as though it were a measured absence of effect.
+    admission measurement. That is what excludes an ALL-CASH option.
     """
     out: List[Tuple[str, str]] = []
     for option in ("condo", "house"):
@@ -2117,10 +2112,9 @@ def _run_sides(value: float, crossings: Dict[int, Tuple[str, float, float, Any, 
     """`(sides, wrong)` for the figure a config states as a key's one
     figure, `value`, beside `crossings`, each `(field, lower, upper, was,
     becomes)` by its index (§0.1 item 65): the side of each crossing it
-    prints on, and `(index, reason)` of a crossing beside which no side
-    reads what `says[field]` says in this run, or None. The rule is the one
-    docs/reference/API_CONTRACT.md states for the stated figure, `up` and
-    `down` its two nearest crossings on each field."""
+    prints on, and `(index, reason)` of the crossing it refuses, or None.
+    The rule is the one docs/reference/API_CONTRACT.md states for the stated
+    figure, `up` and `down` its two nearest crossings on each field."""
     sides = {index: _side(value, lower, upper)
              for index, (_, lower, upper, _, _) in crossings.items()}
     wrong: Optional[Tuple[int, str]] = None

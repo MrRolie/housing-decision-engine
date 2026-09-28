@@ -783,10 +783,10 @@ boundary does not turn on, and it printed a false `not_identified`.
 - The "standard error is largest at the boundary" rationale is false, so it is cut. The rule
   stays: the s.e. is taken at the boundary.
 
-**64. EVERY REVERSAL KEY THE CONFIG STATES APPEARS IN THE BLOCK EXACTLY ONCE.** A stated
+**64. EVERY REVERSAL KEY THE CONFIG STATES APPEARS IN THE BLOCK.** A stated
 renewal ladder that no crossing moves (its renewals fall past the horizon) vanished whenever
 another key was admitted: no row, no refusal, no zero. Each stated reversal key now appears as
-exactly one of: an exact row, an estimated row, a `stated_path` zero, or a refused row. The
+exactly one of: an exact row, an estimated row, or a refused row. The
 refused row carries the `not_admitted` code and the measured fact that already exists: moving
 the key across its bracket moves no priced option's present value. A test enumerates the
 config's stated reversal keys against the block.

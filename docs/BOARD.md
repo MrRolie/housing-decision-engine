@@ -152,12 +152,14 @@ item rather than a quiet default.
 
 **doing** · designed 2026-09-22, all forks ruled · spec `docs/specs/2026-09-22-which-risk-decides-it.md`
 
-**Landed 2026-09-27:** `--decompose` prints three registers. The spread register gives
-the share of the verdict's variance each channel carries. The level register gives how
-far freezing each channel moves the expected margin. Both have intervals and source tags,
-and liveness is measured on the run. The reversal register gives the rate at which each
-part of the verdict changes, on each contract or renewal rate the config states, or a
-refusal's code and the fact it measured.
+**Landed 2026-09-27:** `--decompose` prints the spread and level registers. The spread
+register gives the share of the verdict's variance each channel carries. The level register
+gives how far freezing each channel moves the expected margin. Liveness is measured on the
+run.
+
+The reversal register, which `--decompose` also prints, gives the rate at which each part
+of the verdict changes, on each contract or renewal rate the config states, or a refusal's
+code and the fact it measured.
 
 With both channels live, decompose the verdict's variance: how much comes from renewal
 rates, how much from prices, how much from the household's own inputs. Ship it as a

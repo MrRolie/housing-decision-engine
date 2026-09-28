@@ -480,9 +480,8 @@ row lists are never ranked against each other.
   row, and `label` is `the renewal rate` or `the contract rate`.
 
 **The text block** prints these figures and no sentence about them. Every line
-is one of six kinds: a heading; a figure row with its intervals and source
-tags; a crossing; a path note; a refusal with its code and `reason`; or a row
-of `structural_zeros`.
+is one of six kinds: a heading; a figure row; a crossing; a path note; a
+refusal with its code and `reason`; or a row of `structural_zeros`.
 The lines it prints are these, in this order, and no others; `<…>` stands for
 a figure or a label, and a table's cells are padded with spaces to line up:
 
