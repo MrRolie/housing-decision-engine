@@ -12,7 +12,7 @@ an event, built a config for each place the two could disagree, and measured it 
 paths on two seeds. It found fifteen disagreements. A second, independent check tried to refute
 each one, and none was refuted. Grouped by what the user meets:
 
-| # | Disagreement | What was found (dollar gaps are best guess minus futures unless marked) |
+| # | Disagreement | What was found |
 |---|---|---|
 | C8 | `min_year` beyond the horizon: the futures sampler has no final bound when `timing_std_years` is 0 | the rent futures index past the horizon and **crash** with a traceback. The owned futures silently charge $0 while the central case charges the event in the final year |
 | C1 | `timing_model: hazard` with zero hazard | the central case charges the event (a $15,000 event is $11,841 at 3%, year 8), and no future ever fires it. The single-path gate classes the event as deterministic, so the futures are never consulted |
@@ -76,8 +76,7 @@ the reset (C12).
 
 **E6. Left on the board, stated as conventions, not fixed here:** C6, C7, C10 and C11. Each is
 the difference between one path and a mean, and each is small against its margin on every
-measured household. The normal cost distribution's truncation bias is the one a user can pull
-far with a large vol, so the board records it with its measured sizes.
+measured household.
 
 **E7. E1's lines state the model's schedule, not a count of futures, and every rate is the one
 the model applies.** The first build printed "X% of futures fire it" and "the futures reset it" on
@@ -126,11 +125,14 @@ assume it say so.
 first fix gated the futures on "some future can differ from the central case", and used the
 same test to name a side "stochastic" in the one-sided-uncertainty warning. On a hazard certain
 in another year, every future is one point, so the warning's "stochastic" and "OVERconfident"
-were false. Under E10 the central year is always one of the fire years. The fire-year set
-therefore differs from `{central year}` exactly when it holds more than one outcome, which is
-when the futures disperse. The gate, `dispersion_sources` and `sources.uncertainty_inputs` read
-that one predicate, and a test pins the three against each other by enumeration over event
-shapes.
+were false. Under E10 the central year is always one of the fire years. Some future therefore
+charges an event a present value other than the central case's exactly when the futures charge
+it more than one: a drawn cost on a cost above $0, or fire years that discount to more than one
+present value, never firing being $0. The gate, `dispersion_sources` and
+`sources.uncertainty_inputs` read that one predicate, and a test pins the three against each
+other by enumeration over event shapes. With an income block, the gate and
+`sources.uncertainty_inputs` also read a cost above $0 that the futures charge in more than one
+year, because the affordability ratios read the year.
 
 **E12. Superseded wording is marked where it stands.** E1's third bullet ("the year by which
 half of the futures have fired it") is superseded by E7, and E4 by E8 and E11. Each carries a

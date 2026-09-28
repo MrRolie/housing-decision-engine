@@ -330,8 +330,7 @@ hosted. Parked deliberately, not forgotten.
   future can fire (a hazard of 0 throughout, which the best guess charged at $11,841 on a
   $15,000 event), an event the best guess charges in a year no future fires it, a window
   that contradicts itself, two events with one name, a negative event vol and a pay drop
-  outside the horizon; a hazard fires only inside its window; the single-path gate and the
-  one-sided warning ask whether an event's futures disperse; each future's affordability
+  outside the horizon; a hazard fires only inside its window; each future's affordability
   ratio charges an event in that future's year; and the read-back says where the futures time
   an event, the lease reset or the price crash differently from the best guess. Still here,
   as conventions of one path against a mean, each figure the futures' mean cost minus the
