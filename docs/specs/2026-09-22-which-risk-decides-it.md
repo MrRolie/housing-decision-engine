@@ -812,6 +812,38 @@ several guards whose kills the rebuild lost:
 The mutant list that last full review ran is part of this register's gate. Every mutant on it
 dies, or its code is deleted.
 
+**67. THE REVERSAL REGISTER PRINTS A KEY'S CROSSINGS AND REFUSALS, AND NO OTHER FIGURE ON THAT
+AXIS** *(operator ruling 2026-09-28, taken on the review of rulings 63-66)*. Across that review
+and the two before it, every wrong line printed a SECOND figure beside a crossing, and each one
+was misplaced below the printed precision:
+- the stated rate;
+- a reference rate;
+- one rate of a stated renewal path;
+- a figure inside a sampled bracket.
+
+The crossing figures themselves have matched `--sweep` throughout. Each fix to placement
+exposed the next layer, and the next layer sits where the central case's float error exceeds
+its slope. Placement is therefore cut, not refined, the same shape as item 35.
+- In the text and in `--json`, a key's row prints its key, its crossings (value, `was` and
+  `becomes`, solved or sampled, and a sampled crossing's paths and seed) and its refusals, and
+  nothing else on that axis. There is no stated figure in the row head, no references line, and
+  the path note keeps its construction fact without the path's figures. The user's own figures
+  are in the read-back above the block, and that is their one home.
+- With the figures go `ordered_figure`, `_ordered_axis`, `_run_sides`, `_inside_sides`, the
+  misread check and the `not_orderable` code. Items 54 and 65 are superseded wherever they
+  place a figure other than the crossing's own.
+- What stays: the crossing's own printed figure is evaluated where it prints and sits on its
+  `was` side (items 42, 54 and 60). Item 64 holds by key: every stated reversal key is exactly
+  one of an exact, estimated or refused row.
+- `not_bracketed`, which the previous fix added without a ruling, is ruled here: a solved
+  crossing whose bracket ends do not read its `was` and its `becomes` refuses its own row, with
+  what it read at each end.
+- A decisiveness boundary is identified when every watched probability's s.e. is 0 and the two
+  states differ. The step is then exact. Item 63's check measures noise, and here there is none.
+
+What falls out, recorded rather than argued away: the block no longer shows how far the stated
+rate is from a crossing. The reader compares the crossing to the read-back.
+
 ---
 
 ## 1. Why
