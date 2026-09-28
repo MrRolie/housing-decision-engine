@@ -44,10 +44,8 @@ from .decomposition import (
     StructuralZero,
     channel as dc_channel,
 )
-from .market_scenario import (
-    SCENARIOS, LoadedScenarioPrior, band_horizon_for_calendar_year, calendar_year_for_sim_year,
-)
-from .monte_carlo import _load_prior_if_any, crash_hazard
+from .market_scenario import SCENARIOS, LoadedScenarioPrior
+from .monte_carlo import _load_prior_if_any, crash_hazard, crash_tilt
 from .land_transfer_tax import option_province, purchase_costs_clause
 from .mortgage_insurance import financing_clause
 from .models import (
@@ -1444,8 +1442,7 @@ def best_guess_lines(spec: ComparisonSpec,
         rates = [crash_hazard(shock, 1.0)]
         if prior is not None:
             rows = prior.rows_for_dwelling(name)
-            rates = [crash_hazard(shock, rows[(band_horizon_for_calendar_year(
-                         calendar_year_for_sim_year(year)), scenario)].drawdown_weight_tilt)
+            rates = [crash_hazard(shock, crash_tilt(rows, scenario, year))
                      for year in range(1, years + 1) for scenario in SCENARIOS]
             key += " × the prior's drawdown_weight_tilt"
         low, high = min(rates), max(rates)

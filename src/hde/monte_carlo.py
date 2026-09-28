@@ -615,6 +615,13 @@ def _band_growth_additive(prior_rows, drift_context, sim_year: int):
     return band_drift(row, zs[horizon])
 
 
+def crash_tilt(prior_rows, scenario: str, sim_year: int) -> float:
+    """The prior's `drawdown_weight_tilt` a path in `scenario` applies to the
+    crash hazard in `sim_year`: the row of the band that year falls in."""
+    horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(sim_year))
+    return prior_rows[(horizon, scenario)].drawdown_weight_tilt
+
+
 def crash_hazard(shock: PriceShockParams, tilt: float) -> float:
     """The annual crash probability a path applies: `annual_hazard` times the
     prior's `drawdown_weight_tilt` (1 without a prior)."""
@@ -889,8 +896,7 @@ def _simulate_condo_pv_once(
             # before the freeze existed the pair was unreachable and this read
             # `drift_context[0]` unguarded.
             if prior_rows is not None and drift_context is not None:
-                horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
-                tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
+                tilt = crash_tilt(prior_rows, drift_context[0], year)
             crash_u, crash_z = world.crash_draw(year)
             terminal_value, = _apply_price_shock(
                 [terminal_value], shock, tilt, crash_u, crash_z)
@@ -1023,8 +1029,7 @@ def _simulate_house_pv_once(
             # See the condo's copy: a frozen population channel is what makes
             # `drift_context is None` reachable beside wired prior rows.
             if prior_rows is not None and drift_context is not None:
-                horizon = band_horizon_for_calendar_year(calendar_year_for_sim_year(year))
-                tilt = prior_rows[(horizon, drift_context[0])].drawdown_weight_tilt
+                tilt = crash_tilt(prior_rows, drift_context[0], year)
             crash_u, crash_z = world.crash_draw(year)
             house_value, terminal_value = _apply_price_shock(
                 [house_value, terminal_value], shock, tilt, crash_u, crash_z)

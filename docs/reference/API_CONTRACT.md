@@ -96,8 +96,9 @@ block is present, then the block's `note`; each sweep's `flip:` / `mean flip:`
 / `majority flip:` lines; and, on a verdict Monte Carlo left undecided with a
 `market_scenario` prior loaded, one `next:` line naming the run that resolves
 it (`--break-even <cheapest owned option>.value_growth_rate`), omitted when
-that break-even is already in the run. Every line is built by the same function
-that prints it elsewhere, so the block repeats rather than paraphrases.
+that break-even is already in the run. A line that also prints elsewhere is
+built by the same function that prints it there, so the block repeats rather
+than paraphrases; the `best guess:` lines print only here.
 
 **One fact once (2026-09-04).** Within the block each derived fact is said
 once; every `[warning]` and source line stays verbatim. The break-even lines

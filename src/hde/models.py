@@ -111,9 +111,10 @@ class EventConfig:
     cost_distribution: Literal["normal", "lognormal"] = "lognormal"
 
     def fire_window(self, years: int) -> Tuple[int, int]:
-        """The first and last year the futures can fire this event: its stated
-        window inside the horizon, and for hazard timing no earlier than the
-        hazard's start. Empty when the first year is past the last."""
+        """The first and last year of the window the futures fire this event
+        in: its stated window inside the horizon, and for hazard timing no
+        earlier than the hazard's start. Empty when the first year is past the
+        last."""
         first = max(1, self.min_year)
         if self.timing_model == "hazard":
             first = max(first, self.hazard_start_year)

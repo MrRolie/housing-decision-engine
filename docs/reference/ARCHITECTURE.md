@@ -765,7 +765,8 @@ followed unevenly, so the engine assembles the block instead
    in nominal mode, the `mode:` line — the discount rate stated and the rate
    in use, a real figure (the default, or one typed under `rates: real`)
    composed with `inflation_rate`, or a quoted figure used as typed;
-4. the `decisiveness:` line (the verdict rule, measured);
+4. the `decisiveness:` line (the verdict rule, measured); then the `best
+   guess:` lines (`best_guess_lines`);
 5. each `<option> financing:` line and each `<option> purchase costs:` line —
    the transfer tax, the rebate applied or the fact that none is anchored;
 6. the `Year-1 cash` block: both sides in $/yr and $/mo, the principal repaid,
@@ -791,12 +792,12 @@ followed unevenly, so the engine assembles the block instead
     the prior is loaded, Monte Carlo decided the verdict, the verdict is not
     decisive, and the run is not already that break-even.
 
-Every line is built by the SAME function that prints it elsewhere
-(`format_assumptions`, `affordability_lines`, `decisiveness_line`,
+A line that also prints elsewhere is built by the SAME function that prints it
+there (`format_assumptions`, `affordability_lines`, `decisiveness_line`,
 `year1_cash_lines`, a break-even's own `sentence` and `across_row_sentence`,
 `sweep.flip_lines`) — a second formatter here would be a second thing to drift.
 The block therefore REPEATS lines the report already showed; that repetition is
-the feature.
+the feature. The `best guess:` lines print only here.
 
 Within the block, though, each derived fact is said once (2026-09-04; measured
 on `--sweep years=5,10,15,20 --break-even house.initial_value --read-back` of

@@ -3,10 +3,12 @@
 The best guess charges an event once, in the year the config places it; the
 futures time it by its model. These tests pin what the spec ruled: a config
 whose event cannot happen, or whose window contradicts itself, is refused at
-load (E2); a hazard fires only inside its window (E3); the single-path gate
-asks whether the futures' timing can differ (E4); the futures' affordability
-arrays place each event on each path (E5); and the read-back states, for every
-hazard-timed event, the facts of its schedule (E1).
+load (E2), and so is one whose best guess charges it in a year no future fires
+it (E10); a hazard fires only inside its window (E3); the single-path gate, the
+one-sided warning and the uncertainty inputs ask one question, whether the
+futures disperse (E11); the futures' affordability arrays place each event on
+each path (E5); and the read-back states, for every hazard-timed event, the
+facts of its schedule (E1).
 """
 from __future__ import annotations
 
@@ -75,8 +77,8 @@ REFUSALS = {
                    max_year=8, min_year=8)),
         "house.events['roof']: timing_model hazard, but the hazard is 0 in every year it "
         "can fire [8, 8]: no future fires it",
-        _cfg(_roof(timing_model="hazard", hazard_growth=0.01, hazard_start_year=8,
-                   max_year=9, min_year=8))),
+        _cfg(_roof(timing_model="hazard", hazard_base=0.01, hazard_growth=0.01,
+                   hazard_start_year=8, max_year=8, min_year=8))),
     "hazard starts after the horizon": (
         _cfg(_roof(expected_year=20, timing_model="hazard", hazard_base=0.1,
                    hazard_start_year=21)),
@@ -115,6 +117,29 @@ REFUSALS = {
         "house.events['roof'].expected_year (3) is outside its window [10, 20]",
         _cfg(_roof(expected_year=10, timing_model="hazard", hazard_base=0.2,
                    hazard_start_year=10))),
+    "expected_year at the horizon, above max_year": (
+        _cfg(_roof(expected_year=20, max_year=10)),
+        "house.events['roof'].expected_year (20) is outside its window [1, 10]",
+        _cfg(_roof(expected_year=20, max_year=20))),
+    "hazard-timed expected_year at the horizon, above max_year": (
+        _cfg(_roof(expected_year=20, max_year=10, timing_model="hazard", hazard_base=0.1)),
+        "house.events['roof'].expected_year (20) is outside its window [1, 10]",
+        _cfg(_roof(expected_year=20, max_year=20, timing_model="hazard", hazard_base=0.1))),
+    # E10: the best guess's year is one some future fires the event in.
+    "hazard zero in the year the best guess charges it": (
+        _cfg(_roof(expected_year=10, timing_model="hazard", hazard_growth=0.02,
+                   hazard_start_year=10)),
+        "house.events['roof']: the best guess charges it in year 10 (expected_year), and no "
+        "future fires it then; the futures fire it only in years 11 to 20",
+        _cfg(_roof(expected_year=11, timing_model="hazard", hazard_growth=0.02,
+                   hazard_start_year=10))),
+    "hazard certain before the year the best guess charges it": (
+        _cfg(_roof(expected_year=20, timing_model="hazard", hazard_base=1.0,
+                   hazard_start_year=2)),
+        "house.events['roof']: the best guess charges it in year 20 (expected_year), and no "
+        "future fires it then; the futures fire it only in year 2",
+        _cfg(_roof(expected_year=2, timing_model="hazard", hazard_base=1.0,
+                   hazard_start_year=2))),
     "hazard-timed min_year beyond the horizon": (
         _cfg(_roof(expected_year=20, min_year=21, timing_model="hazard", hazard_base=0.1)),
         "house.events['roof'].min_year (21) > years (20)",
@@ -274,39 +299,34 @@ def test_a_hazard_that_starts_inside_the_window_fires_from_its_start():
 
 
 # ---------------------------------------------------------------------------
-# E4 — the gate asks whether the futures' timing can differ
+# E11 — the gate, the one-sided warning and the uncertainty inputs ask one
+# question: whether the futures disperse
 # ---------------------------------------------------------------------------
 
 GATE = {
     "hazard below certainty": (_roof(timing_model="hazard", hazard_base=0.1), False),
+    "hazard below certainty in a one-year window": (
+        _roof(timing_model="hazard", hazard_base=0.3, min_year=8, max_year=8), False),
+    "a flat hazard of one half": (_roof(expected_year=1, timing_model="hazard",
+                                        hazard_base=0.5), False),
     "hazard certain in its first year": (_roof(timing_model="hazard", hazard_base=1.0,
                                                hazard_start_year=8), True),
     "hazard certain from year 1, charged there": (_roof(expected_year=1, timing_model="hazard",
                                                         hazard_base=1.0), True),
-    "hazard certain in its first year, charged later": (
-        _roof(expected_year=20, timing_model="hazard", hazard_base=1.0, hazard_start_year=2),
-        False),
+    "hazard zero in its first year, then certain": (
+        _roof(expected_year=6, timing_model="hazard", hazard_growth=1.0, hazard_start_year=5),
+        True),
     "jitter across a window": (_roof(timing_std_years=2.0, min_year=7, max_year=8), False),
     "jitter inside a one-year window": (_roof(timing_std_years=2.0, min_year=8, max_year=8), True),
+    # Hazard fields do nothing under jitter timing.
+    "jitter carrying a hazard start after its expected year": (
+        _roof(expected_year=5, timing_std_years=1.0, hazard_start_year=15), False),
+    "fixed, carrying a hazard start past the horizon": (_roof(hazard_start_year=25), True),
+    "fixed, carrying a hazard start past max_year": (
+        _roof(max_year=10, hazard_start_year=11), True),
     "fixed": (_roof(), True),
     "fixed with a drawn cost": (_roof(cost_vol=0.2), False),
 }
-
-
-@pytest.mark.parametrize("case", sorted(GATE))
-def test_the_gate_classes_an_event_by_whether_its_futures_can_differ(case):
-    """A single-path run is one whose every future IS the best guess, and the
-    uncertainty-inputs list names the events exactly when the gate reads them
-    as drawn."""
-    event, single = GATE[case]
-    cfg = _cfg(event)
-    spec = load_config_dict(copy.deepcopy(cfg))
-    assert single_path_run(spec) is single
-    owned, _, _ = dispersion_sources(spec)
-    assert ("house.events" in owned) is not single
-    assert ("house.events" in uncertainty_keys(cfg)) is not single
-    gaps = run_monte_carlo(spec).house.pvs - compute_deterministic(spec).house.total_pv
-    assert bool(np.all(np.abs(gaps) < 1e-6)) is single
 
 
 def _stdout(tmp_path, monkeypatch, capsys, cfg, *flags):
@@ -318,17 +338,56 @@ def _stdout(tmp_path, monkeypatch, capsys, cfg, *flags):
     return capsys.readouterr().out
 
 
-@pytest.mark.parametrize("cost, rent", [(60000, 1080), (15000, 850)], ids=["decisive", "tie"])
-def test_a_certain_hazard_in_another_year_is_named_a_disagreement(
-        tmp_path, monkeypatch, capsys, cost, rent):
-    """Every future fires the roof in year 2 and the best guess charges it in
-    year 20, so every future says rent where the best guess says house."""
-    cfg = _cfg({**_roof(expected_year=20, timing_model="hazard", hazard_base=1.0,
-                        hazard_start_year=2), "base_cost": cost}, sims=1000)
-    cfg["rent"]["monthly_rent"] = rent
+@pytest.mark.parametrize("case", sorted(GATE))
+def test_the_gate_the_warning_and_the_inputs_read_whether_the_futures_disperse(
+        case, tmp_path, monkeypatch, capsys):
+    """A single-path run is one whose futures are all one path, the best guess;
+    the owned side is named stochastic, in the one-sided warning and in the
+    uncertainty inputs, exactly when its futures disperse."""
+    event, single = GATE[case]
+    cfg = _cfg(event)
+    spec = load_config_dict(copy.deepcopy(cfg))
+    assert single_path_run(spec) is single
+    owned, _, _ = dispersion_sources(spec)
+    assert ("house.events" in owned) is not single
+    assert ("house.events" in uncertainty_keys(cfg)) is not single
+    pvs = run_monte_carlo(spec).house.pvs
+    assert bool(np.ptp(pvs) > 1e-6) is not single
+    if single:
+        assert np.all(np.abs(pvs - compute_deterministic(spec).house.total_pv) < 1e-6)
     out = _stdout(tmp_path, monkeypatch, capsys, cfg)
-    assert "most futures say Rent (100% cheapest) — the two disagree, not decisive" in out
-    assert "single-path run" not in out
+    assert ("one-sided uncertainty" in out) is not single
+    if not single:
+        assert "the owned option's PV is the only stochastic side (house.events)" in out
+
+
+def test_a_certain_hazard_in_another_year_is_refused_on_the_cli(tmp_path, monkeypatch, capsys):
+    """A hazard of 1 read as "certain", beside the year the user expects it:
+    every future fires the roof in year 1, and the best guess charged year 12."""
+    path = tmp_path / "cfg.yaml"
+    path.write_text(yaml.safe_dump(_cfg(_roof(expected_year=12, timing_model="hazard",
+                                              hazard_base=1.0))))
+    from hde.cli import main
+    monkeypatch.setattr(sys, "argv", ["hde", str(path)])
+    assert main() == 1
+    assert ("house.events['roof']: the best guess charges it in year 12 (expected_year), and no "
+            "future fires it then; the futures fire it only in year 1") in capsys.readouterr().err
+
+
+def test_a_spec_built_in_code_can_break_what_the_gate_assumes():
+    """The loader refuses this event. Built in code, every future fires it in
+    year 2, one path that is not the best guess's, and the gate still reads a
+    single path."""
+    event = EventConfig("roof", 15000, expected_year=20, timing_model="hazard",
+                        hazard_base=1.0, hazard_start_year=2)
+    spec = _rent_spec(event)
+    spec.rent.events, spec.house.events = [], [event]
+    assert event.fire_years(YEARS) == {2}
+    assert single_path_run(spec)
+    pvs = run_monte_carlo(spec).house.pvs
+    assert np.ptp(pvs) < 1e-6
+    assert pvs[0] - compute_deterministic(spec).house.total_pv == pytest.approx(
+        pv_single(15000, RATE, 2) - pv_single(15000, RATE, 20))
 
 
 # ---------------------------------------------------------------------------
@@ -601,6 +660,62 @@ def test_a_crash_rate_that_varies_by_year_prints_as_its_range(tmp_path):
     assert _best_guess(cfg) == [_crash_line("house", "3.0% to 100.0%", TILTED)]
 
 
+# The house's tilt varies by band and by scenario, the condo's by neither. A
+# 5-year run reads band 2030 in years 1 to 4 and band 2035 in year 5, and the
+# bands it never reads carry the largest tilt of all.
+_HOUSE_TILT = {2030: {"low": 1.5, "reference": 1.0, "high": 1.5},
+               2035: {"low": 3.0, "reference": 1.0, "high": 1.0}}
+
+
+def _tilt(dwelling, horizon, scenario):
+    return 2.0 if dwelling == "condo" else _HOUSE_TILT.get(horizon, {}).get(scenario, 4.0)
+
+
+@pytest.mark.parametrize("years, house_range", [(4, "3.0% to 4.5%"), (5, "3.0% to 9.0%")])
+def test_the_crash_range_is_every_rate_the_model_applies_on_the_run(
+        tmp_path, monkeypatch, years, house_range):
+    """Each line's range spans the years of the run and the prior's three
+    scenarios, for its own option's rows, and matches the hazards the futures
+    apply."""
+    import json
+    from pathlib import Path
+    import hde.monte_carlo as mc
+    prior = json.loads((Path(__file__).parent / "fixtures" / "scenario_prior_golden.json")
+                       .read_text())
+    prior["scenario_priors"] = [
+        {**row, "dwelling_type": dwelling,
+         "drawdown_weight_tilt": _tilt(dwelling, row["horizon_year"], row["scenario"])}
+        for row in prior["scenario_priors"] for dwelling in ("condo", "house")]
+    (tmp_path / "prior.json").write_text(json.dumps(prior))
+    cfg = _cfg(_roof(expected_year=4), years=years, sims=60)
+    cfg["condo"] = {"monthly_fee": 300, "fee_escalation_rate": 0.0, "initial_value": 300000,
+                    "all_cash": True, "price_shock": {"annual_hazard": 0.03}}
+    cfg["house"]["price_shock"] = {"annual_hazard": 0.03}
+    cfg["market_scenario"] = {"path": str(tmp_path / "prior.json"), "geography": "MTL_RMR"}
+    bands = (2030, 2035, 2040, 2045, 2050)
+    expected = {
+        dwelling: {min(0.03 * _tilt(dwelling, next(h for h in bands if h >= min(2026 + t, 2050)),
+                                    scenario), 1.0)
+                   for t in range(1, years + 1) for scenario in ("low", "reference", "high")}
+        for dwelling in ("condo", "house")}
+    low, high = min(expected["house"]), max(expected["house"])
+    assert f"{low:.1%} to {high:.1%}" == house_range
+    assert _best_guess(cfg) == [
+        _crash_line("condo", "6.0%", TILTED.replace("house", "condo")),
+        _crash_line("house", house_range, TILTED)]
+    applied = {1: set(), 2: set()}
+    real = mc._apply_price_shock
+
+    def spy(values, shock, tilt, u, sev_z):
+        # The condo passes one value, the house two.
+        applied[len(values)].add(mc.crash_hazard(shock, tilt))
+        return real(values, shock, tilt, u, sev_z)
+
+    monkeypatch.setattr(mc, "_apply_price_shock", spy)
+    run_monte_carlo(load_config_dict(copy.deepcopy(cfg)))
+    assert applied == {1: expected["condo"], 2: expected["house"]}
+
+
 def test_the_facts_ride_the_json_read_back(tmp_path, monkeypatch, capsys):
     import json
     path = tmp_path / "flat.yaml"
@@ -662,3 +777,28 @@ def test_the_contract_lists_the_best_guess_lines_after_decisiveness():
             "with the annual chance the model applies (after a prior's "
             "`drawdown_weight_tilt`, as a range when it varies); each "
             "`<option> financing:` line") in contract
+
+
+def test_the_best_guess_lines_follow_decisiveness_and_print_only_in_the_read_back(
+        tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+    docs = Path(__file__).parent.parent / "docs/reference"
+    architecture = " ".join((docs / "ARCHITECTURE.md").read_text().split())
+    assert ("4. the `decisiveness:` line (the verdict rule, measured); then the `best guess:` "
+            "lines (`best_guess_lines`); 5. each `<option> financing:` line") in architecture
+    assert "The `best guess:` lines print only here." in architecture
+    assert "the `best guess:` lines print only here." in " ".join(
+        (docs / "API_CONTRACT.md").read_text().split())
+    # A mortgaged house, so a financing line follows the best-guess lines.
+    cfg = copy.deepcopy(EVERY_OPTION)
+    cfg["house"].update({"all_cash": False, "down_payment": 60000, "mortgage_rate": 0.05,
+                         "mortgage_term_years": 25})
+    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+    head, block = out.split("READ-BACK — carry these lines into any answer, verbatim:")
+    assert "best guess:" not in head
+    lines = block.splitlines()
+    at = [i for i, line in enumerate(lines) if line.startswith("best guess:")]
+    assert [lines[i] for i in at] == _best_guess(cfg)
+    assert at == list(range(at[0], at[-1] + 1))
+    assert lines[at[0] - 1].startswith("decisiveness:")
+    assert lines[at[-1] + 1].startswith("house financing:")

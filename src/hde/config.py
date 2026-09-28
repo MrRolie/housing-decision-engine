@@ -1067,12 +1067,11 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
 
 
 def event_widens(event: EventConfig, years: int) -> bool:
-    """Whether some future can place or cost this event differently from the
-    best guess: its cost is drawn, or the years its futures fire it are not
-    exactly the best guess's year. `single_path_run` and
-    `sources.uncertainty_inputs` both read this."""
-    return (event.cost_vol > 0
-            or event.fire_years(years) != {_event_year_deterministic(event, years)})
+    """Whether the futures disperse this event: its cost is drawn, or
+    `fire_years` holds more than one outcome (never firing is one).
+    `single_path_run`, `dispersion_sources` and `sources.uncertainty_inputs`
+    all read this."""
+    return event.cost_vol > 0 or len(event.fire_years(years)) > 1
 
 
 def _stochastic_events(option: Any, years: int) -> bool:
@@ -1261,6 +1260,11 @@ def single_path_run(spec: ComparisonSpec) -> bool:
     True when every uncertainty input is off (audit U3): a Monte Carlo run
     would produce num_sims identical paths. Callers must then skip the
     uncertainty act like the no-MC path and stamp the run 'not a forecast'.
+
+    For events, those paths are the best guess because the loader refuses one
+    whose best-guess year is not one of its `fire_years`: a spec built in code
+    whose every future fires an event in one other year still reads as a
+    single path.
     """
     sim = spec.simulation
     vols = (
@@ -2058,13 +2062,25 @@ def _event_refusals(option_name: str, events: List[EventConfig], years: int) -> 
                        f"({event.max_year}): no future fires it")
             continue
         first, last = event.fire_window(years)
+        in_window = first <= event.expected_year <= last
         # validate_config refuses an expected_year past years on its own line.
-        if event.expected_year <= years and not first <= event.expected_year <= last:
+        if event.expected_year <= years and not in_window:
             out.append(f"{key}.expected_year ({event.expected_year}) is outside its window "
                        f"[{first}, {last}]")
         if hazard and not any(h > 0 for _, h in event.hazard_schedule(years)):
             out.append(f"{key}: timing_model hazard, but the hazard is 0 in every year it can "
                        f"fire [{first}, {last}]: no future fires it")
+        elif in_window:
+            central = _event_year_deterministic(event, years)
+            fired = event.fire_years(years) - {None}
+            if central not in fired:
+                # A hazard is linear in the year from its start and clamped to
+                # [0, 1], and fire_years stops at its first certain year, so
+                # the years some future fires it are consecutive.
+                low, high = min(fired), max(fired)
+                span = f"year {low}" if low == high else f"years {low} to {high}"
+                out.append(f"{key}: the best guess charges it in year {central} (expected_year), "
+                           f"and no future fires it then; the futures fire it only in {span}")
     return out
 
 
