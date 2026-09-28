@@ -769,6 +769,49 @@ resolved. A level row now prints its shift and standard error at the least preci
 then cents, then further) at which the printed pair shows the row's judgment:
 |shift| > 2 × s.e. on a resolved row, and not on an unresolved one.
 
+**63. A DECISIVENESS BOUNDARY IS IDENTIFIED ON THE PROBABILITIES ITS OWN TWO STATES ARE
+COMPUTED FROM** *(2026-09-28, on the review of the rebuilt register)*. The identification check
+watched the run's central-case winner on every `decisive` boundary. On a three-option run the
+crossing can instead be decisive for another option. The check then measured a probability the
+boundary does not turn on, and it printed a false `not_identified`.
+- Each side of a `decisive` boundary names the option its state is computed from. The boundary
+  record carries that option as a field, so no code parses it out of the prose state.
+- The check watches exactly those probabilities.
+- The `not_identified` reason names the option whose move failed, and gives that option's own
+  move and its own 2 s.e. It never reports one option's figures under another's name, and it
+  never reports the smaller of two moves as both.
+- The "standard error is largest at the boundary" rationale is false, so it is cut. The rule
+  stays: the s.e. is taken at the boundary.
+
+**64. EVERY REVERSAL KEY THE CONFIG STATES APPEARS IN THE BLOCK EXACTLY ONCE.** A stated
+renewal ladder that no crossing moves (its renewals fall past the horizon) vanished whenever
+another key was admitted: no row, no refusal, no zero. Each stated reversal key now appears as
+exactly one of: an exact row, an estimated row, a `stated_path` zero, or a refused row. The
+refused row carries the `not_admitted` code and the measured fact that already exists: moving
+the key across its bracket moves no priced option's present value. A test enumerates the
+config's stated reversal keys against the block.
+
+**65. ITEM 60'S THIRD BULLET IS REPLACED: THE RUN'S OWN STATE AT THE STATED VALUE DECIDES ITS
+SIDE.** Near a solved crossing the central-case gap changes sign within a few ULPs, because its
+float error exceeds its slope there. A stated rate one or two ULPs below a bracket can therefore
+read `becomes`, which made "at or below the `was` end it lies on the `was` side" false. The run
+has already priced the stated value, and the report above the block prints that answer, so it
+decides. A stated figure prints on the side where the run reads it. A crossing beside which no
+precision places that figure consistently refuses its own row (item 61), with a reason that
+says what was measured. `not_orderable` covers both of its triggers: a figure that no precision
+places, and a figure that is placed but reads a state other than the run's.
+
+**66. THE REBUILT REGISTER KEEPS EVERY PIN THE LAST FULL BUILD HAD.** The last full build pinned
+several guards whose kills the rebuild lost:
+- a reference's side ordering;
+- the repeated-rate misread guard;
+- the probe cell above `bracket_high`;
+- the row-level refusal catch, which must be narrow;
+- `ordered_figure`'s closed lower end.
+
+The mutant list that last full review ran is part of this register's gate. Every mutant on it
+dies, or its code is deleted.
+
 ---
 
 ## 1. Why
