@@ -7,6 +7,7 @@ configurations, and results throughout the simulation.
 
 import math
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Dict, FrozenSet, List, Optional, Literal, Tuple
 
 import numpy as np
@@ -124,10 +125,13 @@ class EventConfig:
     def hazard_schedule(self, years: int) -> List[Tuple[int, float]]:
         """(year, annual hazard clamped to [0, 1]) for every year of the fire
         window: the one schedule the futures draw from and the read-back and
-        the loader read."""
+        the loader read. Each year's hazard is summed in decimal from the
+        figures as typed, so 0.1 + 0.3 × 3 is 1, not the float 1 − 2⁻⁵³."""
         start = max(1, self.hazard_start_year)
         first, last = self.fire_window(years)
-        return [(t, min(max(self.hazard_base + self.hazard_growth * max(0, t - start), 0.0), 1.0))
+        base, growth = (Decimal(repr(float(self.hazard_base))),
+                        Decimal(repr(float(self.hazard_growth))))
+        return [(t, float(min(max(base + growth * max(0, t - start), Decimal(0)), Decimal(1))))
                 for t in range(first, last + 1)]
 
     def hazard_fire_facts(self, years: int) -> Tuple[float, Optional[int]]:
@@ -149,21 +153,15 @@ class EventConfig:
             p = math.nextafter(0.0, 1.0)
         return p, half
 
-    def fire_years(self, years: int) -> FrozenSet[Optional[int]]:
-        """Every year in which some future fires this event, with None when
-        some future never does."""
-        if self.timing_model == "hazard":
-            out: set = set()
-            for year, hazard in self.hazard_schedule(years):
-                if hazard > 0:
-                    out.add(year)
-                if hazard >= 1.0:
-                    return frozenset(out)
-            return frozenset(out | {None})
-        first, last = self.fire_window(years)
-        if self.timing_std_years > 0 and first < last:
-            return frozenset(range(first, last + 1))
-        return frozenset({max(first, min(self.expected_year, last))})
+    def fire_years(self, years: int) -> FrozenSet[int]:
+        """For hazard timing, every year in which some future fires this event."""
+        out: set = set()
+        for year, hazard in self.hazard_schedule(years):
+            if hazard > 0:
+                out.add(year)
+            if hazard >= 1.0:
+                break
+        return frozenset(out)
 
 
 @dataclass

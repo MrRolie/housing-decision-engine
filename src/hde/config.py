@@ -28,7 +28,7 @@ from .land_transfer_tax import (
     option_province,
     resolve as resolve_land_transfer_tax,
 )
-from .pv import mortgage_payment, pv_single
+from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
 from .rates import (
     MortgageCompoundingError,
@@ -1042,7 +1042,7 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
             owned.append(f"{name}.price_shock")
         if option.other_recurring_costs and sim.other_cost_vol:
             owned.append("simulation.other_cost_vol")
-        if _stochastic_events(option, sim.years, sim.discount_rate, affordability=False):
+        if _stochastic_events(option):
             owned.append(f"{name}.events")
     if spec.rent is not None:
         if sim.rent_escalation_vol:
@@ -1051,7 +1051,7 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
             renter.append("simulation.investment_return_vol")
         if spec.rent.other_recurring_costs and sim.other_cost_vol:
             renter.append("simulation.other_cost_vol")
-        if _stochastic_events(spec.rent, sim.years, sim.discount_rate, affordability=False):
+        if _stochastic_events(spec.rent):
             renter.append("rent.events")
         # The lease reset is the renter's own tail: on some paths the rent
         # series moves to a different track and on others it does not. Missing
@@ -1066,25 +1066,15 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
     return owned, renter, shared
 
 
-def event_widens(event: EventConfig, years: int, discount_rate: float, *,
-                 affordability: bool) -> bool:
-    """True when the futures charge this event more than one present value: a
-    drawn cost on a cost above $0, or `fire_years` that discount to more than
-    one (never firing charges $0). With `affordability`, also when they charge
-    a cost above $0 in more than one year, which the affordability ratios read.
-    `single_path_run`, `dispersion_sources` and `sources.uncertainty_inputs`
-    all read this."""
-    fire = event.fire_years(years)
-    charges = {0.0 if year is None else pv_single(event.base_cost, discount_rate, year)
-               for year in fire}
-    return event.base_cost != 0 and (event.cost_vol > 0 or len(charges) > 1
-                                     or (affordability and len(fire) > 1))
-
-
-def _stochastic_events(option: Any, years: int, discount_rate: float, *,
-                       affordability: bool) -> bool:
-    return any(event_widens(event, years, discount_rate, affordability=affordability)
-               for event in option.events)
+def _stochastic_events(option: Any) -> bool:
+    """True when any of an option's events carries timing or cost dispersion."""
+    for event in option.events:
+        if event.timing_std_years != 0 or event.cost_vol != 0:
+            return True
+        if event.timing_model == "hazard" and (event.hazard_base != 0
+                                               or event.hazard_growth != 0):
+            return True
+    return False
 
 
 def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
@@ -1269,11 +1259,6 @@ def single_path_run(spec: ComparisonSpec) -> bool:
     True when every uncertainty input is off (audit U3): a Monte Carlo run
     would produce num_sims identical paths. Callers must then skip the
     uncertainty act like the no-MC path and stamp the run 'not a forecast'.
-
-    For events, those paths are the best guess because the loader refuses one
-    whose best-guess year is not one of its `fire_years`: a spec built in code
-    whose every future fires an event in one other year still reads as a
-    single path.
     """
     sim = spec.simulation
     vols = (
@@ -1297,9 +1282,13 @@ def single_path_run(spec: ComparisonSpec) -> bool:
         shock = getattr(opt, "price_shock", None)
         if shock is not None and shock.annual_hazard > 0:
             return False
-        if _stochastic_events(opt, sim.years, sim.discount_rate,
-                              affordability=spec.income is not None):
-            return False
+        for event in opt.events:
+            if event.timing_std_years != 0 or event.cost_vol != 0:
+                return False
+            if event.timing_model == "hazard" and (
+                event.hazard_base != 0 or event.hazard_growth != 0
+            ):
+                return False
     if spec.income is not None:
         for drop in spec.income.pay_drop_events:
             if drop.year_jitter_std != 0 or drop.magnitude_vol != 0:
@@ -2080,9 +2069,9 @@ def _event_refusals(option_name: str, events: List[EventConfig], years: int) -> 
         if hazard and not any(h > 0 for _, h in event.hazard_schedule(years)):
             out.append(f"{key}: timing_model hazard, but the hazard is 0 in every year it can "
                        f"fire [{first}, {last}]: no future fires it")
-        elif in_window:
+        elif hazard and in_window:
             central = _event_year_deterministic(event, years)
-            fired = event.fire_years(years) - {None}
+            fired = event.fire_years(years)
             if central not in fired:
                 # A hazard is linear in the year from its start and clamped to
                 # [0, 1], and fire_years stops at its first certain year, so
@@ -2321,13 +2310,6 @@ def _rates_of(data: Dict[str, Any]) -> str:
         raise ConfigValidationError(str(exc)) from exc
 
 
-def _rate_context(data: Dict[str, Any]) -> Tuple[str, EconomicParams, RateConverter, float]:
-    rates = _rates_of(data)
-    econ = _parse_economic(data.get("economic"), rates)
-    conv = RateConverter(rates, econ.mode, econ.inflation_rate)
-    return rates, econ, conv, conv.discount_rate(data, ANCHORS["simulation.discount_rate"].value)
-
-
 def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     """The one loader both entry points share: keys, jurisdictions, the rate
     convention, the sections, provenance, validation.
@@ -2354,7 +2336,10 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     if "years" not in data:
         raise ConfigValidationError("Missing required field: years")
     years = int(data["years"])
-    rates, econ, conv, discount_rate = _rate_context(data)
+    rates = _rates_of(data)
+    econ = _parse_economic(data.get("economic"), rates)
+    conv = RateConverter(rates, econ.mode, econ.inflation_rate)
+    discount_rate = conv.discount_rate(data, ANCHORS["simulation.discount_rate"].value)
 
     # The tax treatment of the two sides' money (2026-09-05): resolved first,
     # because a first-time buyer's refunds and HBP withdrawal enter the option

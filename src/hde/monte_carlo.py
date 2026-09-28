@@ -624,7 +624,7 @@ def crash_tilt(prior_rows, scenario: str, sim_year: int) -> float:
 
 def crash_hazard(shock: PriceShockParams, tilt: float) -> float:
     """The annual crash probability a path applies: `annual_hazard` times the
-    prior's `drawdown_weight_tilt` (1 without a prior)."""
+    prior's `drawdown_weight_tilt` (1 without a prior), capped at 1."""
     # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
     # the composed hazard is capped at certainty — the same clamp the event
     # hazard channel applies (readiness plan C.7).

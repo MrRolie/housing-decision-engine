@@ -14,8 +14,8 @@ key to ``user`` / ``assistant`` / ``anchor:<registry name>``. It changes NO
 computation: it is provenance for the echo and for one warning. Keys the block
 omits are echoed as ``unattributed`` — silence is reported, never inferred.
 
-Import-light on purpose: ``models`` imports the echo type, so nothing here may
-import ``models`` or ``config`` at module level.
+Import-light on purpose (anchors only): ``models`` imports the echo type, so
+nothing here may import ``models`` or ``config``.
 """
 from __future__ import annotations
 
@@ -252,9 +252,10 @@ def _percent(value: float) -> str:
 # Uncertainty inputs: what widens the Monte Carlo distribution
 # ---------------------------------------------------------------------------
 #
-# This list MIRRORS `config.single_path_run`. A test pins the mirror: turn off
-# every key named here and `single_path_run` must be True, so the warning cannot
-# miss an input the engine treats as uncertainty.
+# This list MIRRORS `config.single_path_run` — the engine's own definition of
+# "a path draws something". A test pins the mirror: turn off every key named
+# here and `single_path_run` must be True, so the warning cannot miss an input
+# the engine treats as uncertainty.
 
 _SIM_VOLS = ("house_maintenance_vol", "condo_fee_vol", "other_cost_vol",
              "rent_escalation_vol", "investment_return_vol", "value_growth_vol")
@@ -280,26 +281,6 @@ def _entry_detail(entries: Sequence[Any], fields: Sequence[str],
             found.append(f"{name} {format_source_value(name, entry[name])}")
             break
     return ", ".join(found) if found else None
-
-
-def _widening_events(events: Sequence[Any], data: Dict[str, Any]) -> List[Any]:
-    """The entries `config.event_widens` reads as drawn, parsed by the loader's
-    own parser; an entry the loader cannot parse is refused there."""
-    from .config import ConfigValidationError, _parse_event, _rate_context, event_widens
-    try:
-        years = int(data["years"])
-        rate = _rate_context(data)[3]
-    except (ConfigValidationError, KeyError, TypeError, ValueError):
-        return []
-    out = []
-    for entry in events:
-        try:
-            if event_widens(_parse_event(entry, years), years, rate,
-                            affordability="income" in data):
-                out.append(entry)
-        except (ConfigValidationError, KeyError, TypeError, ValueError):
-            continue
-    return out
 
 
 def uncertainty_inputs(data: Dict[str, Any]) -> List[Tuple[str, Optional[str]]]:
@@ -330,10 +311,10 @@ def uncertainty_inputs(data: Dict[str, Any]) -> List[Tuple[str, Optional[str]]]:
                     out.append((f"rent.{sub}", None))
         events = block.get("events")
         if isinstance(events, list):
-            widening = _widening_events(events, data)
-            if widening:
-                out.append((f"{option}.events", _entry_detail(
-                    widening, _EVENT_WIDENERS, hazard_only=("hazard_base", "hazard_growth"))))
+            detail = _entry_detail(events, _EVENT_WIDENERS,
+                                   hazard_only=("hazard_base", "hazard_growth"))
+            if detail:
+                out.append((f"{option}.events", detail))
     income = data.get("income")
     if isinstance(income, dict) and isinstance(income.get("pay_drop_events"), list):
         detail = _entry_detail(income["pay_drop_events"], _DROP_WIDENERS)
