@@ -350,8 +350,9 @@ def _refused_boundary_lines(refused: Sequence[RefusedBoundary]) -> List[str]:
         if refusal not in fields:
             refusals.append(refusal)
             fields[refusal] = []
-        fields[refusal].append(
-            _BOUNDARY_LABEL.get(item.verdict_field, item.verdict_field))
+        label = _BOUNDARY_LABEL.get(item.verdict_field, item.verdict_field)
+        if label not in fields[refusal]:
+            fields[refusal].append(label)
     lines: List[str] = []
     for code, reason in refusals:
         labels = fields[(code, reason)]

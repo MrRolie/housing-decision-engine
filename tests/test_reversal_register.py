@@ -1584,28 +1584,59 @@ def test_a_decisiveness_step_with_no_noise_is_identified():
     s.e. of 0, is identified, however little those probabilities move across
     the bracket. The same figures on an `mc_best` boundary, on a boundary
     whose two states are one, or with one of them off 0 or 1, are held to the
-    noise rule and refused by it.
+    noise rule and refused by it. Its sides are computed from one option, so
+    item 68 does not decide it.
     *Kills it:* the rule deleted, or widened to any field, to states that
-    agree, or to one s.e. of 0 among several."""
+    agree, or to an s.e. above 0."""
     flat = {"lo": {"condo": 1.0, "rent": 0.0}, "hi": {"condo": 1.0, "rent": 0.0},
             "at": {"condo": 1.0, "rent": 0.0}}
 
     def record(field="decisive", was="decisive for condo", becomes="not decisive",
-               probs=flat):
-        return be._identification({"attribute": field, "computed_from": ("condo", "rent"),
+               probs=flat, computed_from=("condo", "condo")):
+        return be._identification({"attribute": field, "computed_from": computed_from,
                                    "was": was, "becomes": becomes}, probs, 400)
 
     got = record()
     assert got["identified"] is True and got["why"] is None
-    assert [row["two_se"] for row in got["watched"]] == [0.0, 0.0]
-    assert record(field="mc_best", was="condo", becomes="rent")["identified"] is False
+    assert [row["two_se"] for row in got["watched"]] == [0.0]
+    assert record(field="mc_best", was="condo", becomes="rent",
+                  computed_from=("condo", "rent"))["identified"] is False
     assert record(becomes="decisive for condo")["identified"] is False
     noisy = record(probs={**flat, "at": {"condo": 0.99, "rent": 0.0}})
     assert noisy["identified"] is False
     assert noisy["why"].startswith("across the bracket P(condo cheapest) moves by 0.0000")
     # the least s.e. above 0 a float carries is noise all the same
-    least = record(probs={**flat, "at": {"condo": 1.0, "rent": 2.0 ** -1022}})
-    assert 0.0 < least["watched"][1]["two_se"] and least["identified"] is False
+    least = record(probs={**flat, "at": {"condo": 2.0 ** -1022, "rent": 0.0}})
+    assert 0.0 < least["watched"][0]["two_se"] and least["identified"] is False
+
+
+def test_a_decisiveness_step_between_two_options_is_identified():
+    """§0.1 item 68, constructed on the figures of its witness: a `decisive`
+    boundary whose two states differ and whose sides are computed from two
+    options is identified, though neither probability moves across the
+    bracket and each has an s.e. above 0 at the boundary. The same figures
+    on a boundary whose sides are computed from one option are held to the
+    noise rule and refused by it, and so are they on an `mc_best` boundary
+    or on one whose two states are one.
+    *Kills it:* the rule deleted, or widened to one option, to any field, or
+    to states that agree."""
+    probs = {end: {"condo": 0.995, "house": 0.005} for end in ("lo", "hi", "at")}
+
+    def record(computed_from, field="decisive", was="decisive for condo",
+               becomes="not decisive"):
+        return be._identification({"attribute": field, "computed_from": computed_from,
+                                   "was": was, "becomes": becomes}, probs, 400)
+
+    got = record(("condo", "house"))
+    assert got["identified"] is True and got["why"] is None
+    assert [row["option"] for row in got["watched"]] == ["condo", "house"]
+    assert all(row["delta_p"] == 0.0 < row["two_se"] for row in got["watched"])
+    assert record(("condo", "condo"))["why"] == (
+        "across the bracket P(condo cheapest) moves by 0.0000, not more than 2 s.e. of it "
+        "at the boundary (0.0071) on 400 paths")
+    assert record(("condo", "house"), field="mc_best", was="condo",
+                  becomes="house")["identified"] is False
+    assert record(("condo", "house"), becomes="decisive for condo")["identified"] is False
 
 
 def test_a_boundary_with_no_probability_is_not_identified():
@@ -1704,7 +1735,11 @@ def test_a_futures_boundary_is_identified_exactly_when_it_moves_by_more_than_the
         probs = {"lo": {"rent": 0.3, "condo": 0.1},
                  "hi": {"rent": 0.3 + rent_move, "condo": 0.1 + condo_move},
                  "at": {"rent": rent_at, "condo": condo_at}}
-        return be._identification({"computed_from": computed_from}, probs, 50)
+        states = ({"attribute": "mc_best", "was": computed_from[0], "becomes": computed_from[1]}
+                  if len(set(computed_from)) > 1 else
+                  {"attribute": "decisive", "was": "decisive for condo",
+                   "becomes": "not decisive"})
+        return be._identification({"computed_from": computed_from, **states}, probs, 50)
 
     got = pair(0.10, 0.50)
     assert [f"{row['two_se']:.12f}" for row in got["watched"]] == ["0.090000000000",

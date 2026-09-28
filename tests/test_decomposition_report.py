@@ -37,6 +37,7 @@ from tests.decomposition_households import (
     two_channel_option_state,
     uncertainty_surface,
 )
+from tests.decomposition_runs import ONE_REASON_TWO_BOUNDARIES, Run
 from hde import decomposition as dc
 from hde import decomposition_text as dt
 from hde.cli import main as cli_main
@@ -889,6 +890,38 @@ class TestTheReversalRows:
                 "runner-up (unchanged): r") in lines
         assert ("      a boundary not printed for the decisiveness verdict "
                 "(not_identified): r") in lines
+
+    def test_two_boundaries_of_one_field_refused_alike_name_that_field_once(self):
+        """Two boundaries of one field refused with one code and reason print
+        one line, which names that field once beside the other fields it
+        refuses.
+        *Kills it:* a field named once for each boundary the line refuses."""
+        dec = seven_channel_other_household()
+        row = dec.reversal.estimated[0]
+        gated = dataclasses.replace(row, boundaries=(), refused_boundaries=tuple(
+            dc.RefusedBoundary(verdict_field=field, code="not_identified", reason="r")
+            for field in ("mc_best", "mc_best", "decisive")))
+        lines = format_decomposition(dataclasses.replace(
+            dec, reversal=dataclasses.replace(dec.reversal, estimated=(gated,)))).splitlines()
+        assert [line for line in lines if line.endswith("(not_identified): r")] == [
+            "      a boundary not printed for the option most futures call cheapest or the "
+            "decisiveness verdict (not_identified): r"]
+
+    def test_a_run_whose_two_boundaries_are_refused_alike_names_the_field_once(self, tmp_path):
+        """The fixture on 80 futures at seed 10: on the contract rate, two of
+        the boundaries of the option most futures call cheapest are refused
+        with one code and reason, and their line names that field once.
+        *Kills it:* a field named once for each boundary the line refuses."""
+        got = Run(ONE_REASON_TWO_BOUNDARIES, "40").materialise(tmp_path)
+        (row,) = [r for r in got.block["reversal"]["exact"] if r["key"] == "house.mortgage_rate"]
+        refused = [(r["code"], r["reason"]) for r in row["refused_boundaries"]
+                   if r["verdict_field"] == "mc_best"]
+        (shared,) = {item for item in refused if refused.count(item) == 2}
+        assert shared[0] == "not_identified"
+        label = "the option most futures call cheapest"
+        assert (f"      a boundary not printed for {label} ({shared[0]}): {shared[1]}"
+                in got.text.splitlines())
+        assert f"{label} or {label}" not in got.text
 
     def test_one_reason_refusing_several_fields_prints_once_naming_them_all(self):
         """A key the exactness gate refuses carries the gate's one sentence on

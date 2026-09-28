@@ -1860,13 +1860,16 @@ def _identification(
     boundary: Dict[str, Any], probs: Dict[str, Dict[str, Optional[float]]], paths: int,
 ) -> Dict[str, Any]:
     """Whether a futures boundary is identified outside Monte Carlo noise
-    (spec §6, refusal i; §0.1 items 63 and 67): the bracket-wide `|ΔP|` of
+    (spec §6, refusal i; §0.1 items 63, 67 and 68): the bracket-wide `|ΔP|` of
     P(cheapest) for each option in the boundary's `computed_from`, each
     against `2·SE` of that probability at the boundary itself, where
     `SE = sqrt(p(1−p)/N)`. The first that does not clear its own is the one
     the reason names. A decisiveness boundary whose two states differ, and
     at which every one of those probabilities has an `SE` of 0, has no noise
-    to lie inside, and is identified.
+    to lie inside, and is identified. So is one whose two states differ and
+    whose two sides are computed from different options: the central case's
+    winner changes inside its bracket, a step solved on the central case and
+    not drawn from the futures.
     """
     watched = list(dict.fromkeys(boundary["computed_from"]))
     rows = []
@@ -1880,7 +1883,7 @@ def _identification(
     if not rows:
         return {"identified": False, "paths": paths, "watched": [],
                 "why": "no probability is attached to this boundary"}
-    exact = (all(row["two_se"] == 0.0 for row in rows)
+    exact = ((len(watched) > 1 or all(row["two_se"] == 0.0 for row in rows))
              and boundary["attribute"] == "decisive" and boundary["was"] != boundary["becomes"])
     short = None if exact else next(
         (row for row in rows if not row["delta_p"] > row["two_se"]), None)

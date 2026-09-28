@@ -3112,32 +3112,74 @@ def test_a_decisive_boundary_is_identified_on_the_option_its_sides_are_computed_
         assert moves_past_its_noise("house") and not moves_past_its_noise(best), name
 
 
-@claims("unless it is a `decisive` boundary at which")
-def test_a_decisive_step_with_no_noise_is_identified(runs):
-    """§0.1 item 67, on its witness: the condo's decisiveness crossing prints,
-    though the probabilities its two sides are computed from, P(cheapest) of
-    the central case's winner at each end of its bracket, are each 0 or 1 at
-    the boundary, so their standard error there is 0, and move not at all
-    between the two ends of the bracket searched.
-    *Kills it:* the check held to the noise rule there, which refuses the
-    crossing as `not_identified`."""
-    run = runs["decisive_without_noise"]
-    (row,) = [r for r in run.block["reversal"]["exact"] if r["key"] == "condo.mortgage_rate"]
+def _decisive_crossing(run, key, seed):
+    """The run's one `decisive` boundary on `key`, checked to print as its
+    line, and the options `--sweep` names the central case's winner at its
+    two ends."""
+    (row,) = [r for r in run.block["reversal"]["exact"] if r["key"] == key]
     (boundary,) = [b for b in row["boundaries"] if b["verdict_field"] == "decisive"]
     assert (boundary["was"], boundary["becomes"]) == ("decisive for condo", "not decisive")
-    assert (f"      sampled on 400 paths at seed 42: as it rises past {boundary['formatted']}, "
-            "the decisiveness verdict changes from decisive for condo to not decisive"
-            ) in run.text.splitlines()
+    assert (f"      sampled on 400 paths at seed {seed}: as it rises past "
+            f"{boundary['formatted']}, the decisiveness verdict changes from decisive for "
+            "condo to not decisive") in run.text.splitlines()
     sides = [end["best"] for end in _sweep_states(
-        run.path, row["key"], [boundary["value"], boundary["upper_end"]], True)]
-    assert sides == ["condo", "rent"]
-    at = dict(boundary["curve_probabilities"])
-    assert [at[option] for option in sides] == [1.0, 0.0]
+        run.path, key, [boundary["value"], boundary["upper_end"]], True)]
+    return row, boundary, sides
+
+
+def _moves_across_the_bracket(run, row, option):
+    """How far `option`'s P(cheapest), re-simulated at the two ends of the
+    bracket searched, moves between them."""
     low, high = (run_monte_carlo(be.load_at(run.raw, row["key"], v))
                  for v in (row["bracket_low"], row["bracket_high"]))
+    return abs(getattr(high, f"prob_{option}_cheapest") - getattr(low, f"prob_{option}_cheapest"))
+
+
+@claims("or at which every such standard error is 0")
+def test_a_decisive_step_with_no_noise_is_identified(runs):
+    """§0.1 item 67, on two witnesses: the condo's decisiveness crossing
+    prints, though the probabilities its two sides are computed from,
+    P(cheapest) of the central case's winner at each end of its bracket, are
+    each 0 or 1 at the boundary, so their standard error there is 0. On one
+    neither moves between the two ends of the bracket searched; on the other
+    the condo's moves and rent's does not. Both are computed from two
+    options, so item 68 identifies them too.
+    *Kills it:* the check held to the noise rule there, which refuses the
+    crossing as `not_identified`, or held to it wherever one of those
+    probabilities does not move."""
+    for name, moving in (("decisive_without_noise", set()),
+                         ("one_moves_one_flat", {"condo"})):
+        run = runs[name]
+        row, boundary, sides = _decisive_crossing(run, "condo.mortgage_rate", 42)
+        assert sides == ["condo", "rent"], name
+        at = dict(boundary["curve_probabilities"])
+        assert [at[option] for option in sides] == [1.0, 0.0], name
+        assert {option for option in sides
+                if _moves_across_the_bracket(run, row, option) > 0.0} == moving, name
+
+
+@claims("whose two sides are computed from different options")
+def test_a_decisive_step_where_the_winner_changes_is_identified(runs):
+    """§0.1 item 68, on its witness: the condo's decisiveness crossing lies
+    where the central case's winner changes from the condo to the house, at
+    the solved crossing inside its bracket, so its two sides are computed
+    from those two options, and it prints. Neither's P(cheapest) moves
+    between the two ends of the bracket searched, and each has a standard
+    error above 0 at the boundary, so the noise rule alone would refuse it.
+    *Kills it:* the check held to the noise rule wherever the two sides are
+    computed from different options, which refuses the crossing as
+    `not_identified`."""
+    run = runs["decisive_at_the_winners_step"]
+    row, boundary, sides = _decisive_crossing(run, "condo.mortgage_rate", 4)
+    assert sides == ["condo", "house"]
+    (best,) = [b for b in row["boundaries"] if b["verdict_field"] == "best"]
+    assert (best["was"], best["becomes"]) == ("condo", "house")
+    assert boundary["value"] <= best["value"] < boundary["upper_end"]
+    at = dict(boundary["curve_probabilities"])
     for option in sides:
-        assert getattr(low, f"prob_{option}_cheapest") == getattr(
-            high, f"prob_{option}_cheapest"), option
+        assert 0.0 < at[option] < 1.0, option
+        assert _moves_across_the_bracket(run, row, option) == 0.0, option
+    assert not any(r["verdict_field"] == "decisive" for r in row["refused_boundaries"])
 
 
 @claims("A table's rows print resolved rows first, each group largest first")

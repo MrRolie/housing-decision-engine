@@ -271,6 +271,21 @@ DECISIVE_FOR_ANOTHER = {
 # turns on has any noise (spec §0.1 item 67).
 DECISIVE_WITHOUT_NOISE = copy.deepcopy(DECISIVE_FOR_ANOTHER)
 DECISIVE_WITHOUT_NOISE["simulation"].update({"condo_fee_vol": 6.0, "random_seed": 42})
+# The same with the fee drawn a little narrower, beside a house on a lower rate
+# whose maintenance is drawn wider: at the condo's contract rate's decisiveness
+# crossing no probability it turns on has any noise, and the condo's moves
+# across the bracket while rent's does not.
+ONE_MOVES_ONE_FLAT = copy.deepcopy(DECISIVE_FOR_ANOTHER)
+ONE_MOVES_ONE_FLAT["house"]["mortgage_rate"] = 0.065
+ONE_MOVES_ONE_FLAT["simulation"].update({"condo_fee_vol": 5.5, "house_maintenance_vol": 0.6,
+                                         "random_seed": 42})
+# The same three options over sixteen years at another seed: the condo's
+# contract rate's decisiveness crossing lies where the central case's winner
+# changes from the condo to the house, while neither's P(cheapest) moves
+# across the bracket (spec §0.1 item 68).
+DECISIVE_AT_THE_WINNERS_STEP = copy.deepcopy(DECISIVE_FOR_ANOTHER)
+DECISIVE_AT_THE_WINNERS_STEP["years"] = 16
+DECISIVE_AT_THE_WINNERS_STEP["simulation"]["random_seed"] = 4
 # The same three options with the condo's contract rate two floats under its
 # own solved crossing: on the house's contract rate, the central case's winner
 # at the lower end of a solved crossing's bracket is not the one the stretch
@@ -288,6 +303,10 @@ del DECISIVE_FOR_THE_HOUSE["sources"]["house.other_recurring_costs.property_tax.
 # states moves no present value (spec §0.1 item 64).
 INERT_LADDER = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
 INERT_LADDER["house"]["mortgage_renewal_years"] = 25
+# The fixture on 80 futures at seed 10: on the contract rate, two boundaries of
+# the option most futures call cheapest are refused with one code and reason.
+ONE_REASON_TWO_BOUNDARIES = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+ONE_REASON_TWO_BOUNDARIES["simulation"].update({"num_sims": 80, "random_seed": 10})
 # A house bought outright beside a ladder it states: neither of its two
 # financing keys moves a present value, so both are refused rows.
 TWO_REFUSED = {
@@ -756,6 +775,9 @@ CORPUS = {
     # (item 64).
     "decisive_for_another": (DECISIVE_FOR_ANOTHER, "100"),
     "decisive_without_noise": (DECISIVE_WITHOUT_NOISE, "100"),
+    # And two crossings where the central case's winner changes (item 68).
+    "one_moves_one_flat": (ONE_MOVES_ONE_FLAT, "100"),
+    "decisive_at_the_winners_step": (DECISIVE_AT_THE_WINNERS_STEP, "100"),
     "three_way_tie": (THREE_WAY_TIE, "100"),
     "decisive_for_the_house": (DECISIVE_FOR_THE_HOUSE,),
     "inert_ladder": (INERT_LADDER, "300"),

@@ -975,7 +975,7 @@ def _refused_boundary(line):
     assert _BOUNDARY_REASON[m["code"]].fullmatch(m["reason"]), m.group(0)
     named = [r for r in row["refused_boundaries"]
              if (r["code"], r["reason"]) == (m["code"], m["reason"])]
-    labels = [FIELD_WORDS[r["verdict_field"]] for r in named]
+    labels = list(dict.fromkeys(FIELD_WORDS[r["verdict_field"]] for r in named))
     expected = labels[0] if len(labels) == 1 else f"{', '.join(labels[:-1])} or {labels[-1]}"
     assert m["fields"] == expected
     # the head is the contract's: "a boundary not printed" for a code that

@@ -453,8 +453,9 @@ row lists are never ranked against each other.
   points the pairs were scanned at read otherwise than the stretches between
   the crossings, `not_identified` when a probability a futures boundary's two
   sides are computed from moves across the bracket by no more than two of its
-  standard errors at the boundary, unless it is a `decisive` boundary at which
-  every such standard error is 0, or when none is attached to it,
+  standard errors at the boundary, unless it is a `decisive` boundary whose two
+  sides are computed from different options or at which every such standard
+  error is 0, or when none is attached to it,
   `unconfirmed` when the re-simulation at the boundary disagrees with the
   curve, `not_printable` when no precision prints the boundary's figure
   (below), `not_bracketed` when the boundary's field does not say its `was` at
