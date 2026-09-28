@@ -427,8 +427,9 @@ path, which the report stamps "not a forecast"):
   cash flow (a real rate is used as typed); only `z_π` is live there, through
   the `corr_inflation_*` keys.
 - **Events.** Timing: `jitter` → `round(clamp(Normal(expected_year, timing_std_years)))`
-  within `[min_year, max_year]` and the horizon; `hazard` → the first year a uniform
-  draw falls under `hazard_base + hazard_growth · (year − hazard_start_year)` (clamped
+  within `[min_year, max_year]` and the horizon; `hazard` → the first year of
+  `[max(min_year, hazard_start_year), min(max_year, years)]` in which a uniform draw
+  falls under `hazard_base + hazard_growth · (year − hazard_start_year)` (clamped
   to `[0, 1]`), possibly never. Cost: `base_cost × shock(cost_vol)` under `cost_distribution`.
 - **Rent side.** The renter rides the same inflation path as the owners: in
   nominal mode the rent escalation, each other cost's escalation and the
@@ -495,7 +496,7 @@ Present only with an `income` block.
 | `threshold` | the ratio that counts as a breach | `affordability_threshold` (default anchored, 0.32) |
 | `ratios` | year-t housing cost ÷ year-t income | numerator = UNDISCOUNTED year-t outlay: fees `12·fee(1 + e_eff)^(t−1)` or maintenance `rate(t)·V0(1 + g_eff)^(t−1)` or rent `12·rent(1 + e_eff)^(t−1)`, plus the mortgage payment while `t ≤ term`, events in their year, other costs `(1 + e_eff)^(t−1)`. Under a renewal ladder the mortgage term is the payment of the SEGMENT holding year `t` (`pv.payment_in_year`), so the ratio STEPS at every renewal rather than holding one figure. Note the exponent: the affordability numerator escalates from year 2, one year later than the PV engine's fee/rent convention — a documented divergence, not a rounding difference |
 | `years_exceeding` | years whose ratio exceeds the threshold | `[t : ratio_t > threshold]` |
-| `prob_condo_exceeds` / `prob_house_exceeds` / `prob_rent_exceeds` | Monte Carlo breach probability | share of paths on which ANY year's ratio exceeds the threshold, using the path's stochastic income (pay-drop `year_jitter_std`, `magnitude_vol` with the retained fraction clamped to `[0.01, 1]`) against the deterministic cost trajectory |
+| `prob_condo_exceeds` / `prob_house_exceeds` / `prob_rent_exceeds` | Monte Carlo breach probability | share of paths on which ANY year's ratio exceeds the threshold, using the path's stochastic income (pay-drop `year_jitter_std`, `magnitude_vol` with the retained fraction clamped to `[0.01, 1]`) |
 
 ### Which risk decides it — `decomposition` (`--decompose`)
 

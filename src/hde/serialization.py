@@ -44,7 +44,10 @@ from .decomposition import (
     StructuralZero,
     channel as dc_channel,
 )
-from .market_scenario import LoadedScenarioPrior
+from .market_scenario import (
+    SCENARIOS, LoadedScenarioPrior, band_horizon_for_calendar_year, calendar_year_for_sim_year,
+)
+from .monte_carlo import _load_prior_if_any, crash_hazard
 from .land_transfer_tax import option_province, purchase_costs_clause
 from .mortgage_insurance import financing_clause
 from .models import (
@@ -1403,13 +1406,15 @@ def _share(p: float) -> str:
     return text
 
 
-def best_guess_lines(spec: ComparisonSpec) -> List[str]:
-    """Where the best guess and the futures time a risk differently
+def best_guess_lines(spec: ComparisonSpec,
+                     prior: Optional[LoadedScenarioPrior] = None) -> List[str]:
+    """Where the best guess and the model's schedule place a risk differently
     (2026-09-27): the best guess charges each event once, in the year the
     config places it, and fires neither the lease reset nor the price crash.
-    Every hazard-timed event gets the year it is charged, the share of futures
-    that fire it within the horizon and the year by which half of all futures
-    have (exact from `EventConfig.hazard_schedule`)."""
+    Every hazard-timed event gets the year it is charged, and from
+    `EventConfig.hazard_fire_facts` the chance it fires within the horizon and
+    the year that chance reaches one half; the reset and the crash get the
+    annual chance the model applies."""
     years = spec.simulation.years
     lines: List[str] = []
     for name in ("condo", "house", "rent"):
@@ -1418,21 +1423,35 @@ def best_guess_lines(spec: ComparisonSpec) -> List[str]:
             if event.timing_model != "hazard":
                 continue
             p, half = event.hazard_fire_facts(years)
-            when = (f"and half of all futures have by year {half}" if half is not None
-                    else "so fewer than half ever do")
+            when = (f"and that chance reaches one half by year {half}" if half is not None
+                    else "and that chance never reaches one half")
             lines.append(
                 f"best guess: {name}.events['{event.name}'] is charged in year "
-                f"{_event_year_deterministic(event, years)}; on its hazard {_share(p)} of "
-                f"futures fire it within the {years} years, {when}")
+                f"{_event_year_deterministic(event, years)}; on its hazard schedule the chance "
+                f"it fires within the {years} years is {_share(p)}, {when}")
     if spec.rent is not None and spec.rent.reset_hazard > 0:
-        lines.append(f"best guess: the rent is priced on a tenancy that never resets; the "
-                     f"futures reset it at {spec.rent.reset_hazard:.1%}/yr (rent.reset_hazard)")
+        lines.append(f"best guess: the rent is priced on a tenancy that never resets; on the "
+                     f"model's schedule it resets with a chance of "
+                     f"{_share(spec.rent.reset_hazard)} a year (rent.reset_hazard)")
     for name in _OWNED:
         option = getattr(spec, name)
-        if option is not None and option.price_shock is not None and option.price_shock.annual_hazard > 0:
-            lines.append(f"best guess: the {name} is priced with no price crash; the futures "
-                         f"draw one at {option.price_shock.annual_hazard:.1%}/yr "
-                         f"({name}.price_shock.annual_hazard)")
+        shock = option.price_shock if option is not None else None
+        if shock is None or shock.annual_hazard <= 0:
+            continue
+        if prior is None:
+            prior = _load_prior_if_any(spec)
+        key = f"{name}.price_shock.annual_hazard"
+        rates = [crash_hazard(shock, 1.0)]
+        if prior is not None:
+            rows = prior.rows_for_dwelling(name)
+            rates = [crash_hazard(shock, rows[(band_horizon_for_calendar_year(
+                         calendar_year_for_sim_year(year)), scenario)].drawdown_weight_tilt)
+                     for year in range(1, years + 1) for scenario in SCENARIOS]
+            key += " × the prior's drawdown_weight_tilt"
+        low, high = min(rates), max(rates)
+        rate = _share(low) if low == high else f"{_share(low)} to {_share(high)}"
+        lines.append(f"best guess: the {name} is priced with no price crash; on the model's "
+                     f"schedule a crash comes with a chance of {rate} a year ({key})")
     return lines
 
 
@@ -1564,7 +1583,7 @@ def _read_back_sections(
         ("mode", [line for line in echo if line.startswith("mode:")]
                  if spec.economic.mode == "nominal" else [], []),
         ("decisiveness", decisive, decisive),
-        ("best guess", best_guess_lines(spec), []),
+        ("best guess", best_guess_lines(spec, prior), []),
         ("financing", _option_lines(echo, "financing:"), []),
         # The renewal ladder (slice 1, 2026-09-21): a laddered run's payments
         # step, and the path that stepped them is a SCENARIO the user stated,

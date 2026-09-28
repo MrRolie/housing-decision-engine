@@ -65,7 +65,7 @@ from .tax_treatment import (
 # level and loads this module lazily, inside the call.
 from .unpriced import NEUTRAL, TOWARD_BUYING, TOWARD_RENTING
 from .deterministic import (
-    mortgage_leg_pv, renewals_priced_inside, renter_terminal_for,
+    _event_year_deterministic, mortgage_leg_pv, renewals_priced_inside, renter_terminal_for,
 )
 from .models import (
     ComparisonDeterministicResult,
@@ -1066,10 +1066,17 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
     return owned, renter, shared
 
 
+def event_widens(event: EventConfig, years: int) -> bool:
+    """Whether some future can place or cost this event differently from the
+    best guess: its cost is drawn, or the years its futures fire it are not
+    exactly the best guess's year. `single_path_run` and
+    `sources.uncertainty_inputs` both read this."""
+    return (event.cost_vol > 0
+            or event.fire_years(years) != {_event_year_deterministic(event, years)})
+
+
 def _stochastic_events(option: Any, years: int) -> bool:
-    """True when any of an option's events differs between futures: its fire
-    year is not a single point, or its cost is drawn."""
-    return any(event.cost_vol > 0 or event.fire_year_varies(years) for event in option.events)
+    return any(event_widens(event, years) for event in option.events)
 
 
 def affordability_warnings(det: "ComparisonDeterministicResult") -> List[str]:
@@ -2041,20 +2048,21 @@ def _event_refusals(option_name: str, events: List[EventConfig], years: int) -> 
         if event.max_year is not None and event.min_year > event.max_year:
             out.append(f"{key}.min_year ({event.min_year}) > max_year ({event.max_year})")
             continue
-        if event.expected_year < event.min_year or (
-                event.max_year is not None and event.expected_year > event.max_year):
-            window = f"[{event.min_year}, {event.max_year if event.max_year is not None else years}]"
-            out.append(f"{key}.expected_year ({event.expected_year}) is outside its window {window}")
-        if event.timing_model != "hazard":
-            continue
-        if event.hazard_start_year > years:
+        hazard = event.timing_model == "hazard"
+        if hazard and event.hazard_start_year > years:
             out.append(f"{key}.hazard_start_year ({event.hazard_start_year}) > years ({years}): "
                        f"no future fires it")
-        elif event.max_year is not None and event.hazard_start_year > event.max_year:
+            continue
+        if hazard and event.max_year is not None and event.hazard_start_year > event.max_year:
             out.append(f"{key}.hazard_start_year ({event.hazard_start_year}) > max_year "
                        f"({event.max_year}): no future fires it")
-        elif not any(h > 0 for _, h in event.hazard_schedule(years)):
-            first, last = event.fire_window(years)
+            continue
+        first, last = event.fire_window(years)
+        # validate_config refuses an expected_year past years on its own line.
+        if event.expected_year <= years and not first <= event.expected_year <= last:
+            out.append(f"{key}.expected_year ({event.expected_year}) is outside its window "
+                       f"[{first}, {last}]")
+        if hazard and not any(h > 0 for _, h in event.hazard_schedule(years)):
             out.append(f"{key}: timing_model hazard, but the hazard is 0 in every year it can "
                        f"fire [{first}, {last}]: no future fires it")
     return out
@@ -2166,8 +2174,6 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
             warnings.append(
                 f"Event '{event.name}' cost_distribution must be 'normal' or 'lognormal', got {event.cost_distribution}"
             )
-    # An event that cannot happen, or whose window contradicts itself, would be
-    # charged by the best guess and priced otherwise by the futures.
     for option_name, option in (("condo", spec.condo), ("house", spec.house), ("rent", spec.rent)):
         if option is not None:
             warnings.extend(_event_refusals(option_name, option.events, sim.years))

@@ -5,6 +5,7 @@ This module defines all the dataclasses used to represent parameters,
 configurations, and results throughout the simulation.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, List, Optional, Literal, Tuple
 
@@ -130,26 +131,38 @@ class EventConfig:
 
     def hazard_fire_facts(self, years: int) -> Tuple[float, Optional[int]]:
         """(the probability the event fires within the horizon, the first year
-        by which at least half of ALL futures have fired it — None when fewer
-        than half ever do), exact from `hazard_schedule`."""
+        by which that probability reaches one half — None when it never does),
+        from `hazard_schedule`. The probability is exactly 0 or 1 only when the
+        schedule makes it so, not when a float loses the difference."""
+        schedule = self.hazard_schedule(years)
         survive = 1.0
         half: Optional[int] = None
-        for year, hazard in self.hazard_schedule(years):
+        for year, hazard in schedule:
             survive *= 1.0 - hazard
             if half is None and 1.0 - survive >= 0.5:
                 half = year
-        return 1.0 - survive, half
+        p = 1.0 - survive
+        if p >= 1.0 and all(hazard < 1.0 for _, hazard in schedule):
+            p = math.nextafter(1.0, 0.0)
+        elif p <= 0.0 and any(hazard > 0.0 for _, hazard in schedule):
+            p = math.nextafter(0.0, 1.0)
+        return p, half
 
-    def fire_year_varies(self, years: int) -> bool:
-        """Whether the futures' fire year is not a single point. A hazard that
-        is 0 throughout never fires, and one whose first positive year is
-        certain always fires there; jitter varies only inside a window of more
-        than one year."""
+    def fire_years(self, years: int) -> FrozenSet[Optional[int]]:
+        """Every year in which some future fires this event, with None when
+        some future never does."""
         if self.timing_model == "hazard":
-            positive = [h for _, h in self.hazard_schedule(years) if h > 0]
-            return bool(positive) and positive[0] < 1.0
+            out: set = set()
+            for year, hazard in self.hazard_schedule(years):
+                if hazard > 0:
+                    out.add(year)
+                if hazard >= 1.0:
+                    return frozenset(out)
+            return frozenset(out | {None})
         first, last = self.fire_window(years)
-        return self.timing_std_years > 0 and first < last
+        if self.timing_std_years > 0 and first < last:
+            return frozenset(range(first, last + 1))
+        return frozenset({max(first, min(self.expected_year, last))})
 
 
 @dataclass

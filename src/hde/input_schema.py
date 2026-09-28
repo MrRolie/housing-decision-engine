@@ -24,7 +24,8 @@ _UNSOURCED_JURISDICTIONS = ", ".join(
 _EVENT_REFUSALS = (
     ". A hazard (timing_model: hazard) fires only from max(min_year, hazard_start_year) to "
     "min(max_year, years). REFUSED: two events with one name; min_year past years or above "
-    "max_year; expected_year outside [min_year, max_year]; a negative timing_std_years or "
+    "max_year; expected_year outside [min_year, max_year], or for a hazard outside the years "
+    "it can fire; a negative timing_std_years or "
     "cost_vol; a hazard whose hazard_start_year is past years or max_year, or that is 0 in "
     "every year it can fire")
 

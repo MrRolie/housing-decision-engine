@@ -615,6 +615,15 @@ def _band_growth_additive(prior_rows, drift_context, sim_year: int):
     return band_drift(row, zs[horizon])
 
 
+def crash_hazard(shock: PriceShockParams, tilt: float) -> float:
+    """The annual crash probability a path applies: `annual_hazard` times the
+    prior's `drawdown_weight_tilt` (1 without a prior)."""
+    # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
+    # the composed hazard is capped at certainty — the same clamp the event
+    # hazard channel applies (readiness plan C.7).
+    return min(shock.annual_hazard * tilt, 1.0)
+
+
 def _apply_price_shock(value_tracks, shock: PriceShockParams, tilt: float,
                        u: float, sev_z: float):
     """
@@ -635,10 +644,7 @@ def _apply_price_shock(value_tracks, shock: PriceShockParams, tilt: float,
     this engine's price risk
     (docs/specs/2026-09-21-one-world-simulation.md §2).
     """
-    # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
-    # the composed hazard is capped at certainty — the same clamp the event
-    # hazard channel applies (readiness plan C.7).
-    hazard = min(shock.annual_hazard * tilt, 1.0)
+    hazard = crash_hazard(shock, tilt)
     if hazard <= 0:
         return value_tracks
     if u < hazard:
@@ -1537,10 +1543,6 @@ def run_monte_carlo(
     # compares it against a per-path income. A lease reset and each event's
     # year change that array, so a path whose reset or event years differ from
     # the best guess's reads its own, built once per distinct combination.
-    # Without the reset the affordability report read one array for the whole
-    # run and said `prob_rent_exceeds: 0.0` on a config whose reset pushed the
-    # burden from 23.8% to 70.3% of income on 998 of 1,000 paths — a
-    # probability of zero for something close to certain.
     afford_by_path: dict = {}
     best_guess_years = {name: [_event_year_deterministic(e, sim.years) for e in opt.events]
                         for name, opt in (("condo", spec.condo), ("house", spec.house),

@@ -78,11 +78,13 @@ quoted and in use (2026-09-05); in nominal mode the `mode:` line — the
 discount rate stated and the rate in use, a real figure (the default, or one
 typed under `rates: real`) composed with `inflation_rate` or a quoted figure
 used as typed; the `decisiveness:` line; the `best guess:` lines — for each
-hazard-timed event the year the best guess charges it, the share of futures that
-fire it within the horizon and the year by which half of all futures have (or
-that fewer than half ever do), exact from its hazard schedule, and, when the
-futures draw them, that the best guess prices a tenancy that never resets and no
-price crash; each `<option> financing:` line and each `<option>
+hazard-timed event the year the best guess charges it and, on its hazard
+schedule, the chance it fires within the horizon and the year that chance
+reaches one half (or that it never does); when `rent.reset_hazard` or a
+`price_shock.annual_hazard` is above 0, that the best guess prices a tenancy
+that never resets or no price crash, with the annual chance the model applies
+(after a prior's `drawdown_weight_tilt`, as a range when it varies); each
+`<option> financing:` line and each `<option>
 purchase costs:` line; the `Year-1 cash` block (both sides in $/yr and $/mo,
 the principal repaid, the appreciation that is not cash) beside the PV view;
 each `<option> other costs:` line with its citation or `no anchor match`; the
