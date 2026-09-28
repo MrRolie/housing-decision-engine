@@ -1618,6 +1618,86 @@ def test_the_stated_figure_prints_on_the_side_this_run_reads_it():
     assert (texts, kept, dropped) == (["6.01%"], [], [wrong])
 
 
+def test_another_figure_inside_a_bracket_prints_on_the_side_it_reads():
+    """`_inside_sides`, constructed: a figure on the axis other than the
+    key's one stated figure keeps the side it lies on beside every crossing
+    whose bracket does not hold it, and the field is not read there; inside
+    one, it is equal to the crossing's figure where the field reads `was` at
+    it and above it where it reads `becomes`, and where it reads neither
+    that crossing is refused, naming what it read. On the axis, the figure
+    prints on those sides, and a refusal comes before the placing.
+    *Kills it:* a figure inside a bracket placed by where it lies alone, the
+    field read beside a crossing whose bracket does not hold it, or a
+    figure that reads neither state printed as the crossing's `was`."""
+    crossings = {2: ("mc_best", 0.0434, 0.0436, "house", "condo"),
+                 5: ("best", 0.05, 0.0500001, "house", "rent")}
+
+    def reads(states):
+        def field_at(field):
+            assert field == "mc_best", field
+            return states
+        return field_at
+
+    assert be._inside_sides(0.0435, crossings, reads("condo")) == ({2: 1, 5: -1}, None)
+    assert be._inside_sides(0.0435, crossings, reads("house")) == ({2: 0, 5: -1}, None)
+    assert be._inside_sides(0.0435, crossings, reads("rent")) == ({2: 0, 5: -1}, (2, (
+        "0.0435, a figure on this axis inside its bracket [0.0434, 0.0436], reads 'rent' "
+        "there, and the crossing changes from 'house' to 'condo'")))
+
+    def never(field):
+        raise AssertionError(f"{field} read beside a bracket that does not hold the figure")
+
+    assert be._inside_sides(0.0434, crossings, never) == ({2: -1, 5: -1}, None)
+    assert be._inside_sides(0.0436, crossings, never) == ({2: 1, 5: -1}, None)
+    assert be._inside_sides(0.0500001, crossings, never) == ({2: 1, 5: 1}, None)
+    axis = [(0.0434, 0.0436, "4.34%")]
+
+    def on_axis(states):
+        return be._ordered_axis([0.0435], axis, 0, None, lambda figure, kept: be._inside_sides(
+            0.0435, {i: crossings[2] for i in kept}, reads(states)))
+
+    assert on_axis("condo") == (["4.35%"], [0], [])
+    assert on_axis("house") == (["4.34%"], [0], [])
+    assert be._ordered_axis([0.0435], axis) == (["4.34%"], [0], [])
+    assert on_axis("rent") == (["4.35%"], [], [(0, (
+        "0.0435, a figure on this axis inside its bracket [0.0434, 0.0436], reads 'rent' "
+        "there, and the crossing changes from 'house' to 'condo'"))])
+
+
+@pytest.mark.parametrize("end", ["value", "upper_end"])
+def test_a_solved_boundary_whose_bracket_reads_another_state_is_refused(
+        two_option, end, monkeypatch):
+    """A solved boundary is emitted only where the central case says its
+    `was` at `value` and its `becomes` at `upper_end`, each end checked on
+    its own: the central case's winner moved at one end of the mortgage
+    example's crossing refuses that boundary by name, stating what the two
+    ends read, and leaves the rest of the row.
+    *Kills it:* either end unchecked, or a reason naming what was not read."""
+    raw, register = two_option
+    (row,) = register.exact
+    (best,) = [b for b in row.boundaries if b.verdict_field == "best"]
+    moved_to = best.becomes if end == "value" else best.was
+    real = be._ranking_at
+
+    def moved(doc, key, value):
+        got = real(doc, key, value)
+        return {**got, "best": moved_to} if value == getattr(best, end) else got
+
+    monkeypatch.setattr(be, "_ranking_at", moved)
+    spec = load_config_dict(raw)
+    (again,) = reversal_register(raw, compute_deterministic(spec), run_monte_carlo(spec)).exact
+    assert [b for b in again.boundaries if b.verdict_field != "best"] == [
+        b for b in row.boundaries if b.verdict_field != "best"]
+    assert [(r.verdict_field, r.code) for r in again.refused_boundaries
+            if r.verdict_field == "best"] == [("best", "not_bracketed")]
+    reads = (moved_to, best.becomes) if end == "value" else (best.was, moved_to)
+    (refused,) = [r for r in again.refused_boundaries if r.verdict_field == "best"]
+    assert refused.reason == (
+        f"best says {reads[0]!r} at {best.value!r} and {reads[1]!r} at {best.upper_end!r}, "
+        f"the two ends of the bracket its crossing from {best.was!r} to {best.becomes!r} "
+        f"converged in")
+
+
 def test_the_far_end_is_the_end_the_stated_figures_are_not_all_at():
     """`reversal_probe`: the bracket's high end, unless every figure the
     config states for the key is that end, where the probe would price the

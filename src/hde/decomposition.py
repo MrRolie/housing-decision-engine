@@ -415,6 +415,7 @@ BOUNDARY_REFUSAL_CODES: Tuple[str, ...] = (
     "scan_mismatch",
     "not_printable",
     "not_orderable",
+    "not_bracketed",
 )
 
 # Fields: docs/reference/API_CONTRACT.md § The `decomposition` block.
@@ -423,6 +424,7 @@ EDGE_REFUSAL_CODES: Tuple[str, ...] = (
     "unconfirmed",
     "not_printable",
     "not_orderable",
+    "not_bracketed",
 )
 
 NO_DISTANCE_CODES: Tuple[str, ...] = (

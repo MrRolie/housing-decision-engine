@@ -115,6 +115,7 @@ HEADS = {
     "scan_mismatch": "no boundary printed",
     "not_printable": "a boundary not printed",
     "not_orderable": "a boundary not printed",
+    "not_bracketed": "a boundary not printed",
 }
 
 
@@ -231,6 +232,12 @@ def _not_orderable(tmp_path, monkeypatch):
                             "0.06278717945831885, a figure on this axis")
 
 
+def _not_bracketed(tmp_path, monkeypatch):
+    got = run("three_way_tie")
+    return _printed_refusal(got.block, got.text, "house.mortgage_rate", "best",
+                            "best says 'condo' at 0.06272462043641129 and 'condo' at ")
+
+
 def _no_distance(name):
     def witness(tmp_path, monkeypatch):
         got = run(name)
@@ -288,6 +295,7 @@ WITNESSES = {
         "scan_mismatch": _scan_mismatch,
         "not_printable": _not_printable,
         "not_orderable": _not_orderable,
+        "not_bracketed": _not_bracketed,
     },
     "NO_DISTANCE_CODES": {
         "no_candidate": _no_distance("three"),

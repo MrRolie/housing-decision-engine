@@ -2151,10 +2151,39 @@ def _run_sides(value: float, crossings: Dict[int, Tuple[str, float, float, Any, 
     return sides, wrong
 
 
+def _inside_sides(value: float, crossings: Dict[int, Tuple[str, float, float, Any, Any]],
+                  reads: Callable[[str], Any],
+                  ) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
+    """`(sides, wrong)` for a figure on the axis other than the key's one
+    stated figure, `value`, beside `crossings`, each `(field, lower, upper,
+    was, becomes)` by its index: the side of each crossing it lies on, except
+    beside a crossing whose bracket holds it, where what `reads(field)` says
+    at `value` decides it, equal to its figure on `was` and above it on
+    `becomes`; and `(index, reason)` of the first crossing beside which it
+    reads neither, or None."""
+    sides = {index: _side(value, lower, upper)
+             for index, (_, lower, upper, _, _) in crossings.items()}
+    wrong: Optional[Tuple[int, str]] = None
+    for index, (field, lower, upper, was, becomes) in crossings.items():
+        if sides[index] != 0:
+            continue
+        there = reads(field)
+        if there == becomes:
+            sides[index] = 1
+        elif there != was and wrong is None:
+            wrong = (index, (
+                f"{value!r}, a figure on this axis inside its bracket [{lower!r}, "
+                f"{upper!r}], reads {there!r} there, and the crossing changes from "
+                f"{was!r} to {becomes!r}"))
+    return sides, wrong
+
+
 def _ordered_axis(figures: Sequence[float],
                   crossings: Sequence[Tuple[float, float, str]],
                   stated: int = 0,
                   run_sides: Optional[Callable[[List[int]], Tuple[
+                      Dict[int, int], Optional[Tuple[int, str]]]]] = None,
+                  other_sides: Optional[Callable[[int, List[int]], Tuple[
                       Dict[int, int], Optional[Tuple[int, str]]]]] = None,
                   ) -> Tuple[List[str], List[int], List[Tuple[int, str]]]:
     """`(texts, kept, refused)`: every figure in `figures` printed by
@@ -2162,21 +2191,26 @@ def _ordered_axis(figures: Sequence[float],
     indices), and `(index, reason)` for each crossing refused
     (`not_orderable`, §0.1 items 61 and 65), one at a time until none is.
     `run_sides(kept)` gives the first `stated` figures' side of each kept
-    crossing, and a crossing it names first is refused first. Otherwise the
-    first figure not placed beside every kept crossing is taken, and the
-    first crossing, in order, beside which with the crossings before it that
-    figure is not placed is refused."""
+    crossing, and `other_sides(figure, kept)` each later figure's; a crossing
+    either names is refused first, the stated figures' before the others'.
+    Otherwise the first figure not placed beside every kept crossing is
+    taken, and the first crossing, in order, beside which with the crossings
+    before it that figure is not placed is refused."""
     kept = list(range(len(crossings)))
     refused: List[Tuple[int, str]] = []
     while True:
         sides, wrong = run_sides(kept) if run_sides is not None else ({}, None)
+        others = ({figure: other_sides(figure, kept) for figure in range(stated, len(figures))}
+                  if other_sides is not None else {})
+        wrong = wrong or next((w for _, w in others.values() if w is not None), None)
         if wrong is not None:
             refused.append(wrong)
             kept.remove(wrong[0])
             continue
 
         def given(figure: int, indices: Sequence[int]) -> Optional[List[int]]:
-            return [sides[i] for i in indices] if figure < stated and sides else None
+            own = sides if figure < stated else others.get(figure, ({}, None))[0]
+            return [own[i] for i in indices] if own else None
 
         def place(figure: int, indices: Sequence[int]) -> Optional[str]:
             return ordered_figure(figures[figure], [crossings[i] for i in indices],
@@ -2645,6 +2679,16 @@ def _confirmed_boundaries(
             continue
         for entry in found:
             value = entry["value"]
+            if field in _DETERMINISTIC_FIELDS:
+                ends = [_ranking_at(raw, key, end)[field] for end in (value, entry["upper_end"])]
+                if ends != [entry["was"], entry["becomes"]]:
+                    refused.append(RefusedBoundary(
+                        verdict_field=field, code="not_bracketed", reason=(
+                            f"{field} says {ends[0]!r} at {value!r} and {ends[1]!r} at "
+                            f"{entry['upper_end']!r}, the two ends of the bracket its "
+                            f"crossing from {entry['was']!r} to {entry['becomes']!r} "
+                            f"converged in")))
+                    continue
             if free is None:
                 # No futures: the solved value stands on its own and nothing
                 # re-simulates it, which is what the empty corroboration says.
@@ -2686,16 +2730,23 @@ def _confirmed_boundaries(
             continue
         printed.append((field, entry, curve, confirmed, text))
 
+    def kept_crossings(kept: List[int]) -> Dict[int, Tuple[str, float, float, Any, Any]]:
+        return {i: (printed[i][0], printed[i][1]["value"], printed[i][1]["upper_end"],
+                    printed[i][1]["was"], printed[i][1]["becomes"]) for i in kept}
+
     def run_sides(kept: List[int]) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
         if not stated_count:
             return {}, None
-        return _run_sides(one_figure, {
-            i: (printed[i][0], printed[i][1]["value"], printed[i][1]["upper_end"],
-                printed[i][1]["was"], printed[i][1]["becomes"]) for i in kept}, says)
+        return _run_sides(one_figure, kept_crossings(kept), says)
+
+    def other_sides(figure: int,
+                    kept: List[int]) -> Tuple[Dict[int, int], Optional[Tuple[int, str]]]:
+        value = on_axis[figure]
+        return _inside_sides(value, kept_crossings(kept), lambda field: says_at(field)(value))
 
     texts, kept, dropped = _ordered_axis(
         on_axis, [(entry["value"], entry["upper_end"], text)
-                  for _, entry, _, _, text in printed], stated_count, run_sides)
+                  for _, entry, _, _, text in printed], stated_count, run_sides, other_sides)
     for index, reason in dropped:
         refused.append(RefusedBoundary(verdict_field=printed[index][0], code="not_orderable",
                                        reason=reason))

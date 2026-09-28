@@ -449,7 +449,7 @@ row lists are never ranked against each other.
 - `refused_boundaries[]`: `verdict_field`, `code` and `reason`: one for a field
   on which no boundary is printed, or one for a boundary of a field that is not
   printed while another of that field's may be, the codes `not_identified`,
-  `unconfirmed`, `not_printable` and `not_orderable`
+  `unconfirmed`, `not_printable`, `not_orderable` and `not_bracketed`
   (`decomposition.EDGE_REFUSAL_CODES`). `reason` is the measured fact, and
   `code` is `unchanged` when the field says what this run says at every point
   its scan read, `not_on_axis` when it says that at none of them,
@@ -462,7 +462,10 @@ row lists are never ranked against each other.
   `not_printable` when no precision prints the boundary's figure (below),
   `not_orderable` when a figure on the axis is not placed beside the boundary's
   figure, or the stated figure reads beside it a state other than the one the
-  field says in this run (below), `not_exact` on every field of an
+  field says in this run, or another figure between its `value` and `upper_end`
+  reads neither `was` nor `becomes` there (below), `not_bracketed` when on the
+  central case a solved boundary's field does not say its `was` at `value` or
+  its `becomes` at `upper_end`, `not_exact` on every field of an
   `estimated[]` row, and `no_futures` for a futures field on a run without
   futures. The sides of an `mc_best` boundary are computed from P(cheapest) of
   the options it names, and the sides of a `decisive` one from P(cheapest) of
@@ -577,7 +580,10 @@ at or below or inside and beside the nearest whose bracket it lies at or
 above. Otherwise its side of the first of those two is above it, or else its
 side of the second is at or below it, where it then reads what the field says
 beside that crossing and the next one past it; and otherwise the first of the
-two beside which it reads another state refuses with `not_orderable`. A figure
+two beside which it reads another state refuses with `not_orderable`. Any
+other figure that lies between a crossing's `value` and `upper_end` is above
+that crossing's figure instead where the field, evaluated at it as at the
+crossing's figure, says `becomes` there. A figure
 no such rounding places, which lies at or between a crossing's two ends,
 prints as that crossing's figure where that places it. Otherwise the first
 figure not placed beside every printed crossing is taken, and the first
@@ -628,7 +634,9 @@ Of the fields that are words, the widths with their sources and tags,
 `stated_formatted`, `path_note`, a reference's `formatted` and a solved
 boundary's `formatted` are the config's figures at a precision a sampled
 figure can widen, so their decimals are the sample's; a refused boundary's
-`code` and `reason` are the sample's; whether `spread` refuses with
+`code` and `reason` are the config's where its field is `best` or `runner_up`
+and its code `unchanged`, `not_on_axis`, `scan_mismatch` or `not_bracketed`,
+and the sample's otherwise; whether `spread` refuses with
 `no_sign_variation` is the sample's, and so is a whole-block refusal that
 fires once the block's futures are priced
 (`no_spread`, `budget` on `k`, `income_moved`, `one_channel`,

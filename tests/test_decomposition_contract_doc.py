@@ -37,7 +37,7 @@ from hde import monte_carlo
 from hde.anchors import ANCHORS
 from hde.break_even import REVERSAL_GATE_TOLERANCE, reversal_admission
 from hde.config import load_config_dict, single_path_run
-from hde.deterministic import renewal_segments_for
+from hde.deterministic import compute_deterministic, renewal_segments_for
 from hde.monte_carlo import run_monte_carlo
 from hde.rates import effective_mortgage_rate
 from hde.sweep import _fmt_value, flattened_path_note, stated_path
@@ -1926,6 +1926,19 @@ def _stated_reversal_keys(raw):
             for leaf in ("mortgage_renewal_rates", "mortgage_rate") if leaf in raw[option]]
 
 
+def _far_end_moves(raw, key):
+    """Each priced option's present value with `key` at the far end of its
+    bracket minus its value as stated, priced here and not by the register;
+    None where the loader refuses the far end."""
+    try:
+        far = compute_deterministic(be.load_at(raw, key, be.reversal_probe(raw, key)))
+    except (be.ConfigValidationError, be.RateConventionError, ValueError):
+        return None
+    base = compute_deterministic(load_config_dict(raw))
+    return {option: getattr(far, option).total_pv - getattr(base, option).total_pv
+            for option in ("condo", "house", "rent") if getattr(base, option) is not None}
+
+
 @claims("`reversal` — what would have to change for the verdict to change",
         "It carries `exact`, `estimated`, `refused`, `structural_zeros`,",
         "The keys searched are a financed option's `mortgage_rate` and",
@@ -1936,10 +1949,12 @@ def test_what_the_reversal_register_searches(runs):
     """§0.1 item 64, enumerated: on every run of the corpus that prints the
     block, each reversal key the config states is the key of exactly one
     row, in `refused` where moving it to the far end of its bracket moves no
-    present value and in `exact` where it does; the inert ladder beside an
-    admitted contract rate is a refused row, and its line prints.
+    present value and in `exact` where it does, by less than a dollar
+    included; each refused row prints its own line, in the order of
+    `refused`, the inert ladder beside an admitted contract rate included.
     *Kills it:* a stated key that no crossing moves dropped from the block,
-    a key filed twice, or a refused row filed where the key moves a value."""
+    a key filed twice, a refused row filed where the key moves a value, or
+    a refused row whose line does not print."""
     fixture = runs["fixture"].block["reversal"]
     assert set(fixture) == {"exact", "estimated", "refused", "structural_zeros",
                             "no_distance_code", "no_distance_reason"}
@@ -1957,9 +1972,16 @@ def test_what_the_reversal_register_searches(runs):
         stated = _stated_reversal_keys(run.raw)
         assert sorted(key for _, key in filed) == sorted(stated), name
         for kind, key in filed:
-            admitted, _ = reversal_admission(run.raw, key, be.reversal_probe(run.raw, key))
-            assert admitted == (kind != "refused"), (name, key)
+            moves = _far_end_moves(run.raw, key)
+            refused = moves is None or all(delta == 0.0 for delta in moves.values())
+            assert refused == (kind == "refused"), (name, key, moves)
             seen.add(kind)
+        rows = reversal["refused"] or ([] if reversal["exact"] or reversal["estimated"] else [
+            {"code": reversal["no_distance_code"], "reason": reversal["no_distance_reason"]}])
+        assert [line for line in run.text.splitlines()
+                if line.startswith("  WHAT WOULD HAVE TO CHANGE — not solved")] == [
+            f"  WHAT WOULD HAVE TO CHANGE — not solved ({row['code']}): {row['reason']}"
+            for row in rows], name
     assert seen == {"exact", "refused"}
     run = runs["inert_ladder"]
     reversal = run.block["reversal"]
@@ -1968,6 +1990,21 @@ def test_what_the_reversal_register_searches(runs):
     assert row["key"] == "house.mortgage_renewal_rates"
     assert [line for line in run.text.splitlines() if row["key"] in line] == [
         f"  WHAT WOULD HAVE TO CHANGE — not solved (not_admitted): {row['reason']}"]
+    # a house bought outright: both of its keys are refused, and each prints
+    run = runs["two_refused"]
+    reversal = run.block["reversal"]
+    assert reversal["exact"] == [] and reversal["estimated"] == []
+    assert [r["key"] for r in reversal["refused"]] == ["house.mortgage_renewal_rates",
+                                                       "house.mortgage_rate"]
+    for row in reversal["refused"]:
+        assert [line for line in run.text.splitlines() if row["key"] in line] == [
+            f"  WHAT WOULD HAVE TO CHANGE — not solved (not_admitted): {row['reason']}"]
+    # a loan of one dollar: the contract rate moves the house by under a dollar
+    run = runs["one_dollar_loan"]
+    (row,) = run.block["reversal"]["exact"]
+    assert row["key"] == "house.mortgage_rate" and run.block["reversal"]["refused"] == []
+    moves = _far_end_moves(run.raw, row["key"])
+    assert 0.0 < abs(moves["house"]) < 1.0 and moves["rent"] == 0.0
     # stated at the high end, the key is moved to the low end, where it moves
     # the house's present value; at the high end it prices the config itself
     run = runs["stated_at_the_bracket_high_end"]
@@ -2079,6 +2116,21 @@ def _on_the_axis(value, crossings, sides=None):
         if lower <= value <= upper and placed(printed):
             return printed
     return None
+
+
+def _figure_sides(value, row, run):
+    """The side of each of `row`'s printed crossings a figure other than the
+    key's one stated figure prints on, as the contract says: the side it lies
+    on, and above a crossing whose bracket holds it where `--sweep` at it
+    reads that crossing's `becomes`."""
+    sides = []
+    for b in row["boundaries"]:
+        lies = -1 if value <= b["value"] else (1 if value >= b["upper_end"] else 0)
+        if lies == 0:
+            (there,) = _sweep_states(run.path, row["key"], [value], "curve_paths" in b)
+            lies = 1 if there[b["verdict_field"]] == b["becomes"] else 0
+        sides.append(lies)
+    return sides
 
 
 def _stated_sides(value, row, run):
@@ -2231,11 +2283,12 @@ def test_an_estimated_row_carries_no_boundary(monkeypatch):
 
 
 # The runs whose crossings are read against `--sweep` here: the shipped
-# examples, and each witness of a figure on a crossing's axis (§0.1 items 54
-# and 60).
+# examples, each witness of a figure on a crossing's axis (§0.1 items 54
+# and 60), and one whose solved brackets' ends read other states.
 _CROSSING_RUNS = ("fixture", "mortgage", "decisive_step", "decisive_step_lower",
                   "stated_just_below", "stated_just_below_b", "crossing_below_a_step",
-                  "stated_between", "stated_beside_crossing", "sliver_low", "sliver_high")
+                  "stated_between", "stated_beside_crossing", "sliver_low", "sliver_high",
+                  "three_way_tie")
 
 
 @claims("`boundaries[]`: `verdict_field`, `value`, `upper_end`, `formatted`, `was`,",
@@ -2248,9 +2301,11 @@ def test_every_boundary_reads_upward_against_a_sweep(runs):
     """`was` at `value` and `becomes` at `upper_end`, read by `--sweep` (with
     the run's own futures for a bisected boundary), and the two ends as close
     as the contract says: adjacent floats for a solved boundary, less than
-    1e-12 apart for a bisected one.
+    1e-12 apart for a bisected one. No run but the tie's refuses a solved
+    boundary with `not_bracketed`.
     *Kills it:* a boundary reported at a bracket's midpoint or at a solver's
-    stopping tolerance, or a tie counted on the wrong side of it."""
+    stopping tolerance, a tie counted on the wrong side of it, or the state
+    past an edge read on another stretch than the next."""
     solved = sampled = 0
     for name in _CROSSING_RUNS:
         run = runs[name]
@@ -2276,6 +2331,12 @@ def test_every_boundary_reads_upward_against_a_sweep(runs):
                     assert re.fullmatch(r"decisive for \w+|not decisive", boundary["was"])
                 assert f"as it rises past {boundary['formatted']}, " in run.text
     assert solved and sampled
+    # a solved boundary whose bracket's ends read other states is refused on
+    # the one run where three present values tie within a few floats, and on
+    # no other run of the corpus
+    assert {name for name, run in runs.items() if "refusal" not in run.block
+            for row in run.block["reversal"]["exact"] for refused in row["refused_boundaries"]
+            if refused["code"] == "not_bracketed"} == {"three_way_tie"}
 
 
 @claims("`confirming_probabilities` is each option's probability of being cheapest",
@@ -2460,7 +2521,8 @@ def test_the_refused_fields_and_the_references(runs):
                 want = (effective_mortgage_rate(published, "semi_annual") if converted
                         else published)
                 assert ref["value"] == want
-                assert ref["formatted"] == _on_the_axis(ref["value"], _printed_crossings(row))
+                assert ref["formatted"] == _on_the_axis(
+                    ref["value"], _printed_crossings(row), _figure_sides(ref["value"], row, run))
                 assert ref["note"] == (f"published as {_fmt_value(row['key'], published)} "
                                        f"compounded semi-annually" if converted else None)
     assert refused
@@ -3001,6 +3063,7 @@ def _percent(text):
         "A figure on the axis is each stated figure, each reference's `value` and the rate",
         "It prints as `--sweep` prints it, at two decimals of a percent to the nearest,",
         "Its side is at or below the crossing's figure when it lies at or",
+        "other figure that lies between a crossing's `value` and `upper_end` is above",
         "A figure no such rounding places, which lies at or between a crossing's two ends,",
         "Otherwise the first figure not placed beside every printed crossing is taken")
 def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch):
@@ -3027,7 +3090,12 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
                                   "stated_at_the_bracket_high_end",
                                   "ladder_just_under_a_crossing",
                                   "reference_beside_a_crossing", "decisive_for_another",
-                                  "decisive_for_the_house"):
+                                  "decisive_for_the_house", "sampled_just_above_its_figure",
+                                  "solved_just_above_its_figure",
+                                  "sampled_was_just_under_its_figure",
+                                  "solved_was_just_under_its_figure",
+                                  "reference_inside_a_sampled_crossing",
+                                  "path_figure_inside_a_sampled_crossing"):
         run = runs[name]
         for row in run.block["reversal"]["exact"]:
             option, leaf = row["key"].split(".", 1)
@@ -3063,10 +3131,12 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
                     widened += 1
             crossings = _printed_crossings(row)
             assert row["stated_formatted"].split(", ") == [
-                _on_the_axis(v, crossings, _stated_sides(v, row, run) if one else None)
+                _on_the_axis(v, crossings, _stated_sides(v, row, run) if one
+                             else _figure_sides(v, row, run))
                 for v in values]
             for ref in row["references"]:
-                assert ref["formatted"] == _on_the_axis(ref["value"], crossings)
+                assert ref["formatted"] == _on_the_axis(
+                    ref["value"], crossings, _figure_sides(ref["value"], row, run))
     assert widened
     # crossings a few hundredths of a percent inside the bracket's low end
     # print, at their kind's own precision: a floored figure is passed over
@@ -3101,8 +3171,12 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
     # floored from the bracket's lower end, never its middle: the mortgage
     # example's central-case crossings moved onto a bracket whose middle float
     # is the first four-decimal figure above the crossing, where the field no
-    # longer says `was`, and whose lower end floors one step below it
+    # longer says `was`, and whose lower end floors one step below it; the
+    # central case at the moved lower end reads what it reads at the
+    # crossing's own
     real = be.solve_crossings
+    real_ranking = be._ranking_at
+    moved = {}
 
     def onto_a_figure(*args, **kwargs):
         solved = real(*args, **kwargs)
@@ -3113,10 +3187,13 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
             if decimal.Decimal(middle) < grid:
                 middle = math.nextafter(middle, 1.0)
             lower = math.nextafter(middle, 0.0)
+            moved[lower] = entry["value"]
             entry["value"], entry["bracket"] = lower, [lower, math.nextafter(middle, 1.0)]
         return solved
 
     monkeypatch.setattr(be, "solve_crossings", onto_a_figure)
+    monkeypatch.setattr(be, "_ranking_at", lambda raw, key, value: real_ranking(
+        raw, key, moved.get(value, value)))
     code, out, _ = _cli(MORTGAGE, "--decompose", "200", "--json")
     assert code == 0
     (row,) = _strict(out)["decomposition"]["reversal"]["exact"]
@@ -3185,6 +3262,77 @@ def test_a_printed_figure_on_a_crossing_s_axis_is_on_its_side(runs, monkeypatch)
                                         f"lower end of its bracket [{stated!r}, ")
     assert {b["verdict_field"] for b in row["boundaries"]} == {"best", "runner_up"}
     assert row["stated_formatted"] == _on_the_axis(stated, _printed_crossings(row))
+
+
+def test_a_crossing_s_figure_is_checked_at_that_figure(runs):
+    """§0.1 items 54 and 60, a billionth of the figure either side of it.
+    Where the field reads the crossing's `becomes` a billionth of the figure
+    above the printed figure, the crossing still prints, at its kind's own
+    precision; where it reads a state other than `was` a billionth below, the
+    crossing prints no finer than there. A sampled and a solved crossing each
+    way.
+    *Kills it:* the printed-rate check reading the field anywhere but at the
+    printed figure."""
+    for name, field, formatted, line in (
+            ("sampled_just_above_its_figure", "decisive", "6.23%",
+             "sampled on 400 paths at seed 42: as it rises past 6.23%, the decisiveness "
+             "verdict changes from decisive for house to not decisive (and changes again "
+             "above it, inside the bracket)"),
+            ("solved_just_above_its_figure", "best", "6.2700%",
+             "solved on the central case: as it rises past 6.2700%, the central case's "
+             "winner changes from house to rent"),
+            ("sampled_was_just_under_its_figure", "decisive", "6.28%",
+             "sampled on 400 paths at seed 42: as it rises past 6.28%, the decisiveness "
+             "verdict changes from not decisive to decisive for rent (and changes again "
+             "below it, inside the bracket)"),
+            ("solved_was_just_under_its_figure", "runner_up", "6.2700%",
+             "solved on the central case: as it rises past 6.2700%, the runner-up changes "
+             "from house to rent (and changes again below it, inside the bracket)")):
+        run = runs[name]
+        (row,) = run.block["reversal"]["exact"]
+        assert f"      {line}" in run.text.splitlines(), name
+        (boundary,) = [b for b in row["boundaries"]
+                       if b["verdict_field"] == field and b["formatted"] == formatted]
+        figure = _percent(formatted)
+        at, above, below = _sweep_states(run.path, row["key"],
+                                         [figure, figure * (1 + 1e-9), figure * (1 - 1e-9)],
+                                         "curve_paths" in boundary)
+        assert at[field] == boundary["was"], name
+        if "above" in name:
+            assert above[field] == boundary["becomes"], name
+        else:
+            assert below[field] != boundary["was"], name
+
+
+def test_another_figure_inside_a_crossing_s_bracket_prints_on_the_side_it_reads(runs):
+    """A figure on the axis other than the key's one stated figure, inside a
+    sampled crossing's bracket where the run's futures read that crossing's
+    `becomes`, prints above the crossing's figure: the contracted rate the
+    fixture states and cites prints as the stated rate does, and the first
+    rate of a ladder above the crossing it lies inside.
+    *Kills it:* such a figure placed by where it lies alone, printed as the
+    crossing's own figure and so read as its `was`."""
+    for name, key in (("reference_inside_a_sampled_crossing", "house.mortgage_rate"),
+                      ("path_figure_inside_a_sampled_crossing",
+                       "house.mortgage_renewal_rates")):
+        run = runs[name]
+        (row,) = [r for r in run.block["reversal"]["exact"] if r["key"] == key]
+        if key == "house.mortgage_rate":
+            (reference,) = [r for r in row["references"]
+                            if r["value"] == run.raw["house"]["mortgage_rate"]]
+            value, printed = reference["value"], reference["formatted"]
+            assert printed == row["stated_formatted"]
+            assert (f"on the same axis: {reference['label']} {printed} "
+                    f"[{reference['anchor']}]") in run.text
+        else:
+            value = run.raw["house"]["mortgage_renewal_rates"][0]
+            printed = row["stated_formatted"].split(", ")[0]
+        (boundary,) = [b for b in row["boundaries"]
+                       if "curve_paths" in b and b["value"] < value < b["upper_end"]]
+        (there,) = _sweep_states(run.path, key, [value], True)
+        assert there[boundary["verdict_field"]] == boundary["becomes"], name
+        assert decimal.Decimal(printed.rstrip("%")) > decimal.Decimal(
+            boundary["formatted"].rstrip("%")), (name, printed, boundary["formatted"])
 
 
 @claims("The stated figure, where the config states the key as one figure, a path of",
@@ -3515,15 +3663,52 @@ def test_the_partition_of_the_numbers_is_whole(runs, tmp_path):
     assert [r["widths"] for r in a_run.block["spread"]["rows"]] == [
         r["widths"] for r in b_run.block["spread"]["rows"]]
 
+    # a refused boundary's words: the config's on the two solved fields under
+    # the codes the contract names, and the sample's otherwise
+    named = re.search(r"a refused boundary's `code` and `reason` are the config's where its "
+                      r"field is `best` or `runner_up` and its code (?P<codes>.+?), and the "
+                      r"sample's otherwise;", words)
+    config_codes = set(re.findall(r"`(\w+)`", named["codes"]))
+    # the codes decided on the central case alone, with no path read
+    assert config_codes == {"unchanged", "not_on_axis", "scan_mismatch", "not_bracketed"}
+
+    def config_refusal(f):
+        return f["verdict_field"] in ("best", "runner_up") and f["code"] in config_codes
+
     def config_words(block):
         reversal = block["reversal"]
         return ([(r["key"], r["stated_source"], r["stated_tag"], r["bracket_source"],
                   [(b["verdict_field"], b["was"], b["becomes"], b["further_changes"])
-                   for b in r["boundaries"] if "seed" not in b])
+                   for b in r["boundaries"] if "seed" not in b],
+                  [(f["verdict_field"], f["code"], f["reason"]) for f in r["refused_boundaries"]
+                   if config_refusal(f)])
                  for r in reversal["exact"]],
                 reversal["no_distance_code"], reversal["no_distance_reason"])
 
     assert config_words(a_run.block) == config_words(b_run.block)
+    assert any(words[5] for words in config_words(a_run.block)[0])
+    # the refused boundaries filed with the sample: on 150 futures, one
+    # refused at one seed is not refused at another
+    few = copy.deepcopy(a_run.raw)
+    few["simulation"]["num_sims"] = 150
+    one = Run(few, "100").materialise(tmp_path / "seed_42")
+    few["simulation"]["random_seed"] = 10
+    other = Run(few, "100").materialise(tmp_path / "seed_10")
+
+    def sample_words(block):
+        return [(r["key"], f["verdict_field"], f["code"], f["reason"])
+                for r in block["reversal"]["exact"] for f in r["refused_boundaries"]
+                if not config_refusal(f)]
+
+    assert config_words(one.block) == config_words(other.block)
+    assert sample_words(one.block) != sample_words(other.block)
+    # and a boundary whose bracket's ends read other states, at a second seed
+    tie = runs["three_way_tie"]
+    reseeded_tie = copy.deepcopy(tie.raw)
+    reseeded_tie["simulation"]["random_seed"] = 42
+    tie_again = Run(reseeded_tie, "100").materialise(tmp_path / "tie_at_42")
+    assert config_words(tie.block) == config_words(tie_again.block)
+    assert {f[1] for words in config_words(tie.block)[0] for f in words[5]} >= {"not_bracketed"}
 
 
 @claims("A figure that changes with `simulation.random_seed` or with `N` is a property")

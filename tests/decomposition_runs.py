@@ -328,6 +328,12 @@ DECISIVE_FOR_ANOTHER = {
     "simulation": {"num_sims": 400, "random_seed": 7, "condo_fee_vol": 4.0,
                    "house_maintenance_vol": 0.02, "rent_escalation_vol": 0.005},
 }
+# The same three options with the condo's contract rate two floats under its
+# own solved crossing: on the house's contract rate, the central case's winner
+# at the lower end of a solved crossing's bracket is not the one the stretch
+# below that crossing reads.
+THREE_WAY_TIE = copy.deepcopy(DECISIVE_FOR_ANOTHER)
+THREE_WAY_TIE["condo"]["mortgage_rate"] = 0.04999962040678628
 # The fixture with a dearer house on 60 futures: the renewal ladder's
 # decisiveness crossing is decisive for the house while this run's winner is
 # rent.
@@ -339,6 +345,54 @@ del DECISIVE_FOR_THE_HOUSE["sources"]["house.other_recurring_costs.property_tax.
 # states moves no present value (spec §0.1 item 64).
 INERT_LADDER = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
 INERT_LADDER["house"]["mortgage_renewal_years"] = 25
+# A figure on the axis other than the stated one, inside a sampled crossing's
+# bracket where the futures read that crossing's `becomes` (spec §0.1 item
+# 60): the contracted rate the fixture states and cites, beside renewals at one
+# rate, and the first rate of a ladder.
+REFERENCE_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+REFERENCE_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_renewal_rates"] = [
+    0.027164030806393624] * 4
+PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING["house"]["mortgage_renewal_rates"] = [
+    0.02716403080667974, 0.05, 0.048, 0.02954943580452318]
+# A house bought outright beside a ladder it states: neither of its two
+# financing keys moves a present value, so both are refused rows.
+TWO_REFUSED = {
+    "years": 20,
+    "economic": {"mode": "nominal", "inflation_rate": 0.021},
+    "house": {"initial_value": 550000, "down_payment": 550000, "mortgage_rate": 0.044,
+              "mortgage_rate_compounding": "effective_annual", "mortgage_term_years": 25,
+              "mortgage_renewal_years": 5, "mortgage_renewal_rates": [0.05, 0.055],
+              "purchase_costs": 8200, "value_growth_rate": 0.031,
+              "annual_maintenance_rate": 0.01},
+    "rent": {"monthly_rent": 2300, "rent_escalation_rate": 0.031,
+             "invested_down_payment": 550000, "investment_return_rate": 0.051},
+    "simulation": {"num_sims": 300, "random_seed": 42, "house_maintenance_vol": 0.3,
+                   "rent_escalation_vol": 0.01},
+}
+# The same house on a loan of one dollar: its contract rate moves the house's
+# present value by less than a dollar, and it is an exact row.
+ONE_DOLLAR_LOAN = copy.deepcopy(TWO_REFUSED)
+del ONE_DOLLAR_LOAN["house"]["mortgage_renewal_years"]
+del ONE_DOLLAR_LOAN["house"]["mortgage_renewal_rates"]
+ONE_DOLLAR_LOAN["house"]["down_payment"] = 549999
+ONE_DOLLAR_LOAN["rent"]["invested_down_payment"] = 549999
+# A crossing whose figure is checked AT that figure (spec §0.1 items 54 and
+# 60): a billionth of the figure above it, the field reads the crossing's
+# `becomes`, a sampled crossing's and a solved one's.
+SAMPLED_JUST_ABOVE_ITS_FIGURE = copy.deepcopy(DECISIVE_STEP)
+SAMPLED_JUST_ABOVE_ITS_FIGURE["rent"]["monthly_rent"] = 2299.343123435974
+SOLVED_JUST_ABOVE_ITS_FIGURE = copy.deepcopy(DECISIVE_STEP)
+SOLVED_JUST_ABOVE_ITS_FIGURE["rent"]["monthly_rent"] = 2299.199459552765
+# And a billionth of the figure below it, a state other than the crossing's
+# `was`.
+SAMPLED_WAS_JUST_UNDER_ITS_FIGURE = copy.deepcopy(SLIVER_LOW)
+SAMPLED_WAS_JUST_UNDER_ITS_FIGURE["rent"]["monthly_rent"] = 2303.615429943832
+SOLVED_WAS_JUST_UNDER_ITS_FIGURE = copy.deepcopy(DECISIVE_STEP_LOWER)
+SOLVED_WAS_JUST_UNDER_ITS_FIGURE["rent"]["monthly_rent"] = 2299.21875
+SOLVED_WAS_JUST_UNDER_ITS_FIGURE["condo"] = {
+    "monthly_fee": 1211.688020825386, "fee_escalation_rate": 0.031, "initial_value": 400000,
+    "all_cash": True, "purchase_costs": 6000, "value_growth_rate": 0.031}
 # Level rows a fraction of a dollar each (spec §0.1 item 62's witness): at
 # whole dollars no row's pair shows its judgment.
 LEVEL_UNDER_A_DOLLAR = {
@@ -761,8 +815,18 @@ CORPUS = {
     # A decisiveness crossing identified on its own option (spec §0.1 item
     # 63), and a stated key no crossing moves (item 64).
     "decisive_for_another": (DECISIVE_FOR_ANOTHER, "100"),
+    "three_way_tie": (THREE_WAY_TIE, "100"),
     "decisive_for_the_house": (DECISIVE_FOR_THE_HOUSE,),
     "inert_ladder": (INERT_LADDER, "300"),
+    "two_refused": (TWO_REFUSED,),
+    "one_dollar_loan": (ONE_DOLLAR_LOAN,),
+    # A crossing's figure, checked at that figure (items 54 and 60).
+    "sampled_just_above_its_figure": (SAMPLED_JUST_ABOVE_ITS_FIGURE,),
+    "solved_just_above_its_figure": (SOLVED_JUST_ABOVE_ITS_FIGURE,),
+    "sampled_was_just_under_its_figure": (SAMPLED_WAS_JUST_UNDER_ITS_FIGURE,),
+    "solved_was_just_under_its_figure": (SOLVED_WAS_JUST_UNDER_ITS_FIGURE,),
+    "reference_inside_a_sampled_crossing": (REFERENCE_INSIDE_A_SAMPLED_CROSSING, "300"),
+    "path_figure_inside_a_sampled_crossing": (PATH_FIGURE_INSIDE_A_SAMPLED_CROSSING, "300"),
     # A level row's digits (spec §0.1 item 62).
     "pull_nothing": (CORRELATIONS_PULL_NOTHING,),
     "level_under_a_dollar": (LEVEL_UNDER_A_DOLLAR,),
