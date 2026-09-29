@@ -343,6 +343,11 @@ hosted. Parked deliberately, not forgotten.
   pull far is `cost_distribution: normal`, whose zero floor lifts the mean cost by +0.42% at
   `cost_vol` 0.5, +8.3% at 1.0 and +39.6% at 2.0 (analytic): on a $15,000 event in year 8,
   +$987 at 1.0 and +$4,684 at 2.0 (analytic).
+- Two figures print wider than the figure typed. The uncertainty-inputs warning prints a
+  fractional value with `:g` (`sources._number`), so a `hazard_base` of 0.9999999999 reads
+  `hazard_base 1`, a certain event; this predates the events change. The best-guess line prints
+  an annual chance at one decimal (`serialization._share`), so a `reset_hazard` of 0.0005 reads
+  `a chance of 0.1% a year`, twice the figure typed; this came with the events change.
 
 ## 11. Measure the engine again
 
