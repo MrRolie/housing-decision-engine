@@ -3182,6 +3182,33 @@ def test_a_decisive_step_where_the_winner_changes_is_identified(runs):
     assert not any(r["verdict_field"] == "decisive" for r in row["refused_boundaries"])
 
 
+def test_every_decisiveness_step_at_a_winner_change_prints(runs):
+    """§0.1 item 68 on a rendered run: each of the four decisiveness
+    crossings on the two-ladder config lies where the central case's winner
+    changes, so each prints, two of them running out of decisiveness and two
+    into it, and no decisiveness boundary on it is refused.
+    *Kills it:* item 68's rule narrowed to probabilities that do not move, to
+    probabilities inside their noise, or to steps out of decisiveness; each
+    refuses one of these lines as `not_identified`."""
+    run = runs["winners_steps_on_two_ladders"]
+    lines = run.text.splitlines()
+    for key, figure, was, becomes in [
+        ("condo.mortgage_renewal_rates", "3.19%", "decisive for condo", "not decisive"),
+        ("condo.mortgage_rate", "3.80%", "decisive for condo", "not decisive"),
+        ("house.mortgage_renewal_rates", "5.77%", "not decisive", "decisive for condo"),
+        ("house.mortgage_rate", "8.82%", "not decisive", "decisive for condo"),
+    ]:
+        (row,) = [r for r in run.block["reversal"]["exact"] if r["key"] == key]
+        (boundary,) = [b for b in row["boundaries"] if b["verdict_field"] == "decisive"]
+        assert (boundary["formatted"], boundary["was"], boundary["becomes"]) == (figure, was, becomes)
+        assert (f"      sampled on 400 paths at seed 7: as it rises past {figure}, the "
+                f"decisiveness verdict changes from {was} to {becomes}") in lines, key
+        sides = [end["best"] for end in _sweep_states(
+            run.path, key, [boundary["value"], boundary["upper_end"]], True)]
+        assert sides[0] != sides[1], key
+        assert not any(r["verdict_field"] == "decisive" for r in row["refused_boundaries"]), key
+
+
 @claims("A table's rows print resolved rows first, each group largest first")
 def test_the_rows_print_resolved_first_each_group_largest_first():
     """Over every render: the spread table's rows are the JSON's sorted

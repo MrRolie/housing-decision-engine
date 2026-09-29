@@ -286,6 +286,15 @@ ONE_MOVES_ONE_FLAT["simulation"].update({"condo_fee_vol": 5.5, "house_maintenanc
 DECISIVE_AT_THE_WINNERS_STEP = copy.deepcopy(DECISIVE_FOR_ANOTHER)
 DECISIVE_AT_THE_WINNERS_STEP["years"] = 16
 DECISIVE_AT_THE_WINNERS_STEP["simulation"]["random_seed"] = 4
+# The same over sixteen years with a renewal ladder stated on each owned
+# option: four decisiveness crossings where the central case's winner
+# changes, two of them steps into decisiveness (spec §0.1 item 68).
+WINNERS_STEPS_ON_TWO_LADDERS = copy.deepcopy(DECISIVE_FOR_ANOTHER)
+WINNERS_STEPS_ON_TWO_LADDERS["years"] = 16
+WINNERS_STEPS_ON_TWO_LADDERS["condo"].update(
+    {"mortgage_renewal_years": 5, "mortgage_renewal_rates": [0.03, 0.06]})
+WINNERS_STEPS_ON_TWO_LADDERS["house"].update(
+    {"mortgage_renewal_years": 5, "mortgage_renewal_rates": [0.055, 0.045]})
 # The same three options with the condo's contract rate two floats under its
 # own solved crossing: on the house's contract rate, the central case's winner
 # at the lower end of a solved crossing's bracket is not the one the stretch
@@ -778,6 +787,7 @@ CORPUS = {
     # And two crossings where the central case's winner changes (item 68).
     "one_moves_one_flat": (ONE_MOVES_ONE_FLAT, "100"),
     "decisive_at_the_winners_step": (DECISIVE_AT_THE_WINNERS_STEP, "100"),
+    "winners_steps_on_two_ladders": (WINNERS_STEPS_ON_TWO_LADDERS, "100"),
     "three_way_tie": (THREE_WAY_TIE, "100"),
     "decisive_for_the_house": (DECISIVE_FOR_THE_HOUSE,),
     "inert_ladder": (INERT_LADDER, "300"),

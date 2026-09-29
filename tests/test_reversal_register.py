@@ -1639,6 +1639,40 @@ def test_a_decisiveness_step_between_two_options_is_identified():
     assert record(("condo", "house"), becomes="decisive for condo")["identified"] is False
 
 
+@pytest.mark.parametrize("lo, hi, was, becomes", [
+    # Both probabilities move, each inside its own noise.
+    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075},
+     "decisive for condo", "not decisive"),
+    # One clears its noise and the other does not.
+    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0175},
+     "decisive for condo", "not decisive"),
+    # Both clear their noise.
+    ({"condo": 0.90, "house": 0.10}, {"condo": 0.70, "house": 0.30},
+     "decisive for condo", "not decisive"),
+    # A step INTO decisiveness, inside the noise.
+    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075},
+     "not decisive", "decisive for condo"),
+], ids=["both-inside-noise", "one-clears", "both-clear", "into-decisiveness"])
+def test_every_decisiveness_step_between_two_options_is_identified(lo, hi, was, becomes):
+    """§0.1 item 68 for its whole class: whatever the probabilities do across
+    the bracket, and whichever way the step runs, a `decisive` boundary whose
+    two states differ and whose sides are computed from two options is
+    identified. The same figures on one option are held to the noise rule.
+    *Kills it:* the rule narrowed to flat probabilities, to probabilities
+    that all stay inside their noise, or to steps out of decisiveness."""
+    probs = {"lo": lo, "hi": hi, "at": {"condo": 0.995, "house": 0.005}}
+
+    def record(computed_from):
+        return be._identification({"attribute": "decisive", "computed_from": computed_from,
+                                   "was": was, "becomes": becomes}, probs, 400)
+
+    got = record(("condo", "house"))
+    assert got["identified"] is True and got["why"] is None
+    assert any(row["delta_p"] > 0.0 for row in got["watched"])
+    one = record(("condo", "condo"))
+    assert one["identified"] is (one["watched"][0]["delta_p"] > one["watched"][0]["two_se"])
+
+
 def test_a_boundary_with_no_probability_is_not_identified():
     record = be._identification({"computed_from": ("condo", "house")},
                                 {"lo": {}, "hi": {}, "at": {}}, 100)
