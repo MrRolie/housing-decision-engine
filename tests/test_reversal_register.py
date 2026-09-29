@@ -1639,28 +1639,41 @@ def test_a_decisiveness_step_between_two_options_is_identified():
     assert record(("condo", "house"), becomes="decisive for condo")["identified"] is False
 
 
-@pytest.mark.parametrize("lo, hi, was, becomes", [
+_AT_THE_STEP = {"condo": 0.995, "house": 0.005}
+
+
+@pytest.mark.parametrize("lo, hi, at, was, becomes", [
     # Both probabilities move, each inside its own noise.
-    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075},
+    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075}, _AT_THE_STEP,
      "decisive for condo", "not decisive"),
-    # One clears its noise and the other does not.
-    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0175},
-     "decisive for condo", "not decisive"),
+    # One clears its noise, by 1.06 times it, and the other does not.
+    ({"condo": 0.985, "house": 0.010, "rent": 0.005}, {"condo": 0.9825, "house": 0.0175},
+     _AT_THE_STEP, "decisive for condo", "not decisive"),
+    # One clears its noise by 3.19 times it, and the other does not.
+    ({"condo": 0.96, "house": 0.03, "rent": 0.01}, {"condo": 0.9625, "house": 0.0075, "rent": 0.03},
+     _AT_THE_STEP, "decisive for condo", "not decisive"),
     # Both clear their noise.
-    ({"condo": 0.90, "house": 0.10}, {"condo": 0.70, "house": 0.30},
+    ({"condo": 0.90, "house": 0.10}, {"condo": 0.70, "house": 0.30}, _AT_THE_STEP,
      "decisive for condo", "not decisive"),
     # A step INTO decisiveness, inside the noise.
-    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075},
+    ({"condo": 0.990, "house": 0.010}, {"condo": 0.9925, "house": 0.0075}, _AT_THE_STEP,
      "not decisive", "decisive for condo"),
-], ids=["both-inside-noise", "one-clears", "both-clear", "into-decisiveness"])
-def test_every_decisiveness_step_between_two_options_is_identified(lo, hi, was, becomes):
+    # One option's probability is 0 throughout, so its noise is 0, and the
+    # other moves inside its noise.
+    ({"condo": 0.900, "house": 0.0, "rent": 0.100}, {"condo": 0.902, "house": 0.0, "rent": 0.098},
+     {"condo": 0.901, "house": 0.0, "rent": 0.099}, "not decisive", "decisive for condo"),
+], ids=["both-inside-noise", "one-clears", "one-clears-far", "both-clear", "into-decisiveness",
+        "one-without-noise"])
+def test_every_decisiveness_step_between_two_options_is_identified(lo, hi, at, was, becomes):
     """§0.1 item 68 for its whole class: whatever the probabilities do across
     the bracket, and whichever way the step runs, a `decisive` boundary whose
     two states differ and whose sides are computed from two options is
     identified. The same figures on one option are held to the noise rule.
     *Kills it:* the rule narrowed to flat probabilities, to probabilities
-    that all stay inside their noise, or to steps out of decisiveness."""
-    probs = {"lo": lo, "hi": hi, "at": {"condo": 0.995, "house": 0.005}}
+    that all stay inside their noise, to probabilities that all stay within
+    3 times their noise, to options whose noise is above 0, or to steps out
+    of decisiveness."""
+    probs = {"lo": lo, "hi": hi, "at": at}
 
     def record(computed_from):
         return be._identification({"attribute": "decisive", "computed_from": computed_from,
