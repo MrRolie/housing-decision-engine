@@ -815,7 +815,9 @@ The mutant list that last full review ran is part of this register's gate. Every
 dies, or its code is deleted.
 
 **67. THE REVERSAL REGISTER PRINTS A KEY'S CROSSINGS AND REFUSALS, AND NO OTHER FIGURE PLACED
-ON THAT AXIS** *(operator ruling 2026-09-28, taken on the review of rulings 63-66)*. Across that review
+ON THAT AXIS** *(operator ruling 2026-09-28, taken on the review of rulings 63-66. The bracket
+clause and the word PLACED are a same-day amendment made on its recheck, not a further operator
+ruling.)* Across that review
 and the two before it, every wrong line printed a SECOND figure beside a crossing, and each one
 was misplaced below the printed precision:
 - the stated rate;
@@ -833,7 +835,7 @@ its slope. Placement is therefore cut, not refined, the same shape as item 35.
   `further_changes` read against it. It makes no claim about which side of a crossing anything
   lies on, so it is not in the class this item cuts. There is no stated figure in the row head, no references line, and
   the path note keeps its construction fact without the path's figures. The user's own figures
-  are in the read-back above the block, and that is their one home.
+  are in the read-back, and that is their one home.
 - With the figures go `ordered_figure`, `_ordered_axis`, `_run_sides`, `_inside_sides`, the
   misread check and the `not_orderable` code. Items 54 and 65 are superseded wherever they
   place a figure other than the crossing's own.

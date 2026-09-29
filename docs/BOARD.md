@@ -348,6 +348,19 @@ hosted. Parked deliberately, not forgotten.
   `hazard_base 1`, a certain event; this predates the events change. The best-guess line prints
   an annual chance at one decimal (`serialization._share`), so a `reset_hazard` of 0.0005 reads
   `a chance of 0.1% a year`, twice the figure typed; this came with the events change.
+- Carried from the `--decompose` and events reviews, each measured and none blocking:
+  - a threshold in the `--decompose` block printed in scientific notation (measured 2026-09-27);
+  - `--decompose=250000` priced the run for about two minutes before it refused the path count
+    (measured 2026-09-27);
+  - a `--no-monte-carlo` run still prints the one-sided P(cheapest) warning, with no P(cheapest)
+    computed (also on main before the events change);
+  - the events spec's E1 says the read-back's hazard facts are computed exactly, while
+    `hazard_fire_facts` multiplies in float; every printed figure still matches exact arithmetic
+    at its printed precision;
+  - the decompose spec's item 53 lists an event whose hazard starts after the horizon as a
+    config the block meets, and the loader now refuses that config;
+  - a refused-boundary line naming several fields has only a constructed test, no rendered one;
+  - the test corpus name `EV_LATE_START` no longer describes its event.
 
 ## 11. Measure the engine again
 
