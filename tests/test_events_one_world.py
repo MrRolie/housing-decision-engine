@@ -237,11 +237,17 @@ def test_a_hazard_start_under_fixed_or_jitter_timing_changes_nothing(
             == _stdout(tmp_path, monkeypatch, capsys, _cfg(bare, sims=400)))
 
 
-def test_a_hazard_below_1_is_never_read_as_certain(tmp_path, monkeypatch, capsys):
-    """At 0.995 a year, a future outlives each year with a chance of 0.005, so
-    a future can fire the roof in year 5, where the best guess charges it."""
-    cfg = _cfg(_roof(expected_year=5, timing_model="hazard", hazard_base=0.995), sims=400)
-    out = _stdout(tmp_path, monkeypatch, capsys, cfg)
+@pytest.mark.parametrize("hazard", [0.995, 0.9999999999, math.nextafter(1.0, 0.0)],
+                         ids=["0.995", "1e-10-under-1", "largest-float-under-1"])
+def test_a_hazard_below_1_is_never_read_as_certain(hazard, tmp_path, monkeypatch, capsys):
+    """At any hazard under 1 a year, a future outlives each year with a chance
+    above 0, so a future can fire the roof in year 5, where the best guess
+    charges it. The largest float under 1 is the witness every cutoff under 1
+    fails on.
+    *Kills it:* the certainty stop loosened to any figure under 1."""
+    event = _roof(expected_year=5, timing_model="hazard", hazard_base=hazard)
+    assert 5 in load_config_dict(_cfg(event, sims=400)).house.events[0].fire_years(YEARS)
+    out = _stdout(tmp_path, monkeypatch, capsys, _cfg(event, sims=400))
     assert [x for x in out.splitlines() if x.startswith("best guess:")] == [
         _event_line("roof", 5, "over 99.9%", 1)]
 

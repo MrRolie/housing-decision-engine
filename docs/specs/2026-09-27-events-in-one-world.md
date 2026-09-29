@@ -115,8 +115,10 @@ two contradictions through:
 
 The exact statement, for a hazard-timed event, is one predicate: `_event_year_deterministic(event,
 years) ∈ event.fire_years(years)`. `fire_years` is the one home of the years in which some future
-fires a hazard-timed event. The loader refuses a hazard-timed event for which the predicate fails,
-naming the year the central case would charge and the years the futures can fire it. For jitter
+fires a hazard-timed event. The loader refuses a hazard-timed event whose `expected_year` lies
+inside its E9 window and for which the predicate fails, naming the year the central case would
+charge and the years the futures can fire it. An `expected_year` outside that window, and a
+hazard that is zero in every year of its window, are refused on their own lines instead. For jitter
 timing, E2 keeps the central year inside the window the futures draw from. E8's witnesses of a
 hazard that is certain in another year now fail at load, which is E9's own contradiction.
 
