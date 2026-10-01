@@ -507,6 +507,11 @@ def solve_break_even(
             entry["sentence"] = band_sentence(
                 key, entry, core["tie_band_fraction"], band_clause=False,
                 note=lambda v: f"{deflate(v, pi):.2%} real")
+    # Attached here rather than in `no_crossing_record`: the story's act 6 and
+    # the reversal register call `solve_crossings` on curves that have no
+    # config to price an income against.
+    if "no_crossing" in core:
+        core["no_crossing"]["affordability"] = _affordability_at_ends(raw, key, core["no_crossing"])
 
     out: Dict[str, Any] = {
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": core["searched"],
@@ -865,6 +870,35 @@ def _band_interior_steps(
     return clauses
 
 
+def _affordability_points_at(
+    raw: Dict[str, Any], key: str, values: Sequence[Any],
+) -> Optional[Tuple[Optional[float], List[Optional[Dict[str, Dict[str, Any]]]]]]:
+    """Each value priced the way a single run there is, as `(threshold,
+    [per-option {max_ratio, years_exceeding} or None per value])`: None for a
+    value that is None or that the loader refuses. The whole result is None
+    when the FIRST value carries no affordability (no `income` block), so a
+    run without one prices that one point and no other. One home for both
+    branches of a break-even: the crossing with its band edges, and the two
+    searched ends of a bracket with no crossing."""
+    threshold: Optional[float] = None
+    priced: List[Optional[Dict[str, Dict[str, Any]]]] = []
+    for value in values:
+        per = None
+        if value is not None:
+            try:
+                det = compute_deterministic(load_at(raw, key, value))
+            except (ConfigValidationError, ValueError):
+                det = None
+            if det is not None:
+                if det.income_report is not None:
+                    threshold = det.income_report.threshold
+                per = affordability_of(det)
+        if not priced and per is None:
+            return None
+        priced.append(per)
+    return threshold, priced
+
+
 def _affordability_at(
     raw: Dict[str, Any], key: str, entry: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
@@ -878,25 +912,32 @@ def _affordability_at(
     has to say what $X costs against income; the band edges are where it bites
     hardest. `None` without an `income` block, like a sweep row's.
     """
-    threshold: Optional[float] = None
-
-    def at(value: Any) -> Optional[Dict[str, Dict[str, Any]]]:
-        nonlocal threshold
-        if value is None:
-            return None
-        try:
-            det = compute_deterministic(load_at(raw, key, value))
-        except (ConfigValidationError, ValueError):
-            return None
-        if det.income_report is not None:
-            threshold = det.income_report.threshold
-        return affordability_of(det)
-
-    crossing = at(entry["value"])
-    if crossing is None:
+    priced = _affordability_points_at(raw, key, [entry["value"], *entry["tie_band"]])
+    if priced is None:
         return None
-    edges = [at(edge) for edge in entry["tie_band"]]
+    threshold, (crossing, *edges) = priced
     return {"threshold": threshold, "value": crossing, "tie_band": edges}
+
+
+def _affordability_at_ends(
+    raw: Dict[str, Any], key: str, record: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """The same ratios for a bracket with no crossing, at the two ends it
+    searched, mirroring the record's own `lo` and `hi` keys. Both are grid
+    points the loader accepted (`searched` holds accepted runs only), so both
+    were priced, the `at_floor` low end of 0 included.
+
+    2026-10-01, board round 12 item 3: the no-crossing line printed no ratio at
+    all. On examples/first_time_buyer_montreal.yaml seeded at $380,000, the
+    bracket 250,000–420,000 printed none, while a sweep over it found the
+    condo at 34.0% of income at its top, three years over the 32% threshold.
+    The lanes withhold that sweep in that shape. `None` without an `income`
+    block."""
+    priced = _affordability_points_at(raw, key, [record["lo"], record["hi"]])
+    if priced is None:
+        return None
+    threshold, (lo, hi) = priced
+    return {"threshold": threshold, "lo": lo, "hi": hi}
 
 
 def solve_break_even_across(
@@ -1015,16 +1056,36 @@ def threshold_sentences(key: str, result_like: Dict[str, Any], band: float) -> L
     return [be.get("sentence") or band_sentence(key, be, band) for be in result_like["break_evens"]]
 
 
+def _crossing_branch(be: Dict[str, Any]) -> bool:
+    """True for a crossing entry (it has a tie band), False for the
+    no-crossing record (it has the searched `lo` and `hi`)."""
+    return "tie_band" in be
+
+
+def quoted_records(carrier: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The records whose affordability a solve's line quotes: each crossing
+    entry, or, when there is none, the no-crossing record (2026-10-01)."""
+    if carrier["break_evens"]:
+        return list(carrier["break_evens"])
+    record = carrier.get("no_crossing")
+    return [record] if record else []
+
+
 def quoted_points(key: str, be: Dict[str, Any]) -> List[Tuple[str, Any, Dict[str, Any]]]:
     """(label, value, per-option affordability) for every point the sentence
-    quotes and the run priced: the crossing and both band edges."""
+    quotes and the run priced: the crossing and both band edges, or, for the
+    no-crossing record, the two ends it searched."""
     aff = be.get("affordability")
     if not aff:
         return []
-    lo, hi = be["tie_band"]
-    points = [("at the crossing", be["value"], aff["value"]),
-              ("at the band's low edge", lo, aff["tie_band"][0]),
-              ("at the band's high edge", hi, aff["tie_band"][1])]
+    if _crossing_branch(be):
+        lo, hi = be["tie_band"]
+        points = [("at the crossing", be["value"], aff["value"]),
+                  ("at the band's low edge", lo, aff["tie_band"][0]),
+                  ("at the band's high edge", hi, aff["tie_band"][1])]
+    else:
+        points = [("at the low end", be["lo"], aff["lo"]),
+                  ("at the high end", be["hi"], aff["hi"])]
     return [(label, value, per) for label, value, per in points
             if per is not None and value is not None]
 
@@ -1036,8 +1097,9 @@ def _aff_phrase(option: str, entry: Dict[str, Any]) -> str:
 def _affordability_points(
     key: str, be: Dict[str, Any], drop: Any = (),
 ) -> Tuple[Optional[float], List[str]]:
-    """(threshold, phrases): the crossing and both band edges with their
-    highest cost/income ratio and breach count. An option whose figures are
+    """(threshold, phrases): the crossing and both band edges, or the two
+    searched ends of a no-crossing record, with their highest cost/income
+    ratio and breach count. An option whose figures are
     the same at every quoted point — the renter's, on a price scan — is one
     phrase, `… at every quoted point`, not three; `drop` names the options a
     block header already stated. Empty without an `income` block."""
@@ -1072,11 +1134,14 @@ def _affordability_head(threshold: Optional[float], where: str = "") -> str:
 
 def _affordability_lines(key: str, be: Dict[str, Any]) -> List[str]:
     """What the threshold and its band edges cost against income — the lines a
-    "cheaper on average" answer needs beside the crossing it quotes."""
+    "cheaper on average" answer needs beside the crossing it quotes. With no
+    crossing, the same lines at the two ends the bracket searched."""
     threshold, phrases = _affordability_points(key, be)
     if not phrases:
         return []
-    head = _affordability_head(threshold, " at the crossing and the band edges")
+    where = (" at the crossing and the band edges" if _crossing_branch(be)
+             else " at both searched ends")
+    head = _affordability_head(threshold, where)
     return [head] + [f"  {phrase}" for phrase in phrases]
 
 
@@ -1107,7 +1172,8 @@ def across_row_sentence(
     pi: Optional[float] = None,
 ) -> str:
     """One `across` row in words: the sweep point, the threshold re-solved
-    there, what the config refused, and what the crossing costs against income.
+    there, what the config refused, and what the crossing costs against income
+    (with no crossing, what the two searched ends cost).
 
     One function words the text block and the read-back line (2026-09-04 review:
     the block carried the base sentence alone, so an answer reduced a whole
@@ -1119,7 +1185,7 @@ def across_row_sentence(
     if refused_clause and _refused_clause(row):
         sentences.append(_refused_clause(row))
     text = f"{sweep_key}={point_label(sweep_key, row['value'], pi)}: " + "; ".join(sentences)
-    for be in row["break_evens"]:
+    for be in quoted_records(row):
         text += _affordability_clause(key, be, drop=drop, head=head)
     return text
 
@@ -1140,10 +1206,10 @@ def read_back_block(result: Dict[str, Any]) -> List[str]:
     carriers = [result] + rows
     refused = [_refused_clause(c) for c in carriers]
     refused_once = all(refused) and len(set(refused)) == 1
-    quoted = [per for c in carriers for be in c["break_evens"]
+    quoted = [per for c in carriers for be in quoted_records(c)
               for _, _, per in quoted_points(key, be)]
     constant = constant_options(quoted) if len(quoted) > 1 else {}
-    thresholds = [be["affordability"]["threshold"] for c in carriers for be in c["break_evens"]
+    thresholds = [be["affordability"]["threshold"] for c in carriers for be in quoted_records(c)
                   if be.get("affordability") and be["affordability"].get("threshold") is not None]
     head = [f"bracket {_fmt_value(key, lo)}–{_fmt_value(key, hi)}", band_rule(band)]
     if refused_once:
@@ -1162,7 +1228,7 @@ def read_back_block(result: Dict[str, Any]) -> List[str]:
     if not refused_once and refused[0]:
         sentences.append(refused[0])
     base_text = "; ".join(sentences) + "".join(
-        _affordability_clause(key, be, drop=drop, head=False) for be in result["break_evens"])
+        _affordability_clause(key, be, drop=drop, head=False) for be in quoted_records(result))
     lines.append(f"break-even {key}: {base_text}")
     for across in result.get("across", []):
         skey, base = across["key"], across.get("base_value")
@@ -1197,7 +1263,7 @@ def format_break_even(result: Dict[str, Any]) -> str:
         span = ", ".join(f"{_fmt_value(key, s0)}–{_fmt_value(key, s1)}" for s0, s1 in result["searched"])
         lines.append(f"  the config refuses {r['count']} point(s) of that bracket ({r['reason']}); searched {span}")
     lines.extend(f"  {t}" for t in threshold_sentences(key, result, band))
-    for be in result["break_evens"]:
+    for be in quoted_records(result):
         lines.extend(f"  {t}" for t in _affordability_lines(key, be))
     # `across` rows keep their one-line shape — the affordability the row
     # implies rides that same line.
