@@ -834,15 +834,21 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
         ]
 
     @pytest.mark.parametrize("hi, searched, ends", [
-        (3.5, [1.1666666666666667, 3.5], (1, 4)),
         (10.0, [1.25, 10.0], (1, 10)),
-    ], ids=["a-third-and-a-half", "a-quarter"])
+        (3.5, [1.1666666666666667, 3.5], (1, 4)),
+        (2.5, [1.25, 2.5], (1, 2)),
+        (20.0, [2.5, 20.0], (2, 20)),
+        (28.0, [3.5, 28.0], (4, 28)),
+    ], ids=["low-end-a-quarter", "high-end-odd-half", "high-end-even-half", "low-end-even-half",
+            "low-end-odd-half"])
     def test_the_ends_are_rounded_by_the_solvers_own_rule(self, hi, searched, ends):
-        """The record's whole numbers are the solver's `int(round(v))`, not
-        any rounding that agrees with it on `0:30`. On `0:3.5`, 1.17 and 3.5
-        round to 1 and 4 (a half to the even one); on `0:10`, 1.25 rounds to 1.
-        *Kills it:* rounding up (2 and 4; 2), rounding inward (2 and 3), or
-        truncating (1 and 3)."""
+        """The record's whole numbers are the solver's `int(round(v))`: the
+        nearest whole number, and a half to the even one, at either end. The
+        witnesses hold a point off a half and a half rounding up and down at each
+        end (2.5 to 2 and 3.5 to 4, low and high), so a rounding that differs from
+        the solver's anywhere on that rule fails one.
+        *Kills it:* rounding up, rounding inward, truncating, a half rounded up,
+        down, away from the bracket or to the odd number."""
         raw = _montreal()
         out = solve_break_even(raw, self.KEY, lo=0.0, hi=hi)
         assert out["break_evens"] == [] and out["searched"] == [searched]

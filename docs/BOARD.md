@@ -374,8 +374,9 @@ margin. Run it on Opus and Sonnet, never on the steering model.
 found that predate the seed change, each checked against the tip:
 
 - Québec: `property_tax_rate` refuses a `school_tax` line ("declare exactly one"), and
-  without one the run warns `no school-tax line` unless the rate's `sources:` entry cites a
-  school-tax anchor, against the lane's "prefer the rate forms" (round 12, item 6).
+  without one the run warns `no school-tax line` unless the rate is sourced to a school-tax
+  anchor or equals a published municipal-plus-school sum, against the lane's "prefer the rate
+  forms" (round 12, item 6).
 - The FHSA balance inside or on top of `cash_available` is never asked: on the live household
   the cash covers 20% down up to $362,589 with it inside and $435,316 with it on top.
 - Growth brackets: gates.md gate 5 takes zero in the user's units and one step below;
@@ -402,16 +403,18 @@ found that predate the seed change, each checked against the tip:
 - An assistant read `(max 40.6%)` as a constant ("40.6% in every year"); the condo's ratio
   falls from 40.6% in year 1 to 32.0% in year 10.
 
-Found by the same lane's review, also predating it, each run on the tip:
+Found by the same lane's review, each run on the tip:
 
 - At the band's low edge, a run at $438,607 on `examples/first_time_buyer_montreal.yaml`
   prints `margin 5.0000% of condo PV < 5.0000% tie band`: two figures rounded into equality
   around a `<`, round 12 item 1's class.
-- An integer key's grid end is priced at `int(round(v))`, a half going to the even whole
-  number, so `--break-even condo.mortgage_term_years=0:3.5` prints `no crossing between 1 and
-  4`, a high end outside the bracket asked.
-- `--break-even condo.mortgage_term_years=1:40` suggests `widen with --break-even
-  condo.mortgage_term_years=1:40`, the bracket it just searched.
+- The solver has priced an integer key's grid point at `int(round(v))`, a half going to the
+  even whole number, since 2026-09-02, so a bracket's end can be priced outside the bracket
+  asked. Since this change the no-crossing line names that whole number:
+  `--break-even condo.mortgage_term_years=0:3.5` prints `no crossing between 1 and 4`.
+- At $380,000 on `examples/first_time_buyer_montreal.yaml`,
+  `--break-even condo.mortgage_term_years=1:40` suggests `widen with --break-even
+  condo.mortgage_term_years=1:40`, the bracket it just searched (this predates the change).
 - A market scenario's provenance in `--json` says `simulation year 1 = calendar 2026`, while
   `calendar_year_for_sim_year` maps simulation year 1 to 2027.
 
