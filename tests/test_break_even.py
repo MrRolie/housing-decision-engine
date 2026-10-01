@@ -527,8 +527,8 @@ class TestQuotedRateThresholdsCarryTheRealEquivalent:
 
 def _with_income(raw=None):
     """`_base()` with an income block: rent $2,000/mo is 30.0% of $80,000, and
-    the condo's ratio climbs with the price, past the 32% default above about
-    $380,000 (2026-10-01)."""
+    the condo's ratio climbs with the price: 31.95% at $375,000, and 32.03%,
+    past the 32% default, at $376,000 (2026-10-01)."""
     raw = _base() if raw is None else raw
     raw["income"] = {"annual_income": 80_000, "income_growth_rate": 0.0}
     return raw

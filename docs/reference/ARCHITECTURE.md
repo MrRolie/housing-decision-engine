@@ -819,7 +819,8 @@ while the block gained its five per-point sweep lines). The band rule, a
 refused clause every solve shares, the affordability sub-header and an option
 whose ratio holds at every quoted point of every solve live in the break-even
 header; an option whose ratio holds at the crossing and both edges of one
-solve is one phrase, `… at every quoted point`; the `across` row that
+solve, or at both ends of a solve with no crossing, is one phrase, `… at every
+quoted point`; the `across` row that
 re-solves the base config prints `(= base)` — the base line now carries its
 own affordability clause, so nothing is lost; the sweep row at the base value
 is marked `(= base)` and keeps its verdict clauses alone; an invariant renter
