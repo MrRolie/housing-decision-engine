@@ -634,7 +634,19 @@ both ends — widen with --break-even <key>=<lo'>:<hi'>` — one bracket width
 further out on the side where the gap narrows (a money input never below half
 its low end, an integer input never below 1; an end the config refuses beyond
 gets no hint and says why); the record rides `--json` as `no_crossing` beside
-`cheaper_throughout`, which the story's act 6 still reads. And the cliff note
+`cheaper_throughout`, which the story's act 6 still reads. With an `income`
+block the record also carries `affordability` at the two ends it searched
+(`{threshold, lo, hi}`, the crossing branch's per-option figures, `null`
+without one; 2026-10-01): `solve_break_even` prices both ends through the same
+helper that prices a crossing and its band edges, and the same formatter prints
+them, as an `affordability at both searched ends` block under the line, on the
+read-back line and on every `across` row with no crossing. Both ends are grid
+points the loader accepted, so both were priced, the `at_floor` low end of 0
+included. Board round 12: a household's no-crossing run printed no ratio while
+a sweep over the same range found its top past the threshold, and the lanes
+withhold that sweep. The record is attached after the solve, not in
+`no_crossing_record`, so the story's act 6 and the reversal register, which
+call `solve_crossings` directly, are unchanged. And the cliff note
 samples the INSIDE of the tie band, not only the crossing and its edges: a
 mortgage-insurance step that lies strictly between them — a smooth crossing
 whose band spanned the 85%-LTV tier change said nothing — is bisected to its
@@ -779,7 +791,8 @@ followed unevenly, so the engine assembles the block instead
 9. for `--break-even`, each threshold's `sentence`; beside `--sweep`, the same
    threshold re-solved at every sweep point, one line each, prefixed
    `break-even <key> at <sweep key>=<value>:` and carrying the affordability at
-   the crossing and both band edges where an `income` block is present; then
+   the crossing and both band edges where an `income` block is present (at the
+   two searched ends on a solve with no crossing, the base line included); then
    the block's `note`;
 10. for `--sweep`, the `flip:` / `mean flip:` / `majority flip:` lines — each
     naming its key (`flip <key>:`, `no flip along <key>:`; two flags used to

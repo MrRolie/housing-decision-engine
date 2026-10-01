@@ -609,13 +609,24 @@ lesson, and this list is ordered that way.
    A third correction from the same builder: `tax.renter_capital` is only a PARTIAL remedy. On
    that household the FHSA rollover haircut is 80% of the term and moves only with
    `tax.retirement_marginal_rate`. The fixed sentence names two legs with two levers.
-2. **The threshold seed describes a purchase the household cannot make.** Operator ruled
-   2026-09-21: seed ABOVE the insurance line, not below. See the convergence note below.
-3. **The no-crossing branch drops affordability entirely.** A sweep the lane forbids finds max
-   ratio 44.6% at the top of the searched range on $54,000 of income — past CMHC's 39% GDS cap
-   — while the run prints one ratio, 17.1%, at the seed. Two instances in two lanes. Not a
-   skill defect: `quick-sense.md` and `threshold-lane.md` both withhold the price sweep here,
-   so the disclosure cannot depend on the assistant running a forbidden command.
+2. **The threshold seed describes a purchase the household cannot make. LANDED 2026-10-01.**
+   Operator ruled 2026-09-22: seed ABOVE the insurance line, not below. See the convergence
+   note below. Both lanes now seed at the first round figure above the price the `financing:`
+   line names. On `examples/first_time_buyer_montreal.yaml` that price is $361,762, so the seed
+   is $370,000. Its block reads `insured: 80.68% LTV → 2.80% tier = $8,359 financed; premium
+   tax 9% (QC) = $752 cash`, where a $330,000 seed, a step below the line, read `none
+   required`. The crossing,
+   468,398, is unchanged. Spec: `docs/specs/2026-10-01-threshold-seed-above-the-line.md`.
+3. **The no-crossing branch drops affordability entirely. LANDED 2026-10-01.** A sweep the lane
+   forbids finds max ratio 44.6% at the top of the searched range on $54,000 of income — past
+   CMHC's 39% GDS cap — while the run prints one ratio, 17.1%, at the seed. Two instances in
+   two lanes. Not a skill defect: `quick-sense.md` and `threshold-lane.md` both withhold the
+   price sweep here, so the disclosure cannot depend on the assistant running a forbidden
+   command. The engine now prints the no-crossing line's affordability at both ends it
+   searched: in the text block, on the read-back line, on every `across` row with no crossing,
+   and in `--json` as `no_crossing.affordability`. On the Montréal household seeded at $380,000,
+   `--break-even condo.initial_value=250000:420000` prints `at the high end 420,000: condo 34.0%
+   (3 yr(s) over)`, the figure the sweep finds there.
 4. **Neither side's p95 reaches the verbatim channel.** 23 block lines, zero hits for `p95` or
    `P(condo cheapest)`. "Smallest worst case" is one of the three criteria the intake asks for
    by name. The block already carries two report sections, so adding the percentiles is
@@ -642,6 +653,13 @@ the prices they are considering — and all three descend from one decision, tha
 lane seeds a price BELOW the 20%-down ceiling. `PROMPTS.md` advertises that household by name.
 One design choice generating three defects means the sibling sweep here is the seed rule
 itself, not the three lines. Operator ruling: seed above the line.
+
+**Resolved 2026-10-01, in two parts, because the seed flip alone did not close all three.** The
+flip closes item 2 and puts the insured financing in the seed's block: the premium, its tax
+and the insured loan-to-value. It does not close item 3. Measured at a $380,000 seed, above the
+line, a no-crossing break-even still printed no affordability. Item 3 closed only with the engine
+change above. That change is engine scope, beyond the lane-doc change the ruling was presented
+as.
 
 **The category sweep found EIGHT reachable-and-false warnings, not one, and one of them was in
 the skill rather than the engine.** The sweep was the more valuable half of that fix, as
