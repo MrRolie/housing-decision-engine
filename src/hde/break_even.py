@@ -178,7 +178,7 @@ def solve_crossings(
     band = ANCHORS["verdict.tie_band"].value
     refused = [] if refused is None else refused
     cache: Dict[float, Optional[Tuple[float, float]]] = {}
-    priced: Dict[float, Any] = {}  # each grid point -> the value priced for it
+    priced: Dict[float, Any] = {}  # each point the solver priced -> the value priced there
 
     def totals_or_none(v: float) -> Optional[Tuple[float, float]]:
         """The two totals at v, or None when the caller refuses that value (a

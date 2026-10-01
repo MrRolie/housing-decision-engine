@@ -848,8 +848,9 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
         nearest whole number, and a half to the even one, at either end. The
         witnesses hold a point off a half and a half rounding up and down at each
         end (2.5 to 2 and 3.5 to 4, low and high), on the engine's own prices.
-        That the record reads the solver's value rather than rounding again is
-        `test_the_record_names_the_values_the_solver_priced`'s.
+        That the record names what the solver priced across 195 brackets is
+        `test_the_record_names_the_values_the_solver_priced`'s; a bracket split
+        into runs, and a lone accepted point, are the ladder tests'.
         *Kills it:* rounding up, rounding inward, truncating, a half rounded up,
         down, away from the bracket or to the odd number."""
         raw = _montreal()
@@ -878,13 +879,15 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
     def test_the_record_names_the_values_the_solver_priced(self):
         """The no-crossing record reads its ends from the solver's own memo of
         what it priced, so it cannot round them by a second rule. This test
-        watches every value the solver hands `totals_at` and checks that an
-        integer key's ends are the lowest and highest it priced, on 195
+        records every value the solver asks `totals_at` to price and the spy
+        accepts, and checks that an integer key's ends are the lowest and
+        highest of them on one accepted run, on 195
         brackets, each with the gap narrowing toward either end and either
         option cheaper. Any rounding at the record that differs from the
         solver's on one of them fails. A float key's ends stay the searched grid
         points.
-        *Kills it:* the record rounding its ends itself, by any rule."""
+        *Kills it:* the record rounding its ends by any rule other than the
+        solver's."""
         from hde.break_even import solve_crossings
         # The gap condo minus rent, never crossing zero: narrowing toward the
         # low end or the high end, with either option cheaper.
@@ -908,6 +911,58 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
             else:
                 assert [record["lo"], record["hi"]] == [out["searched"][0][0],
                                                         out["searched"][-1][1]], (lo, hi)
+
+    @staticmethod
+    def _ladder():
+        """The 380,000 fixture with a renewal ladder of four 5-year terms, which
+        the loader accepts only on amortizations that renew exactly four times,
+        so a term bracket splits into runs."""
+        raw = _montreal()
+        raw["condo"]["mortgage_renewal_years"] = 5
+        raw["condo"]["mortgage_renewal_rates"] = [0.05] * 4
+        return raw
+
+    def test_a_bracket_split_into_runs_names_the_first_runs_low_and_the_last_runs_high(self):
+        """`1:30` searches 1–4.625 and 22.75–30: the record's ends are the
+        first run's low end and the last run's high end, as priced.
+        *Kills it:* naming the first run's high end (5) or the last run's low
+        end (23)."""
+        raw = self._ladder()
+        out = solve_break_even(raw, self.KEY, lo=1.0, hi=30.0)
+        assert out["searched"] == [[1.0, 4.625], [22.75, 30.0]]
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == (1, 30)
+        assert record["affordability"]["lo"] == _priced_at(raw, self.KEY, 1)
+        assert record["affordability"]["hi"] == _priced_at(raw, self.KEY, 30)
+        text = format_break_even(out)
+        assert "  no crossing between 1 and 30: condo is cheaper at both ends" in text
+        assert "    at the low end 1: condo 357.6% (1 yr(s) over)" in text
+        assert "    at the high end 30: condo 29.0% (0 yr(s) over)" in text
+
+    def test_a_lone_accepted_point_outside_every_run_is_not_an_end(self):
+        """`0:30` accepts 3.75 alone, between refused points, and searches only
+        22.5–30: the record names 22 and 30, not the lone point's 4.
+        *Kills it:* taking the ends from every accepted point rather than the
+        searched runs."""
+        raw = self._ladder()
+        out = solve_break_even(raw, self.KEY, lo=0.0, hi=30.0)
+        assert out["searched"] == [[22.5, 30.0]]
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == (22, 30)
+        assert "  no crossing between 22 and 30: condo is cheaper at both ends" in format_break_even(out)
+
+    def test_the_widen_hint_is_derived_from_the_grid_point_not_the_whole_number(self):
+        """On `5.45:30` the gap narrows toward the low end, and the hint widens
+        from the grid point 5.45, one width down and never below half of it:
+        `=2:30`. Rounded to 5 first, the open-end test no longer matches the
+        bracket asked and the line wrongly says the config refuses beyond.
+        *Kills it:* rounding the ends before `widen` is derived."""
+        out = solve_break_even(_montreal(), self.KEY, lo=5.45, hi=30.0)
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == (5, 30)
+        assert record["widen"] == [2.0, 30.0]
+        assert ("  no crossing between 5 and 30: condo is cheaper at both ends — widen with "
+                "--break-even condo.mortgage_term_years=2:30") in format_break_even(out)
 
     def test_an_across_row_names_the_whole_numbers_and_keeps_its_widen_hint(self):
         from hde.break_even import read_back_block
