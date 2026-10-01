@@ -611,12 +611,12 @@ lesson, and this list is ordered that way.
    `tax.retirement_marginal_rate`. The fixed sentence names two legs with two levers.
 2. **The threshold seed describes a purchase the household cannot make. LANDED 2026-10-01.**
    Operator ruled 2026-09-22: seed ABOVE the insurance line, not below. See the convergence
-   note below. Both lanes now seed at the first round figure above the price the `financing:`
-   line names. On `examples/first_time_buyer_montreal.yaml` that price is $361,762, so the seed
-   is $370,000. Its block reads `insured: 80.68% LTV → 2.80% tier = $8,359 financed; premium
-   tax 9% (QC) = $752 cash`, where a $330,000 seed, a step below the line, read `none
-   required`. The crossing,
-   468,398, is unchanged. Spec: `docs/specs/2026-10-01-threshold-seed-above-the-line.md`.
+   note below. Both lanes now seed at the first round figure above the price the
+   `financing:` line names. On `examples/first_time_buyer_montreal.yaml` that price is
+   $361,762, so the seed is $370,000. Its block reads `insured: 80.68% LTV → 2.80% tier =
+   $8,359 financed; premium tax 9% (QC) = $752 cash`, where a $330,000 seed, a step below the
+   line, read `none required`. The crossing, 468,398, is unchanged. Spec:
+   `docs/specs/2026-10-01-threshold-seed-above-the-line.md`.
 3. **The no-crossing branch drops affordability entirely. LANDED 2026-10-01.** A sweep the lane
    forbids finds max ratio 44.6% at the top of the searched range on $54,000 of income — past
    CMHC's 39% GDS cap — while the run prints one ratio, 17.1%, at the seed. Two instances in
@@ -656,10 +656,11 @@ itself, not the three lines. Operator ruling: seed above the line.
 
 **Resolved 2026-10-01, in two parts, because the seed flip alone did not close all three.** The
 flip closes item 2 and puts the insured financing in the seed's block: the premium, its tax
-and the insured loan-to-value. It does not close item 3. Measured at a $380,000 seed, above the
-line, a no-crossing break-even still printed no affordability. Item 3 closed only with the engine
-change above. That change is engine scope, beyond the lane-doc change the ruling was presented
-as.
+and the insured loan-to-value. Those three are the missing financing leg the note above
+names: the below-line seed's block carried none of them. It does not close item 3. Measured
+at a $380,000 seed, above the line, a no-crossing break-even still printed no affordability.
+Item 3 closed only with the engine change above. That change is engine scope, beyond the
+lane-doc change the ruling was presented as.
 
 **The category sweep found EIGHT reachable-and-false warnings, not one, and one of them was in
 the skill rather than the engine.** The sweep was the more valuable half of that fix, as

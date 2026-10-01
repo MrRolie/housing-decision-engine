@@ -21,7 +21,7 @@ FHSA refunds and $95,000 of income over 10 years.
 - **The 20%-down ceiling.** At the shipped $450,000 the `financing:` line reads `this cash covers
   20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage
   is insured)`.
-- **Below the line, as both lane docs say today.** At a $330,000 seed the block reads
+- **Below the line, as both lane docs said at 83ea552.** At a $330,000 seed the block reads
   `mortgage_insurance: auto → none required (77.93% ≤ 80%)`, and the qualifying-rate warning
   reads `Your loan is uninsured, so that rate is OSFI's`. `--break-even condo.initial_value`
   crosses at 468,398, with the band 438,607 to 503,436. At 468,398 the loan is insured:

@@ -13,11 +13,15 @@ threshold their current rent or a market rent you label; for a price threshold
 the first round figure ABOVE the price their cash supports at 20% down (with the
 transfer tax and purchase costs netted, the engine's `financing:` line prints
 the distance to the 20% line and, with `cash_available`, the price where the
-cash stops covering 20% — take that figure, never cash × 5): the next $10,000,
-or a finer step if the engine refuses that price as over the maximum insurable
-loan-to-value, so the block shows the premium, its tax and the insured
-loan-to-value they would carry; or, when every price they named lies below
-that figure, inside their range. Say so in the answer. Everything
+cash stops covering 20% — take that figure, never cash × 5): the next multiple
+of $10,000 above that price, or a finer step if the engine refuses the seed as
+over the maximum insurable loan-to-value; when every price they named lies
+above that figure, the bottom of their range, which is still above the line;
+or, when every price they named lies below that figure, inside their range.
+Say so in the answer. On a price threshold, SKILL.md's exception for cash
+within one premium of the 20% line (run BOTH tiers) does not apply to the
+seed: the scan re-derives the insurance tier and its premium at every price it
+tries. Everything
 property-specific they cannot know yet
 (tax, fees, maintenance, purchase costs) is an estimate you label; check
 `--print-anchors` first. Declare the placeholder itself, and every estimate,
@@ -41,9 +45,12 @@ prints affordability at the crossing and the band edges when an income is
 given — quote it, and at every bracket end too: the `across` rows carry
 affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
 income is a breach, not a ceiling. With no crossing it prints the same figures
-at the two ends it searched: the block's `affordability at both searched ends`
-line, and the `at the low end …` / `at the high end …` phrases on the read-back
-and on every `across` row with no crossing. Quote them too. "Where does the
+at the two ends it searched: in the text output, the `affordability at both
+searched ends` sub-line under the no-crossing line, with its `at the low end …`
+/ `at the high end …` lines; the same phrases ride the full read-back's
+`break-even` line and every `across` row with no crossing. The short read-back
+(`--read-back short`) carries no break-even line, so it carries neither. Quote
+them too. "Where does the
 affordability line bite along a price?" is its own run, not a reading of the
 break-even: a break-even prints affordability only at the crossing and the band
 edges, or at the two searched ends, so scan the price —

@@ -48,12 +48,13 @@ the engine re-cuts its own block from the same seeded run, so the two agree
 line for line. Never hand-shorten the full block.
 
 Seed the config's price at the first round figure ABOVE the 20%-down price the
-`financing:` line prints for their cash: the next $10,000, or a finer step if
-the engine refuses that price as over the maximum insurable loan-to-value (run
-once to read it; declare the seed `assistant` in `sources:`). The block then
-describes the insured purchase they would make, with the premium, its tax and
-the loan-to-value. When every price they named lies below that figure, seed
-inside their range instead, where the block's `none required` is true. If the
+`financing:` line prints for their cash: the next multiple of $10,000 above
+that price, or a finer step if the engine refuses the seed as over the maximum
+insurable loan-to-value (run once to read it; declare the seed `assistant` in
+`sources:`). When every price they named lies above that figure, seed at the
+bottom of their range, which is still above the line. When every price they
+named lies below that figure, seed inside their range instead, where the
+block's `none required` is true. If the
 engine reports no crossing inside the bracket, quote its `affordability at both
 searched ends` line, widen to the bounds it prints and rerun — never call the
 bracket asked for the answer.
