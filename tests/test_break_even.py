@@ -833,6 +833,28 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
             "    at the high end 30: condo 29.0% (0 yr(s) over)",
         ]
 
+    @pytest.mark.parametrize("hi, searched, ends", [
+        (3.5, [1.1666666666666667, 3.5], (1, 4)),
+        (10.0, [1.25, 10.0], (1, 10)),
+    ], ids=["a-third-and-a-half", "a-quarter"])
+    def test_the_ends_are_rounded_by_the_solvers_own_rule(self, hi, searched, ends):
+        """The record's whole numbers are the solver's `int(round(v))`, not
+        any rounding that agrees with it on `0:30`. On `0:3.5`, 1.17 and 3.5
+        round to 1 and 4 (a half to the even one); on `0:10`, 1.25 rounds to 1.
+        *Kills it:* rounding up (2 and 4; 2), rounding inward (2 and 3), or
+        truncating (1 and 3)."""
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=0.0, hi=hi)
+        assert out["break_evens"] == [] and out["searched"] == [searched]
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == ends
+        assert record["affordability"]["lo"] == _priced_at(raw, self.KEY, ends[0])
+        assert record["affordability"]["hi"] == _priced_at(raw, self.KEY, ends[1])
+        text = format_break_even(out)
+        assert f"  no crossing between {ends[0]} and {ends[1]}: condo is cheaper at both ends" in text
+        assert f"    at the low end {ends[0]}: condo " in text
+        assert f"    at the high end {ends[1]}: condo " in text
+
     def test_an_across_row_names_the_whole_numbers_and_keeps_its_widen_hint(self):
         from hde.break_even import read_back_block
         raw = _montreal()

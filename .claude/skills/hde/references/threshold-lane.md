@@ -47,7 +47,8 @@ affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
 income is a breach, not a ceiling. With no crossing it prints the same figures
 at the two ends it searched: in the text output, the `affordability at both
 searched ends` sub-line under the no-crossing line, with its `at the low end …`
-/ `at the high end …` lines; the same phrases ride the full read-back's
+/ `at the high end …` lines (an option whose figure is the same at both ends
+prints once, `… at every quoted point`); the same phrases ride the full read-back's
 `break-even` line and every `across` row with no crossing. The short read-back
 (`--read-back short`) carries no break-even line, so it carries neither. Quote
 them too. "Where does the

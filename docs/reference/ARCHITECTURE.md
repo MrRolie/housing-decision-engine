@@ -642,8 +642,8 @@ helper that prices a crossing and its band edges, and the same formatter prints
 them, as an `affordability at both searched ends` block under the line, on the
 read-back line and on every `across` row with no crossing. Both ends are points
 the solver priced and the loader accepted, the `at_floor` low end of 0
-included. The solver prices an integer key's grid point at its nearest whole
-number, so a grid point of 3.75 on a term in years is a 4-year term, and the
+included. The solver prices an integer key's grid point at `int(round(v))`, a
+half going to the even whole number, so a grid point of 3.75 on a term in years is a 4-year term, and the
 record's ends are those whole numbers; `searched`, and the refusal line that
 prints it, keep the grid point. Board round 12: a household's no-crossing run
 printed no ratio while a sweep over the same range found its top past the

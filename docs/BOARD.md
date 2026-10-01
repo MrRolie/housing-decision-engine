@@ -373,23 +373,25 @@ margin. Run it on Opus and Sonnet, never on the steering model.
 **2026-10-01: the threshold lane, run live by two assistants.** Skill frictions the live runs
 found that predate the seed change, each checked against the tip:
 
-- Québec: `property_tax_rate` refuses a `school_tax` line ("declare exactly one") and warns
-  `no school-tax line` without one, against the lane's "prefer the rate forms" (round 12,
-  item 6).
+- Québec: `property_tax_rate` refuses a `school_tax` line ("declare exactly one"), and
+  without one the run warns `no school-tax line` unless the rate's `sources:` entry cites a
+  school-tax anchor, against the lane's "prefer the rate forms" (round 12, item 6).
 - The FHSA balance inside or on top of `cash_available` is never asked: on the live household
   the cash covers 20% down up to $362,589 with it inside and $435,316 with it on top.
 - Growth brackets: gates.md gate 5 takes zero in the user's units and one step below;
   threshold-lane's nominal bracket `0.021:0.061:5` starts at inflation.
 - The shop-under edge is a tie at itself: at the band's low edge, $526,299, the run prints
   `Too close to call` and `margin 4.9999% of condo PV < 5.0000% tie band`.
-- The prior's drift line prints a `2040 band` on a 10-year run from 2026, which ends in 2036,
-  against gates.md's "quote only the bands inside the horizon".
+- The prior's drift line prints a `2040 band` on a 10-year run from 2026, which ends in 2036:
+  the engine prints every band the horizon touches, as gates.md's own example does, while
+  gates.md also says "quote only the bands inside the horizon".
 - The story headline `Buying a condo wins by $1,007 over 10 years — under MTL_ISLAND_RA06
   demographic conditions` puts the deterministic margin under the prior's label.
 - quick-sense's threshold cap of 250–350 words cannot hold its own checklist: the live answer
   that kept every item ran 534 words of prose.
 - The read-back's Affordability section prints only `Rent: max ratio 23.4%` when the condo
-  breaches; the condo's 40.6% rides only the `[warning]` line.
+  breaches; the condo's 40.6% rides only the `[warning]` lines (the affordability warning and
+  the qualifying-rate warning).
 - Intake: SKILL.md's Missing-information gate asks for every owner cost and where each pile
   sits, while quick-sense's threshold shape says "Ask only six things".
 - One `mortgage_rate` cannot follow the insurance tier along a price scan: at $420,000 the
@@ -399,6 +401,19 @@ found that predate the seed change, each checked against the tip:
   seed: 473,669–645,511 against $440,000 prints `covers only values ABOVE the placeholder`.
 - An assistant read `(max 40.6%)` as a constant ("40.6% in every year"); the condo's ratio
   falls from 40.6% in year 1 to 32.0% in year 10.
+
+Found by the same lane's review, also predating it, each run on the tip:
+
+- At the band's low edge, a run at $438,607 on `examples/first_time_buyer_montreal.yaml`
+  prints `margin 5.0000% of condo PV < 5.0000% tie band`: two figures rounded into equality
+  around a `<`, round 12 item 1's class.
+- An integer key's grid end is priced at `int(round(v))`, a half going to the even whole
+  number, so `--break-even condo.mortgage_term_years=0:3.5` prints `no crossing between 1 and
+  4`, a high end outside the bracket asked.
+- `--break-even condo.mortgage_term_years=1:40` suggests `widen with --break-even
+  condo.mortgage_term_years=1:40`, the bracket it just searched.
+- A market scenario's provenance in `--json` says `simulation year 1 = calendar 2026`, while
+  `calendar_year_for_sim_year` maps simulation year 1 to 2027.
 
 ## 12. The shipped examples barely exercise uncertainty
 
@@ -641,7 +656,7 @@ lesson, and this list is ordered that way.
    `tax.retirement_marginal_rate`. The fixed sentence names two legs with two levers.
 2. **The threshold seed describes a purchase the household cannot make. LANDED 2026-10-01.**
    Operator ruled 2026-09-22: seed ABOVE the insurance line, not below. See the convergence
-   note below. Both lanes now seed at the first round figure above the price the
+   note below. Both lanes now seed at the next multiple of $10,000 above the price the
    `financing:` line names. On `examples/first_time_buyer_montreal.yaml` that price is
    $361,762, so the seed is $370,000. Its block reads `insured: 80.68% LTV → 2.80% tier =
    $8,359 financed; premium tax 9% (QC) = $752 cash`, where a $330,000 seed, a step below the
