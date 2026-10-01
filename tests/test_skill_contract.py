@@ -155,3 +155,43 @@ def test_answer_checklist_reads_the_engine_lines_back():
     # pastes it names the flag that prints it.
     assert "the gist shape pastes the short block" in " ".join(TEXT.split())
     assert "--read-back short" in ALL_TEXT
+
+
+LANES = ("quick-sense.md", "threshold-lane.md")
+
+
+def _lane(name: str) -> str:
+    return " ".join((SKILL.parent / "references" / name).read_text(encoding="utf-8").split())
+
+
+@pytest.mark.parametrize("name", LANES)
+def test_the_price_threshold_seeds_above_the_20_percent_line(name):
+    """Operator ruling 2026-09-22 (docs/specs/2026-10-01-threshold-seed-above-the-line.md
+    §3): a seed a step BELOW the 20%-down price printed `none required` and an
+    OSFI qualifying rate for a household whose crossing was insured. Both lanes
+    now seed at the first round figure above it, with the engine's refusal past
+    the maximum insurable loan-to-value as the reason to take a finer step."""
+    text = _lane(name)
+    assert "first round figure ABOVE" in text
+    assert "maximum insurable loan-to-value" in text
+    assert "step BELOW" not in text
+    assert "still covers 20%" not in text
+
+
+@pytest.mark.parametrize("name", LANES)
+def test_the_lanes_quote_the_no_crossing_affordability_the_engine_prints(name):
+    """Board round 12 item 3: a no-crossing break-even now prints affordability
+    at both ends it searched. Each lane names that line by the header the
+    engine prints, so the assistant quotes it instead of going without."""
+    from hde.break_even import format_break_even, solve_break_even
+    header = "affordability at both searched ends"
+    assert header in _lane(name)
+    raw = {"years": 10, "rates": "real",
+           "rent": {"monthly_rent": 2000, "rent_escalation_rate": 0.0, "invested_down_payment": 85_000},
+           "condo": {"initial_value": 400_000, "monthly_fee": 300, "value_growth_rate": 0.0,
+                     "down_payment": 80_000, "mortgage_rate": 0.04, "mortgage_term_years": 25,
+                     "purchase_costs": 5_000},
+           "income": {"annual_income": 80_000, "income_growth_rate": 0.0}}
+    out = solve_break_even(raw, "condo.initial_value", lo=250_000.0, hi=300_000.0)
+    assert out["break_evens"] == []
+    assert f"  {header} (highest cost/income ratio" in format_break_even(out)

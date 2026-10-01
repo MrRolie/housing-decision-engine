@@ -523,3 +523,159 @@ class TestQuotedRateThresholdsCarryTheRealEquivalent:
                    for line in read_back_block(base))
         assert any("at condo.value_growth_rate=2.00% (-0.10% real): " in line
                    for line in format_break_even(base).splitlines() + read_back_block(base))
+
+
+def _with_income(raw=None):
+    """`_base()` with an income block: rent $2,000/mo is 30.0% of $80,000, and
+    the condo's ratio climbs with the price, past the 32% default above about
+    $380,000 (2026-10-01)."""
+    raw = _base() if raw is None else raw
+    raw["income"] = {"annual_income": 80_000, "income_growth_rate": 0.0}
+    return raw
+
+
+def _affordability_at(raw, key, value):
+    """The per-option affordability a single run at `value` prints, computed
+    here without the break-even code, so a test can tell which point the
+    solver priced."""
+    from hde.sweep import affordability_of
+    return affordability_of(compute_deterministic(load_config_dict(with_value(raw, key, value))))
+
+
+class TestNoCrossingPricesAffordabilityAtBothSearchedEnds:
+    """Board round 12 item 3 (2026-10-01, docs/specs/2026-10-01-threshold-seed-above-the-line.md
+    §4): a break-even with no crossing printed no affordability at all, in the
+    text or the JSON, while a sweep over the same range found the top of it
+    past the household's threshold. The no-crossing line now carries the
+    crossing branch's affordability figures at the two ends it searched.
+
+    The bracket 250,000–390,000 on `_with_income()` has no crossing (condo is
+    cheaper throughout). The seed, 400,000, lies outside it, and its condo
+    ratio, 34.0%, differs from both ends: 21.9% at 250,000 and 33.2% at 390,000."""
+
+    KEY = "condo.initial_value"
+    LO, HI = 250_000.0, 390_000.0
+    LINE = ("no crossing between 250,000 and 390,000: condo is cheaper at both ends — "
+            "widen with --break-even condo.initial_value=250000:530000")
+    BLOCK = [
+        f"  {LINE}",
+        "  affordability at both searched ends (highest cost/income ratio; years above the 32% threshold):",
+        "    rent 30.0% (0 yr(s) over) at every quoted point",
+        "    at the low end 250,000: condo 21.9% (0 yr(s) over)",
+        "    at the high end 390,000: condo 33.2% (10 yr(s) over)",
+    ]
+
+    def _solve(self, raw=None):
+        return solve_break_even(_with_income() if raw is None else raw, self.KEY, lo=self.LO, hi=self.HI)
+
+    def test_the_text_block_prints_the_ratio_at_both_ends(self):
+        out = self._solve()
+        assert out["break_evens"] == []
+        lines = format_break_even(out).splitlines()
+        start = lines.index(self.BLOCK[0])
+        assert lines[start:start + len(self.BLOCK)] == self.BLOCK
+
+    def test_the_figures_are_the_searched_ends_and_not_the_seed(self):
+        raw = _with_income()
+        out = self._solve(raw)
+        record = out["no_crossing"]["affordability"]
+        lo, hi = _affordability_at(raw, self.KEY, self.LO), _affordability_at(raw, self.KEY, self.HI)
+        seed = _affordability_at(raw, self.KEY, raw["condo"]["initial_value"])
+        assert record == {"threshold": 0.32, "lo": lo, "hi": hi}
+        assert seed["condo"] != lo["condo"] and seed["condo"] != hi["condo"]
+        text = format_break_even(out)
+        assert f"condo {seed['condo']['max_ratio']:.1%}" not in text
+        assert f"at the low end 250,000: condo {lo['condo']['max_ratio']:.1%}" in text
+        assert f"at the high end 390,000: condo {hi['condo']['max_ratio']:.1%}" in text
+
+    def test_the_read_back_carries_both_ends_on_the_line_it_pastes(self):
+        from hde.break_even import read_back_block
+        header, line = read_back_block(self._solve())[:2]
+        assert header == ("break-even condo.initial_value (bracket 250,000–390,000; band = 5% of the "
+                          "cheaper option's PV; affordability = highest cost/income ratio; years above "
+                          "the 32% threshold; rent 30.0% (0 yr(s) over) at every quoted point)")
+        assert line == (f"break-even condo.initial_value: {self.LINE}; affordability at the low end "
+                        f"250,000: condo 21.9% (0 yr(s) over) · at the high end 390,000: condo 33.2% "
+                        f"(10 yr(s) over)")
+
+    def test_an_across_row_with_no_crossing_carries_it_too(self):
+        from hde.break_even import across_row_sentence, read_back_block
+        raw = _with_income()
+        out = self._solve(raw)
+        out["across"] = [solve_break_even_across(raw, self.KEY, self.LO, self.HI,
+                                                 "rent.monthly_rent", [1_500, 2_200])]
+        crossed, flat = out["across"][0]["rows"]
+        assert crossed["break_evens"] and not flat["break_evens"]
+        at = with_value(raw, "rent.monthly_rent", 2_200)
+        assert flat["no_crossing"]["affordability"] == {
+            "threshold": 0.32, "lo": _affordability_at(at, self.KEY, self.LO),
+            "hi": _affordability_at(at, self.KEY, self.HI)}
+        row = ("rent.monthly_rent=2,200: " + self.LINE + "; affordability (highest cost/income ratio; "
+               "years above the 32% threshold): rent 33.0% (10 yr(s) over) at every quoted point · "
+               "at the low end 250,000: condo 21.9% (0 yr(s) over) · at the high end 390,000: "
+               "condo 33.2% (10 yr(s) over)")
+        assert across_row_sentence(self.KEY, "rent.monthly_rent", flat, BAND) == row
+        assert f"    {row}" in format_break_even(out).splitlines()
+        assert ("break-even condo.initial_value at rent.monthly_rent=2,200: " + self.LINE
+                + "; affordability rent 33.0% (10 yr(s) over) at every quoted point · at the low end "
+                "250,000: condo 21.9% (0 yr(s) over) · at the high end 390,000: condo 33.2% "
+                "(10 yr(s) over)") in read_back_block(out)
+
+    def test_the_at_floor_branch_prints_both_ends_it_priced(self):
+        """`no crossing down to 0`: the fee of 0 is a point the loader accepts
+        and the scan priced, so it is an end like any other."""
+        raw = _with_income()
+        raw["rent"]["monthly_rent"] = 1_200
+        out = solve_break_even(raw, "condo.monthly_fee", lo=0.0, hi=200.0)
+        assert out["no_crossing"]["at_floor"] is True
+        assert out["no_crossing"]["affordability"]["lo"] == _affordability_at(raw, "condo.monthly_fee", 0.0)
+        lines = format_break_even(out).splitlines()
+        start = lines.index("  no crossing down to 0 on condo.monthly_fee: rent is cheaper throughout "
+                            "that range — widen upward with --break-even condo.monthly_fee=0:400")
+        assert lines[start + 1:start + 5] == [
+            "  affordability at both searched ends (highest cost/income ratio; years above the 32% threshold):",
+            "    rent 18.0% (0 yr(s) over) at every quoted point",
+            "    at the low end 0: condo 29.5% (0 yr(s) over)",
+            "    at the high end 200: condo 32.5% (10 yr(s) over)",
+        ]
+
+    def test_without_an_income_block_nothing_new_prints(self):
+        from hde.break_even import across_row_sentence, read_back_block
+        raw = _base()
+        out = self._solve(raw)
+        assert out["break_evens"] == [] and out["no_crossing"]["affordability"] is None
+        out["across"] = [solve_break_even_across(raw, self.KEY, self.LO, self.HI,
+                                                 "rent.monthly_rent", [2_200])]
+        [row] = out["across"][0]["rows"]
+        assert not row["break_evens"] and row["no_crossing"]["affordability"] is None
+        assert "affordability" not in format_break_even(out)
+        assert not any("affordability" in line for line in read_back_block(out))
+        assert across_row_sentence(self.KEY, "rent.monthly_rent", row, BAND) == (
+            "rent.monthly_rent=2,200: " + self.LINE)
+
+    def test_the_cli_prints_and_serializes_it(self, tmp_path, monkeypatch, capsys):
+        import json, sys
+        import yaml
+        from hde.cli import main as cli_main
+        for raw, priced in ((_with_income(), True), (_base(), False)):
+            cfg = tmp_path / "two.yaml"
+            cfg.write_text(yaml.safe_dump(raw), encoding="utf-8")
+            args = ["hde", str(cfg), "--no-monte-carlo", "--break-even", f"{self.KEY}=250000:390000"]
+            monkeypatch.setattr(sys, "argv", args + ["--json"])
+            assert cli_main() == 0
+            record = json.loads(capsys.readouterr().out)["break_evens"][0]["no_crossing"]
+            monkeypatch.setattr(sys, "argv", args)
+            assert cli_main() == 0
+            lines = capsys.readouterr().out.splitlines()
+            start = lines.index(self.BLOCK[0])
+            if priced:
+                assert set(record["affordability"]) == {"threshold", "lo", "hi"}
+                assert record["affordability"]["hi"]["condo"]["years_exceeding"] == list(range(1, 11))
+                assert lines[start:start + len(self.BLOCK)] == self.BLOCK
+                assert ("break-even condo.initial_value: " + self.LINE + "; affordability at the low end "
+                        "250,000: condo 21.9% (0 yr(s) over) · at the high end 390,000: condo 33.2% "
+                        "(10 yr(s) over)") in lines
+            else:
+                assert record["affordability"] is None
+                assert not any("affordability at both searched ends" in line for line in lines)
+                assert f"break-even condo.initial_value: {self.LINE}" in lines
