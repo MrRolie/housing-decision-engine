@@ -178,6 +178,7 @@ def solve_crossings(
     band = ANCHORS["verdict.tie_band"].value
     refused = [] if refused is None else refused
     cache: Dict[float, Optional[Tuple[float, float]]] = {}
+    priced: Dict[float, Any] = {}  # each grid point -> the value priced for it
 
     def totals_or_none(v: float) -> Optional[Tuple[float, float]]:
         """The two totals at v, or None when the caller refuses that value (a
@@ -185,6 +186,7 @@ def solve_crossings(
         refusal is recorded, never raised — the search shrinks to what the
         config accepts and the output says so."""
         vv = _solver_point(v, is_int)
+        priced[v] = vv
         if vv not in cache:
             cache[vv] = totals_at(vv)
         return cache[vv]
@@ -376,9 +378,15 @@ def solve_crossings(
     }
     if not break_evens:
         out["cheaper_throughout"] = a if (first_gap or 0.0) < 0 else b
-        out["no_crossing"] = no_crossing_record(
+        record = no_crossing_record(
             key, out["cheaper_throughout"], searched, (lo, hi),
             first_gap or 0.0, last_gap or 0.0, is_int=is_int)
+        # The ends as priced, read from the solver's own memo rather than
+        # rounded again: a grid point of 3.75 on a term in years was priced as
+        # a 4-year term (2026-10-01). Set after `widen` is derived, and apart
+        # from `searched`, so the widen hint and the refusal line do not move.
+        record["lo"], record["hi"] = priced[record["lo"]], priced[record["hi"]]
+        out["no_crossing"] = record
     return out
 
 
@@ -519,12 +527,6 @@ def solve_break_even(
     # 6 and the reversal register, never read this record's affordability.
     if "no_crossing" in core:
         record = core["no_crossing"]
-        if key in INT_KEYS:
-            # The ends the solver priced: a grid point of 3.75 on a term in
-            # years is a 4-year term to it (2026-10-01). Rounded here, after
-            # `no_crossing_record` derived `widen` and apart from `searched`,
-            # so the widen hint and the refusal line do not move.
-            record["lo"], record["hi"] = (_solver_point(record[end], True) for end in ("lo", "hi"))
         record["affordability"] = _affordability_at_ends(raw, key, record)
 
     out: Dict[str, Any] = {

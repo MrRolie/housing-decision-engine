@@ -9,6 +9,8 @@ verdict uses), so the answer reads "renting is cheaper below $X, too close to
 call between $A and $B, buying is cheaper above $B".
 """
 
+import itertools
+
 import pytest
 
 from hde.anchors import ANCHORS
@@ -845,8 +847,9 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
         """The record's whole numbers are the solver's `int(round(v))`: the
         nearest whole number, and a half to the even one, at either end. The
         witnesses hold a point off a half and a half rounding up and down at each
-        end (2.5 to 2 and 3.5 to 4, low and high), so a rounding that differs from
-        the solver's anywhere on that rule fails one.
+        end (2.5 to 2 and 3.5 to 4, low and high), on the engine's own prices.
+        That the record reads the solver's value rather than rounding again is
+        `test_the_record_names_the_values_the_solver_priced`'s.
         *Kills it:* rounding up, rounding inward, truncating, a half rounded up,
         down, away from the bracket or to the odd number."""
         raw = _montreal()
@@ -860,6 +863,51 @@ class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
         assert f"  no crossing between {ends[0]} and {ends[1]}: condo is cheaper at both ends" in text
         assert f"    at the low end {ends[0]}: condo " in text
         assert f"    at the high end {ends[1]}: condo " in text
+
+    @staticmethod
+    def _brackets():
+        """Ends off a half, at halves, near a half and at whole numbers, on
+        both sides, with and without a refused low tail."""
+        named = [(5.45, 30.0), (5.46, 30.0), (5.497, 30.0), (5.55, 30.0), (4.5, 30.0),
+                 (0.0, 10.25), (0.0, 10.75), (0.0, 2.5), (0.0, 20.0), (0.0, 28.0),
+                 (0.0, 3.5), (0.0, 10.0), (0.0, 30.0), (1.5, 9.5), (2.5, 6.5)]
+        swept = [(round(0.13 * i, 2), round(0.13 * i + w, 2))
+                 for i in range(60) for w in (2.5, 7.3, 10.75)]
+        return named + swept
+
+    def test_the_record_names_the_values_the_solver_priced(self):
+        """The no-crossing record reads its ends from the solver's own memo of
+        what it priced, so it cannot round them by a second rule. This test
+        watches every value the solver hands `totals_at` and checks that an
+        integer key's ends are the lowest and highest it priced, on 195
+        brackets, each with the gap narrowing toward either end and either
+        option cheaper. Any rounding at the record that differs from the
+        solver's on one of them fails. A float key's ends stay the searched grid
+        points.
+        *Kills it:* the record rounding its ends itself, by any rule."""
+        from hde.break_even import solve_crossings
+        # The gap condo minus rent, never crossing zero: narrowing toward the
+        # low end or the high end, with either option cheaper.
+        gaps = [lambda v: 100.0 + v, lambda v: 200.0 - v,
+                lambda v: -(100.0 + v), lambda v: -(200.0 - v)]
+        for is_int, gap, (lo, hi) in itertools.product((True, False), gaps, self._brackets()):
+            asked = []
+
+            def totals_at(v, asked=asked, gap=gap):
+                if v < 1:
+                    return None  # a term under a year is refused
+                asked.append(v)
+                return (gap(v), 0.0)
+
+            out = solve_crossings(self.KEY, ("condo", "rent"), lo, hi, totals_at,
+                                  is_int=is_int, refused=[])
+            record = out["no_crossing"]
+            if is_int:
+                assert (record["lo"], record["hi"]) == (min(asked), max(asked)), (lo, hi)
+                assert all(type(record[end]) is int for end in ("lo", "hi"))
+            else:
+                assert [record["lo"], record["hi"]] == [out["searched"][0][0],
+                                                        out["searched"][-1][1]], (lo, hi)
 
     def test_an_across_row_names_the_whole_numbers_and_keeps_its_widen_hint(self):
         from hde.break_even import read_back_block
