@@ -134,6 +134,13 @@ def _priced_options(raw: Dict[str, Any]) -> List[str]:
     return [o for o in ("condo", "house", "rent") if o in raw]
 
 
+def _solver_point(v: float, is_int: bool) -> Any:
+    """The value the solver prices for the grid point v: an integer input at
+    its nearest whole number (Python's `round`, a half to the even one),
+    anything else as v itself."""
+    return int(round(v)) if is_int else float(v)
+
+
 def solve_crossings(
     key: str,
     options: Tuple[str, str],
@@ -177,7 +184,7 @@ def solve_crossings(
         price below the fixed down payment, a rate outside its bounds): the
         refusal is recorded, never raised — the search shrinks to what the
         config accepts and the output says so."""
-        vv = int(round(v)) if is_int else float(v)
+        vv = _solver_point(v, is_int)
         if vv not in cache:
             cache[vv] = totals_at(vv)
         return cache[vv]
@@ -511,7 +518,14 @@ def solve_break_even(
     # solves any pair of total curves, and its other callers, the story's act
     # 6 and the reversal register, never read this record's affordability.
     if "no_crossing" in core:
-        core["no_crossing"]["affordability"] = _affordability_at_ends(raw, key, core["no_crossing"])
+        record = core["no_crossing"]
+        if key in INT_KEYS:
+            # The ends the solver priced: a grid point of 3.75 on a term in
+            # years is a 4-year term to it (2026-10-01). Rounded here, after
+            # `no_crossing_record` derived `widen` and apart from `searched`,
+            # so the widen hint and the refusal line do not move.
+            record["lo"], record["hi"] = (_solver_point(record[end], True) for end in ("lo", "hi"))
+        record["affordability"] = _affordability_at_ends(raw, key, record)
 
     out: Dict[str, Any] = {
         "key": key, "options": [a, b], "bracket": [lo, hi], "searched": core["searched"],
@@ -923,9 +937,11 @@ def _affordability_at_ends(
     raw: Dict[str, Any], key: str, record: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     """The same ratios for a bracket with no crossing, at the two ends it
-    searched, mirroring the record's own `lo` and `hi` keys. Both are grid
-    points the loader accepted (`searched` holds accepted runs only), so both
-    were priced, the `at_floor` low end of 0 included.
+    searched, mirroring the record's own `lo` and `hi` keys. Both are points
+    the solver priced and the loader accepted (`searched` holds accepted runs
+    only), the `at_floor` low end of 0 included: an integer key's ends are
+    the whole numbers the solver priced its grid points at, and the record
+    carries those.
 
     2026-10-01, board round 12 item 3: the no-crossing line printed no ratio at
     all. On examples/first_time_buyer_montreal.yaml seeded at $380,000, the

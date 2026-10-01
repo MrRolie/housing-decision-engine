@@ -795,3 +795,54 @@ class TestTheNoCrossingGuardsPriceWhatTheSolverSearched:
         assert read_back_block(out)[1].endswith(
             "; affordability at the crossing 468,398: condo 37.7% (7 yr(s) over) · "
             "at the band's high edge 503,436: condo 40.3% (9 yr(s) over)")
+
+
+class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
+    """Seat ruling 2026-10-01 (F4): the solver prices an integer key at
+    `int(round(v))`, so the grid point 3.75 of `mortgage_term_years=0:30` is a
+    4-year term to the solver. The no-crossing record printed `3.75` and priced
+    affordability at a 3.75-year term, 130.0%, a point no solve priced; at 4 the
+    figure is 101.6%. The record now carries the whole number at both ends, and
+    the sentence, the affordability lines and the JSON all name it. The refusal
+    line's `searched` span and the widen hint are not the record's and do not
+    move."""
+
+    KEY = "condo.mortgage_term_years"
+    LINE = ("no crossing between 4 and 30: condo is cheaper at both ends — the gap narrows toward "
+            "the low end, which the config refuses beyond; no wider bracket reaches a crossing")
+
+    def test_the_low_end_is_the_four_year_term_the_solver_priced(self):
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=0.0, hi=30.0)
+        assert out["break_evens"] == [] and out["searched"] == [[3.75, 30.0]]
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == (4, 30)
+        assert all(type(record[end]) is int for end in ("lo", "hi"))
+        four = _priced_at(raw, self.KEY, 4)
+        assert four["condo"]["years_exceeding"] == [1, 2, 3, 4]
+        assert four != _priced_at(raw, self.KEY, 3.75)
+        assert record["affordability"] == {"threshold": 0.32, "lo": four,
+                                           "hi": _priced_at(raw, self.KEY, 30)}
+        lines = format_break_even(out).splitlines()
+        start = lines.index(f"  {self.LINE}")
+        assert lines[start - 1].endswith("; searched 3.75–30.0")
+        assert lines[start + 1:start + 5] == [
+            "  affordability at both searched ends (highest cost/income ratio; years above the 32% threshold):",
+            "    rent 23.4% (0 yr(s) over) at every quoted point",
+            "    at the low end 4: condo 101.6% (4 yr(s) over)",
+            "    at the high end 30: condo 29.0% (0 yr(s) over)",
+        ]
+
+    def test_an_across_row_names_the_whole_numbers_and_keeps_its_widen_hint(self):
+        from hde.break_even import read_back_block
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=0.0, hi=30.0)
+        out["across"] = [solve_break_even_across(raw, self.KEY, 0.0, 30.0,
+                                                 "rent.monthly_rent", [1_500, 1_850])]
+        cheap = out["across"][0]["rows"][0]
+        assert (cheap["no_crossing"]["lo"], cheap["no_crossing"]["hi"]) == (4, 30)
+        assert ("break-even condo.mortgage_term_years at rent.monthly_rent=1,500: no crossing "
+                "between 4 and 30: rent is cheaper at both ends — widen with --break-even "
+                "condo.mortgage_term_years=4:56; affordability rent 18.9% (0 yr(s) over) at every "
+                "quoted point · at the low end 4: condo 101.6% (4 yr(s) over) · at the high end 30: "
+                "condo 29.0% (0 yr(s) over)") in read_back_block(out)

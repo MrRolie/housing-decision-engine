@@ -640,13 +640,16 @@ block the record also carries `affordability` at the two ends it searched
 without one; 2026-10-01): `solve_break_even` prices both ends through the same
 helper that prices a crossing and its band edges, and the same formatter prints
 them, as an `affordability at both searched ends` block under the line, on the
-read-back line and on every `across` row with no crossing. Both ends are grid
-points the loader accepted, so both were priced, the `at_floor` low end of 0
-included. Board round 12: a household's no-crossing run printed no ratio while
-a sweep over the same range found its top past the threshold, and the lanes
-withhold that sweep. The record is attached after the solve, not in
-`no_crossing_record`, so the story's act 6 and the reversal register, which
-call `solve_crossings` directly, are unchanged. And the cliff note
+read-back line and on every `across` row with no crossing. Both ends are points
+the solver priced and the loader accepted, the `at_floor` low end of 0
+included. The solver prices an integer key's grid point at its nearest whole
+number, so a grid point of 3.75 on a term in years is a 4-year term, and the
+record's ends are those whole numbers; `searched`, and the refusal line that
+prints it, keep the grid point. Board round 12: a household's no-crossing run
+printed no ratio while a sweep over the same range found its top past the
+threshold, and the lanes withhold that sweep. The record is attached after the
+solve, not in `no_crossing_record`, so the story's act 6 and the reversal
+register, which call `solve_crossings` directly, are unchanged. And the cliff note
 samples the INSIDE of the tie band, not only the crossing and its edges: a
 mortgage-insurance step that lies strictly between them — a smooth crossing
 whose band spanned the 85%-LTV tier change said nothing — is bisected to its
