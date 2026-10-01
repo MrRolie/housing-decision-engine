@@ -370,6 +370,36 @@ Round 12: four question shapes on the current tip, scored, gaps folded into the 
 rather than into prose. The last round found the flat trap, worth 85% of one verdict's
 margin. Run it on Opus and Sonnet, never on the steering model.
 
+**2026-10-01: the threshold lane, run live by two assistants.** Skill frictions the live runs
+found that predate the seed change, each re-measured on the tip:
+
+- Québec: `property_tax_rate` refuses a `school_tax` line ("declare exactly one") and warns
+  `no school-tax line` without one, against the lane's "prefer the rate forms" (round 12,
+  item 6).
+- The FHSA balance inside or on top of `cash_available` is never asked: on the live household
+  the cash covers 20% down up to $362,589 with it inside and $435,316 with it on top.
+- Growth brackets: gates.md gate 5 takes zero in the user's units and one step below;
+  threshold-lane's nominal bracket `0.021:0.061:5` starts at inflation.
+- The shop-under edge is a tie at itself: at the band's low edge, $526,299, the run prints
+  `Too close to call` and `margin 4.9999% of condo PV < 5.0000% tie band`.
+- The prior's drift line prints a `2040 band` on a 10-year run from 2026, which ends in 2036,
+  against gates.md's "quote only the bands inside the horizon".
+- The story headline `Buying a condo wins by $1,007 over 10 years — under MTL_ISLAND_RA06
+  demographic conditions` puts the deterministic margin under the prior's label.
+- quick-sense's threshold cap of 250–350 words cannot hold its own checklist: the live answer
+  that kept every item ran 534 words of prose.
+- The read-back's Affordability section prints only `Rent: max ratio 23.4%` when the condo
+  breaches; the condo's 40.6% rides only the `[warning]` line.
+- Intake: SKILL.md's Missing-information gate asks for every owner cost and where each pile
+  sits, while quick-sense's threshold shape says "Ask only six things".
+- One `mortgage_rate` cannot follow the insurance tier along a price scan: at $420,000 the
+  loan is uninsured (`none required (79.20% ≤ 80%)`) and still priced at the insured anchor's
+  4.01%.
+- The prior-sweep grid `<band low − 10%>:<band high + 10%>:11` can put every point above the
+  seed: 473,669–645,511 against $440,000 prints `covers only values ABOVE the placeholder`.
+- An assistant read `(max 40.6%)` as a constant ("40.6% in every year"); the condo's ratio
+  falls from 40.6% in year 1 to 32.0% in year 10.
+
 ## 12. The shipped examples barely exercise uncertainty
 
 **LANDED 2026-09-21** · a gate that mostly could not fail
