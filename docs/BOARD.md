@@ -371,7 +371,7 @@ rather than into prose. The last round found the flat trap, worth 85% of one ver
 margin. Run it on Opus and Sonnet, never on the steering model.
 
 **2026-10-01: the threshold lane, run live by two assistants.** Skill frictions the live runs
-found that predate the seed change, each re-measured on the tip:
+found that predate the seed change, each checked against the tip:
 
 - Québec: `property_tax_rate` refuses a `school_tax` line ("declare exactly one") and warns
   `no school-tax line` without one, against the lane's "prefer the rate forms" (round 12,
