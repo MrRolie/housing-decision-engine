@@ -679,3 +679,119 @@ class TestNoCrossingPricesAffordabilityAtBothSearchedEnds:
                 assert record["affordability"] is None
                 assert not any("affordability at both searched ends" in line for line in lines)
                 assert f"break-even condo.initial_value: {self.LINE}" in lines
+
+
+def _montreal(**condo):
+    """The shipped first-time buyer, Montréal, seeded at $380,000, a step above
+    the $361,762 its cash covers at 20% down, with any `condo` key overridden."""
+    import yaml
+    from pathlib import Path
+    doc = yaml.safe_load((Path(__file__).resolve().parents[1] / "examples"
+                          / "first_time_buyer_montreal.yaml").read_text(encoding="utf-8"))
+    doc["condo"].update({"initial_value": 380_000, **condo})
+    return doc
+
+
+def _priced_at(raw, key, value):
+    """`_affordability_at` for a config with a `sources:` block: `load_at`
+    lifts the declaration on the scanned key, as every scan path does."""
+    from hde.sweep import affordability_of, load_at
+    return affordability_of(compute_deterministic(load_at(raw, key, value)))
+
+
+class TestTheNoCrossingGuardsPriceWhatTheSolverSearched:
+    """Three guards a fresh verifier found unpinned on 2026-10-01: each one
+    survived a mutant that drops or misplaces a figure the user reads. Every
+    test reads the rendered lines, not only the record behind them."""
+
+    KEY = "condo.initial_value"
+    RENT = "    rent 23.4% (0 yr(s) over) at every quoted point"
+
+    def test_a_refused_bracket_is_priced_at_the_ends_it_searched_not_the_ends_asked(self):
+        """`=0:300000` refuses 0, 37,500 and 75,000 (the cash nets a down
+        payment above the price), so the search runs 112,500–300,000. The
+        asked low end of 0 is a price the loader refuses: priced there, the
+        whole record would read as no income block and nothing would print."""
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=0.0, hi=300_000.0)
+        assert out["break_evens"] == [] and out["refused"]["count"] == 3
+        record = out["no_crossing"]
+        assert (record["lo"], record["hi"]) == (112_500.0, 300_000.0)
+        assert record["affordability"] == {
+            "threshold": 0.32, "lo": _priced_at(raw, self.KEY, 112_500.0),
+            "hi": _priced_at(raw, self.KEY, 300_000.0)}
+        lines = format_break_even(out).splitlines()
+        start = lines.index("  no crossing between 112,500 and 300,000: condo is cheaper at both ends — "
+                            "widen with --break-even condo.initial_value=112500:487500")
+        assert lines[start - 1].endswith("; searched 112,500–300,000")
+        assert lines[start + 1:start + 5] == [
+            "  affordability at both searched ends (highest cost/income ratio; years above the 32% threshold):",
+            self.RENT,
+            "    at the low end 112,500: condo 11.0% (0 yr(s) over)",
+            "    at the high end 300,000: condo 24.5% (0 yr(s) over)",
+        ]
+
+    def test_an_end_the_config_refuses_beyond_still_carries_both_ends(self):
+        """`widen` is None when the gap narrows toward an end the config
+        refuses beyond (95% loan-to-value past 1,075,000 here): the record
+        still carries the affordability, on the base line and on an `across`
+        row alike."""
+        from hde.break_even import read_back_block
+        refused_beyond = ("no crossing between 200,000 and 1,075,000: condo is cheaper at both ends — "
+                          "the gap narrows toward the high end, which the config refuses beyond; "
+                          "no wider bracket reaches a crossing")
+        ends = ("at the low end 200,000: condo 17.3% (0 yr(s) over) · "
+                "at the high end 1,075,000: condo 84.0% (10 yr(s) over)")
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=200_000.0, hi=1_600_000.0)
+        out["across"] = [solve_break_even_across(raw, self.KEY, 200_000.0, 1_600_000.0,
+                                                 "condo.value_growth_rate", [0.021, 0.051])]
+        crossed, flat = out["across"][0]["rows"]
+        assert crossed["break_evens"] and flat["no_crossing"]["widen"] is None
+        hot = with_value(raw, "condo.value_growth_rate", 0.051)
+        assert flat["no_crossing"]["affordability"] == {
+            "threshold": 0.32, "lo": _priced_at(hot, self.KEY, 200_000.0),
+            "hi": _priced_at(hot, self.KEY, 1_075_000.0)}
+        row = next(line for line in format_break_even(out).splitlines()
+                   if line.startswith("    condo.value_growth_rate=5.10% (2.94% real): "))
+        assert refused_beyond in row and row.endswith(" · " + ends)
+        assert (f"break-even condo.initial_value at condo.value_growth_rate=5.10% (2.94% real): "
+                f"{refused_beyond}; affordability {ends}") in read_back_block(out)
+
+        base = solve_break_even(hot, self.KEY, lo=200_000.0, hi=1_600_000.0)
+        assert base["break_evens"] == [] and base["no_crossing"]["widen"] is None
+        lines = format_break_even(base).splitlines()
+        start = lines.index(f"  {refused_beyond}")
+        assert lines[start + 1:start + 5] == [
+            "  affordability at both searched ends (highest cost/income ratio; years above the 32% threshold):",
+            self.RENT,
+            "    at the low end 200,000: condo 17.3% (0 yr(s) over)",
+            "    at the high end 1,075,000: condo 84.0% (10 yr(s) over)",
+        ]
+        assert read_back_block(base)[1] == (
+            f"break-even condo.initial_value: {refused_beyond}; affordability {ends}")
+
+    def test_a_band_edge_outside_the_bracket_leaves_the_crossing_and_the_other_edge_priced(self):
+        """The band's low edge, 438,607, lies below a bracket that starts at
+        440,000, so it is None. The crossing and the high edge are still
+        priced: one missing point does not withhold the two that exist."""
+        from hde.break_even import read_back_block
+        raw = _montreal()
+        out = solve_break_even(raw, self.KEY, lo=440_000.0, hi=900_000.0)
+        [be] = out["break_evens"]
+        assert be["tie_band"][0] is None and be["tie_band"][1] is not None
+        aff = be["affordability"]
+        assert aff["tie_band"][0] is None
+        assert aff["value"] == _priced_at(raw, self.KEY, be["value"])
+        assert aff["tie_band"][1] == _priced_at(raw, self.KEY, be["tie_band"][1])
+        lines = format_break_even(out).splitlines()
+        start = lines.index("  affordability at the crossing and the band edges (highest cost/income "
+                            "ratio; years above the 32% threshold):")
+        assert lines[start + 1:start + 4] == [
+            self.RENT,
+            "    at the crossing 468,398: condo 37.7% (7 yr(s) over)",
+            "    at the band's high edge 503,436: condo 40.3% (9 yr(s) over)",
+        ]
+        assert read_back_block(out)[1].endswith(
+            "; affordability at the crossing 468,398: condo 37.7% (7 yr(s) over) · "
+            "at the band's high edge 503,436: condo 40.3% (9 yr(s) over)")
