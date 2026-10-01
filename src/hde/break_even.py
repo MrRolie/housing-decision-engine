@@ -507,9 +507,9 @@ def solve_break_even(
             entry["sentence"] = band_sentence(
                 key, entry, core["tie_band_fraction"], band_clause=False,
                 note=lambda v: f"{deflate(v, pi):.2%} real")
-    # Attached here rather than in `no_crossing_record`: the story's act 6 and
-    # the reversal register call `solve_crossings` on curves that have no
-    # config to price an income against.
+    # Attached here rather than in `no_crossing_record`: `solve_crossings`
+    # solves any pair of total curves, and its other callers, the story's act
+    # 6 and the reversal register, never read this record's affordability.
     if "no_crossing" in core:
         core["no_crossing"]["affordability"] = _affordability_at_ends(raw, key, core["no_crossing"])
 
