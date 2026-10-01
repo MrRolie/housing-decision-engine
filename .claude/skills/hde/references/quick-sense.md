@@ -39,18 +39,23 @@ uv run hde scenarios/<slug>.yaml --break-even <option>.initial_value=<lo>:<hi>
 
 Read the threshold `sentence` and the `financing:` line from that run's
 output (a break-even prints affordability only at the crossing and the band
-edges — "where does the affordability line bite along a price?" is a
+edges, or at both searched ends when it finds no crossing — "where does the
+affordability line bite along a price?" is a
 `--sweep <option>.initial_value=lo:hi:n` and its per-point
 `affordability … breaches years` lines, densified, which this shape runs only
 when the user asks for it); the same command with `--read-back short` appended is the paste —
 the engine re-cuts its own block from the same seeded run, so the two agree
 line for line. Never hand-shorten the full block.
 
-Seed the config's price a step BELOW the 20%-down price the `financing:` line
-prints for their cash (run once to read it; declare the seed `assistant` in
-`sources:`), so the scan starts where their cash still covers 20% and the
-engine re-derives the premium tier above it. If the engine reports no crossing
-inside the bracket, widen to the bounds it prints and rerun — never call the
+Seed the config's price at the first round figure ABOVE the 20%-down price the
+`financing:` line prints for their cash: the next $10,000, or a finer step if
+the engine refuses that price as over the maximum insurable loan-to-value (run
+once to read it; declare the seed `assistant` in `sources:`). The block then
+describes the insured purchase they would make, with the premium, its tax and
+the loan-to-value. When every price they named lies below that figure, seed
+inside their range instead, where the block's `none required` is true. If the
+engine reports no crossing inside the bracket, quote its `affordability at both
+searched ends` line, widen to the bounds it prints and rerun — never call the
 bracket asked for the answer.
 
 **The prose.** Two sentences of verdict at their numbers ("renting at $1,600

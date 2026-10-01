@@ -10,11 +10,15 @@ would I have to stay?". That is a threshold question, not a verdict question.
 Their known side is the config's number. The unknown side needs a placeholder
 so the engine can run (a `monthly_rent`, an `initial_value`): for a rent
 threshold their current rent or a market rent you label; for a price threshold
-a first guess a step BELOW the price their cash supports at 20% down (with the
+the first round figure ABOVE the price their cash supports at 20% down (with the
 transfer tax and purchase costs netted, the engine's `financing:` line prints
 the distance to the 20% line and, with `cash_available`, the price where the
-cash stops covering 20% — take that figure, never cash × 5) — and say so in
-the answer. Everything property-specific they cannot know yet
+cash stops covering 20% — take that figure, never cash × 5): the next $10,000,
+or a finer step if the engine refuses that price as over the maximum insurable
+loan-to-value, so the block shows the premium, its tax and the insured
+loan-to-value they would carry; or, when every price they named lies below
+that figure, inside their range. Say so in the answer. Everything
+property-specific they cannot know yet
 (tax, fees, maintenance, purchase costs) is an estimate you label; check
 `--print-anchors` first. Declare the placeholder itself, and every estimate,
 as `assistant` in the config's `sources:` block — the seed price is not the
@@ -36,10 +40,14 @@ bracket spanning both sides of your figure. The break-even also
 prints affordability at the crossing and the band edges when an income is
 given — quote it, and at every bracket end too: the `across` rows carry
 affordability, and a growth-bracket "safe-buy ceiling" that sits at 44% of
-income is a breach, not a ceiling. "Where does the affordability line bite
-along a price?" is its own run, not a reading of the break-even: a break-even
-prints affordability only at the crossing and the band edges, so scan the
-price — `--sweep <opt>.initial_value=lo:hi:n` — and read the per-point
+income is a breach, not a ceiling. With no crossing it prints the same figures
+at the two ends it searched: the block's `affordability at both searched ends`
+line, and the `at the low end …` / `at the high end …` phrases on the read-back
+and on every `across` row with no crossing. Quote them too. "Where does the
+affordability line bite along a price?" is its own run, not a reading of the
+break-even: a break-even prints affordability only at the crossing and the band
+edges, or at the two searched ends, so scan the price —
+`--sweep <opt>.initial_value=lo:hi:n` — and read the per-point
 `affordability … breaches years` lines, densifying until two neighbouring
 points are close enough to shop between. The threshold those breaches are
 measured against is the engine's (32% by default, or the config's
