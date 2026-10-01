@@ -119,6 +119,20 @@ Docs updated: `API_CONTRACT.md` (the `break_evens` row and the read-back line),
 `ARCHITECTURE.md` (the no-crossing paragraph and read-back item 9), and both lane docs, so the
 assistant quotes the new line and no sentence implies the no-crossing affordability is missing.
 
+**Measured after the change**, on the same runs:
+
+- `--break-even condo.initial_value=250000:420000` at the $380,000 seed prints `at the low end
+  250,000: condo 20.9% (0 yr(s) over)` and `at the high end 420,000: condo 34.0% (3 yr(s)
+  over)`, with `rent 23.4% (0 yr(s) over) at every quoted point`. These are the figures the
+  sweep found at those two prices.
+- The $600,000 fee run prints `at the low end 0: condo 42.7% (10 yr(s) over)` and `at the high
+  end 200: condo 45.3% (10 yr(s) over)`.
+- The same household with the `income` block removed (and `tax.marginal_rate` typed, since
+  nothing is left to resolve it from) serializes `"affordability": null`, and no line containing
+  `affordab` prints.
+- The seven shipped examples' `--json` is byte-identical to origin/main's. None of them runs
+  a break-even.
+
 ## 5. Out of scope
 
 - A purchase-price cap on insured mortgages. The engine anchors none, and adding one would be
