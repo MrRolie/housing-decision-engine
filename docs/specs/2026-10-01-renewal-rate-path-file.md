@@ -1,7 +1,7 @@
 # Renewal-rate path file — design (2026-10-01)
 
-**Status:** ruled 2026-10-01, revised 2026-10-02 after a review round (§0.1 items 4 to 14), not
-built. Round 1 measured on main at a2d1a7d. Round 2's figures, like the review's, are on
+**Status:** ruled 2026-10-01, revised 2026-10-02 after two review rounds (§0.1 items 4 to 14),
+not built. Round 1 measured on main at a2d1a7d. Round 2's figures, like the review's, are on
 1486fbc, which changes only `sources.py` and `input_schema.py` under `src/hde/`, and whose
 `--json` on all 7 examples and the fixture is byte-identical to a2d1a7d's.
 **Lineage:** `docs/specs/2026-09-03-mortgage-renewal-risk.md` §3, §10 and §11 (the ladder, and
@@ -11,7 +11,9 @@ E10 (the central case prices something a future can price).
 
 Every figure below was measured, and §12 gives each one's command. "Prototype" means an
 uncommitted patch that implements §3 to §6 just far enough to measure them, on a2d1a7d in round
-1 and on 1486fbc in round 2. Its inputs are defined in §2 and §12.
+1 and on 1486fbc in round 2, where an independent rebuild on 1486fbc reproduced every round-2
+figure. Its inputs are defined in §2 and §12. The build starts from origin/main, never from the
+prototype.
 
 ## 0. The ruling
 
@@ -70,8 +72,9 @@ switch the channel on.
    and 0.0027, so `argmin` returns row 1. As rationals on the same parsed floats they are
    equal, and the first minimum is row 0 (§5).
 2. **Ruling 3's zero-spread refusal is evaluated per reading option** (R12). Every reading
-   option then pays a different rate on some future at a priced renewal, so none falls out of
-   both the spread register and the NO ROW list, which is what makes ruling 6 hold (§6).
+   option that prices a renewal then pays a different rate on some future at one of them, so
+   none falls out of both the spread register and the NO ROW list, which is what makes ruling 6
+   hold (§6).
 3. **Ruling 3's "renewal grid" is the renewal years.** Column k is the rate at the k-th
    renewal, as `mortgage_renewal_rates` indexes it (§2).
 4. **Coverage.** A grid that misses a renewal inside any reading option's amortization is
@@ -80,8 +83,9 @@ switch the channel on.
 6. **`renewal_rates.path` takes `user` only**; `assistant` is refused (R20), enforcing ruling 9.
 7. **(b′) checks its premise:** identical recorded rows in the stated and probe runs, or the
    gate refuses (§6).
-8. **The central row depends on the priced renewals**, so on the horizon and the amortizations;
-   the read-back names it at each sweep point, and a crossing on a row switch says so (§5).
+8. **The central row depends on the priced renewals**, so on the horizon; at any config the
+   file loads against, an amortization cannot move it (§5). The read-back names it at each sweep
+   point, and a crossing on a row switch says so.
 9. **The did-you-mean change is accepted** (§8).
 10. **Commit 1's goldens store the documents**, `engine_version` masked, never bare sha256s (§8).
 11. **The test hard-codes and the stale "seven" comments join the commit plan** (§8).
@@ -89,9 +93,10 @@ switch the channel on.
     (config.py:836–846) do not gain it (§3).
 13. **A file run gates the whole ladder-warning loop off** (config.py:874–985), the bias
     warning included, with no retargeted prose: the read-back's band already shows it (§7).
-14. **Cuts.** File-run skill guidance has one home, gates.md §8, plus one scope clause (§8,
-    commit 7); the independence clause is §7's exact string; the JSON lists channel ids
-    derived from `CHANNELS`.
+14. **Cuts.** File-run skill guidance has one home, gates.md §8. Elsewhere a sentence that a
+    file run would make false gains a scope clause pointing there, and nothing more (§8, commit
+    7). The independence clause is §7's exact string, and the JSON lists channel ids derived
+    from `CHANNELS`.
 
 ## 1. Why
 
@@ -243,9 +248,9 @@ row, column or year.
   everything after the first load, and exits 1 with `Error: {message}`, so every re-entry is
   covered by construction. A stand-in exception of that kind, raised from the second load,
   escapes `main()` today on `--sweep` (cli.py:421), on `--break-even` (cli.py:446 catches
-  `ValueError` only) and on `--read-back` with an income block (unpriced.py:187, called at
-  cli.py:367 outside any `try`). "This process", not "this run": a library session is one
-  process too.
+  `ValueError` only), on `--decompose`, and on any run with an income block, the read-back's
+  included (`unpriced_warnings`, unpriced.py:187, called at cli.py:367 on the main run path
+  outside any `try`). "This process", not "this run": a library session is one process too.
 - Under `--no-monte-carlo`, `RATES_WITHOUT_MONTE_CARLO`, the sibling of
   `cli.PRIOR_WITHOUT_MONTE_CARLO`, warns: `renewal_rates draws only in Monte Carlo — this run
   prices the central row alone`.
@@ -300,8 +305,8 @@ row, column or year.
 - **Recorded rows.** `ComparisonMonteCarloResult.renewal_rate_rows: Optional[np.ndarray] =
   None` holds each path's row index. `mc_to_dict` never emits it: index arrays, like PV arrays,
   never cross a surface boundary.
-- **Independence (ruling 5).** The row index is drawn independently of every other draw, and
-  the discount rate is fixed. Whole rows keep the producer's serial and term structure. A
+- **Independence (ruling 5).** Its one statement is §7's exact string. Whole rows keep the
+  producer's serial and term structure. A
   jointly fitted file would make one primitive feed channels 0 and 8, which the partition would
   have to merge (which-risk §3.1); that is board item 13's.
 - **Legacy binding.** Under `streams=None` every channel shares one generator (`_OneStream`),
@@ -317,7 +322,8 @@ row, column or year.
   FIRST row at the minimum. Both steps run in exact rational arithmetic (`fractions.Fraction`)
   on the parsed floats (§0.1 item 1), at a cost of N·P rational operations once per load.
 - **What it depends on** (§0.1 item 8). The central row depends on the priced renewals, so on
-  the horizon and the amortizations.
+  the horizon. At any config the file loads against, an amortization cannot move it (the second
+  bullet below).
   - On `m/hvr_ar1.yaml` (2,000 rows) through `sweep.load_at`, it is row 251 at 6 and 10 years
     (P = 1), 1153 at 11 and 15 (P = 2), and 1003 at 16 and 20 (P = 3).
   - R16 and R17 make K the largest n_o at any config the file loads against, so there P =
@@ -458,10 +464,12 @@ prints once on stdout and is absent from `--read-back`, `--read-back short` and
 
 **The rendered-output pin.** On the stdout and stderr of `m/hvr_opens_at.yaml`,
 `m/condo5.yaml` and `m/hvr_example.yaml`, rebuilt as fixtures, none of `mortgage_renewal_rates`,
-`opens at`, `are inert`, `the stated renewal path` or `a stated scenario` appears. In the
-prototype the lines carrying `mortgage_renewal_rates` or `stated` number 3 on stdout and 1 on
-stderr, 6 and 2, and 3 and 1. The bare word "stated" cannot be the pin: the sources echo's
-`user-stated:` label carries it on any run with a `sources:` block.
+`opens at`, `are inert`, `the stated renewal path` or `a stated scenario` appears, and every
+remaining `stated` sits inside the sources echo's `user-stated:` label. The bare word cannot be
+the pin, because that label carries it on any run with a `sources:` block. If the gated output
+carries another legitimate `stated`, the pin names that line, measured, and keeps the five
+phrases. In the prototype the lines carrying `mortgage_renewal_rates` or `stated` number 3 on
+stdout and 1 on stderr, 6 and 2, and 3 and 1.
 
 **`--json`.** `assumptions.renewal_rate_paths` carries `path`, `file_sha256`,
 `schema_version`, `term_years`, `renewal_years`, `priced_years`, `compounding`, `as_of` (null
@@ -530,13 +538,17 @@ through commit 7.
      message), decomposition_run.py:127, :139 and :143–144, decomposition_math.py:287,
      test_channel_streams.py:272 and API_CONTRACT.md:251. `decomposition_households.py:162` and
      :463 describe fixtures whose live channels stay seven, and `sweep.py:220`'s `range(8)`
-     counts bracket doublings.
+     counts bracket doublings;
+   - the `range(7)` asserts at `test_decomposition_liveness.py:470`,
+     `test_decomposition_run.py:276` and `test_decomposition_contract_doc.py:436` and :624
+     state what no-file fixtures make live, so they stay, like :277 and :841. The builder
+     confirms each on the built tree, since row 4's mutation names literal `range(7)`.
 5. `feat(break_even)`: (b′) with its premise check and free curve, the zero rows on both gate
    branches, and the row-switch note.
 6. `feat(serialization)`: the read-back line and its section, §7's file-run changes (the
    ladder-warning gate included), the central row on each sweep point's line, the `--json`
    block, and the rows in API_CONTRACT and which-risk §3.1.
-7. `docs(skill)`: exactly these four edits (§0.1 item 14).
+7. `docs(skill)`: exactly these five edits (§0.1 item 14).
    - `references/gates.md` §8, the one home, after "read back the engine's `renewals:` line.":
      "A `renewal_rates` path file prices it as a distribution instead: read back the `renewal
      rate paths:` line, whose model and validation are the file's own words. Use a file only
@@ -544,10 +556,16 @@ through commit 7.
    - `references/answer-template.md` §8, the one scope clause: "as ONE scenario with no
      distribution around it" gains "when the path is a ladder (a path file: gates §8)".
    - `references/gates.md:141`: "with every vol at 0" gains "and no `renewal_rates` file".
-   - `references/translation.md:22`: "it needs `mortgage_renewal_rates` beside it" gains ", or
-     a path file the user supplied (gates §8)".
-   - On a copy with these edits and commit 3's schema text, `test_skill_contract.py` passes
-     (17), and SKILL.md is untouched at 2,597 words (measured).
+   - `references/translation.md:22`, two scope clauses. "an `anchor:` declaration on the
+     ladder is refused at load" gains " — or, instead of a ladder, a path file the user
+     supplied (gates §8)". Placed there, after the whole ladder clause, the ladder's "yours to
+     label as an estimate" cannot be read as covering a file. The last cell's "prices it as ONE
+     stated scenario" gains " (a ladder; a path file: gates §8)".
+   - `references/quick-sense.md:73`: "named as one stated scenario, when it is" gains " a
+     ladder; a path file: gates §8", inside the existing parenthesis.
+   - On a copy with the first four edits and commit 3's schema text, `test_skill_contract.py`
+     passes (17), and SKILL.md is untouched at 2,597 words (measured). The builder re-runs it
+     with all five.
 
 ## 9. Tests: the classes this invites, each pinned and mutated both ways
 
@@ -567,7 +585,7 @@ pin names the mutation that must fail it.
 | 9 | (b′) | It licenses `mortgage_rate` on a file run (residual ≤ 1e-9·sd) and matches re-simulation (§6). With no file, (b′) and (b) are bit-identical on the fixture's two licensed keys. A probe whose recorded rows differ is refused. **First pin the builder lands:** the register's own output under (b′), end to end on the new fixture, which was not measured here. | Deleted: not_exact (7.00e-02, 1.76e-01). Widened to `value_growth_rate`: refuses (1.79e-01). A gate that refuses everything fails the no-file pin. A (b′) without the central row's leg fails the no-file bit identity (9.572e-16 against 9.525e-16). The premise check deleted. |
 | 10 | Vanishing zero row | The contract rate's row prints on both gate branches. | Restoring line 2339's placement (the prototype lost the row) |
 | 11 | Rendered output | §7's pin on the three configs. On a semi-annual file beside an effective-annual contract, `assumptions.mortgage_renewals[].compounding` is `semi_annual`. | The loop's gate deleted (the prototype's hits, §7) or narrowed to the bias branch; the source clause restored |
-| 12 | File integrity | Bytes rewritten between two loads raise `RatePathsChanged`. `--sweep`, `--break-even` and `--read-back` with an income block each exit 1 with one `Error: '…' changed since this process first read it` line and no `Traceback`. `rate_paths.reset_pins()` runs before each test. The printed sha is the sha of the bytes priced. | The catch in `main()` removed (today's escape, measured); `RatePathsChanged` made a `ValueError`, which a sweep row swallows |
+| 12 | File integrity | Bytes rewritten between two loads raise `RatePathsChanged`. `--sweep`, `--break-even`, `--decompose`, a plain run with an income block and `--read-back` with one each exit 1 with one `Error: '…' changed since this process first read it` line and no `Traceback`. `rate_paths.reset_pins()` runs before each test. The printed sha is the sha of the bytes priced. | The catch in `main()` removed (today's escape, measured); `RatePathsChanged` made a `ValueError`, which a sweep row swallows |
 | 13 | Refusals both ways | Every R-row against its neighbour: N = 2 loads; one varying column loads; at a 25-year amortization, 5-year term and 20-year horizon, `[6, 11, 16, 21]` loads, `[6, 11, 16]` refuses (R16) and `[1, 6, 11, 16]` refuses (R7); a condo whose amortization ends before a column the house reads loads; a file with no `as_of` loads. | Each refusal deleted, and each widened onto its neighbour; R16 measured against the horizon instead of the amortization |
 | 14 | Sources and anchors | `user` loads; `assistant` refuses (R20); `anchor:<a registry name>` refuses (R18). | R20 deleted; R20 widened to `user` |
 | 15 | Read-back | Every figure on §7's line is recomputed independently: the exact central row, linear percentiles, the sha of the bytes. On the rendered output the line appears once in `--read-back` and in `assumptions.read_back`, right after the `renewals:` lines, and `--read-back short`'s closing line names it. A no-file read-back is unchanged. | Any template field read from a second source; the section left out (today's gap) |
@@ -597,9 +615,15 @@ pin and of `m/two_opts.yaml`'s shape are committed beside it as test data.
 
 Neither of these can be settled by measuring inside the engine.
 
-1. **Does independence understate the channel's share?** If rates and prices move in opposite
-   directions, as they usually do, independence probably understates it. The engine cannot
-   sign that covariance without a jointly fitted model, and that is board item 13's.
+1. **Which way does independence bias the channel's share?** It depends on a sign the data
+   does not settle. Over the same five-year window, the change in the CMHC five-year rate
+   (Statistics Canada v733833) has moved WITH the log change in house prices: +0.21 to +0.68
+   across four price series (the NHPI for Montréal, nominal and CPI-deflated, and the Dallas
+   Fed's international index for Canada, nominal and real), on about 5 to 9 independent
+   windows. That co-movement would partly hedge a buyer, so independence would overstate the
+   combined channel. Over the next window the sign is mixed, and over one year it is negative
+   (−0.16 to −0.30 since 1991), which would make independence understate it. The engine cannot
+   sign the covariance without a jointly fitted model, and that is board item 13's.
 2. **What is the smallest N a file needs?** Drawing with replacement means a 50-row file at
    10,000 paths is a 50-point distribution. The read-back prints N. Whether some N should be
    refused is a product rule, not a measurement.
