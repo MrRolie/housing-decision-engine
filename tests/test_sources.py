@@ -864,3 +864,118 @@ class TestRateEchoPrecision:
     def test_a_finer_figure_prints_to_the_digit_it_needs(self):
         assert format_source_value("simulation.discount_rate", 0.03125) == "3.125%"
         assert format_source_value("condo.property_tax_rate", 0.01272144) == "1.2721%"
+
+
+# ---------------------------------------------------------------------------
+# A renewal rate carries no anchor (2026-10-01)
+#
+# A config declared `house.mortgage_renewal_rates:
+# anchor:mortgage_rate.contracted_5y_uninsured` on a 4.35% ladder, and it
+# loaded: the figure equals the anchor's, and the declaration check compared
+# figures only, never whether the KEY may carry an anchor. The read-back then
+# printed `anchor-sourced: house.mortgage_renewal_rates=4.35% [...]` and, on
+# the `house renewals:` line, "the engine anchors no renewal rate, and the
+# read-back cannot tell whose figure it is" — two lines contradicting each
+# other about one number. A renewal rate is a stated scenario for a rate set
+# years from now; today's contracted rate is not a forecast of it, so the
+# loader refuses the declaration on the key, whatever anchor it names and
+# whatever figure the ladder states. `mortgage_rate` — today's contract — may
+# still cite the anchor.
+# ---------------------------------------------------------------------------
+
+CONTRACTED = "anchor:mortgage_rate.contracted_5y_uninsured"
+
+
+def _ladder_cfg(option, rates, sources):
+    block = {"initial_value": 550_000, "down_payment": 110_000,
+             "mortgage_rate": 0.0435, "mortgage_term_years": 25,
+             "mortgage_renewal_years": 5, "mortgage_renewal_rates": rates}
+    if option == "condo":
+        block["monthly_fee"] = 350
+    return {
+        "years": 20,
+        "economic": {"mode": "nominal", "inflation_rate": 0.021},
+        option: block,
+        "rent": {"monthly_rent": 2_300, "invested_down_payment": 110_000},
+        "sources": sources,
+    }
+
+
+def _ladder_refusal(key, declaration=CONTRACTED):
+    return (f"sources: '{key}' declared {declaration} — a renewal rate is a stated "
+            f"scenario for a rate set years from now, and the engine anchors no "
+            f"forward rate: today's contracted rate is not a forecast of it; an "
+            f"assistant using today's contracted rate as a flat scenario declares "
+            f"it 'assistant'")
+
+
+class TestARenewalRateCarriesNoAnchor:
+    @pytest.mark.parametrize("option", ["house", "condo"])
+    @pytest.mark.parametrize("rates", [0.0435, [0.0435, 0.05]], ids=["scalar", "list"])
+    def test_an_anchor_on_the_ladder_is_refused_naming_the_key(self, option, rates):
+        key = f"{option}.mortgage_renewal_rates"
+        with pytest.raises(ConfigValidationError) as refused:
+            load_config_dict(_ladder_cfg(option, rates, {key: CONTRACTED}))
+        assert str(refused.value) == _ladder_refusal(key)
+
+    def test_the_refusal_is_on_the_key_whatever_anchor_or_figure(self):
+        """The posted rate on a 5% ladder: the figure matches no anchor, and
+        the key is the reason given, not the figure."""
+        key = "house.mortgage_renewal_rates"
+        declaration = "anchor:mortgage_rate.posted_5y"
+        with pytest.raises(ConfigValidationError) as refused:
+            load_config_dict(_ladder_cfg("house", 0.05, {key: declaration}))
+        assert str(refused.value) == _ladder_refusal(key, declaration)
+
+    @pytest.mark.parametrize("option", ["house", "condo"])
+    def test_todays_contract_rate_may_still_cite_the_anchor(self, option):
+        key = f"{option}.mortgage_rate"
+        spec = load_config_dict(_ladder_cfg(
+            option, 0.0435, {key: CONTRACTED,
+                             f"{option}.mortgage_renewal_rates": "assistant"}))
+        assert spec.sources.anchor_name(key) == "mortgage_rate.contracted_5y_uninsured"
+        anchored = [ln for ln in format_assumptions(spec) if ln.startswith("anchor-sourced:")]
+        assert anchored == [
+            f"anchor-sourced: {key}=4.35% [mortgage_rate.contracted_5y_uninsured]"]
+
+    @pytest.mark.parametrize("option", ["house", "condo"])
+    @pytest.mark.parametrize("declared, clause", [
+        ("user", "your stated scenario, not a forecast"),
+        ("assistant", "the ASSISTANT's stated scenario and not yours, not a forecast"),
+    ])
+    def test_user_and_assistant_on_the_ladder_still_load(self, option, declared, clause):
+        spec = load_config_dict(_ladder_cfg(
+            option, [0.0435, 0.05], {f"{option}.mortgage_renewal_rates": declared}))
+        rendered = format_assumptions(spec)
+        renewals = [ln for ln in rendered if ln.startswith(f"{option} renewals:")]
+        assert len(renewals) == 1 and clause in renewals[0]
+        assert not any(ln.startswith("anchor-sourced:") for ln in rendered)
+
+
+class TestARenewalAnchorIsRefusedOnEveryCliPath:
+    """The CLI loads the base config before any scan, so a `--sweep` or
+    `--break-even` over the ladder — whose grid points relabel the swept key's
+    declaration `sweep` — never reaches a grid point with the anchor on it."""
+
+    @pytest.mark.parametrize("flags", [
+        [],
+        ["--json"],
+        ["--sweep", "house.mortgage_renewal_rates=0.03,0.05"],
+        ["--break-even", "house.mortgage_renewal_rates=0.02:0.08"],
+    ], ids=["plain", "json", "sweep", "break-even"])
+    def test_the_cli_refuses_the_anchored_ladder(self, tmp_path, monkeypatch, capsys, flags):
+        import sys
+
+        import yaml
+
+        from hde.cli import main as cli_main
+
+        key = "house.mortgage_renewal_rates"
+        path = tmp_path / "anchored.yaml"
+        path.write_text(yaml.safe_dump(_ladder_cfg("house", 0.0435, {key: CONTRACTED})),
+                        encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hde", str(path), "--no-monte-carlo", *flags])
+        assert cli_main() == 1
+        captured = capsys.readouterr()
+        assert captured.err == f"Configuration error: {_ladder_refusal(key)}\n"
+        assert "anchor-sourced" not in captured.out
