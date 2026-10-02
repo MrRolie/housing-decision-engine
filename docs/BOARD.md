@@ -14,16 +14,21 @@ Each item: **what**, *why now*, and what it unblocks. Status is `open`, `doing` 
 ## 1. Rate risk over the horizon — the renewal a Canadian mortgage actually has
 
 **slice 1 LANDED 2026-09-21** · design: `docs/specs/2026-09-03-mortgage-renewal-risk.md`
+**slice 2 LANDED 2026-10-02** · design: `docs/specs/2026-10-01-renewal-rate-path-file.md`
 
 Slice 1 ships: term and amortization separated, the payment re-solving at each renewal off a
-user-stated path, the affordability ratio stepping with it, and no anchored renewal rate. Left
-for slice 2, with the calibrated process of §11: drawing the renewal rate rather than stating
-it, which arrives with item 3.
+user-stated path, the affordability ratio stepping with it, and no anchored renewal rate.
 
-What remains here is the distribution. A stated ladder is one scenario the household chose;
-the engine anchors no forward rate and says so on every run that prices one. Drawing that rate
-from a calibrated process is slice 2 and belongs with item 3, because a rate distribution is
-only worth having beside a price distribution.
+Slice 2 ships the distribution without a rate model in the engine. A `renewal_rates` path file
+holds sampled renewal-rate paths written by a model fitted outside the engine, with its method,
+data window and validation record. Each future draws one row (channel 8), the deterministic
+case prices the row nearest the per-renewal median, and the read-back prints the file's
+provenance beside its band. `--decompose` sizes the renewal rates beside the other channels. A
+stated ladder is unchanged.
+
+What remains here: the draws are independent of every other channel. A jointly fitted
+rate-and-price model is item 13's. The repo ships no producer, because calibration is the
+user's own work.
 
 ## 2. Name the unknown that changes the verdict
 
