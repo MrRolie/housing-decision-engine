@@ -1,9 +1,10 @@
 # Renewal-rate path file — design (2026-10-01)
 
 **Status:** ruled 2026-10-01, revised 2026-10-02 after two review rounds (§0.1 items 4 to 14),
-not built. Round 1 measured on main at a2d1a7d. Round 2's figures, like the review's, are on
-1486fbc, which changes only `sources.py` and `input_schema.py` under `src/hde/`, and whose
-`--json` on all 7 examples and the fixture is byte-identical to a2d1a7d's.
+built 2026-10-02, from commit 751bee2 on. Round 1 measured on main at a2d1a7d. Round 2's
+figures, like the review's, are on 1486fbc, which changes only `sources.py` and
+`input_schema.py` under `src/hde/`, and whose `--json` on all 7 examples and the fixture is
+byte-identical to a2d1a7d's.
 **Lineage:** `docs/specs/2026-09-03-mortgage-renewal-risk.md` §3, §10 and §11 (the ladder, and
 the fitted process it deferred); `docs/specs/2026-09-22-which-risk-decides-it.md` §3 and §6
 (the channel partition and the reversal register); `docs/specs/2026-09-27-events-in-one-world.md`
@@ -226,7 +227,8 @@ row, column or year.
 | R12 | zero spread, per reading option that prices a renewal inside the horizon | `every row of '{path}' prices {opt}'s renewals in years {years} at the same rates: no future differs` |
 | R13 | ladder beside the file | `{opt}.mortgage_renewal_rates is set beside renewal_rates.path — one market, two sources for its renewal rate` |
 | R14 | financed, no term | `{opt} has a mortgage and no mortgage_renewal_years; renewal_rates.path quotes {T}-year rates` |
-| R15 | nothing priced | `no reading option renews inside the {H}-year horizon (first renewal: year {T+1})` |
+| R15 | nothing priced, with a reading option | `no reading option renews inside the {H}-year horizon (first renewal: year {T+1})` |
+| R15 | nothing priced, with no reading option | `'{path}': no option carries a mortgage, so nothing reads a renewal rate`, checked first: with no mortgage there is no renewal year for the message above to name |
 | R16 | grid too short | `'{path}' ends at year {y}; {opt} renews in year {r} inside its {A}-year amortization — every renewal needs a column, and the engine carries no rate forward` |
 | R17 | grid past every amortization | `'{path}' renewal_years {y}: past every reading option's last renewal ({opt}: year {r})` |
 | R18 | `anchor:` on `renewal_rates.path` | the existing `_anchor_declaration` refusal: `… an anchor sources a number, not str` (measured on `market_scenario.path`, §12) |
@@ -299,10 +301,10 @@ row, column or year.
 - **Affordability per path** (the events lane's C12 class). `_annual_costs_for_option` gains
   `renewal_rates=None` and threads it into `renewal_segments_for`, and
   `run_monte_carlo._path_costs` keys its cache on `(option, reset_year, fired, rate_row)`. On
-  `m/hvr_example.yaml` plus `income: {annual_income: 150000, affordability_threshold: 0.32}`
-  (prototype), the central row's peak ratio is 28.10% and row 1's is 38.55%, there is no
-  deterministic house breach, and P(house exceeds) is 0.508, the share of paths that drew row
-  1.
+  `m/hvr_example.yaml` plus `income: {annual_income: 150000, income_growth_rate: 0.0,
+  affordability_threshold: 0.32}` (prototype), the central row's peak ratio is 28.10% and row
+  1's is 38.55%, there is no deterministic house breach, and P(house exceeds) is 0.508, the
+  share of paths that drew row 1.
 - **Recorded rows.** `ComparisonMonteCarloResult.renewal_rate_rows: Optional[np.ndarray] =
   None` holds each path's row index. `mc_to_dict` never emits it: index arrays, like PV arrays,
   never cross a surface boundary.
@@ -413,9 +415,11 @@ row, column or year.
   dead is named by `_dead_draw_rows`. v1 builds no drop branch for the ladder's row:
   `reversal_candidates` reads the raw config, which cannot state the ladder on a file run (R13),
   and on a run with no file channel 8 never draws.
-- **JSON and homes.** `decomposition.spread.rows[]` and `level.rows[]` carry `channel_id` 8 and
-  `key` `"rates"`. The channel table in `docs/reference/API_CONTRACT.md` (one home) and which-risk
-  §3.1's table both gain the row.
+- **JSON and homes.** `decomposition.spread.rows[]` and `level.rows[]` carry `channel_id` 8,
+  `channel` `"rates"` and `label` `"the renewal rates"`, and no `key` field (measured on the
+  opt-in fixture's `--decompose --json`). `docs/reference/API_CONTRACT.md` has no channel
+  table: its one home for the ids is the streams sentence of § The `decomposition` block,
+  which lists `6 portfolio, 8 rates`. Which-risk §3.1's table gains the row.
 
 ## 7. The read-back line
 
@@ -581,7 +585,7 @@ pin names the mutation that must fail it.
 | 4 | Channel-count hard-codes | `freeze=ALL_CHANNEL_IDS` is allowed on the legacy binding; `freeze=range(7)` is refused as partial; `channel(8)` resolves; `channel(7)` and `channel(9)` raise. | Any surviving positional `CHANNELS[i]`, literal `range(7)`, or `range(8)` of commit 4's list |
 | 5 | One market | Two reading options draw the same row on every path. | A per-option draw |
 | 6 | Per-option columns | On `m/two_opts.yaml`'s shape, each option's ladder, per-path override and `renewals:` line carry n_o rates: 1 for the condo, 4 for the house. | Every option given all K columns (the prototype printed four for the condo) |
-| 7 | Per-path affordability (C12) | P(house exceeds) 0.508 = the share of row-1 paths, on §4's config. | Central costs on every path: P = 0.0 (measured) |
+| 7 | Per-path affordability (C12) | P(house exceeds) 0.508 = the share of row-1 paths, on §4's config (its income block holds `income_growth_rate: 0.0`; without it the peaks are 27.18% and 29.84% and P is 0.0, which the mutation also gives). | Central costs on every path: P = 0.0 (measured) |
 | 8 | Freeze isolation | On the new fixture, for each c in 0 to 6, `freeze=(c,)` records the unfrozen run's rate row on every path. | `rate_rows` left out of the frozen rebuild (measured: different rows for every c; channel 4's level −$71,683 against $90) |
 | 9 | (b′) | It licenses `mortgage_rate` on a file run (residual ≤ 1e-9·sd) and matches re-simulation (§6). With no file, (b′) and (b) are bit-identical on the fixture's two licensed keys. A probe whose recorded rows differ is refused. **First pin the builder lands:** the register's own output under (b′), end to end on the new fixture, which was not measured here. | Deleted: not_exact (7.00e-02, 1.76e-01). Widened to `value_growth_rate`: refuses (1.79e-01). A gate that refuses everything fails the no-file pin. A (b′) without the central row's leg fails the no-file bit identity (9.572e-16 against 9.525e-16). The premise check deleted. |
 | 10 | Vanishing zero row | The contract rate's row prints on both gate branches. | Restoring line 2339's placement (the prototype lost the row) |
@@ -672,7 +676,7 @@ not committed; r2's `m/` configs are the review's. Each is a delta on §2's two 
 | the config states no purchase date (main) | `uv run hde --print-schema \| grep -io '"[a-z_]*\(date\|calendar\|purchase\)[a-z_]*"' \| sort -u` prints only the three `*purchase_costs*` keys |
 | `sources:` refuses a key the config does not set (main) | the fixture with `house.mortgage_renewal_*` removed and `sources: {house.mortgage_renewal_rates: user}`, through `load_config_dict` |
 | 0.9992, 0.9792 and 0.9844 (prototype) | `m/hvr_ar1.yaml` at 5,000 paths: the shifted base arrays through `break_even._cheapest_probabilities`, against `run_monte_carlo(load_at(raw, "house.mortgage_rate", v))` |
-| 28.10%, 38.55%, 0.508 and 0.0 (prototype) | §4's config, `run_monte_carlo`, then the same with `deterministic._annual_costs_for_option` patched to the central row |
+| 28.10%, 38.55%, 0.508 and 0.0 (prototype) | §4's config, `income_growth_rate: 0.0` included, `run_monte_carlo`, then the same with `deterministic._annual_costs_for_option` patched to the central row |
 | 1 failed / 2,438 passed and 12 failed / 2,427 passed, with §8's list (main and prototype) | `uv run --extra dev python -m pytest -q -p no:cacheprovider` in both trees (846 s and 879 s) |
 | every line number cited in this spec (main, r2) | `grep -n` and `sed -n` on the cited files |
 | `demographic prior:`: 1 line on stdout, 0 on `--read-back`, 0 on `--read-back short`, 0 in `assumptions.read_back` (main, r2) | `uv run hde examples/showcase_demographic_prior.yaml` bare, with `--read-back`, with `--read-back short` and with `--json`, each counted for lines containing `demographic prior:` |

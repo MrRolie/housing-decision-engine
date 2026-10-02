@@ -422,6 +422,12 @@ Found by the same lane's review, each run on the tip:
   and prints `anchor-sourced: house.mortgage_renewal_years=5 [hbp.repayment_grace_years]`, a
   provenance the figure only shares by coincidence. The renewal ladder is refused outright since
   2026-10-01; the general fix is an anchor that names the keys it may source.
+- Found 2026-10-02 on the renewal-rate path file build: on a file run,
+  `tests/fixtures/renewal_paths/hvr_opens_at.yaml` prints `first renewal at year 6: -$0/yr
+  (-0.0%)`, a signed zero. Main prints the same line on that config with the central row typed
+  as its ladder, and there the `opens at 4.40%, the same figure as mortgage_rate` warning
+  explains the zero step; a file run gates that warning off. Rendering a signed zero predates
+  the build.
 
 ## 12. The shipped examples barely exercise uncertainty
 

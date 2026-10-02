@@ -880,10 +880,12 @@ def coherence_warnings(spec: ComparisonSpec, raw: Optional[Dict[str, Any]] = Non
     # The engine priced one rate for a whole amortization; a Canadian fixed term
     # is at most five years, so a 25-year amortization resets four times and the
     # reset is the largest risk the buy side carries.
-    # A renewal-rate path file gates the whole loop off: every branch below
-    # speaks of a ladder the config states, and on a file run the config cannot
-    # state one (R13), so each would name a key nobody can set. The read-back's
-    # `renewal rate paths:` band shows what the bias warning measured
+    # A renewal-rate path file gates the whole loop off. The not-modelled
+    # branch speaks of a financed option with no mortgage_renewal_years, which
+    # beside a file is refused (R14), and every other branch of a stated
+    # mortgage_renewal_rates, which beside a file is refused too (R13), so none
+    # describes a file run. The read-back's `renewal rate paths:` band shows
+    # what the bias warning measured
     # (docs/specs/2026-10-01-renewal-rate-path-file.md §0.1 item 13, §7).
     ladder_options = (() if spec.renewal_rate_paths is not None
                       else (("condo", spec.condo), ("house", spec.house)))

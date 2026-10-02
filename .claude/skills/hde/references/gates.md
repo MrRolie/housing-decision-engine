@@ -205,10 +205,13 @@ distribution around it, and read back the engine's `renewals:` line. A
 `renewal_rates` path file prices it as a distribution instead: read back the
 `renewal rate paths:` line, whose model and validation are the file's own
 words. Use a file only when the user supplies one; never propose, invent or
-build one. Read that
-line before writing either sentence — it says how many renewals fell inside
-the horizon, and a renewal past the horizon is priced by nothing, which the
-engine warns about separately. Any default the engine warned on stays on the
+build one. Read the
+`renewals:` line, and on a file run the `renewal rate paths:` line too, before
+writing either sentence — the `renewals:` line says how many renewals fell
+inside the horizon and marks each one past it `not priced — past the
+horizon`. The engine warns of renewals past the horizon only when none of a
+stated ladder's falls inside it, and refuses a path file there; a ladder
+priced in part draws no warning. Any default the engine warned on stays on the
 list too (a
 1% real rent escalation defaulted for a Québec continuing lease biases toward
 buying); "no chance you move early" biases toward buying too (an early exit
