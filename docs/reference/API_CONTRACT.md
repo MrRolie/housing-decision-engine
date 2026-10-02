@@ -416,6 +416,11 @@ row lists are never ranked against each other.
   same amount on every path, to within `break_even.REVERSAL_GATE_TOLERANCE` of
   that option's standard deviation, over `probe_paths` paths;
   `max_path_deviation_over_sd` is the largest departure measured.
+- On a run with a renewal-rate path file, each path's shift is first taken net
+  of the named option's financing leg at the row that path drew less that leg
+  at the central row, both priced at a terminal value of 0, and moved from the
+  stated value to the probe (`break_even.row_financing_gaps`); a probe that
+  draws a different row on any path is refused.
 - `bracket_low` and `bracket_high` bound the search, on the key's own quoting
   axis, and `bracket_source` is whose range that is: `set in the engine`, for a
   range written into the engine (`break_even.RATE_BRACKETS`).
@@ -480,7 +485,7 @@ row lists are never ranked against each other.
   the options it names, and the sides of a `decisive` one from P(cheapest) of
   the central case's winner at each end of the bracket it converged in.
 - `structural_zeros[]`: `kind`, `label`, `keys` and `reversal_key`, one row per
-  `exact` row: `kind` is `stated_path` on every row, `keys` holds that row's
+  `exact` or `estimated` row: `kind` is `stated_path` on every row, `keys` holds that row's
   key, which the config states and no draw touches, `reversal_key` names that
   row, and `label` is `the renewal rate` or `the contract rate`.
 

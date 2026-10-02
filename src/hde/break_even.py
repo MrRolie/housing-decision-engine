@@ -23,12 +23,12 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from .anchors import ANCHORS
-from .config import ConfigValidationError, load_config_dict, single_path_run
+from .config import ConfigValidationError, _reads_the_file, load_config_dict, single_path_run
 from .decomposition import (BOUNDARY_FIELDS,
                             EstimatedReversal, ExactReversal, RefusedBoundary,
                             RefusedReversal, ReversalRegister, SampledBoundary,
                             SolvedBoundary, StructuralZero)
-from .deterministic import compute_deterministic
+from .deterministic import _financing_pv, compute_deterministic, renewal_args_for
 from .models import (ComparisonDeterministicResult, ComparisonMonteCarloResult, ComparisonSpec,
                      MonteCarloOptionResult, Verdict, compute_verdict)
 # `_summarize_array` is the reversal register's, on purpose: the free curve has
@@ -522,6 +522,12 @@ def solve_break_even(
             entry["sentence"] = band_sentence(
                 key, entry, core["tie_band_fraction"], band_clause=False,
                 note=lambda v: f"{deflate(v, pi):.2%} real")
+    # A renewal-rate path file prices its central row, which depends on the
+    # priced renewals: a crossing whose two ends price different rows says so.
+    for entry in core["break_evens"]:
+        switch = central_row_switch(raw, key, entry)
+        if switch is not None:
+            entry["sentence"] = f"{entry['sentence']}; {switch}"
     # Attached here rather than in `no_crossing_record`: `solve_crossings`
     # solves any pair of total curves, and its other callers, the story's act
     # 6 and the reversal register, never read this record's affordability.
@@ -566,6 +572,43 @@ def solve_break_even(
 # "crossing" that was the mortgage-insurance cliff — the premium switching on,
 # not two costs meeting. Both are the engine's to state.
 # ---------------------------------------------------------------------------
+
+
+def central_row_switch(raw: Dict[str, Any], key: str,
+                       entry: Dict[str, Any]) -> Optional[str]:
+    """`the central row switches here: row i at …, row j at …` when the two
+    ends a crossing was found between price different central rows of a
+    renewal-rate path file, else None
+    (docs/specs/2026-10-01-renewal-rate-path-file.md §5).
+
+    The central row is re-read off the loader at each end, never carried from
+    the stated config: it moves with the priced renewals, so with the horizon.
+    The ends are the integer crossing's last value below and first value
+    above, or a float crossing's adjacent-float bracket. A bisected float
+    crossing keeps no ends, and no float key moves the priced renewals, which
+    are counted in whole years. An end the loader refuses switches nothing it
+    could name."""
+    if "renewal_rates" not in raw:
+        return None
+    if "last_value_below" in entry:
+        ends = (entry["last_value_below"], entry["value"])
+    elif "bracket" in entry:
+        ends = tuple(entry["bracket"])
+    else:
+        return None
+    rows = []
+    for end in ends:
+        try:
+            loaded = load_at(raw, key, end).renewal_rate_paths
+        except (ConfigValidationError, ValueError):
+            return None
+        if loaded is None:
+            return None
+        rows.append(loaded.central_index)
+    if rows[0] == rows[1]:
+        return None
+    return (f"the central row switches here: row {rows[0]} at {key}={_fmt_value(key, ends[0])}, "
+            f"row {rows[1]} at {key}={_fmt_value(key, ends[1])}")
 
 
 def horizon_drift(
@@ -1456,6 +1499,49 @@ def reversal_admission(
                   "deltas": {option: deltas[option] for option in moves}, "why": None}
 
 
+def _financing_at_zero_value(params: Any, spec: ComparisonSpec,
+                             rates: Optional[Sequence[float]]) -> float:
+    """Fin: one option's `_financing_pv`, its three legs summed, at a terminal
+    value of 0 and with `rates` as its renewal rates (None: its own ladder).
+    The value-dependent half of the terminal equity is left out on purpose:
+    it is the path's own, and the term below only moves with the row."""
+    sim = spec.simulation
+    return float(sum(_financing_pv(
+        params.initial_value, params.down_payment, params.mortgage_rate,
+        params.mortgage_term_years, params.all_cash, params.selling_cost_rate,
+        0.0, sim.discount_rate, sim.years, params.financed_purchase_costs,
+        **renewal_args_for(params, rates))))
+
+
+def row_financing_gaps(spec: ComparisonSpec, option: str, rows: Optional[Any],
+                       paths: int) -> Any:
+    """G_i = Fin(rho_i) - Fin(c) for `option` on every path: the financing leg
+    at the renewal-rate row path i priced, less that leg at the central row c,
+    both at `spec`'s own figures (docs/specs/2026-10-01-renewal-rate-path-file.md
+    §6, clause (b')). `rows` is a run's `renewal_rate_rows`.
+
+    THE ONE HOME of the term, for the exactness gate and the free curve alike,
+    so the two cannot disagree about it. With no rows every path prices the
+    central ladder, and G is that leg less itself: 0.0 exactly, so (b') is (b)
+    bit for bit. Fin is computed once per distinct row. An option with no
+    mortgage to renew (the renter, an all-cash or unfinanced purchase) has no
+    such leg, and its term is 0.0."""
+    params = getattr(spec, option, None)
+    if option not in ("condo", "house") or not _reads_the_file(params):
+        return np.zeros(int(paths), dtype=np.float64)
+    loaded = spec.renewal_rate_paths
+    central = _financing_at_zero_value(params, spec, None)
+    if rows is None or loaded is None or option not in loaded.columns:
+        return np.full(int(paths), central - central, dtype=np.float64)
+    n = loaded.columns[option]
+    rows = np.asarray(rows)
+    gaps = np.empty(rows.size, dtype=np.float64)
+    for row in np.unique(rows).tolist():
+        leg = _financing_at_zero_value(params, spec, loaded.effective[row][:n])
+        gaps[rows == row] = leg - central
+    return gaps
+
+
 def _shift_deviation_over_sd(before: Any, after: Any) -> float:
     """Clause (b)'s measure: `max |Δ_i − mean Δ| / sd(before)` for one option's
     per-path PVs at the stated value and at the probe.
@@ -1514,6 +1600,14 @@ def reversal_gate(
     (b) the option the key does name moves by **one constant on every path**:
         `max |Δ_i − mean Δ| ≤ REVERSAL_GATE_TOLERANCE · sd(PV)`.
 
+    With a renewal-rate path file, (b) becomes (b'): each path's financing leg
+    reads the row it drew, so Δ_i carries a per-row term, and that term is
+    subtracted before the shift is measured — d_i = Δ_i − [G_i(x₁) − G_i(x₀)]
+    with G_i from `row_financing_gaps`. Its PREMISE is that the stated and the
+    probe run drew the same row on every path; any difference refuses the
+    licence. With no file G_i is 0.0 exactly and (b') is (b) bit for bit
+    (docs/specs/2026-10-01-renewal-rate-path-file.md §6).
+
     An exactness test, not a tolerance — see `REVERSAL_GATE_TOLERANCE`. The
     mechanism behind the licence is readable rather than lucky: `_financing_pv`
     is one terminal call and `equity_N = value_N·(1−s) − balance_N` has no
@@ -1533,8 +1627,10 @@ def reversal_gate(
     option = key.split(".", 1)[0]
     spec = load_config_dict(raw)
     m = max(1, min(int(paths), int(spec.simulation.num_sims)))
-    base = simulate(load_at(raw, "simulation.num_sims", m))
-    at = simulate(load_at(with_value(raw, "simulation.num_sims", m), key, probe))
+    stated_spec = load_at(raw, "simulation.num_sims", m)
+    probe_spec = load_at(with_value(raw, "simulation.num_sims", m), key, probe)
+    base = simulate(stated_spec)
+    at = simulate(probe_spec)
     record: Dict[str, Any] = {
         "paths": m, "probe": probe, "names": option,
         "tolerance": REVERSAL_GATE_TOLERANCE,
@@ -1558,10 +1654,22 @@ def reversal_gate(
             why=(f"a present value this gate compares is not a finite number: "
                  f"{'; '.join(unreadable)}"))
         return record
+    rows_before, rows_after = base.renewal_rate_rows, at.renewal_rate_rows
+    if (rows_before is None) != (rows_after is None) or (
+            rows_before is not None and not np.array_equal(rows_before, rows_after)):
+        differ = (m if rows_before is None or rows_after is None
+                  else int(np.count_nonzero(np.asarray(rows_before) != np.asarray(rows_after))))
+        record.update(
+            others_bit_identical=None, worst_deviation_over_sd=math.nan,
+            why=(f"moving {key} changes the renewal-rate row {differ:,} of the {m:,} paths "
+                 f"price, so no per-row term can be subtracted"))
+        return record
+    gap = (row_financing_gaps(probe_spec, option, rows_after, m)
+           - row_financing_gaps(stated_spec, option, rows_before, m))
     for name, before, after in pairs:
         if name == option:
             record["worst_deviation_over_sd"] = _shift_deviation_over_sd(
-                before.pvs, after.pvs)
+                before.pvs, after.pvs - gap)
         elif not np.array_equal(before.pvs, after.pvs):
             record["others_bit_identical"] = False
             record["moved_others"].append(name)
@@ -1620,9 +1728,19 @@ def _free_curve(
     leg moves an owner's annual cost, so the base run's breach probabilities
     are NOT the ones that hold at this value and nothing may read them as if
     they were. `compute_verdict` does not read them.
+
+    The option `key` names also moves by its per-row term, G_i(v) − G_i(x₀)
+    (`row_financing_gaps`, on the base run's own rows): on a renewal-rate path
+    file run its paths price different rows, and the deterministic delta is
+    the central row's alone. With no file that term is 0.0 on every path.
     """
     base_pv = {o: getattr(det_base, o).total_pv for o in options}
     base_arr = {o: getattr(mc_base, o).pvs for o in options}
+    named = key.split(".", 1)[0]
+    rows = mc_base.renewal_rate_rows
+    paths = len(base_arr[named]) if named in base_arr else 0
+    stated_gaps = (row_financing_gaps(load_config_dict(raw), named, rows, paths)
+                   if named in base_arr else None)
     cache: Dict[float, Tuple[Verdict, Dict[str, Optional[float]]]] = {}
 
     def at(value: float) -> Tuple[Verdict, Dict[str, Optional[float]]]:
@@ -1631,6 +1749,9 @@ def _free_curve(
             spec = load_at(raw, key, v)
             det = compute_deterministic(spec)
             arrays = {o: base_arr[o] + (getattr(det, o).total_pv - base_pv[o]) for o in options}
+            if stated_gaps is not None:
+                arrays[named] = arrays[named] + (
+                    row_financing_gaps(spec, named, rows, paths) - stated_gaps)
             probs = _cheapest_probabilities(arrays, options)
             mc = ComparisonMonteCarloResult(
                 **{o: (MonteCarloOptionResult(pvs=arrays[o],
@@ -2310,6 +2431,10 @@ def reversal_register(
                 reason=_not_admitted_reason(key, priced=bool(record["deltas"]))))
             continue
         gate = reversal_gate(raw, key, far, paths=gate_paths, simulate=simulate)
+        # No draw touches a stated financing key, whatever the gate licenses:
+        # its row prints on both branches (docs/specs/2026-10-01-renewal-rate-path-file.md
+        # §6, ruling 6), or a key the gate refuses vanishes from the NO ROW list.
+        zeros.append(_stated_path_zero(key))
 
         common = {
             "key": key, "option": option,
@@ -2336,7 +2461,6 @@ def reversal_register(
         exact.append(ExactReversal(
             **common, probe_paths=gate["paths"],
             boundaries=tuple(boundaries), refused_boundaries=tuple(refused)))
-        zeros.append(_stated_path_zero(key))
 
     rowless = not (exact or estimated or not_admitted)
     return ReversalRegister(

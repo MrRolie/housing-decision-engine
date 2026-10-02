@@ -317,7 +317,8 @@ _MEANINGS = {
     ("reversal.refused[]", "reason"): ("`code` is `not_admitted`, and `reason` is the "
                                        "measured fact.",),
     ("reversal", "structural_zeros"): ("`structural_zeros[]`: `kind`, `label`, `keys` and "
-                                       "`reversal_key`, one row per `exact` row",),
+                                       "`reversal_key`, one row per `exact` or "
+                                       "`estimated` row",),
     ("reversal", "no_distance_code"): (_NO_DISTANCE,),
     ("reversal", "no_distance_reason"): (_NO_DISTANCE,),
     ("reversal.exact[]", "key"): ("`key` is the key searched and `option` the option it "
@@ -2094,6 +2095,32 @@ def test_the_exact_rows_and_their_licence(runs):
     assert checked
 
 
+@claims("On a run with a renewal-rate path file, each path's shift is first taken net")
+def test_the_licence_on_a_path_file_run():
+    """*Kills it:* the per-row term left out (clause (b) refuses the contract
+    rate here), or the premise check deleted."""
+    import dataclasses
+    from hde.break_even import reversal_gate, row_financing_gaps
+    raw = _load(REPO / "tests" / "fixtures" / "renewal_paths" / "hvr_example.yaml")
+    raw["renewal_rates"]["path"] = str(REPO / raw["renewal_rates"]["path"])
+    gate = reversal_gate(raw, "house.mortgage_rate", 0.10)
+    assert gate["licensed"] and gate["worst_deviation_over_sd"] <= REVERSAL_GATE_TOLERANCE
+    spec = load_config_dict(copy.deepcopy(raw))
+    rows = run_monte_carlo(dr._spec_at(spec, 40)).renewal_rate_rows
+    gaps = row_financing_gaps(spec, "house", rows, 40)
+    assert np.all(gaps[rows == spec.renewal_rate_paths.central_index] == 0.0)
+    assert np.all(gaps[rows != spec.renewal_rate_paths.central_index] != 0.0)
+    calls = []
+
+    def shifted(probe_spec):
+        result = run_monte_carlo(probe_spec)
+        calls.append(1)
+        return (dataclasses.replace(result, renewal_rate_rows=np.roll(
+            result.renewal_rate_rows, 1)) if len(calls) == 2 else result)
+
+    assert not reversal_gate(raw, "house.mortgage_rate", 0.10, simulate=shifted)["licensed"]
+
+
 @claims("`bracket_low` and `bracket_high` bound the search")
 def test_the_bracket_is_the_engines_own(runs):
     for name in ("fixture", "mortgage"):
@@ -2397,13 +2424,13 @@ def test_the_refused_fields(runs):
 
 @claims("`structural_zeros[]`: `kind`, `label`, `keys` and `reversal_key`, one row per")
 def test_the_reversal_register_s_zeros_are_its_stated_paths(runs):
-    """One row per `exact` row, each naming that row's key, which no draw
-    touches: moving it moves no stream's generator state."""
+    """One row per `exact` or `estimated` row, each naming that row's key,
+    which no draw touches: moving it moves no stream's generator state."""
     for name in ("fixture", "mortgage"):
         run = runs[name]
-        exact = run.block["reversal"]["exact"]
+        searched = run.block["reversal"]["exact"] + run.block["reversal"]["estimated"]
         zeros = run.block["reversal"]["structural_zeros"]
-        assert [z["reversal_key"] for z in zeros] == [r["key"] for r in exact]
+        assert sorted(z["reversal_key"] for z in zeros) == sorted(r["key"] for r in searched)
         spec = dr._spec_at(run.spec, 40)
         for zero in zeros:
             assert set(zero) == {"kind", "label", "keys", "reversal_key"}
