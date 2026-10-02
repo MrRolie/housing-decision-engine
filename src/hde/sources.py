@@ -456,6 +456,7 @@ def _sum_hint(anchor: Anchor, figure: float, window: float) -> str:
 # anchor's figure loaded, and its read-back printed `anchor-sourced:` two lines
 # above a `renewals:` line saying the engine anchors no renewal rate. Today's
 # contract, `<option>.mortgage_rate`, is not in this list: it may cite one.
+# Pinned in tests/test_sources.py::TestARenewalRateCarriesNoAnchor.
 _UNANCHORED_KEYS: Tuple[str, ...] = tuple(
     f"{option}.mortgage_renewal_rates" for option in ("condo", "house"))
 

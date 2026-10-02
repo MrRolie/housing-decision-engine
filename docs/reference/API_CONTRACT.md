@@ -32,7 +32,13 @@ arms one warning. A key the config does not set, a value outside those forms, an
 unknown anchor name, a `source: none` anchor (it holds no figure), and an anchor
 whose figure is not the number the config states all refuse at load: the value
 must equal the anchor's — or the sum, or a declared `restatement` of it — within
-the same equality window the read-back matcher uses.
+the same equality window the read-back matcher uses. One key takes no anchor at
+any figure (2026-10-01): an `anchor:` declaration on
+`<option>.mortgage_renewal_rates`, condo or house, scalar or list, refuses at
+load naming the key, because a renewal rate is a stated scenario for a rate set
+years from now and the engine anchors no forward rate; the ladder is `user` or
+`assistant`. `<option>.mortgage_rate`, today's contract, may still cite a
+`mortgage_rate.*` anchor at its figure.
 
 An `other_recurring_costs` line is declared by NAME:
 `<option>.other_recurring_costs.<line name>.annual_amount` (and

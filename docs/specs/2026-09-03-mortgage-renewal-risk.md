@@ -78,6 +78,9 @@ real-mode warning must name the payment it quotes (now "the year-1 payment").
   (2026-09-21): the user's own only where `sources:` declares the key `user`, the
   assistant's where it declares `assistant`, and otherwise the line says the read-back
   cannot tell whose it is, rather than overriding the echo's own sentence.
+  2026-10-01: the loader refuses an `anchor:` declaration on `<option>.mortgage_renewal_rates`
+  at any figure, naming the key — today's contracted rate is no forecast of a renewal rate,
+  so an assistant's flat path at it is declared `assistant`.
 - **Warnings** (`config.coherence_warnings`): no `mortgage_renewal_years` on a mortgage block
   — renewal risk not modelled, the rate held for the whole amortization though a Canadian
   fixed term is at most five years; renewal rates below `mortgage_rate` — biases the verdict

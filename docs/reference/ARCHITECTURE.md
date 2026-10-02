@@ -724,14 +724,23 @@ annual are one figure) within the read-back matcher's own window, and a
 2026-09-04: `anchor:property_tax.quebec_city` was accepted on a 0.82539% rate
 and the same read-back printed `anchor-sourced` beside `no anchor match` for
 that one number — a name-only check dresses an estimate as a citation, which is
-worse than declaring nothing. It feeds four echo lines — `user-stated:`, `assistant-typed:`, `anchor-sourced: key=value
+worse than declaring nothing. A figure check is not enough either: a key may
+take no anchor at all. `<option>.mortgage_renewal_rates` is refused on the KEY,
+before any name or figure is read (`sources._UNANCHORED_KEYS`, 2026-10-01) —
+a ladder declared `anchor:mortgage_rate.contracted_5y_uninsured` at that
+anchor's 4.35% loaded, and its read-back printed `anchor-sourced:` above a
+`renewals:` line saying the engine anchors no renewal rate. A renewal rate is a
+stated scenario for a rate set years from now, so the ladder is `user` or
+`assistant`; `<option>.mortgage_rate`, today's contract, may still cite the
+anchor. It feeds four echo lines — `user-stated:`, `assistant-typed:`, `anchor-sourced: key=value
 [anchor name]`, and `unattributed:` for stated keys the block omits — and, with
 no block at all, the single line `sources: none declared — the read-back cannot
 tell the user's numbers from the assistant's`. Values are echoed in the config's
 own units ($/mo, dollars, percentages, counts, `N entries` for a list). It
 changes NO computation: a declared key the config does not set, a class outside
-those three forms, an anchor name outside the registry, and an anchor whose
-figure is not the one the config states all refuse at load.
+those three forms, an anchor name outside the registry, an anchor whose
+figure is not the one the config states, and any anchor on a renewal ladder all
+refuse at load.
 
 Its one consequence is the decisiveness-provenance `[warning]`: when the
 `mc_floor` rule decides the verdict, every uncertainty input that is

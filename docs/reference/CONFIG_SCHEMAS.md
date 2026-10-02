@@ -567,7 +567,10 @@ The config loader validates:
 11. A `sources:` entry names a key the config sets — an `other_recurring_costs`
     line by its name (`<option>.other_recurring_costs.<name>.annual_amount`);
     an unknown line name is refused naming the lines that exist, and a name two
-    lines share cannot be declared
+    lines share cannot be declared. `<option>.mortgage_renewal_rates` is `user`
+    or `assistant` only: an `anchor:` declaration on it is refused at any
+    figure, because a renewal rate is a stated scenario for a rate set years
+    from now and no anchor forecasts it (`mortgage_rate` may cite one)
 
 12. `mortgage_renewal_years` and `mortgage_renewal_rates` travel together —
     either alone is refused, because no renewal rate is anchored or forecast

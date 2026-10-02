@@ -918,11 +918,14 @@ class TestARenewalRateCarriesNoAnchor:
             load_config_dict(_ladder_cfg(option, rates, {key: CONTRACTED}))
         assert str(refused.value) == _ladder_refusal(key)
 
-    def test_the_refusal_is_on_the_key_whatever_anchor_or_figure(self):
-        """The posted rate on a 5% ladder: the figure matches no anchor, and
-        the key is the reason given, not the figure."""
+    @pytest.mark.parametrize("declaration", [
+        "anchor:mortgage_rate.posted_5y", "anchor:no_such.anchor"],
+        ids=["figure-off", "unknown-name"])
+    def test_the_refusal_is_on_the_key_whatever_anchor_or_figure(self, declaration):
+        """A 5% ladder declared with the posted rate (its figure matches no
+        anchor) or with a name outside the registry: the key is the reason
+        given, before any name or figure is read."""
         key = "house.mortgage_renewal_rates"
-        declaration = "anchor:mortgage_rate.posted_5y"
         with pytest.raises(ConfigValidationError) as refused:
             load_config_dict(_ladder_cfg("house", 0.05, {key: declaration}))
         assert str(refused.value) == _ladder_refusal(key, declaration)
