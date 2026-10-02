@@ -48,6 +48,7 @@ from .market_scenario import (
     load_scenario_prior,
 )
 from .pv import pv_single, pv_recurring_with_escalation
+from .decomposition import CHANNELS as _CHANNELS
 from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 
 # ---------------------------------------------------------------------------
@@ -1432,7 +1433,8 @@ def run_monte_carlo(
     econ = spec.economic
 
     frozen = frozenset(int(c) for c in freeze)
-    outside = sorted(c for c in frozen if not 0 <= c <= 6)
+    freezable = frozenset(entry.id for entry in _CHANNELS)
+    outside = sorted(c for c in frozen if c not in freezable)
     if outside:
         raise ValueError(
             "freeze names %s, which is no channel: the ids are 0 economy, "
@@ -1448,7 +1450,7 @@ def run_monte_carlo(
     # nothing removes nothing, and freezing all seven takes no draw at all, so
     # the binding cannot matter (measured: the all-frozen identity holds to the
     # same 1 ULP under both bindings).
-    if streams is None and frozen and frozen != frozenset(range(7)):
+    if streams is None and frozen and frozen != freezable:
         raise ValueError(
             "a partial freeze needs an addressed binding: freeze=%s with no "
             "streams shares one generator across every channel, so removing "

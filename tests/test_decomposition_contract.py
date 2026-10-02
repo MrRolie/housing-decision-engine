@@ -557,9 +557,9 @@ def test_every_docstring_and_every_comment_is_a_pointer():
              '    """`move_threshold` is the largest move any re-draw made."""\n', True),
             ("    tag: Optional[str] = None\n",
              '    """`tag` is the read-back\'s tag for this width\'s key."""\n', True),
-            ("    if not 0 <= channel_id < len(CHANNELS):\n",
+            ("    found = [entry for entry in CHANNELS if entry.id == channel_id]\n",
              '    "A channel id is the address of the stream that draws it."\n', False),
-            ("    if not 0 <= channel_id < len(CHANNELS):\n",
+            ("    found = [entry for entry in CHANNELS if entry.id == channel_id]\n",
              '    f"A channel id is {channel_id}."\n', False)):
         assert source.count(anchor) == 1, anchor
         mutated = source.replace(anchor, anchor + restatement if after

@@ -118,9 +118,10 @@ LEVEL_PATHS: int = 2000
 
 def channel(channel_id: int) -> Channel:
     """Design: docs/specs/2026-09-22-which-risk-decides-it.md §3.1."""
-    if not 0 <= channel_id < len(CHANNELS):
+    found = [entry for entry in CHANNELS if entry.id == channel_id]
+    if not found:
         raise KeyError(channel_id)
-    return CHANNELS[channel_id]
+    return found[0]
 
 
 def channel_by_key(key: str) -> Channel:
