@@ -450,6 +450,16 @@ def _sum_hint(anchor: Anchor, figure: float, window: float) -> str:
     return ""
 
 
+# Keys no anchor may source (2026-10-01). A renewal rate is a stated scenario
+# for a rate set years from now, and the engine anchors no forward rate — so a
+# ladder declared `anchor:mortgage_rate.contracted_5y_uninsured` at that
+# anchor's figure loaded, and its read-back printed `anchor-sourced:` two lines
+# above a `renewals:` line saying the engine anchors no renewal rate. Today's
+# contract, `<option>.mortgage_rate`, is not in this list: it may cite one.
+_UNANCHORED_KEYS: Tuple[str, ...] = tuple(
+    f"{option}.mortgage_renewal_rates" for option in ("condo", "house"))
+
+
 def _anchor_declaration(
     data: Dict[str, Any], key: str, declaration: str,
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -467,8 +477,20 @@ def _anchor_declaration(
     The `+` form is for a value that is the sum of two anchors — a Québec
     owner's property-tax rate is the municipal rate plus the province's school
     rate — and is checked against the sum.
+
+    BY FIGURE IS NOT ENOUGH EITHER (2026-10-01). Some keys may carry no anchor
+    at all, whatever figure they state: `_UNANCHORED_KEYS` is refused before
+    any name or figure is read.
     """
     parts = [part.strip() for part in declaration[len("anchor:"):].split("+")]
+    if key in _UNANCHORED_KEYS:
+        return None, (
+            f"sources: '{key}' declared anchor:{'+'.join(parts)} — a renewal rate is a "
+            f"stated scenario for a rate set years from now, and the engine anchors no "
+            f"forward rate: today's contracted rate is not a forecast of it; an "
+            f"assistant using today's contracted rate as a flat scenario declares it "
+            f"'assistant'"
+        )
     if not all(parts):
         return None, _value_problem(key, declaration)
     for name in parts:
