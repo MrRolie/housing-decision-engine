@@ -13,11 +13,14 @@ that only wants numbers.
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
 import datetime
 import math
 from importlib import metadata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from .anchors import (
     ANCHORS,
@@ -32,6 +35,7 @@ from .anchors import (
     short_cite,
 )
 from .decomposition import (
+    CHANNELS,
     DecompositionOutcome,
     DecompositionRefusal,
     LevelRow,
@@ -57,6 +61,7 @@ from .models import (
     MonteCarloSummary,
     Verdict,
 )
+from .rate_paths import LoadedRatePaths
 from .rates import ConvertedRate, converted_for, deflate, inflation_anchor_name
 from .sources import SourceEcho, source_echo_to_dict, source_lines, stated_tag
 from .tax_treatment import (
@@ -539,13 +544,25 @@ def renewal_line(name: str, opt, spec: ComparisonSpec) -> Optional[str]:
             + ", ".join(f"{q:.2%}" for q in quoted) + " = "
             + ", ".join(f"{e:.3%}" for e in opt.mortgage_renewal_rates)
             + " effective annual")
-    parts.append(renewal_source_clause(name, spec))
+    clause = renewal_source_clause(name, spec)
+    if clause is not None:
+        parts.append(clause)
     return " · ".join(parts)
 
 
-def renewal_source_clause(name: str, spec: ComparisonSpec) -> str:
+def renewal_source_clause(name: str, spec: ComparisonSpec) -> Optional[str]:
     """Whose renewal path this is, from the source echo — never a claim the
-    echo contradicts two lines away (2026-09-21)."""
+    echo contradicts two lines away (2026-09-21).
+
+    On a renewal-rate path file run the rates are the file's central row, not
+    a scenario anyone stated: the clause names the row and the file, and an
+    option that reads no column of it has no clause, because no row prices
+    anything for it (docs/specs/2026-10-01-renewal-rate-path-file.md §7)."""
+    loaded = spec.renewal_rate_paths
+    if loaded is not None:
+        if not loaded.columns.get(name, 0):
+            return None
+        return f"central row {loaded.central_index} of {loaded.path}"
     tail = "not a forecast — the engine anchors no renewal rate"
     echo = spec.sources
     source = echo.classify(f"{name}.mortgage_renewal_rates") if echo is not None else None
@@ -569,17 +586,22 @@ def mortgage_renewals_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
     """
     out: List[Dict[str, Any]] = []
     horizon = spec.simulation.years
+    loaded = spec.renewal_rate_paths
     for name in _OWNED:
         opt = getattr(spec, name)
         segments = renewal_segments_for(opt) if opt is not None else None
         if not segments:
             continue
+        # On a path file run the renewal rates are the file's quotes, in the
+        # file's convention, never the contract's (path-file spec §7).
+        compounding = (loaded.compounding if loaded is not None and name in loaded.columns
+                       else opt.mortgage_rate_compounding)
         out.append({
             "option": name,
             "renewal_years": opt.mortgage_renewal_years,
             "rates_quoted": opt.mortgage_renewal_rates_quoted,
             "rates": opt.mortgage_renewal_rates,
-            "compounding": opt.mortgage_rate_compounding,
+            "compounding": compounding,
             "renewals_priced": sum(1 for s in segments[1:] if s.start_year <= horizon),
             "segments": [
                 {"start_year": s.start_year, "end_year": s.end_year, "rate": s.rate,
@@ -589,6 +611,71 @@ def mortgage_renewals_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
             ],
         })
     return out
+
+
+# The one statement of ruling 5 (path-file spec §4, §7): the file's rows are
+# drawn on their own stream, against nothing else the run draws.
+RATE_PATHS_INDEPENDENCE = "drawn independently of every other draw (the discount rate is fixed)"
+_COMPOUNDING_WORDS = {"semi_annual": "semi-annual", "effective_annual": "effective annual"}
+
+
+def renewal_rate_band(loaded: LoadedRatePaths) -> List[Tuple[int, float, float]]:
+    """`(year, p5, p95)` for each priced renewal: the linear percentiles of
+    the file's quoted rates in that column, over every row."""
+    out: List[Tuple[int, float, float]] = []
+    for k, year in enumerate(loaded.priced_years):
+        p5, p95 = np.percentile([row[k] for row in loaded.quoted], [5, 95])
+        out.append((year, float(p5), float(p95)))
+    return out
+
+
+def renewal_rate_paths_line(loaded: LoadedRatePaths) -> str:
+    """The `renewal rate paths:` assumptions line (path-file spec §7): the
+    file, its bytes, the central row the deterministic case prices and why,
+    the 5–95% band at each priced renewal, the file's own words for its model
+    and validation, and the independence clause. Figures, no prose."""
+    priced = loaded.priced_columns
+    tied = loaded.tied_rows
+    tie = (f", tied with {tied} other row{'' if tied == 1 else 's'}, lowest index"
+           if tied else "")
+    central = ", ".join(f"{r:.2%}" for r in loaded.central_quoted(priced))
+    band = ", ".join(f"year {year} {p5:.2%}–{p95:.2%}"
+                     for year, p5, p95 in renewal_rate_band(loaded))
+    provenance = loaded.provenance
+    return (
+        f"renewal rate paths: {loaded.path} · sha256 {loaded.file_sha256[:12]}… · "
+        f"central row {loaded.central_index} of {loaded.rows:,} (nearest the per-renewal "
+        f"median{tie}): {central} as quoted ({_COMPOUNDING_WORDS[loaded.compounding]}) · "
+        f"5–95% by renewal: {band} · method: {provenance['method']} · data window: "
+        f"{provenance['data_window']} · validation: {provenance['validation']['text']} · "
+        f"{RATE_PATHS_INDEPENDENCE}"
+    )
+
+
+def renewal_rate_paths_to_dict(loaded: LoadedRatePaths) -> Dict[str, Any]:
+    """`assumptions.renewal_rate_paths` (path-file spec §7): the read-back
+    line's figures, structured, and the file's provenance verbatim. The
+    channels the rows are drawn independently of are every channel but the
+    renewal rates' own, read off the channel table."""
+    priced = loaded.priced_columns
+    return {
+        "path": loaded.path,
+        "file_sha256": loaded.file_sha256,
+        "schema_version": loaded.schema_version,
+        "term_years": loaded.term_years,
+        "renewal_years": list(loaded.renewal_years),
+        "priced_years": list(loaded.priced_years),
+        "compounding": loaded.compounding,
+        "as_of": loaded.as_of,
+        "rows": loaded.rows,
+        "central_index": loaded.central_index,
+        "central_rates_quoted": loaded.central_quoted(priced),
+        "tied_rows": loaded.tied_rows,
+        "band": {str(year): [p5, p95] for year, p5, p95 in renewal_rate_band(loaded)},
+        "provenance": copy.deepcopy(loaded.provenance),
+        "independent_of_channels": [c.id for c in CHANNELS
+                                    if "renewal_rates.path" not in c.sizing_keys],
+    }
 
 
 def mortgage_rates_to_list(spec: ComparisonSpec) -> List[Dict[str, Any]]:
@@ -942,6 +1029,8 @@ def format_assumptions(
             f"sha256 {prior.file_sha256[:12]}… [demoflow ScenarioPrior v{prior.schema_version}]"
             + (f" · {drift}" if drift else "")
         )
+    if spec.renewal_rate_paths is not None:
+        lines.append(renewal_rate_paths_line(spec.renewal_rate_paths))
     if spec.defaults_applied:
         def _echo_entry(key: str) -> str:
             cite = default_tag(spec, key)
@@ -1007,7 +1096,7 @@ def assumptions_to_dict(
             "note": note,
             "anchor": anchor_to_dict(anchor) if anchor is not None else None,
         })
-    return {
+    out: Dict[str, Any] = {
         "mode": spec.economic.mode,
         "years": spec.simulation.years,
         "discount_rate": spec.simulation.discount_rate,
@@ -1045,6 +1134,11 @@ def assumptions_to_dict(
             if prior is not None else None
         ),
     }
+    # Absent, never null, without a file: a run with no path file prints
+    # today's document byte for byte (path-file spec §8).
+    if spec.renewal_rate_paths is not None:
+        out["renewal_rate_paths"] = renewal_rate_paths_to_dict(spec.renewal_rate_paths)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1587,6 +1681,11 @@ def _read_back_sections(
         # not a figure the engine anchored. An answer that carries the verdict
         # without it never names what produced the verdict.
         ("renewals", _option_lines(echo, "renewals:"), []),
+        # A renewal-rate path file (docs/specs/2026-10-01-renewal-rate-path-file.md
+        # §7): the file, its central row and its band, which the renewals: lines
+        # above price.
+        ("renewal rate paths",
+         [line for line in echo if line.startswith("renewal rate paths:")], []),
         ("purchase costs", _option_lines(echo, "purchase costs:"), []),
         # The tax treatment of the two sides' money (2026-09-05): the `tax:`
         # line and each first-time purchase's `hbp:` line — the rate the run

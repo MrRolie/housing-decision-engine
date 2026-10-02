@@ -444,6 +444,12 @@ def run_sweep(raw: Dict[str, Any], key: str, values: List[Any], *, monte_carlo: 
                 if mc is not None else None
             ),
         }
+        # A renewal-rate path file's central row depends on the priced
+        # renewals, so on the horizon: each point names the row its own load
+        # chose (docs/specs/2026-10-01-renewal-rate-path-file.md §5). Absent
+        # without a file.
+        if spec.renewal_rate_paths is not None:
+            row["central_row"] = spec.renewal_rate_paths.central_index
         row["sentence"] = point_sentence(key, row, pi=pi)
         rows.append(row)
     flips, mc_mean_flips = find_flips(rows)
@@ -505,7 +511,8 @@ def point_sentence(
 ) -> str:
     """One grid point in words: `<key>=<v>: best <opt> by $<margin> (<pct>% of
     <opt> PV)[, P(best) <p>%][, insured <opt> <tier>%][, affordability <opt>
-    max <r>% breaches years […]]` — only the clauses whose data the run has.
+    max <r>% breaches years […]][, central row <i>]` — only the clauses whose
+    data the run has; the last only on a renewal-rate path file run.
     On a disagreement point the verdict clause names both sides instead:
     `<key>=<v>: best guess <opt> by $<margin> (<pct>% of <opt> PV), most
     futures <other> (<p>%) — disagree`, the other clauses unchanged.
@@ -539,6 +546,9 @@ def point_sentence(
                    if option in aff and option not in drop_affordability]
         if clauses:
             parts.append("affordability " + "; ".join(clauses))
+    # Every point, the base one included: the row is the point's own.
+    if "central_row" in row:
+        parts.append(f"central row {row['central_row']}")
     return f"{head}: " + ", ".join(parts)
 
 

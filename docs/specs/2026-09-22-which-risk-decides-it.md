@@ -966,7 +966,7 @@ builds every correlation by composing independent primitives (`_correlated_z` re
 `rho*z_inf + sqrt(1-rho²)*eps`, `monte_carlo.py:326`), so the primitives are independent even
 where the resulting shocks are not. Grouping over config keys would import the dependence back.
 
-Seven channels, a fixed table in the source with fixed integer ids, never derived from set
+Eight channels, a fixed table in the source with fixed integer ids, never derived from set
 iteration order (the defect `_world_draws` already sorts `drift_bands` to avoid):
 
 | id | channel | draw sites | sized by |
@@ -978,6 +978,7 @@ iteration order (the defect `_world_draws` already sorts `drift_bands` to avoid)
 | 4 | `house` | its maintenance eps, other-cost eps, event years and event-cost eps | `house_maintenance_vol`, `other_cost_vol`, `house.events` |
 | 5 | `shelter` | the escalation z, the renter's event years and cost eps, its other-cost eps, **and `reset_year`** | `rent_escalation_vol`, `other_cost_vol`, `rent.events`, `rent.reset_hazard` |
 | 6 | `portfolio` | the per-year `z_inv` | `simulation.investment_return_vol` |
+| 8 | `rates` | the renewal-rate row, one `integers(0, N)` per path, last in `_draw_path_world` (docs/specs/2026-10-01-renewal-rate-path-file.md §4; income keeps id 7) | `renewal_rates.path` |
 
 **The renter split is not deferrable.** Measured, lumping the renter into one channel gives
 `renter 0.809` — a row that names nothing a household can act on. Split, it gives
