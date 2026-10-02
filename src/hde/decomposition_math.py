@@ -284,7 +284,7 @@ def bootstrap_path_indices(n_futures: int, n_resamples: int, seed: int) -> npt.N
     The resampling unit is the path — a future, drawn whole, so that f(A), f(B)
     and every row of the f(A_B) table are re-read at the SAME futures and the
     figures stay paired inside each resample. Channels are never resampled:
-    there are seven of them, they are a fixed table, and their sampling error is
+    they are a fixed table (`decomposition.CHANNELS`), and their sampling error is
     not what an interval here is about.
 
     Public so that a test can rebuild the resample table itself and recompute

@@ -1137,7 +1137,7 @@ def test_draws_and_live_channels_are_measured(runs, tmp_path):
     channels move rent, never the cheapest other option, and the margin is one
     figure on every future."""
     assert [c.key for c in dc.CHANNELS] == ["economy", "market", "population", "condo",
-                                            "house", "shelter", "portfolio"]
+                                            "house", "shelter", "portfolio", "rates"]
     assert dc.INCOME_STREAM_ID == 7
     run = runs["three"]
     block = run.block
@@ -2555,7 +2555,7 @@ def test_the_structural_zeros_say_what_is_drawn(runs):
 
 
 def _held(overrides=None):
-    seeds = {c: 1000 + c for c in range(8)}
+    seeds = {c: 1000 + c for c in dr.STREAM_IDS}
     seeds.update(overrides or {})
     return {c: np.random.default_rng(s) for c, s in seeds.items()}
 

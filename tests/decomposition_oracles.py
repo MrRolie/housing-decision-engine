@@ -31,7 +31,7 @@ from hde.models import compute_verdict
 from hde.monte_carlo import run_monte_carlo
 
 OPTIONS = ("condo", "house", "rent")
-STREAMS = tuple(range(8))
+STREAMS = dr.STREAM_IDS
 
 
 def held_streams(overrides=None):

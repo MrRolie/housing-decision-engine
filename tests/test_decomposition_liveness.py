@@ -141,6 +141,15 @@ FIXED_PAY_DROP = yaml.safe_load(
     (pathlib.Path(__file__).resolve().parents[1] / "examples" / "income_shock.yaml")
     .read_text(encoding="utf-8"))
 FIXED_PAY_DROP["simulation"].update({"num_sims": 400, "rent_escalation_vol": 0.02})
+# A renewal-rate path file: stream 8 draws one row per path, and the block
+# measures it like any other stream (docs/specs/2026-10-01-renewal-rate-path-file.md §4).
+_REPO = pathlib.Path(__file__).resolve().parents[1]
+RATE_PATHS = yaml.safe_load(
+    (_REPO / "tests" / "fixtures" / "renewal_rate_paths.yaml").read_text(encoding="utf-8"))
+RATE_PATHS["renewal_rates"]["path"] = str(
+    _REPO / "tests" / "fixtures" / "renewal_rate_paths_synthetic.json")
+RATE_PATHS["sources"] = {"renewal_rates.path": "user"}
+RATE_PATHS["simulation"]["num_sims"] = 400
 
 # What each prints, and which streams draw and are live on its futures.
 EXPECTED = {
@@ -162,6 +171,8 @@ EXPECTED = {
         CRASH_CERTAIN, "one_channel:the condo's costs", (1, 3), (3,)),
     "fixed_pay_drop": (
         FIXED_PAY_DROP, "header", (3, 5), (3, 5)),
+    "renewal_rate_paths": (
+        RATE_PATHS, "header", (4, 5, 8), (4, 5, 8)),
 }
 
 
@@ -216,7 +227,7 @@ def test_the_block_prints_what_the_instruments_measure(name):
             assert moves[stream] > limit and frozen[stream] > limit, (stream, moves)
         else:
             assert moves[stream] <= limit, (stream, moves[stream], limit)
-    for stream in set(range(8)) - set(drawn):
+    for stream in set(dr.STREAM_IDS) - set(drawn):
         assert moves[stream] == 0.0, stream
 
 

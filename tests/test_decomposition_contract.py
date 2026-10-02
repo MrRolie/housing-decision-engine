@@ -29,6 +29,7 @@ EXPECTED = (
     (4, "house", "the house's costs"),
     (5, "shelter", "your tenancy"),
     (6, "portfolio", "the renter's portfolio"),
+    (8, "rates", "the renewal rates"),
 )
 
 _DUMP = ("from hde.decomposition import CHANNELS; "
@@ -40,14 +41,16 @@ def _fields(cls):
 
 
 class TestTheChannelTable:
-    def test_ids_are_exactly_zero_to_six_in_fixed_slots(self):
+    def test_ids_are_fixed_integers_in_fixed_slots(self):
         assert tuple((c.id, c.key, c.label) for c in dc.CHANNELS) == EXPECTED
-        for slot, entry in enumerate(dc.CHANNELS):   # the id IS the position
-            assert entry.id == slot
-            assert dc.channel(slot) is entry
+        ids = [entry.id for entry in dc.CHANNELS]
+        assert ids == sorted(set(ids))               # in id order, each once
+        for entry in dc.CHANNELS:                    # found by its id, not its slot
+            assert dc.channel(entry.id) is entry
             assert dc.channel_by_key(entry.key) is entry
 
-    @pytest.mark.parametrize("bad", [-1, len(dc.CHANNELS), dc.INCOME_STREAM_ID])
+    @pytest.mark.parametrize("bad", [-1, max(c.id for c in dc.CHANNELS) + 1,
+                                     dc.INCOME_STREAM_ID])
     def test_lookups_refuse_rather_than_wrap(self, bad):
         with pytest.raises(KeyError):   # -1 would return the last channel, and
             dc.channel(bad)             # income is a stream id, not a channel

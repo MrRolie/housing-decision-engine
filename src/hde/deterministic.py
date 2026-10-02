@@ -6,7 +6,7 @@ ownership costs using deterministic (fixed) parameters, without
 any randomness or Monte Carlo simulation.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .models import (
     CondoParams,
@@ -193,13 +193,19 @@ def _financing_pv(
     return downpayment_pv, mortgage_pv, terminal_equity_pv
 
 
-def renewal_segments_for(params) -> Optional[List["RenewalSegment"]]:
+def renewal_segments_for(params, rates: Optional[Sequence[float]] = None,
+                         ) -> Optional[List["RenewalSegment"]]:
     """
     The renewal ladder for one owned option, or None when it declared no
     renewal term (today's single-rate mortgage) or has no mortgage to renew.
 
     The ONE builder every consumer reads, so the affordability ratio, the story
     curve and the PV leg cannot drift apart by re-deriving it.
+
+    `rates` replaces the option's own effective renewal rates for one Monte
+    Carlo path that drew a row of a renewal-rate path file
+    (docs/specs/2026-10-01-renewal-rate-path-file.md §4); None prices the
+    option's own ladder, which on a file run is the central row.
     """
     if getattr(params, "mortgage_renewal_years", None) is None:
         return None
@@ -209,8 +215,9 @@ def renewal_segments_for(params) -> Optional[List["RenewalSegment"]]:
             or params.mortgage_term_years is None):
         return None
     loan = params.initial_value - params.down_payment + params.financed_purchase_costs
+    renewal_rates = params.mortgage_renewal_rates if rates is None else rates
     return renewal_schedule(
-        loan, [params.mortgage_rate, *params.mortgage_renewal_rates],
+        loan, [params.mortgage_rate, *renewal_rates],
         params.mortgage_renewal_years, params.mortgage_term_years,
     )
 
@@ -244,16 +251,21 @@ def renewals_priced_inside(params, n_years: int) -> int:
     return sum(1 for segment in segments[1:] if segment.start_year <= n_years)
 
 
-def renewal_args_for(params) -> Dict[str, Any]:
+def renewal_args_for(params, rates: Optional[Sequence[float]] = None) -> Dict[str, Any]:
     """`_financing_pv`'s two renewal keywords for one owned option — empty when
     it declared no renewal term, so the single-rate path is reached by exactly
-    the call it always was."""
+    the call it always was.
+
+    `rates` overrides the option's own effective renewal rates with one path's
+    row of a renewal-rate path file, cut to the option's own columns
+    (docs/specs/2026-10-01-renewal-rate-path-file.md §4). None, today's call."""
     if getattr(params, "mortgage_renewal_years", None) is None:
         return {}
     if getattr(params, "all_cash", False):
         return {}
     return {"renewal_years": params.mortgage_renewal_years,
-            "renewal_rates": params.mortgage_renewal_rates}
+            "renewal_rates": (params.mortgage_renewal_rates if rates is None
+                              else list(rates))}
 
 
 def _maintenance_rate_for_year(house: HouseParams, year: int) -> float:
@@ -597,9 +609,15 @@ def _annual_costs_for_option(
     econ: EconomicParams,
     rent_reset_year: Optional[int] = None,
     event_years: Optional[List[Optional[int]]] = None,
+    renewal_rates: Optional[Sequence[float]] = None,
 ) -> List[float]:
     """
     Un-discounted annual housing cost by year, used for affordability ratios.
+
+    `renewal_rates` is one Monte Carlo path's row of a renewal-rate path file,
+    cut to this option's columns, and steps the payment as that path's PV leg
+    does (docs/specs/2026-10-01-renewal-rate-path-file.md §4). None: the
+    option's own ladder.
 
     `event_years` gives the year each of `params.events` fires on one Monte
     Carlo path, in list order (None: it never does). Omitted, each event is at
@@ -635,7 +653,7 @@ def _annual_costs_for_option(
             mort_term = params.mortgage_term_years
             # A renewal ladder steps the payment; the affordability ratio steps
             # with it (spec §4). No ladder, no change to the line below.
-            segments = renewal_segments_for(params)
+            segments = renewal_segments_for(params, renewal_rates)
 
     # Nominal mode composes inflation into every escalation, exactly as the PV
     # engine does (readiness plan D.6 — `econ` was accepted and ignored here,

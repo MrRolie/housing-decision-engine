@@ -1070,7 +1070,7 @@ class TestStructuralZeros:
         assert spec.economic.mode == "real"
 
         def held(economy_seed):
-            seeds = {c: 1000 + c for c in range(8)}
+            seeds = {c: 1000 + c for c in dr.STREAM_IDS}
             seeds[0] = economy_seed
             return {c: np.random.default_rng(s) for c, s in seeds.items()}
 

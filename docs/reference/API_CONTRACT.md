@@ -248,9 +248,9 @@ spread register's bootstrap runs; `freeze_leak` and `identity_failed`, once the
 level register is priced.
 
 **Draws and live channels, measured on the block's own futures.** The streams
-are the seven channels — ids 0 economy, 1 market, 2 population, 3 condo, 4
-house, 5 shelter, 6 portfolio (`decomposition.CHANNELS`) — and the income
-stream, id 7, which is not a channel. Where the block names a stream,
+are the channels — ids 0 economy, 1 market, 2 population, 3 condo, 4
+house, 5 shelter, 6 portfolio, 8 rates (`decomposition.CHANNELS`) — and the
+income stream, id 7, which is not a channel. Where the block names a stream,
 `channel_id` is its id, `label` the name the text block prints for it (the
 channel's `label` in `decomposition.CHANNELS`, or `your pay drops` for the
 income stream), and `channel`, where it is carried, the channel's key: the

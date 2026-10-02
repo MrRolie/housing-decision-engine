@@ -102,6 +102,13 @@ CHANNELS: Tuple[Channel, ...] = (
         label="the renter's portfolio",
         sizing_keys=("simulation.investment_return_vol",),
     ),
+    # Design: docs/specs/2026-09-22-which-risk-decides-it.md §3.1.
+    Channel(
+        id=8,
+        key="rates",
+        label="the renewal rates",
+        sizing_keys=("renewal_rates.path",),
+    ),
 )
 
 

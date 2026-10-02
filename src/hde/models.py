@@ -637,6 +637,10 @@ class ComparisonMonteCarloResult:
     affordability_mc: Optional[AffordabilityMCReport] = None
     # S4b provenance: present only when a ScenarioPrior was loaded
     market_scenario: Optional[Dict[str, str]] = None
+    # The renewal-rate path file's row each path priced, by path index; None
+    # with no file (docs/specs/2026-10-01-renewal-rate-path-file.md §4). An
+    # index array, like a PV array, never crosses a surface boundary.
+    renewal_rate_rows: Optional[np.ndarray] = None
 
 
 # ----- Verdict (readiness plan B.1, 2026-09-01) -----

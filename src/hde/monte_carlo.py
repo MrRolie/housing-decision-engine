@@ -54,12 +54,13 @@ from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 # ---------------------------------------------------------------------------
 # The channel seam (docs/specs/2026-09-22-which-risk-decides-it.md 3.1-3.4)
 # ---------------------------------------------------------------------------
-# Seven channels partition this module's PRIMITIVE DRAWS rather than its config
+# The channels partition this module's PRIMITIVE DRAWS rather than its config
 # keys. That is what makes the independence a decomposition assumes the
 # independence the engine actually has: `_correlated_z` composes independent
 # primitives into correlated shocks, so grouping by config key would import the
 # dependence back. Their ids are fixed by the spec's 3.1, which is their home --
-# 0 economy, 1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio --
+# 0 economy, 1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio,
+# 8 the renewal rates (docs/specs/2026-10-01-renewal-rate-path-file.md §4) --
 # and they appear at the draw sites below as integer literals, so no table
 # anywhere can renumber a committed measurement out from under itself.
 #
@@ -76,6 +77,14 @@ from .tax_treatment import TaxParams, after_tax_factor, terminal_from_growth
 # not resolve and the tenancy moves the margin by one that does
 # (`tests/test_decomposition_report.py`, FIXTURE_BLOCK). A table that adds the
 # two together names nothing a household can act on.
+
+# The ids and keys a refusal names, read off the channel table so that a
+# channel added there is named here: "0 economy, 1 market, ..., 8 rates".
+_CHANNEL_NAMES = ", ".join(f"{entry.id} {entry.key}" for entry in _CHANNELS)
+_STREAM_NAMES = ", ".join(
+    f"{stream_id} {key}"
+    for stream_id, key in sorted([(entry.id, entry.key) for entry in _CHANNELS]
+                                 + [(7, "income")]))
 
 # A channel's stream source: the generator its draw sites read, or a factory
 # from path index to that generator, which is what per-path addressing needs.
@@ -224,9 +233,8 @@ class _AddressedBinding(_Binding):
                 raise ValueError(
                     "streams binds no stream for channel %d, and a draw site on "
                     "this run reads it. Every id the run reaches needs one "
-                    "(0 economy, 1 market, 2 population, 3 condo, 4 house, "
-                    "5 shelter, 6 portfolio, 7 income); `addressed_streams` "
-                    "binds them all." % channel_id
+                    "(%s); `addressed_streams` binds them all."
+                    % (channel_id, _STREAM_NAMES)
                 ) from None
             got = source(self._path) if callable(source) else source
             self._cache[channel_id] = got
@@ -315,6 +323,12 @@ class PathWorld:
     # Whether `z_inflation` is a real draw or a constant zero. It decides
     # whether a `corr_inflation_*` key means anything: see `corr`.
     inflation_is_stochastic: bool = False
+    # The row of a renewal-rate path file this path prices: one market, so one
+    # row for every financed option (channel 8,
+    # docs/specs/2026-10-01-renewal-rate-path-file.md §4). None with no file
+    # or with channel 8 frozen: each option prices its own ladder, the
+    # central row.
+    rate_row: Optional[int] = None
 
     def corr(self, rho: float) -> float:
         """`rho` as the shocks should actually use it.
@@ -365,6 +379,9 @@ class WorldDraws:
     crash: bool = False
     drift_bands: Tuple[int, ...] = ()
     value_vol: float = 0.0
+    # N, the rows of a renewal-rate path file; 0 with no file, so a config
+    # without one takes no extra draw.
+    rate_rows: int = 0
 
 
 def _world_draws(spec: ComparisonSpec, prior_rows_by_option) -> WorldDraws:
@@ -387,10 +404,12 @@ def _world_draws(spec: ComparisonSpec, prior_rows_by_option) -> WorldDraws:
     for rows in prior_rows_by_option:
         if rows is not None:
             bands.update(h for h, _ in rows.keys())
+    rate_paths = getattr(spec, "renewal_rate_paths", None)
     return WorldDraws(
         crash=crash,
         drift_bands=tuple(sorted(bands)),
         value_vol=max(0.0, spec.simulation.value_growth_vol),
+        rate_rows=rate_paths.rows if rate_paths is not None else 0,
     )
 
 
@@ -459,9 +478,17 @@ def _draw_path_world(
         g_value = b.gen(1)
         z_value = [float(g_value.normal()) for _ in range(n)]
 
+    # The renewal rates, LAST, so every draw above keeps the stream it had
+    # before the channel existed: ONE row of the path file per path, drawn
+    # with replacement, and none at all without a file or with channel 8
+    # frozen (docs/specs/2026-10-01-renewal-rate-path-file.md §4).
+    rate_row: Optional[int] = None
+    if draws.rate_rows and not b.frozen_at(8):
+        rate_row = int(b.gen(8).integers(0, draws.rate_rows))
+
     return PathWorld(
         tuple(factors), tuple(zs), tuple(crash_u), tuple(crash_z), drift,
-        tuple(z_value), inflation_draws,
+        tuple(z_value), inflation_draws, rate_row,
     )
 
 
@@ -829,9 +856,14 @@ def _simulate_condo_pv_once(
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
     event_years_out: Optional[List[Optional[int]]] = None,
+    renewal_rates: Optional[Sequence[float]] = None,
 ) -> float:
     """
     Run one simulation of condo PV with randomness.
+
+    `renewal_rates` is this path's row of a renewal-rate path file, cut to the
+    condo's own columns, and re-solves its payment at each renewal; None
+    prices its own ladder.
 
     Randomness applied to:
     - Annual fees (if condo_fee_vol > 0)
@@ -950,7 +982,7 @@ def _simulate_condo_pv_once(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
         terminal_value, r, sim.years, condo.financed_purchase_costs,
-        **renewal_args_for(condo),
+        **renewal_args_for(condo, renewal_rates),
     )
     # The HBP repayment leg is a constant (priced at the renter's unshocked
     # return), added on every path exactly as the deterministic engine adds it.
@@ -968,9 +1000,14 @@ def _simulate_house_pv_once(
     shock: Optional[PriceShockParams] = None,
     hbp_repayment_pv: float = 0.0,
     event_years_out: Optional[List[Optional[int]]] = None,
+    renewal_rates: Optional[Sequence[float]] = None,
 ) -> float:
     """
     Run one simulation of house PV with randomness.
+
+    `renewal_rates` is this path's row of a renewal-rate path file, cut to the
+    house's own columns, and re-solves its payment at each renewal; None
+    prices its own ladder.
 
     Randomness applied to:
     - Annual maintenance (if house_maintenance_vol > 0)
@@ -1068,7 +1105,7 @@ def _simulate_house_pv_once(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
         terminal_value, r, sim.years, house.financed_purchase_costs,
-        **renewal_args_for(house),
+        **renewal_args_for(house, renewal_rates),
     )
     pv += dp_pv + mort_pv + term_eq_pv + house.purchase_costs + hbp_repayment_pv
     return pv
@@ -1400,8 +1437,9 @@ def run_monte_carlo(
             number, which is the reason it raises instead of being documented:
             a caller reaching for a partial freeze is not the caller who reads
             the warning. Two freezes need no binding and are allowed --
-            `freeze=()`, which removes nothing, and all seven channels, which
-            takes no draw at all, so the binding cannot matter.
+            `freeze=()`, which removes nothing, and every channel in
+            `decomposition.CHANNELS`, which takes no draw at all, so the
+            binding cannot matter.
 
     Returns:
         ComparisonMonteCarloResult with per-option results, ranking
@@ -1437,17 +1475,16 @@ def run_monte_carlo(
     outside = sorted(c for c in frozen if c not in freezable)
     if outside:
         raise ValueError(
-            "freeze names %s, which is no channel: the ids are 0 economy, "
-            "1 market, 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio. "
-            "Id 7 is the income trajectory and is not freezable -- it reaches no "
-            "PV, so freezing it could change no figure." % (outside,)
+            "freeze names %s, which is no channel: the ids are %s. Id 7 is the "
+            "income trajectory and is not freezable -- it reaches no PV, so "
+            "freezing it could change no figure." % (outside, _CHANNEL_NAMES)
         )
     # A partial freeze on the legacy binding would RUN, and return a number
     # nobody could tell was wrong: every channel is on one stream there, so
     # dropping one channel's draws shifts what every later draw site reads, and
     # the paired comparison the level register takes against an unfrozen run is
     # no longer paired. The two ends are safe and stay allowed -- freezing
-    # nothing removes nothing, and freezing all seven takes no draw at all, so
+    # nothing removes nothing, and freezing every channel takes no draw at all, so
     # the binding cannot matter (measured: the all-frozen identity holds to the
     # same 1 ULP under both bindings).
     if streams is None and frozen and frozen != freezable:
@@ -1457,8 +1494,8 @@ def run_monte_carlo(
             "the frozen channel's draws shifts every later draw site and the "
             "run is not paired with an unfrozen one. Pass "
             "`addressed_streams(sim.random_seed)`. An empty freeze and a freeze "
-            "of all seven channels both take the legacy binding safely."
-            % (sorted(frozen),)
+            "of every channel, %s, both take the legacy binding safely."
+            % (sorted(frozen), sorted(freezable))
         )
 
     # Reject impossible appreciation once per run: the per-sim loops compound
@@ -1544,7 +1581,22 @@ def run_monte_carlo(
             crash=world_draws.crash and 1 not in frozen,
             drift_bands=() if 2 in frozen else world_draws.drift_bands,
             value_vol=0.0 if 1 in frozen else world_draws.value_vol,
+            # Every field, or a freeze of another channel would silently
+            # freeze the renewal rates too.
+            rate_rows=0 if 8 in frozen else world_draws.rate_rows,
         )
+
+    # A renewal-rate path file: each financed option reads its own first n_o
+    # columns of the row a path drew (docs/specs/2026-10-01-renewal-rate-path-file.md
+    # §4). A path that drew nothing prices each option's own ladder, which is
+    # the central row's same columns.
+    rate_paths = spec.renewal_rate_paths
+    rate_rows = (np.empty(n, dtype=np.int64) if rate_paths is not None else None)
+
+    def _row_rates(option_type: str, row: Optional[int]) -> Optional[List[float]]:
+        if row is None or rate_paths is None or option_type not in rate_paths.columns:
+            return None
+        return list(rate_paths.effective[row][:rate_paths.columns[option_type]])
 
     # The affordability channel reads an UNDISCOUNTED cost array per option and
     # compares it against a per-path income. A lease reset and each event's
@@ -1555,15 +1607,23 @@ def run_monte_carlo(
                         for name, opt in (("condo", spec.condo), ("house", spec.house),
                                           ("rent", spec.rent)) if opt is not None}
 
-    def _path_costs(option_type, params, central, reset_year, fired):
+    central_row = rate_paths.central_index if rate_paths is not None else None
+
+    def _path_costs(option_type, params, central, reset_year, fired, rate_row=None):
         if params is None:
             return central
-        if reset_year is None and fired == best_guess_years[option_type]:
+        if rate_row == central_row:
+            # The central row is each option's own ladder, so its costs are
+            # the central array's.
+            rate_row = None
+        if (reset_year is None and fired == best_guess_years[option_type]
+                and rate_row is None):
             return central
-        key = (option_type, reset_year, tuple(fired))
+        key = (option_type, reset_year, tuple(fired), rate_row)
         if key not in afford_by_path:
             afford_by_path[key] = _annual_costs_for_option(
-                option_type, params, sim, econ, rent_reset_year=reset_year, event_years=fired)
+                option_type, params, sim, econ, rent_reset_year=reset_year, event_years=fired,
+                renewal_rates=_row_rates(option_type, rate_row))
         return afford_by_path[key]
 
     for i in range(n):
@@ -1575,6 +1635,9 @@ def run_monte_carlo(
         # ONE economy and ONE housing market per iteration, drawn before any
         # option is priced.
         world = _draw_path_world(binding, econ, sim.years, world_draws)
+        if rate_rows is not None:
+            rate_rows[i] = (world.rate_row if world.rate_row is not None
+                            else rate_paths.central_index)
         # The tenancy's own hazard: a HOUSEHOLD event, so it is drawn here
         # rather than in the world, but drawn ONCE per path — the PV leg and
         # the affordability leg must price the same tenancy. Consumes nothing
@@ -1595,6 +1658,7 @@ def run_monte_carlo(
                 shock=spec.condo.price_shock,
                 hbp_repayment_pv=condo_hbp,
                 event_years_out=fired["condo"],
+                renewal_rates=_row_rates("condo", world.rate_row),
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
@@ -1603,6 +1667,7 @@ def run_monte_carlo(
                 shock=spec.house.price_shock,
                 hbp_repayment_pv=house_hbp,
                 event_years_out=fired["house"],
+                renewal_rates=_row_rates("house", world.rate_row),
             )
         if spec.rent is not None:
             rent_pvs[i] = _simulate_rent_pv_once(
@@ -1611,8 +1676,10 @@ def run_monte_carlo(
         if spec.income is not None:
             flags = _compute_income_affordability_once(
                 spec.income, sim, econ,
-                _path_costs("condo", spec.condo, afford_condo_costs, None, fired["condo"]),
-                _path_costs("house", spec.house, afford_house_costs, None, fired["house"]),
+                _path_costs("condo", spec.condo, afford_condo_costs, None, fired["condo"],
+                            world.rate_row),
+                _path_costs("house", spec.house, afford_house_costs, None, fired["house"],
+                            world.rate_row),
                 _path_costs("rent", spec.rent, afford_rent_costs, reset_year, fired["rent"]),
                 binding,
             )
@@ -1675,4 +1742,5 @@ def run_monte_carlo(
         prob_rent_cheapest=prob_rent,
         affordability_mc=affordability_mc,
         market_scenario=provenance,
+        renewal_rate_rows=rate_rows,
     )

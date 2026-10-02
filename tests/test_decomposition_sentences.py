@@ -429,7 +429,7 @@ def _echo_class(doc, key) -> Optional[str]:
 
 
 def _held(overrides=None):
-    seeds = {c: 1000 + c for c in range(8)}
+    seeds = {c: 1000 + c for c in dr.STREAM_IDS}
     seeds.update(overrides or {})
     return {c: np.random.default_rng(s) for c, s in seeds.items()}
 

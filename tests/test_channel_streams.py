@@ -51,17 +51,19 @@ from hde.models import (
     compute_verdict,
 )
 from hde.monte_carlo import addressed_streams, channel_stream, run_monte_carlo
+from hde import decomposition as dc
+from hde import decomposition_run as dr
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
 PRIOR = "tests/fixtures/scenario_prior_golden.json"
 
-# The channel ids, as §3.1 fixes them. Spelled out here because a test that
-# hardcoded them silently would be pinning its own arithmetic instead of the
-# spec's: 0 economy, 1 market, 2 population, 3 condo, 4 house, 5 shelter,
-# 6 portfolio, and 7 the income trajectory, which is not a channel.
-CHANNELS = (0, 1, 2, 3, 4, 5, 6)
-IDS = CHANNELS + (7,)
+# The channel ids, read off the table whose literal pin is
+# `tests/test_decomposition_contract.py::EXPECTED`: 0 economy, 1 market,
+# 2 population, 3 condo, 4 house, 5 shelter, 6 portfolio, 8 the renewal rates,
+# and 7 the income trajectory, which is not a channel.
+CHANNELS = tuple(entry.id for entry in dc.CHANNELS)
+IDS = dr.STREAM_IDS
 
 
 # ---------------------------------------------------------------------------
@@ -269,8 +271,8 @@ class TestLegacyBinding:
     @pytest.mark.parametrize("allowed", ((), CHANNELS))
     def test_the_two_freezes_that_need_no_binding_are_allowed(self, allowed):
         """The boundary, from the other side: refusing these would refuse a
-        correct call. Freezing nothing removes no draw, and freezing all seven
-        takes no draw at all, so in both the legacy binding is exactly the
+        correct call. Freezing nothing removes no draw, and freezing every
+        channel takes no draw at all, so in both the legacy binding is exactly the
         binding an addressed run would have used."""
         mc = run_monte_carlo(_one_live_channel_spec(num_sims=4), freeze=allowed)
         assert mc.condo is not None and mc.rent is not None

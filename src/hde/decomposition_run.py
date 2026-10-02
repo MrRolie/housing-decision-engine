@@ -124,10 +124,10 @@ OPTION_NAMES: Tuple[str, ...] = ("condo", "house", "rent")
 # refuses the id in `freeze` outright.
 ALL_CHANNEL_IDS: Tuple[int, ...] = tuple(c.id for c in CHANNELS)
 
-# Every stream a run can draw from: the seven channels and the income stream.
-# Which of them DREW on a run is measured (`_DrawRecorder`), never read off the
-# config.
-STREAM_IDS: Tuple[int, ...] = ALL_CHANNEL_IDS + (INCOME_STREAM_ID,)
+# Every stream a run can draw from, in id order: the channels and the income
+# stream. Which of them DREW on a run is measured (`_DrawRecorder`), never read
+# off the config.
+STREAM_IDS: Tuple[int, ...] = tuple(sorted(ALL_CHANNEL_IDS + (INCOME_STREAM_ID,)))
 
 # The two matrices the spread register draws (§3.3): `A` is matrix 0 and `B` is
 # matrix 1, and `A_B^(c)` is matrix 0 with channel c taken from matrix 1.
@@ -136,12 +136,12 @@ MATRIX_B = 1
 
 # §8 refusal 6's ceiling, in model evaluations. THE SPEC NAMES NO FIGURE, so
 # this one is the engine's own and the refusal says so. Derivation: the shipped
-# `num_sims` default at seven channels must not refuse — §9 calls it "the
+# `num_sims` default with every channel drawing must not refuse — §9 calls it "the
 # common case and not a worst case" — so the ceiling clears it with headroom,
 # and fires around the point where a run wants to be asked for rather than
 # waited on (`planned_evaluations` prices both; §9 has the per-path timing).
-# It is a gate on WORK, never a cap on the channel count: a cap at seven under
-# a seven-channel taxonomy could never fire.
+# It is a gate on WORK, never a cap on the channel count: a cap at the number
+# of channels in the taxonomy could never fire.
 EVALUATION_CEILING = 250_000
 
 # The smallest sample this block will interval, DERIVED rather than chosen. A
@@ -491,8 +491,10 @@ def _priced(spec) -> Tuple[str, ...]:
 # draws belong to is the channel's, never the key's. The population prior's
 # rows reach the owned options' values: `monte_carlo.run_monte_carlo` hands
 # them to the condo's and the house's simulations, and the renter's reads none.
+# A renewal-rate path file's row reaches the condo's and the house's payments.
 _CHANNEL_OPTIONS: Dict[int, Tuple[str, ...]] = {
-    2: ("condo", "house"), 3: ("condo",), 4: ("house",), 5: ("rent",), 6: ("rent",)}
+    2: ("condo", "house"), 3: ("condo",), 4: ("house",), 5: ("rent",), 6: ("rent",),
+    8: ("condo", "house")}
 
 # On the economy's and the market's rows, the `simulation.*` sizing keys whose
 # draws some options' simulations read and others' do not, and the options
