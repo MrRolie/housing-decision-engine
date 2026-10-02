@@ -417,6 +417,11 @@ Found by the same lane's review, each run on the tip:
   condo.mortgage_term_years=1:40`, the bracket it just searched (this predates the change).
 - A market scenario's provenance in `--json` says `simulation year 1 = calendar 2026`, while
   `calendar_year_for_sim_year` maps simulation year 1 to 2027.
+- Found 2026-10-01 by the renewal-draw design review, run on the tip: an `anchor:` declaration
+  is checked against the anchor's figure, never against the key it sources. `house.mortgage_renewal_years: 5` declared `anchor:hbp.repayment_grace_years` loads
+  and prints `anchor-sourced: house.mortgage_renewal_years=5 [hbp.repayment_grace_years]`, a
+  provenance the figure only shares by coincidence. The renewal ladder is refused outright since
+  2026-10-01; the general fix is an anchor that names the keys it may source.
 
 ## 12. The shipped examples barely exercise uncertainty
 
