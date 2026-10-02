@@ -241,6 +241,25 @@ def test_every_figure_on_the_line_is_recomputed(config, monkeypatch, tmp_path):
     assert sum("renewal rate paths:" in line for line in block) == 1
 
 
+def test_the_line_sits_between_the_renewals_and_the_purchase_costs(monkeypatch, tmp_path):
+    """A config that prints a `purchase costs:` line: the fixture with a
+    Montréal land transfer tax. The read-back runs `house renewals:`, then
+    `renewal rate paths:`, then `house purchase costs:`, in the text block and
+    in `assumptions.read_back`; a section placed after the purchase costs
+    swaps the last two."""
+    cfg = _yaml(FIXTURE)
+    cfg["province"] = "QC"
+    cfg["house"]["land_transfer_tax"] = "auto"
+    cfg["house"]["municipality"] = "montreal"
+    e = _expected(FIXTURE)
+    _, out, _ = _hde(monkeypatch, tmp_path, cfg, "--read-back")
+    _, doc, _ = _hde(monkeypatch, tmp_path, cfg, "--json")
+    for block in (out.splitlines(), json.loads(doc)["assumptions"]["read_back"]):
+        at = block.index(_line(e))
+        assert block[at - 1].startswith("house renewals:")
+        assert block[at + 1].startswith("house purchase costs: land transfer tax ")
+
+
 def test_the_fixtures_tell_rows_apart():
     """The opt-in fixture's central row is not row 0 and is not tied, and the
     example's is a tie: a line that printed row 0 always, or never said tie,

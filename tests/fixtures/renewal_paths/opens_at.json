@@ -11,7 +11,7 @@
   "compounding": "effective_annual",
   "as_of": "2026-10-01",
   "provenance": {
-    "method": "synthetic, not a calibration: two hand-set paths",
+    "method": "synthetic, not a calibration: three hand-set paths",
     "data_window": "none",
     "source": "none",
     "producer": "the worked example of the path-file spec",
