@@ -478,10 +478,13 @@ def _draw_path_world(
         g_value = b.gen(1)
         z_value = [float(g_value.normal()) for _ in range(n)]
 
-    # The renewal rates, LAST, so every draw above keeps the stream it had
-    # before the channel existed: ONE row of the path file per path, drawn
-    # with replacement, and none at all without a file or with channel 8
-    # frozen (docs/specs/2026-10-01-renewal-rate-path-file.md §4).
+    # The renewal rates, LAST: ONE row of the path file per path, drawn with
+    # replacement, and none at all without a file or with channel 8 frozen
+    # (docs/specs/2026-10-01-renewal-rate-path-file.md §4). On addressed
+    # streams every draw above keeps the stream it had before the channel
+    # existed, on every path. Under the legacy binding one generator serves
+    # every channel, so only path 0's draws above keep theirs: every draw after
+    # this one, the rest of path 0 and every later path, moves in the stream.
     rate_row: Optional[int] = None
     if draws.rate_rows and not b.frozen_at(8):
         rate_row = int(b.gen(8).integers(0, draws.rate_rows))

@@ -195,27 +195,54 @@ class TestTheDraw:
 # §9 row 3: the draw is last, so the stream order holds
 # ---------------------------------------------------------------------------
 
+def _drawing_before_the_row(raw: dict) -> dict:
+    """The config with a world that draws before the row: an inflation path, a
+    house price shock and a value-growth vol, so the economy's and the
+    market's draws all come first on the one generator of the legacy binding."""
+    raw = copy.deepcopy(raw)
+    raw["economic"]["inflation_vol"] = 0.01
+    raw["simulation"]["value_growth_vol"] = 0.05
+    raw["house"]["price_shock"] = {"annual_hazard": 0.03, "severity_mean": 0.2,
+                                   "severity_vol": 0.1}
+    return raw
+
+
 def test_under_the_legacy_binding_every_earlier_draw_is_the_no_file_run_s():
     """The draw is LAST in the path's world: with one generator for every
-    channel, path 0's world draws on a file run are those of the same config
-    without the file, and the file run's path 0 then takes one more."""
-    filed = _spec(FIXTURE, 1)
-    typed = _typed(FIXTURE, 1)
+    channel, path 0's inflation, crash and value draws on a file run are those
+    of the same config without the file, and the file run's path 0 then takes
+    exactly one more draw, one integers(0, N). The world draws its inflation,
+    crash and value draws before the row, so a row drawn ahead of any of the
+    three moves them and fails here."""
+    raw = _drawing_before_the_row(_raw(FIXTURE, 1))
+    filed = load_config_dict(raw)
+    twin = copy.deepcopy(raw)
+    twin.pop("renewal_rates")
+    twin["sources"].pop("renewal_rates.path")
+    if not twin["sources"]:
+        twin.pop("sources")
+    twin["house"]["mortgage_renewal_rates"] = filed.renewal_rate_paths.central_effective(4)
+    plain_spec = load_config_dict(twin)
+    assert plain_spec.renewal_rate_paths is None
     g_file = np.random.default_rng(1)
     g_plain = np.random.default_rng(1)
     world = mc_mod._draw_path_world(g_file, filed.economic, filed.simulation.years,
                                     mc_mod._world_draws(filed, (None, None)))
-    plain = mc_mod._draw_path_world(g_plain, typed.economic, typed.simulation.years,
-                                    mc_mod._world_draws(typed, (None, None)))
+    plain = mc_mod._draw_path_world(g_plain, plain_spec.economic, plain_spec.simulation.years,
+                                    mc_mod._world_draws(plain_spec, (None, None)))
     assert world.rate_row is not None and plain.rate_row is None
+    # every channel the world draws before the row drew, on both runs
+    assert len(plain.z_inflation) == len(plain.crash_uniforms) == len(plain.z_value) == 20
+    assert any(z != 0.0 for z in plain.z_inflation)
     assert world.inflation_factors == plain.inflation_factors
     assert world.z_inflation == plain.z_inflation
-    # the fixture's world draws nothing before the row, so both generators
-    # sit where they started, less one integers draw on the file run's
-    assert g_plain.bit_generator.state == np.random.default_rng(1).bit_generator.state
-    after = np.random.default_rng(1)
-    after.integers(0, filed.renewal_rate_paths.rows)
-    assert g_file.bit_generator.state == after.bit_generator.state
+    assert world.crash_uniforms == plain.crash_uniforms
+    assert world.crash_zs == plain.crash_zs
+    assert world.z_value == plain.z_value
+    # and the file run's generator sits exactly one integers(0, N) further on,
+    # `has_uint32` included
+    g_plain.integers(0, filed.renewal_rate_paths.rows)
+    assert g_file.bit_generator.state == g_plain.bit_generator.state
 
 
 # ---------------------------------------------------------------------------
@@ -323,9 +350,9 @@ def test_an_option_that_reads_no_column_prices_the_empty_ladder_on_every_path():
 # ---------------------------------------------------------------------------
 
 def test_a_path_s_affordability_reads_its_own_row():
-    """On §4's config the central row's peak ratio is 28.10% and row 1's is
-    38.55% against a 32% threshold, so the house breaches on exactly the paths
-    that drew row 1."""
+    """On §4's config, whose income block holds income_growth_rate 0.0, the
+    central row's peak ratio is 28.10% and row 1's is 38.55% against a 32%
+    threshold, so the house breaches on exactly the paths that drew row 1."""
     raw = _raw(DATA / "hvr_example.yaml")
     raw["income"] = {"annual_income": 150000, "income_growth_rate": 0.0,
                      "affordability_threshold": 0.32}
