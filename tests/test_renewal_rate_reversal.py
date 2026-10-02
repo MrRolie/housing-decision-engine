@@ -167,6 +167,36 @@ def test_a_probe_whose_recorded_rows_differ_is_refused():
     assert reversal_gate(raw, "house.mortgage_rate", 0.10)["licensed"]
 
 
+def _one_middle_row_changed_on_the_probe(calls):
+    """A simulator whose second run (the gate's probe) records one path in the
+    middle on another row and leaves every other path, path 0 included, as
+    it drew: a premise check that compared only path 0 would pass it."""
+    import dataclasses
+
+    def simulate(spec):
+        result = run_monte_carlo(spec)
+        calls.append(spec)
+        if len(calls) == 2 and result.renewal_rate_rows is not None:
+            rows = result.renewal_rate_rows.copy()
+            middle = rows.size // 2
+            rows[middle] = (rows[middle] + 1) % spec.renewal_rate_paths.rows
+            return dataclasses.replace(result, renewal_rate_rows=rows)
+        return result
+
+    return simulate
+
+
+def test_a_probe_with_one_middle_row_changed_is_refused():
+    raw = _raw(FIXTURE)
+    calls = []
+    gate = reversal_gate(raw, "house.mortgage_rate", 0.10,
+                         simulate=_one_middle_row_changed_on_the_probe(calls))
+    assert not gate["licensed"]
+    # the premise refused it, not the tolerance: one path of the 200 moved
+    assert gate["why"] == ("moving house.mortgage_rate changes the renewal-rate row 1 of "
+                           "the 200 paths price, so no per-row term can be subtracted")
+
+
 def test_the_free_curve_is_a_full_re_simulation():
     """At 3% the curve and a full re-simulation both give P(house cheapest)
     0.966; shifting every path by the central case's delta alone gives
@@ -230,6 +260,37 @@ def test_a_break_even_inside_one_central_row_says_nothing():
     (entry,) = result["break_evens"]
     assert (entry["last_value_below"], entry["value"]) == (10, 11)
     assert "central row" not in entry["sentence"]
+
+
+def _one_end_raising(monkeypatch, error):
+    """`load_at` in break_even raising `error` at years=16 and loading every
+    other value as it does."""
+    real = be.load_at
+
+    def load_at(raw, key, value):
+        if key == "years" and value == 16:
+            raise error
+        return real(raw, key, value)
+
+    monkeypatch.setattr(be, "load_at", load_at)
+
+
+def test_a_bug_in_one_end_s_load_is_never_reported_as_no_switch(monkeypatch):
+    """Only the loader's refusals mean an end switches nothing it could name:
+    any other exception from one end's load propagates."""
+    entry = {"last_value_below": 15, "value": 16}
+    assert be.central_row_switch(_at_rent(1840), "years", entry) == (
+        "the central row switches here: row 2 at years=15, row 9 at years=16")
+    _one_end_raising(monkeypatch, RuntimeError("a bug in the load"))
+    with pytest.raises(RuntimeError, match="a bug in the load"):
+        be.central_row_switch(_at_rent(1840), "years", entry)
+
+
+def test_an_end_the_loader_refuses_switches_nothing(monkeypatch):
+    from hde.config import ConfigValidationError
+    _one_end_raising(monkeypatch, ConfigValidationError("refused"))
+    entry = {"last_value_below": 15, "value": 16}
+    assert be.central_row_switch(_at_rent(1840), "years", entry) is None
 
 
 def test_the_row_switch_reaches_the_rendered_break_even(tmp_path):

@@ -2303,9 +2303,12 @@ _STATED_PATH_LABELS: Dict[str, str] = {
 
 def _stated_path_zero(key: str) -> StructuralZero:
     """The §3.5 `stated_path` row for one financing key: zero spread BY
-    CONSTRUCTION, never a dash. `reversal_key` names the exact row carrying its
-    crossings. It carries no sentence: that no draw touches the key is its
-    KIND, and anything more would explain rather than report (§0.1 item 35)."""
+    CONSTRUCTION, never a dash. `reversal_key` names the key's own row in the
+    reversal register, on both branches of the gate: the exact row carrying
+    its crossings when the gate licenses the key, and the estimated row whose
+    every boundary is refused not_exact when it does not. It carries no
+    sentence: that no draw touches the key is its KIND, and anything more
+    would explain rather than report (§0.1 item 35)."""
     leaf = key.rsplit(".", 1)[-1]
     return StructuralZero(kind="stated_path", label=_STATED_PATH_LABELS.get(leaf, key),
                           keys=(key,), reversal_key=key)
