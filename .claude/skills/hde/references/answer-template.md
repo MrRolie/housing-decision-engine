@@ -57,7 +57,8 @@ After the checklist in SKILL.md, the prose, in this order:
 8. **Not modelled:** each item with its direction of bias ("renewal risk —
    biases toward buying"), taking the wording from the engine's own warning.
    With a renewal path stated the item moves out of this section: renewal risk
-   is priced, as ONE scenario with no distribution around it, and the
+   is priced, as ONE scenario with no distribution around it when the path is
+   a ladder (a path file: gates §8), and the
    `renewals:` line goes into the assumptions instead.
 9. **Where the story is** (`scenarios/<slug>/STORY.md` and the act PNGs) and
    the one next step (usually: a real listing's tax bill and closing costs

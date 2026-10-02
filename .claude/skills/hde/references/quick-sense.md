@@ -71,7 +71,7 @@ above that the mortgage is insured and the engine priced the premium"). Then
 one clause for the prior when the area has one (gate 2: what growth it encodes
 and whether the verdict survives it), and one "not modelled" clause: renewal
 risk when no renewal path is stated (priced, and named as one stated scenario,
-when it is), unit insurance, and — whenever the engine warned on it — the
+when it is a ladder; a path file: gates §8), unit insurance, and — whenever the engine warned on it — the
 rent-escalation default by name and direction ("1% real rent escalation is the
 engine's default; a Québec continuing lease runs nearer 0%, which favours
 renting"). State plainly that every property-specific figure is a placeholder

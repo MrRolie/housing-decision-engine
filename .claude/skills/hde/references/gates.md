@@ -138,7 +138,7 @@ them illustrative, and read the p95 and `prob_*_cheapest`.
 ≈ a 60/40 portfolio, 0.16 ≈ equities); with a `price_shock` or a prior on the
 owned side and 0 here the renter's capital cannot lose — the engine warns
 (`asymmetric tails`, `one-sided uncertainty`), so set both or neither; with
-every vol at 0 the Monte Carlo is one repeated path and "P(x cheapest): 100%"
+every vol at 0 and no `renewal_rates` file the Monte Carlo is one repeated path and "P(x cheapest): 100%"
 means nothing was modelled. A "no nasty surprise" criterion gets ONE clause
 carrying both sides' p95, labelled as resting on the vols you typed ("the
 worst 5% of futures: buying $412k, renting $388k — both on my illustrative
@@ -201,7 +201,11 @@ held for the whole amortization, which biases toward buying when rates are
 rising), and the warning is the wording to carry. Once the config states
 `mortgage_renewal_years` + `mortgage_renewal_rates` the risk is PRICED and
 that sentence becomes false: name instead the one path the run holds, with no
-distribution around it, and read back the engine's `renewals:` line. Read that
+distribution around it, and read back the engine's `renewals:` line. A
+`renewal_rates` path file prices it as a distribution instead: read back the
+`renewal rate paths:` line, whose model and validation are the file's own
+words. Use a file only when the user supplies one; never propose, invent or
+build one. Read that
 line before writing either sentence — it says how many renewals fell inside
 the horizon, and a renewal past the horizon is priced by nothing, which the
 engine warns about separately. Any default the engine warned on stays on the
