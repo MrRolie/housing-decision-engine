@@ -211,7 +211,7 @@ writing either sentence — the `renewals:` line says how many renewals fell
 inside the horizon and marks each one past it `not priced — past the
 horizon`. The engine warns of renewals past the horizon only when none of a
 stated ladder's falls inside it, and refuses a path file there; a ladder
-priced in part draws no warning. Any default the engine warned on stays on the
+priced in part draws no warning about its renewals past the horizon. Any default the engine warned on stays on the
 list too (a
 1% real rent escalation defaulted for a Québec continuing lease biases toward
 buying); "no chance you move early" biases toward buying too (an early exit

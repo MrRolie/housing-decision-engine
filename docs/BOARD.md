@@ -428,6 +428,14 @@ Found by the same lane's review, each run on the tip:
   as its ladder, and there the `opens at 4.40%, the same figure as mortgage_rate` warning
   explains the zero step; a file run gates that warning off. Rendering a signed zero predates
   the build.
+- Found 2026-10-02 by the same build's review: `break_even.central_row_switch` catches
+  `(ConfigValidationError, ValueError)`, so a plain `ValueError` from a bug in one end's load is
+  reported as "no switch". The pin separates a `RuntimeError` from a refusal, not a
+  `ValueError`. The fix is a loader error class of its own for the switch to catch.
+- Found 2026-10-02 by the same build's review: a config whose mortgage block is incomplete, beside
+  a path file, gets the file's "no option carries a mortgage" refusal ahead of the loader's
+  "declare all_cash: true OR a mortgage block". Both are true, but the root cause comes second.
+  The question is refusal order across the loader and the file.
 
 ## 12. The shipped examples barely exercise uncertainty
 

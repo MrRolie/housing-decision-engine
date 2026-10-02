@@ -210,7 +210,8 @@ def _drawing_before_the_row(raw: dict) -> dict:
 def test_under_the_legacy_binding_every_earlier_draw_is_the_no_file_run_s():
     """The draw is LAST in the path's world: with one generator for every
     channel, path 0's inflation, crash and value draws on a file run are those
-    of the same config without the file, and the file run's path 0 then takes
+    of its no-file twin (the same config with the central row typed as its
+    ladder, which takes no world draw), and the file run's path 0 then takes
     exactly one more draw, one integers(0, N). The world draws its inflation,
     crash and value draws before the row, so a row drawn ahead of any of the
     three moves them and fails here."""

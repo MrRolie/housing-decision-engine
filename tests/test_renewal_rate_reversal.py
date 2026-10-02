@@ -276,8 +276,10 @@ def _one_end_raising(monkeypatch, error):
 
 
 def test_a_bug_in_one_end_s_load_is_never_reported_as_no_switch(monkeypatch):
-    """Only the loader's refusals mean an end switches nothing it could name:
-    any other exception from one end's load propagates."""
+    """A ConfigValidationError or a ValueError from one end's load means that
+    end switches nothing it could name; any other exception propagates. A
+    plain ValueError from a bug is caught too, which no pin here separates
+    from a refusal."""
     entry = {"last_value_below": 15, "value": 16}
     assert be.central_row_switch(_at_rent(1840), "years", entry) == (
         "the central row switches here: row 2 at years=15, row 9 at years=16")

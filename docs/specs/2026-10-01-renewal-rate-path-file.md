@@ -676,6 +676,7 @@ not committed; r2's `m/` configs are the review's. Each is a delta on §2's two 
 | the config states no purchase date (main) | `uv run hde --print-schema \| grep -io '"[a-z_]*\(date\|calendar\|purchase\)[a-z_]*"' \| sort -u` prints only the three `*purchase_costs*` keys |
 | `sources:` refuses a key the config does not set (main) | the fixture with `house.mortgage_renewal_*` removed and `sources: {house.mortgage_renewal_rates: user}`, through `load_config_dict` |
 | 0.9992, 0.9792 and 0.9844 (prototype) | `m/hvr_ar1.yaml` at 5,000 paths: the shifted base arrays through `break_even._cheapest_probabilities`, against `run_monte_carlo(load_at(raw, "house.mortgage_rate", v))` |
+| 27.18%, 29.84% and P 0.0 without `income_growth_rate: 0.0` (§9 row 7; the build) | §4's config without that field: the peak of `deterministic._annual_costs_for_option` per row against `_compute_income_trajectory`, then `run_monte_carlo`'s `affordability_mc.prob_house_exceeds` |
 | 28.10%, 38.55%, 0.508 and 0.0 (prototype) | §4's config, `income_growth_rate: 0.0` included, `run_monte_carlo`, then the same with `deterministic._annual_costs_for_option` patched to the central row |
 | 1 failed / 2,438 passed and 12 failed / 2,427 passed, with §8's list (main and prototype) | `uv run --extra dev python -m pytest -q -p no:cacheprovider` in both trees (846 s and 879 s) |
 | every line number cited in this spec (main, r2) | `grep -n` and `sed -n` on the cited files |

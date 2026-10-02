@@ -122,8 +122,8 @@ class TestTheFile:
         doc = _file(provenance=dict(_file()["provenance"], method=method))
         assert _loads(_config(_write(tmp_path, doc, "utf8.json"))).renewal_rate_paths \
             .provenance["method"] == method
-        # the neighbour: a float in exponent notation, as numpy-written JSON
-        # emits it, is a number
+        # the neighbour: a float in exponent notation is a number (JSON allows
+        # it, and json.dumps writes small magnitudes such as 1e-05 that way)
         text = json.dumps(_file()).replace("0.08, 0.08, 0.08, 0.08]", "8e-2, 4.5e-2, 0.08, 0.08]")
         assert "4.5e-2" in text
         loaded = _loads(_config(_write(tmp_path, text, "exponent.json"))).renewal_rate_paths
