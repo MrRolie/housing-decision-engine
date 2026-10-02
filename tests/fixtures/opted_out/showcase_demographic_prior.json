@@ -1,0 +1,747 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "rent: invested capital $145,000 earns 5.0% real (7.2% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+    "decisiveness rests on uncertainty inputs the user did not state: simulation.investment_return_vol=10.0% (assistant), condo.price_shock.annual_hazard=3.0% (assistant), condo.price_shock.severity_mean=20.0% (assistant), condo.events=1 entry (cost_vol 20.0%) (assistant), house.price_shock.annual_hazard=3.0% (assistant), house.price_shock.severity_mean=20.0% (assistant), house.events=1 entry (cost_vol 15.0%) (assistant), market_scenario.path='tests/fixtures/scenario_prior_golden.json' (assistant) — the deterministic line alone says house by $4,135 (0.8% of its PV — not decisive under the 5% band)"
+  ],
+  "assumptions": {
+    "mode": "real",
+    "years": 25,
+    "discount_rate": 0.049951028403526054,
+    "discount_rate_note": "deflated at parse: (1 + 7.2% as quoted)/(1 + 2.1% inflation_rate) − 1 = 5.00% real",
+    "rates": "as_quoted",
+    "inflation_rate": 0.021,
+    "converted_rates": [
+      {
+        "key": "discount_rate",
+        "quoted": 0.072,
+        "effective": 0.049951028403526054
+      },
+      {
+        "key": "condo.fee_escalation_rate",
+        "quoted": 0.052,
+        "effective": 0.03036238981390804
+      },
+      {
+        "key": "condo.value_growth_rate",
+        "quoted": 0.041,
+        "effective": 0.019588638589618013
+      },
+      {
+        "key": "condo.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.0
+      },
+      {
+        "key": "house.value_growth_rate",
+        "quoted": 0.041,
+        "effective": 0.019588638589618013
+      },
+      {
+        "key": "house.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.0
+      },
+      {
+        "key": "house.other_recurring_costs.home_insurance.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.0
+      },
+      {
+        "key": "rent.rent_escalation_rate",
+        "quoted": 0.047,
+        "effective": 0.025465230166503483
+      },
+      {
+        "key": "rent.investment_return_rate",
+        "quoted": 0.072,
+        "effective": 0.049951028403526054
+      }
+    ],
+    "mortgage_rates": [],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: real terms · discount_rate 7.2% as quoted → 5.0% real (after 2.1% inflation)",
+      "condo: value growth +2.0%/yr (4.1% as quoted) · fee escalation +3.0%/yr (5.2% as quoted) · selling_cost_rate 5.0%",
+      "house: value growth +2.0%/yr (4.1% as quoted) · maintenance 1.2% of value/yr · selling_cost_rate 5.0%",
+      "condo other costs: property_tax $3,600/yr = 0.750% of price [no anchor match — hde --print-anchors]",
+      "house other costs: property_tax $4,700/yr = 0.855% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]",
+      "rent: escalation +2.5%/yr (4.7% as quoted) · invested capital $145,000 at +5.0%/yr (7.2% as quoted)",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "demographic prior: MTL_RMR (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · sha256 e73fff23ef46… [demoflow ScenarioPrior v1] · reference REAL drift over this 25-year run — all: +0.27%/yr (2030 band), +0.25%/yr (2035 band), +0.09%/yr (2040 band), +0.03%/yr (2045 band), +0.01%/yr (2050 band) (added to value_growth_rate in the Monte Carlo; all bands and the scenario range in --json)",
+      "defaults applied: economic.mode='real', economic.inflation_rate=2.1% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 7.2% as quoted = 5.0% after 2.1% inflation · condo.fee_escalation_rate 5.2% as quoted = 3.0% after 2.1% inflation · condo.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · condo.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · house.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.other_recurring_costs.home_insurance.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · rent.rent_escalation_rate 4.7% as quoted = 2.5% after 2.1% inflation · rent.investment_return_rate 7.2% as quoted = 5.0% after 2.1% inflation",
+      "user-stated: years=25, market_scenario.geography='MTL_RMR', condo.monthly_fee=$800/mo, condo.initial_value=$480,000, condo.all_cash=true, house.initial_value=$550,000, house.all_cash=true, rent.monthly_rent=$2,400/mo, rent.invested_down_payment=$145,000",
+      "assistant-typed: discount_rate=7.2%, market_scenario.path='tests/fixtures/scenario_prior_golden.json', condo.fee_escalation_rate=5.2%, condo.value_growth_rate=4.1%, condo.purchase_costs=$7,200, condo.other_recurring_costs=1 entry, condo.price_shock.annual_hazard=3.0%, condo.price_shock.severity_mean=20.0%, condo.events=1 entry, house.value_growth_rate=4.1%, house.annual_maintenance_rate=1.2%, house.purchase_costs=$8,200, house.other_recurring_costs=2 entries, house.price_shock.annual_hazard=3.0%, house.price_shock.severity_mean=20.0%, house.events=1 entry, rent.rent_escalation_rate=4.7%, rent.investment_return_rate=7.2%, simulation.num_sims=5,000, simulation.random_seed=42, simulation.investment_return_vol=10.0%",
+      "anchor-sourced: condo.price_shock.severity_vol=10.0% [price_shock.severity_vol], house.price_shock.severity_vol=10.0% [price_shock.severity_vol]"
+    ],
+    "defaults_applied": [
+      {
+        "key": "economic.mode",
+        "value": "real",
+        "formatted": "'real'",
+        "cite": null,
+        "kind": "mode",
+        "note": null,
+        "anchor": null
+      },
+      {
+        "key": "economic.inflation_rate",
+        "value": 0.021,
+        "formatted": "2.1%",
+        "cite": "FP Canada 2026 PAG",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "economic.inflation_rate.nominal_planning",
+          "value": 0.021,
+          "as_of": "2026",
+          "source": "FP Canada 2026 PAG §5 inflation 2.1%; PAG p.6: CPI averaged 2.5% over the 10 years to Dec 2025",
+          "url": "https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+          "rationale": "The nominal-mode planning figure the engine SUGGESTS (never applies): the coherence warning for nominal mode with inflation_rate=0 and the --print-schema note both format this value. Band top 2.5% = the realised 10-year CPI average the PAG quotes.",
+          "band": [
+            0.021,
+            0.025
+          ],
+          "short_cite": "FP Canada 2026 PAG",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "house.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "condo",
+        "cost_name": "property_tax",
+        "annual_amount": 3600.0,
+        "family": "property_tax.",
+        "implied_rate": 0.0075,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "property_tax",
+        "annual_amount": 4700.0,
+        "family": "property_tax.",
+        "implied_rate": 0.008545454545454545,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "home_insurance",
+        "annual_amount": 1200.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": true,
+      "user": [
+        {
+          "key": "years",
+          "value": 25,
+          "formatted": "25"
+        },
+        {
+          "key": "market_scenario.geography",
+          "value": "MTL_RMR",
+          "formatted": "'MTL_RMR'"
+        },
+        {
+          "key": "condo.monthly_fee",
+          "value": 800,
+          "formatted": "$800/mo"
+        },
+        {
+          "key": "condo.initial_value",
+          "value": 480000,
+          "formatted": "$480,000"
+        },
+        {
+          "key": "condo.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "house.initial_value",
+          "value": 550000,
+          "formatted": "$550,000"
+        },
+        {
+          "key": "house.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "rent.monthly_rent",
+          "value": 2400,
+          "formatted": "$2,400/mo"
+        },
+        {
+          "key": "rent.invested_down_payment",
+          "value": 145000,
+          "formatted": "$145,000"
+        }
+      ],
+      "assistant": [
+        {
+          "key": "discount_rate",
+          "value": 0.072,
+          "formatted": "7.2%"
+        },
+        {
+          "key": "market_scenario.path",
+          "value": "tests/fixtures/scenario_prior_golden.json",
+          "formatted": "'tests/fixtures/scenario_prior_golden.json'"
+        },
+        {
+          "key": "condo.fee_escalation_rate",
+          "value": 0.052,
+          "formatted": "5.2%"
+        },
+        {
+          "key": "condo.value_growth_rate",
+          "value": 0.041,
+          "formatted": "4.1%"
+        },
+        {
+          "key": "condo.purchase_costs",
+          "value": 7200,
+          "formatted": "$7,200"
+        },
+        {
+          "key": "condo.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 3600,
+              "escalation_rate": 0.021
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "condo.price_shock.annual_hazard",
+          "value": 0.03,
+          "formatted": "3.0%"
+        },
+        {
+          "key": "condo.price_shock.severity_mean",
+          "value": 0.2,
+          "formatted": "20.0%"
+        },
+        {
+          "key": "condo.events",
+          "value": [
+            {
+              "name": "special_assessment",
+              "base_cost": 15000,
+              "expected_year": 8,
+              "cost_vol": 0.2
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "house.value_growth_rate",
+          "value": 0.041,
+          "formatted": "4.1%"
+        },
+        {
+          "key": "house.annual_maintenance_rate",
+          "value": 0.012,
+          "formatted": "1.2%"
+        },
+        {
+          "key": "house.purchase_costs",
+          "value": 8200,
+          "formatted": "$8,200"
+        },
+        {
+          "key": "house.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 4700,
+              "escalation_rate": 0.021
+            },
+            {
+              "name": "home_insurance",
+              "annual_amount": 1200,
+              "escalation_rate": 0.021
+            }
+          ],
+          "formatted": "2 entries"
+        },
+        {
+          "key": "house.price_shock.annual_hazard",
+          "value": 0.03,
+          "formatted": "3.0%"
+        },
+        {
+          "key": "house.price_shock.severity_mean",
+          "value": 0.2,
+          "formatted": "20.0%"
+        },
+        {
+          "key": "house.events",
+          "value": [
+            {
+              "name": "roof_replacement",
+              "base_cost": 20000,
+              "expected_year": 12,
+              "cost_vol": 0.15
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "rent.rent_escalation_rate",
+          "value": 0.047,
+          "formatted": "4.7%"
+        },
+        {
+          "key": "rent.investment_return_rate",
+          "value": 0.072,
+          "formatted": "7.2%"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 5000,
+          "formatted": "5,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 42,
+          "formatted": "42"
+        },
+        {
+          "key": "simulation.investment_return_vol",
+          "value": 0.1,
+          "formatted": "10.0%"
+        }
+      ],
+      "anchor": {
+        "condo.price_shock.severity_vol": "price_shock.severity_vol",
+        "house.price_shock.severity_vol": "price_shock.severity_vol"
+      },
+      "unattributed": [],
+      "sweep": []
+    },
+    "tax": null,
+    "demographic_prior": {
+      "file_sha256": "e73fff23ef469d6e02e84f33f29b457421107cb092815033f8c7144bd822f74c",
+      "assumptions_hash": "e03504aaffd0a35a",
+      "geography": "MTL_RMR",
+      "schema_version": "1",
+      "mapping_version": "1",
+      "isq_edition": "2026",
+      "census_year": "2021",
+      "constants_as_of": "2026-07-21",
+      "start_calendar_year": 2026,
+      "horizon_years": [
+        2030,
+        2035,
+        2040,
+        2045,
+        2050
+      ],
+      "source_keys": [
+        "census_tenure_age_98100231.csv",
+        "compo-ra-base.xlsx",
+        "compo-rmr-base.xlsx",
+        "headship_by_age.json",
+        "hors_aligned_csd_98100232.json",
+        "living_arrangement.json",
+        "living_arrangement_98100134.json",
+        "mortality_basis:CPM2014_combined+CPM-B",
+        "ownership_by_geo_age.json",
+        "ownership_hors_aligned.json",
+        "pop-as-qc-base.xlsx",
+        "pop-as-ra-base.xlsx",
+        "pop-as-rmr-base.xlsx"
+      ],
+      "encoded_drift": {
+        "all": {
+          "reference_by_band": {
+            "2030": 0.0026608205148462754,
+            "2035": 0.0025276373930573012,
+            "2040": 0.0009372262611348547,
+            "2045": 0.0003353073614537788,
+            "2050": 6.858807199783069e-05
+          },
+          "scenario_min": -0.009425635700600956,
+          "scenario_max": 0.013463359088899283
+        }
+      },
+      "description": "MTL_RMR demand model (ISQ 2026 scenarios, 2021 census) · constants as of 2026-07-21 · simulation year 1 = calendar 2026, bands 2030/2035/2040/2045/2050 · mapping v1: excess-demand rate → real price drift through a linear-through-origin β prior with the uniform β demoflow pinned; horizon bands (2030…2050) are piecewise-constant with no interpolation; drawdown_weight_tilt multiplies the user's price-shock hazard (S4b sketch §1 slots 2–3, §3) · encoded REAL drift by band, added to value_growth_rate in the Monte Carlo — all: reference 2030 +0.27%/yr, 2035 +0.25%/yr, 2040 +0.09%/yr, 2045 +0.03%/yr, 2050 +0.01%/yr (scenarios -0.94%…+1.35%) · 13 pinned sources (sha256 in --json): StatCan 98-10-0231-01; ISQ arrival flows (RA); ISQ arrival flows (RMR); derived: headship rate by single year of age; StatCan 98-10-0232-01; derived: living-arrangement shares; StatCan 98-10-0134-01; CIA CPM2014 mortality + CPM-B scale; derived: ownership rate by geography × age; derived: HORS_RMR ownership curve; ISQ population scenarios (QC); ISQ population scenarios (RA); ISQ population scenarios (RMR)",
+      "sources": [
+        {
+          "key": "census_tenure_age_98100231.csv",
+          "citation": "StatCan 98-10-0231-01 — Statistics Canada, 2021 Census, tenure × age of primary household maintainer; source of the ownership and headship surfaces",
+          "sha256": "773f7af8deac87087f02d5464292f8a3e71351a7b1d735e47d983b7fd32b7b2b",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "compo-ra-base.xlsx",
+          "citation": "ISQ arrival flows (RA) — ISQ Perspectives démographiques, components of growth for the administrative regions, base scenario",
+          "sha256": "1b81a82b0f0588a3217eb93b74d37044addf08934731dfd612e846e6de7b728f",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "compo-rmr-base.xlsx",
+          "citation": "ISQ arrival flows (RMR) — ISQ Perspectives démographiques, components of growth (migration/arrival flows) for the census metropolitan areas, base scenario",
+          "sha256": "096246df47a95f729d46bacdb655cf297f4779163d62ee25e95254b5cc23844b",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "headship_by_age.json",
+          "citation": "derived: headship rate by single year of age — StatCan 98-10-0231-01 maintainers ÷ ISQ persons (pop-as-qc-base.xlsx)",
+          "sha256": "e9f00d61ff1ce90278a5cb98041a23d12f41caf2f454babef5d4772931006c92",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "hors_aligned_csd_98100232.json",
+          "citation": "StatCan 98-10-0232-01 — Statistics Canada, 2021 Census, census-subdivision extract aligning the outside-CMA (HORS_RMR) ownership curve",
+          "sha256": "92821b9dad0d7aae7211300d11d3f721b8d7a0e2d19efcfa50ca78fb8cf24d3f",
+          "extracted_at": "2026-08-15"
+        },
+        {
+          "key": "living_arrangement.json",
+          "citation": "derived: living-arrangement shares — computed in demoflow from StatCan 98-10-0134-01 (its _provenance records the extraction date)",
+          "sha256": "685c6e41deb14a8603bf43dae286aea85e7f0cc1ba66a06f1fe8844f0d4eabe7",
+          "extracted_at": "2026-08-08"
+        },
+        {
+          "key": "living_arrangement_98100134.json",
+          "citation": "StatCan 98-10-0134-01 — Statistics Canada, 2021 Census, living arrangements by sex",
+          "sha256": "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
+          "extracted_at": "2026-08-08"
+        },
+        {
+          "key": "mortality_basis:CPM2014_combined+CPM-B",
+          "citation": "CIA CPM2014 mortality + CPM-B scale — Canadian Institute of Actuaries, Canadian Pensioners' Mortality 2014 (combined) with improvement scale CPM-B; the cohort roll-forward's survival basis (via the actuarial-system package)",
+          "sha256": "d15e1f52318413016d1cc3229a5a2c85306fe922010be52e132dc8fbba830cea",
+          "extracted_at": "2026-08-19"
+        },
+        {
+          "key": "ownership_by_geo_age.json",
+          "citation": "derived: ownership rate by geography × age — computed in demoflow from StatCan 98-10-0231-01",
+          "sha256": "2c371f84a7ac1cd1dac4ce0f069993d59fdf32a552c39b147c149c9dc62706e4",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "ownership_hors_aligned.json",
+          "citation": "derived: HORS_RMR ownership curve — computed in demoflow from StatCan 98-10-0232-01 census subdivisions",
+          "sha256": "88775eca8ecf6283858155b42787301c614478fee37a29682790758b7831c0e5",
+          "extracted_at": "2026-08-15"
+        },
+        {
+          "key": "pop-as-qc-base.xlsx",
+          "citation": "ISQ population scenarios (QC) — ISQ Perspectives démographiques, Québec total by single year of age; the headship curve's denominator",
+          "sha256": "1d286d252a75195db6ab66ac767e352d9f74e4e2359c68eba4a43301c9c61fd4",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "pop-as-ra-base.xlsx",
+          "citation": "ISQ population scenarios (RA) — ISQ Perspectives démographiques, population by age and sex for the administrative regions, base scenario workbook",
+          "sha256": "ae9de62fd8631668e127e5cd37ec10028959a38a18831e1c5e4d102a1c8779fe",
+          "extracted_at": "2026-07-21"
+        },
+        {
+          "key": "pop-as-rmr-base.xlsx",
+          "citation": "ISQ population scenarios (RMR) — Institut de la statistique du Québec, Perspectives démographiques, population by age and sex for the census metropolitan areas, base scenario workbook (edition per data_vintage.isq_edition)",
+          "sha256": "288d8c9f03d05ece6ae1271e2cf55226a534d4fe27005ca76fb2ef305f0882d7",
+          "extracted_at": "2026-07-21"
+        }
+      ]
+    },
+    "read_back": [
+      "[warning] rent: invested capital $145,000 earns 5.0% real (7.2% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] decisiveness rests on uncertainty inputs the user did not state: simulation.investment_return_vol=10.0% (assistant), condo.price_shock.annual_hazard=3.0% (assistant), condo.price_shock.severity_mean=20.0% (assistant), condo.events=1 entry (cost_vol 20.0%) (assistant), house.price_shock.annual_hazard=3.0% (assistant), house.price_shock.severity_mean=20.0% (assistant), house.events=1 entry (cost_vol 15.0%) (assistant), market_scenario.path='tests/fixtures/scenario_prior_golden.json' (assistant) — the deterministic line alone says house by $4,135 (0.8% of its PV — not decisive under the 5% band)",
+      "assistant-typed: discount_rate=7.2%, market_scenario.path='tests/fixtures/scenario_prior_golden.json', condo.fee_escalation_rate=5.2%, condo.value_growth_rate=4.1%, condo.purchase_costs=$7,200, condo.other_recurring_costs=1 entry, condo.price_shock.annual_hazard=3.0%, condo.price_shock.severity_mean=20.0%, condo.events=1 entry, house.value_growth_rate=4.1%, house.annual_maintenance_rate=1.2%, house.purchase_costs=$8,200, house.other_recurring_costs=2 entries, house.price_shock.annual_hazard=3.0%, house.price_shock.severity_mean=20.0%, house.events=1 entry, rent.rent_escalation_rate=4.7%, rent.investment_return_rate=7.2%, simulation.num_sims=5,000, simulation.random_seed=42, simulation.investment_return_vol=10.0%",
+      "anchor-sourced: condo.price_shock.severity_vol=10.0% [price_shock.severity_vol], house.price_shock.severity_vol=10.0% [price_shock.severity_vol]",
+      "defaults applied: economic.mode='real', economic.inflation_rate=2.1% [FP Canada 2026 PAG], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 7.2% as quoted = 5.0% after 2.1% inflation · condo.fee_escalation_rate 5.2% as quoted = 3.0% after 2.1% inflation · condo.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · condo.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.value_growth_rate 4.1% as quoted = 2.0% after 2.1% inflation · house.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · house.other_recurring_costs.home_insurance.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · rent.rent_escalation_rate 4.7% as quoted = 2.5% after 2.1% inflation · rent.investment_return_rate 7.2% as quoted = 5.0% after 2.1% inflation",
+      "decisiveness: best guess says house by $4,135 (0.8% of house PV); most futures say rent (44% cheapest) — the two disagree, not decisive [hde verdict rule]; Monte Carlo mean favours rent ($536,242 vs $536,366)",
+      "best guess: the condo is priced with no price crash; on the model's schedule a crash comes with a chance of 3.0% a year (condo.price_shock.annual_hazard × the prior's drawdown_weight_tilt)",
+      "best guess: the house is priced with no price crash; on the model's schedule a crash comes with a chance of 3.0% a year (house.price_shock.annual_hazard × the prior's drawdown_weight_tilt)",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "Condo: $    13,200/yr ($1,100/mo); expected appreciation $9,403 (value × real growth, not cash)",
+      "House: $    12,500/yr ($1,042/mo); expected appreciation $10,774 (value × real growth, not cash)",
+      "Rent: $    28,800/yr ($2,400/mo)",
+      "condo other costs: property_tax $3,600/yr = 0.750% of price [no anchor match — hde --print-anchors]",
+      "house other costs: property_tax $4,700/yr = 0.855% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]",
+      "next: not decisive under the prior — run --break-even house.value_growth_rate to see where the prior's drift sits against the tie band"
+    ],
+    "read_back_short": [
+      "[warning] rent: invested capital $145,000 earns 5.0% real (7.2% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] decisiveness rests on uncertainty inputs the user did not state: simulation.investment_return_vol=10.0% (assistant), condo.price_shock.annual_hazard=3.0% (assistant), condo.price_shock.severity_mean=20.0% (assistant), condo.events=1 entry (cost_vol 20.0%) (assistant), house.price_shock.annual_hazard=3.0% (assistant), house.price_shock.severity_mean=20.0% (assistant), house.events=1 entry (cost_vol 15.0%) (assistant), market_scenario.path='tests/fixtures/scenario_prior_golden.json' (assistant) — the deterministic line alone says house by $4,135 (0.8% of its PV — not decisive under the 5% band)",
+      "assistant-typed: discount_rate=7.2%, market_scenario.path='tests/fixtures/scenario_prior_golden.json', condo.fee_escalation_rate=5.2%, condo.value_growth_rate=4.1%, condo.purchase_costs=$7,200, condo.other_recurring_costs=1 entry, condo.price_shock.annual_hazard=3.0%, condo.price_shock.severity_mean=20.0%, condo.events=1 entry, house.value_growth_rate=4.1%, house.annual_maintenance_rate=1.2%, house.purchase_costs=$8,200, house.other_recurring_costs=2 entries, house.price_shock.annual_hazard=3.0%, house.price_shock.severity_mean=20.0%, house.events=1 entry, rent.rent_escalation_rate=4.7%, rent.investment_return_rate=7.2%, simulation.num_sims=5,000, simulation.random_seed=42, simulation.investment_return_vol=10.0%",
+      "anchor-sourced: condo.price_shock.severity_vol=10.0% [price_shock.severity_vol], house.price_shock.severity_vol=10.0% [price_shock.severity_vol]",
+      "you said: years=25, market_scenario.geography='MTL_RMR', condo.monthly_fee=$800/mo, condo.initial_value=$480,000, condo.all_cash=true, house.initial_value=$550,000, house.all_cash=true, rent.monthly_rent=$2,400/mo, rent.invested_down_payment=$145,000",
+      "decisiveness: best guess says house by $4,135 (0.8% of house PV); most futures say rent (44% cheapest) — the two disagree, not decisive [hde verdict rule]; Monte Carlo mean favours rent ($536,242 vs $536,366)",
+      "full read-back: 10 more lines (defaults applied, rates, best guess, year-1 cash, other costs, next step) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "house",
+    "runner_up": "condo",
+    "margin_pv": 4134.919811166241,
+    "margin_frac": 0.008034525121147305,
+    "monthly_equivalent": 23.89433365064975,
+    "prob_best": 0.4198,
+    "decisive": false,
+    "state": "disagreement",
+    "rule": "mc_floor",
+    "reason": "best guess says house by $4,135 (0.8% of house PV); most futures say rent (44% cheapest) — the two disagree, not decisive [hde verdict rule]; Monte Carlo mean favours rent ($536,242 vs $536,366)",
+    "mc_mean_best": "rent",
+    "mc_best": "rent",
+    "mc_prob_best": 0.4404
+  },
+  "deterministic": {
+    "condo": {
+      "total_pv": 518778.8780810718,
+      "breakdown": {
+        "purchase_costs_pv": 7200.0,
+        "fee_pv": 189618.71086196048,
+        "events_pv": 10156.379328921923,
+        "other_pv": 50763.11336031523,
+        "reserve_pv": 0.0,
+        "downpayment_pv": 480000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -218959.32547012588,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 13200.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 9402.546523016646
+    },
+    "house": {
+      "total_pv": 514643.95826990553,
+      "breakdown": {
+        "purchase_costs_pv": 8200.0,
+        "maintenance_pv": 112996.76636863357,
+        "events_pv": 11142.983217496792,
+        "other_pv": 83195.10245162777,
+        "downpayment_pv": 550000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -250890.89376785254,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 12500.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 10773.751224289907
+    },
+    "rent": {
+      "total_pv": 537497.5105235286,
+      "breakdown": {
+        "rent_pv": 537497.5105235286,
+        "events_pv": 0.0,
+        "other_pv": 0.0,
+        "invested_capital_pv": 145000.0,
+        "invested_dp_benefit_pv": -145000.0
+      },
+      "cash_year1": 28800.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "affordability": null,
+    "market_scenario": {
+      "file_sha256": "e73fff23ef469d6e02e84f33f29b457421107cb092815033f8c7144bd822f74c",
+      "assumptions_hash": "e03504aaffd0a35a",
+      "geography": "MTL_RMR",
+      "schema_version": "1",
+      "mapping_version": "1",
+      "isq_edition": "2026",
+      "census_year": "2021",
+      "constants_as_of": "2026-07-21",
+      "start_calendar_year": 2026,
+      "horizon_years": [
+        2030,
+        2035,
+        2040,
+        2045,
+        2050
+      ],
+      "source_keys": [
+        "census_tenure_age_98100231.csv",
+        "compo-ra-base.xlsx",
+        "compo-rmr-base.xlsx",
+        "headship_by_age.json",
+        "hors_aligned_csd_98100232.json",
+        "living_arrangement.json",
+        "living_arrangement_98100134.json",
+        "mortality_basis:CPM2014_combined+CPM-B",
+        "ownership_by_geo_age.json",
+        "ownership_hors_aligned.json",
+        "pop-as-qc-base.xlsx",
+        "pop-as-ra-base.xlsx",
+        "pop-as-rmr-base.xlsx"
+      ],
+      "encoded_drift": {
+        "all": {
+          "reference_by_band": {
+            "2030": 0.0026608205148462754,
+            "2035": 0.0025276373930573012,
+            "2040": 0.0009372262611348547,
+            "2045": 0.0003353073614537788,
+            "2050": 6.858807199783069e-05
+          },
+          "scenario_min": -0.009425635700600956,
+          "scenario_max": 0.013463359088899283
+        }
+      }
+    }
+  },
+  "monte_carlo": {
+    "condo": {
+      "mean": 542413.7641782277,
+      "std": 49709.827979116555,
+      "p5": 454274.4633114035,
+      "p50": 553493.1159981388,
+      "p95": 621343.1894460664
+    },
+    "house": {
+      "mean": 536365.5949521621,
+      "std": 45500.98873092144,
+      "p5": 455216.8748060614,
+      "p50": 545278.504702507,
+      "p95": 606285.2447837384
+    },
+    "rent": {
+      "mean": 536242.0464834366,
+      "std": 78211.84749691283,
+      "p5": 390770.4657023649,
+      "p50": 554317.7588099905,
+      "p95": 625707.9458037555
+    },
+    "prob_condo_cheapest": 0.1398,
+    "prob_house_cheapest": 0.4198,
+    "prob_rent_cheapest": 0.4404,
+    "affordability_mc": null,
+    "market_scenario": {
+      "file_sha256": "e73fff23ef469d6e02e84f33f29b457421107cb092815033f8c7144bd822f74c",
+      "assumptions_hash": "e03504aaffd0a35a",
+      "geography": "MTL_RMR",
+      "schema_version": "1",
+      "mapping_version": "1",
+      "isq_edition": "2026",
+      "census_year": "2021",
+      "constants_as_of": "2026-07-21",
+      "start_calendar_year": 2026,
+      "horizon_years": [
+        2030,
+        2035,
+        2040,
+        2045,
+        2050
+      ],
+      "source_keys": [
+        "census_tenure_age_98100231.csv",
+        "compo-ra-base.xlsx",
+        "compo-rmr-base.xlsx",
+        "headship_by_age.json",
+        "hors_aligned_csd_98100232.json",
+        "living_arrangement.json",
+        "living_arrangement_98100134.json",
+        "mortality_basis:CPM2014_combined+CPM-B",
+        "ownership_by_geo_age.json",
+        "ownership_hors_aligned.json",
+        "pop-as-qc-base.xlsx",
+        "pop-as-ra-base.xlsx",
+        "pop-as-rmr-base.xlsx"
+      ],
+      "encoded_drift": {
+        "all": {
+          "reference_by_band": {
+            "2030": 0.0026608205148462754,
+            "2035": 0.0025276373930573012,
+            "2040": 0.0009372262611348547,
+            "2045": 0.0003353073614537788,
+            "2050": 6.858807199783069e-05
+          },
+          "scenario_min": -0.009425635700600956,
+          "scenario_max": 0.013463359088899283
+        }
+      }
+    }
+  }
+}

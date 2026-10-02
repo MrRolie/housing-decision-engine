@@ -1,0 +1,458 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) vs discount_rate 5.0% real (7.2% as quoted) — net capital term $128,389 charged to the renter over 15 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+    "rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+    "condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+    "one-sided uncertainty: the owned option's PV is the only stochastic side (simulation.condo_fee_vol) while the renter's PV is a single path — P(cheapest) measures that one side's dispersion against a fixed number and is OVERconfident: the too-close-to-call zone is wider than shown; give the renter's side its own uncertainty (simulation.investment_return_vol, 0.10 ≈ 60/40 portfolio; simulation.rent_escalation_vol; or, for a sitting tenant below market, rent.reset_hazard with rent.reset_to_monthly_rent) — or read the deterministic line",
+    "affordability: rent housing cost exceeds 35% of income in years [13, 14, 15] (max 35.7%) — rent plus the renter's own recurring costs over income, with no mortgage and no maintenance in it: a tenant faces no lender test, so this threshold is a budget line and not a qualifying rule [income.affordability_threshold]",
+    "decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.condo_fee_vol=8.0% (unattributed) — the deterministic line alone says condo by $119,176 (27.9% of its PV — decisive under the 5% band)"
+  ],
+  "assumptions": {
+    "mode": "real",
+    "years": 15,
+    "discount_rate": 0.049951028403526054,
+    "discount_rate_note": "deflated at parse: (1 + 7.2% as quoted)/(1 + 2.1% inflation_rate) − 1 = 5.00% real",
+    "rates": "as_quoted",
+    "inflation_rate": 0.021,
+    "converted_rates": [
+      {
+        "key": "discount_rate",
+        "quoted": 0.072,
+        "effective": 0.049951028403526054
+      },
+      {
+        "key": "condo.fee_escalation_rate",
+        "quoted": 0.052,
+        "effective": 0.03036238981390804
+      },
+      {
+        "key": "condo.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.0
+      },
+      {
+        "key": "rent.rent_escalation_rate",
+        "quoted": 0.062,
+        "effective": 0.04015670910871716
+      },
+      {
+        "key": "rent.investment_return_rate",
+        "quoted": 0.051,
+        "effective": 0.02938295788442713
+      },
+      {
+        "key": "income.income_growth_rate",
+        "quoted": 0.052,
+        "effective": 0.03036238981390804
+      }
+    ],
+    "mortgage_rates": [],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: real terms · discount_rate 7.2% as quoted → 5.0% real (after 2.1% inflation)",
+      "condo: value growth +0.0%/yr · fee escalation +3.0%/yr (5.2% as quoted) · selling_cost_rate 5.0%",
+      "condo other costs: property_tax $3,800/yr = 0.760% of price [no anchor match — hde --print-anchors]",
+      "rent: escalation +4.0%/yr (6.2% as quoted) · invested capital $500,000 at +2.9%/yr (5.1% as quoted)",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "defaults applied: economic.inflation_rate=2.1% [FP Canada 2026 PAG], condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 7.2% as quoted = 5.0% after 2.1% inflation · condo.fee_escalation_rate 5.2% as quoted = 3.0% after 2.1% inflation · condo.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · rent.rent_escalation_rate 6.2% as quoted = 4.0% after 2.1% inflation · rent.investment_return_rate 5.1% as quoted = 2.9% after 2.1% inflation · income.income_growth_rate 5.2% as quoted = 3.0% after 2.1% inflation",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's"
+    ],
+    "defaults_applied": [
+      {
+        "key": "economic.inflation_rate",
+        "value": 0.021,
+        "formatted": "2.1%",
+        "cite": "FP Canada 2026 PAG",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "economic.inflation_rate.nominal_planning",
+          "value": 0.021,
+          "as_of": "2026",
+          "source": "FP Canada 2026 PAG §5 inflation 2.1%; PAG p.6: CPI averaged 2.5% over the 10 years to Dec 2025",
+          "url": "https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+          "rationale": "The nominal-mode planning figure the engine SUGGESTS (never applies): the coherence warning for nominal mode with inflation_rate=0 and the --print-schema note both format this value. Band top 2.5% = the realised 10-year CPI average the PAG quotes.",
+          "band": [
+            0.021,
+            0.025
+          ],
+          "short_cite": "FP Canada 2026 PAG",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.value_growth_rate",
+        "value": 0.0,
+        "formatted": "0.0%",
+        "cite": "neutral, uncited",
+        "kind": "neutral",
+        "note": null,
+        "anchor": {
+          "name": "condo.value_growth_rate",
+          "value": 0.0,
+          "as_of": "2026",
+          "source": "hde neutrality ruling — deliberately uncited",
+          "url": "none (deliberately uncited)",
+          "rationale": "Neutral by construction: no defensible universal long-run real appreciation default exists for Canadian home prices. Users should set their own view or wire a market_scenario prior (ISQ-grounded demographic drift). Band is an illustrative neutrality range, not a citation.",
+          "band": [
+            -0.01,
+            0.02
+          ],
+          "short_cite": "neutral, uncited",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "",
+          "kind": "neutral",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "condo",
+        "cost_name": "property_tax",
+        "annual_amount": 3800.0,
+        "family": "property_tax.",
+        "implied_rate": 0.0076,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": false,
+      "user": [],
+      "assistant": [],
+      "anchor": {},
+      "unattributed": [
+        {
+          "key": "years",
+          "value": 15,
+          "formatted": "15"
+        },
+        {
+          "key": "discount_rate",
+          "value": 0.072,
+          "formatted": "7.2%"
+        },
+        {
+          "key": "condo.monthly_fee",
+          "value": 700,
+          "formatted": "$700/mo"
+        },
+        {
+          "key": "condo.fee_escalation_rate",
+          "value": 0.052,
+          "formatted": "5.2%"
+        },
+        {
+          "key": "condo.initial_value",
+          "value": 500000,
+          "formatted": "$500,000"
+        },
+        {
+          "key": "condo.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "condo.purchase_costs",
+          "value": 7500,
+          "formatted": "$7,500"
+        },
+        {
+          "key": "condo.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 3800,
+              "escalation_rate": 0.021
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "rent.monthly_rent",
+          "value": 2500,
+          "formatted": "$2,500/mo"
+        },
+        {
+          "key": "rent.rent_escalation_rate",
+          "value": 0.062,
+          "formatted": "6.2%"
+        },
+        {
+          "key": "rent.invested_down_payment",
+          "value": 500000,
+          "formatted": "$500,000"
+        },
+        {
+          "key": "rent.investment_return_rate",
+          "value": 0.051,
+          "formatted": "5.1%"
+        },
+        {
+          "key": "income.annual_income",
+          "value": 120000,
+          "formatted": "$120,000"
+        },
+        {
+          "key": "income.income_growth_rate",
+          "value": 0.052,
+          "formatted": "5.2%"
+        },
+        {
+          "key": "income.affordability_threshold",
+          "value": 0.35,
+          "formatted": "35.0%"
+        },
+        {
+          "key": "income.pay_drop_events",
+          "value": [
+            {
+              "year": 3,
+              "magnitude": 0.8
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 5000,
+          "formatted": "5,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 42,
+          "formatted": "42"
+        },
+        {
+          "key": "simulation.condo_fee_vol",
+          "value": 0.08,
+          "formatted": "8.0%"
+        },
+        {
+          "key": "economic.mode",
+          "value": "real",
+          "formatted": "'real'"
+        }
+      ],
+      "sweep": []
+    },
+    "tax": null,
+    "demographic_prior": null,
+    "read_back": [
+      "[warning] rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) vs discount_rate 5.0% real (7.2% as quoted) — net capital term $128,389 charged to the renter over 15 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+      "[warning] rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] one-sided uncertainty: the owned option's PV is the only stochastic side (simulation.condo_fee_vol) while the renter's PV is a single path — P(cheapest) measures that one side's dispersion against a fixed number and is OVERconfident: the too-close-to-call zone is wider than shown; give the renter's side its own uncertainty (simulation.investment_return_vol, 0.10 ≈ 60/40 portfolio; simulation.rent_escalation_vol; or, for a sitting tenant below market, rent.reset_hazard with rent.reset_to_monthly_rent) — or read the deterministic line",
+      "[warning] affordability: rent housing cost exceeds 35% of income in years [13, 14, 15] (max 35.7%) — rent plus the renter's own recurring costs over income, with no mortgage and no maintenance in it: a tenant faces no lender test, so this threshold is a budget line and not a qualifying rule [income.affordability_threshold]",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.condo_fee_vol=8.0% (unattributed) — the deterministic line alone says condo by $119,176 (27.9% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "defaults applied: economic.inflation_rate=2.1% [FP Canada 2026 PAG], condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 7.2% as quoted = 5.0% after 2.1% inflation · condo.fee_escalation_rate 5.2% as quoted = 3.0% after 2.1% inflation · condo.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 0.0% after 2.1% inflation · rent.rent_escalation_rate 6.2% as quoted = 4.0% after 2.1% inflation · rent.investment_return_rate 5.1% as quoted = 2.9% after 2.1% inflation · income.income_growth_rate 5.2% as quoted = 3.0% after 2.1% inflation",
+      "decisiveness: P(condo cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "Condo: $    12,200/yr ($1,017/mo)",
+      "Rent: $    30,000/yr ($2,500/mo)",
+      "condo other costs: property_tax $3,800/yr = 0.760% of price [no anchor match — hde --print-anchors]",
+      "Affordability (threshold: 35% — a GDS-shaped ratio, housing cost incl. maintenance over income; the 32% figure is the legacy guideline, CMHC caps GDS at 39%, TDS at 44%)",
+      "Condo: max ratio 12.5%  years exceeding: none"
+    ],
+    "read_back_short": [
+      "[warning] rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) vs discount_rate 5.0% real (7.2% as quoted) — net capital term $128,389 charged to the renter over 15 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+      "[warning] rent: invested capital $500,000 earns 2.9% real (5.1% as quoted) untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] one-sided uncertainty: the owned option's PV is the only stochastic side (simulation.condo_fee_vol) while the renter's PV is a single path — P(cheapest) measures that one side's dispersion against a fixed number and is OVERconfident: the too-close-to-call zone is wider than shown; give the renter's side its own uncertainty (simulation.investment_return_vol, 0.10 ≈ 60/40 portfolio; simulation.rent_escalation_vol; or, for a sitting tenant below market, rent.reset_hazard with rent.reset_to_monthly_rent) — or read the deterministic line",
+      "[warning] affordability: rent housing cost exceeds 35% of income in years [13, 14, 15] (max 35.7%) — rent plus the renter's own recurring costs over income, with no mortgage and no maintenance in it: a tenant faces no lender test, so this threshold is a budget line and not a qualifying rule [income.affordability_threshold]",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.condo_fee_vol=8.0% (unattributed) — the deterministic line alone says condo by $119,176 (27.9% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "decisiveness: P(condo cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+      "full read-back: 8 more lines (defaults applied, rates, year-1 cash, other costs, affordability) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "condo",
+    "runner_up": "rent",
+    "margin_pv": 119176.00950830046,
+    "margin_frac": 0.2790686239276561,
+    "monthly_equivalent": 935.2669863338922,
+    "prob_best": 0.9998,
+    "decisive": true,
+    "state": "option",
+    "rule": "mc_floor",
+    "reason": "P(condo cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+    "mc_mean_best": "condo",
+    "mc_best": "condo",
+    "mc_prob_best": 0.9998
+  },
+  "deterministic": {
+    "condo": {
+      "total_pv": 427049.1172780314,
+      "breakdown": {
+        "purchase_costs_pv": 7500.0,
+        "fee_pv": 108736.38404766095,
+        "events_pv": 0.0,
+        "other_pv": 39455.75995513897,
+        "reserve_pv": 0.0,
+        "downpayment_pv": 500000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -228643.02672476848,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 12200.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "house": null,
+    "rent": {
+      "total_pv": 546225.1267863319,
+      "breakdown": {
+        "rent_pv": 417836.4719727566,
+        "events_pv": 0.0,
+        "other_pv": 0.0,
+        "invested_capital_pv": 500000.0,
+        "invested_dp_benefit_pv": -371611.3451864246
+      },
+      "cash_year1": 30000.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "affordability": {
+      "annual_incomes": [
+        120000.0,
+        123643.48677766896,
+        101918.07881693068,
+        105012.55525505493,
+        108200.98739306346,
+        111486.2279505414,
+        114871.21626245795,
+        118358.98090901643,
+        121952.6424253529,
+        125655.4160935076,
+        129470.6148191675,
+        133401.6520957534,
+        137452.045058504,
+        141625.41763128917,
+        145925.5037689679
+      ],
+      "threshold": 0.35,
+      "rent": {
+        "ratios": [
+          0.25,
+          0.25237642585551334,
+          0.31846930163801707,
+          0.3214965763684165,
+          0.32455262747458014,
+          0.32763772849620165,
+          0.33075215557316184,
+          0.3338961874702452,
+          0.3370701056020916,
+          0.3402741940583853,
+          0.34350873962928247,
+          0.3467740318310818,
+          0.3500703629321378,
+          0.35339802797902126,
+          0.35675732482292827
+        ],
+        "years_exceeding": [
+          13,
+          14,
+          15
+        ]
+      },
+      "condo": {
+        "ratios": [
+          0.10166666666666667,
+          0.10073352344740177,
+          0.12478484724310504,
+          0.12368614927301354,
+          0.12261982738378974,
+          0.12158492752742332,
+          0.12058052376948594,
+          0.11960571746068929,
+          0.11865963643285528,
+          0.11774143421857912,
+          0.11685028929388715,
+          0.11598540434321176,
+          0.11514600554602586,
+          0.11433134188449846,
+          0.11354068447155223
+        ],
+        "years_exceeding": []
+      },
+      "house": null
+    }
+  },
+  "monte_carlo": {
+    "condo": {
+      "mean": 426900.43896471395,
+      "std": 20511.544974303728,
+      "p5": 397547.21645271796,
+      "p50": 424621.71593563445,
+      "p95": 463801.13318754244
+    },
+    "house": null,
+    "rent": {
+      "mean": 546225.1267863318,
+      "std": 1.1641532182693481e-10,
+      "p5": 546225.1267863319,
+      "p50": 546225.1267863319,
+      "p95": 546225.1267863319
+    },
+    "prob_condo_cheapest": 0.9998,
+    "prob_house_cheapest": null,
+    "prob_rent_cheapest": 0.0002,
+    "affordability_mc": {
+      "threshold": 0.35,
+      "prob_condo_exceeds": 0.0,
+      "prob_house_exceeds": null,
+      "prob_rent_exceeds": 1.0
+    }
+  }
+}

@@ -1,0 +1,553 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=25.0% (unattributed), simulation.condo_fee_vol=8.0% (unattributed), simulation.other_cost_vol=12.0% (unattributed), economic.inflation_vol=1.0% (unattributed), condo.events=2 entries (timing_std_years 2, cost_vol 35.0%, hazard_base 0.05, hazard_growth 0.03) (unattributed), house.events=6 entries (timing_std_years 2, cost_vol 30.0%, hazard_base 0.03, hazard_growth 0.04) (unattributed) — the deterministic line alone says house by $25,893 (7.9% of its PV — decisive under the 5% band)"
+  ],
+  "assumptions": {
+    "mode": "nominal",
+    "years": 30,
+    "discount_rate": 0.061,
+    "discount_rate_note": "as quoted: 6.1% nominal, used as typed",
+    "rates": "as_quoted",
+    "inflation_rate": 0.025,
+    "converted_rates": [
+      {
+        "key": "discount_rate",
+        "quoted": 0.061,
+        "effective": 0.061
+      },
+      {
+        "key": "condo.fee_escalation_rate",
+        "quoted": 0.04,
+        "effective": 0.04
+      },
+      {
+        "key": "condo.value_growth_rate",
+        "quoted": 0.046,
+        "effective": 0.046
+      },
+      {
+        "key": "condo.reserve_growth_rate",
+        "quoted": 0.046,
+        "effective": 0.046
+      },
+      {
+        "key": "condo.other_recurring_costs.unit_insurance.escalation_rate",
+        "quoted": 0.046,
+        "effective": 0.046
+      },
+      {
+        "key": "condo.other_recurring_costs.parking_fee.escalation_rate",
+        "quoted": 0.035,
+        "effective": 0.035
+      },
+      {
+        "key": "house.value_growth_rate",
+        "quoted": 0.056,
+        "effective": 0.056
+      },
+      {
+        "key": "house.other_recurring_costs.home_insurance.escalation_rate",
+        "quoted": 0.056,
+        "effective": 0.056
+      },
+      {
+        "key": "house.other_recurring_costs.landscaping.escalation_rate",
+        "quoted": 0.035,
+        "effective": 0.035
+      },
+      {
+        "key": "house.other_recurring_costs.snow_removal.escalation_rate",
+        "quoted": 0.035,
+        "effective": 0.035
+      }
+    ],
+    "mortgage_rates": [],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: nominal terms · discount_rate 6.1% as quoted, used as typed (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "condo: value growth +4.6%/yr nominal, as quoted (2.0% real) · fee escalation +4.0%/yr nominal, as quoted (1.5% real) · selling_cost_rate 5.0%",
+      "house: value growth +5.6%/yr nominal, as quoted (3.0% real) · maintenance 0.9% of value/yr · selling_cost_rate 5.0%",
+      "condo other costs: unit_insurance $600/yr [no anchor match — hde --print-anchors]",
+      "house other costs: home_insurance $1,200/yr [no anchor match — hde --print-anchors]",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "defaults applied: condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 6.1% as quoted = 6.1% nominal = 3.5% real · condo.fee_escalation_rate 4.0% as quoted = 4.0% nominal = 1.5% real · condo.value_growth_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.reserve_growth_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.other_recurring_costs.unit_insurance.escalation_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.other_recurring_costs.parking_fee.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real · house.value_growth_rate 5.6% as quoted = 5.6% nominal = 3.0% real · house.other_recurring_costs.home_insurance.escalation_rate 5.6% as quoted = 5.6% nominal = 3.0% real · house.other_recurring_costs.landscaping.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real · house.other_recurring_costs.snow_removal.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's"
+    ],
+    "defaults_applied": [
+      {
+        "key": "condo.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "house.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "condo",
+        "cost_name": "unit_insurance",
+        "annual_amount": 600.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "home_insurance",
+        "annual_amount": 1200.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": false,
+      "user": [],
+      "assistant": [],
+      "anchor": {},
+      "unattributed": [
+        {
+          "key": "years",
+          "value": 30,
+          "formatted": "30"
+        },
+        {
+          "key": "discount_rate",
+          "value": 0.061,
+          "formatted": "6.1%"
+        },
+        {
+          "key": "economic.mode",
+          "value": "nominal",
+          "formatted": "'nominal'"
+        },
+        {
+          "key": "economic.inflation_rate",
+          "value": 0.025,
+          "formatted": "2.5%"
+        },
+        {
+          "key": "economic.inflation_vol",
+          "value": 0.01,
+          "formatted": "1.0%"
+        },
+        {
+          "key": "condo.monthly_fee",
+          "value": 550,
+          "formatted": "$550/mo"
+        },
+        {
+          "key": "condo.fee_escalation_rate",
+          "value": 0.04,
+          "formatted": "4.0%"
+        },
+        {
+          "key": "condo.initial_value",
+          "value": 420000,
+          "formatted": "$420,000"
+        },
+        {
+          "key": "condo.value_growth_rate",
+          "value": 0.046,
+          "formatted": "4.6%"
+        },
+        {
+          "key": "condo.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "condo.purchase_costs",
+          "value": 6300,
+          "formatted": "$6,300"
+        },
+        {
+          "key": "condo.reserve_contribution_rate",
+          "value": 0.3,
+          "formatted": "30.0%"
+        },
+        {
+          "key": "condo.reserve_initial_balance",
+          "value": 15000,
+          "formatted": "$15,000"
+        },
+        {
+          "key": "condo.reserve_growth_rate",
+          "value": 0.046,
+          "formatted": "4.6%"
+        },
+        {
+          "key": "condo.events",
+          "value": [
+            {
+              "name": "special_assessment_exterior",
+              "base_cost": 8000,
+              "expected_year": 12,
+              "timing_model": "hazard",
+              "hazard_base": 0.05,
+              "hazard_growth": 0.03,
+              "hazard_start_year": 8,
+              "min_year": 8,
+              "max_year": 18,
+              "cost_vol": 0.35,
+              "cost_distribution": "lognormal"
+            },
+            {
+              "name": "special_assessment_amenities",
+              "base_cost": 5000,
+              "expected_year": 18,
+              "timing_std_years": 2,
+              "cost_vol": 0.25
+            }
+          ],
+          "formatted": "2 entries"
+        },
+        {
+          "key": "condo.other_recurring_costs",
+          "value": [
+            {
+              "name": "unit_insurance",
+              "annual_amount": 600,
+              "escalation_rate": 0.046
+            },
+            {
+              "name": "parking_fee",
+              "annual_amount": 1200,
+              "escalation_rate": 0.035
+            }
+          ],
+          "formatted": "2 entries"
+        },
+        {
+          "key": "house.initial_value",
+          "value": 500000,
+          "formatted": "$500,000"
+        },
+        {
+          "key": "house.value_growth_rate",
+          "value": 0.056,
+          "formatted": "5.6%"
+        },
+        {
+          "key": "house.annual_maintenance_rate",
+          "value": 0.009,
+          "formatted": "0.9%"
+        },
+        {
+          "key": "house.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "house.purchase_costs",
+          "value": 7500,
+          "formatted": "$7,500"
+        },
+        {
+          "key": "house.maintenance_curve",
+          "value": [
+            {
+              "year": 1,
+              "rate": 0.007
+            },
+            {
+              "year": 15,
+              "rate": 0.012
+            },
+            {
+              "year": 30,
+              "rate": 0.018
+            }
+          ],
+          "formatted": "3 entries"
+        },
+        {
+          "key": "house.events",
+          "value": [
+            {
+              "name": "roof_replacement",
+              "base_cost": 14000,
+              "expected_year": 22,
+              "timing_model": "hazard",
+              "hazard_base": 0.03,
+              "hazard_growth": 0.04,
+              "hazard_start_year": 18,
+              "min_year": 15,
+              "max_year": 28,
+              "cost_vol": 0.3,
+              "cost_distribution": "lognormal"
+            },
+            {
+              "name": "hvac_replacement",
+              "base_cost": 5000,
+              "expected_year": 15,
+              "timing_std_years": 2,
+              "min_year": 10,
+              "max_year": 20,
+              "cost_vol": 0.2
+            },
+            {
+              "name": "water_heater",
+              "base_cost": 1200,
+              "expected_year": 12,
+              "timing_std_years": 1.5,
+              "cost_vol": 0.15,
+              "cost_distribution": "normal"
+            },
+            {
+              "name": "appliance_refresh",
+              "base_cost": 2500,
+              "expected_year": 10,
+              "timing_std_years": 1,
+              "cost_vol": 0.2
+            },
+            {
+              "name": "exterior_paint",
+              "base_cost": 1500,
+              "expected_year": 20,
+              "timing_std_years": 3,
+              "cost_vol": 0.15
+            },
+            {
+              "name": "driveway_repair",
+              "base_cost": 3000,
+              "expected_year": 30,
+              "timing_std_years": 3,
+              "cost_vol": 0.3
+            }
+          ],
+          "formatted": "6 entries"
+        },
+        {
+          "key": "house.other_recurring_costs",
+          "value": [
+            {
+              "name": "home_insurance",
+              "annual_amount": 1200,
+              "escalation_rate": 0.056
+            },
+            {
+              "name": "landscaping",
+              "annual_amount": 1000,
+              "escalation_rate": 0.035
+            },
+            {
+              "name": "snow_removal",
+              "annual_amount": 350,
+              "escalation_rate": 0.035
+            }
+          ],
+          "formatted": "3 entries"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 15000,
+          "formatted": "15,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 12345,
+          "formatted": "12,345"
+        },
+        {
+          "key": "simulation.house_maintenance_vol",
+          "value": 0.25,
+          "formatted": "25.0%"
+        },
+        {
+          "key": "simulation.condo_fee_vol",
+          "value": 0.08,
+          "formatted": "8.0%"
+        },
+        {
+          "key": "simulation.other_cost_vol",
+          "value": 0.12,
+          "formatted": "12.0%"
+        },
+        {
+          "key": "simulation.corr_inflation_house",
+          "value": 0.4,
+          "formatted": "0.4"
+        },
+        {
+          "key": "simulation.corr_inflation_condo",
+          "value": 0.5,
+          "formatted": "0.5"
+        },
+        {
+          "key": "simulation.corr_inflation_other",
+          "value": 0.35,
+          "formatted": "0.35"
+        },
+        {
+          "key": "simulation.corr_inflation_event_cost",
+          "value": 0.25,
+          "formatted": "0.25"
+        },
+        {
+          "key": "simulation.shock_model",
+          "value": "lognormal",
+          "formatted": "'lognormal'"
+        }
+      ],
+      "sweep": []
+    },
+    "tax": null,
+    "demographic_prior": null,
+    "read_back": [
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=25.0% (unattributed), simulation.condo_fee_vol=8.0% (unattributed), simulation.other_cost_vol=12.0% (unattributed), economic.inflation_vol=1.0% (unattributed), condo.events=2 entries (timing_std_years 2, cost_vol 35.0%, hazard_base 0.05, hazard_growth 0.03) (unattributed), house.events=6 entries (timing_std_years 2, cost_vol 30.0%, hazard_base 0.03, hazard_growth 0.04) (unattributed) — the deterministic line alone says house by $25,893 (7.9% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "defaults applied: condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 6.1% as quoted = 6.1% nominal = 3.5% real · condo.fee_escalation_rate 4.0% as quoted = 4.0% nominal = 1.5% real · condo.value_growth_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.reserve_growth_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.other_recurring_costs.unit_insurance.escalation_rate 4.6% as quoted = 4.6% nominal = 2.0% real · condo.other_recurring_costs.parking_fee.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real · house.value_growth_rate 5.6% as quoted = 5.6% nominal = 3.0% real · house.other_recurring_costs.home_insurance.escalation_rate 5.6% as quoted = 5.6% nominal = 3.0% real · house.other_recurring_costs.landscaping.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real · house.other_recurring_costs.snow_removal.escalation_rate 3.5% as quoted = 3.5% nominal = 1.0% real",
+      "mode: nominal terms · discount_rate 6.1% as quoted, used as typed (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "decisiveness: P(house cheapest) = 73% ≥ 65% floor [hde verdict rule]",
+      "best guess: condo.events['special_assessment_exterior'] is charged in year 12; on its hazard schedule the chance it fires within the 30 years is 92.1%, and that chance reaches one half by year 13",
+      "best guess: house.events['roof_replacement'] is charged in year 22; on its hazard schedule the chance it fires within the 30 years is 95.2%, and that chance reaches one half by year 23",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "Condo: $     8,400/yr ($700/mo); expected appreciation $19,320 (value × nominal growth = real growth composed with inflation; not cash)",
+      "House: $     6,050/yr ($504/mo); expected appreciation $28,000 (value × nominal growth = real growth composed with inflation; not cash)",
+      "condo other costs: unit_insurance $600/yr [no anchor match — hde --print-anchors]",
+      "house other costs: home_insurance $1,200/yr [no anchor match — hde --print-anchors]"
+    ],
+    "read_back_short": [
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=25.0% (unattributed), simulation.condo_fee_vol=8.0% (unattributed), simulation.other_cost_vol=12.0% (unattributed), economic.inflation_vol=1.0% (unattributed), condo.events=2 entries (timing_std_years 2, cost_vol 35.0%, hazard_base 0.05, hazard_growth 0.03) (unattributed), house.events=6 entries (timing_std_years 2, cost_vol 30.0%, hazard_base 0.03, hazard_growth 0.04) (unattributed) — the deterministic line alone says house by $25,893 (7.9% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "decisiveness: P(house cheapest) = 73% ≥ 65% floor [hde verdict rule]",
+      "full read-back: 10 more lines (defaults applied, rates, mode, best guess, year-1 cash, other costs) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "house",
+    "runner_up": "condo",
+    "margin_pv": 25892.511106626072,
+    "margin_frac": 0.07914267987923865,
+    "monthly_equivalent": 154.1718872719731,
+    "prob_best": 0.7276666666666667,
+    "decisive": true,
+    "state": "option",
+    "rule": "mc_floor",
+    "reason": "P(house cheapest) = 73% ≥ 65% floor [hde verdict rule]",
+    "mc_mean_best": "house",
+    "mc_best": "house",
+    "mc_prob_best": 0.7276666666666667
+  },
+  "deterministic": {
+    "condo": {
+      "total_pv": 353054.9365657418,
+      "breakdown": {
+        "purchase_costs_pv": 6300.0,
+        "fee_pv": 147426.4880507705,
+        "events_pv": 5653.258856819103,
+        "other_pv": 39621.10431027605,
+        "reserve_pv": -5653.258856819103,
+        "downpayment_pv": 420000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -260292.65579530483,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 8400.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 19319.999999999924
+    },
+    "house": {
+      "total_pv": 327162.4254591157,
+      "breakdown": {
+        "purchase_costs_pv": 7500.0,
+        "maintenance_pv": 161403.57125244653,
+        "events_pv": 8801.59870726889,
+        "other_pv": 61696.78949589114,
+        "downpayment_pv": 500000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -412239.5339964908,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 6050.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 27999.999999999913
+    },
+    "rent": null,
+    "affordability": null
+  },
+  "monte_carlo": {
+    "condo": {
+      "mean": 354337.3388670764,
+      "std": 38283.26525917489,
+      "p5": 301624.940158751,
+      "p50": 349566.69674511557,
+      "p95": 424099.5721929398
+    },
+    "house": {
+      "mean": 327407.6817042805,
+      "std": 18953.864638501007,
+      "p5": 298020.41816013976,
+      "p50": 326351.4908779792,
+      "p95": 359802.7972785981
+    },
+    "rent": null,
+    "prob_condo_cheapest": 0.2723333333333333,
+    "prob_house_cheapest": 0.7276666666666667,
+    "prob_rent_cheapest": null,
+    "affordability_mc": null
+  }
+}

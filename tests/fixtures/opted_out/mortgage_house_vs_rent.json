@@ -1,0 +1,371 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "rent: invested capital $110,000 earns 5.1% vs discount_rate 5.2% — net capital term $1,310 charged to the renter over 20 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+    "rent: invested capital $110,000 earns 5.1% untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+    "house: renewal risk is not modelled — mortgage_rate 4.40% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+    "decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.rent_escalation_vol=1.0% (unattributed) — the deterministic line alone says house by $102,702 (29.4% of its PV — decisive under the 5% band)"
+  ],
+  "assumptions": {
+    "mode": "nominal",
+    "years": 20,
+    "discount_rate": 0.05162999999999984,
+    "discount_rate_note": "composed at parse: (1 + 3.0% real)(1 + 2.1% inflation_rate) − 1 = 5.16% nominal",
+    "rates": "as_quoted",
+    "inflation_rate": 0.021,
+    "converted_rates": [
+      {
+        "key": "house.value_growth_rate",
+        "quoted": 0.031,
+        "effective": 0.031
+      },
+      {
+        "key": "house.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.021
+      },
+      {
+        "key": "house.other_recurring_costs.home_insurance.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.021
+      },
+      {
+        "key": "rent.rent_escalation_rate",
+        "quoted": 0.031,
+        "effective": 0.031
+      },
+      {
+        "key": "rent.investment_return_rate",
+        "quoted": 0.051,
+        "effective": 0.051
+      }
+    ],
+    "mortgage_rates": [
+      {
+        "option": "house",
+        "quoted": 0.044,
+        "compounding": "effective_annual",
+        "effective": 0.044
+      }
+    ],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: nominal terms · discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation) (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "house: value growth +3.1%/yr nominal, as quoted (1.0% real) · maintenance 1.0% of value/yr · selling_cost_rate 5.0%",
+      "house financing: down payment $110,000 = 20.00% of price, $0 above the 20% mortgage-insurance line ($110,000) · loan-to-value 80.00% · year-0 cash $118,200 (down payment + purchase_costs)",
+      "house other costs: property_tax $4,700/yr = 0.855% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]",
+      "rent: escalation +3.1%/yr nominal, as quoted (1.0% real) · invested capital $110,000 at +5.1%/yr nominal, as quoted (2.9% real)",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "defaults applied: simulation.discount_rate=5.2% [FP Canada 2026 PAG (60/40 real)], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · house.value_growth_rate 3.1% as quoted = 3.1% nominal = 1.0% real · house.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · house.other_recurring_costs.home_insurance.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · rent.rent_escalation_rate 3.1% as quoted = 3.1% nominal = 1.0% real · rent.investment_return_rate 5.1% as quoted = 5.1% nominal = 2.9% real · house.mortgage_rate 4.40% effective annual, as typed",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's"
+    ],
+    "defaults_applied": [
+      {
+        "key": "simulation.discount_rate",
+        "value": 0.05162999999999984,
+        "formatted": "5.2%",
+        "cite": "FP Canada 2026 PAG (60/40 real)",
+        "kind": "derivation",
+        "note": "composed at parse: (1 + 3.0% real)(1 + 2.1% inflation_rate) − 1 = 5.16% nominal",
+        "anchor": {
+          "name": "simulation.discount_rate",
+          "value": 0.03,
+          "as_of": "2026",
+          "source": "derivation: equals rent.investment_return_rate — FP Canada 2026 PAG 60/40 balanced ≈ 3.0% real, the household's opportunity cost",
+          "url": "https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+          "rationale": "A present-value comparison discounts at the return the household could otherwise earn. With the renter's alternative anchored at 3.0% real, the same figure is the coherent default: a renter earning the default return then nets exactly zero on the capital leg, and neither side is handed a spread by construction. A stronger personal time preference overrides it; the coherence tripwire warns outside [0, 15%] (units typo).",
+          "band": [
+            0.02,
+            0.06
+          ],
+          "short_cite": "FP Canada 2026 PAG (60/40 real)",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "derivation",
+          "restatements": [
+            {
+              "value": 0.051,
+              "why": "the same figure AS QUOTED, before deflation — rent.investment_return_rate's quoted form: the PAG 60/40 components 0.6 × 6.4% + 0.4 × 3.2% ≈ 5.1% nominal, and 3.0% real is that less the PAG's 2.1% inflation"
+            }
+          ],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "house.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "house",
+        "cost_name": "property_tax",
+        "annual_amount": 4700.0,
+        "family": "property_tax.",
+        "implied_rate": 0.008545454545454545,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "home_insurance",
+        "annual_amount": 1200.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": false,
+      "user": [],
+      "assistant": [],
+      "anchor": {},
+      "unattributed": [
+        {
+          "key": "years",
+          "value": 20,
+          "formatted": "20"
+        },
+        {
+          "key": "economic.mode",
+          "value": "nominal",
+          "formatted": "'nominal'"
+        },
+        {
+          "key": "economic.inflation_rate",
+          "value": 0.021,
+          "formatted": "2.1%"
+        },
+        {
+          "key": "house.initial_value",
+          "value": 550000,
+          "formatted": "$550,000"
+        },
+        {
+          "key": "house.down_payment",
+          "value": 110000,
+          "formatted": "$110,000"
+        },
+        {
+          "key": "house.mortgage_rate",
+          "value": 0.044,
+          "formatted": "4.4%"
+        },
+        {
+          "key": "house.mortgage_rate_compounding",
+          "value": "effective_annual",
+          "formatted": "'effective_annual'"
+        },
+        {
+          "key": "house.mortgage_term_years",
+          "value": 25,
+          "formatted": "25"
+        },
+        {
+          "key": "house.purchase_costs",
+          "value": 8200,
+          "formatted": "$8,200"
+        },
+        {
+          "key": "house.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 4700,
+              "escalation_rate": 0.021
+            },
+            {
+              "name": "home_insurance",
+              "annual_amount": 1200,
+              "escalation_rate": 0.021
+            }
+          ],
+          "formatted": "2 entries"
+        },
+        {
+          "key": "house.value_growth_rate",
+          "value": 0.031,
+          "formatted": "3.1%"
+        },
+        {
+          "key": "house.annual_maintenance_rate",
+          "value": 0.01,
+          "formatted": "1.0%"
+        },
+        {
+          "key": "rent.monthly_rent",
+          "value": 2300,
+          "formatted": "$2,300/mo"
+        },
+        {
+          "key": "rent.rent_escalation_rate",
+          "value": 0.031,
+          "formatted": "3.1%"
+        },
+        {
+          "key": "rent.invested_down_payment",
+          "value": 110000,
+          "formatted": "$110,000"
+        },
+        {
+          "key": "rent.investment_return_rate",
+          "value": 0.051,
+          "formatted": "5.1%"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 5000,
+          "formatted": "5,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 42,
+          "formatted": "42"
+        },
+        {
+          "key": "simulation.house_maintenance_vol",
+          "value": 0.3,
+          "formatted": "30.0%"
+        },
+        {
+          "key": "simulation.rent_escalation_vol",
+          "value": 0.01,
+          "formatted": "1.0%"
+        }
+      ],
+      "sweep": []
+    },
+    "tax": null,
+    "demographic_prior": null,
+    "read_back": [
+      "[warning] rent: invested capital $110,000 earns 5.1% vs discount_rate 5.2% — net capital term $1,310 charged to the renter over 20 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+      "[warning] rent: invested capital $110,000 earns 5.1% untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] house: renewal risk is not modelled — mortgage_rate 4.40% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.rent_escalation_vol=1.0% (unattributed) — the deterministic line alone says house by $102,702 (29.4% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "defaults applied: simulation.discount_rate=5.2% [FP Canada 2026 PAG (60/40 real)], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · house.value_growth_rate 3.1% as quoted = 3.1% nominal = 1.0% real · house.other_recurring_costs.property_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · house.other_recurring_costs.home_insurance.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · rent.rent_escalation_rate 3.1% as quoted = 3.1% nominal = 1.0% real · rent.investment_return_rate 5.1% as quoted = 5.1% nominal = 2.9% real · house.mortgage_rate 4.40% effective annual, as typed",
+      "mode: nominal terms · discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation) (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "decisiveness: P(house cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+      "house financing: down payment $110,000 = 20.00% of price, $0 above the 20% mortgage-insurance line ($110,000) · loan-to-value 80.00% · year-0 cash $118,200 (down payment + purchase_costs)",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "House: $    40,769/yr ($3,397/mo) — of which $10,009 principal repaid; the rest is unrecoverable; expected appreciation $17,050 (value × nominal growth = real growth composed with inflation; not cash)",
+      "Rent: $    27,600/yr ($2,300/mo)",
+      "house other costs: property_tax $4,700/yr = 0.855% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]"
+    ],
+    "read_back_short": [
+      "[warning] rent: invested capital $110,000 earns 5.1% vs discount_rate 5.2% — net capital term $1,310 charged to the renter over 20 years; set investment_return_rate = discount_rate for a neutral comparison or keep the spread deliberately",
+      "[warning] rent: invested capital $110,000 earns 5.1% untaxed — no tax: block, so tax on the taxable share is not modelled (toward renting); state where the savings sit (tax.renter_capital)",
+      "[warning] house: renewal risk is not modelled — mortgage_rate 4.40% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.rent_escalation_vol=1.0% (unattributed) — the deterministic line alone says house by $102,702 (29.4% of its PV — decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "decisiveness: P(house cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+      "full read-back: 8 more lines (defaults applied, rates, mode, financing, year-1 cash, other costs) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "house",
+    "runner_up": "rent",
+    "margin_pv": 102701.61730683933,
+    "margin_frac": 0.2935454239985377,
+    "monthly_equivalent": 680.3242890150502,
+    "prob_best": 1.0,
+    "decisive": true,
+    "state": "option",
+    "rule": "mc_floor",
+    "reason": "P(house cheapest) = 100% ≥ 65% floor [hde verdict rule]",
+    "mc_mean_best": "house",
+    "mc_best": "house",
+    "mc_prob_best": 1.0
+  },
+  "deterministic": {
+    "condo": null,
+    "house": {
+      "total_pv": 349866.18393802975,
+      "breakdown": {
+        "purchase_costs_pv": 8200.0,
+        "maintenance_pv": 87220.62671581008,
+        "events_pv": 0.0,
+        "other_pv": 87777.10167668757,
+        "downpayment_pv": 110000.0,
+        "mortgage_pv": 360990.62030983466,
+        "terminal_equity_pv": -304322.1647643025,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 40768.5106721957,
+      "principal_year1": 10008.510672195694,
+      "appreciation_year1": 17049.999999999953
+    },
+    "rent": {
+      "total_pv": 452567.8012448691,
+      "breakdown": {
+        "rent_pv": 451257.3210135279,
+        "events_pv": 0.0,
+        "other_pv": 0.0,
+        "invested_capital_pv": 110000.0,
+        "invested_dp_benefit_pv": -108689.51976865885
+      },
+      "cash_year1": 27600.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "affordability": null
+  },
+  "monte_carlo": {
+    "condo": null,
+    "house": {
+      "mean": 349932.3258968376,
+      "std": 6086.764625602281,
+      "p5": 340182.0810728967,
+      "p50": 349750.75142002106,
+      "p95": 360376.8106533067
+    },
+    "rent": {
+      "mean": 452595.46867163846,
+      "std": 1329.7501516772934,
+      "p5": 450443.0787044466,
+      "p50": 452620.59369300544,
+      "p95": 454812.73485134373
+    },
+    "prob_condo_cheapest": null,
+    "prob_house_cheapest": 1.0,
+    "prob_rent_cheapest": 0.0,
+    "affordability_mc": null
+  }
+}

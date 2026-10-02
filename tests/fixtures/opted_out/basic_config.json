@@ -1,0 +1,426 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+    "decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.condo_fee_vol=5.0% (unattributed), house.events=1 entry (timing_std_years 3, cost_vol 25.0%) (unattributed) — the deterministic line alone says house by $6,315 (2.1% of its PV — not decisive under the 5% band)"
+  ],
+  "assumptions": {
+    "mode": "real",
+    "years": 20,
+    "discount_rate": 0.030000000000000027,
+    "discount_rate_note": "deflated at parse: (1 + 3.0% as quoted)/(1 + 0.0% inflation_rate) − 1 = 3.00% real",
+    "rates": "as_quoted",
+    "inflation_rate": 0.0,
+    "converted_rates": [
+      {
+        "key": "discount_rate",
+        "quoted": 0.03,
+        "effective": 0.030000000000000027
+      },
+      {
+        "key": "condo.fee_escalation_rate",
+        "quoted": 0.02,
+        "effective": 0.020000000000000018
+      },
+      {
+        "key": "condo.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.0,
+        "effective": 0.0
+      },
+      {
+        "key": "house.value_growth_rate",
+        "quoted": 0.01,
+        "effective": 0.010000000000000009
+      },
+      {
+        "key": "house.other_recurring_costs.property_tax.escalation_rate",
+        "quoted": 0.0,
+        "effective": 0.0
+      },
+      {
+        "key": "house.other_recurring_costs.home_insurance.escalation_rate",
+        "quoted": 0.0,
+        "effective": 0.0
+      }
+    ],
+    "mortgage_rates": [],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: real terms · discount_rate 3.0% as quoted → 3.0% real (after 0.0% inflation)",
+      "condo: value growth +0.0%/yr · fee escalation +2.0%/yr (2.0% as quoted) · selling_cost_rate 5.0%",
+      "house: value growth +1.0%/yr (1.0% as quoted) · maintenance 1.2% of value/yr · selling_cost_rate 5.0%",
+      "condo other costs: property_tax $2,600/yr = 0.743% of price [no anchor match — hde --print-anchors]",
+      "house other costs: property_tax $3,400/yr = 0.850% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "defaults applied: condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 3.0% as quoted = 3.0% after 0.0% inflation · condo.fee_escalation_rate 2.0% as quoted = 2.0% after 0.0% inflation · condo.other_recurring_costs.property_tax.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation · house.value_growth_rate 1.0% as quoted = 1.0% after 0.0% inflation · house.other_recurring_costs.property_tax.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation · house.other_recurring_costs.home_insurance.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's"
+    ],
+    "defaults_applied": [
+      {
+        "key": "condo.value_growth_rate",
+        "value": 0.0,
+        "formatted": "0.0%",
+        "cite": "neutral, uncited",
+        "kind": "neutral",
+        "note": null,
+        "anchor": {
+          "name": "condo.value_growth_rate",
+          "value": 0.0,
+          "as_of": "2026",
+          "source": "hde neutrality ruling — deliberately uncited",
+          "url": "none (deliberately uncited)",
+          "rationale": "Neutral by construction: no defensible universal long-run real appreciation default exists for Canadian home prices. Users should set their own view or wire a market_scenario prior (ISQ-grounded demographic drift). Band is an illustrative neutrality range, not a citation.",
+          "band": [
+            -0.01,
+            0.02
+          ],
+          "short_cite": "neutral, uncited",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "",
+          "kind": "neutral",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "house.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "condo",
+        "cost_name": "property_tax",
+        "annual_amount": 2600.0,
+        "family": "property_tax.",
+        "implied_rate": 0.0074285714285714285,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "property_tax",
+        "annual_amount": 3400.0,
+        "family": "property_tax.",
+        "implied_rate": 0.0085,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      },
+      {
+        "option": "house",
+        "cost_name": "home_insurance",
+        "annual_amount": 1200.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": null,
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": false,
+      "user": [],
+      "assistant": [],
+      "anchor": {},
+      "unattributed": [
+        {
+          "key": "years",
+          "value": 20,
+          "formatted": "20"
+        },
+        {
+          "key": "discount_rate",
+          "value": 0.03,
+          "formatted": "3.0%"
+        },
+        {
+          "key": "economic.mode",
+          "value": "real",
+          "formatted": "'real'"
+        },
+        {
+          "key": "economic.inflation_rate",
+          "value": 0.0,
+          "formatted": "0.0%"
+        },
+        {
+          "key": "condo.monthly_fee",
+          "value": 450,
+          "formatted": "$450/mo"
+        },
+        {
+          "key": "condo.fee_escalation_rate",
+          "value": 0.02,
+          "formatted": "2.0%"
+        },
+        {
+          "key": "condo.initial_value",
+          "value": 350000,
+          "formatted": "$350,000"
+        },
+        {
+          "key": "condo.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "condo.purchase_costs",
+          "value": 5200,
+          "formatted": "$5,200"
+        },
+        {
+          "key": "condo.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 2600,
+              "escalation_rate": 0.0
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "condo.events",
+          "value": [],
+          "formatted": "0 entries"
+        },
+        {
+          "key": "house.initial_value",
+          "value": 400000,
+          "formatted": "$400,000"
+        },
+        {
+          "key": "house.value_growth_rate",
+          "value": 0.01,
+          "formatted": "1.0%"
+        },
+        {
+          "key": "house.annual_maintenance_rate",
+          "value": 0.012,
+          "formatted": "1.2%"
+        },
+        {
+          "key": "house.all_cash",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "house.purchase_costs",
+          "value": 6000,
+          "formatted": "$6,000"
+        },
+        {
+          "key": "house.other_recurring_costs",
+          "value": [
+            {
+              "name": "property_tax",
+              "annual_amount": 3400,
+              "escalation_rate": 0.0
+            },
+            {
+              "name": "home_insurance",
+              "annual_amount": 1200,
+              "escalation_rate": 0.0
+            }
+          ],
+          "formatted": "2 entries"
+        },
+        {
+          "key": "house.events",
+          "value": [
+            {
+              "name": "roof",
+              "base_cost": 10000,
+              "expected_year": 20,
+              "timing_std_years": 3,
+              "cost_vol": 0.25
+            }
+          ],
+          "formatted": "1 entry"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 10000,
+          "formatted": "10,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 42,
+          "formatted": "42"
+        },
+        {
+          "key": "simulation.house_maintenance_vol",
+          "value": 0.3,
+          "formatted": "30.0%"
+        },
+        {
+          "key": "simulation.condo_fee_vol",
+          "value": 0.05,
+          "formatted": "5.0%"
+        }
+      ],
+      "sweep": []
+    },
+    "tax": null,
+    "demographic_prior": null,
+    "read_back": [
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.condo_fee_vol=5.0% (unattributed), house.events=1 entry (timing_std_years 3, cost_vol 25.0%) (unattributed) — the deterministic line alone says house by $6,315 (2.1% of its PV — not decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "defaults applied: condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026], house.selling_cost_rate=5.0% [WOWA 2026]",
+      "rates: as quoted · discount_rate 3.0% as quoted = 3.0% after 0.0% inflation · condo.fee_escalation_rate 2.0% as quoted = 2.0% after 0.0% inflation · condo.other_recurring_costs.property_tax.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation · house.value_growth_rate 1.0% as quoted = 1.0% after 0.0% inflation · house.other_recurring_costs.property_tax.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation · house.other_recurring_costs.home_insurance.escalation_rate 0.0% as quoted = 0.0% after 0.0% inflation",
+      "decisiveness: P(house cheapest) = 64.7% < 65.0% floor [hde verdict rule]",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "Condo: $     8,000/yr ($667/mo)",
+      "House: $     9,400/yr ($783/mo); expected appreciation $4,000 (value × real growth, not cash)",
+      "condo other costs: property_tax $2,600/yr = 0.743% of price [no anchor match — hde --print-anchors]",
+      "house other costs: property_tax $3,400/yr = 0.850% of price [no anchor match — hde --print-anchors] · home_insurance $1,200/yr [no anchor match — hde --print-anchors]"
+    ],
+    "read_back_short": [
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] decisiveness rests on uncertainty inputs no sources: entry attributes — typed in the config with nobody's name on them, so the engine cannot say whose figures they are: simulation.house_maintenance_vol=30.0% (unattributed), simulation.condo_fee_vol=5.0% (unattributed), house.events=1 entry (timing_std_years 3, cost_vol 25.0%) (unattributed) — the deterministic line alone says house by $6,315 (2.1% of its PV — not decisive under the 5% band)",
+      "sources: none declared — the read-back cannot tell the user's numbers from the assistant's",
+      "decisiveness: P(house cheapest) = 64.7% < 65.0% floor [hde verdict rule]",
+      "full read-back: 7 more lines (defaults applied, rates, year-1 cash, other costs) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "house",
+    "runner_up": "condo",
+    "margin_pv": 6315.320385588566,
+    "margin_frac": 0.020973635755512508,
+    "monthly_equivalent": 34.896790652714,
+    "prob_best": 0.6473,
+    "decisive": false,
+    "state": "tie",
+    "rule": "mc_floor",
+    "reason": "P(house cheapest) = 64.7% < 65.0% floor [hde verdict rule]",
+    "mc_mean_best": "house",
+    "mc_best": "house",
+    "mc_prob_best": 0.6473
+  },
+  "deterministic": {
+    "condo": {
+      "total_pv": 307422.88510186377,
+      "breakdown": {
+        "purchase_costs_pv": 5200.0,
+        "fee_pv": 97638.63873163574,
+        "events_pv": 0.0,
+        "other_pv": 38681.434637184306,
+        "reserve_pv": 0.0,
+        "downpayment_pv": 350000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -184097.18826695622,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 8000.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "house": {
+      "total_pv": 301107.5647162752,
+      "breakdown": {
+        "purchase_costs_pv": 6000.0,
+        "maintenance_pv": 77858.48625147731,
+        "events_pv": 5536.757541863345,
+        "other_pv": 68436.38435809533,
+        "downpayment_pv": 400000.0,
+        "mortgage_pv": 0.0,
+        "terminal_equity_pv": -256724.0634351608,
+        "hbp_repayment_pv": 0.0
+      },
+      "cash_year1": 9400.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 4000.0000000000036
+    },
+    "rent": null,
+    "affordability": null
+  },
+  "monte_carlo": {
+    "condo": {
+      "mean": 307348.8292225543,
+      "std": 12893.651812871567,
+      "p5": 288083.00856039434,
+      "p50": 306285.7010616334,
+      "p95": 330532.2321845003
+    },
+    "house": {
+      "mean": 301374.8159151068,
+      "std": 5569.7129155189305,
+      "p5": 292599.2519458917,
+      "p50": 301126.7317848935,
+      "p95": 310931.8170904515
+    },
+    "rent": null,
+    "prob_condo_cheapest": 0.3527,
+    "prob_house_cheapest": 0.6473,
+    "prob_rent_cheapest": null,
+    "affordability_mc": null
+  }
+}

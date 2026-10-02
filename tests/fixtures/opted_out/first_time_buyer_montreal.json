@@ -1,0 +1,651 @@
+{
+  "engine_version": "<masked>",
+  "warnings": [
+    "rent: invested capital $77,889 earns 5.1% (after tax on the taxable share and the FHSA rollover: blended 4.09%) vs discount_rate 5.2% — net capital term $7,624 charged to the renter over 10 years; two causes, and fixing one moves only its own share: $465 charged by the spread between the two rates, which investment_return_rate = discount_rate removes, and $7,159 charged by the tax the engine applied — $1,415 of drag on the taxable share (lever: tax.renter_capital) and $5,744 of FHSA rollover haircut (lever: tax.retirement_marginal_rate)",
+    "condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+    "condo: down payment 15.57% of price is under the 20% mortgage-insurance line — the engine priced the insured mortgage at 84.43% loan-to-value: 2.80% = $10,638 added to the loan, plus $957 of provincial tax on the premium paid in cash at closing (it cannot be added to the loan) [CMHC 2026 premium schedule]. The premium is non-refundable and carries interest for the whole amortization; this cash covers 20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage is insured)",
+    "condo: renewal risk is not modelled — mortgage_rate 4.55% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+    "affordability: condo housing cost exceeds 32% of income in years [1, 2, 3, 4, 5] (max 36.2%) — GDS-shaped ratio (housing cost incl. maintenance over income, no other debts): CMHC's cap for that shape is 39% GDS, not the 44% TDS [income.affordability_threshold]",
+    "condo: unpriced — at the minimum qualifying rate a lender would test you at (6.55% as quoted, against your contract 4.55%), year-1 housing cost runs 42.2% of income against this run's own 36.2% — 6.0 points the run does not show, toward buying. Your loan is insured, so that rate is the federal government's, not OSFI's [qualifying_rate.buffer, qualifying_rate.floor]. Both ratios are the engine's own measure, broader than the gross debt service a lender uses [income.affordability_threshold], so this run cannot say how a lender would rule on you."
+  ],
+  "assumptions": {
+    "mode": "nominal",
+    "years": 10,
+    "discount_rate": 0.05162999999999984,
+    "discount_rate_note": "composed at parse: (1 + 3.0% real)(1 + 2.1% inflation_rate) − 1 = 5.16% nominal",
+    "rates": "as_quoted",
+    "inflation_rate": 0.021,
+    "converted_rates": [
+      {
+        "key": "condo.other_recurring_costs.municipal_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.021
+      },
+      {
+        "key": "condo.other_recurring_costs.school_tax.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.021
+      },
+      {
+        "key": "condo.other_recurring_costs.unit_insurance.escalation_rate",
+        "quoted": 0.021,
+        "effective": 0.021
+      },
+      {
+        "key": "rent.rent_escalation_rate",
+        "quoted": 0.031,
+        "effective": 0.031
+      },
+      {
+        "key": "rent.investment_return_rate",
+        "quoted": 0.051,
+        "effective": 0.051
+      },
+      {
+        "key": "income.income_growth_rate",
+        "quoted": 0.031,
+        "effective": 0.031
+      }
+    ],
+    "mortgage_rates": [
+      {
+        "option": "condo",
+        "quoted": 0.0455,
+        "compounding": "effective_annual",
+        "effective": 0.0455
+      }
+    ],
+    "mortgage_renewals": [],
+    "lines": [
+      "mode: nominal terms · discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation) (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "condo: value growth +0.0%/yr real → +2.1%/yr nominal (incl. 2.1% inflation) · fee escalation +0.0%/yr real → +2.1%/yr nominal (incl. 2.1% inflation) · selling_cost_rate 5.0%",
+      "condo purchase costs: land transfer tax $4,860 (Ville de Montréal droits de mutation 2026); first_time_buyer: true applied nothing; Québec refunds up to $5,875 of the duty as a refundable tax credit on the return (land_transfer_tax.qc.first_time_buyer_credit_max) — not applied here; Montréal's own acquisition program closed to new applications on 2026-07-07 (land_transfer_tax.montreal.first_time_buyer_rebate) · purchase_costs $6,860 in cash at closing ($2,000 stated + transfer tax $4,860)",
+      "condo financing: cash available $60,000 + FHSA refunds $2,889 + HBP $15,000 − purchase_costs $6,860 − premium tax $957 = down payment $70,071 = 15.57% of price, $19,929 below the 20% mortgage-insurance line ($90,000) · loan-to-value 84.43% · insured: 84.43% LTV → 2.80% tier = $10,638 financed; premium tax 9% (QC) = $957 cash → loan $390,567 = 86.79% LTV · this cash covers 20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage is insured) · fhsa: balance $8,000 + $8,000 contributed over 1 saving year (room $8,000/yr + carry-forward ≤ $8,000, lifetime $40,000, $24,000 remaining [fhsa.annual_limit, fhsa.carry_forward_max, fhsa.lifetime_limit]) → refunds $2,889 at 36.12%, added to both sides' capital",
+      "condo hbp: $15,000 withdrawn from the RRSP into the down payment (≤ $60,000 [hbp.withdrawal_limit]) · repaid $1,000/yr over 15 years from year 5 [hbp.repayment_years, hbp.repayment_grace_years]; 10 tranches fall at or past year 10 and return at the horizon · the RRSP is rebuilt to $15,819 by year 10 (repayments PV $9,569 against the rebuilt RRSP's PV $9,562) — net PV $7 charged to condo (hbp_repayment_pv)",
+      "condo other costs: municipal_tax $2,610/yr = 0.580% of price [no anchor match — hde --print-anchors; nearest: property_tax.laval 0.5909% (Δ -0.0109 pt) — not a match] · unit_insurance $420/yr [no anchor match — hde --print-anchors]",
+      "rent: escalation +3.1%/yr nominal, as quoted (1.0% real) · invested capital $75,000 at +5.1%/yr nominal, as quoted (2.9% real)",
+      "tax: marginal rate 36.12% resolved from income $95,000 in QC — federal 20.5% × (1 − 16.5% Québec abatement) + QC 19% [tax.federal.*, tax.qc.* 2026] · renter capital $75,000 = sheltered $61,000 (TFSA $30,000 + RRSP $15,000 + FHSA $16,000) + taxable $14,000 (+ FHSA refunds $2,889) · taxable share: 5.10% × (1 − 36.12% × 50% inclusion, capital gains — default) = 4.18% after tax [tax.capital_gains_inclusion_rate]; blended 4.09%; drag $2,340 at year 10 (PV $1,415) charged to rent · owner: principal-residence exemption — no tax on the equity gain at sale [tax.principal_residence_exempt_fraction] · FHSA share $16,000 rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open]) — haircut 36.12% retirement marginal rate (= current, default) on $26,312 at year 10 = $9,503 (PV $5,744) charged to rent [tax.retirement_marginal_rate]",
+      "conventions: end-of-year cash flows discounted at (1+dr)^-t · fees, rent and other costs escalate before year 1, maintenance from year 1 · mortgage = level annual payment at an effective annual rate · $/mo equivalent at (1+dr)^(1/12)−1 (docs/reference/ARCHITECTURE.md figure glossary)",
+      "defaults applied: simulation.discount_rate=5.2% [FP Canada 2026 PAG (60/40 real)], condo.fee_escalation_rate=0.0% [ref: FP Canada 2026 PAG], condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026], income.affordability_threshold=32.0% [CMHC GDS/TDS]",
+      "rates: as quoted · condo.other_recurring_costs.municipal_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · condo.other_recurring_costs.school_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · condo.other_recurring_costs.unit_insurance.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · rent.rent_escalation_rate 3.1% as quoted = 3.1% nominal = 1.0% real · rent.investment_return_rate 5.1% as quoted = 5.1% nominal = 2.9% real · income.income_growth_rate 3.1% as quoted = 3.1% nominal = 1.0% real · condo.mortgage_rate 4.55% effective annual, as typed",
+      "user-stated: years=10, province='QC', condo.initial_value=$450,000, condo.monthly_fee=$380/mo, condo.cash_available=$60,000, condo.mortgage_rate=4.55%, condo.mortgage_rate_compounding='effective_annual', condo.mortgage_term_years=25, condo.municipality='montreal', condo.first_time_buyer=true, condo.purchase_costs=$2,000, condo.other_recurring_costs=3 entries, rent.monthly_rent=$1,850/mo, rent.invested_down_payment=$75,000, income.annual_income=$95,000, tax.renter_capital.tfsa=$30,000, tax.renter_capital.rrsp=$15,000, tax.renter_capital.taxable=$14,000, tax.fhsa.balance=$8,000, tax.fhsa.annual_contribution=$8,000, tax.fhsa.years_until_purchase=1, tax.hbp_withdrawal=$15,000",
+      "assistant-typed: economic.mode='nominal', condo.mortgage_insurance='auto', condo.land_transfer_tax='auto', simulation.num_sims=5,000, simulation.random_seed=42",
+      "anchor-sourced: economic.inflation_rate=2.1% [economic.inflation_rate.nominal_planning], rent.rent_escalation_rate=3.1% [rent.rent_escalation_rate], rent.investment_return_rate=5.1% [rent.investment_return_rate], income.income_growth_rate=3.1% [income.income_growth_rate]"
+    ],
+    "defaults_applied": [
+      {
+        "key": "simulation.discount_rate",
+        "value": 0.05162999999999984,
+        "formatted": "5.2%",
+        "cite": "FP Canada 2026 PAG (60/40 real)",
+        "kind": "derivation",
+        "note": "composed at parse: (1 + 3.0% real)(1 + 2.1% inflation_rate) − 1 = 5.16% nominal",
+        "anchor": {
+          "name": "simulation.discount_rate",
+          "value": 0.03,
+          "as_of": "2026",
+          "source": "derivation: equals rent.investment_return_rate — FP Canada 2026 PAG 60/40 balanced ≈ 3.0% real, the household's opportunity cost",
+          "url": "https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+          "rationale": "A present-value comparison discounts at the return the household could otherwise earn. With the renter's alternative anchored at 3.0% real, the same figure is the coherent default: a renter earning the default return then nets exactly zero on the capital leg, and neither side is handed a spread by construction. A stronger personal time preference overrides it; the coherence tripwire warns outside [0, 15%] (units typo).",
+          "band": [
+            0.02,
+            0.06
+          ],
+          "short_cite": "FP Canada 2026 PAG (60/40 real)",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "derivation",
+          "restatements": [
+            {
+              "value": 0.051,
+              "why": "the same figure AS QUOTED, before deflation — rent.investment_return_rate's quoted form: the PAG 60/40 components 0.6 × 6.4% + 0.4 × 3.2% ≈ 5.1% nominal, and 3.0% real is that less the PAG's 2.1% inflation"
+            }
+          ],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.fee_escalation_rate",
+        "value": 0.0,
+        "formatted": "0.0%",
+        "cite": "ref: FP Canada 2026 PAG",
+        "kind": "reference",
+        "note": "REAL rate; the engine composes inflation_rate on top at compute time: (1 + 0.0%)(1 + 2.1%) − 1 = 2.10% nominal",
+        "anchor": {
+          "name": "condo.fee_escalation_rate",
+          "value": 0.0,
+          "as_of": "2026",
+          "source": "FP Canada 2026 PAG §5 'Shelter Projection Considerations' 3.1% nominal (≈ 1.0% real) as the upper reference",
+          "url": "https://www.fpcanada.ca/docs/professionalsitelibraries/standards/projection-assumption-guidelines.pdf",
+          "rationale": "Condo fees track inflation absent aging-building pressure ⇒ 0.0% real. FP Canada 2026 shelter-cost growth 1.0% real is the upper reference — a fee growing faster than that in real terms is an aging-building judgment the user should set explicitly.",
+          "band": [
+            0.0,
+            0.01
+          ],
+          "short_cite": "FP Canada 2026 PAG",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "reference",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.value_growth_rate",
+        "value": 0.0,
+        "formatted": "0.0%",
+        "cite": "neutral, uncited",
+        "kind": "neutral",
+        "note": "REAL rate; the engine composes inflation_rate on top at compute time: (1 + 0.0%)(1 + 2.1%) − 1 = 2.10% nominal",
+        "anchor": {
+          "name": "condo.value_growth_rate",
+          "value": 0.0,
+          "as_of": "2026",
+          "source": "hde neutrality ruling — deliberately uncited",
+          "url": "none (deliberately uncited)",
+          "rationale": "Neutral by construction: no defensible universal long-run real appreciation default exists for Canadian home prices. Users should set their own view or wire a market_scenario prior (ISQ-grounded demographic drift). Band is an illustrative neutrality range, not a citation.",
+          "band": [
+            -0.01,
+            0.02
+          ],
+          "short_cite": "neutral, uncited",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "",
+          "kind": "neutral",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "condo.selling_cost_rate",
+        "value": 0.05,
+        "formatted": "5.0%",
+        "cite": "WOWA 2026",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "condo.house.selling_cost_rate",
+          "value": 0.05,
+          "as_of": "2026",
+          "source": "WOWA.ca, 'Cost of Selling a House in Canada 2026'; PropertyMesh 2026 Ontario example (5% total commission)",
+          "url": "https://wowa.ca/calculators/cost-selling-house",
+          "rationale": "WOWA 2026: combined commission 3.5–5% in Ontario, BC graduated (3–4% on the first $100k, 1–2% above), seller legal fees $1,000–$1,600; WOWA's own Ontario worked example totals 5.9% including 13% HST on the commission. 5% is the commission-plus-notary figure before sales tax; the band (3–8%) brackets a discount brokerage at the low end and a taxed full-commission sale at the high end. One anchor serves both condo and house so the citation cannot drift between options.",
+          "band": [
+            0.03,
+            0.08
+          ],
+          "short_cite": "WOWA 2026",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": null,
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      },
+      {
+        "key": "income.affordability_threshold",
+        "value": 0.32,
+        "formatted": "32.0%",
+        "cite": "CMHC GDS/TDS",
+        "kind": "cited",
+        "note": null,
+        "anchor": {
+          "name": "income.affordability_threshold",
+          "value": 0.32,
+          "as_of": "2026",
+          "source": "CMHC 'Calculating GDS/TDS': 'CMHC restricts debt service ratios to 39% (GDS) and 44% (TDS)'; industry guideline 32% GDS / 40% TDS per Ratehub 'Debt Service Ratios' (ratehub.ca/debt-service-ratios) — the 32% is NOT on the CMHC page",
+          "url": "https://cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/calculating-gds-tds",
+          "rationale": "Legacy GDS guideline 32%, deliberately below CMHC's current 39% GDS cap: hde's numerator is broader than GDS PITH (full condo fees, maintenance, stochastic events), so the same-income ratio runs higher than a lender's GDS — 32% on the broader numerator is the conservative reading. Band spans the legacy 32% guideline to CMHC's 44% TDS ceiling.",
+          "band": [
+            0.32,
+            0.44
+          ],
+          "short_cite": "CMHC GDS/TDS",
+          "quoted": "",
+          "unit": "",
+          "province": "",
+          "retrieved_on": "2026-09-01",
+          "kind": "cited",
+          "restatements": [],
+          "replaces": {
+            "value": 0.35,
+            "why": "uncited midpoint between the legacy and CMHC caps; re-anchored to the legacy 32% GDS guideline"
+          },
+          "valid_until": "",
+          "refresh_group": ""
+        }
+      }
+    ],
+    "reference_matches": [
+      {
+        "option": "condo",
+        "cost_name": "municipal_tax",
+        "annual_amount": 2610.0,
+        "family": "property_tax.",
+        "implied_rate": 0.0058,
+        "province": "QC",
+        "matches": [],
+        "citations": [],
+        "nearest": {
+          "name": "property_tax.laval",
+          "value": 0.005909,
+          "delta": -0.00010900000000000059,
+          "short_cite": "Ville de Laval 2026",
+          "unit": "rate on ASSESSED value (0,5909 $ per 100 $ of municipal assessment) — assessed ≠ market"
+        }
+      },
+      {
+        "option": "condo",
+        "cost_name": "unit_insurance",
+        "annual_amount": 420.0,
+        "family": "home_insurance.",
+        "implied_rate": null,
+        "province": "QC",
+        "matches": [],
+        "citations": [],
+        "nearest": null
+      }
+    ],
+    "sources": {
+      "declared": true,
+      "user": [
+        {
+          "key": "years",
+          "value": 10,
+          "formatted": "10"
+        },
+        {
+          "key": "province",
+          "value": "QC",
+          "formatted": "'QC'"
+        },
+        {
+          "key": "condo.initial_value",
+          "value": 450000,
+          "formatted": "$450,000"
+        },
+        {
+          "key": "condo.monthly_fee",
+          "value": 380,
+          "formatted": "$380/mo"
+        },
+        {
+          "key": "condo.cash_available",
+          "value": 60000,
+          "formatted": "$60,000"
+        },
+        {
+          "key": "condo.mortgage_rate",
+          "value": 0.0455,
+          "formatted": "4.55%"
+        },
+        {
+          "key": "condo.mortgage_rate_compounding",
+          "value": "effective_annual",
+          "formatted": "'effective_annual'"
+        },
+        {
+          "key": "condo.mortgage_term_years",
+          "value": 25,
+          "formatted": "25"
+        },
+        {
+          "key": "condo.municipality",
+          "value": "montreal",
+          "formatted": "'montreal'"
+        },
+        {
+          "key": "condo.first_time_buyer",
+          "value": true,
+          "formatted": "true"
+        },
+        {
+          "key": "condo.purchase_costs",
+          "value": 2000,
+          "formatted": "$2,000"
+        },
+        {
+          "key": "condo.other_recurring_costs",
+          "value": [
+            {
+              "name": "municipal_tax",
+              "annual_amount": 2610,
+              "escalation_rate": 0.021
+            },
+            {
+              "name": "school_tax",
+              "annual_amount": 330,
+              "escalation_rate": 0.021
+            },
+            {
+              "name": "unit_insurance",
+              "annual_amount": 420,
+              "escalation_rate": 0.021
+            }
+          ],
+          "formatted": "3 entries"
+        },
+        {
+          "key": "rent.monthly_rent",
+          "value": 1850,
+          "formatted": "$1,850/mo"
+        },
+        {
+          "key": "rent.invested_down_payment",
+          "value": 75000,
+          "formatted": "$75,000"
+        },
+        {
+          "key": "income.annual_income",
+          "value": 95000,
+          "formatted": "$95,000"
+        },
+        {
+          "key": "tax.renter_capital.tfsa",
+          "value": 30000,
+          "formatted": "$30,000"
+        },
+        {
+          "key": "tax.renter_capital.rrsp",
+          "value": 15000,
+          "formatted": "$15,000"
+        },
+        {
+          "key": "tax.renter_capital.taxable",
+          "value": 14000,
+          "formatted": "$14,000"
+        },
+        {
+          "key": "tax.fhsa.balance",
+          "value": 8000,
+          "formatted": "$8,000"
+        },
+        {
+          "key": "tax.fhsa.annual_contribution",
+          "value": 8000,
+          "formatted": "$8,000"
+        },
+        {
+          "key": "tax.fhsa.years_until_purchase",
+          "value": 1,
+          "formatted": "1"
+        },
+        {
+          "key": "tax.hbp_withdrawal",
+          "value": 15000,
+          "formatted": "$15,000"
+        }
+      ],
+      "assistant": [
+        {
+          "key": "economic.mode",
+          "value": "nominal",
+          "formatted": "'nominal'"
+        },
+        {
+          "key": "condo.mortgage_insurance",
+          "value": "auto",
+          "formatted": "'auto'"
+        },
+        {
+          "key": "condo.land_transfer_tax",
+          "value": "auto",
+          "formatted": "'auto'"
+        },
+        {
+          "key": "simulation.num_sims",
+          "value": 5000,
+          "formatted": "5,000"
+        },
+        {
+          "key": "simulation.random_seed",
+          "value": 42,
+          "formatted": "42"
+        }
+      ],
+      "anchor": {
+        "economic.inflation_rate": "economic.inflation_rate.nominal_planning",
+        "rent.rent_escalation_rate": "rent.rent_escalation_rate",
+        "rent.investment_return_rate": "rent.investment_return_rate",
+        "income.income_growth_rate": "income.income_growth_rate"
+      },
+      "unattributed": [],
+      "sweep": []
+    },
+    "tax": {
+      "marginal_rate": 0.361175,
+      "marginal_rate_source": "resolved",
+      "marginal_rate_detail": "federal 20.5% × (1 − 16.5% Québec abatement) + QC 19% [tax.federal.*, tax.qc.* 2026]",
+      "province": "QC",
+      "income": 95000.0,
+      "taxable_return_treatment": "capital_gains",
+      "inclusion_rate": 0.5,
+      "inclusion_applied": 0.5,
+      "retirement_marginal_rate": 0.361175,
+      "retirement_rate_source": "default",
+      "renter_capital": {
+        "tfsa": 30000.0,
+        "rrsp": 15000.0,
+        "fhsa": 16000.0,
+        "taxable": 14000.0,
+        "fhsa_derived": true,
+        "total": 75000.0,
+        "total_derived": false,
+        "refunds_added": 2889.4
+      },
+      "after_tax_factor": 1.0417900375,
+      "blended_rate": 0.04085252473757284,
+      "drag_at_horizon": 2340.0976480421787,
+      "drag_pv": 1414.5044308309898,
+      "haircut_at_horizon": 9503.089607935137,
+      "haircut_pv": 5744.274119609687,
+      "fhsa": {
+        "balance": 8000.0,
+        "years_until_purchase": 1,
+        "contributions": [
+          8000.0
+        ],
+        "refunds": 2889.4,
+        "share_at_year0": 16000.0,
+        "lifetime_remaining": 24000.0
+      },
+      "hbp": {
+        "withdrawal": 15000.0,
+        "limit": 60000.0,
+        "tranche": 1000.0,
+        "repayment_years": 15,
+        "first_repayment_year": 5,
+        "legs": {
+          "condo": {
+            "outlays_pv": 9568.584482530205,
+            "rebuilt_at_horizon": 15819.05070123125,
+            "rebuilt_pv": 9562.044270739067,
+            "hbp_repayment_pv": 6.540211791138063
+          }
+        }
+      },
+      "principal_residence_exempt_fraction": 1.0
+    },
+    "demographic_prior": null,
+    "read_back": [
+      "[warning] rent: invested capital $77,889 earns 5.1% (after tax on the taxable share and the FHSA rollover: blended 4.09%) vs discount_rate 5.2% — net capital term $7,624 charged to the renter over 10 years; two causes, and fixing one moves only its own share: $465 charged by the spread between the two rates, which investment_return_rate = discount_rate removes, and $7,159 charged by the tax the engine applied — $1,415 of drag on the taxable share (lever: tax.renter_capital) and $5,744 of FHSA rollover haircut (lever: tax.retirement_marginal_rate)",
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] condo: down payment 15.57% of price is under the 20% mortgage-insurance line — the engine priced the insured mortgage at 84.43% loan-to-value: 2.80% = $10,638 added to the loan, plus $957 of provincial tax on the premium paid in cash at closing (it cannot be added to the loan) [CMHC 2026 premium schedule]. The premium is non-refundable and carries interest for the whole amortization; this cash covers 20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage is insured)",
+      "[warning] condo: renewal risk is not modelled — mortgage_rate 4.55% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+      "[warning] affordability: condo housing cost exceeds 32% of income in years [1, 2, 3, 4, 5] (max 36.2%) — GDS-shaped ratio (housing cost incl. maintenance over income, no other debts): CMHC's cap for that shape is 39% GDS, not the 44% TDS [income.affordability_threshold]",
+      "[warning] condo: unpriced — at the minimum qualifying rate a lender would test you at (6.55% as quoted, against your contract 4.55%), year-1 housing cost runs 42.2% of income against this run's own 36.2% — 6.0 points the run does not show, toward buying. Your loan is insured, so that rate is the federal government's, not OSFI's [qualifying_rate.buffer, qualifying_rate.floor]. Both ratios are the engine's own measure, broader than the gross debt service a lender uses [income.affordability_threshold], so this run cannot say how a lender would rule on you.",
+      "assistant-typed: economic.mode='nominal', condo.mortgage_insurance='auto', condo.land_transfer_tax='auto', simulation.num_sims=5,000, simulation.random_seed=42",
+      "anchor-sourced: economic.inflation_rate=2.1% [economic.inflation_rate.nominal_planning], rent.rent_escalation_rate=3.1% [rent.rent_escalation_rate], rent.investment_return_rate=5.1% [rent.investment_return_rate], income.income_growth_rate=3.1% [income.income_growth_rate]",
+      "defaults applied: simulation.discount_rate=5.2% [FP Canada 2026 PAG (60/40 real)], condo.fee_escalation_rate=0.0% [ref: FP Canada 2026 PAG], condo.value_growth_rate=0.0% [neutral, uncited], condo.selling_cost_rate=5.0% [WOWA 2026], income.affordability_threshold=32.0% [CMHC GDS/TDS]",
+      "rates: as quoted · condo.other_recurring_costs.municipal_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · condo.other_recurring_costs.school_tax.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · condo.other_recurring_costs.unit_insurance.escalation_rate 2.1% as quoted = 2.1% nominal = 0.0% real · rent.rent_escalation_rate 3.1% as quoted = 3.1% nominal = 1.0% real · rent.investment_return_rate 5.1% as quoted = 5.1% nominal = 2.9% real · income.income_growth_rate 3.1% as quoted = 3.1% nominal = 1.0% real · condo.mortgage_rate 4.55% effective annual, as typed",
+      "mode: nominal terms · discount_rate 3.0% real default → 5.2% nominal (incl. 2.1% inflation) (typed rates are as quoted and used as typed; anchored defaults are real and composed with inflation_rate; mortgage_rate is used as entered)",
+      "decisiveness: margin 3.3% of condo PV < 5% tie band [hde verdict rule] (single-path run, uncertainty inputs off)",
+      "condo financing: cash available $60,000 + FHSA refunds $2,889 + HBP $15,000 − purchase_costs $6,860 − premium tax $957 = down payment $70,071 = 15.57% of price, $19,929 below the 20% mortgage-insurance line ($90,000) · loan-to-value 84.43% · insured: 84.43% LTV → 2.80% tier = $10,638 financed; premium tax 9% (QC) = $957 cash → loan $390,567 = 86.79% LTV · this cash covers 20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage is insured) · fhsa: balance $8,000 + $8,000 contributed over 1 saving year (room $8,000/yr + carry-forward ≤ $8,000, lifetime $40,000, $24,000 remaining [fhsa.annual_limit, fhsa.carry_forward_max, fhsa.lifetime_limit]) → refunds $2,889 at 36.12%, added to both sides' capital",
+      "condo purchase costs: land transfer tax $4,860 (Ville de Montréal droits de mutation 2026); first_time_buyer: true applied nothing; Québec refunds up to $5,875 of the duty as a refundable tax credit on the return (land_transfer_tax.qc.first_time_buyer_credit_max) — not applied here; Montréal's own acquisition program closed to new applications on 2026-07-07 (land_transfer_tax.montreal.first_time_buyer_rebate) · purchase_costs $6,860 in cash at closing ($2,000 stated + transfer tax $4,860)",
+      "tax: marginal rate 36.12% resolved from income $95,000 in QC — federal 20.5% × (1 − 16.5% Québec abatement) + QC 19% [tax.federal.*, tax.qc.* 2026] · renter capital $75,000 = sheltered $61,000 (TFSA $30,000 + RRSP $15,000 + FHSA $16,000) + taxable $14,000 (+ FHSA refunds $2,889) · taxable share: 5.10% × (1 − 36.12% × 50% inclusion, capital gains — default) = 4.18% after tax [tax.capital_gains_inclusion_rate]; blended 4.09%; drag $2,340 at year 10 (PV $1,415) charged to rent · owner: principal-residence exemption — no tax on the equity gain at sale [tax.principal_residence_exempt_fraction] · FHSA share $16,000 rolls to an RRSP for the renter (within 15 years of opening [fhsa.max_years_open]) — haircut 36.12% retirement marginal rate (= current, default) on $26,312 at year 10 = $9,503 (PV $5,744) charged to rent [tax.retirement_marginal_rate]",
+      "condo hbp: $15,000 withdrawn from the RRSP into the down payment (≤ $60,000 [hbp.withdrawal_limit]) · repaid $1,000/yr over 15 years from year 5 [hbp.repayment_years, hbp.repayment_grace_years]; 10 tranches fall at or past year 10 and return at the horizon · the RRSP is rebuilt to $15,819 by year 10 (repayments PV $9,569 against the rebuilt RRSP's PV $9,562) — net PV $7 charged to condo (hbp_repayment_pv)",
+      "Year-1 cash (undiscounted; PV totals above credit equity at sale)",
+      "Condo: $    34,395/yr ($2,866/mo) — of which $8,704 principal repaid; the rest is unrecoverable; expected appreciation $9,450 (value × nominal growth = real growth composed with inflation; not cash)",
+      "Rent: $    22,200/yr ($1,850/mo)",
+      "condo other costs: municipal_tax $2,610/yr = 0.580% of price [no anchor match — hde --print-anchors; nearest: property_tax.laval 0.5909% (Δ -0.0109 pt) — not a match] · unit_insurance $420/yr [no anchor match — hde --print-anchors]",
+      "Affordability (threshold: 32% — a GDS-shaped ratio, housing cost incl. maintenance over income; the 32% figure is the legacy guideline, CMHC caps GDS at 39%, TDS at 44%)",
+      "Rent: max ratio 23.4%  years exceeding: none"
+    ],
+    "read_back_short": [
+      "[warning] rent: invested capital $77,889 earns 5.1% (after tax on the taxable share and the FHSA rollover: blended 4.09%) vs discount_rate 5.2% — net capital term $7,624 charged to the renter over 10 years; two causes, and fixing one moves only its own share: $465 charged by the spread between the two rates, which investment_return_rate = discount_rate removes, and $7,159 charged by the tax the engine applied — $1,415 of drag on the taxable share (lever: tax.renter_capital) and $5,744 of FHSA rollover haircut (lever: tax.retirement_marginal_rate)",
+      "[warning] condo.value_growth_rate=0.0% — no appreciation modelled (neutral); the verdict is sensitive to it: state a view or bracket it (a market_scenario prior adds drift in the Monte Carlo only)",
+      "[warning] condo: down payment 15.57% of price is under the 20% mortgage-insurance line — the engine priced the insured mortgage at 84.43% loan-to-value: 2.80% = $10,638 added to the loan, plus $957 of provincial tax on the premium paid in cash at closing (it cannot be added to the loan) [CMHC 2026 premium schedule]. The premium is non-refundable and carries interest for the whole amortization; this cash covers 20% down up to a price of $361,762 (purchase_costs $5,537 at that price; above it the mortgage is insured)",
+      "[warning] condo: renewal risk is not modelled — mortgage_rate 4.55% is held for the whole 25-year amortization, but a Canadian fixed term runs at most 5 years and the rate resets at every renewal; set mortgage_renewal_years + mortgage_renewal_rates to price a renewal path (the engine anchors no renewal rate — the path is yours to state)",
+      "[warning] affordability: condo housing cost exceeds 32% of income in years [1, 2, 3, 4, 5] (max 36.2%) — GDS-shaped ratio (housing cost incl. maintenance over income, no other debts): CMHC's cap for that shape is 39% GDS, not the 44% TDS [income.affordability_threshold]",
+      "[warning] condo: unpriced — at the minimum qualifying rate a lender would test you at (6.55% as quoted, against your contract 4.55%), year-1 housing cost runs 42.2% of income against this run's own 36.2% — 6.0 points the run does not show, toward buying. Your loan is insured, so that rate is the federal government's, not OSFI's [qualifying_rate.buffer, qualifying_rate.floor]. Both ratios are the engine's own measure, broader than the gross debt service a lender uses [income.affordability_threshold], so this run cannot say how a lender would rule on you.",
+      "assistant-typed: economic.mode='nominal', condo.mortgage_insurance='auto', condo.land_transfer_tax='auto', simulation.num_sims=5,000, simulation.random_seed=42",
+      "anchor-sourced: economic.inflation_rate=2.1% [economic.inflation_rate.nominal_planning], rent.rent_escalation_rate=3.1% [rent.rent_escalation_rate], rent.investment_return_rate=5.1% [rent.investment_return_rate], income.income_growth_rate=3.1% [income.income_growth_rate]",
+      "you said: years=10, province='QC', condo.initial_value=$450,000, condo.monthly_fee=$380/mo, condo.cash_available=$60,000, condo.mortgage_rate=4.55%, condo.mortgage_rate_compounding='effective_annual', condo.mortgage_term_years=25, condo.municipality='montreal', condo.first_time_buyer=true, condo.purchase_costs=$2,000, condo.other_recurring_costs=3 entries, rent.monthly_rent=$1,850/mo, rent.invested_down_payment=$75,000, income.annual_income=$95,000, tax.renter_capital.tfsa=$30,000, tax.renter_capital.rrsp=$15,000, tax.renter_capital.taxable=$14,000, tax.fhsa.balance=$8,000, tax.fhsa.annual_contribution=$8,000, tax.fhsa.years_until_purchase=1, tax.hbp_withdrawal=$15,000",
+      "tax: marginal rate 36.12% (resolved from income in QC) · renter capital sheltered $61,000 / taxable $14,000 (+ FHSA refunds $2,889) · drag $2,340 at year 10 (PV $1,415) charged to rent · owner exempt (principal residence) · FHSA rollover haircut PV $5,744 charged to rent",
+      "decisiveness: margin 3.3% of condo PV < 5% tie band [hde verdict rule] (single-path run, uncertainty inputs off)",
+      "full read-back: 11 more lines (defaults applied, rates, mode, financing, purchase costs, tax, year-1 cash, other costs, affordability) — rerun with --read-back full"
+    ]
+  },
+  "verdict": {
+    "best": "condo",
+    "runner_up": "rent",
+    "margin_pv": 6525.775553238578,
+    "margin_frac": 0.03254724490163982,
+    "monthly_equivalent": 69.35867093546811,
+    "prob_best": null,
+    "decisive": false,
+    "state": "tie",
+    "rule": "margin_band",
+    "reason": "margin 3.3% of condo PV < 5% tie band [hde verdict rule] (single-path run, uncertainty inputs off)",
+    "mc_mean_best": null,
+    "mc_best": null,
+    "mc_prob_best": null
+  },
+  "deterministic": {
+    "condo": {
+      "total_pv": 200501.62687993882,
+      "breakdown": {
+        "purchase_costs_pv": 6860.5,
+        "fee_pv": 38897.7249356978,
+        "events_pv": 0.0,
+        "other_pv": 28661.4815315668,
+        "reserve_pv": 0.0,
+        "downpayment_pv": 70071.48012992741,
+        "mortgage_pv": 202825.46540352312,
+        "terminal_equity_pv": -146821.56533256746,
+        "hbp_repayment_pv": 6.540211791138063
+      },
+      "cash_year1": 34395.149606918174,
+      "principal_year1": 8704.373018515395,
+      "appreciation_year1": 9449.999999999958
+    },
+    "house": null,
+    "rent": {
+      "total_pv": 207027.4024331774,
+      "breakdown": {
+        "rent_pv": 199403.2677347348,
+        "events_pv": 0.0,
+        "other_pv": 0.0,
+        "invested_capital_pv": 77889.4,
+        "invested_dp_benefit_pv": -70265.26530155743
+      },
+      "cash_year1": 22200.0,
+      "principal_year1": 0.0,
+      "appreciation_year1": 0.0
+    },
+    "affordability": {
+      "annual_incomes": [
+        95000.0,
+        97944.99999999999,
+        100981.29499999998,
+        104111.71514499998,
+        107339.17831449497,
+        110666.6928422443,
+        114097.36032035387,
+        117634.37849028483,
+        121281.04422348365,
+        125040.75659441164
+      ],
+      "threshold": 0.32,
+      "rent": {
+        "ratios": [
+          0.2336842105263158,
+          0.2336842105263158,
+          0.23368421052631577,
+          0.23368421052631577,
+          0.2336842105263158,
+          0.23368421052631577,
+          0.23368421052631577,
+          0.23368421052631577,
+          0.2336842105263158,
+          0.23368421052631577
+        ],
+        "years_exceeding": []
+      },
+      "condo": {
+        "ratios": [
+          0.36205420638861235,
+          0.35286609430719457,
+          0.3439377790403478,
+          0.33526160879614025,
+          0.32683016030643763,
+          0.31863623197070257,
+          0.31067283720579925,
+          0.3029331979956117,
+          0.29541073863446854,
+          0.2880990796585477
+        ],
+        "years_exceeding": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "house": null
+    }
+  },
+  "monte_carlo": {
+    "condo": {
+      "mean": 200501.62687993885,
+      "std": 2.9103830456733704e-11,
+      "p5": 200501.62687993882,
+      "p50": 200501.62687993882,
+      "p95": 200501.62687993882
+    },
+    "house": null,
+    "rent": {
+      "mean": 207027.40243317743,
+      "std": 2.9103830456733704e-11,
+      "p5": 207027.4024331774,
+      "p50": 207027.4024331774,
+      "p95": 207027.4024331774
+    },
+    "prob_condo_cheapest": 1.0,
+    "prob_house_cheapest": null,
+    "prob_rent_cheapest": 0.0,
+    "affordability_mc": {
+      "threshold": 0.32,
+      "prob_condo_exceeds": 1.0,
+      "prob_house_exceeds": null,
+      "prob_rent_exceeds": 0.0
+    }
+  }
+}
