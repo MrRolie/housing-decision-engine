@@ -21,7 +21,11 @@ import hde.monte_carlo as mc
 from hde.config import load_config_dict
 
 FIXTURE = Path(__file__).parent / "fixtures" / "min_interaction.yaml"
-SKIPPING = dc.CHANNELS + (dc.Channel(id=8, key="probe", label="a probe channel",
+# A probe channel two past the highest id on the real table, so the gap below
+# it is no channel whatever the real table holds.
+PROBE = max(entry.id for entry in dc.CHANNELS) + 2
+GAP = PROBE - 1
+SKIPPING = dc.CHANNELS + (dc.Channel(id=PROBE, key="probe", label="a probe channel",
                                      sizing_keys=()),)
 
 
@@ -47,27 +51,29 @@ def test_every_channel_resolves_by_its_own_id():
         dc.channel(-1)
 
 
-def test_an_id_past_income_resolves_and_the_gap_raises(skipping_table):
-    assert dc.channel(8).key == "probe"
+def test_an_id_past_a_gap_resolves_and_the_gap_raises(skipping_table):
+    assert dc.channel(PROBE).key == "probe"
     with pytest.raises(KeyError):
-        dc.channel(7)
+        dc.channel(GAP)
     with pytest.raises(KeyError):
-        dc.channel(9)
+        dc.channel(PROBE + 1)
 
 
 def test_the_freeze_guard_reads_its_ids_off_the_table(skipping_table):
     spec = _spec()
     streams = mc.addressed_streams(spec.simulation.random_seed)
-    mc.run_monte_carlo(spec, streams, freeze=(8,))
+    mc.run_monte_carlo(spec, streams, freeze=(PROBE,))
     with pytest.raises(ValueError, match="which is no channel"):
-        mc.run_monte_carlo(spec, streams, freeze=(7,))
+        mc.run_monte_carlo(spec, streams, freeze=(GAP,))
     with pytest.raises(ValueError, match="which is no channel"):
-        mc.run_monte_carlo(spec, streams, freeze=(9,))
+        mc.run_monte_carlo(spec, streams, freeze=(PROBE + 1,))
+    with pytest.raises(ValueError, match="which is no channel"):
+        mc.run_monte_carlo(spec, streams, freeze=(dc.INCOME_STREAM_ID,))
 
 
 def test_the_legacy_binding_takes_a_freeze_of_every_id_on_the_table(skipping_table):
     spec = _spec()
-    every = [entry.id for entry in SKIPPING]
+    every = sorted({entry.id for entry in SKIPPING})
     mc.run_monte_carlo(spec, freeze=every)
     with pytest.raises(ValueError, match="partial freeze"):
-        mc.run_monte_carlo(spec, freeze=every[:-1])
+        mc.run_monte_carlo(spec, freeze=[i for i in every if i != PROBE])

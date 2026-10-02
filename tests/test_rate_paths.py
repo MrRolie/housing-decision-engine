@@ -408,8 +408,9 @@ class TestFileIntegrity:
         assert loaded.file_sha256.startswith("b3827bb92169")
 
 
-def _cli(argv, rewrite_after_first_load, monkeypatch, tmp_path):
-    """`hde` in-process on the fixture with an income block, at 200 paths.
+def _cli(argv, income, rewrite_after_first_load, monkeypatch, tmp_path):
+    """`hde` in-process on the fixture, at 200 paths, with an income block when
+    asked (it makes the read-back's unpriced check re-enter the loader).
     With `rewrite_after_first_load` the path file's bytes are rewritten right
     after the first load reads them, so every later load sees other bytes."""
     doc = json.loads((FIXTURES / "renewal_rate_paths_synthetic.json").read_text(encoding="utf-8"))
@@ -417,8 +418,9 @@ def _cli(argv, rewrite_after_first_load, monkeypatch, tmp_path):
     cfg = _yaml(FIXTURE)
     cfg["renewal_rates"]["path"] = path
     cfg["simulation"]["num_sims"] = 200
-    cfg["income"] = {"annual_income": 150_000, "income_growth_rate": 0.0,
-                     "affordability_threshold": 0.32}
+    if income:
+        cfg["income"] = {"annual_income": 150_000, "income_growth_rate": 0.0,
+                         "affordability_threshold": 0.32}
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     real = config_mod.read_path_file
@@ -440,18 +442,23 @@ def _cli(argv, rewrite_after_first_load, monkeypatch, tmp_path):
     return code, out.getvalue(), err.getvalue(), calls["n"]
 
 
+# The three flags re-enter the loader on their own, so they run without an
+# income block: with one, the unpriced check's re-entry would trip first and
+# the flag's own would never be the one exercised.
 SURFACES = [
-    ["--sweep", "house.mortgage_rate=0.03:0.06:3"],
-    ["--break-even", "house.mortgage_rate=0.01:0.12"],
-    ["--decompose", "200"],
-    [],                      # a plain run: the income block re-enters the loader
-    ["--read-back"],
+    (["--sweep", "house.mortgage_rate=0.03:0.06:3"], False),
+    (["--break-even", "house.mortgage_rate=0.01:0.12"], False),
+    (["--decompose", "200"], False),
+    ([], True),
+    (["--read-back"], True),
 ]
+_IDS = [" ".join(a) + (" with income" if i else "") or "plain" for a, i in SURFACES]
+_IDS = [("plain with income" if not a else name) for (a, _), name in zip(SURFACES, _IDS)]
 
 
-@pytest.mark.parametrize("argv", SURFACES, ids=lambda a: " ".join(a) or "plain")
-def test_r19_every_surface_exits_once_with_one_error_line(argv, monkeypatch, tmp_path):
-    code, out, err, loads = _cli(argv, True, monkeypatch, tmp_path)
+@pytest.mark.parametrize("argv,income", SURFACES, ids=_IDS)
+def test_r19_every_surface_exits_once_with_one_error_line(argv, income, monkeypatch, tmp_path):
+    code, out, err, loads = _cli(argv, income, True, monkeypatch, tmp_path)
     assert loads >= 2, "the surface never re-entered the loader, so this pins nothing"
     errors = [line for line in err.splitlines() if line.startswith("Error:")]
     assert code == 1, (code, err[-400:])
@@ -460,11 +467,17 @@ def test_r19_every_surface_exits_once_with_one_error_line(argv, monkeypatch, tmp
     assert "Traceback" not in err + out
 
 
-@pytest.mark.parametrize("argv", SURFACES, ids=lambda a: " ".join(a) or "plain")
-def test_r19_the_same_surfaces_run_when_the_bytes_hold(argv, monkeypatch, tmp_path):
-    code, _, err, loads = _cli(argv, False, monkeypatch, tmp_path)
+@pytest.mark.parametrize("argv,income", SURFACES, ids=_IDS)
+def test_r19_the_same_surfaces_run_when_the_bytes_hold(argv, income, monkeypatch, tmp_path):
+    code, _, err, loads = _cli(argv, income, False, monkeypatch, tmp_path)
     assert code == 0, err[-400:]
     assert loads >= 2
+
+
+def test_without_income_a_plain_run_loads_once(monkeypatch, tmp_path):
+    """The control for the three flag cases above: with no income block and no
+    flag nothing re-enters the loader, so their second load is their own."""
+    assert _cli([], False, True, monkeypatch, tmp_path)[::3] == (0, 1)
 
 
 def test_no_monte_carlo_says_the_run_prices_the_central_row_alone(monkeypatch, capsys):
