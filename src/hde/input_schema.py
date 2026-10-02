@@ -61,6 +61,9 @@ _NOTES: Dict[str, Dict[str, Any]] = {
         "simulation": (False, "optional block; Monte Carlo + uncertainty knobs"),
         "economic": (False, "optional block; real (default) vs nominal mode"),
         "market_scenario": (False, "optional block; demographic prior (path + geography)"),
+        "renewal_rates": (False, "a renewal-rate path file the USER supplies (schema "
+                                 "hde.renewal_rate_paths), written by a model fitted outside the "
+                                 "engine; an assistant never proposes, invents or builds one"),
         "tax": (False, "optional block — the tax treatment of the two sides' money "
                        "(docs/specs/2026-09-05-tax-treatment.md): the renter's TAXABLE share earns "
                        "the after-tax return (sheltered TFSA / RRSP / FHSA shares untouched), the "
@@ -155,7 +158,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                           "held for the whole amortization and a warning says "
                                           "renewal risk is not modelled",
                                           "requires mortgage_renewal_rates — the two renewal keys "
-                                          "travel together"),
+                                          "travel together — or a renewal_rates.path file, which "
+                                          "supplies the rates and refuses mortgage_renewal_rates"),
         "mortgage_renewal_rates": (False, "the rate charged at each renewal, decimal: ONE figure "
                                          "applied to every renewal, or a list in order whose LAST "
                                          "entry carries forward. Quoted exactly like mortgage_rate "
@@ -349,7 +353,8 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                           "held for the whole amortization and a warning says "
                                           "renewal risk is not modelled",
                                           "requires mortgage_renewal_rates — the two renewal keys "
-                                          "travel together"),
+                                          "travel together — or a renewal_rates.path file, which "
+                                          "supplies the rates and refuses mortgage_renewal_rates"),
         "mortgage_renewal_rates": (False, "the rate charged at each renewal, decimal: ONE figure "
                                          "applied to every renewal, or a list in order whose LAST "
                                          "entry carries forward. Quoted exactly like mortgage_rate "
@@ -692,6 +697,15 @@ _NOTES: Dict[str, Dict[str, Any]] = {
                                   "renter's return — hbp_repayment_pv, zero when that return "
                                   "equals the discount rate. Outside the affordability ratio and "
                                   "the year-1 cash line (a transfer into the household's own RRSP)"),
+    },
+    "renewal_rates": {
+        "path": (True, "the path file, relative to the working directory as market_scenario.path "
+                       "is: sampled renewal-rate paths, one row per future, a column per renewal, "
+                       "with the fitted model's method, data window and validation record. Every "
+                       "financed option states mortgage_renewal_years equal to the file's "
+                       "term_years and no mortgage_renewal_rates; the deterministic case prices "
+                       "the row nearest the per-renewal median. sources: declares it user — "
+                       "assistant is refused"),
     },
     "market_scenario": {
         "path": (True, "ScenarioPrior JSON (see examples/showcase_demographic_prior.yaml)"),

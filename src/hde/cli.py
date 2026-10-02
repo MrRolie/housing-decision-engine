@@ -19,6 +19,7 @@ from .deterministic import compute_deterministic
 from .market_scenario import ScenarioPriorError
 from .models import InputError, compute_verdict
 from .monte_carlo import run_monte_carlo
+from .rate_paths import RatePathsChanged
 from .reporting import format_text_report, verdict_line
 from .unpriced import unpriced_warnings
 
@@ -36,6 +37,12 @@ PRIOR_WITHOUT_MONTE_CARLO = (
     "deterministic line alone (the prior's drift is not in it)"
 )
 
+# Its sibling for a renewal-rate path file: the deterministic case prices the
+# file's central row, and the other rows are drawn only in the Monte Carlo.
+RATES_WITHOUT_MONTE_CARLO = (
+    "renewal_rates draws only in Monte Carlo — this run prices the central row alone"
+)
+
 
 def main() -> int:
     """
@@ -43,7 +50,21 @@ def main() -> int:
 
     Returns:
         Exit code (0 for success, non-zero for errors)
+
+    A renewal-rate path file whose bytes change while the process runs is
+    caught HERE, once, around everything: every sweep point, break-even probe
+    and reversal probe re-enters the loader, and none of their per-point
+    captures may fold the change into one row's reason (it subclasses neither
+    exception they catch).
     """
+    try:
+        return _main()
+    except RatePathsChanged as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+def _main() -> int:
     parser = argparse.ArgumentParser(
         prog="hde",
         description="Rent vs condo vs house present-value comparison, "
@@ -319,6 +340,8 @@ def main() -> int:
     warnings = all_warnings(spec, prior, current_year=today.year, run_date=today, raw=raw)
     if args.no_monte_carlo and spec.market_scenario is not None:
         warnings.append(PRIOR_WITHOUT_MONTE_CARLO)
+    if args.no_monte_carlo and spec.renewal_rate_paths is not None:
+        warnings.append(RATES_WITHOUT_MONTE_CARLO)
     for warning in warnings:
         print(f"[warning] {warning}", file=sys.stderr)
 

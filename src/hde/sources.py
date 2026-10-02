@@ -326,6 +326,10 @@ def uncertainty_inputs(data: Dict[str, Any]) -> List[Tuple[str, Optional[str]]]:
         for key in ("path", "geography"):
             if key in scenario:
                 out.append((f"market_scenario.{key}", None))
+    paths = data.get("renewal_rates")
+    if isinstance(paths, dict) and "path" in paths:
+        # A path file prices a distribution of renewal rates (single_path_run says so).
+        out.append(("renewal_rates.path", None))
     return out
 
 
@@ -459,6 +463,19 @@ def _sum_hint(anchor: Anchor, figure: float, window: float) -> str:
 # Pinned in tests/test_sources.py::TestARenewalRateCarriesNoAnchor.
 _UNANCHORED_KEYS: Tuple[str, ...] = tuple(
     f"{option}.mortgage_renewal_rates" for option in ("condo", "house"))
+
+
+# The one key only the user can source (2026-10-01; R20 of
+# docs/specs/2026-10-01-renewal-rate-path-file.md). A renewal-rate path file is
+# the output of a model fitted outside the engine, which the user supplies; an
+# assistant never proposes, invents or builds one, so `assistant` on it would
+# declare a file that should not exist. An `anchor:` on it is refused by the
+# figure check below, because a path sources no number.
+_USER_ONLY_KEY = "renewal_rates.path"
+_USER_ONLY_PROBLEM = (
+    "sources: 'renewal_rates.path' declared assistant — the path file is the user's own "
+    "work and an assistant never proposes, invents or builds one; declare it user when "
+    "the user supplied it")
 
 
 def _anchor_declaration(
@@ -658,6 +675,8 @@ def build_source_echo(
                     continue
                 if not isinstance(value, str):
                     problems.append(_value_problem(key, value))
+                elif value == "assistant" and key == _USER_ONLY_KEY:
+                    problems.append(_USER_ONLY_PROBLEM)
                 elif value in ("user", "assistant"):
                     declared_map[key] = (value, None)
                 elif value.startswith("anchor:"):

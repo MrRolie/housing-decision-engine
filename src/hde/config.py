@@ -30,6 +30,7 @@ from .land_transfer_tax import (
 )
 from .pv import mortgage_payment
 from .market_scenario import LoadedScenarioPrior, time_anchor_violations
+from .rate_paths import LoadedRatePaths, RatePathsError, ReadingOption, price_against, read_path_file
 from .rates import (
     MortgageCompoundingError,
     RateConventionError,
@@ -102,6 +103,7 @@ class ConfigValidationError(Exception):
 _TOP_LEVEL_KEYS = frozenset({
     "years", "discount_rate", "condo", "house", "rent", "income",
     "simulation", "economic", "market_scenario", "province", "sources", "rates", "tax",
+    "renewal_rates",
 })
 # Legacy/alias top-level names → the section that replaced them. There is no
 # top-level monte_carlo section (and never was in this engine); a config that
@@ -145,6 +147,8 @@ _SIMULATION_KEYS = frozenset({
     "rent_escalation_vol", "investment_return_vol", "value_growth_vol",
 })
 _MARKET_SCENARIO_KEYS = frozenset({"path", "geography"})
+# A renewal-rate path file (docs/specs/2026-10-01-renewal-rate-path-file.md).
+_RENEWAL_RATES_KEYS = frozenset({"path"})
 _PRICE_SHOCK_KEYS = frozenset({"annual_hazard", "severity_mean", "severity_vol"})
 # The tax treatment of the two sides' money (2026-09-05; tax_treatment.py).
 _TAX_KEYS = frozenset({
@@ -173,6 +177,7 @@ _SECTION_KEYS: Dict[str, frozenset] = {
     "simulation": _SIMULATION_KEYS,
     "market_scenario": _MARKET_SCENARIO_KEYS,
     "tax": _TAX_KEYS,
+    "renewal_rates": _RENEWAL_RATES_KEYS,
 }
 
 
@@ -1027,6 +1032,8 @@ def dispersion_sources(spec: ComparisonSpec) -> Tuple[List[str], List[str], List
         shared.append("economic.inflation_vol")
     if spec.market_scenario is not None:
         owned.append("market_scenario (demographic drift per path)")
+    if spec.renewal_rate_paths is not None:
+        owned.append("renewal_rates.path (renewal rates per path)")
     # value_growth_vol moves the value track of EVERY owned option, so it is
     # named once against the owned side rather than once per option.
     if sim.value_growth_vol and any(o is not None for o in (spec.condo, spec.house)):
@@ -1276,6 +1283,8 @@ def single_path_run(spec: ComparisonSpec) -> bool:
         return False  # the tenancy can end on some paths and not others
     if spec.market_scenario is not None:
         return False  # prior draws demographic drift per path
+    if spec.renewal_rate_paths is not None:
+        return False  # a path file prices a distribution of renewal rates
     for opt in (spec.condo, spec.house, spec.rent):
         if opt is None:
             continue
@@ -1615,7 +1624,7 @@ def _mortgage_rate(data: Dict[str, Any], name: str) -> Tuple[Optional[float], st
 
 
 def _mortgage_renewal(
-    data: Dict[str, Any], name: str, compounding: str,
+    data: Dict[str, Any], name: str, compounding: str, file_present: bool = False,
 ) -> Tuple[Optional[int], Optional[List[float]], Optional[List[float]]]:
     """(the rate contract's length, the EFFECTIVE annual rate per renewal, the
     rates as quoted) for one owned option — the renewal ladder, slice 1.
@@ -1628,12 +1637,21 @@ def _mortgage_renewal(
     A renewal rate is a quoted contract rate of `mortgage_rate`'s class (spec
     §5), so it takes the SAME compounding conversion and never meets inflation:
     the same typed figure in the two fields means the same rate.
+
+    Beside a `renewal_rates` path file the rates come from the file: the term
+    is read here and the rates are filled from the file's central row once it
+    is loaded (`_renewal_rate_paths`), and a ladder beside the file is refused
+    — one market cannot have two sources for its renewal rate (R13).
     """
     has_years = "mortgage_renewal_years" in data
     has_rates = "mortgage_renewal_rates" in data
+    if file_present and has_rates:
+        raise ConfigValidationError(
+            f"{name}.mortgage_renewal_rates is set beside renewal_rates.path — one market, "
+            f"two sources for its renewal rate")
     if not has_years and not has_rates:
         return None, None, None
-    if has_years and not has_rates:
+    if has_years and not has_rates and not file_present:
         raise ConfigValidationError(
             f"{name}.mortgage_renewal_years={data['mortgage_renewal_years']} is set without "
             f"{name}.mortgage_renewal_rates — no renewal rate is anchored or forecast by this "
@@ -1650,6 +1668,8 @@ def _mortgage_renewal(
     if years <= 0:
         raise ConfigValidationError(
             f"{name}.mortgage_renewal_years must be > 0, got {years}")
+    if file_present:
+        return years, None, None
 
     raw = data["mortgage_renewal_rates"]
     if isinstance(raw, (list, tuple)):
@@ -1700,7 +1720,8 @@ def _day_one_additions(data: Dict[str, Any], name: str, tax: Optional[TaxParams]
 
 def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
                  top_province: Optional[str] = None,
-                 tax: Optional[TaxParams] = None) -> CondoParams:
+                 tax: Optional[TaxParams] = None,
+                 rate_file: bool = False) -> CondoParams:
     """
     Parse condo parameters from YAML data.
     """
@@ -1721,7 +1742,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
                                   ANCHORS["condo.value_growth_rate"].value)
     mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(condo_data, "condo")
     (renewal_years, renewal_rates,
-     renewal_rates_quoted) = _mortgage_renewal(condo_data, "condo", mortgage_rate_compounding)
+     renewal_rates_quoted) = _mortgage_renewal(condo_data, "condo", mortgage_rate_compounding,
+                                               rate_file)
     property_tax = _property_tax_cost(condo_data, "condo", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -1782,7 +1804,8 @@ def _parse_condo(condo_data: Dict[str, Any], years: int, conv: RateConverter,
 
 def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
                  top_province: Optional[str] = None,
-                 tax: Optional[TaxParams] = None) -> HouseParams:
+                 tax: Optional[TaxParams] = None,
+                 rate_file: bool = False) -> HouseParams:
     """
     Parse house parameters from YAML data.
     """
@@ -1811,7 +1834,8 @@ def _parse_house(house_data: Dict[str, Any], years: int, conv: RateConverter,
                                   ANCHORS["house.value_growth_rate"].value)
     mortgage_rate_quoted, mortgage_rate_compounding, mortgage_rate = _mortgage_rate(house_data, "house")
     (renewal_years, renewal_rates,
-     renewal_rates_quoted) = _mortgage_renewal(house_data, "house", mortgage_rate_compounding)
+     renewal_rates_quoted) = _mortgage_renewal(house_data, "house", mortgage_rate_compounding,
+                                               rate_file)
     property_tax = _property_tax_cost(house_data, "house", other_costs, value_growth_rate)
     if property_tax is not None:
         other_costs.append(property_tax)
@@ -2303,6 +2327,47 @@ def validate_config(spec: ComparisonSpec) -> List[str]:
     return warnings
 
 
+def _reads_the_file(opt: Any) -> bool:
+    """A reading option (docs/specs/2026-10-01-renewal-rate-path-file.md §3):
+    a condo or house that is not all-cash and has a full mortgage block."""
+    return (opt is not None and not opt.all_cash and opt.down_payment is not None
+            and opt.mortgage_rate is not None and opt.mortgage_term_years is not None
+            and opt.mortgage_term_years > 0)
+
+
+def _renewal_rate_paths(data: Dict[str, Any], spec: ComparisonSpec) -> Optional[LoadedRatePaths]:
+    """Load the `renewal_rates` path file against this config, and give each
+    reading option the first n_o columns of the file's central row as its
+    ladder, so every deterministic consumer prices that one row (§3, §5).
+
+    Loaded here rather than at the CLI edge, because this is the one path
+    every sweep point, break-even probe and reversal probe re-enters: each
+    re-reads the bytes, and a file that changed raises `RatePathsChanged`.
+    """
+    if "renewal_rates" not in data:
+        return None
+    block = data["renewal_rates"]
+    if not isinstance(block, dict):
+        raise ConfigValidationError("renewal_rates must be a mapping with 'path'")
+    if "path" not in block:
+        raise ConfigValidationError("renewal_rates missing required field: path")
+    path = block["path"]
+    if not isinstance(path, str) or not path.strip():
+        raise ConfigValidationError("renewal_rates.path must be a non-empty string")
+    reading = [(name, opt) for name, opt in (("condo", spec.condo), ("house", spec.house))
+               if _reads_the_file(opt)]
+    options = [ReadingOption(name, opt.mortgage_renewal_years, opt.mortgage_term_years)
+               for name, opt in reading]
+    try:
+        loaded = price_against(read_path_file(path), path, options, spec.simulation.years)
+    except RatePathsError as exc:
+        raise ConfigValidationError(str(exc)) from exc
+    for name, opt in reading:
+        opt.mortgage_renewal_rates_quoted = loaded.central_quoted(loaded.columns[name])
+        opt.mortgage_renewal_rates = loaded.central_effective(loaded.columns[name])
+    return loaded
+
+
 def _rates_of(data: Dict[str, Any]) -> str:
     try:
         return convention_of(data)
@@ -2345,8 +2410,11 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     # because a first-time buyer's refunds and HBP withdrawal enter the option
     # parsers' day-one cash.
     tax = _parse_tax(data)
-    condo = _parse_condo(data["condo"], years, conv, data.get("province"), tax) if "condo" in data else None
-    house = _parse_house(data["house"], years, conv, data.get("province"), tax) if "house" in data else None
+    rate_file = "renewal_rates" in data
+    condo = (_parse_condo(data["condo"], years, conv, data.get("province"), tax, rate_file)
+             if "condo" in data else None)
+    house = (_parse_house(data["house"], years, conv, data.get("province"), tax, rate_file)
+             if "house" in data else None)
     # The renter's capital derived from the tax block's shares when the config
     # omits `rent.invested_down_payment` (2026-09-08); the echo says so.
     derived_capital = (tax.renter_capital.total
@@ -2372,6 +2440,8 @@ def _build_spec(data: Dict[str, Any]) -> ComparisonSpec:
     spec.sources, source_problems = build_source_echo(data, derived_values=derived_values)
     if source_problems:
         raise ConfigValidationError("\n".join(source_problems))
+    # Before validation: the reading options' renewal rates come from the file.
+    spec.renewal_rate_paths = _renewal_rate_paths(data, spec)
     warnings = validate_config(spec)
     if warnings:
         raise ConfigValidationError("Configuration validation failed:\n" + "\n".join(warnings))

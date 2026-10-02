@@ -17,6 +17,7 @@ from .anchors import ANCHORS
 from .land_transfer_tax import LandTransferTax
 from .mortgage_insurance import MortgageInsurance
 from .pv import pv_to_monthly_savings
+from .rate_paths import LoadedRatePaths
 from .rates import ConvertedRate
 from .sources import SourceEcho
 from .tax_treatment import TaxParams
@@ -501,6 +502,11 @@ class ComparisonSpec:
     # (the renter's after-tax growth, the owner's HBP repayment leg) and by the
     # read-back; a spec constructed directly leaves it None.
     tax: Optional[TaxParams] = None
+    # --- A renewal-rate path file (docs/specs/2026-10-01-renewal-rate-path-file.md):
+    # the `renewal_rates` block, loaded and priced against this config by the
+    # loader. None = no file, every figure as before. A dataclass field, so
+    # `dataclasses.replace` carries it into every copy of the spec.
+    renewal_rate_paths: Optional[LoadedRatePaths] = None
 
 
 # ----- Result Dataclasses -----

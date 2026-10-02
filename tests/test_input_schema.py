@@ -10,6 +10,7 @@ import copy
 from pathlib import Path
 
 import pytest
+import yaml
 
 from hde.config import ConfigValidationError, _SECTION_KEYS, _TOP_LEVEL_KEYS, load_config_dict
 from hde.input_schema import _NOTES, input_schema
@@ -60,6 +61,20 @@ KNOWN_GOOD = {
     "market_scenario": {"path": GOLDEN, "geography": "MTL_RMR"},
     "tax": {},
 }
+# The `renewal_rates` section's known-good config. KNOWN_GOOD's options are all
+# cash, and a path file beside no financed option prices nothing, so the loader
+# refuses it there (R15 of docs/specs/2026-10-01-renewal-rate-path-file.md);
+# the opt-in fixture is a house on a mortgage with the section's one key.
+ROOT = Path(__file__).resolve().parents[1]
+RATE_PATHS_GOOD = yaml.safe_load(
+    (ROOT / "tests" / "fixtures" / "renewal_rate_paths.yaml").read_text(encoding="utf-8"))
+SECTION_GOOD = {"renewal_rates": RATE_PATHS_GOOD}
+
+
+def _known_good(section):
+    return copy.deepcopy(SECTION_GOOD.get(section, KNOWN_GOOD))
+
+
 REQUIRED = [
     (section, key)
     for section, block in SCHEMA.items() if section != "top_level"
@@ -73,20 +88,25 @@ CONDITIONAL = [
 
 
 class TestRequiredFlagsAreTrue:
-    def test_known_good_is_exactly_the_required_keys(self):
+    def test_known_good_is_exactly_the_required_keys(self, monkeypatch):
+        monkeypatch.chdir(ROOT)
         load_config_dict(KNOWN_GOOD)
         for section, block in SCHEMA.items():
             if section == "top_level":
                 continue
             required = {k for k, e in block.items() if e["required"]}
-            present = set(KNOWN_GOOD[section])
+            good = _known_good(section)
+            load_config_dict(good)
+            present = set(good[section])
             extra = present - required
             assert extra <= {"all_cash"}, (section, extra)   # the one required_if choice
             assert required <= present, (section, required - present)
 
     @pytest.mark.parametrize("section,key", REQUIRED)
-    def test_dropping_a_required_key_refuses(self, section, key):
-        cfg = copy.deepcopy(KNOWN_GOOD)
+    def test_dropping_a_required_key_refuses(self, section, key, monkeypatch):
+        monkeypatch.chdir(ROOT)
+        cfg = _known_good(section)
+        load_config_dict(copy.deepcopy(cfg))
         cfg[section].pop(key)
         with pytest.raises(ConfigValidationError):
             load_config_dict(cfg)

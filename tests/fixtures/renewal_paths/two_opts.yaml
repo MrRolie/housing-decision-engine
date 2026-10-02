@@ -1,0 +1,49 @@
+# Test data for docs/specs/2026-10-01-renewal-rate-path-file.md (§2, §7, §12): every
+# figure is illustrative and the path file it reads is synthetic. A FIXTURE, not an example.
+condo:
+  down_payment: 80000
+  initial_value: 400000
+  monthly_fee: 300
+  mortgage_rate: 0.044
+  mortgage_rate_compounding: effective_annual
+  mortgage_renewal_years: 5
+  mortgage_term_years: 10
+  other_recurring_costs:
+  - annual_amount: 3000
+    escalation_rate: 0.021
+    name: property_tax
+  purchase_costs: 5000
+  value_growth_rate: 0.031
+economic:
+  inflation_rate: 0.021
+  mode: nominal
+house:
+  annual_maintenance_rate: 0.01
+  down_payment: 110000
+  initial_value: 550000
+  mortgage_rate: 0.044
+  mortgage_rate_compounding: effective_annual
+  mortgage_renewal_years: 5
+  mortgage_term_years: 25
+  other_recurring_costs:
+  - annual_amount: 4700
+    escalation_rate: 0.021
+    name: property_tax
+  - annual_amount: 1200
+    escalation_rate: 0.021
+    name: home_insurance
+  purchase_costs: 8200
+  value_growth_rate: 0.031
+renewal_rates:
+  path: tests/fixtures/renewal_paths/semi.json
+rent:
+  invested_down_payment: 110000
+  investment_return_rate: 0.051
+  monthly_rent: 2300
+  rent_escalation_rate: 0.031
+simulation:
+  house_maintenance_vol: 0.3
+  num_sims: 5000
+  random_seed: 42
+  rent_escalation_vol: 0.01
+years: 20
