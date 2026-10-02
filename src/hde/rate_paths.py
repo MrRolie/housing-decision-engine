@@ -361,6 +361,9 @@ def price_against(file: RatePathFile, path: str, options: Sequence[ReadingOption
     inside = max(0, (horizon - 1) // term)
     priced_by = {name: min(n, inside) for name, n in columns.items()}
     priced = max(priced_by.values(), default=0)
+    if not options:                                                        # R15
+        raise RatePathsError(f"'{path}': no option carries a mortgage, so nothing reads a "
+                             f"renewal rate")
     if priced == 0:                                                        # R15
         raise RatePathsError(f"no reading option renews inside the {horizon}-year horizon "
                              f"(first renewal: year {term + 1})")

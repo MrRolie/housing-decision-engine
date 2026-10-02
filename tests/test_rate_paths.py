@@ -122,6 +122,12 @@ class TestTheFile:
         doc = _file(provenance=dict(_file()["provenance"], method=method))
         assert _loads(_config(_write(tmp_path, doc, "utf8.json"))).renewal_rate_paths \
             .provenance["method"] == method
+        # the neighbour: a float in exponent notation, as numpy-written JSON
+        # emits it, is a number
+        text = json.dumps(_file()).replace("0.08, 0.08, 0.08, 0.08]", "8e-2, 4.5e-2, 0.08, 0.08]")
+        assert "4.5e-2" in text
+        loaded = _loads(_config(_write(tmp_path, text, "exponent.json"))).renewal_rate_paths
+        assert loaded.quoted[1] == (0.08, 0.045, 0.08, 0.08)
 
     def test_r3_exact_allowlist_at_every_level(self, tmp_path):
         assert _why(tmp_path, _file(weights=[1, 1])) == \
@@ -175,10 +181,12 @@ class TestTheFile:
         assert _refused(_config(path)) == (
             f"'{path}': provenance.validation.metrics.rmse = 'small': a metric is a "
             f"finite number")
-        # the neighbour: any finite number is a metric, a negative bias included
-        provenance = dict(_file()["provenance"],
-                          validation={"text": "none", "metrics": {"rmse": 0.004, "bias": -0.001}})
-        _loads(_config(_write(tmp_path, _file(provenance=provenance), "good.json")))
+        # the neighbour: any finite number is a metric, a negative bias and an
+        # integer count included
+        metrics = {"rmse": 0.004, "bias": -0.001, "n_obs": 240}
+        provenance = dict(_file()["provenance"], validation={"text": "none", "metrics": metrics})
+        loaded = _loads(_config(_write(tmp_path, _file(provenance=provenance), "good.json")))
+        assert loaded.renewal_rate_paths.provenance["validation"]["metrics"] == metrics
 
     def test_r6_compounding(self, tmp_path):
         path = _write(tmp_path, _file(compounding="monthly"))
@@ -196,6 +204,13 @@ class TestTheFile:
         assert _refused(_config(path)).startswith(f"'{path}': term_years 0 must be an integer >= 1")
         # the neighbour: the grid exactly
         _loads(_config(_write(tmp_path, _file(renewal_years=[6, 11, 16, 21]), "good.json")))
+        # and a grid of one column: a 10-year amortization on a 5-year term
+        # renews once, so K = 1 is the whole grid
+        cfg = _config(_write(tmp_path, _file(renewal_years=[6], paths=[[0.03], [0.05]]),
+                             "one.json"))
+        cfg["house"]["mortgage_term_years"] = 10
+        loaded = _loads(cfg).renewal_rate_paths
+        assert (loaded.renewal_years, loaded.columns) == ((6,), {"house": 1})
 
     def test_r8_as_of(self, tmp_path):
         for value in ("2026-13-01", "2026-1-1", 20261001, "2026-10-01T00:00"):
@@ -300,10 +315,24 @@ class TestTheFileAgainstTheConfig:
         assert _loads(cfg).renewal_rate_paths.priced_years == (6,)
 
     def test_r15_with_no_reading_option(self):
+        """With no option on a mortgage, no renewal exists to place in or past
+        the horizon, so the refusal names no renewal year."""
         cfg = _config(TWO_PATHS)
         cfg["house"] = {"initial_value": 400_000, "all_cash": True}
         assert _refused(cfg) == (
-            "no reading option renews inside the 20-year horizon (first renewal: year 6)")
+            f"'{TWO_PATHS}': no option carries a mortgage, so nothing reads a renewal rate")
+        # an all-cash example, the condo and the house both bought outright
+        cfg = _yaml(ROOT / "examples" / "showcase_demographic_prior.yaml")
+        assert all(cfg[name].get("all_cash") for name in ("condo", "house"))
+        cfg["renewal_rates"] = {"path": TWO_PATHS}
+        assert _refused(cfg) == (
+            f"'{TWO_PATHS}': no option carries a mortgage, so nothing reads a renewal rate")
+        # the neighbour: a financed option inside its first term keeps the
+        # horizon's refusal
+        cfg = _config(TWO_PATHS)
+        cfg["years"] = 5
+        assert _refused(cfg) == (
+            "no reading option renews inside the 5-year horizon (first renewal: year 6)")
 
     def test_r16_every_renewal_inside_the_amortization_needs_a_column(self, tmp_path):
         # 25-year amortization, 5-year term, 20-year horizon: year 21 is priced by

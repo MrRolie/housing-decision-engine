@@ -63,7 +63,8 @@ KNOWN_GOOD = {
 }
 # The `renewal_rates` section's known-good config. KNOWN_GOOD's options are all
 # cash, and a path file beside no financed option prices nothing, so the loader
-# refuses it there (R15 of docs/specs/2026-10-01-renewal-rate-path-file.md);
+# refuses it there (R15 of docs/specs/2026-10-01-renewal-rate-path-file.md, its
+# case for no option on a mortgage);
 # the opt-in fixture is a house on a mortgage with the section's one key.
 ROOT = Path(__file__).resolve().parents[1]
 RATE_PATHS_GOOD = yaml.safe_load(
