@@ -25,7 +25,7 @@ data window and its validation record. The engine prices those paths, on the pre
 household's ladder (`mortgage_renewal_rates`) stays exactly as it is, and a casual run cannot
 switch the channel on.
 
-**Seat mechanism rulings** (built to as written; §0.1 records where this spec makes one exact):
+**Mechanism rulings** (built to as written; §0.1 records where this spec makes one exact):
 
 1. **Central case.** The deterministic case prices ONE ACTUAL ROW of the file. That row is the
    one nearest the per-year median path, by Euclidean distance over the priced renewal years,
@@ -65,7 +65,7 @@ switch the channel on.
 11. **Anchors.** An `anchor:` on any renewal-rate key is refused. The file path must not reopen
     the ladder fix, which was in flight when this was ruled and has landed since (§3).
 
-### 0.1 Where this spec makes a ruling exact, and the seat's rulings of 2026-10-02
+### 0.1 Where this spec makes a ruling exact, and the rulings of 2026-10-02
 
 1. **Ruling 1's tie is decided in exact arithmetic.** Float evaluation breaks the
    counterexample's true tie by rounding: the squared distances come out 0.0027000000000000006
@@ -248,9 +248,10 @@ row, column or year.
   everything after the first load, and exits 1 with `Error: {message}`, so every re-entry is
   covered by construction. A stand-in exception of that kind, raised from the second load,
   escapes `main()` today on `--sweep` (cli.py:421), on `--break-even` (cli.py:446 catches
-  `ValueError` only), on `--decompose`, and on any run with an income block, the read-back's
-  included (`unpriced_warnings`, unpriced.py:187, called at cli.py:367 on the main run path
-  outside any `try`). "This process", not "this run": a library session is one process too.
+  `ValueError` only), on `--decompose` and on `--read-back` with an income block (measured,
+  §12). The read-back's escape is `unpriced_warnings` (unpriced.py:187), called at cli.py:367
+  on the main run path outside any `try`, so by the code a plain run with an income block
+  escapes too. That case is unmeasured, and §9 row 12 pins it. "This process", not "this run": a library session is one process too.
 - Under `--no-monte-carlo`, `RATES_WITHOUT_MONTE_CARLO`, the sibling of
   `cli.PRIOR_WITHOUT_MONTE_CARLO`, warns: `renewal_rates draws only in Monte Carlo — this run
   prices the central row alone`.
@@ -616,14 +617,16 @@ pin and of `m/two_opts.yaml`'s shape are committed beside it as test data.
 Neither of these can be settled by measuring inside the engine.
 
 1. **Which way does independence bias the channel's share?** It depends on a sign the data
-   does not settle. Over the same five-year window, the change in the CMHC five-year rate
+   does not settle (§12). Over the same five-year window, the change in the CMHC five-year rate
    (Statistics Canada v733833) has moved WITH the log change in house prices: +0.21 to +0.68
    across four price series (the NHPI for Montréal, nominal and CPI-deflated, and the Dallas
-   Fed's international index for Canada, nominal and real), on about 5 to 9 independent
+   Fed's international index for Canada, nominal and real), on about 6 to 9 independent
    windows. That co-movement would partly hedge a buyer, so independence would overstate the
-   combined channel. Over the next window the sign is mixed, and over one year it is negative
-   (−0.16 to −0.30 since 1991), which would make independence understate it. The engine cannot
-   sign the covariance without a jointly fitted model, and that is board item 13's.
+   combined channel. Against the price change over the FOLLOWING five years the sign is mixed
+   (−0.26 to +0.41), and a one-year rate change against the following year's price change is
+   negative since 1991 (−0.16 to −0.30), the sign under which independence would understate
+   it. The engine cannot sign the covariance without a jointly fitted model, and that is board
+   item 13's.
 2. **What is the smallest N a file needs?** Drawing with replacement means a 50-row file at
    10,000 paths is a 50-point distribution. The read-back prints N. Whether some N should be
    refused is a product rule, not a measurement.
@@ -678,8 +681,9 @@ not committed; r2's `m/` configs are the review's. Each is a delta on §2's two 
 | the empty ladder prices `m/condo5.yaml`'s condo as `[0.05]` does (main, r2) | `m/condo5.yaml` without `renewal_rates` and with ladders typed; `spec.condo.mortgage_renewal_rates = []`; `compute_deterministic(spec).condo.total_pv` compared |
 | freeze isolation: rows identical for c in 0 to 6 and channel 4 at $90 (prototype); rows different for every c and channel 4 at −$71,683 (mutant) (r2) | `uv run python ../m_freeze_rows.py m/hvr_example.yaml` in each tree: `decomposition_run._run(spec, MATRIX_A, freeze=(c,))` at 2,000 paths, its `_rate_rows` against the unfrozen run's, and the mean margin shift |
 | central rows 251, 1153, 1003 by horizon; 1153 at term 15, 251 at term 10 (prototype, r2) | `uv run python ../m_row_switch.py`: `sweep.load_at` on `m/hvr_ar1.yaml` for `years` 6, 10, 11, 15, 16, 20 and `house.mortgage_term_years` 25, 15, 10, printing `renewal_rate_paths.central_index` |
-| the escape from `main()` on `--sweep`, `--break-even` and `--read-back` with income; one load and exit 0 without them (prototype, r2) | `uv run python ../m_r19_escape.py <flags>`: `config._build_spec` wrapped to raise from its second call, `cli.main()` in-process on `m/hvr_example.yaml` at 200 paths, `INCOME=1` adding an income block |
+| the escape from `main()` on `--sweep`, `--break-even` and `--read-back` with income (r2), and on `--decompose` (the recheck); one load and exit 0 without them (prototype) | `uv run python ../m_r19_escape.py <flags>`: `config._build_spec` wrapped to raise from its second call, `cli.main()` in-process on `m/hvr_example.yaml` at 200 paths, `INCOME=1` adding an income block |
 | the did-you-mean message on `renewal_rate` (main and prototype, r2) | `uv run python ../m_didyoumean.py`: `examples/mortgage_house_vs_rent.yaml` plus a top-level `renewal_rate: {path: x.json}`, through `load_config_dict` |
 | `CHANNELS` ids `[0, …, 6]` (main) and `[0, …, 6, 8]` (prototype) (r2) | `uv run python -c "from hde.decomposition import CHANNELS; print([c.id for c in CHANNELS])"` |
 | commit 3's and 7's text: `test_skill_contract.py` 17 passed, `test_input_schema.py` 2 failed (the `KNOWN_GOOD` tests), SKILL.md 2,597 words (prototype, r2) | the edits on a copy, then `uv run --extra dev python -m pytest -q -p no:cacheprovider tests/test_skill_contract.py tests/test_input_schema.py`, and `python3 -c "print(len(open('.claude/skills/hde/SKILL.md').read().split()))"` |
+| §11's co-movement: same five-year window +0.32/+0.50, +0.44/+0.40, +0.68/+0.38, +0.45/+0.21; following window +0.32/+0.41, +0.25/+0.36, +0.13/+0.03, −0.26/−0.10; one-year rate change against the following year's price change, since 1991, −0.16, −0.24, −0.29, −0.30 (all starts / 1991+; public data, outside the engine) | Pearson over overlapping annual starts t through 2025, December values (Q4 for the Dallas Fed series): x = v733833(t+h) − v733833(t) in percentage points, y = ln(P(b)/P(a)) with [a, b] = [t, t+h] (same) or [t+h, t+2h] (following), h = 5 or 1. Price series: Statistics Canada v111955484 (NHPI, Montréal), that divided by CPI v41690973, and the Dallas Fed International House Price Database HPI and RHPI for Canada. Independent windows ≈ n/h |
 | the stream hard-codes and the "seven" comments (main, r2) | `grep -rn "range(8)" tests src`; `grep -rn -i "\bseven\b" src tests docs/reference .claude` |
