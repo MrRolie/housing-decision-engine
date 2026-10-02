@@ -453,8 +453,8 @@ def _sum_hint(anchor: Anchor, figure: float, window: float) -> str:
 # Keys no anchor may source (2026-10-01). A renewal rate is a stated scenario
 # for a rate set years from now, and the engine anchors no forward rate — so a
 # ladder declared `anchor:mortgage_rate.contracted_5y_uninsured` at that
-# anchor's figure loaded, and its read-back printed `anchor-sourced:` two lines
-# above a `renewals:` line saying the engine anchors no renewal rate. Today's
+# anchor's figure loaded, and its read-back printed `anchor-sourced:` beside a
+# `renewals:` line saying the engine anchors no renewal rate. Today's
 # contract, `<option>.mortgage_rate`, is not in this list: it may cite one.
 # Pinned in tests/test_sources.py::TestARenewalRateCarriesNoAnchor.
 _UNANCHORED_KEYS: Tuple[str, ...] = tuple(
