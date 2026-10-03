@@ -1,7 +1,7 @@
 # Crash stress panel — design (2026-10-03)
 
-**Status:** R1–R6 ruled 2026-10-03 (§2); R7 is still open. Design only; no engine code is written
-by this document. Revision 2: every figure re-measured against main at 3b7306a (§13).
+**Status:** R1–R7 ruled 2026-10-03 (§2). Design only; no engine code is written by this document.
+Revision 2: every figure re-measured against main at 3b7306a (§13).
 **Lineage:** `docs/specs/2026-09-21-one-world-simulation.md` §2 (one housing market per path);
 `docs/specs/2026-09-22-which-risk-decides-it.md` §0.1 item 35 (the block prints figures, not
 interpretation); `docs/specs/2026-10-01-renewal-rate-path-file.md` (the ladder, the path file and
@@ -189,8 +189,8 @@ second flag.
 
 Two P2b rows are seed-unstable, not changes: half recovery over 5 years from year 1 at 30%, and
 full recovery over 5 years from year 24 at 20%, are each `tie` at seed 42 (0.6426) and `option` at
-seed 4242 (0.6550). The two rows share one sale multiple to three digits (×0.837), and a condo's
-total sees nothing else.
+seed 4242 (0.6550). The two rows' sale multiples agree to within 0.0002, and a condo's total sees
+nothing else.
 
 **A row can be `disagreement`.** P2 with a 32% permanent drop in year 1: the central line has the
 condo cheaper by $316, while 50.32% / 50.42% of the futures have rent cheaper, so the verdict is
@@ -218,11 +218,12 @@ two-option gap `rent − condo`, permanent drop in year 1, seed 42 (seed 4242 wi
 | P2b | 10% / 20% / 40% | +45,235 / +24,817 / −16,018 | −20,418 / −40,835 / −81,671 | −20,334 / −40,668 / −81,335 | 83,069 / 77,718 / 67,995 |
 
 Across 36 measured rows (P1, P2, P2b; permanent at 10% to 40%, full over 5 from year T−1 and full
-over 15 from year 1, at 20%; both seeds) the futures' mean gap moves by the level to within $619.
+over 15 from year 1, at 20%; both seeds) the futures' mean gap moves by the level to within $620.
 So the panel's decision changes are, to that precision, the level. The spread is not flat: `sd`
 falls as the drop deepens, because the ordinary dispersion multiplies a smaller value. A drop that
-leaves the sale value unchanged (full over 15 from year 1 on P2) leaves the futures identical to
-the plain run's.
+leaves the sale value unchanged (full over 15 from year 1 on P2) leaves `prob_best` identical to
+the plain run's, with every condo PV within $4.7e-10 of it (the yearly steps `m(t) / m(t − 1)`
+multiply back to 1 only to rounding), so a recovered row is never pinned byte for byte.
 
 ### 1.6 The "2022-like" variant: a renewal jump with the drop
 
@@ -272,16 +273,14 @@ in year 1 is underwater in years 1–10 against 1–9.
 ### 1.8 History the engine's skill may cite (Statistics Canada, Bank of Canada)
 
 Only Statistics Canada series (under the Statistics Canada Open Licence) and Bank of Canada series
-(under its terms) may enter the engine or the skill. CREA's terms forbid publishing its data, the
-Dallas Fed series has no licence text, and the JST macrohistory dataset is non-commercial and
-share-alike; this spec quotes no figure from any of the three.
+(under its terms) may enter the engine, the skill or any public doc, each figure with its notice
+(R7). This spec quotes no figure from CREA, Dallas Fed or JST data, and draws no comparison from
+them.
 
 **New Housing Price Index** (table 18-10-0205-01, monthly; real = divided by the CPI,
-v41690973). A new-house, quality-held index. Its depth against resale prices is mixed, not systematically
-shallower: on the 1981–85 national fall its real depth was about the same as a resale index's,
-and from 2022-03 to 2026-08 in Vancouver and Toronto it fell less than a resale composite. Over
-decades its real level drifts away from resale prices, so the recovery times below measure how
-long the new-house index took to regain its own peak, not how long resale prices took.
+v41690973). A new-house, quality-held index, not a resale one, so the recovery times below
+measure how long the new-house index took to regain its own peak, not how long resale prices
+took.
 
 | geography | nominal fall | peak → trough | years to trough | back to the peak, years after the trough |
 |---|---|---|---|---|
@@ -293,6 +292,8 @@ long the new-house index took to regain its own peak, not how long resale prices
 | Ontario | −19.4% | 1990-03 → 1996-05 | 6.17 | 7.33 |
 | Canada | −11.1% | 1990-03 → 1996-05 | 6.17 | 6.08 |
 | Montréal | none of 10% or more | | | |
+
+The table is selective: it is not every nominal fall of 10% or more on these geographies.
 
 In real terms Montréal fell 15.0% (1988-05 → 1998-10) and regained its real peak 5.83 years after
 the trough; Toronto fell 38.1% (1989-04 → 1996-11) and has not regained it; Canada fell 27.9% over
@@ -335,13 +336,13 @@ windows).
 >
 > Source: Bank of Canada, Valet series V122667786 (monthly, 2013-01 to 2026-07) and V80691335
 > (weekly, 1975-01 to 2026-09), retrieved 2026-10-01. Changes were made: the weekly V80691335
-> observations are averaged to calendar months, and every figure quoted is a difference between
-> two months, computed for this document.
+> observations are averaged to calendar months, and the figures quoted are monthly values and
+> differences between two months, computed for this document.
 
 ## 2. Rulings (2026-10-03)
 
-Each one changes what a panel row MEANS. R1–R6 are ruled as written; everything after §2 is
-written to them. R7 is open.
+Each one changes what a panel row MEANS. R1–R7 are ruled as written; everything after §2 is
+written to them.
 
 **R1. The verdict per row: a conditional Monte Carlo, ordinary dispersion kept, beside the
 central line.** Each row runs the config's own Monte Carlo with the stated drop on every path,
@@ -375,11 +376,11 @@ index, 1.8 to 24.5 years over a handful of independent events (§1.8); five and 
 it, and `permanent` stands for the open falls. That spread measures how long the new-house index
 took to regain its own peak, not how long resale prices took. The engine accepts any form.
 
-**R7 (open). Licences for the public docs.** This spec quotes no CREA, Dallas Fed or JST figure;
-the path-file spec §11 already quotes correlations derived from the Dallas Fed series. Ruling
-asked: may derived figures from the Dallas Fed (citation required, no licence found) or CREA
-("derived results may be cited", publication of the data forbidden) appear in public docs at all,
-or only in private ones.
+**R7. Licences for the public docs.** Public docs carry only figures derived from Statistics
+Canada and Bank of Canada data, each with its notice. CREA data is never published, not even in
+derived form, and no comparison drawn from it appears here. The path-file spec's §11 and §12
+already quote correlations derived from the Dallas Fed's International House Price Database; they
+carry the citation the Dallas Fed asks for.
 
 ## 3. The surface
 
@@ -408,15 +409,17 @@ or only in private ones.
 crash panel — stated drops, each conditional on happening [drop, year, recovery: command line]
                           central line                                         futures (5,000)
   drop  sale value  condo     rent      rent − condo  level     best   state    best   P(best)  state   sd       underwater
-  none  ×1          200,502   207,027   +6,526        0         condo  tie      condo  0.5450   tie     48,104   none
+  none  ×1          200,502   207,027   +6,525        0         condo  tie      condo  0.5450   tie     48,104   none
 year 1 · permanent
-  10%   ×0.900      232,312   207,027   −25,284       −31,810   rent   option   rent   0.7192   option  44,535   none
-  20%   ×0.800      264,122   207,027   −57,094       −63,620   rent   option   rent   0.9158   option  41,073   condo 1–2
+  10%   ×0.900      232,312   207,027   −25,285       −31,810   rent   option   rent   0.7192   option  44,535   none
+  20%   ×0.800      264,122   207,027   −57,095       −63,620   rent   option   rent   0.9158   option  41,073   condo 1–2
   ...
   break-even: too close to call from no drop to 5.31%; rent is cheaper above 5.31% (crossing 2.05%) [solved, central case]
 ```
 
-(P1 at seed 42; its central line is FTB's.)
+(P1 at seed 42; its central line is FTB's. The gap is the difference of the printed totals, so it
+reads +6,525 where §1.2's unrounded gap is $6,525.78, and the affordability column is left off
+here for width.)
 
 - `sale value` is `m(years)`, the sale value as a multiple of the no-crash path's. It is the figure
   that shows why a recovered drop leaves a condo's total unchanged.
@@ -581,7 +584,7 @@ conversion (§9), never the block.
      `mortgage_renewal_rates_quoted` replaced (`dataclasses.replace`).
   The central line, the Monte Carlo, the affordability channel and the underwater balance all read
   that one ladder through their existing calls (`renewal_args_for`, `renewal_segments_for`), so no
-  second ladder builder exists. Adding `j` to a ladder that was not written out would jump every
+  second function writes a ladder. Adding `j` to a ladder that was not written out would jump every
   renewal on a scalar ladder (§1.6). The jump lands at the first renewal, which the horizon must
   PRICE (`renewals_priced_inside` ≥ 1 on at least one option), or the panel refuses (X6).
   Affordability re-runs with the jumped ladder: on FTB-10L +2.37 pp moves the peak from 36.21% to
@@ -643,7 +646,7 @@ named crash → `--crash-panel`, §11) →". New §11, the one home, appended af
 > `crash_panel` block". Each row has a central line and the futures beside it: quote both, and the
 > `level` column as how far the drop moved the central gap. A `disagreement` row names both
 > options with their figures; say so, never pick one. Say the rows are conditional: "if the value
-> drops 20% next year and never recovers, renting comes out $57,094 cheaper" — never "a 20% crash
+> drops 20% next year and never recovers, renting comes out $57,095 cheaper" — never "a 20% crash
 > is likely" or "in a crash". The panel's drop is measured against the run's own no-crash path, in
 > the run's own terms: compare a historical fall with it only in the same terms (real fall against
 > real trend in a real-mode run, nominal against nominal in a nominal one), with the trend over the
@@ -667,7 +670,7 @@ named crash → `--crash-panel`, §11) →". New §11, the one home, appended af
 
 With both edits applied, `tests/test_skill_contract.py` gives 17 passed (measured, then
 reverted). The flag is named only in references/, which that file's flag test does not read, so
-the test passes before the flag exists; the builder re-runs it after commit 5.
+the test passes before the flag exists; it is re-run after commit 5.
 
 ## 10. Tests: each class pinned, each pin mutated both ways
 
@@ -740,13 +743,12 @@ asserted. The verdict is `models.compute_verdict` on `compute_deterministic` and
 | §1.4 table, seed-unstable rows, byte-identical renter PVs | the Monte Carlo wrapper on each household at seeds 42 and 4242: the plain run, permanent from year 1 and `full:7` from year T−1 at 10% to 40%, `full:7` from year 1 at 40%, `share:0.5:5` from year 1 at 30% (P2b); `res.rent.pvs.tobytes()` compared across rows |
 | the `disagreement` row | P2, permanent from year 1 at 31%, 32%, 32.5%, 33%, 34%, 35%, both seeds: `verdict.best`, `state`, `prob_best`, `mc_best`, `mc_prob_best` |
 | the dispersion row (R1) | P1, P2, P2b at both seeds, 20% permanent from year 1, `value_growth_vol` as configured and at 1e-6 |
-| §1.5 level and spread | P1, P2, P2b at both seeds: no drop; permanent from year 1 at 10% to 40%; `full:5` from year T−1 and `full:15` from year 1 at 20%. `level` = central `rent − condo` minus the no-drop row's; the futures' gap = `res.rent.pvs − res.condo.pvs`, its mean and `std()`; the $619 is the largest |(futures' mean − no drop's) − level| over the 36 rows |
+| §1.5 level and spread | P1, P2, P2b at both seeds: no drop; permanent from year 1 at 10% to 40%; `full:5` from year T−1 and `full:15` from year 1 at 20%. `level` = central `rent − condo` minus the no-drop row's; the futures' gap = `res.rent.pvs − res.condo.pvs`, its mean and `std()`; the $620 bound is the largest |(futures' mean − no drop's) − level| over the 36 rows, $619.59; the recovered row: P2, `full:15` from year 1 at 20%, against the plain run at both seeds, `prob_condo_cheapest` equal and `max |Δ condo.pvs|` = 4.66e-10 |
 | per-row cost 0.48 s / 1.06 s | `OMP_NUM_THREADS=1`, one P1 and one P2 conditional run (20% permanent from year 1), `run_monte_carlo` timed three times after a warm-up |
 | §1.6 table | FTB-10L and FTB-25L with `mortgage_renewal_rates` [0.0455 + j, 0.0455, 0.0455, 0.0455] for j = 0, 0.0130, 0.0237; the central-line wrapper at no drop and a 20% permanent drop in year 5; `det.income_report.condo_ratios` and `years_condo_exceeds`; `solve_crossings` at drop year 5, permanent, bracket [0, 0.99] |
 | §1.6 scalar against first-only | the same configs with `mortgage_renewal_rates: 0.0692`; `deterministic.renewals_priced_inside(spec.condo, years)` gives 1 on FTB-10L and 4 on FTB-25L; the loader refusal from FTB plus `condo.mortgage_renewal_years: 5` alone, via `uv run hde` |
 | §1.7 underwater figures | `pv.outstanding_balance(loan, mortgage_rate, mortgage_term_years, t, payment)` and `pv.balance_at(renewal_segments_for(spec.condo), mortgage_term_years, loan, t)` for every year, against `initial_value × (1 + g)^t × m(t) × (1 − selling_cost_rate)`, on FTB, FTB-10L at j = 0.0237, FTB-25L and FTB-25L at j = 0.0237 |
 | §4 what a recovered drop leaves | FTB-25L and FTB at 20% and 40%: the central-line wrapper for `full:5`, `full:7`, `full:15` at every drop year `c = 1..T`, the condo's added cost divided by the permanent row's, and `ln m(T) / ln(1 − d)`, each averaged over `c` |
-| §1.8 depth against resale prices (stated qualitatively; the resale figures are not quotable, R7) | the CPI-deflated NHPI Canada series against a resale real index, 1981-06 → 1985-06, 1981-06 → 2001-06 and 1981-06 → 2026-03; the NHPI Vancouver and Toronto series against a resale composite, 2022-03 → 2026-08 |
 | §1.8 NHPI table, real episodes, open falls | monthly peak-to-trough on every NHPI geography with 120+ months, nominal and divided by CPI v41690973, falls of 10% or more, from the Statistics Canada tables in the notice (retrieved 2026-10-01) |
 | §1.8 R6 spread | the closed real episodes of 15% or more from that run: 24, minimum 1.83 years after the trough (Toronto 1981), maximum 24.50 (Hamilton 1989); open real episodes deeper than 38.1% |
 | §1.8 trend conversions | `1 − (1 − fall) / 1.021^(years to trough)`; `1 − 1.021 × (1 − d)`; `ln(1 / (1 − d)) / ln(1.021)` |
