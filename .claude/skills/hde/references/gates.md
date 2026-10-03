@@ -131,7 +131,7 @@ cheapest) last clears the 65% floor on the densified sweep (an insured-tier
 cliff can move it); on a single-path run, the deterministic band's low edge —
 while the `mean flip <key>:` line and the crossing are where the advantage
 VANISHES, a conditional ceiling quoted with its P and both means, never a
-shop-under price. Smallest worst case →
+shop-under price. Smallest worst case (a named crash → `--crash-panel`, §11) →
 turn the uncertainty inputs ON (`simulation.*_vol`, `price_shock`), label
 them illustrative, and read the p95 and `prob_*_cheapest`.
 `investment_return_vol` is the ANNUAL volatility of the renter's return (0.10
@@ -268,3 +268,34 @@ them from. So:
   "contribution to the answer".
 - A refusal, of the whole block, of the spread, of a boundary or of the search
   for one, is that run's finding: quote its line as printed.
+
+## 11. A named crash: `--crash-panel`
+
+When the user asks "what if prices crash", run the panel; never answer from the hazard channel.
+The standard grid, typed by you and labelled yours: drops 10%, 20%, 30%, 40%; years 1 and
+`years − 1`; recovery `permanent`, `full:5` and `full:15`. Quote each row's figures and each
+break-even line verbatim, and read their meaning in `docs/reference/API_CONTRACT.md`, "The
+`crash_panel` block". Each row has a central line and the futures beside it: quote both, and the
+`level` column as how far the drop moved the central gap. A `disagreement` row names both
+options with their figures; say so, never pick one. Say the rows are conditional: "if the value
+drops 20% next year and never recovers, renting comes out $57,095 cheaper" — never "a 20% crash
+is likely" or "in a crash". The panel's drop is measured against the run's own no-crash path, in
+the run's own terms: compare a historical fall with it only in the same terms (real fall against
+real trend in a real-mode run, nominal against nominal in a nominal one), with the trend over the
+fall added back. In real terms at 0% real growth the fall is the drop: Statistics Canada's New
+Housing Price Index for Toronto fell 38.1% in real terms from 1989 to 1996 and had not regained
+that peak by 2026, which is a 38.1% `permanent` drop so far. History measures the time to regain
+a peak; `full:K` means back to the trend line; they coincide only at 0% growth in the run's own
+terms. Cite only Statistics Canada or the Bank of Canada, and carry the notice with any figure
+derived from them: "Adapted from Statistics Canada, New housing price index, monthly (table
+18-10-0205-01), and Consumer Price Index, monthly, not seasonally adjusted (table
+18-10-0004-01), reference periods 1981-01 to 2026-08. This does not constitute an endorsement by
+Statistics Canada of this product." For a Bank of Canada series, name it, say "Source: Bank of
+Canada", and say what you changed (a monthly average, a five-year difference). Name, each with
+its direction, what a drop does not reach: no forced sale and no loan-to-value test at renewal
+(each favours buying); rent unchanged (favours buying, if market rents would fall too); fees and
+property taxes unchanged (favours renting, if a lower assessment would lower the bill); a
+house's maintenance falls with its value (favours the house). A recovered drop leaves a condo's
+total unchanged when the recovery ends before the sale, because the engine prices the home only
+at the sale: say that from the `sale value` column, not as reassurance. Use `jump` only for the
+joint question ("what if rates also jump at renewal"), with a figure you state as yours.
