@@ -455,3 +455,226 @@ def test_a_run_with_no_value_dispersion_takes_the_drop_too():
 def test_a_monte_carlo_drop_path_of_the_wrong_length_is_refused():
     with pytest.raises(ValueError, match="drop_path has 9 entries for a 10-year run"):
         run_monte_carlo(_spec(_raw(FTB)), drop_path=(1.0,) * 9)
+
+
+# --- the runner (§3.3; rows 11 second pin, 12, 14 and 15; X4 to X8) -------------------
+
+from hde.crash_panel import apply_jump, run_crash_panel  # noqa: E402
+
+THREE = ROOT / "examples" / "rent_vs_condo_vs_house.yaml"
+SURFACE = ROOT / "tests" / "fixtures" / "uncertainty_surface.yaml"
+PATH_FILE = ROOT / "tests" / "fixtures" / "renewal_paths" / "hvr_example.yaml"
+
+
+def _panel(spec, arg: str, **kw):
+    return run_crash_panel(spec, parse_grid(arg), **kw)
+
+
+def _ftb_jumped(years: int, jump: float = 0.0237):
+    spec, reached = apply_jump(_spec(_ftb_laddered(years)), jump)
+    return spec, reached
+
+
+def test_row11_the_underwater_balance_reads_the_jumped_ladder():
+    """Row 11, second pin. FTB-10L with jump=0.0237, 45% permanent from year 1:
+    underwater years 1–10, through the panel row. The unladdered balance
+    (`outstanding_balance`) under the jump gives 1–9."""
+    panel = _panel(_spec(_ftb_laddered(10)),
+                   "drop=0.45;year=1;recovery=permanent;jump=0.0237", monte_carlo=False)
+    (row,) = panel["rows"]
+    assert row["underwater_years"] == {"condo": list(range(1, 11))}
+    assert panel["grid"]["jump"] == {"value": 0.0237, "options": ["condo"]}
+
+
+def test_row12_the_jump_lands_on_the_first_renewal_only():
+    """Row 12. FTB-25L (four priced renewals), jump=0.0237: condo $403,362.00
+    and years above 32% 1–10 at no drop; with a 20% permanent drop, rent by
+    $689, `tie`. The jump on every renewal gives $432,244.22, years 1–11, and
+    rent by $29,571, `option`."""
+    panel = _panel(_spec(_ftb_laddered(25)),
+                   "drop=0.20;year=1;recovery=permanent;jump=0.0237", monte_carlo=False)
+    none, (row,) = panel["no_drop"], panel["rows"]
+    assert round(none["central"]["totals"]["condo"], 2) == 403362.00
+    assert none["affordability"]["condo"]["years_exceeding"] == list(range(1, 11))
+    central = row["central"]
+    assert (central["best"], round(central["margin_pv"]), central["state"]) == ("rent", 689, "tie")
+
+
+def test_a_jump_of_zero_leaves_the_ladder_as_loaded():
+    """§6's write-out and conversion reproduce the loader's ladder exactly."""
+    base = _spec(_ftb_laddered(25))
+    jumped, reached = apply_jump(base, 0.0)
+    assert reached == ["condo"]
+    assert compute_deterministic(jumped).condo.total_pv == compute_deterministic(base).condo.total_pv
+    assert jumped.condo.mortgage_renewal_rates_quoted == [0.0455] * 4
+
+
+def _p2b():
+    return _household(25, 0.068, 0.23)
+
+
+def test_row14_level_is_the_central_move_and_sd_the_row_own_spread():
+    """Row 14. P2b at seed 42, 20% permanent from year 1: `level` −40,835 (the
+    central gaps' difference), `sd` 77,718 (the plain run's is 88,671), futures
+    `condo` 0.6080 `tie`, central `condo` `option`."""
+    panel = _panel(_p2b(), "drop=0.20;year=1;recovery=permanent")
+    (row,) = panel["rows"]
+    assert round(row["level_pv"]) == -40835
+    assert round(row["futures"]["gap_sd"]) == 77718
+    assert round(panel["no_drop"]["futures"]["gap_sd"]) == 88671
+    futures = row["futures"]
+    assert (futures["best"], round(futures["prob_best"], 4), futures["state"]) == ("condo", 0.6080, "tie")
+    assert (row["central"]["best"], row["central"]["state"]) == ("condo", "option")
+
+
+def _p2():
+    return _household(25, 0.04, 0.23)
+
+
+def test_row15_a_disagreement_row_carries_both_options():
+    """Row 15. P2 at seed 42, 32% permanent from year 1: the verdict is
+    `condo` `disagreement` at 0.4968 and the majority is rent at 0.5032."""
+    (row,) = _panel(_p2(), "drop=0.32;year=1;recovery=permanent")["rows"]
+    futures = row["futures"]
+    assert (futures["best"], round(futures["prob_best"], 4), futures["state"]) == (
+        "condo", 0.4968, "disagreement")
+    assert (futures["mc_best"], round(futures["mc_prob_best"], 4)) == ("rent", 0.5032)
+
+
+def test_the_no_drop_row_is_the_plain_run():
+    """Row 8 through the runner: the `none` row is the run's own verdict."""
+    spec = _household(10, 0.04, 0.23)
+    panel = _panel(spec, "drop=0.10;year=1;recovery=permanent")
+    _, plain = _verdict(spec, None)
+    none = panel["no_drop"]
+    assert none["futures"]["prob_best"] == plain.prob_best
+    assert (none["drop"], none["sale_multiple"], none["level_pv"]) == (None, 1.0, 0.0)
+    (row,) = panel["rows"]
+    assert (row["futures"]["best"], round(row["futures"]["prob_best"], 4)) == ("rent", 0.7192)
+
+
+def test_futures_are_absent_without_a_monte_carlo_and_on_a_single_path_run():
+    spec = _household(10, 0.04, 0.23)
+    assert _panel(spec, "drop=0.1;year=1;recovery=permanent",
+                  monte_carlo=False)["rows"][0]["futures"] is None
+    assert _panel(_spec(_raw(FTB)), "drop=0.1;year=1;recovery=permanent")["rows"][0]["futures"] is None
+
+
+def test_the_rows_group_by_year_then_recovery_with_one_break_even_each():
+    panel = _panel(_spec(_raw(FTB)), "drop=0.2,0.1;year=9,1;recovery=permanent,full:7",
+                   monte_carlo=False)
+    keys = [(r["year"], r["recovery"]["years"], r["drop"]) for r in panel["rows"]]
+    assert keys == [(1, None, 0.1), (1, None, 0.2), (1, 7, 0.1), (1, 7, 0.2),
+                    (9, None, 0.1), (9, None, 0.2), (9, 7, 0.1), (9, 7, 0.2)]
+    assert [(b["year"], b["recovery"]["years"]) for b in panel["break_evens"]] == [
+        (1, None), (1, 7), (9, None), (9, 7)]
+    first = panel["break_evens"][0]
+    assert set(first["break_evens"][0]) == {"value", "cheaper_below", "cheaper_above", "tie_band"}
+    assert round(first["break_evens"][0]["value"], 6) == 0.020515
+
+
+# --- row 9: X4 to X8, each beside the neighbour that loads -----------------------------
+
+def _surface(hazard: float):
+    raw = _raw(SURFACE)
+    for name in ("condo", "house"):
+        raw[name]["price_shock"]["annual_hazard"] = hazard
+    raw["simulation"]["num_sims"] = 50
+    return _spec(raw)
+
+
+def test_x4_refuses_a_wired_hazard():
+    panel = _panel(_surface(0.03), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    assert panel["refused"] == {"code": "hazard_wired",
+                                "fact": "condo.price_shock.annual_hazard is 0.03"}
+    assert panel["rows"] == [] and panel["no_drop"] is None
+
+
+def test_x4_neighbour_a_hazard_of_zero_loads():
+    panel = _panel(_surface(0.0), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    assert panel["refused"] is None
+    assert len(panel["rows"]) == 1
+
+
+def _without(path: Path, option: str) -> dict:
+    raw = _raw(path)
+    del raw[option]
+    raw["sources"] = {k: v for k, v in (raw.get("sources") or {}).items()
+                      if not k.startswith(f"{option}.")}
+    return raw
+
+
+def test_x5_refuses_a_config_with_no_owned_option():
+    raw = _without(HOUSE, "house")
+    panel = _panel(_spec(raw), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    assert panel["refused"] == {"code": "no_owned_option", "fact": "no owned option is priced"}
+
+
+def test_x5_neighbour_one_owned_option_loads():
+    raw = _without(HOUSE, "rent")
+    panel = _panel(_spec(raw), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    assert panel["refused"] is None
+    assert panel["rows"][0]["central"]["totals"].keys() == {"house"}
+    assert panel["break_evens"][0]["refused"] == {"code": "not_two_options",
+                                                  "fact": "1 option is priced"}
+
+
+def _ftb_laddered_at(years: int):
+    return _spec(_ftb_laddered(years))
+
+
+def test_x6_refuses_a_jump_no_renewal_reaches():
+    """FTB-10L at 4 years: the first renewal is year 6."""
+    panel = _panel(_ftb_laddered_at(4), "drop=0.1;year=1;recovery=permanent;jump=0.0237",
+                   monte_carlo=False)
+    assert panel["refused"] == {"code": "jump_without_ladder",
+                                "fact": "no financed option prices a renewal inside 4 years"}
+
+
+def test_x6_refuses_a_jump_on_a_config_with_no_ladder():
+    panel = _panel(_spec(_raw(FTB)), "drop=0.1;year=1;recovery=permanent;jump=0.0237",
+                   monte_carlo=False)
+    assert panel["refused"]["code"] == "jump_without_ladder"
+
+
+def test_x6_neighbour_a_renewal_inside_the_horizon_loads():
+    """FTB-10L at 6 years prices its one renewal, in year 6."""
+    panel = _panel(_ftb_laddered_at(6), "drop=0.1;year=1;recovery=permanent;jump=0.0237",
+                   monte_carlo=False)
+    assert panel["refused"] is None
+    assert panel["grid"]["jump"]["options"] == ["condo"]
+
+
+def test_x7_refuses_a_jump_beside_a_path_file():
+    panel = _panel(_spec(_raw(PATH_FILE)), "drop=0.1;year=1;recovery=permanent;jump=0.01",
+                   monte_carlo=False)
+    assert panel["refused"] == {"code": "jump_beside_path_file", "fact": "renewal_rates.path is set"}
+
+
+def test_x7_neighbour_the_flag_without_jump_loads():
+    panel = _panel(_spec(_raw(PATH_FILE)), "drop=0.1;year=1;recovery=permanent",
+                   monte_carlo=False)
+    assert panel["refused"] is None
+
+
+def test_x8_three_options_refuse_the_break_even_level_and_sd_and_keep_the_rows():
+    raw = _raw(THREE)
+    raw["simulation"]["num_sims"] = 200
+    panel = _panel(_spec(raw), "drop=0.1;year=1;recovery=permanent")
+    assert panel["refused"] is None
+    (row,) = panel["rows"]
+    assert row["central"]["totals"].keys() == {"condo", "house", "rent"}
+    assert row["level_pv"] is None and row["futures"]["gap_sd"] is None
+    assert panel["no_drop"]["level_pv"] is None
+    assert panel["break_evens"] == [{"year": 1, "recovery": {"form": "permanent", "share": 0.0,
+                                                             "years": None},
+                                     "refused": {"code": "not_two_options",
+                                                 "fact": "3 options are priced"}}]
+
+
+def test_x8_neighbour_two_options_solve():
+    panel = _panel(_spec(_raw(HOUSE)), "drop=0.3;year=1;recovery=permanent", monte_carlo=False)
+    (be,) = panel["break_evens"]
+    assert "refused" not in be
+    assert round(be["break_evens"][0]["value"], 4) == 0.3885
+    assert panel["rows"][0]["level_pv"] is not None

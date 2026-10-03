@@ -10,12 +10,21 @@ Monte Carlo read its tuple; neither re-derives it.
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .deterministic import _effective_growth_rate, owned_balance
-from .models import EconomicParams
+import numpy as np
+
+from .break_even import solve_crossings
+from .config import single_path_run
+from .deterministic import (_effective_growth_rate, compute_deterministic, owned_balance,
+                            renewal_segments_for, renewals_priced_inside)
+from .models import ComparisonSpec, EconomicParams, compute_verdict
+from .monte_carlo import run_monte_carlo
+from .rates import effective_mortgage_rate
+from .sweep import affordability_of
 
 # §7: the largest drop the panel accepts, and the most rows one grid may ask for.
 DROP_CEILING = 0.99
@@ -248,3 +257,244 @@ def underwater_years(params, econ: EconomicParams, years: int,
         if net < owned_balance(params, t):
             under.append(t)
     return under
+
+
+# ---------------------------------------------------------------------------
+# The runner: one row per (drop, year, recovery), each with its central line
+# and the conditional futures beside it (spec R1, §3.2, §3.3).
+# ---------------------------------------------------------------------------
+
+# The axis `solve_crossings` searches, and the bracket: the whole range X1
+# accepts, so no wider bracket exists (spec §1.3).
+BREAK_EVEN_KEY = "crash.drawdown"
+BREAK_EVEN_BRACKET = (0.0, DROP_CEILING)
+
+_OPTION_ORDER = ("condo", "house", "rent")
+_OWNED = ("condo", "house")
+
+
+def recovery_to_dict(recovery: Recovery) -> Dict[str, Any]:
+    """A recovery as the JSON carries it: `full:K` is `share:1:K` (spec
+    §3.1), so both serialise as the share form; `permanent` keeps its name,
+    with share 0 and no years."""
+    if recovery.years is None:
+        return {"form": "permanent", "share": 0.0, "years": None}
+    return {"form": "share", "share": recovery.share, "years": recovery.years}
+
+
+def _priced(spec: ComparisonSpec) -> List[str]:
+    return [name for name in _OPTION_ORDER if getattr(spec, name) is not None]
+
+
+def _renewal_count(params) -> int:
+    """The loader's count of renewals over the amortization:
+    ⌈mortgage_term_years / mortgage_renewal_years⌉ − 1."""
+    return -(-params.mortgage_term_years // params.mortgage_renewal_years) - 1
+
+
+def jumped_params(params, jump: float):
+    """Spec §6's four steps on one financed option's ladder: write the quoted
+    ladder out in full (one entry per renewal, the last carried forward), add
+    `jump` to the FIRST entry only, convert each entry once as the loader
+    does, and give back a copy with both ladders replaced. None when the
+    option states no ladder, so there is nothing to jump."""
+    if renewal_segments_for(params) is None or not params.mortgage_renewal_rates_quoted:
+        return None
+    count = _renewal_count(params)
+    if count < 1:
+        return None
+    quoted = list(params.mortgage_renewal_rates_quoted)
+    full = [quoted[min(i, len(quoted) - 1)] for i in range(count)]
+    full[0] += jump
+    return dataclasses.replace(
+        params,
+        mortgage_renewal_rates=[effective_mortgage_rate(q, params.mortgage_rate_compounding)
+                                for q in full],
+        mortgage_renewal_rates_quoted=full,
+    )
+
+
+def apply_jump(spec: ComparisonSpec, jump: Optional[float]) -> Tuple[ComparisonSpec, List[str]]:
+    """The spec every row of a jumped panel prices, and the options the jump
+    reached: those whose first renewal the horizon prices. One market, so
+    one jump for every laddered option."""
+    if jump is None:
+        return spec, []
+    replaced: Dict[str, Any] = {}
+    reached: List[str] = []
+    for name in _OWNED:
+        params = getattr(spec, name)
+        if params is None:
+            continue
+        jumped = jumped_params(params, jump)
+        if jumped is None:
+            continue
+        replaced[name] = jumped
+        if renewals_priced_inside(jumped, spec.simulation.years) >= 1:
+            reached.append(name)
+    return dataclasses.replace(spec, **replaced), reached
+
+
+def check_panel(spec: ComparisonSpec, grid: CrashGrid) -> None:
+    """The refusals the config decides (§7): X2 against the horizon, then
+    X5, X4, X7 and X6. Each raises `CrashPanelRefusal`; X8 refuses only the
+    break-even lines, `level` and `sd`, and is taken per block."""
+    years = spec.simulation.years
+    check_years(grid, years)
+    owned = [name for name in _OWNED if getattr(spec, name) is not None]
+    if not owned:
+        raise CrashPanelRefusal("no_owned_option", "no owned option is priced")
+    for name in owned:
+        shock = getattr(spec, name).price_shock
+        if shock is not None and shock.annual_hazard > 0:
+            raise CrashPanelRefusal(
+                "hazard_wired", f"{name}.price_shock.annual_hazard is {shock.annual_hazard!r}")
+    if grid.jump is None:
+        return
+    if spec.renewal_rate_paths is not None:
+        raise CrashPanelRefusal("jump_beside_path_file", "renewal_rates.path is set")
+    _, reached = apply_jump(spec, grid.jump)
+    if not reached:
+        raise CrashPanelRefusal(
+            "jump_without_ladder", f"no financed option prices a renewal inside {years} years")
+
+
+def _options_fact(count: int) -> str:
+    return f"{count} option is priced" if count == 1 else f"{count} options are priced"
+
+
+def _central(det, spec: ComparisonSpec, options: Sequence[str]) -> Dict[str, Any]:
+    """The central line and the margin rule `--break-even` applies."""
+    verdict = compute_verdict(det, None, years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate)
+    return {
+        "totals": {name: getattr(det, name).total_pv for name in options},
+        "best": verdict.best, "runner_up": verdict.runner_up,
+        "margin_pv": verdict.margin_pv, "margin_frac": verdict.margin_frac,
+        "state": verdict.state, "rule": verdict.rule,
+    }
+
+
+def _futures(det, spec: ComparisonSpec, options: Sequence[str],
+             path: Optional[Sequence[float]]) -> Dict[str, Any]:
+    """The config's own Monte Carlo with the stated drop on every path, the
+    same random numbers as the plain run, and the verdict's own rule."""
+    mc = run_monte_carlo(spec, drop_path=path)
+    verdict = compute_verdict(det, mc, years=spec.simulation.years,
+                              discount_rate=spec.simulation.discount_rate)
+    gap_sd = None
+    if len(options) == 2:
+        a, b = options
+        gap_sd = float(np.std(getattr(mc, b).pvs - getattr(mc, a).pvs))
+    return {
+        "best": verdict.best, "prob_best": verdict.prob_best,
+        "mc_best": verdict.mc_best, "mc_prob_best": verdict.mc_prob_best,
+        "state": verdict.state, "rule": verdict.rule, "gap_sd": gap_sd,
+    }
+
+
+def _row(spec: ComparisonSpec, options: Sequence[str], drop: Optional[float],
+         year: Optional[int], recovery: Optional[Recovery], *, futures: bool) -> Dict[str, Any]:
+    years = spec.simulation.years
+    path = None if drop is None else drop_path(years, drop, year, recovery)
+    det = compute_deterministic(spec, drop_path=path)
+    return {
+        "drop": drop, "year": year,
+        "recovery": None if recovery is None else recovery_to_dict(recovery),
+        "sale_multiple": 1.0 if path is None else path[-1],
+        "central": _central(det, spec, options),
+        "level_pv": None,
+        "futures": _futures(det, spec, options, path) if futures else None,
+        "underwater_years": {
+            name: underwater_years(getattr(spec, name), spec.economic, years, path)
+            for name in _OWNED if getattr(spec, name) is not None
+        },
+        "affordability": affordability_of(det),
+    }
+
+
+def _gap(row: Dict[str, Any], options: Sequence[str]) -> float:
+    a, b = options
+    totals = row["central"]["totals"]
+    return totals[b] - totals[a]
+
+
+def _break_even(spec: ComparisonSpec, options: Sequence[str], year: int,
+                recovery: Recovery) -> Dict[str, Any]:
+    """The drop at which the central case's cheapest option changes, solved
+    by `solve_crossings` over the whole accepted range. Only its figures are
+    kept (`value`, `cheaper_below`, `cheaper_above`, `tie_band`); its
+    `sentence` is `threshold_sentences`' wording, which this axis does not
+    use (spec §1.3)."""
+    head = {"year": year, "recovery": recovery_to_dict(recovery)}
+    if len(options) != 2:
+        return {**head, "refused": {"code": "not_two_options",
+                                    "fact": _options_fact(len(options))}}
+    years = spec.simulation.years
+
+    def totals_at(d: float) -> Tuple[float, float]:
+        det = compute_deterministic(spec, drop_path=drop_path(years, d, year, recovery))
+        return getattr(det, options[0]).total_pv, getattr(det, options[1]).total_pv
+
+    lo, hi = BREAK_EVEN_BRACKET
+    out = solve_crossings(BREAK_EVEN_KEY, (options[0], options[1]), lo, hi, totals_at,
+                          to_adjacent_floats=True)
+    crossings = [{"value": be["value"], "cheaper_below": be["cheaper_below"],
+                  "cheaper_above": be["cheaper_above"], "tie_band": list(be["tie_band"])}
+                 for be in out["break_evens"]]
+    no_crossing = None
+    if not crossings:
+        no_crossing = {"cheaper": out["cheaper_throughout"], "lo": lo, "hi": hi}
+    return {**head, "key": BREAK_EVEN_KEY, "options": list(options), "bracket": [lo, hi],
+            "break_evens": crossings, "no_crossing": no_crossing}
+
+
+def grid_to_dict(grid: CrashGrid, reached: Sequence[str]) -> Dict[str, Any]:
+    return {
+        "drop": list(grid.drops), "year": list(grid.years),
+        "recovery": [recovery_to_dict(r) for r in grid.recoveries],
+        "jump": None if grid.jump is None else {"value": grid.jump, "options": list(reached)},
+    }
+
+
+def refused_panel(refusal: CrashPanelRefusal, grid: Optional[CrashGrid] = None,
+                  reached: Sequence[str] = ()) -> Dict[str, Any]:
+    """A panel refused whole: the refusal in place of the rows (§7)."""
+    return {"grid": None if grid is None else grid_to_dict(grid, reached),
+            "source": "command line", "no_drop": None, "rows": [], "break_evens": [],
+            "refused": {"code": refusal.code, "fact": refusal.fact}}
+
+
+def run_crash_panel(spec: ComparisonSpec, grid: CrashGrid, *,
+                    monte_carlo: bool = True) -> Dict[str, Any]:
+    """The panel (§3.3's `crash_panel` object). A whole-panel refusal comes
+    back as `refused` with no rows; it is never raised.
+
+    Every row prices the jumped spec when the grid carries a jump, the
+    `none` row included, so `level` is the drop's move with the jump in
+    place. The futures run only when the run itself has futures: not under
+    `--no-monte-carlo` (`monte_carlo=False`) and not on a single-path run.
+    """
+    try:
+        check_panel(spec, grid)
+    except CrashPanelRefusal as refusal:
+        return refused_panel(refusal, grid)
+    row_spec, reached = apply_jump(spec, grid.jump)
+    options = _priced(row_spec)
+    futures = monte_carlo and not single_path_run(spec)
+
+    no_drop = _row(row_spec, options, None, None, None, futures=futures)
+    if len(options) == 2:
+        no_drop["level_pv"] = 0.0
+    rows: List[Dict[str, Any]] = []
+    break_evens: List[Dict[str, Any]] = []
+    for year in grid.years:
+        for recovery in grid.recoveries:
+            for drop in grid.drops:
+                row = _row(row_spec, options, drop, year, recovery, futures=futures)
+                if len(options) == 2:
+                    row["level_pv"] = _gap(row, options) - _gap(no_drop, options)
+                rows.append(row)
+            break_evens.append(_break_even(row_spec, options, year, recovery))
+    return {"grid": grid_to_dict(grid, reached), "source": "command line",
+            "no_drop": no_drop, "rows": rows, "break_evens": break_evens, "refused": None}
