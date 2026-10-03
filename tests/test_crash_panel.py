@@ -13,6 +13,7 @@ import re
 import tokenize
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
 
@@ -23,6 +24,8 @@ from hde.crash_panel import (
     underwater_years,
 )
 from hde.deterministic import _annual_costs_for_option, compute_deterministic
+from hde.models import compute_verdict
+from hde.monte_carlo import run_monte_carlo
 from hde.pv import pv_single
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -350,3 +353,100 @@ def test_a_drop_path_of_the_wrong_length_is_refused():
     spec = _spec(_raw(FTB))
     with pytest.raises(ValueError, match="drop_path has 9 entries for a 10-year run"):
         compute_deterministic(spec, drop_path=(1.0,) * 9)
+
+
+# --- the Monte Carlo (§4; rows 7 and 8) -------------------------------------------
+
+def _household(base_years: int, value_vol: float, rent_vol: float, seed: int = 42):
+    """The worked households (spec, top): P1 is FTB-10L at 0.04 / 0.23, P2b
+    FTB-25L at 0.068 / 0.23, 5,000 paths."""
+    raw = _ftb_laddered(base_years)
+    raw["economic"]["inflation_vol"] = 0.01
+    raw["simulation"].update(investment_return_vol=0.10, other_cost_vol=0.01,
+                             value_growth_vol=value_vol, rent_escalation_vol=rent_vol,
+                             random_seed=seed)
+    for key in ("economic.inflation_vol", "simulation.investment_return_vol",
+                "simulation.other_cost_vol", "simulation.value_growth_vol",
+                "simulation.rent_escalation_vol"):
+        raw["sources"][key] = "assistant"
+    return _spec(raw)
+
+
+def _verdict(spec, path):
+    det = compute_deterministic(spec, drop_path=path)
+    mc = run_monte_carlo(spec, drop_path=path)
+    return mc, compute_verdict(det, mc, years=spec.simulation.years,
+                               discount_rate=spec.simulation.discount_rate)
+
+
+def _one_stream(seed: int):
+    gen = np.random.default_rng(seed)
+    return gen, {channel: gen for channel in range(9)}
+
+
+def test_row7_a_stated_drop_takes_no_draw():
+    """Row 7. Every row and the plain run read the same random numbers: the
+    renter's PVs are byte-identical and the generator ends in the same state,
+    while the condo's PVs do move."""
+    spec = _household(10, 0.04, 0.23)
+    gen, streams = _one_stream(42)
+    plain = run_monte_carlo(spec, streams)
+    end_state = gen.bit_generator.state
+    for path in (drop_path(10, 0.20, 1, PERMANENT), drop_path(10, 0.40, 9, FULL_7),
+                 drop_path(10, 0.10, 3, Recovery("share", 0.5, 4))):
+        gen, streams = _one_stream(42)
+        row = run_monte_carlo(spec, streams, drop_path=path)
+        assert gen.bit_generator.state == end_state
+        assert row.rent.pvs.tobytes() == plain.rent.pvs.tobytes()
+        assert not np.array_equal(row.condo.pvs, plain.condo.pvs)
+
+
+def test_row7_the_house_takes_no_draw_either():
+    spec = _spec(_raw(HOUSE))
+    gen, streams = _one_stream(42)
+    plain = run_monte_carlo(spec, streams)
+    end_state = gen.bit_generator.state
+    gen, streams = _one_stream(42)
+    row = run_monte_carlo(spec, streams, drop_path=drop_path(20, 0.30, 2, FULL_7))
+    assert gen.bit_generator.state == end_state
+    assert row.rent.pvs.tobytes() == plain.rent.pvs.tobytes()
+    assert np.all(row.house.pvs < plain.house.pvs)  # R3: a recovered drop lowers maintenance
+
+
+def test_row8_a_path_of_ones_is_the_plain_run():
+    """Row 8. Built directly, since X1 refuses a 0 drop on the grid: the
+    conditional run on a path of ones is the plain run bit for bit, P1 0.5450."""
+    spec = _household(10, 0.04, 0.23)
+    plain_mc, plain = _verdict(spec, None)
+    ones_mc, ones = _verdict(spec, (1.0,) * 10)
+    assert ones_mc.condo.pvs.tobytes() == plain_mc.condo.pvs.tobytes()
+    assert ones.prob_best == plain.prob_best
+    assert (ones.best, ones.state, round(ones.prob_best, 4)) == ("condo", "tie", 0.5450)
+
+
+def test_a_conditional_run_moves_the_verdict_by_the_stated_drop():
+    """P1, 10% permanent from year 1, seed 42: rent option at 0.7192 (§1.4)."""
+    _, verdict = _verdict(_household(10, 0.04, 0.23), drop_path(10, 0.10, 1, PERMANENT))
+    assert (verdict.best, verdict.state, round(verdict.prob_best, 4)) == ("rent", "option", 0.7192)
+
+
+def test_a_run_with_no_value_dispersion_takes_the_drop_too():
+    """FTB draws nothing, so every path is its central line: with a stated drop
+    the paths price the dropped central total, condo and house alike."""
+    for raw, option, years, c in ((_raw(FTB), "condo", 10, 4), (_raw(HOUSE), "house", 20, 3)):
+        raw["simulation"]["num_sims"] = 3
+        if option == "house":
+            raw["simulation"]["house_maintenance_vol"] = 0.0
+            raw["simulation"]["rent_escalation_vol"] = 0.0
+        spec = _spec(raw)
+        path = drop_path(years, 0.30, c, Recovery("share", 0.6, 5))
+        central = getattr(compute_deterministic(spec, drop_path=path), option).total_pv
+        plain = getattr(compute_deterministic(spec), option).total_pv
+        pvs = getattr(run_monte_carlo(spec, drop_path=path), option).pvs
+        assert central != pytest.approx(plain, rel=1e-6)
+        assert pvs == pytest.approx([central] * 3, rel=1e-12)
+
+
+def test_a_monte_carlo_drop_path_of_the_wrong_length_is_refused():
+    with pytest.raises(ValueError, match="drop_path has 9 entries for a 10-year run"):
+        run_monte_carlo(_spec(_raw(FTB)), drop_path=(1.0,) * 9)

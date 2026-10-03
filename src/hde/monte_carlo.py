@@ -719,6 +719,18 @@ def _apply_value_dispersion(value_tracks, vol: float, z: float, model: str):
     return value_tracks
 
 
+def _drop_step(drop_path: Sequence[float], year: int) -> float:
+    """The crash panel's move in `year`: m(year) / m(year − 1), with m(0) = 1.
+
+    Applied after the year's ordinary dispersion, so a path ends the drop year
+    at the stated fraction of the value it had reached. A stated drop is no
+    draw: it consumes nothing and is the same on every path, so every panel
+    row is paired with the plain run (docs/specs/2026-10-03-crash-stress-panel.md §4).
+    """
+    previous = drop_path[year - 2] if year > 1 else 1.0
+    return drop_path[year - 1] / previous
+
+
 def _maintenance_rate_for_year(house: HouseParams, year: int) -> float:
     """
     Return maintenance rate for a given year using an optional age/condition curve.
@@ -860,6 +872,7 @@ def _simulate_condo_pv_once(
     hbp_repayment_pv: float = 0.0,
     event_years_out: Optional[List[Optional[int]]] = None,
     renewal_rates: Optional[Sequence[float]] = None,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> float:
     """
     Run one simulation of condo PV with randomness.
@@ -867,6 +880,9 @@ def _simulate_condo_pv_once(
     `renewal_rates` is this path's row of a renewal-rate path file, cut to the
     condo's own columns, and re-solves its payment at each renewal; None
     prices its own ladder.
+
+    `drop_path` is a crash panel row's multiplier m(t) (`crash_panel.drop_path`):
+    the value takes `_drop_step` each year after its dispersion. None: no drop.
 
     Randomness applied to:
     - Annual fees (if condo_fee_vol > 0)
@@ -925,6 +941,8 @@ def _simulate_condo_pv_once(
         # the market had reached this year.
         terminal_value, = _apply_value_dispersion(
             [terminal_value], value_vol, world.value_z(year), sim.shock_model)
+        if drop_path is not None:
+            terminal_value *= _drop_step(drop_path, year)
         if shock is not None:
             tilt = 1.0
             # `drift_context is None` beside wired prior rows is what a FROZEN
@@ -1004,6 +1022,7 @@ def _simulate_house_pv_once(
     hbp_repayment_pv: float = 0.0,
     event_years_out: Optional[List[Optional[int]]] = None,
     renewal_rates: Optional[Sequence[float]] = None,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> float:
     """
     Run one simulation of house PV with randomness.
@@ -1011,6 +1030,10 @@ def _simulate_house_pv_once(
     `renewal_rates` is this path's row of a renewal-rate path file, cut to the
     house's own columns, and re-solves its payment at each renewal; None
     prices its own ladder.
+
+    `drop_path` is a crash panel row's multiplier m(t): both value tracks take
+    `_drop_step` each year after their dispersion, so the maintenance follows
+    the dropped value as the sale does. None: no drop.
 
     Randomness applied to:
     - Annual maintenance (if house_maintenance_vol > 0)
@@ -1064,6 +1087,10 @@ def _simulate_house_pv_once(
         house_value, terminal_value = _apply_value_dispersion(
             [house_value, terminal_value], value_vol,
             world.value_z(year), sim.shock_model)
+        if drop_path is not None:
+            step = _drop_step(drop_path, year)
+            house_value *= step
+            terminal_value *= step
 
         if shock is not None:
             tilt = 1.0
@@ -1408,6 +1435,7 @@ def run_monte_carlo(
     streams: Optional[Streams] = None,
     *,
     freeze: Iterable[int] = (),
+    drop_path: Optional[Sequence[float]] = None,
 ) -> ComparisonMonteCarloResult:
     """
     Run Monte Carlo simulation for all options present in the spec.
@@ -1443,6 +1471,12 @@ def run_monte_carlo(
             `freeze=()`, which removes nothing, and every channel in
             `decomposition.CHANNELS`, which takes no draw at all, so the
             binding cannot matter.
+        drop_path: a crash panel row's multiplier m(t), t = 1..years
+            (`crash_panel.drop_path`), applied to every owned option's value
+            on every path (one market). It takes no draw, so the run is paired
+            with the plain one path for path. The affordability channel keeps
+            pricing the house's maintenance on the central value path, as it
+            does for every value draw. None: no drop.
 
     Returns:
         ComparisonMonteCarloResult with per-option results, ranking
@@ -1472,6 +1506,9 @@ def run_monte_carlo(
     """
     sim = spec.simulation
     econ = spec.economic
+    if drop_path is not None and len(drop_path) != sim.years:
+        raise ValueError(
+            f"drop_path has {len(drop_path)} entries for a {sim.years}-year run")
 
     frozen = frozenset(int(c) for c in freeze)
     freezable = frozenset(entry.id for entry in _CHANNELS)
@@ -1662,6 +1699,7 @@ def run_monte_carlo(
                 hbp_repayment_pv=condo_hbp,
                 event_years_out=fired["condo"],
                 renewal_rates=_row_rates("condo", world.rate_row),
+                drop_path=drop_path,
             )
         if spec.house is not None:
             house_pvs[i] = _simulate_house_pv_once(
@@ -1671,6 +1709,7 @@ def run_monte_carlo(
                 hbp_repayment_pv=house_hbp,
                 event_years_out=fired["house"],
                 renewal_rates=_row_rates("house", world.rate_row),
+                drop_path=drop_path,
             )
         if spec.rent is not None:
             rent_pvs[i] = _simulate_rent_pv_once(
