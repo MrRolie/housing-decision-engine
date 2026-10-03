@@ -446,9 +446,18 @@ here for width.)
   - `break-even: too close to call from no drop to hi; B is cheaper above hi (crossing x)`
   - `break-even: A is cheaper below lo; too close to call from lo to a 99% drop (crossing x)`
   - `break-even: too close to call from no drop to a 99% drop (crossing x)`
-  - `break-even: no crossing from no drop to a 99% drop: A is cheaper throughout`
+  - with no crossing, `break-even: no crossing from no drop to a 99% drop: ` and then the stretches
+    of the bracket read by the margin rule the rows' central state uses, so the line never
+    contradicts a row: `A is cheaper throughout`; `too close to call throughout`; `too close to
+    call from no drop to hi; A is cheaper above hi`; `A is cheaper below lo; too close to call from
+    lo to a 99% drop`; and, for a margin that enters the band more than once, the same clauses in
+    order joined by `; `, with `A is cheaper from lo to hi` for a decisive stretch between two
+    ties. The stretches are found by reading the rule at 34 evenly spaced drops and at every drop
+    of the grid, and bisecting each change of state;
   - with other than two options, X8's code and fact instead.
-  The no-crossing line carries no hint to widen: the bracket is the whole accepted range.
+  The no-crossing line carries no hint to widen: the bracket is the whole accepted range. (Ruled
+  2026-10-03: FTB with `full:7` from year 1 is a tie in every row, and "condo is cheaper
+  throughout" would have contradicted all of them.)
 - Every row of a config with an `income` block carries each option's peak affordability ratio and
   its years above the threshold (`sweep.affordability_of`, as `--sweep` rows do): a jump moves the
   financed options' ratios and, under R3, a drop moves the house's. With `jump`, the header names
@@ -466,7 +475,7 @@ A top-level `crash_panel` object, absent without the flag:
  "no_drop": <row>,
  "rows": [<row>],
  "break_evens": [{"year", "recovery", "key": "crash.drawdown", "options", "bracket": [0, 0.99],
-                  "break_evens": [...], "no_crossing": null | {"cheaper", "lo", "hi"}}
+                  "break_evens": [...], "no_crossing": null | {"cheaper", "lo", "hi", "tie_bands"}}
                  | {"year", "recovery", "refused": {"code", "fact"}}],
  "refused": null | {"code", "fact"}}
 
@@ -477,7 +486,9 @@ A top-level `crash_panel` object, absent without the flag:
          "underwater_years": {"condo": [...]}, "affordability": {...} | null}
 ```
 
-`no_crossing` carries no `widen` key. Each field's meaning goes in one place: a new
+`no_crossing` carries no `widen` key; its `tie_bands` lists the too-close-to-call stretches, each
+`[lo, hi]` with `null` at the bracket's own end (`[]`: decisive throughout; `[[null, null]]`: too
+close to call throughout). Each field's meaning goes in one place: a new
 `docs/reference/API_CONTRACT.md` section, "The `crash_panel` block", which also says that
 `prob_best` is below 0.5 in the `disagreement` state. The skill reads it there and never restates
 it.
@@ -685,7 +696,7 @@ the test passes before the flag exists; it is re-run after commit 5.
 | 7 | No draw | The renter's PVs and each generator's end state are identical across every row and the plain run. | One `random()` taken per row |
 | 8 | Conditional run | A path of all ones, built directly because X1 refuses a 0 drop, gives the plain run's `prob_best` exactly (P1 0.5450 at seed 42). | The panel runs on another seed or binding |
 | 9 | Refusals both ways | Each of X1–X9 against its neighbour in §7. | Each refusal deleted, and each widened onto its neighbour (X1 widened to refuse 0.99; X4 widened to a hazard of 0; X2 widened to `years`) |
-| 10 | Rendered output | Every line of the block matches one of §3.2's fixed templates; each gap equals the difference of its row's printed totals; each `level` equals the difference of two printed gaps. The no-crossing template: FTB, `full:7` from year 1 prints `break-even: no crossing from no drop to a 99% drop: condo is cheaper throughout [solved, central case]`, and no line of the block contains `widen`. FTB, permanent from year 1 prints the band-from-no-drop template. | A closing sentence added; a gap read from `margin_pv` and rounded separately; the panel's no-crossing template deleted, so `threshold_sentences`' line with its widen hint prints; the no-crossing template widened onto a row with a crossing (FTB permanent prints "no crossing") |
+| 10 | Rendered output | Every line of the block matches one of §3.2's fixed templates; each gap equals the difference of its row's printed totals; each `level` equals the difference of two printed gaps. The no-crossing templates: FTB, `full:7` from year 1 prints `break-even: no crossing from no drop to a 99% drop: too close to call throughout [solved, central case]`, the house example's `full:7` prints `house is cheaper throughout`, and each other no-crossing template is pinned against its rows' states; no line of the block contains `widen`. FTB, permanent from year 1 prints the band-from-no-drop template. | A closing sentence added; a gap read from `margin_pv` and rounded separately; the panel's no-crossing template deleted, so `threshold_sentences`' line with its widen hint prints; the no-crossing template widened onto a row with a crossing (FTB permanent prints "no crossing") |
 | 11 | Underwater | FTB, year 1: a 12% drop has no underwater year 1, a 13% drop has. FTB-10L with `jump=0.0237`, 45% permanent from year 1: underwater years 1–10. | Selling cost omitted: the year-1 boundary moves to 16.89%. The unladdered balance (`outstanding_balance`) under the jump: years 1–9 |
 | 12 | Joint jump | FTB-25L (four priced renewals), `jump=0.0237`: condo $403,362.00 and years above 32% 1–10; with a 20% permanent drop, rent by $689, `tie`. | The jump on every renewal (`quoted[0] += j` on the scalar ladder): condo $432,244.22, years 1–11; rent by $29,571, `option` |
 | 13 | Read-back | The line appears once in `--read-back` and in `assumptions.read_back`, after `renewals:`. | The line printed without the flag |

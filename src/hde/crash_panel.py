@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from .anchors import ANCHORS
 from .break_even import solve_crossings
 from .config import single_path_run
 from .deterministic import (_effective_growth_rate, compute_deterministic, owned_balance,
@@ -268,6 +269,10 @@ def underwater_years(params, econ: EconomicParams, years: int,
 # accepts, so no wider bracket exists (spec §1.3).
 BREAK_EVEN_KEY = "crash.drawdown"
 BREAK_EVEN_BRACKET = (0.0, DROP_CEILING)
+# Where no crossing exists, the drops at which the no-crossing line reads the
+# margin rule, besides the grid's own drops (every row's drop is one of them,
+# so the line cannot contradict a row's state).
+TIE_SCAN_POINTS = 34
 
 _OPTION_ORDER = ("condo", "house", "rent")
 _OWNED = ("condo", "house")
@@ -419,8 +424,57 @@ def _gap(row: Dict[str, Any], options: Sequence[str]) -> float:
     return totals[b] - totals[a]
 
 
+def _decisive(totals: Tuple[float, float]) -> bool:
+    """The margin rule `compute_verdict` applies to a central line: the
+    margin is at least the tie band of the cheaper option's total."""
+    best, runner = sorted(totals)
+    denom = abs(best) if best != 0 else abs(runner)
+    frac = (runner - best) / denom if denom > 0 else 0.0
+    return frac >= ANCHORS["verdict.tie_band"].value
+
+
+def tie_bands(totals_at, lo: float, hi: float, drops: Sequence[float] = (),
+              points: int = TIE_SCAN_POINTS, iterations: int = 60) -> List[List[Optional[float]]]:
+    """Where no crossing exists: the stretches of [lo, hi] on which the
+    central line is too close to call, each `[start, end]`, with None for an
+    end at the bracket's own end. The margin rule is read at `points` evenly
+    spaced drops and at every drop in `drops`, and each change of state is
+    bisected. `[]` is decisive throughout; `[[None, None]]` too close to call
+    throughout."""
+    grid = sorted({lo + (hi - lo) * i / (points - 1) for i in range(points - 1)} | {hi}
+                  | {d for d in drops if lo <= d <= hi})
+    states = [_decisive(totals_at(d)) for d in grid]
+
+    def edge(x0: float, x1: float, s0: bool) -> float:
+        for _ in range(iterations):
+            mid = 0.5 * (x0 + x1)
+            if not x0 < mid < x1:
+                break
+            if _decisive(totals_at(mid)) == s0:
+                x0 = mid
+            else:
+                x1 = mid
+        return x1
+
+    bands: List[List[Optional[float]]] = []
+    start: Optional[float] = None
+    in_tie = not states[0]
+    for i in range(1, len(grid)):
+        if states[i] == states[i - 1]:
+            continue
+        at = edge(grid[i - 1], grid[i], states[i - 1])
+        if in_tie:
+            bands.append([start, at])
+        else:
+            start = at
+        in_tie = not in_tie
+    if in_tie:
+        bands.append([start, None])
+    return bands
+
+
 def _break_even(spec: ComparisonSpec, options: Sequence[str], year: int,
-                recovery: Recovery) -> Dict[str, Any]:
+                recovery: Recovery, drops: Sequence[float] = ()) -> Dict[str, Any]:
     """The drop at which the central case's cheapest option changes, solved
     by `solve_crossings` over the whole accepted range. Only its figures are
     kept (`value`, `cheaper_below`, `cheaper_above`, `tie_band`); its
@@ -432,9 +486,13 @@ def _break_even(spec: ComparisonSpec, options: Sequence[str], year: int,
                                     "fact": _options_fact(len(options))}}
     years = spec.simulation.years
 
+    memo: Dict[float, Tuple[float, float]] = {}
+
     def totals_at(d: float) -> Tuple[float, float]:
-        det = compute_deterministic(spec, drop_path=drop_path(years, d, year, recovery))
-        return getattr(det, options[0]).total_pv, getattr(det, options[1]).total_pv
+        if d not in memo:
+            det = compute_deterministic(spec, drop_path=drop_path(years, d, year, recovery))
+            memo[d] = (getattr(det, options[0]).total_pv, getattr(det, options[1]).total_pv)
+        return memo[d]
 
     lo, hi = BREAK_EVEN_BRACKET
     out = solve_crossings(BREAK_EVEN_KEY, (options[0], options[1]), lo, hi, totals_at,
@@ -444,7 +502,8 @@ def _break_even(spec: ComparisonSpec, options: Sequence[str], year: int,
                  for be in out["break_evens"]]
     no_crossing = None
     if not crossings:
-        no_crossing = {"cheaper": out["cheaper_throughout"], "lo": lo, "hi": hi}
+        no_crossing = {"cheaper": out["cheaper_throughout"], "lo": lo, "hi": hi,
+                       "tie_bands": tie_bands(totals_at, lo, hi, drops)}
     return {**head, "key": BREAK_EVEN_KEY, "options": list(options), "bracket": [lo, hi],
             "break_evens": crossings, "no_crossing": no_crossing}
 
@@ -495,7 +554,7 @@ def run_crash_panel(spec: ComparisonSpec, grid: CrashGrid, *,
                 if len(options) == 2:
                     row["level_pv"] = _gap(row, options) - _gap(no_drop, options)
                 rows.append(row)
-            break_evens.append(_break_even(row_spec, options, year, recovery))
+            break_evens.append(_break_even(row_spec, options, year, recovery, grid.drops))
     return {"grid": grid_to_dict(grid, reached), "source": "command line",
             "no_drop": no_drop, "rows": rows, "break_evens": break_evens, "refused": None}
 
@@ -597,6 +656,31 @@ def _futures_cells(futures: Dict[str, Any]) -> Tuple[str, ...]:
     return (futures["best"], f"{futures['prob_best']:.4f}", futures["state"])
 
 
+def _no_crossing_text(record: Dict[str, Any]) -> str:
+    """The stretches of a no-crossing axis, in order, each read by the margin
+    rule as the rows are: `A is cheaper throughout`, `too close to call
+    throughout`, or clauses of `A is cheaper below lo`, `too close to call
+    from lo to hi`, `A is cheaper from lo to hi` and `A is cheaper above hi`."""
+    cheaper, bands = record["cheaper"], record["tie_bands"]
+    if not bands:
+        return f"{cheaper} is cheaper throughout"
+    if bands == [[None, None]]:
+        return "too close to call throughout"
+    clauses: List[str] = []
+    after: Optional[float] = None  # where the last tie stretch ended
+    for k, (start, end) in enumerate(bands):
+        if start is not None:
+            clauses.append(f"{cheaper} is cheaper below {_edge(start)}" if k == 0
+                           else f"{cheaper} is cheaper from {_edge(after)} to {_edge(start)}")
+        lo_text = "no drop" if start is None else _edge(start)
+        hi_text = "a 99% drop" if end is None else _edge(end)
+        clauses.append(f"too close to call from {lo_text} to {hi_text}")
+        after = end
+    if after is not None:
+        clauses.append(f"{cheaper} is cheaper above {_edge(after)}")
+    return "; ".join(clauses)
+
+
 def _break_even_line(entry: Dict[str, Any]) -> List[str]:
     """One line per crossing, from §3.2's fixed templates and no others."""
     if "refused" in entry:
@@ -606,7 +690,7 @@ def _break_even_line(entry: Dict[str, Any]) -> List[str]:
     if not crossings:
         record = entry["no_crossing"]
         return [f"break-even: no crossing from no drop to a 99% drop: "
-                f"{record['cheaper']} is cheaper throughout {TAG}"]
+                f"{_no_crossing_text(record)} {TAG}"]
     lines = []
     last = len(crossings) - 1
     for k, be in enumerate(crossings):

@@ -706,6 +706,11 @@ _BREAK_EVEN = [
     rf"\(crossing {_PCT}\){_TAG}",
     rf"break-even: too close to call from no drop to a 99% drop \(crossing {_PCT}\){_TAG}",
     rf"break-even: no crossing from no drop to a 99% drop: {_O} is cheaper throughout{_TAG}",
+    rf"break-even: no crossing from no drop to a 99% drop: too close to call throughout{_TAG}",
+    rf"break-even: no crossing from no drop to a 99% drop: too close to call from no drop to "
+    rf"{_PCT}; {_O} is cheaper above {_PCT}{_TAG}",
+    rf"break-even: no crossing from no drop to a 99% drop: {_O} is cheaper below {_PCT}; "
+    rf"too close to call from {_PCT} to a 99% drop{_TAG}",
     r"break-even: refused \(not_two_options\): \d+ options? (is|are) priced",
 ]
 _LINE = [
@@ -763,7 +768,7 @@ def test_row10_every_line_of_the_block_is_a_fixed_template():
     assert lines[1].endswith("futures (5,000)")
     assert ("  break-even: too close to call from no drop to 5.31%; rent is cheaper above 5.31% "
             "(crossing 2.05%) [solved, central case]") in lines
-    assert ("  break-even: no crossing from no drop to a 99% drop: condo is cheaper throughout "
+    assert ("  break-even: no crossing from no drop to a 99% drop: too close to call throughout "
             "[solved, central case]") in lines
     none = rows[0]
     assert (none["drop"], none["sale value"], none["condo"], none["rent"], none["rent − condo"]) == (
@@ -899,5 +904,101 @@ def test_the_json_block_is_the_runner_document():
                         "futures", "underwater_years", "affordability"}
     assert row["recovery"] == {"form": "share", "share": 1.0, "years": 7}
     (be,) = panel["break_evens"]
-    assert be["no_crossing"] == {"cheaper": "condo", "lo": 0.0, "hi": 0.99}
+    assert be["no_crossing"] == {"cheaper": "condo", "lo": 0.0, "hi": 0.99,
+                                 "tie_bands": [[None, None]]}
     assert "widen" not in json.dumps(panel)
+
+
+# --- the no-crossing line reads the margin rule as the rows do ------------------------------
+
+from hde.crash_panel import _no_crossing_text, tie_bands  # noqa: E402
+
+
+def _no_crossing_case(spec, arg: str):
+    panel = _panel(spec, arg, monte_carlo=False)
+    lines, _, _ = _parse_block(format_crash_panel(panel))
+    states = {row["drop"]: row["central"]["state"] for row in panel["rows"]}
+    (line,) = [l for l in lines if l.startswith("  break-even:")]
+    return line, states, panel["break_evens"][0]["no_crossing"]
+
+
+def test_no_crossing_tie_throughout_where_every_row_is_a_tie():
+    """FTB, full:7 from year 1: m(10) = 1, so every row is the base's 3.25%
+    tie, and the line says so instead of "condo is cheaper throughout"."""
+    line, states, record = _no_crossing_case(_spec(_raw(FTB)),
+                                             "drop=0.1,0.4,0.99;year=1;recovery=full:7")
+    assert set(states.values()) == {"tie"}
+    assert line == ("  break-even: no crossing from no drop to a 99% drop: too close to call "
+                    "throughout [solved, central case]")
+    assert record["tie_bands"] == [[None, None]]
+
+
+def test_no_crossing_decisive_throughout_where_every_row_is_decisive():
+    """House example, full:7 from year 1: the house only gets cheaper (R3)."""
+    line, states, record = _no_crossing_case(_spec(_raw(HOUSE)),
+                                             "drop=0.1,0.4,0.99;year=1;recovery=full:7")
+    assert set(states.values()) == {"option"}
+    assert line == ("  break-even: no crossing from no drop to a 99% drop: house is cheaper "
+                    "throughout [solved, central case]")
+    assert record["tie_bands"] == []
+
+
+def test_no_crossing_tie_then_decisive():
+    """The house example at 80% of its rent starts inside the band (3.6%) and a
+    recovered drop's lower maintenance carries the house out of it."""
+    raw = _raw(HOUSE)
+    raw["rent"]["monthly_rent"] = round(raw["rent"]["monthly_rent"] * 0.8)
+    line, states, record = _no_crossing_case(_spec(raw), "drop=0.1,0.4,0.9;year=1;recovery=full:7")
+    assert states == {0.1: "tie", 0.4: "option", 0.9: "option"}
+    assert line == ("  break-even: no crossing from no drop to a 99% drop: too close to call "
+                    "from no drop to 23.04%; house is cheaper above 23.04% [solved, central case]")
+    (band,) = record["tie_bands"]
+    assert band[0] is None and 0.1 < band[1] < 0.4
+
+
+def test_no_crossing_decisive_then_tie():
+    """FTB-25L, full:15 from year 11: four of the fifteen recovery years fall
+    after the sale, so the sale meets part of the drop and a deep enough one
+    brings the condo's lead inside the band without crossing."""
+    line, states, record = _no_crossing_case(_spec(_ftb_laddered(25)),
+                                             "drop=0.4,0.9,0.98;year=11;recovery=full:15")
+    assert states == {0.4: "option", 0.9: "option", 0.98: "tie"}
+    assert line == ("  break-even: no crossing from no drop to a 99% drop: condo is cheaper "
+                    "below 97.50%; too close to call from 97.50% to a 99% drop "
+                    "[solved, central case]")
+    (band,) = record["tie_bands"]
+    assert 0.9 < band[0] < 0.98 and band[1] is None
+
+
+def _synthetic(fracs):
+    """totals_at for a made-up margin: A cheaper by `frac(d)` of A's total."""
+    return lambda d: (100.0, 100.0 * (1 + fracs(d)))
+
+
+def test_tie_bands_find_every_stretch_and_include_the_grid_drops():
+    """A margin that dips into the band and out again, and one that leaves it
+    and comes back: each stretch is found, and a stretch narrower than the
+    scan spacing is found at a grid drop."""
+    dip = _synthetic(lambda d: 0.03 if 0.3 <= d <= 0.6 else 0.08)
+    bands = tie_bands(dip, 0.0, 0.99)
+    assert len(bands) == 1 and abs(bands[0][0] - 0.3) < 1e-9 and abs(bands[0][1] - 0.6) < 1e-6
+    narrow = _synthetic(lambda d: 0.03 if 0.501 <= d <= 0.502 else 0.08)
+    assert tie_bands(narrow, 0.0, 0.99) == []
+    assert len(tie_bands(narrow, 0.0, 0.99, drops=(0.5015,))) == 1
+    hump = _synthetic(lambda d: 0.08 if 0.2 <= d <= 0.7 else 0.03)
+    assert [[b is None for b in band] for band in tie_bands(hump, 0.0, 0.99)] == [
+        [True, False], [False, True]]
+
+
+def test_the_no_crossing_clauses_for_every_shape():
+    def text(bands):
+        return _no_crossing_text({"cheaper": "condo", "tie_bands": bands})
+    assert text([]) == "condo is cheaper throughout"
+    assert text([[None, None]]) == "too close to call throughout"
+    assert text([[None, 0.2]]) == "too close to call from no drop to 20.00%; condo is cheaper above 20.00%"
+    assert text([[0.3, None]]) == "condo is cheaper below 30.00%; too close to call from 30.00% to a 99% drop"
+    assert text([[0.3, 0.6]]) == ("condo is cheaper below 30.00%; too close to call from 30.00% to "
+                                  "60.00%; condo is cheaper above 60.00%")
+    assert text([[None, 0.2], [0.7, None]]) == (
+        "too close to call from no drop to 20.00%; condo is cheaper from 20.00% to 70.00%; "
+        "too close to call from 70.00% to a 99% drop")

@@ -685,8 +685,14 @@ changes, solved on the central line over the whole range the flag accepts:
 `break_evens`, each crossing `{value, cheaper_below, cheaper_above, tie_band}`
 with the tie-band edges `[lo, hi]`; an edge is `null` where the band reaches
 the bracket's end (no drop, or a 99% drop) or where the next crossing ends it.
-`no_crossing` is `null` when a crossing exists, else `{cheaper, lo, hi}`: the
-option cheaper at both ends of the bracket `[lo, hi]`. With other than two
+`no_crossing` is `null` when a crossing exists, else `{cheaper, lo, hi,
+tie_bands}`: the option cheaper throughout the bracket `[lo, hi]`, and the
+stretches of it on which the central line is too close to call under the
+margin rule each row's central `state` uses, each `[lo, hi]` with `null` at the
+bracket's own end. `[]` is decisive throughout and `[[null, null]]` too close
+to call throughout. The rule is read at 34 evenly spaced drops and at every
+drop of the grid, so the stretches agree with every row's central `state`;
+each change of state between those drops is bisected. With other than two
 priced options the entry is `{year, recovery, refused}` instead.
 
 **Refusals.** Each is a code and one measured fact.
@@ -727,6 +733,12 @@ next crossing" for an edge another crossing ends:
 - `break-even: A is cheaper below lo; too close to call from lo to a 99% drop (crossing x)`
 - `break-even: too close to call from no drop to a 99% drop (crossing x)`
 - `break-even: no crossing from no drop to a 99% drop: A is cheaper throughout`
+- `break-even: no crossing from no drop to a 99% drop: too close to call throughout`
+- `break-even: no crossing from no drop to a 99% drop: too close to call from no drop to hi; A is cheaper above hi`
+- `break-even: no crossing from no drop to a 99% drop: A is cheaper below lo; too close to call from lo to a 99% drop`
+- for a margin that enters the band more than once, the no-crossing clauses in
+  order, joined by `; `, with `A is cheaper from lo to hi` for a decisive
+  stretch between two ties
 - `break-even: refused (not_two_options): <n> options are priced`
 
 A whole-panel refusal prints `crash panel — refused (<code>): <fact>` in place
