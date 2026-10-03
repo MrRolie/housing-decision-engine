@@ -24,7 +24,7 @@ from .deterministic import (_effective_growth_rate, compute_deterministic, owned
 from .models import ComparisonSpec, EconomicParams, compute_verdict
 from .monte_carlo import run_monte_carlo
 from .rates import effective_mortgage_rate
-from .sweep import affordability_of
+from .sweep import _breaches, affordability_of
 
 # §7: the largest drop the panel accepts, and the most rows one grid may ask for.
 DROP_CEILING = 0.99
@@ -498,3 +498,237 @@ def run_crash_panel(spec: ComparisonSpec, grid: CrashGrid, *,
             break_evens.append(_break_even(row_spec, options, year, recovery))
     return {"grid": grid_to_dict(grid, reached), "source": "command line",
             "no_drop": no_drop, "rows": rows, "break_evens": break_evens, "refused": None}
+
+
+# ---------------------------------------------------------------------------
+# The text block and the read-back line (spec §3.2, §3.4): figures, not prose.
+# ---------------------------------------------------------------------------
+
+HEADER = ("crash panel — stated drops, each conditional on happening "
+          "[drop, year, recovery: command line]")
+TAG = "[solved, central case]"
+MINUS = "−"
+
+
+def _pct(value: float) -> str:
+    """A grid figure as a percentage, as typed: 0.1 → 10%, 0.125 → 12.5%."""
+    return f"{value * 100:g}%"
+
+
+def _edge(value: float) -> str:
+    """A solved drop: a break-even crossing or a tie-band edge."""
+    return f"{value * 100:.2f}%"
+
+
+def recovery_words(recovery: Dict[str, Any]) -> str:
+    """`permanent`, `full over K years` or `share R over K years`."""
+    if recovery["years"] is None:
+        return "permanent"
+    span = f"{recovery['years']} year{'s' if recovery['years'] != 1 else ''}"
+    if recovery["share"] == 1.0:
+        return f"full over {span}"
+    return f"share {recovery['share']:g} over {span}"
+
+
+def jump_words(jump: Dict[str, Any]) -> str:
+    """`jump +2.37 pp at the first renewal: condo`."""
+    return (f"jump {jump['value'] * 100:+g} pp at the first renewal: "
+            f"{', '.join(jump['options'])}").replace("-", MINUS)
+
+
+def read_back_line(grid: Dict[str, Any]) -> str:
+    """The one read-back line (§3.4): the grid as stated, and what it is not."""
+    parts = [
+        "drops " + ", ".join(_pct(d) for d in grid["drop"]),
+        "years " + ", ".join(str(y) for y in grid["year"]),
+        "recovery " + ", ".join(recovery_words(r) for r in grid["recovery"]),
+    ]
+    if grid["jump"] is not None:
+        parts.append(jump_words(grid["jump"]))
+    return ("crash panel: " + "; ".join(parts)
+            + "; stated on the command line, not a forecast and not a probability")
+
+
+def _money(value: float) -> str:
+    return f"{round(value):,}".replace("-", MINUS)
+
+
+def _signed(value: int) -> str:
+    """A printed gap or level: `+6,526`, `−25,284`, `0`."""
+    if value == 0:
+        return "0"
+    return (f"+{value:,}" if value > 0 else f"{MINUS}{-value:,}")
+
+
+def _years(years: Sequence[int]) -> str:
+    """[1, 2, 3, 5] → `1–3, 5`."""
+    runs: List[List[int]] = []
+    for y in years:
+        if runs and y == runs[-1][-1] + 1:
+            runs[-1].append(y)
+        else:
+            runs.append([y])
+    return ", ".join(f"{r[0]}–{r[-1]}" if len(r) > 1 else f"{r[0]}" for r in runs)
+
+
+def _underwater(row: Dict[str, Any]) -> str:
+    named = [f"{name} {_years(years)}" for name, years in row["underwater_years"].items() if years]
+    return " · ".join(named) if named else "none"
+
+
+def _affordability(row: Dict[str, Any]) -> str:
+    aff = row["affordability"] or {}
+    return "; ".join(f"{name} max {aff[name]['max_ratio']:.1%} {_breaches(aff[name])}"
+                     for name in _OPTION_ORDER if name in aff)
+
+
+def _printed_gap(row: Dict[str, Any], options: Sequence[str]) -> int:
+    """`B − A` as the difference of the two PRINTED totals (which-risk §0.1
+    item 2), so the gap a reader recomputes is the gap printed."""
+    totals = row["central"]["totals"]
+    a, b = options
+    return round(totals[b]) - round(totals[a])
+
+
+def _futures_cells(futures: Dict[str, Any]) -> Tuple[str, ...]:
+    if futures["state"] == "disagreement":
+        return (f"{futures['best']} {futures['prob_best']:.4f} disagreement · "
+                f"{futures['mc_best']} {futures['mc_prob_best']:.4f} of the futures",)
+    return (futures["best"], f"{futures['prob_best']:.4f}", futures["state"])
+
+
+def _break_even_line(entry: Dict[str, Any]) -> List[str]:
+    """One line per crossing, from §3.2's fixed templates and no others."""
+    if "refused" in entry:
+        refused = entry["refused"]
+        return [f"break-even: refused ({refused['code']}): {refused['fact']}"]
+    crossings = entry["break_evens"]
+    if not crossings:
+        record = entry["no_crossing"]
+        return [f"break-even: no crossing from no drop to a 99% drop: "
+                f"{record['cheaper']} is cheaper throughout {TAG}"]
+    lines = []
+    last = len(crossings) - 1
+    for k, be in enumerate(crossings):
+        left, right = be["tie_band"]
+        below, above = be["cheaper_below"], be["cheaper_above"]
+        at_low = left is None and k == 0
+        at_high = right is None and k == last
+        lo = "the next crossing" if left is None else _edge(left)
+        hi = "the next crossing" if right is None else _edge(right)
+        crossing = f"(crossing {_edge(be['value'])})"
+        if at_low and at_high:
+            text = f"too close to call from no drop to a 99% drop {crossing}"
+        elif at_low:
+            text = f"too close to call from no drop to {hi}; {above} is cheaper above {hi} {crossing}"
+        elif at_high:
+            text = f"{below} is cheaper below {lo}; too close to call from {lo} to a 99% drop {crossing}"
+        else:
+            text = (f"{below} is cheaper below {lo}; too close to call from {lo} to {hi}; "
+                    f"{above} is cheaper above {hi} {crossing}")
+        lines.append(f"break-even: {text} {TAG}")
+    return lines
+
+
+def format_crash_panel(panel: Dict[str, Any], *, paths: Optional[int] = None) -> str:
+    """The `--crash-panel` text block. `paths` is the run's path count, printed
+    over the futures columns; the futures columns are absent when no row
+    carries futures."""
+    if panel["refused"] is not None:
+        refused = panel["refused"]
+        return f"crash panel — refused ({refused['code']}): {refused['fact']}"
+    none = panel["no_drop"]
+    options = list(none["central"]["totals"])
+    two = len(options) == 2
+    with_futures = none["futures"] is not None
+    with_aff = none["affordability"] is not None
+
+    head_central = ["drop", "sale value", *options]
+    if two:
+        head_central += [f"{options[1]} {MINUS} {options[0]}", "level"]
+    elif len(options) > 2:
+        head_central += ["gap"]
+    head_central += ["best", "state"]
+    head_futures = (["best", "P(best)", "state"] + (["sd"] if two else [])) if with_futures else []
+    head_tail = ["underwater"] + (["affordability"] if with_aff else [])
+
+    none_gap = _printed_gap(none, options) if two else None
+
+    def cells(row: Dict[str, Any]) -> List[Any]:
+        central = row["central"]
+        drop = "none" if row["drop"] is None else _pct(row["drop"])
+        sale = "×1" if row["drop"] is None else f"×{row['sale_multiple']:.3f}"
+        out: List[Any] = [drop, sale, *(_money(central["totals"][o]) for o in options)]
+        if two:
+            gap = _printed_gap(row, options)
+            out += [_signed(gap), _signed(gap - none_gap)]
+        elif len(options) > 2:
+            margin = round(central["totals"][central["runner_up"]]) - round(central["totals"][central["best"]])
+            out += [f"{central['runner_up']} {MINUS} {central['best']} {_signed(margin)}"]
+        out += [central["best"], central["state"]]
+        if with_futures:
+            futures = row["futures"]
+            verdict_cells = _futures_cells(futures)
+            out.append(verdict_cells)  # one span: three cells, or the disagreement cell
+            if two:
+                out.append(_money(futures["gap_sd"]))
+        out.append(_underwater(row))
+        if with_aff:
+            out.append(_affordability(row))
+        return out
+
+    body = [("row", cells(none))]
+    by_group: Dict[Tuple[int, Any], List[Dict[str, Any]]] = {}
+    for row in panel["rows"]:
+        by_group.setdefault((row["year"], tuple(sorted(row["recovery"].items()))), []).append(row)
+    for entry in panel["break_evens"]:
+        key = (entry["year"], tuple(sorted(entry["recovery"].items())))
+        body.append(("group", f"year {entry['year']} · {recovery_words(entry['recovery'])}"))
+        for row in by_group[key]:
+            body.append(("row", cells(row)))
+        for line in _break_even_line(entry):
+            body.append(("text", f"  {line}"))
+
+    # The futures verdict is one span of three sub-cells, aligned within it.
+    span_widths = [len(h) for h in head_futures[:3]]
+    for kind, item in body:
+        if kind == "row" and with_futures:
+            span = next(c for c in item if isinstance(c, tuple))
+            if len(span) == 3:
+                span_widths = [max(w, len(s)) for w, s in zip(span_widths, span)]
+
+    def span_text(span: Sequence[str]) -> str:
+        if len(span) == 1:
+            return span[0]
+        return "  ".join(s.ljust(w) for s, w in zip(span, span_widths)).rstrip()
+
+    header = list(head_central)
+    if with_futures:
+        header.append(span_text(head_futures[:3]))
+        header += head_futures[3:]
+    header += head_tail
+    rendered_rows = [[span_text(c) if isinstance(c, tuple) else c for c in item]
+                     for kind, item in body if kind == "row"]
+    widths = [max(len(header[i]), *(len(r[i]) for r in rendered_rows)) for i in range(len(header))]
+
+    def line(cols: Sequence[str]) -> str:
+        return ("  " + "  ".join(c.ljust(w) for c, w in zip(cols, widths))).rstrip()
+
+    lines = [HEADER]
+    if panel["grid"]["jump"] is not None:
+        lines.append(jump_words(panel["grid"]["jump"]))
+    # The two column groups, each label over its first column.
+    starts, pos = [], 2
+    for w in widths:
+        starts.append(pos)
+        pos += w + 2
+    over = " " * starts[0] + "central line"
+    if with_futures:
+        label = f"futures ({paths:,})" if paths is not None else "futures"
+        over = over.ljust(starts[len(head_central)]) + label
+    lines.append(over)
+    lines.append(line(header))
+    rows_iter = iter(rendered_rows)
+    for kind, item in body:
+        lines.append(line(next(rows_iter)) if kind == "row" else item)
+    return "\n".join(lines)

@@ -204,6 +204,18 @@ def _main() -> int:
              "beside --sweep the threshold is re-solved at every sweep point ('across'); "
              "rides --json as 'break_evens'",
     )
+    parser.add_argument(
+        "--crash-panel",
+        type=str,
+        default=None,
+        metavar="'drop=d1,...;year=y1,...;recovery=r1,...[;jump=j]'",
+        help="Price stated one-time drops in the home's value, each a conditional row "
+             "with its central line and its futures, e.g. --crash-panel "
+             "'drop=0.10,0.20;year=1,9;recovery=permanent,full:5,share:0.5:7'; every "
+             "field but jump is required; jump adds a rate to the first renewal; rides "
+             "--json as 'crash_panel'. What each figure means: "
+             "docs/reference/API_CONTRACT.md, the crash_panel block",
+    )
     args = parser.parse_args()
 
     # `hde --decompose config.yaml`: an optional value takes the next token
@@ -297,6 +309,22 @@ def _main() -> int:
                   "decomposition and show none of it. Run --decompose without "
                   "--read-back: the block prints in the text, or rides --json "
                   "as 'decomposition'", file=sys.stderr)
+            return 1
+
+    # --crash-panel's grid, read before anything is priced: a flag without the
+    # grid's shape is a usage error (exit 1, as --sweep), while a grid the
+    # panel refuses (a drop, recovery or row count out of range) prints its
+    # refusal in place of the block and the run goes on.
+    crash_grid = None
+    crash_refusal = None
+    if args.crash_panel is not None:
+        from .crash_panel import CrashPanelRefusal, parse_grid
+        try:
+            crash_grid = parse_grid(args.crash_panel)
+        except CrashPanelRefusal as e:
+            crash_refusal = e
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
             return 1
 
     # Validate config path
@@ -470,6 +498,35 @@ def _main() -> int:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
 
+    # The crash panel (docs/specs/2026-10-03-crash-stress-panel.md): priced on
+    # the base config beside the sweeps and thresholds, re-solving neither.
+    # Under --read-back only its refusals and its one line are needed, so no
+    # row is priced there.
+    crash_panel = None
+    crash_line = None
+    if args.crash_panel is not None:
+        from .crash_panel import (CrashPanelRefusal, apply_jump, check_panel, grid_to_dict,
+                                  read_back_line, refused_panel, run_crash_panel)
+        if crash_refusal is not None:
+            crash_panel = refused_panel(crash_refusal)
+        elif args.read_back:
+            try:
+                check_panel(spec, crash_grid)
+                crash_panel = {"grid": grid_to_dict(crash_grid,
+                                                    apply_jump(spec, crash_grid.jump)[1]),
+                               "refused": None}
+            except CrashPanelRefusal as e:
+                crash_panel = refused_panel(e, crash_grid)
+        else:
+            try:
+                crash_panel = run_crash_panel(spec, crash_grid,
+                                              monte_carlo=not args.no_monte_carlo)
+            except (ConfigValidationError, InputError, ScenarioPriorError) as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+        if crash_panel["refused"] is None:
+            crash_line = read_back_line(crash_panel["grid"])
+
     # The read-back block (2026-09-04): the lines an honest answer must carry,
     # assembled by the engine in one order rather than gathered by hand from
     # four surfaces. Built here, after the sweeps and thresholds, so the same
@@ -477,6 +534,8 @@ def _main() -> int:
     from .serialization import read_back_lines
     read_back_kw = dict(warnings=warnings, verdict=verdict, det=det_result, prior=prior,
                         break_evens=break_evens, sweeps=sweeps, raw=raw)
+    if crash_line is not None:
+        read_back_kw["crash_panel"] = crash_line
     read_back = read_back_lines(spec, **read_back_kw)
     # The short block (2026-09-05): the gist shape's paste — warnings, source
     # lines, decisiveness, and one closing line counting what the full block
@@ -509,6 +568,8 @@ def _main() -> int:
         if args.decompose is not None:
             from .serialization import decomposition_to_dict
             doc["decomposition"] = decomposition_to_dict(decomposition)
+        if args.crash_panel is not None:
+            doc["crash_panel"] = crash_panel
         print(_json.dumps(doc, indent=2, ensure_ascii=False))
         # plots/story still render below when requested
     elif args.read_back:
@@ -582,6 +643,10 @@ def _main() -> int:
         rendered = format_decomposition(decomposition)
         if rendered:
             print(f"\n{rendered}")
+
+    if crash_panel is not None and not args.json and not args.read_back:
+        from .crash_panel import format_crash_panel
+        print(f"\n{format_crash_panel(crash_panel, paths=spec.simulation.num_sims)}")
 
     if sweeps and not args.json and not args.read_back:
         from .sweep import format_sweep

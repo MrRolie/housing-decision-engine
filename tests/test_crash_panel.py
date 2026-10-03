@@ -678,3 +678,226 @@ def test_x8_neighbour_two_options_solve():
     assert "refused" not in be
     assert round(be["break_evens"][0]["value"], 4) == 0.3885
     assert panel["rows"][0]["level_pv"] is not None
+
+
+# --- the surface: the text block, --json and the read-back (rows 10 and 13) -------------
+
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import json  # noqa: E402
+import sys  # noqa: E402
+
+import hde.cli as cli_mod  # noqa: E402
+from hde.crash_panel import HEADER, format_crash_panel  # noqa: E402
+
+_NUM = r"−?[\d,]+"
+_SIGNED = r"(?:0|[+−][\d,]+)"
+_PCT = r"\d+\.\d\d%"
+_EDGE = rf"(?:{_PCT}|the next crossing)"
+_O = r"(?:condo|house|rent)"
+_TAG = r" \[solved, central case\]"
+# §3.2's break-even templates, and no others.
+_BREAK_EVEN = [
+    rf"break-even: {_O} is cheaper below {_EDGE}; too close to call from {_EDGE} to {_EDGE}; "
+    rf"{_O} is cheaper above {_EDGE} \(crossing {_PCT}\){_TAG}",
+    rf"break-even: too close to call from no drop to {_EDGE}; {_O} is cheaper above {_EDGE} "
+    rf"\(crossing {_PCT}\){_TAG}",
+    rf"break-even: {_O} is cheaper below {_EDGE}; too close to call from {_EDGE} to a 99% drop "
+    rf"\(crossing {_PCT}\){_TAG}",
+    rf"break-even: too close to call from no drop to a 99% drop \(crossing {_PCT}\){_TAG}",
+    rf"break-even: no crossing from no drop to a 99% drop: {_O} is cheaper throughout{_TAG}",
+    r"break-even: refused \(not_two_options\): \d+ options? (is|are) priced",
+]
+_LINE = [
+    re.escape(HEADER),
+    r"jump [+−][\d.]+ pp at the first renewal: [a-z, ]+",
+    r"  central line( +futures \([\d,]+\))?",
+    r"  drop  sale value  .*",
+    r"year \d+ · (permanent|full over \d+ years?|share [\d.]+ over \d+ years?)",
+    rf"  (none|\d+(\.\d+)?%) +×(1|\d\.\d\d\d) +{_NUM}( +{_NUM})+ .*",
+    *(rf"  {t}" for t in _BREAK_EVEN),
+]
+
+
+def _parse_block(text: str):
+    """Every line against the fixed shapes; the rows' printed columns."""
+    lines = text.split("\n")
+    for line in lines:
+        assert any(re.fullmatch(p, line) for p in _LINE), f"untemplated line: {line!r}"
+    assert not any("widen" in line for line in lines)
+    header = next(l for l in lines if l.startswith("  drop  sale value"))
+    cols = re.split(r"  +", header.strip())
+    rows = [dict(zip(cols, re.split(r"  +", l.strip()))) for l in lines
+            if re.fullmatch(rf"  (none|\d+(\.\d+)?%) +×.*", l)]
+    return lines, cols, rows
+
+
+def _int(text: str) -> int:
+    return int(text.replace(",", "").replace("−", "-").replace("+", ""))
+
+
+def _check_arithmetic(cols, rows):
+    """Row 10: each gap is the difference of its row's printed totals, and
+    each level the difference of two printed gaps."""
+    gap_col = next(c for c in cols if " − " in c)
+    b, a = gap_col.split(" − ")
+    none_gap = None
+    for row in rows:
+        gap = _int(row[gap_col])
+        assert gap == _int(row[b]) - _int(row[a])
+        if row["drop"] == "none":
+            none_gap = gap
+            assert row["level"] == "0"
+        assert _int(row["level"]) == gap - none_gap
+
+
+def test_row10_every_line_of_the_block_is_a_fixed_template():
+    """Row 10 on P1 at seed 42 (FTB's central line): the band-from-no-drop
+    template for a permanent drop, the no-crossing one for full:7 from year 1,
+    and every gap and level recomputed from the printed figures."""
+    spec = _household(10, 0.04, 0.23)
+    panel = _panel(spec, "drop=0.10,0.20;year=1;recovery=permanent,full:7")
+    lines, cols, rows = _parse_block(format_crash_panel(panel, paths=5000))
+    _check_arithmetic(cols, rows)
+    assert lines[1] == "  central line" + lines[1][len("  central line"):]
+    assert lines[1].endswith("futures (5,000)")
+    assert ("  break-even: too close to call from no drop to 5.31%; rent is cheaper above 5.31% "
+            "(crossing 2.05%) [solved, central case]") in lines
+    assert ("  break-even: no crossing from no drop to a 99% drop: condo is cheaper throughout "
+            "[solved, central case]") in lines
+    none = rows[0]
+    assert (none["drop"], none["sale value"], none["condo"], none["rent"], none["rent − condo"]) == (
+        "none", "×1", "200,502", "207,027", "+6,525")
+    ten = rows[1]
+    assert (ten["drop"], ten["sale value"], ten["level"], ten["best"]) == ("10%", "×0.900", "−31,810", "rent")
+    assert lines[3].split() == ["none", "×1", "200,502", "207,027", "+6,525", "0", "condo", "tie",
+                                "condo", "0.5450", "tie", "48,104", "none", "condo", "max", "36.2%",
+                                "breaches", "years", "[1,", "2,", "3,", "4,", "5];", "rent", "max",
+                                "23.4%", "breaches", "none"]
+    twenty = next(l for l in lines if l.startswith("  20%"))
+    assert "condo 1–2" in twenty
+
+
+def test_row10_the_house_rows_and_their_crossings_are_templates():
+    panel = _panel(_spec(_raw(HOUSE)), "drop=0.3,0.4;year=1,19;recovery=permanent,share:0.5:3",
+                   monte_carlo=False)
+    lines, cols, rows = _parse_block(format_crash_panel(panel))
+    _check_arithmetic(cols, rows)
+    assert lines[1] == "  central line"
+    assert ("  break-even: house is cheaper below 30.70%; too close to call from 30.70% to 47.41%; "
+            "rent is cheaper above 47.41% (crossing 38.85%) [solved, central case]") in lines
+    assert "year 1 · share 0.5 over 3 years" in lines
+
+
+def test_row15_the_disagreement_cell_names_both_options():
+    """Row 15, rendered: `condo 0.4968 disagreement · rent 0.5032 of the futures`."""
+    panel = _panel(_p2(), "drop=0.32;year=1;recovery=permanent")
+    lines, _, _ = _parse_block(format_crash_panel(panel, paths=5000))
+    row = next(l for l in lines if l.startswith("  32%"))
+    assert "condo 0.4968 disagreement · rent 0.5032 of the futures" in row
+
+
+def test_x8_three_options_print_the_rows_and_the_refusal_line():
+    raw = _raw(THREE)
+    raw["simulation"]["num_sims"] = 200
+    panel = _panel(_spec(raw), "drop=0.1;year=1;recovery=permanent")
+    lines, cols, _ = _parse_block(format_crash_panel(panel, paths=200))
+    assert "level" not in cols and "sd" not in cols and "gap" in cols
+    assert lines[-1] == "  break-even: refused (not_two_options): 3 options are priced"
+
+
+def _cli(*argv: str, tmp_cwd=None):
+    out, err = io.StringIO(), io.StringIO()
+    saved = sys.argv
+    try:
+        sys.argv = ["hde", *argv]
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli_mod.main()
+    finally:
+        sys.argv = saved
+    return code, out.getvalue(), err.getvalue()
+
+
+def _ftb10l_file(tmp_path) -> str:
+    path = tmp_path / "ftb10l.yaml"
+    path.write_text(yaml.safe_dump(_ftb_laddered(10)), encoding="utf-8")
+    return str(path)
+
+
+def test_row13_the_read_back_line_follows_the_renewals_line(tmp_path):
+    """Row 13. Once in --read-back and in assumptions.read_back, right after
+    the `renewals:` line."""
+    config = _ftb10l_file(tmp_path)
+    flag = ("--crash-panel", "drop=0.10,0.20;year=1,9;recovery=permanent,full:5;jump=0.0237")
+    want = ("crash panel: drops 10%, 20%; years 1, 9; recovery permanent, full over 5 years; "
+            "jump +2.37 pp at the first renewal: condo; stated on the command line, not a "
+            "forecast and not a probability")
+    code, out, _ = _cli(config, *flag, "--read-back")
+    assert code == 0
+    lines = out.splitlines()
+    assert lines.count(want) == 1
+    assert lines[lines.index(want) - 1].startswith("condo renewals:")
+    code, out, _ = _cli(config, *flag, "--json", "--no-monte-carlo")
+    doc = json.loads(out)
+    read_back = doc["assumptions"]["read_back"]
+    assert read_back.count(want) == 1
+    assert read_back[read_back.index(want) - 1].startswith("condo renewals:")
+    assert doc["crash_panel"]["grid"]["jump"] == {"value": 0.0237, "options": ["condo"]}
+    assert len(doc["crash_panel"]["rows"]) == 8
+
+
+def test_row13_no_line_and_no_key_without_the_flag(tmp_path):
+    config = _ftb10l_file(tmp_path)
+    code, out, _ = _cli(config, "--read-back")
+    assert code == 0 and "crash panel" not in out
+    code, out, _ = _cli(config, "--json", "--no-monte-carlo")
+    doc = json.loads(out)
+    assert "crash_panel" not in doc
+    assert not any("crash panel" in line for line in doc["assumptions"]["read_back"])
+
+
+def test_the_short_read_back_counts_the_line(tmp_path):
+    code, out, _ = _cli(_ftb10l_file(tmp_path), "--crash-panel",
+                        "drop=0.1;year=1;recovery=permanent", "--read-back", "short")
+    assert code == 0
+    closing = out.splitlines()[-1]
+    assert closing.startswith("full read-back:") and "crash panel" in closing
+    assert not any(l.startswith("crash panel:") for l in out.splitlines())
+
+
+def test_the_text_block_prints_after_the_report_and_q_keeps_it():
+    code, out, _ = _cli(str(FTB), "--crash-panel", "drop=0.1;year=1;recovery=permanent", "-q")
+    assert code == 0
+    assert HEADER in out.splitlines()
+
+
+def test_a_refused_grid_prints_its_refusal_in_place_and_the_run_goes_on():
+    code, out, _ = _cli(str(FTB), "--crash-panel", "drop=1.5;year=1;recovery=permanent", "-q")
+    assert code == 0
+    assert "crash panel — refused (drop_out_of_range): drop 1.5 is outside (0, 0.99]" in out
+    assert out.startswith("Condo: $200,502")
+    code, out, _ = _cli(str(FTB), "--crash-panel", "drop=0.1;year=11;recovery=permanent", "--json")
+    panel = json.loads(out)["crash_panel"]
+    assert panel["refused"] == {"code": "year_out_of_range",
+                                "fact": "year 11 is past the 10-year horizon"}
+    assert panel["rows"] == [] and panel["no_drop"] is None
+
+
+def test_a_flag_without_the_grid_shape_exits_1():
+    code, _, err = _cli(str(FTB), "--crash-panel", "drop=x;year=1;recovery=permanent")
+    assert code == 1
+    assert "Error: --crash-panel drop: 'x' is not a number" in err
+
+
+def test_the_json_block_is_the_runner_document():
+    code, out, _ = _cli(str(FTB), "--crash-panel", "drop=0.1;year=1;recovery=full:7", "--json")
+    panel = json.loads(out)["crash_panel"]
+    assert set(panel) == {"grid", "source", "no_drop", "rows", "break_evens", "refused"}
+    assert panel["source"] == "command line"
+    (row,) = panel["rows"]
+    assert set(row) == {"drop", "year", "recovery", "sale_multiple", "central", "level_pv",
+                        "futures", "underwater_years", "affordability"}
+    assert row["recovery"] == {"form": "share", "share": 1.0, "years": 7}
+    (be,) = panel["break_evens"]
+    assert be["no_crossing"] == {"cheaper": "condo", "lo": 0.0, "hi": 0.99}
+    assert "widen" not in json.dumps(panel)

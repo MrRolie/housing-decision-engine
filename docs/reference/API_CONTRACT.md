@@ -71,6 +71,7 @@ uv run hde <config.yaml> --json
 | `sweeps` | only with `--sweep`: one entry per flag — `key`, `values` (the DISTINCT points actually run), per-point `rows` (`value`, `totals` per option, the verdict fields `best` / `runner_up` / `margin_pv` / `margin_frac` / `decisive` / `state` / `prob_best` / `mc_mean_best` / `reason`, the Monte Carlo majority `mc_best` and its `mc_prob_best` (the verdict's own) — `best` is the DETERMINISTIC winner and `prob_best` that winner's probability, so a row can read `best: rent` / `prob_best: 0.34` while the majority favours the house: that row's `state` is `disagreement` and its `decisive` is false, `affordability` per option — `max_ratio` and `years_exceeding` — when an `income` block is present, or `error` when that point is refused), `flips` (consecutive points whose cheapest option differs) plus `mc_mean_flips` (the same for `mc_mean_best`) and `mc_majority_flips` (the same for `mc_best`; the text block prints a `majority flip:` line only where it differs from the deterministic `flip:`), and `note` (present when either applies, `; `-joined: duplicate grid points collapsed — an integer key rounds `7:8:5` to five points and two values; or the price-scan coherence note below). Each row also carries (2026-09-04) `sentence` — the read-back's one line for that point, `<key>=<v>: best <opt> by <margin$> (<pct>% of <opt> PV)[, P(best) <p>%[ (at the floor)]][, insured <opt> <tier>%][, affordability <opt> max <r>% breaches years […]][, central row <i>]`, only the clauses whose data the run has (`at the floor` marks a probability EQUAL to the 65% floor: decisive by ≥, with nothing to spare; the text table's decisive column prints `True (mc_floor, at the floor)` there; on a `disagreement` point the verdict clause reads `best guess <opt> by <margin$> (<pct>% of <opt> PV), most futures <other> (<p>%) — disagree` instead, the other clauses unchanged, and the table's decisive column prints `False (mc_floor, disagree: house 60%)`) — and `insured` (`{option: premium rate}` for every owned option whose derived mortgage insurance is required at that point) — and, only on a run with a `renewal_rates` path file, `central_row`: the file's row that point's own load priced as its deterministic case, which moves with the priced renewals and so with `years`; its `sentence` then ends `, central row <i>`, the base point's included; the sweep carries `base_value` (the key's value in the YAML, or `null`). A `sources:` declaration on the swept key is lifted at every grid point — its echo class there is `sweep` — rather than re-validated against an anchor's figure; the base run still validates it. The key may be a cost line by name, `<opt>.other_recurring_costs.<line name>.annual_amount` or `.escalation_rate` — the path `sources:` accepts (2026-09-08); the list is resolved by each line's `name`, a name no line carries is refused naming the lines that exist, and a `sources:` declaration on that line is echoed `swept:` like any other. When EVERY grid point is refused the block prints one line, `sweep <key>: every point refused — <reason>` (distinct reasons `; `-joined), and NO flip line — the flip lines describe points that ran. `real_equivalent_inflation` (2026-09-08) is the run's `inflation_rate` when the swept key is a rate the loader reads AS QUOTED and the run is nominal, else `null`: there the points are nominal figures — a typed 0 is a 2.1%/yr real decline while the omitted key is the neutral 0% real — so every row label and `sentence` carries the real equivalent, `house.value_growth_rate=0.00% (-2.06% real): best rent by …`, and the header adds one clause, `points are quoted rates; 0.0% quoted = -2.1% real, the neutral default is 2.1% quoted` (or `…, the anchored default 3.0% real is 5.2% quoted` for a key whose real default is not 0). Real mode, `rates: real` and every other key are unchanged |
 | `break_evens` | only with `--break-even`: one entry per flag — `key`, the two `options`, the `bracket` asked for, `searched` (the accepted run(s) actually scanned), `refused` (only when the loader refused grid points: `count`, `values`, `reason`), `note` (`; `-joined, present when any applies: a `market_scenario` prior does not move a deterministic threshold; where that prior's own reference drift sits against the tie band on a `<owned>.value_growth_rate` threshold — INSIDE / BELOW / ABOVE, with the reminder that the drift is added to `value_growth_rate` in the Monte Carlo rather than substituted for it; a crossing OR EITHER BAND EDGE that is a mortgage-insurance cliff (the 20%-down line crossed or a premium tier changed between the two sides of that point — a step, whose "tie band" is the step's width; the clause names which point jumped, and a point that is both the crossing and an edge is said once) or that borders a refused value; or the price-scan coherence note below), `across` (only beside `--sweep`: per swept key, `rows` of `{value, break_evens, cheaper_throughout?, no_crossing?, refused?}` — the threshold re-solved at every sweep point; each row prints as ONE line carrying its sentence(s), what the config refused, and — with an `income` block — the `affordability` its `break_evens` hold, at the crossing and both band edges, or, on a row with no crossing, the `affordability` its `no_crossing` record holds at the two searched ends), `base_value`, `tie_band_fraction`, and `break_evens` (each: `sentence` — the threshold band-first in words, quote this shape; `value` where the deterministic totals cross, `cheaper_below` / `cheaper_above`, `tie_band` edges `[lo, hi]` — `null` when an edge lies outside the bracket; `affordability` — `threshold`, `value` and `tie_band` mirroring those keys, each holding per-option `{max_ratio, years_exceeding}` — or `null` without an `income` block); `cheaper_throughout` when there is no crossing, beside `no_crossing` (2026-09-04): `lo` / `hi` (the searched bounds; on an integer key, the whole numbers the solver priced them at, 2026-10-01), `cheaper`, `narrows_toward` (`low` or `high` — the end where the gap is smaller) and `widen` (the bracket to try next, one width further out on that side, or `null` when that end is one the config refuses beyond); the line reads `no crossing between <lo> and <hi>: <opt> is cheaper at both ends — widen with --break-even <key>=<lo'>:<hi'>`, on the base solve and on every `across` row; and `affordability` (2026-10-01) — `threshold`, `lo` and `hi` mirroring the record's own keys, each of `lo` / `hi` the per-option `{max_ratio, years_exceeding}` a single run at that end prints, both ends being points the solver priced — or `null` without an `income` block, when nothing new prints; with one, the text block prints `affordability at both searched ends (highest cost/income ratio; years above the N% threshold):` under the no-crossing line, then `at the low end <lo>: …` and `at the high end <hi>: …` (an option whose figures match at both ends is one `… at every quoted point` phrase), and the read-back line and each `across` row carry the same phrases on one line; `at_floor` (2026-09-08) is true when the gap narrows toward a low end already at 0 on an input whose domain stops there — a dollar figure, a tax, cost, mortgage or share-of-price rate, a volatility; a growth, escalation, return or discount rate may be negative and keeps the open floor — and then `widen` never goes below 0: the line reads `no crossing down to 0 on <key>: <opt> is cheaper throughout that range — widen upward with --break-even <key>=0:<hi'>`, or `… — the high end is one the config refuses beyond; no wider bracket reaches a crossing` when the high end was refused. The key may be a cost line by name, `<opt>.other_recurring_costs.<line name>.annual_amount` (2026-09-08; the money default bracket is taken from that line's value) or `.escalation_rate` (give `lo:hi`) (an `across` block also carries the sweep key's `base_value`). The `sentence` closes with `(crossing <v>)` alone: the band rule is stated once, in the block's header line, and `tie_band_fraction` carries the figure. `real_equivalent_inflation` (2026-09-08; the same marker the sweeps carry, on the solved key — and on each `across` block for its sweep key) is set when the key is a quoted rate in a nominal run: each band edge and the crossing then state their real equivalent once, `rent is cheaper below 1.16% (-0.92% real); too close to call between 1.16% and 1.88% (-0.22% real); condo is cheaper above 1.88% (crossing 1.53%, -0.55% real)`, and an `across` row over such a sweep key labels its point `condo.value_growth_rate=0.00% (-2.06% real): …`; real mode is unchanged. The `note` also names a mortgage-insurance step strictly INSIDE the tie band — neither the crossing nor an edge — as `… lies inside the tie band, at <v> — the gap steps there; the band is not one smooth range of near-ties` |
 | `decomposition` | only with `--decompose`: which risk decides the verdict — the spread, level and reversal registers together, or a named refusal; keys, refusal codes and which figures move with the sample are in § The `decomposition` block below |
+| `crash_panel` | only with `--crash-panel`: stated one-time drops in the home's value, each a conditional row with its central line and its futures, the solved break-even drop per year and recovery, or a named refusal; keys, codes and the text block are in § The `crash_panel` block below |
 
 **The read-back block (`assumptions.read_back`, `--read-back`).** The lines an
 answer must carry, assembled by the engine in one fixed order: every
@@ -622,6 +623,120 @@ fires once the block's futures are priced
 (`no_spread`, `budget` on `k`, `income_moved`, `one_channel`,
 `untagged_width`, `degenerate_resample`, `freeze_leak` and `identity_failed`),
 with its `code`, `reason`, `channel` and `label`.
+
+## The `crash_panel` block (`--crash-panel`)
+
+This section is the one home of what each figure of the panel means. Design
+record: `docs/specs/2026-10-03-crash-stress-panel.md`.
+
+**What a row is.** A row is CONDITIONAL: if the home's value drops by `drop`
+in year `year`, measured against the run's own no-crash value path, and comes
+back as `recovery` says, these are the figures. Nothing in the block is a
+probability of a drop, and nothing in it is a forecast; every drop, year and
+recovery was typed on the command line for this run (`source`), and the engine
+has no default grid and no historical anchor. A drop multiplies every owned
+option's value in that year and after, in the central line and on every
+future; it reaches the sale value and, for a house, the maintenance (a rate on
+the value). It reaches no payment, no renewal, no rent, no fee and no tax.
+
+**The flag.** `--crash-panel 'drop=d1,...;year=y1,...;recovery=r1,...[;jump=j]'`.
+`drop` is a fraction in (0, 0.99]; `year` a whole year in 1..`years` (`years`
+is the sale year); `recovery` one or more of `permanent`, `full:K` and
+`share:R:K`, where `share:R:K` returns the share R in (0, 1] of the log drop in
+equal log steps over the K ≥ 1 years after the drop year and `full:K` is
+`share:1:K`. Drops and years are sorted and de-duplicated, recoveries
+de-duplicated in the order typed. Every field but `jump` is required. The rows
+are the product of the three, at most 48. A flag without this shape is a usage
+error (exit 1).
+
+**`jump`.** A decimal added to the quoted rate of the FIRST renewal of every
+financed option that states a renewal ladder, after the ladder is written out
+in full (one entry per renewal of the amortization, the last stated entry
+carried forward), each entry then converted as the loader converts it. Every
+row, the `none` row included, prices the jumped ladder, so `level` is the
+drop's move with the jump in place. `grid.jump.options` names the options whose
+first renewal the horizon prices.
+
+**Presence.** The key is present only with `--crash-panel`, absent otherwise.
+
+| Key | What it is |
+|---|---|
+| `grid` | `drop`, `year`, `recovery` (each `{form, share, years}`: `form` is `permanent` with `share` 0 and `years` null, or `share`, which `full:K` also serialises as, with `share` 1), `jump` (`null`, or `{value, options}`); `null` when the grid itself was refused |
+| `source` | always `command line` |
+| `no_drop` | the row with no drop: `drop`, `year` and `recovery` are `null`, `sale_multiple` is 1 |
+| `rows` | one row per (drop, year, recovery), grouped by year, then recovery, then drop |
+| `break_evens` | one entry per (year, recovery), in the rows' order |
+| `refused` | `null`, or `{code, fact}` when the whole panel is refused; `no_drop` is then `null` and `rows` and `break_evens` are empty |
+
+**A row.**
+
+| Key | What it is |
+|---|---|
+| `sale_multiple` | `m(years)`: the sale value as a multiple of the no-crash path's. A recovery that completes before the sale gives exactly 1, and a condo's total is then unchanged |
+| `central` | the central line with the stated drop: `totals` per priced option, `best`, `runner_up`, `margin_pv`, `margin_frac`, and `state` and `rule` under the margin rule `--break-even` applies (`option` when the margin is at least the tie band of the cheaper option's PV, `tie` otherwise) |
+| `level_pv` | with two priced options, the row's `B − A` central gap minus the `no_drop` row's (options in the order condo, house, rent): how far the stated drop moved the central line; 0 on `no_drop`; `null` with other than two options |
+| `futures` | the config's own Monte Carlo with the stated drop on every path, the same random numbers as the plain run and no extra draw, judged by the verdict's own rule: `best`, `prob_best`, `mc_best`, `mc_prob_best`, `state`, `rule`, and `gap_sd`, the standard deviation over the futures of the same `B − A` difference (`null` with other than two options). `prob_best` is the probability over the futures GIVEN the stated drop, never a probability of the drop. In the `disagreement` state the central case and the majority of the futures favour different options and `prob_best` is below 0.5; `mc_best` and `mc_prob_best` name the majority. `futures` is `null` under `--no-monte-carlo` and on a single-path run |
+| `underwater_years` | per owned option, the years whose value net of selling cost, `value_t × m(t) × (1 − selling_cost_rate)`, is below the balance owed at the end of that year, on the same balance the present value prices (the jumped ladder under a jump). The engine prices no consequence of it: no forced sale, no loan-to-value test at renewal |
+| `affordability` | with an `income` block, per option `max_ratio` and `years_exceeding` on the row's central line, as `--sweep` rows carry them; `null` without one |
+
+**A break-even entry.** The drop at which the central case's cheapest option
+changes, solved on the central line over the whole range the flag accepts:
+`key` (`crash.drawdown`), `options`, `bracket` (`[0, 0.99]`) and
+`break_evens`, each crossing `{value, cheaper_below, cheaper_above, tie_band}`
+with the tie-band edges `[lo, hi]`; an edge is `null` where the band reaches
+the bracket's end (no drop, or a 99% drop) or where the next crossing ends it.
+`no_crossing` is `null` when a crossing exists, else `{cheaper, lo, hi}`: the
+option cheaper at both ends of the bracket `[lo, hi]`. With other than two
+priced options the entry is `{year, recovery, refused}` instead.
+
+**Refusals.** Each is a code and one measured fact.
+
+| code | fires when |
+|---|---|
+| `drop_out_of_range` | a drop ≤ 0 or > 0.99 |
+| `year_out_of_range` | a year < 1 or > `years` |
+| `recovery_malformed` | a share outside (0, 1], K < 1 or not whole, or an unknown form |
+| `hazard_wired` | any owned `price_shock.annual_hazard` > 0: a row is "given this crash", and random crashes on top would make it "given this crash and maybe more" |
+| `no_owned_option` | neither condo nor house is priced |
+| `jump_without_ladder` | `jump`, and no financed option prices a renewal inside the horizon |
+| `jump_beside_path_file` | `jump` beside a `renewal_rates.path` file |
+| `not_two_options` | other than two priced options: the break-even entries, `level_pv` and `gap_sd` only; the rows still print |
+| `too_many_rows` | more than 48 rows |
+
+Every code but `not_two_options` refuses the whole panel; the run's other
+output is unchanged and the exit code is the run's.
+
+**The text block.** A header tagged `[drop, year, recovery: command line]`; with
+`jump`, the line `jump +<pp> pp at the first renewal: <options>`; the column
+header, the central line's columns then, with futures, the futures' columns;
+the `none` row; then, per (year, recovery), the line `year <c> · <recovery>`,
+its rows, and its break-even line(s) tagged `[solved, central case]`.
+`<recovery>` reads `permanent`, `full over K years` or `share R over K years`.
+The gap column is `B − A` with two options, computed as the difference of the
+two PRINTED totals; with three it is runner-up − best with both names. `level`
+is the row's printed gap minus the `none` row's. A `disagreement` row's
+futures cell reads `<best> <prob_best> disagreement · <mc_best> <mc_prob_best>
+of the futures`. `underwater` lists each owned option's years, or `none`.
+`affordability` prints each option's `max <ratio> breaches years [...]` or
+`breaches none`. The break-even lines come from these templates and no
+others, with `lo`, `hi` and `x` the band's edges and the crossing, and "the
+next crossing" for an edge another crossing ends:
+
+- `break-even: A is cheaper below lo; too close to call from lo to hi; B is cheaper above hi (crossing x)`
+- `break-even: too close to call from no drop to hi; B is cheaper above hi (crossing x)`
+- `break-even: A is cheaper below lo; too close to call from lo to a 99% drop (crossing x)`
+- `break-even: too close to call from no drop to a 99% drop (crossing x)`
+- `break-even: no crossing from no drop to a 99% drop: A is cheaper throughout`
+- `break-even: refused (not_two_options): <n> options are priced`
+
+A whole-panel refusal prints `crash panel — refused (<code>): <fact>` in place
+of the block.
+
+**The read-back line.** After the `renewals:` lines, in `--read-back` and in
+`assumptions.read_back`: `crash panel: drops ...; years ...; recovery ...[;
+jump ...]; stated on the command line, not a forecast and not a probability`.
+`--read-back short` counts it in its closing line. A refused panel carries no
+line.
 
 ## Provenance
 

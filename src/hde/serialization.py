@@ -1625,6 +1625,7 @@ def _read_back_sections(
     break_evens: Iterable[Dict[str, Any]],
     sweeps: Iterable[Dict[str, Any]],
     raw: Optional[Dict[str, Any]],
+    crash_panel: Optional[str] = None,
 ) -> List[Tuple[str, List[str], List[str]]]:
     """The block as labelled sections, in the block's order — the ONE assembly
     both views are cut from: `(label, lines, short)`, the full block's lines
@@ -1681,6 +1682,10 @@ def _read_back_sections(
         # not a figure the engine anchored. An answer that carries the verdict
         # without it never names what produced the verdict.
         ("renewals", _option_lines(echo, "renewals:"), []),
+        # The crash panel's grid (docs/specs/2026-10-03-crash-stress-panel.md
+        # §3.4): every drop, year and recovery was stated for this run, and the
+        # line says it is not a forecast. Absent without --crash-panel.
+        ("crash panel", [crash_panel] if crash_panel is not None else [], []),
         # A renewal-rate path file (docs/specs/2026-10-01-renewal-rate-path-file.md
         # §7): the file, its central row and its band, which the renewals: lines
         # above price.
@@ -1758,6 +1763,7 @@ def read_back_lines(
     sweeps: Iterable[Dict[str, Any]] = (),
     raw: Optional[Dict[str, Any]] = None,
     short: bool = False,
+    crash_panel: Optional[str] = None,
 ) -> List[str]:
     """Every line an honest answer has to carry, in one order, ready to paste.
 
@@ -1769,7 +1775,8 @@ def read_back_lines(
     `mode:` line, which names the discount rate stated and the rate in use
     (a real figure composed, or a quoted figure used as typed); the
     decisiveness rule; the `best guess:` lines;
-    each option's financing line and its
+    each option's financing line, its `renewals:` line, the `crash panel:`
+    line when `crash_panel` (that line) is given, and its
     `purchase costs:` line; the year-1 cash view; each option's other-costs
     line with its citation or `no anchor match`; the affordability summary;
     each break-even's sentence, its re-solutions across a sweep, and the
@@ -1790,7 +1797,7 @@ def read_back_lines(
     """
     sections = _read_back_sections(
         spec, warnings=warnings, verdict=verdict, det=det, prior=prior,
-        break_evens=break_evens, sweeps=sweeps, raw=raw,
+        break_evens=break_evens, sweeps=sweeps, raw=raw, crash_panel=crash_panel,
     )
     full = [line for _, lines, _ in sections for line in lines]
     if not short:
