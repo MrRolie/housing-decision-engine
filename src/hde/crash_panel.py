@@ -267,7 +267,7 @@ def underwater_years(params, econ: EconomicParams, years: int,
 
 # The axis `solve_crossings` searches, and the bracket: the whole range X1
 # accepts, so no wider bracket exists (spec §1.3).
-BREAK_EVEN_KEY = "crash.drawdown"
+BREAK_EVEN_KEY = "crash.drop"
 BREAK_EVEN_BRACKET = (0.0, DROP_CEILING)
 # Where no crossing exists, the drops at which the no-crossing line reads the
 # margin rule, besides the grid's own drops (every row's drop is one of them,

@@ -681,7 +681,7 @@ first renewal the horizon prices.
 
 **A break-even entry.** The drop at which the central case's cheapest option
 changes, solved on the central line over the whole range the flag accepts:
-`key` (`crash.drawdown`), `options`, `bracket` (`[0, 0.99]`) and
+`key` (`crash.drop`), `options`, `bracket` (`[0, 0.99]`) and
 `break_evens`, each crossing `{value, cheaper_below, cheaper_above, tie_band}`
 with the tie-band edges `[lo, hi]`; an edge is `null` where the band reaches
 the bracket's end (no drop, or a 99% drop) or where the next crossing ends it.

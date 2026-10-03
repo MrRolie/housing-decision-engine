@@ -263,7 +263,7 @@ def test_row3_the_permanent_break_even_is_the_selling_cost_oracle():
         det = _central(spec, d, 1, PERMANENT)
         return det.condo.total_pv, det.rent.total_pv
 
-    out = solve_crossings("crash.drawdown", ("condo", "rent"), 0.0, 0.99, totals_at,
+    out = solve_crossings("crash.drop", ("condo", "rent"), 0.0, 0.99, totals_at,
                           to_adjacent_floats=True)
     (crossing,) = out["break_evens"]
     assert crossing["value"] == pytest.approx(gap / unit, rel=1e-9)
@@ -904,6 +904,8 @@ def test_the_json_block_is_the_runner_document():
                         "futures", "underwater_years", "affordability"}
     assert row["recovery"] == {"form": "share", "share": 1.0, "years": 7}
     (be,) = panel["break_evens"]
+    # One input, one name: the flag's `drop=` is the break-even's `crash.drop`.
+    assert (be["key"], be["bracket"]) == ("crash.drop", [0.0, 0.99])
     assert be["no_crossing"] == {"cheaper": "condo", "lo": 0.0, "hi": 0.99,
                                  "tie_bands": [[None, None]]}
     assert "widen" not in json.dumps(panel)

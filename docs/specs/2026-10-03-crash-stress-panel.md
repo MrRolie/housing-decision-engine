@@ -127,19 +127,19 @@ same reason.
 ### 1.3 The break-even drop: `solve_crossings` finds it; the panel words it
 
 `break_even.solve_crossings(key, options, lo, hi, totals_at)` takes any callable. With
-`key = "crash.drawdown"`, bracket [0, 0.99] (the whole range X1 accepts, §7) and `totals_at(d)`
+`key = "crash.drop"`, bracket [0, 0.99] (the whole range X1 accepts, §7) and `totals_at(d)`
 returning the prototype's crashed totals, it returns the crossing and the tie-band edges. The
 rest of the break-even machinery (`solve_break_even`, `_affordability_at`,
 `deterministic_boundaries`, `_ranking_at`) reaches values only through `load_at(raw, key, v)` on
 a YAML key, so it cannot be reused for an axis that is not in the YAML.
 
 `solve_crossings`'s FIGURES are reused; `threshold_sentences`'s WORDING is not. Where there is no
-crossing it prints, on FTB with full recovery over 7 years from year 1, on FTB-25L likewise, and on
-the house example likewise: "no crossing between 0.00% and 99.00%: condo is cheaper at both ends —
-widen with --break-even crash.drawdown=-0.99:0.99". That command does not exist (`crash.drawdown`
-is no YAML key and `--crash-panel` takes no bracket), and its low end is a negative drop, which X1
-refuses: `floor_at_zero("crash.drawdown")` is False. The bracket is the whole accepted range, so
-no wider bracket exists. Where the band reaches the bracket's low end it prints "condo is cheaper
+crossing it prints, on FTB with full recovery over 7 years from year 1, and on FTB-25L likewise:
+"no crossing between 0.00% and 99.00%: condo is cheaper at both ends — widen with --break-even
+crash.drop=-0.99:0.99" (on the house example likewise, with house in condo's place). That
+command does not exist (`crash.drop` is no YAML key and `--crash-panel` takes no bracket), and its
+low end is a negative drop, which X1 refuses: `floor_at_zero("crash.drop")` is False. The bracket
+is the whole accepted range, so no wider bracket exists. Where the band reaches the bracket's low end it prints "condo is cheaper
 below the bracket's low end", which on this axis would assert something about a price RISE, which
 the panel cannot price. The panel therefore has its own break-even templates (§3.2), and no hint
 to widen.
@@ -474,7 +474,7 @@ A top-level `crash_panel` object, absent without the flag:
  "source": "command line",
  "no_drop": <row>,
  "rows": [<row>],
- "break_evens": [{"year", "recovery", "key": "crash.drawdown", "options", "bracket": [0, 0.99],
+ "break_evens": [{"year", "recovery", "key": "crash.drop", "options", "bracket": [0, 0.99],
                   "break_evens": [...], "no_crossing": null | {"cheaper", "lo", "hi", "tie_bands"}}
                  | {"year", "recovery", "refused": {"code", "fact"}}],
  "refused": null | {"code", "fact"}}
@@ -749,7 +749,7 @@ asserted. The verdict is `models.compute_verdict` on `compute_deterministic` and
 | central totals identical with and without `price_shock` | `compute_deterministic` on `tests/fixtures/uncertainty_surface.yaml` (via `load_config_dict`) and on a copy with both `price_shock` blocks and their `sources:` entries removed |
 | §1.2 tables | the central-line wrapper per (drop, year, recovery) on FTB, FTB-25L and the house example |
 | §1.3 house with maintenance on the no-crash path (29.21%) | the central-line wrapper with `_maintenance_rate_for_year` left unwrapped, `solve_crossings` on the house example, permanent from year 1 |
-| §1.3 crossings, bands, no-crossing sentences, oracle | `break_even.solve_crossings('crash.drawdown', options, 0, hi, totals_at)` at hi = 0.95 and 0.99, then `break_even.threshold_sentences('crash.drawdown', out, out['tie_band_fraction'])`; `break_even.floor_at_zero('crash.drawdown')`; the oracle `gap / pv_single(value_N × (1 − selling_cost_rate), r, years)` and, for the mutation, `gap / pv_single(value_N, r, years)` |
+| §1.3 crossings, bands, no-crossing sentences, oracle | `break_even.solve_crossings('crash.drop', options, 0, hi, totals_at)` at hi = 0.95 and 0.99, then `break_even.threshold_sentences('crash.drop', out, out['tie_band_fraction'])`; `break_even.floor_at_zero('crash.drop')`; the oracle `gap / pv_single(value_N × (1 − selling_cost_rate), r, years)` and, for the mutation, `gap / pv_single(value_N, r, years)` |
 | the households' configs and plain runs | each household rebuilt from FTB-10L or FTB-25L by the keys in the table at the top, at seeds 42 and 4242 |
 | §1.4 table, seed-unstable rows, byte-identical renter PVs | the Monte Carlo wrapper on each household at seeds 42 and 4242: the plain run, permanent from year 1 and `full:7` from year T−1 at 10% to 40%, `full:7` from year 1 at 40%, `share:0.5:5` from year 1 at 30% (P2b); `res.rent.pvs.tobytes()` compared across rows |
 | the `disagreement` row | P2, permanent from year 1 at 31%, 32%, 32.5%, 33%, 34%, 35%, both seeds: `verdict.best`, `state`, `prob_best`, `mc_best`, `mc_prob_best` |
