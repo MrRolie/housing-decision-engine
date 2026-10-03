@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
+
+from .deterministic import _effective_growth_rate, owned_balance
+from .models import EconomicParams
 
 # §7: the largest drop the panel accepts, and the most rows one grid may ask for.
 DROP_CEILING = 0.99
@@ -105,11 +108,14 @@ def drop_path(years: int, d: float, c: int, recovery: Recovery) -> Tuple[float, 
     equal log steps over the K years after it. "Back" is back to the no-crash
     path, not to the pre-crash price (spec §5). A full recovery that completes
     gives exactly 1.0.
+
+    A drop of 0 gives a path of ones: the break-even solver prices the
+    bracket's low end, which the grid itself refuses (X1).
     """
     if not 1 <= c <= years:
         raise ValueError(f"drop year {c} is outside 1..{years}")
-    if not 0.0 < d <= DROP_CEILING:
-        raise ValueError(f"drop {d!r} is outside (0, {DROP_CEILING}]")
+    if not 0.0 <= d <= DROP_CEILING:
+        raise ValueError(f"drop {d!r} is outside [0, {DROP_CEILING}]")
     log_drop = -math.log1p(-d)
     path: List[float] = []
     for t in range(1, years + 1):
@@ -223,3 +229,21 @@ def check_years(grid: CrashGrid, horizon: int) -> None:
         if c < 1:
             raise CrashPanelRefusal("year_out_of_range", f"year {c} is before year 1")
 
+
+
+def underwater_years(params, econ: EconomicParams, years: int,
+                     path: Optional[Sequence[float]] = None) -> List[int]:
+    """The years t = 1..years in which one owned option's value net of selling
+    cost, `initial_value × (1 + g)^t × m(t) × (1 − selling_cost_rate)`, is
+    below the balance it owes at the end of t (`deterministic.owned_balance`,
+    the split the PV leg prices at the sale). `path` None: no drop."""
+    if path is not None and len(path) != years:
+        raise ValueError(f"drop_path has {len(path)} entries for a {years}-year run")
+    growth = _effective_growth_rate(params.value_growth_rate, econ)
+    under: List[int] = []
+    for t in range(1, years + 1):
+        m = 1.0 if path is None else path[t - 1]
+        net = params.initial_value * (1 + growth) ** t * m * (1 - params.selling_cost_rate)
+        if net < owned_balance(params, t):
+            under.append(t)
+    return under

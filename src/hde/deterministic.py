@@ -98,6 +98,38 @@ def _require_valued_growth(effective_growth: float, label: str) -> None:
             f"(1+g={1 + effective_growth:.4f}); growth <= -100% cannot be valued")
 
 
+def _check_drop_path(drop_path: Optional[Sequence[float]], years: int) -> None:
+    """A crash panel's multiplier carries one entry per year of the run."""
+    if drop_path is not None and len(drop_path) != years:
+        raise ValueError(
+            f"drop_path has {len(drop_path)} entries for a {years}-year run")
+
+
+def _loan_balance(loan: float, mortgage_rate: float, mortgage_term_years: int, year: int,
+                  payment: float, segments: Optional[List[RenewalSegment]]) -> float:
+    """The balance owed at the end of `year`: on the renewal ladder when the
+    option has one, on the single-rate schedule otherwise. The one split the
+    PV leg and the crash panel's underwater years both read."""
+    if segments is None:
+        return outstanding_balance(loan, mortgage_rate, mortgage_term_years, year, payment)
+    return balance_at(segments, mortgage_term_years, loan, year)
+
+
+def owned_balance(params, year: int) -> float:
+    """The balance one owned option owes at the end of `year`, by exactly the
+    split `_financing_pv` prices at the sale; 0.0 all-cash or without a
+    mortgage block."""
+    if getattr(params, "all_cash", False):
+        return 0.0
+    if (params.down_payment is None or params.mortgage_rate is None
+            or params.mortgage_term_years is None):
+        return 0.0
+    loan = params.initial_value - params.down_payment + params.financed_purchase_costs
+    payment = mortgage_payment(loan, params.mortgage_rate, params.mortgage_term_years)
+    return _loan_balance(loan, params.mortgage_rate, params.mortgage_term_years, year,
+                         payment, renewal_segments_for(params))
+
+
 def _financing_pv(
     initial_value: float,
     down_payment: Optional[float],
@@ -169,9 +201,8 @@ def _financing_pv(
         if renewal_years is None:
             payment = mortgage_payment(loan, mortgage_rate, mortgage_term_years)
             mortgage_pv = pv_annuity(payment, dr, min(n_years, mortgage_term_years))
-            balance_N = outstanding_balance(
-                loan, mortgage_rate, mortgage_term_years, n_years, payment
-            )
+            balance_N = _loan_balance(loan, mortgage_rate, mortgage_term_years, n_years,
+                                      payment, None)
         else:
             # Each segment's payments are an annuity valued at the segment's
             # own start and discounted back from there; the horizon truncates
@@ -187,7 +218,8 @@ def _financing_pv(
                 mortgage_pv += pv_single(
                     pv_annuity(segment.payment, dr, paid_years), dr, segment.start_year - 1
                 )
-            balance_N = balance_at(segments, mortgage_term_years, loan, n_years)
+            balance_N = _loan_balance(loan, mortgage_rate, mortgage_term_years, n_years,
+                                      0.0, segments)
     equity_N = value_N * (1 - selling_cost_rate) - balance_N
     terminal_equity_pv = -pv_single(equity_N, dr, n_years)
     return downpayment_pv, mortgage_pv, terminal_equity_pv
@@ -351,9 +383,14 @@ def _compute_condo_option(
     sim: SimulationParams,
     econ: EconomicParams,
     hbp_repayment_pv: float = 0.0,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> OptionResult:
     """
     Compute the deterministic OptionResult for a condo.
+
+    `drop_path` is a crash panel row's multiplier m(t), t = 1..years
+    (`crash_panel.drop_path`): the sale value is multiplied by m(years), and
+    nothing else a condo prices reads its value. None: today's call.
 
     Preserves the exact year-by-year arithmetic of the original engine:
     per-year fee escalation, reserve accrual, and reserve coverage of events.
@@ -415,6 +452,9 @@ def _compute_condo_option(
     condo_value_growth = _effective_growth_rate(condo.value_growth_rate, econ)
     _require_valued_growth(condo_value_growth, "condo")
     value_N = condo.initial_value * (1 + condo_value_growth) ** sim.years
+    _check_drop_path(drop_path, sim.years)
+    if drop_path is not None:
+        value_N *= drop_path[sim.years - 1]
     downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
         condo.initial_value, condo.down_payment, condo.mortgage_rate,
         condo.mortgage_term_years, condo.all_cash, condo.selling_cost_rate,
@@ -444,9 +484,15 @@ def _compute_house_option(
     sim: SimulationParams,
     econ: EconomicParams,
     hbp_repayment_pv: float = 0.0,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> OptionResult:
     """
     Compute the deterministic OptionResult for a house.
+
+    `drop_path` is a crash panel row's multiplier m(t), t = 1..years: the sale
+    value is multiplied by m(years) and year t's maintenance by m(t), since
+    maintenance is a rate on the value the house has that year. None: today's
+    call.
 
     Preserves the exact year-by-year arithmetic of the original engine:
     value growth, age/condition maintenance curve, events, and other costs.
@@ -459,6 +505,7 @@ def _compute_house_option(
     discount_rate = sim.discount_rate
     house_value_growth = _effective_growth_rate(house.value_growth_rate, econ)
     _require_valued_growth(house_value_growth, "house")
+    _check_drop_path(drop_path, sim.years)
 
     other_cost_growth = [
         _effective_growth_rate(c.escalation_rate, econ)
@@ -479,7 +526,10 @@ def _compute_house_option(
         if year > 1:
             house_value *= (1 + house_value_growth)
         maintenance_rate = _maintenance_rate_for_year(house, year)
-        maint_amount = maintenance_rate * house_value
+        if drop_path is None:
+            maint_amount = maintenance_rate * house_value
+        else:
+            maint_amount = maintenance_rate * (house_value * drop_path[year - 1])
         maintenance_pv += pv_single(maint_amount, discount_rate, year)
 
         # Other recurring costs
@@ -494,6 +544,8 @@ def _compute_house_option(
                 events_pv += pv_single(event.base_cost, discount_rate, year)
 
     value_N = house.initial_value * (1 + house_value_growth) ** sim.years
+    if drop_path is not None:
+        value_N *= drop_path[sim.years - 1]
     downpayment_pv, mortgage_pv, terminal_equity_pv = _financing_pv(
         house.initial_value, house.down_payment, house.mortgage_rate,
         house.mortgage_term_years, house.all_cash, house.selling_cost_rate,
@@ -610,9 +662,13 @@ def _annual_costs_for_option(
     rent_reset_year: Optional[int] = None,
     event_years: Optional[List[Optional[int]]] = None,
     renewal_rates: Optional[Sequence[float]] = None,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> List[float]:
     """
     Un-discounted annual housing cost by year, used for affordability ratios.
+
+    `drop_path` is a crash panel row's multiplier m(t): it reaches only the
+    house's maintenance, a rate on the year's value. None: today's call.
 
     `renewal_rates` is one Monte Carlo path's row of a renewal-rate path file,
     cut to this option's columns, and steps the payment as that path's PV leg
@@ -663,6 +719,7 @@ def _annual_costs_for_option(
 
     if event_years is None:
         event_years = [_event_year_deterministic(ev, sim.years) for ev in params.events]
+    _check_drop_path(drop_path, sim.years)
     costs: List[float] = []
     for t in range(sim.years):
         year = t + 1
@@ -681,6 +738,8 @@ def _annual_costs_for_option(
             costs.append(base + ev_cost + other_cost + mort_t)
         elif option_type == "house":
             house_val = params.initial_value * ((1 + _g(params.value_growth_rate)) ** t)
+            if drop_path is not None:
+                house_val *= drop_path[t]
             maint_rate = _maintenance_rate_for_year(params, year)
             costs.append(house_val * maint_rate + ev_cost + other_cost + mort_t)
         elif option_type == "rent":
@@ -702,6 +761,7 @@ def _annual_costs_for_option(
 def _compute_affordability_report(
     income: IncomeParams,
     spec: ComparisonSpec,
+    drop_path: Optional[Sequence[float]] = None,
 ) -> AffordabilityReport:
     """
     Build the deterministic affordability report: an income trajectory plus,
@@ -715,7 +775,8 @@ def _compute_affordability_report(
         if params is None:
             return None, []
         costs = _annual_costs_for_option(
-            option_type, params, spec.simulation, spec.economic
+            option_type, params, spec.simulation, spec.economic,
+            drop_path=drop_path if option_type == "house" else None,
         )
         ratios = [
             c / inc if inc > 0 else float("inf")
@@ -740,7 +801,11 @@ def _compute_affordability_report(
     )
 
 
-def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult:
+def compute_deterministic(
+    spec: ComparisonSpec,
+    *,
+    drop_path: Optional[Sequence[float]] = None,
+) -> ComparisonDeterministicResult:
     """
     Run deterministic PV analysis for all options present in the spec.
 
@@ -751,6 +816,9 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
     Args:
         spec: ComparisonSpec bundling simulation/economic params and the
               optional condo/house/rent/income parameter sets.
+        drop_path: a crash panel row's multiplier m(t) on the home's value,
+              t = 1..years (`crash_panel.drop_path`), applied to both owned
+              options (one market). None: the central case as always.
 
     Returns:
         ComparisonDeterministicResult with per-option results and an optional
@@ -762,13 +830,13 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
     """
     condo_result = (
         _compute_condo_option(spec.condo, spec.simulation, spec.economic,
-                              hbp_repayment_pv_for(spec, "condo"))
+                              hbp_repayment_pv_for(spec, "condo"), drop_path=drop_path)
         if spec.condo is not None
         else None
     )
     house_result = (
         _compute_house_option(spec.house, spec.simulation, spec.economic,
-                              hbp_repayment_pv_for(spec, "house"))
+                              hbp_repayment_pv_for(spec, "house"), drop_path=drop_path)
         if spec.house is not None
         else None
     )
@@ -780,7 +848,7 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
 
     income_report = None
     if spec.income is not None:
-        income_report = _compute_affordability_report(spec.income, spec)
+        income_report = _compute_affordability_report(spec.income, spec, drop_path)
 
     # S4b: a loaded ScenarioPrior stamps its identity on the result payload
     # (its drift enters the Monte Carlo only; real in either mode — nominal
@@ -797,7 +865,9 @@ def compute_deterministic(spec: ComparisonSpec) -> ComparisonDeterministicResult
     ):
         if result is None:
             continue
-        result.cash_year1 = _annual_costs_for_option(option_type, params, spec.simulation, spec.economic)[0]
+        result.cash_year1 = _annual_costs_for_option(
+            option_type, params, spec.simulation, spec.economic,
+            drop_path=drop_path if option_type == "house" else None)[0]
         result.principal_year1 = _principal_repaid_year1(option_type, params)
         result.appreciation_year1 = (
             params.initial_value * _effective_growth_rate(params.value_growth_rate, spec.economic)
