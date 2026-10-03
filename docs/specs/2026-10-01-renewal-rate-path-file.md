@@ -631,6 +631,12 @@ Neither of these can be settled by measuring inside the engine.
    negative since 1991 (−0.16 to −0.30), the sign under which independence would understate
    it. The engine cannot sign the covariance without a jointly fitted model, and that is board
    item 13's.
+
+   > The authors acknowledge use of the dataset described in Mack and Martínez-García (2011).
+   > Mack, A., and E. Martínez-García. 2011. "A Cross-Country Quarterly Database of Real House
+   > Prices: A Methodological Note." Globalization and Monetary Policy Institute Working Paper
+   > No. 99, Federal Reserve Bank of Dallas. The figures above were computed from the database
+   > by 2026-10-02; the date it was consulted was not recorded.
 2. **What is the smallest N a file needs?** Drawing with replacement means a 50-row file at
    10,000 paths is a 50-point distribution. The read-back prints N. Whether some N should be
    refused is a product rule, not a measurement.
@@ -690,5 +696,5 @@ not committed; r2's `m/` configs are the review's. Each is a delta on §2's two 
 | the did-you-mean message on `renewal_rate` (main and prototype, r2) | `uv run python ../m_didyoumean.py`: `examples/mortgage_house_vs_rent.yaml` plus a top-level `renewal_rate: {path: x.json}`, through `load_config_dict` |
 | `CHANNELS` ids `[0, …, 6]` (main) and `[0, …, 6, 8]` (prototype) (r2) | `uv run python -c "from hde.decomposition import CHANNELS; print([c.id for c in CHANNELS])"` |
 | commit 3's and 7's text: `test_skill_contract.py` 17 passed, `test_input_schema.py` 2 failed (the `KNOWN_GOOD` tests), SKILL.md 2,597 words (prototype, r2) | the edits on a copy, then `uv run --extra dev python -m pytest -q -p no:cacheprovider tests/test_skill_contract.py tests/test_input_schema.py`, and `python3 -c "print(len(open('.claude/skills/hde/SKILL.md').read().split()))"` |
-| §11's co-movement: same five-year window +0.32/+0.50, +0.44/+0.40, +0.68/+0.38, +0.45/+0.21; following window +0.32/+0.41, +0.25/+0.36, +0.13/+0.03, −0.26/−0.10; one-year rate change against the following year's price change, since 1991, −0.16, −0.24, −0.29, −0.30 (all starts / 1991+; public data, outside the engine) | Pearson over overlapping annual starts t through 2025, December values (Q4 for the Dallas Fed series): x = v733833(t+h) − v733833(t) in percentage points, y = ln(P(b)/P(a)) with [a, b] = [t, t+h] (same) or [t+h, t+2h] (following), h = 5 or 1. Price series: Statistics Canada v111955484 (NHPI, Montréal), that divided by CPI v41690973, and the Dallas Fed International House Price Database HPI and RHPI for Canada. Independent windows ≈ n/h |
+| §11's co-movement: same five-year window +0.32/+0.50, +0.44/+0.40, +0.68/+0.38, +0.45/+0.21; following window +0.32/+0.41, +0.25/+0.36, +0.13/+0.03, −0.26/−0.10; one-year rate change against the following year's price change, since 1991, −0.16, −0.24, −0.29, −0.30 (all starts / 1991+; public data, outside the engine) | Pearson over overlapping annual starts t through 2025, December values (Q4 for the Dallas Fed series): x = v733833(t+h) − v733833(t) in percentage points, y = ln(P(b)/P(a)) with [a, b] = [t, t+h] (same) or [t+h, t+2h] (following), h = 5 or 1. Price series: Statistics Canada v111955484 (NHPI, Montréal), that divided by CPI v41690973, and the Dallas Fed International House Price Database HPI and RHPI for Canada (Mack and Martínez-García 2011, Globalization and Monetary Policy Institute Working Paper No. 99; the full citation is under §11 Q1). Independent windows ≈ n/h |
 | the stream hard-codes and the "seven" comments (main, r2) | `grep -rn "range(8)" tests src`; `grep -rn -i "\bseven\b" src tests docs/reference .claude` |
