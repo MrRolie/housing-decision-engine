@@ -768,3 +768,26 @@ asserted. The verdict is `models.compute_verdict` on `compute_deterministic` and
 | SKILL.md 2,597 words, budget below 2,600 | `python3 -c "print(len(open('.claude/skills/hde/SKILL.md').read().split()))"`; `tests/test_skill_contract.py` |
 | nine opted-out goldens | `ls tests/fixtures/opted_out` |
 | §9's edits: 17 passed | both edits applied to `references/gates.md`, `python -m pytest -q -p no:cacheprovider tests/test_skill_contract.py`, the file restored |
+
+## 14. As built (2026-10-03)
+
+Where the build had to choose because this spec is silent, the choice and its home in
+`docs/reference/API_CONTRACT.md`, "The `crash_panel` block":
+
+- **Every whole-panel refusal prints in place.** §7 says so for X4 and X5; X1–X3, X6, X7 and X9
+  print the same way, `crash panel — refused (<code>): <fact>`, with `refused` set in the JSON and
+  the exit code the run's. A flag without the grid's shape exits 1, as `--sweep` does. The facts
+  §7 does not give: `year 0 is before year 1`, `years 0 is below 1`, `years 2.5 is not a whole
+  number`, `recovery '<token>' is not permanent, full:K or share:R:K`, and `1 option is priced`.
+- **The `none` row prices the jump.** Under `jump` every row, `none` included, prices the jumped
+  ladder, so `level` is the drop's move with the jump in place (§1.6's "+2.37 pp, none" row).
+- **Futures are absent under `--no-monte-carlo`** as on a single-path run.
+- **The affordability column** prints each option's `max <ratio> breaches years [...]`, the
+  `--sweep` rows' clause.
+- **The read-back line** carries `jump +<pp> pp at the first renewal: <options>` when `jump` is
+  set; `share:R:K` reads `share R over K years` there and in the group lines; a refused panel
+  carries no line; under `--read-back` no row is priced.
+- **One break-even line per crossing** when an axis crosses more than once, each from §3.2's
+  templates, with "the next crossing" for an edge another crossing ends.
+- **The JSON** lists rows grouped by year, then recovery, then drop, in the break-even entries'
+  order; `permanent` serialises as `{"form": "permanent", "share": 0.0, "years": null}`.
