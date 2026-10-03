@@ -142,10 +142,15 @@ def test_the_grid_parses_sorted_and_deduplicated():
                   "jump=0.0237")
     assert grid.drops == (0.10, 0.20, 0.30)
     assert grid.years == (1, 9)
-    assert grid.recoveries == (PERMANENT, Recovery("full", 1.0, 5), Recovery("share", 1.0, 5),
-                               Recovery("full", 1.0, 15))
+    assert grid.recoveries == (PERMANENT, Recovery("full", 1.0, 5), Recovery("full", 1.0, 15))
     assert grid.jump == 0.0237
-    assert grid.row_count == 3 * 2 * 4
+    assert grid.row_count == 3 * 2 * 3
+
+
+def test_full_k_and_share_1_k_are_one_recovery_and_other_shares_are_not():
+    grid = _loads("drop=0.1;year=1;recovery=share:1:7,full:7,share:0.5:7,full:5")
+    assert grid.recoveries == (Recovery("share", 1.0, 7), Recovery("share", 0.5, 7),
+                               Recovery("full", 1.0, 5))
 
 
 def test_jump_is_optional():

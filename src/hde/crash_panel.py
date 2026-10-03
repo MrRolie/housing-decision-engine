@@ -169,8 +169,8 @@ def parse_grid(arg: str) -> CrashGrid:
     that does not have this shape (a missing, unknown or repeated field, a
     token that is not a number) raises a plain ValueError, as `--sweep` does.
     Drops are sorted and de-duplicated; years are too, and recoveries are
-    de-duplicated in the order typed, so the row count X9 reads is the count
-    of distinct rows.
+    de-duplicated in the order typed (`full:K` and `share:1:K` are one), so
+    the row count X9 reads is the count of distinct rows.
     """
     fields = {}
     for part in arg.split(";"):
@@ -207,10 +207,11 @@ def parse_grid(arg: str) -> CrashGrid:
             raise ValueError(f"--crash-panel year: {y!r} is not a whole year")
     years = sorted({int(y) for y in year_values})
 
+    # `full:K` is `share:1:K`: one recovery, kept in the spelling typed first.
     recoveries: List[Recovery] = []
     for token in tokens("recovery"):
         recovery = _parse_recovery(token)
-        if recovery not in recoveries:
+        if all((r.share, r.years) != (recovery.share, recovery.years) for r in recoveries):
             recoveries.append(recovery)
 
     jump = _number("jump", fields["jump"]) if "jump" in fields else None
