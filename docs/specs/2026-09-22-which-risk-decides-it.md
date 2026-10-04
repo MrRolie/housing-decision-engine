@@ -259,7 +259,7 @@ nobody can see — the one that arrives at renewal, which this engine anchors no
 draws no distribution over — flips the verdict at 1.6052%, inside the bracket the engine already
 uses for a mortgage rate.
 
-So the master's finding is not merely "renewal risk is unpriced". It is that **the priceable rate
+So the finding is not merely "renewal risk is unpriced". It is that **the priceable rate
 cannot decide this and the unpriceable one does**, and the rate-shopping advice a household
 actually receives is aimed at the term that cannot move the answer. `mortgage_rate` is the
 control that makes the renewal figure mean something rather than being one number among many.
@@ -1649,7 +1649,7 @@ rules; every refusal in §8; the `--json` block; the `PROMPTS.md` sentence.
 channel carrying 88% of the spread moves the answer by nothing that resolves, the channel
 carrying 8% is what made the central case and the futures disagree, and the channel with no
 spread at all reverses the verdict inside its own plausible bracket. None of those three
-statements can be made by the engine today, and the third is the master's-project contribution.
+statements can be made by the engine today, and the third is the one no other channel can make.
 
 ---
 

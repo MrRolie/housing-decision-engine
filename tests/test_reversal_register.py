@@ -83,7 +83,7 @@ PATHS = 2000
 # Measured on this tree, derived from the solver rather than copied from the
 # spec: `solve_crossings` on the relevant pair for the two deterministic
 # figures, an independent bisection of the free curve for the third.
-BEST_FLIPS_AT = 0.016052260138094424        # house below, rent above: the master's-project finding
+BEST_FLIPS_AT = 0.016052260138094424        # house below, rent above: where the verdict reverses
 RUNNER_UP_SWAPS_AT = 0.029549435637891294   # house below, condo above
 MAJORITY_SWAPS_AT = 0.027164030807034577    # house below, condo above — a property of THIS sample
 
