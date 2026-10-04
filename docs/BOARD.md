@@ -442,17 +442,17 @@ Found by the same lane's review, each run on the tip:
   "declare all_cash: true OR a mortgage block". Both are true, but the root cause comes second.
   The question is refusal order across the loader and the file.
 - Found 2026-10-03 on the crash stress panel build: `--crash-panel` prints a band edge rounded
-  to 0.01 pp, so a row typed at that precision can sit on the other side of the printed edge. On
+  to 0.01 pp, so a row between the solved edge and the printed one reads the other state. On
   `examples/first_time_buyer_montreal.yaml`, permanent from year 1, the solved edge is 5.3056%
-  and prints `too close to call from no drop to 5.31%`, while the row at `drop=0.05306` prints
-  `rent option`.
+  and prints `too close to call from no drop to 5.31%`, while the rows at `drop=0.05306` and
+  `drop=0.0531` each print `rent option`.
 - Found 2026-10-03 on the same build: `crash_panel._decisive` restates the margin rule
   `compute_verdict` applies to a central line (`margin_frac >= verdict.tie_band`), so the rule
   has two homes and the no-crossing line agrees with the rows only while both copies do.
-- Found 2026-10-03 on the same build: the panel's templates for an axis that crosses more than
-  once (an edge printed as `the next crossing`) and its no-crossing line with more than one
-  too-close stretch are pinned on hand-built records only; no measured config is known to reach
-  them.
+- Found 2026-10-03 on the same build: the panel's lines for an axis that crosses more than once
+  (an edge printed as `the next crossing`) are pinned by no test, and no config measured for
+  this build is known to reach them; its no-crossing line with more than one too-close stretch
+  is pinned on hand-built bands only.
 - Found 2026-10-03 on the same build: the X1 refusal widened to refuse drops below 1%, and the
   X3 refusal widened to refuse a share below 0.1, each leave the crash panel's tests green. The
   neighbours pinned are 0.99 and `share:1:7`, the far ends of each range.
