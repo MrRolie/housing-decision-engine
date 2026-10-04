@@ -488,9 +488,10 @@ def test_row11_the_underwater_balance_reads_the_jumped_ladder():
 
 def test_row12_the_jump_lands_on_the_first_renewal_only():
     """Row 12. FTB-25L (four priced renewals), jump=0.0237: condo $403,362.00
-    and years above 32% 1–10 at no drop; with a 20% permanent drop, rent by
-    $689, `tie`. The jump on every renewal gives $432,244.22, years 1–11, and
-    rent by $29,571, `option`."""
+    and years above 32% 1–10 at no drop; with a 20% permanent drop, rent by a
+    `margin_pv` of $689 (the printed `rent − condo` gap reads −688), `tie`.
+    The jump on every renewal gives $432,244.22, years 1–11, and rent by a
+    `margin_pv` of $29,571, `option`."""
     panel = _panel(_spec(_ftb_laddered(25)),
                    "drop=0.20;year=1;recovery=permanent;jump=0.0237", monte_carlo=False)
     none, (row,) = panel["no_drop"], panel["rows"]
@@ -514,9 +515,10 @@ def _p2b():
 
 
 def test_row14_level_is_the_central_move_and_sd_the_row_own_spread():
-    """Row 14. P2b at seed 42, 20% permanent from year 1: `level` −40,835 (the
-    central gaps' difference), `sd` 77,718 (the plain run's is 88,671), futures
-    `condo` 0.6080 `tie`, central `condo` `option`."""
+    """Row 14. P2b at seed 42, 20% permanent from year 1: `level_pv` −40,835
+    (the printed `level` column, the difference of printed gaps, reads
+    −40,836), `sd` 77,718 (the plain run's is 88,671), futures `condo` 0.6080
+    `tie`, central `condo` `option`."""
     panel = _panel(_p2b(), "drop=0.20;year=1;recovery=permanent")
     (row,) = panel["rows"]
     assert round(row["level_pv"]) == -40835

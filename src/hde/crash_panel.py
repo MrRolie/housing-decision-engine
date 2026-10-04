@@ -634,7 +634,7 @@ def _money(value: float) -> str:
 
 
 def _signed(value: int) -> str:
-    """A printed gap or level: `+6,526`, `−25,284`, `0`."""
+    """A printed gap or level: `+6,525`, `−25,285`, `0`."""
     if value == 0:
         return "0"
     return (f"+{value:,}" if value > 0 else f"{MINUS}{-value:,}")

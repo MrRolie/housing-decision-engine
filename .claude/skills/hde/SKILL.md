@@ -148,10 +148,10 @@ required key with the exact message — show it.
    deterministic one; an unswept claim is written "not run".
 6. **Match the figure to their criterion.** Expected cost → the margin, and
    with uncertainty on the Monte Carlo MEAN (`verdict.mc_mean_best`; say so
-   when it disagrees); worst case → vols and `price_shock` on, labelled, read
-   p95 and `prob_*_cheapest`; `investment_return_vol` is the ANNUAL volatility
-   of the renter's return — both sides carry uncertainty or neither; most
-   wealth → `total_pv`.
+   when it disagrees); worst case → vols on, labelled, read p95 and
+   `prob_*_cheapest`, or `--crash-panel` (gates §11); `investment_return_vol`
+   is the ANNUAL volatility of the renter's return — both sides carry
+   uncertainty or neither; most wealth → `total_pv`.
 7. **Cash line — cash is not PV.** Quote the report's `Year-1 cash` line
    beside the $/month PV equivalent: outlay, principal, unrecoverable cash,
    and the `expected appreciation` term with the engine's label (at 0% real

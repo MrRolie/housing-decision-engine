@@ -294,8 +294,9 @@ Statistics Canada of this product." For a Bank of Canada series, name it, say "S
 Canada", and say what you changed (a monthly average, a five-year difference). Name, each with
 its direction, what a drop does not reach: no forced sale and no loan-to-value test at renewal
 (each favours buying); rent unchanged (favours buying, if market rents would fall too); fees and
-property taxes unchanged (favours renting, if a lower assessment would lower the bill); a
-house's maintenance falls with its value (favours the house). A recovered drop leaves a condo's
-total unchanged when the recovery ends before the sale, because the engine prices the home only
-at the sale: say that from the `sale value` column, not as reassurance. Use `jump` only for the
-joint question ("what if rates also jump at renewal"), with a figure you state as yours.
+property taxes unchanged (favours renting, if a lower assessment would lower the bill). Name
+too what it reaches besides the sale value: a house's maintenance falls with its value (favours
+the house). A recovered drop leaves a condo's total unchanged when the recovery ends before the
+sale, because the engine prices the home only at the sale: say that from the `sale value`
+column, not as reassurance. Use `jump` only for the joint question ("what if rates also jump at
+renewal"), with a figure you state as yours.

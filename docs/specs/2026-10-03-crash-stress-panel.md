@@ -234,7 +234,7 @@ per renewal of the 25-year amortization on a 5-year term: `condo.mortgage_renewa
 `mortgage_renewal_rates` is refused by the loader: "condo.mortgage_renewal_years=5 is set without
 condo.mortgage_renewal_rates".) Central line.
 
-| config | jump | drop | best, gap | condo affordability peak, years above 32% | break-even drop (year 5, permanent) |
+| config | jump | drop | best, margin (`margin_pv`) | condo affordability peak, years above 32% | break-even drop (year 5, permanent) |
 |---|---|---|---|---|---|
 | FTB-10L | 0 | none | condo by 6,526 (3.25%), `tie` | 36.21%, years 1–5 | 2.05% |
 | | +1.30 pp | none | rent by 7,530 (3.64%), `tie` | 36.21%, years 1–9 | none: rent cheaper throughout |
@@ -242,7 +242,7 @@ condo.mortgage_renewal_rates".) Central line.
 | FTB-25L | 0 | 20%, permanent | condo by 24,817 (5.93%), `option` | 36.21%, years 1–5 | 32.15% |
 | | +1.30 pp | 20%, permanent | condo by 10,917 (2.52%), `tie` | 36.21%, years 1–9 | 25.35% |
 | | +2.37 pp | none | condo by 40,147 (9.95%), `option` | 37.01%, years 1–10 | |
-| | +2.37 pp | 20%, permanent | rent by 689 (0.16%), `tie` | 37.01%, years 1–10 | 19.66% |
+| | +2.37 pp | 20%, permanent | rent by 689 (0.16%; the printed `rent − condo` gap reads −688), `tie` | 37.01%, years 1–10 | 19.66% |
 
 Neither leg alone moves FTB-25L's state; together they make it a tie. A drop alone never moves a
 condo's affordability ratio (the condo's cost array has no value term).
@@ -251,10 +251,10 @@ condo's affordability ratio (the condo's cost array has no value term).
 `mortgage_renewal_rates: 0.0692` applies to EVERY renewal, because the loader reads a scalar as a
 one-entry list and the schedule carries the last entry forward. On FTB-25L, which prices four
 renewals, that gives condo $432,244.22 (`tie`, 2.61%) against $403,362.00 for the first-only
-ladder, years above 32% 1–11 against 1–10, and with a 20% permanent drop rent cheaper by $29,571
-(`option`) against $689 (`tie`). On FTB-10L, which prices one renewal (year 6), the two ladders
-give the same condo total, $226,280.89, and the same years above 32%, 1–10, so a 10-year config
-cannot tell them apart.
+ladder, years above 32% 1–11 against 1–10, and with a 20% permanent drop rent cheaper by a
+`margin_pv` of $29,571 (`option`) against $689 (`tie`; its printed gap reads −688). On FTB-10L,
+which prices one renewal (year 6), the two ladders give the same condo total, $226,280.89, and
+the same years above 32%, 1–10, so a 10-year config cannot tell them apart.
 
 ### 1.7 Underwater years
 
@@ -376,11 +376,12 @@ index, 1.8 to 24.5 years over a handful of independent events (§1.8); five and 
 it, and `permanent` stands for the open falls. That spread measures how long the new-house index
 took to regain its own peak, not how long resale prices took. The engine accepts any form.
 
-**R7. Licences for the public docs.** Public docs carry only figures derived from Statistics
-Canada and Bank of Canada data, each with its notice. CREA data is never published, not even in
-derived form, and no comparison drawn from it appears here. The path-file spec's §11 and §12
-already quote correlations derived from the Dallas Fed's International House Price Database; they
-carry the citation the Dallas Fed asks for.
+**R7. Licences for the public docs.** This panel adds no new figure derived from CREA, JST or
+Dallas Fed data to any public doc; the historical figures it adds are derived from Statistics
+Canada and Bank of Canada data, each with its notice. The Dallas Fed-derived correlations already
+in the path-file spec (its §11 and §12) carry the citation the Dallas Fed requests, Mack and
+Martínez-García (2011), in its §11. CREA data is never published, not even in derived form, and
+no comparison drawn from it appears here.
 
 ## 3. The surface
 
@@ -407,18 +408,18 @@ carry the citation the Dallas Fed asks for.
 
 ```
 crash panel — stated drops, each conditional on happening [drop, year, recovery: command line]
-                          central line                                         futures (5,000)
-  drop  sale value  condo     rent      rent − condo  level     best   state    best   P(best)  state   sd       underwater
-  none  ×1          200,502   207,027   +6,525        0         condo  tie      condo  0.5450   tie     48,104   none
+  central line                                                              futures (5,000)
+  drop  sale value  condo    rent     rent − condo  level    best   state   best   P(best)  state   sd      underwater
+  none  ×1          200,502  207,027  +6,525        0        condo  tie     condo  0.5450   tie     48,104  none
 year 1 · permanent
-  10%   ×0.900      232,312   207,027   −25,285       −31,810   rent   option   rent   0.7192   option  44,535   none
-  20%   ×0.800      264,122   207,027   −57,095       −63,620   rent   option   rent   0.9158   option  41,073   condo 1–2
-  ...
+  10%   ×0.900      232,312  207,027  −25,285       −31,810  rent   option  rent   0.7192   option  44,535  none
+  20%   ×0.800      264,122  207,027  −57,095       −63,620  rent   option  rent   0.9158   option  41,073  condo 1–2
   break-even: too close to call from no drop to 5.31%; rent is cheaper above 5.31% (crossing 2.05%) [solved, central case]
 ```
 
-(P1 at seed 42; its central line is FTB's. The gap is the difference of the printed totals, so it
-reads +6,525 where §1.2's unrounded gap is $6,525.78, and the affordability column is left off
+(P1 at seed 42, `drop=0.1,0.2;year=1;recovery=permanent`; its central line is FTB's. Each group
+label prints over its group's first column. The gap is the difference of the printed totals, so
+it reads +6,525 where §1.2's unrounded gap is $6,525.78, and the affordability column is left off
 here for width.)
 
 - `sale value` is `m(years)`, the sale value as a multiple of the no-crash path's. It is the figure
@@ -645,8 +646,10 @@ unchanged; the exit code is the run's.
 
 ## 9. Skill guidance (one home: `references/gates.md`, new §11)
 
-SKILL.md is untouched; it stands at 2,597 words against `test_skill_contract.py`'s budget of fewer
-than 2,600. In `references/gates.md` §6, "Smallest worst case →" becomes "Smallest worst case (a
+SKILL.md changes in one clause: gate 6's worst case reads "vols on, labelled, read p95 and
+`prob_*_cheapest`, or `--crash-panel` (gates §11)" instead of sending it to `price_shock`, which
+takes it from 2,597 words to 2,599 against `test_skill_contract.py`'s budget of fewer than 2,600.
+In `references/gates.md` §6, "Smallest worst case →" becomes "Smallest worst case (a
 named crash → `--crash-panel`, §11) →". New §11, the one home, appended after §10:
 
 > ## 11. A named crash: `--crash-panel`
@@ -674,11 +677,12 @@ named crash → `--crash-panel`, §11) →". New §11, the one home, appended af
 > Canada", and say what you changed (a monthly average, a five-year difference). Name, each with
 > its direction, what a drop does not reach: no forced sale and no loan-to-value test at renewal
 > (each favours buying); rent unchanged (favours buying, if market rents would fall too); fees and
-> property taxes unchanged (favours renting, if a lower assessment would lower the bill); a
-> house's maintenance falls with its value (favours the house). A recovered drop leaves a condo's
-> total unchanged when the recovery ends before the sale, because the engine prices the home only
-> at the sale: say that from the `sale value` column, not as reassurance. Use `jump` only for the
-> joint question ("what if rates also jump at renewal"), with a figure you state as yours.
+> property taxes unchanged (favours renting, if a lower assessment would lower the bill). Name
+> too what it reaches besides the sale value: a house's maintenance falls with its value (favours
+> the house). A recovered drop leaves a condo's total unchanged when the recovery ends before the
+> sale, because the engine prices the home only at the sale: say that from the `sale value`
+> column, not as reassurance. Use `jump` only for the joint question ("what if rates also jump at
+> renewal"), with a figure you state as yours.
 
 With both edits applied, `tests/test_skill_contract.py` gives 17 passed (measured, then
 reverted). The flag is named only in references/, which that file's flag test does not read, so
@@ -699,9 +703,9 @@ the test passes before the flag exists; it is re-run after commit 5.
 | 9 | Refusals both ways | Each of X1–X10 against its neighbour in §7; X4 also with the hazard on the house alone. | Each refusal deleted, and each widened onto its neighbour (X1 widened to refuse 0.99; X4 widened to a hazard of 0; X2 widened to `years`; X10 widened to refuse a first renewal of exactly 0); X4 reading the condo only |
 | 10 | Rendered output | Every line of the block matches one of §3.2's fixed templates; each gap equals the difference of its row's printed totals; each `level` equals the difference of two printed gaps. The no-crossing templates: FTB, `full:7` from year 1 prints `break-even: no crossing from no drop to a 99% drop: too close to call throughout [solved, central case]`, the house example's `full:7` prints `house is cheaper throughout`, and each other no-crossing template is pinned against its rows' states; no line of the block contains `widen`. FTB, permanent from year 1 prints the band-from-no-drop template. | A closing sentence added; a gap read from `margin_pv` and rounded separately; the panel's no-crossing template deleted, so `threshold_sentences`' line with its widen hint prints; the no-crossing template widened onto a row with a crossing (FTB permanent prints "no crossing") |
 | 11 | Underwater | FTB, year 1: a 12% drop has no underwater year 1, a 13% drop has. FTB-10L with `jump=0.0237`, 45% permanent from year 1: underwater years 1–10. | Selling cost omitted: the year-1 boundary moves to 16.89%. The unladdered balance (`outstanding_balance`) under the jump: years 1–9 |
-| 12 | Joint jump | FTB-25L (four priced renewals), `jump=0.0237`: condo $403,362.00 and years above 32% 1–10; with a 20% permanent drop, rent by $689, `tie`. | The jump on every renewal (`quoted[0] += j` on the scalar ladder): condo $432,244.22, years 1–11; rent by $29,571, `option` |
+| 12 | Joint jump | FTB-25L (four priced renewals), `jump=0.0237`: condo $403,362.00 and years above 32% 1–10; with a 20% permanent drop, rent by a `margin_pv` of $689 (the printed `rent − condo` gap reads −688), `tie`. | The jump on every renewal (`quoted[0] += j` on the scalar ladder): condo $432,244.22, years 1–11; rent by a `margin_pv` of $29,571, `option` |
 | 13 | Read-back | The line appears once in `--read-back` and in `assumptions.read_back`, after `renewals:`. | The line printed without the flag |
-| 14 | Level apart from spread | P2b at seed 42, 20% permanent from year 1: `level` −40,835 (the central gaps' difference), `sd` 77,718, futures `condo` 0.6080 `tie`, central `condo` `option`. | `level` read from the futures' mean gap (−40,668); `sd` taken from the plain run (88,671) |
+| 14 | Level apart from spread | P2b at seed 42, 20% permanent from year 1: `level_pv` −40,835 (the printed `level` column, the difference of printed gaps, reads −40,836), `sd` 77,718, futures `condo` 0.6080 `tie`, central `condo` `option`. | `level` read from the futures' mean gap (−40,668); `sd` taken from the plain run (88,671) |
 | 15 | Disagreement | P2 at seed 42, 32% permanent from year 1: the futures cell names `condo 0.4968 disagreement` and `rent 0.5032`; the JSON row carries `mc_best` and `mc_prob_best`. | `mc_best` or `mc_prob_best` dropped from the row |
 
 ## 11. Commit order
@@ -766,7 +770,7 @@ asserted. The verdict is `models.compute_verdict` on `compute_deterministic` and
 | §1.8 trend conversions | `1 − (1 − fall) / 1.021^(years to trough)`; `1 − 1.021 × (1 − d)`; `ln(1 / (1 − d)) / ln(1.021)` |
 | §1.8 renewal jumps | Valet V122667786, V122667780 and V80691335 as calendar-month means, rate at t + 60 months minus at t |
 | licence names and notice wording | statcan.gc.ca/en/reference/licence and bankofcanada.ca/terms, fetched 2026-10-03 |
-| SKILL.md 2,597 words, budget below 2,600 | `python3 -c "print(len(open('.claude/skills/hde/SKILL.md').read().split()))"`; `tests/test_skill_contract.py` |
+| SKILL.md 2,597 words before gate 6's clause and 2,599 after, budget below 2,600 | `python3 -c "print(len(open('.claude/skills/hde/SKILL.md').read().split()))"`; `tests/test_skill_contract.py` |
 | nine opted-out goldens | `ls tests/fixtures/opted_out` |
 | §9's edits: 17 passed | both edits applied to `references/gates.md`, `python -m pytest -q -p no:cacheprovider tests/test_skill_contract.py`, the file restored |
 
