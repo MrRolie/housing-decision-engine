@@ -626,6 +626,7 @@ Each prints its code and one measured fact, and the legal neighbour one step awa
 | X7 `jump_beside_path_file` | `jump` and a `renewal_rates.path` file (R5) | `renewal_rates.path is set` | the same flag without `jump` |
 | X8 `not_two_options` | the break-even line, `level` and `sd` only, with other than two priced options; the rows still print | `3 options are priced` | two options |
 | X9 `too_many_rows` | more than 48 rows | `the grid has 54 rows` | 48 |
+| X10 `jump_floor` | `jump` takes a laddered option's first quoted renewal rate below 0, the floor the loader holds every renewal rate to | `jump −0.06 takes the first renewal to −1.45%, below 0` (FTB-10L) | `jump=-0.0455`, a first renewal of exactly 0 |
 
 A panel refused by X4 or X5 prints the refusal in place of the block and the run's other output is
 unchanged; the exit code is the run's.
@@ -695,7 +696,7 @@ the test passes before the flag exists; it is re-run after commit 5.
 | 6 | House maintenance (R3) | House example, year 1, `full:7`, 40%: house total $341,252 (< $349,866). | Maintenance left on the no-crash path: the total returns to $349,866 |
 | 7 | No draw | The renter's PVs and each generator's end state are identical across every row and the plain run. | One `random()` taken per row |
 | 8 | Conditional run | A path of all ones, built directly because X1 refuses a 0 drop, gives the plain run's `prob_best` exactly (P1 0.5450 at seed 42). | The panel runs on another seed or binding |
-| 9 | Refusals both ways | Each of X1–X9 against its neighbour in §7. | Each refusal deleted, and each widened onto its neighbour (X1 widened to refuse 0.99; X4 widened to a hazard of 0; X2 widened to `years`) |
+| 9 | Refusals both ways | Each of X1–X10 against its neighbour in §7; X4 also with the hazard on the house alone. | Each refusal deleted, and each widened onto its neighbour (X1 widened to refuse 0.99; X4 widened to a hazard of 0; X2 widened to `years`; X10 widened to refuse a first renewal of exactly 0); X4 reading the condo only |
 | 10 | Rendered output | Every line of the block matches one of §3.2's fixed templates; each gap equals the difference of its row's printed totals; each `level` equals the difference of two printed gaps. The no-crossing templates: FTB, `full:7` from year 1 prints `break-even: no crossing from no drop to a 99% drop: too close to call throughout [solved, central case]`, the house example's `full:7` prints `house is cheaper throughout`, and each other no-crossing template is pinned against its rows' states; no line of the block contains `widen`. FTB, permanent from year 1 prints the band-from-no-drop template. | A closing sentence added; a gap read from `margin_pv` and rounded separately; the panel's no-crossing template deleted, so `threshold_sentences`' line with its widen hint prints; the no-crossing template widened onto a row with a crossing (FTB permanent prints "no crossing") |
 | 11 | Underwater | FTB, year 1: a 12% drop has no underwater year 1, a 13% drop has. FTB-10L with `jump=0.0237`, 45% permanent from year 1: underwater years 1–10. | Selling cost omitted: the year-1 boundary moves to 16.89%. The unladdered balance (`outstanding_balance`) under the jump: years 1–9 |
 | 12 | Joint jump | FTB-25L (four priced renewals), `jump=0.0237`: condo $403,362.00 and years above 32% 1–10; with a 20% permanent drop, rent by $689, `tie`. | The jump on every renewal (`quoted[0] += j` on the scalar ladder): condo $432,244.22, years 1–11; rent by $29,571, `option` |
@@ -774,9 +775,9 @@ asserted. The verdict is `models.compute_verdict` on `compute_deterministic` and
 Where the build had to choose because this spec is silent, the choice and its home in
 `docs/reference/API_CONTRACT.md`, "The `crash_panel` block":
 
-- **Every whole-panel refusal prints in place.** §7 says so for X4 and X5; X1–X3, X6, X7 and X9
-  print the same way, `crash panel — refused (<code>): <fact>`, with `refused` set in the JSON and
-  the exit code the run's. A flag without the grid's shape exits 1, as `--sweep` does. The facts
+- **Every whole-panel refusal prints in place.** §7 says so for X4 and X5; X1–X3, X6, X7, X9
+  and X10 print the same way, `crash panel — refused (<code>): <fact>`, with `refused` set in the
+  JSON and the exit code the run's. A flag without the grid's shape exits 1, as `--sweep` does. The facts
   §7 does not give: `year 0 is before year 1`, `years 0 is below 1`, `years 2.5 is not a whole
   number`, `recovery '<token>' is not permanent, full:K or share:R:K`, and `1 option is priced`.
 - **The `none` row prices the jump.** Under `jump` every row, `none` included, prices the jumped

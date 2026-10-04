@@ -573,6 +573,33 @@ def test_the_rows_group_by_year_then_recovery_with_one_break_even_each():
     assert round(first["break_evens"][0]["value"], 6) == 0.020515
 
 
+def test_row3_the_runner_solves_the_break_even_to_adjacent_floats():
+    """Row 3 through the runner: the JSON crossing is the adjacent-floats
+    solve exactly. The default bisection stops at a width of 1e-9 and lands on
+    another float."""
+    spec = _spec(_raw(FTB))
+    panel = _panel(spec, "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    (crossing,) = panel["break_evens"][0]["break_evens"]
+
+    def totals_at(d):
+        det = _central(spec, d, 1, PERMANENT)
+        return det.condo.total_pv, det.rent.total_pv
+
+    exact = solve_crossings("crash.drop", ("condo", "rent"), 0.0, 0.99, totals_at,
+                            to_adjacent_floats=True)["break_evens"][0]["value"]
+    assert crossing["value"] == exact
+
+
+def test_level_is_the_gap_move_when_the_best_option_changes():
+    """FTB, 10% permanent from year 1: condo is cheapest with no drop and rent
+    with the drop, so `level_pv` is the signed move of `rent − condo`,
+    −31,810.01; the difference of the two margins would read +18,758."""
+    panel = _panel(_spec(_raw(FTB)), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    (row,) = panel["rows"]
+    assert (panel["no_drop"]["central"]["best"], row["central"]["best"]) == ("condo", "rent")
+    assert round(row["level_pv"], 2) == -31810.01
+
+
 # --- row 9: X4 to X8, each beside the neighbour that loads -----------------------------
 
 def _surface(hazard: float):
@@ -594,6 +621,18 @@ def test_x4_neighbour_a_hazard_of_zero_loads():
     panel = _panel(_surface(0.0), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
     assert panel["refused"] is None
     assert len(panel["rows"]) == 1
+
+
+def test_x4_refuses_a_hazard_wired_on_the_house_alone():
+    """X4 reads every owned option: the condo at hazard 0 and the house at
+    0.03 refuse on the house."""
+    raw = _raw(SURFACE)
+    raw["condo"]["price_shock"]["annual_hazard"] = 0.0
+    raw["house"]["price_shock"]["annual_hazard"] = 0.03
+    raw["simulation"]["num_sims"] = 50
+    panel = _panel(_spec(raw), "drop=0.1;year=1;recovery=permanent", monte_carlo=False)
+    assert panel["refused"] == {"code": "hazard_wired",
+                                "fact": "house.price_shock.annual_hazard is 0.03"}
 
 
 def _without(path: Path, option: str) -> dict:
@@ -655,6 +694,28 @@ def test_x7_neighbour_the_flag_without_jump_loads():
     panel = _panel(_spec(_raw(PATH_FILE)), "drop=0.1;year=1;recovery=permanent",
                    monte_carlo=False)
     assert panel["refused"] is None
+
+
+def test_x10_refuses_a_jump_that_takes_the_first_renewal_below_zero():
+    """X10. FTB-10L's first renewal is quoted at 4.55%: a jump of −0.06 takes
+    it to −1.45%, which the loader's floor refuses, so the panel refuses
+    before any ladder is built; −0.0456 is one step past the floor."""
+    for jump, fact in (("-0.06", "jump −0.06 takes the first renewal to −1.45%, below 0"),
+                       ("-0.0456", "jump −0.0456 takes the first renewal to −0.01%, below 0")):
+        panel = _panel(_ftb_laddered_at(10), f"drop=0.2;year=1;recovery=permanent;jump={jump}",
+                       monte_carlo=False)
+        assert panel["refused"] == {"code": "jump_floor", "fact": fact}
+        assert panel["rows"] == [] and panel["no_drop"] is None
+
+
+def test_x10_neighbour_a_jump_to_a_zero_renewal_loads():
+    """A jump of −0.0455 takes the first renewal to exactly 0, which the
+    loader's floor admits: the panel prices it."""
+    panel = _panel(_ftb_laddered_at(10), "drop=0.2;year=1;recovery=permanent;jump=-0.0455",
+                   monte_carlo=False)
+    assert panel["refused"] is None
+    assert panel["grid"]["jump"] == {"value": -0.0455, "options": ["condo"]}
+    assert len(panel["rows"]) == 1
 
 
 def test_x8_three_options_refuse_the_break_even_level_and_sd_and_keep_the_rows():
@@ -794,6 +855,24 @@ def test_row10_the_house_rows_and_their_crossings_are_templates():
     assert "year 1 · share 0.5 over 3 years" in lines
 
 
+def test_row10_a_recovery_under_way_at_the_sale_moves_the_futures_by_its_sale_multiple():
+    """P1 at seed 42, year 9, full:7: the sale is two years into the
+    recovery, so every future takes m(10), not m(9). The futures' cells, as
+    printed (a condo path that took m(9) prints other futures cells)."""
+    panel = _panel(_household(10, 0.04, 0.23), "drop=0.1,0.2,0.4;year=9;recovery=full:7")
+    lines, cols, rows = _parse_block(format_crash_panel(panel, paths=5000))
+    _check_arithmetic(cols, rows)
+    printed = [l.split()[:12] for l in lines if re.match(r"  \d+% ", l)]
+    assert printed == [
+        ["10%", "×0.914", "227,970", "207,027", "−20,943", "−27,468", "rent", "option",
+         "rent", "0.6838", "option", "45,016"],
+        ["20%", "×0.826", "255,879", "207,027", "−48,852", "−55,377", "rent", "option",
+         "rent", "0.8812", "option", "41,958"],
+        ["40%", "×0.645", "313,293", "207,027", "−106,266", "−112,791", "rent", "option",
+         "rent", "0.9984", "option", "36,003"],
+    ]
+
+
 def test_row15_the_disagreement_cell_names_both_options():
     """Row 15, rendered: `condo 0.4968 disagreement · rent 0.5032 of the futures`."""
     panel = _panel(_p2(), "drop=0.32;year=1;recovery=permanent")
@@ -886,6 +965,16 @@ def test_a_refused_grid_prints_its_refusal_in_place_and_the_run_goes_on():
     assert panel["refused"] == {"code": "year_out_of_range",
                                 "fact": "year 11 is past the 10-year horizon"}
     assert panel["rows"] == [] and panel["no_drop"] is None
+
+
+def test_a_jump_below_the_floor_prints_its_refusal_in_place(tmp_path):
+    """X10 through the command line: the run that used to end in a traceback
+    prints the refusal where the block goes and exits as the run does."""
+    code, out, _ = _cli(_ftb10l_file(tmp_path), "--crash-panel",
+                        "drop=0.2;year=1;recovery=permanent;jump=-0.06", "-q")
+    assert code == 0
+    assert ("crash panel — refused (jump_floor): jump −0.06 takes the first renewal to −1.45%, "
+            "below 0") in out.splitlines()
 
 
 def test_a_flag_without_the_grid_shape_exits_1():

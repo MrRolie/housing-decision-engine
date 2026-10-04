@@ -41,6 +41,7 @@ REFUSAL_CODES = (
     "jump_beside_path_file",  # X7
     "not_two_options",        # X8
     "too_many_rows",          # X9
+    "jump_floor",             # X10
 )
 
 _FIELDS = ("drop", "year", "recovery", "jump")
@@ -340,10 +341,29 @@ def apply_jump(spec: ComparisonSpec, jump: Optional[float]) -> Tuple[ComparisonS
     return dataclasses.replace(spec, **replaced), reached
 
 
+def check_jump_floor(spec: ComparisonSpec, jump: float) -> None:
+    """X10: the jump may not take any laddered option's first renewal below 0,
+    the floor the loader holds every quoted renewal rate to. Checked on the
+    quoted rate before any ladder is built, reached by the horizon or not."""
+    for name in _OWNED:
+        params = getattr(spec, name)
+        if params is None or renewal_segments_for(params) is None:
+            continue
+        quoted = params.mortgage_renewal_rates_quoted
+        if not quoted or _renewal_count(params) < 1:
+            continue
+        first = quoted[0] + jump
+        if first < 0:
+            raise CrashPanelRefusal(
+                "jump_floor",
+                (f"jump {jump:g} takes the first renewal to {first * 100:.2f}%, "
+                 f"below 0").replace("-", MINUS))
+
+
 def check_panel(spec: ComparisonSpec, grid: CrashGrid) -> None:
     """The refusals the config decides (§7): X2 against the horizon, then
-    X5, X4, X7 and X6. Each raises `CrashPanelRefusal`; X8 refuses only the
-    break-even lines, `level` and `sd`, and is taken per block."""
+    X5, X4, X7, X10 and X6. Each raises `CrashPanelRefusal`; X8 refuses only
+    the break-even lines, `level` and `sd`, and is taken per block."""
     years = spec.simulation.years
     check_years(grid, years)
     owned = [name for name in _OWNED if getattr(spec, name) is not None]
@@ -358,6 +378,7 @@ def check_panel(spec: ComparisonSpec, grid: CrashGrid) -> None:
         return
     if spec.renewal_rate_paths is not None:
         raise CrashPanelRefusal("jump_beside_path_file", "renewal_rates.path is set")
+    check_jump_floor(spec, grid.jump)
     _, reached = apply_jump(spec, grid.jump)
     if not reached:
         raise CrashPanelRefusal(

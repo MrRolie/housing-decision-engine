@@ -708,6 +708,7 @@ priced options the entry is `{year, recovery, refused}` instead.
 | `jump_beside_path_file` | `jump` beside a `renewal_rates.path` file |
 | `not_two_options` | other than two priced options: the break-even entries, `level_pv` and `gap_sd` only; the rows still print |
 | `too_many_rows` | more than 48 rows |
+| `jump_floor` | `jump` takes the first quoted renewal rate of a financed option that states a ladder below 0, the floor the loader holds every renewal rate to |
 
 Every code but `not_two_options` refuses the whole panel; the run's other
 output is unchanged and the exit code is the run's.
