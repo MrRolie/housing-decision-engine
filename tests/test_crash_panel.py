@@ -858,8 +858,8 @@ def test_row10_the_house_rows_and_their_crossings_are_templates():
 
 
 def test_row10_a_recovery_under_way_at_the_sale_moves_the_futures_by_its_sale_multiple():
-    """P1 at seed 42, year 9, full:7: the sale is two years into the
-    recovery, so every future takes m(10), not m(9). The futures' cells, as
+    """P1 at seed 42, year 9, full:7: the sale is one year into the
+    seven-year recovery, so every future takes m(10), not m(9). The futures' cells, as
     printed (a condo path that took m(9) prints other futures cells)."""
     panel = _panel(_household(10, 0.04, 0.23), "drop=0.1,0.2,0.4;year=9;recovery=full:7")
     lines, cols, rows = _parse_block(format_crash_panel(panel, paths=5000))

@@ -206,7 +206,9 @@ P2b's other rows keep their states.
 
 A stated drop moves the central line (the LEVEL) and leaves the futures spread around it. The two
 are reported apart (§3.2): `level` is the central gap's change against no drop, and `sd` is the
-standard deviation over the futures of the same two options' difference. Measured with the
+standard deviation over the futures of the same two options' difference. The table's gaps and levels
+are the unrounded figures (`margin_pv`, `level_pv`). The printed block subtracts the printed totals,
+so it can differ by $1 (P1 none prints +6,525, P2b none +65,653, P2b 20% −40,836). Measured with the
 two-option gap `rent − condo`, permanent drop in year 1, seed 42 (seed 4242 within $1,000 on each
 `sd`):
 
@@ -237,7 +239,7 @@ condo.mortgage_renewal_rates".) Central line.
 | config | jump | drop | best, margin (`margin_pv`) | condo affordability peak, years above 32% | break-even drop (year 5, permanent) |
 |---|---|---|---|---|---|
 | FTB-10L | 0 | none | condo by 6,526 (3.25%), `tie` | 36.21%, years 1–5 | 2.05% |
-| | +1.30 pp | none | rent by 7,530 (3.64%), `tie` | 36.21%, years 1–9 | none: rent cheaper throughout |
+| | +1.30 pp | none | rent by 7,530 (3.64%), `tie` | 36.21%, years 1–9 | too close to call from no drop to 0.89%; rent is cheaper above 0.89% |
 | | +2.37 pp | none | rent by 19,253 (9.30%), `option` | 37.01%, years 1–10 | none: rent cheaper throughout |
 | FTB-25L | 0 | 20%, permanent | condo by 24,817 (5.93%), `option` | 36.21%, years 1–5 | 32.15% |
 | | +1.30 pp | 20%, permanent | condo by 10,917 (2.52%), `tie` | 36.21%, years 1–9 | 25.35% |
@@ -272,10 +274,11 @@ in year 1 is underwater in years 1–10 against 1–9.
 
 ### 1.8 History the engine's skill may cite (Statistics Canada, Bank of Canada)
 
-Only Statistics Canada series (under the Statistics Canada Open Licence) and Bank of Canada series
-(under its terms) may enter the engine, the skill or any public doc, each figure with its notice
-(R7). This spec quotes no figure from CREA, Dallas Fed or JST data, and draws no comparison from
-them.
+The history this panel adds to the engine, the skill or any public doc comes only from Statistics
+Canada series (under the Statistics Canada Open Licence) and Bank of Canada series (under its
+terms), each figure with its notice (R7). This spec quotes no figure from CREA, Dallas Fed or JST
+data, and draws no comparison from them. The Dallas Fed-derived correlations the path-file spec
+already carries keep the citation the Dallas Fed requests.
 
 **New Housing Price Index** (table 18-10-0205-01, monthly; real = divided by the CPI,
 v41690973). A new-house, quality-held index, not a resale one, so the recovery times below
@@ -642,7 +645,8 @@ unchanged; the exit code is the run's.
 - The engine prints no historical anchor (R4). The skill may cite only Statistics Canada and Bank
   of Canada figures (§1.8), with each one's notice, and labels any grid it chose as its own.
 - What a drop does not reach is the skill's to say (§9), from §6's list: no forced sale, no
-  loan-to-value test at renewal, no change to rent, fees or taxes, and maintenance only on a house.
+  loan-to-value test at renewal, and no change to rent, fees or taxes. What it does reach besides the
+  sale value is a house's maintenance, which falls with its value.
 
 ## 9. Skill guidance (one home: `references/gates.md`, new §11)
 

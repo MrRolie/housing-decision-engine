@@ -455,7 +455,7 @@ Found by the same lane's review, each run on the tip:
   is pinned on hand-built bands only.
 - Found 2026-10-03 on the same build: the X1 refusal widened to refuse drops below 1%, and the
   X3 refusal widened to refuse a share below 0.1, each leave the crash panel's tests green. The
-  neighbours pinned are 0.99 and `share:1:7`, the far ends of each range.
+  lowest drop pinned to load is 0.99 and the lowest share is 0.5 (`share:0.5:1`).
 - Found 2026-10-03 by a realism check of the same build: `compute_deterministic` ignores
   `price_shock`, so a crash hazard moves the futures and never the central line, and a large
   enough hazard prints a disagreement the hazard alone creates. P2 (FTB-25L at
@@ -471,6 +471,10 @@ Found by the same lane's review, each run on the tip:
 - Found 2026-10-03 by the same check: the rent escalation shock is one draw per path, scaling
   every year's escalation rate alike, while history has year-to-year noise around its trend. It
   changes the shape of the renter's futures; no decision change from it has been measured.
+- Found 2026-10-03 by the crash panel's review: the `jump_floor` refusal rounds an undershoot under
+  0.005 pp to "−0.00%" (`jump=-0.04551` on a 4.55% ladder prints "takes the first renewal to
+  −0.00%, below 0"). Its `{jump:g}` format would print a tiny jump in exponent form. Whether a
+  large positive jump meets another loader limit is unmeasured.
 
 ## 12. The shipped examples barely exercise uncertainty
 
