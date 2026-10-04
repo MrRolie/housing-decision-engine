@@ -441,6 +441,36 @@ Found by the same lane's review, each run on the tip:
   a path file, gets the file's "no option carries a mortgage" refusal ahead of the loader's
   "declare all_cash: true OR a mortgage block". Both are true, but the root cause comes second.
   The question is refusal order across the loader and the file.
+- Found 2026-10-03 on the crash stress panel build: `--crash-panel` prints a band edge rounded
+  to 0.01 pp, so a row typed at that precision can sit on the other side of the printed edge. On
+  `examples/first_time_buyer_montreal.yaml`, permanent from year 1, the solved edge is 5.3056%
+  and prints `too close to call from no drop to 5.31%`, while the row at `drop=0.05306` prints
+  `rent option`.
+- Found 2026-10-03 on the same build: `crash_panel._decisive` restates the margin rule
+  `compute_verdict` applies to a central line (`margin_frac >= verdict.tie_band`), so the rule
+  has two homes and the no-crossing line agrees with the rows only while both copies do.
+- Found 2026-10-03 on the same build: the panel's templates for an axis that crosses more than
+  once (an edge printed as `the next crossing`) and its no-crossing line with more than one
+  too-close stretch are pinned on hand-built records only; no measured config is known to reach
+  them.
+- Found 2026-10-03 on the same build: the X1 refusal widened to refuse drops below 1%, and the
+  X3 refusal widened to refuse a share below 0.1, each leave the crash panel's tests green. The
+  neighbours pinned are 0.99 and `share:1:7`, the far ends of each range.
+- Found 2026-10-03 by a realism check of the same build: `compute_deterministic` ignores
+  `price_shock`, so a crash hazard moves the futures and never the central line, and a large
+  enough hazard prints a disagreement the hazard alone creates. P2 (FTB-25L at
+  `value_growth_vol` 0.04, seed 42) with `condo.price_shock` at hazard 0.10, severity 0.20 and
+  severity vol 0.10 keeps the condo's central total at $377,856.33 and prints `condo`
+  `disagreement` at 0.4056 against rent at 0.5944 of the futures.
+- Found 2026-10-03 by the same check: `simulation.value_growth_vol` is labelled the ANNUAL
+  volatility of the home's value and is drawn independently each year, so under the default
+  lognormal model a run's H-year spread of the log value is that figure × √H. A household that sizes it from history as the H-year
+  change's standard deviation over √H gets the spread it meant; the label invites a one-year
+  standard deviation instead, which gives another H-year spread wherever yearly changes are
+  correlated.
+- Found 2026-10-03 by the same check: the rent escalation shock is one draw per path, scaling
+  every year's escalation rate alike, while history has year-to-year noise around its trend. It
+  changes the shape of the renter's futures; no decision change from it has been measured.
 
 ## 12. The shipped examples barely exercise uncertainty
 
