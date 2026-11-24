@@ -9,7 +9,7 @@ below resolves the entry point THROUGH the declaration in `pyproject.toml` rathe
 an import statement a reader wrote by hand. The live `uv run demoflow` legs are run at
 acceptance; this file pins what a live run cannot re-check on every commit.
 
-THE EXIT-CODE CONTRACT IS AN INTERFACE PROMISE (seat ruling, run-30 carry C4), so it is tested
+THE EXIT-CODE CONTRACT IS AN INTERFACE PROMISE (ruling, run-30 carry C4), so it is tested
 in both directions and its `--help` text is tested too:
 
   * `demoflow run`       exits on EMISSION success — artifacts written and every contract

@@ -3,7 +3,7 @@
 **Date:** 2026-06-08
 **Session:** S4a (foundation half of the split S4; see Roadmap deviation below)
 **Scope:** personal tooling — nothing here places trades or moves money.
-**Status:** DRAFT — awaiting operator review before plan.
+**Status:** DRAFT — awaiting review before plan.
 
 ---
 
@@ -40,7 +40,7 @@ Consequence in the current model: a price drop makes owning look *cheaper* (less
 maintenance) — wrong-signed. A "price-drop scenario" built on that surface would
 ship a feature that does the opposite of its name.
 
-### Decisions (operator-confirmed, 2026-06-08)
+### Decisions (confirmed, 2026-06-08)
 
 | # | Decision | Choice |
 |---|---|---|
@@ -53,10 +53,10 @@ ship a feature that does the opposite of its name.
 
 ### Roadmap deviation (recorded)
 
-The roadmap (`docs/roadmaps/2026-06-07_housing-decision-engine.md`) lists
+The project roadmap lists
 "mortgage optimization / leverage modeling" as **out of scope**. D2 deliberately
-re-opens leverage/amortization. Operator's in-conversation instruction overrides
-the roadmap boundary (Authority Hierarchy #1). The roadmap's Decisions/Deviations
+re-opens leverage/amortization. The maintainer's instruction overrides
+the roadmap boundary. The roadmap's Decisions/Deviations
 table and session list are updated to reflect the S4a/S4b split and the
 leverage re-scope.
 
@@ -96,7 +96,7 @@ strategic facet's headline call). Mods folded into this spec:
   `inflation_factor`, adding no new draw → order preserved. `test_reproducibility_with_seed`
   is the regression canary.
 
-**The real cost the operator must see (strategic):** D5 (canonical) + D6 (required
+**The real cost to flag (strategic):** D5 (canonical) + D6 (required
 capital structure) together eliminate every intermediate green-test checkpoint
 inside the core rewrite — all 74 fixtures + deterministic + MC + house + condo
 break atomically until the rewrite completes (a ~3–4h dark window). This is the
@@ -328,7 +328,7 @@ an immediate follow-on. This avoids an all-red session end without mandating the
 split upfront. The default remains: finish both house and condo in one session
 (the S3 empirical anchor — comparable new-surface scope — shipped clean).
 
-## 9. Open items for the operator review gate
+## 9. Open items for review
 
 - The leverage-free→leveraged shift means owning will frequently dominate renting
   on net-wealth PV when appreciation `g` exceeds the renter's `r_inv` — that is

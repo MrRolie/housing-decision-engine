@@ -78,7 +78,7 @@ from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 def _headship(headship_by_age: dict[int, float], age: int, persons: float) -> float:
     """headship(age) at an age carrying population. ABSENT is a hole at EVERY age.
 
-    Unlike ownership, headship has no undefined region to point at: since operator ruling V the
+    Unlike ownership, headship has no undefined region to point at: since ruling V the
     committed curve is AGE-RESOLVED at every single year 0-100 (`census._HEADSHIP_MEMBER_SPEC`
     graduated onto the ISQ single-year denominator) and the pipeline materialises it over
     `range(0, 101)`, so a missing rate can only mean a holed or partially-built curve.
@@ -109,7 +109,7 @@ def _ownership(ownership_by_age: dict[int, float], age: int, persons: float) -> 
     committed extract PUBLISHES owner-maintainer counts below 25 — Québec `20 to 24 years` is
     17,170 owners of 106,605 households, at all seven of its GEO rows — and `census.py` reads
     those same members for HEADSHIP while `census._AGE_BAND_SPEC` starts the ownership lattice
-    at 25 — its lowest band is `25-34` since operator ruling W (2026-08-20), `25-54` before it;
+    at 25 — its lowest band is `25-34` since ruling W (2026-08-20), `25-54` before it;
     the FLOOR is 25 either way and ruling W did not move it. So the convention is a CHOICE
     upstream of this module, recorded in `census.py`'s
     `zero_support_note` (T13b 2026-08-08, re-attributed at amendment #12), which names THIS

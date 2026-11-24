@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate `demoflow/data/living_arrangement.json` from the pinned WDS extract.
 
-Thin wrapper by design (steering ruling B): all derivation lives in
+Thin wrapper by design (ruling B): all derivation lives in
 `demoflow.loaders.living_arrangement.derive_living_arrangement`, so the shipped artifact and
 the no-drift gate exercise the SAME code path. This file hardcodes no rate.
 

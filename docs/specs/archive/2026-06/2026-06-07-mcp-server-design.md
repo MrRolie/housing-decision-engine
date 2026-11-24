@@ -2,7 +2,7 @@
 
 **Scope:** personal tooling — nothing here places trades or moves money.
 **Date:** 2026-06-07
-**Session:** S2 of `docs/roadmaps/2026-06-07_housing-decision-engine.md`
+**Session:** S2 of the project roadmap
 
 ## Goal
 

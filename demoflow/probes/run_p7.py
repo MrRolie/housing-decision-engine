@@ -8,7 +8,7 @@ one that ran last would silently define the file.
 
 WHY THIS PROBE EXISTS. Spec §5 r3-F2 closes the 75+ owner cohort after band entry: post-entry
 net migration at ages 75+ is OMITTED. The spec's original evidence prescription pointed at the
-ISQ `compo-*` workbooks; steering ruling J REFUTED that (those workbooks carry no age axis at
+ISQ `compo-*` workbooks; ruling J REFUTED that (those workbooks carry no age axis at
 all) and RE-POINTED the leg at an age-structured migration source, with a MATERIALITY TRIPWIRE:
 a measured rate above 1%/yr in any modeled geography escalates the altitude call to the
 operator. This probe supplies that measurement.
@@ -137,7 +137,7 @@ RESIDUAL_COMPONENT = "Residual deviation"
 # other datapoint this run reads must be published, or `_guard_published` refuses.
 NULLABLE_COMPONENTS = frozenset({RESIDUAL_COMPONENT})
 
-# Spec §5 r3-F2 (steering ruling J): the materiality threshold, in percent per year.
+# Spec §5 r3-F2 (ruling J): the materiality threshold, in percent per year.
 TRIPWIRE_PCT = 1.0
 
 _DATA_CHUNK = 60
@@ -663,10 +663,10 @@ def _evidence_lines(metas, resolved, keys, spans, nullable, identity, rows,
     uncovered = Fact.derived(len(NOT_COVERED),
                              "modeled geographies published by NEITHER cube")
     threshold = Fact.cited(f"{TRIPWIRE_PCT:.3f} %/yr",
-                           "spec §5 r3-F2 MATERIALITY TRIPWIRE (steering ruling J, 2026-08-07)")
+                           "spec §5 r3-F2 MATERIALITY TRIPWIRE (ruling J, 2026-08-07)")
     resolution = Fact.cited(
         "THE OMISSION STANDS for Tranche 1",
-        "spec §5 r3-F2 STEERING RULING K (operator-ruled at the tripwire escalation, "
+        "spec §5 r3-F2 STEERING RULING K (ruled at the tripwire escalation, "
         "2026-08-07)")
     titles = [Fact.cited(metas[pid]["cubeTitleEn"], f"{table_number(pid)} live cube metadata")
               for pid in PIDS]
@@ -814,7 +814,7 @@ def _evidence_lines(metas, resolved, keys, spans, nullable, identity, rows,
                      f"{_period(overall[1])}), at or below the tripwire everywhere.")
     lines += [
         "",
-        "## 3. Tripwire evaluation and the OPERATOR RESOLUTION (steering ruling K)",
+        "## 3. Tripwire evaluation and the OPERATOR RESOLUTION (ruling K)",
         "",
         f"**Evaluated on the FULL published span** ({span_fact}, {n_periods} periods): the",
         f"tripwire **{'FIRED' if fired else 'did NOT fire'}** — {n_exceed} geography-period(s)",

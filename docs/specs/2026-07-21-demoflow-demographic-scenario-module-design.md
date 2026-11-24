@@ -1,14 +1,9 @@
 # demoflow — Demographic Housing-Flow Scenario Module — Design
 
 **Date:** 2026-07-21
-**Status:** Approved design (operator 2026-07-21); elegance-gate 2A+2B folded (both
-PROCEED-WITH-MODIFICATIONS, 2026-07-21 — 2B re-sequenced to rankings-first tranches with the
-ScenarioPrior emitter deferred behind an S4b input-slot sketch; 2A subtractive mods folded: parquet
-mirror cut, plex compute deferred to v1, CLI folded to run+tripwires, flat error classes,
-enum→string serialization stated); 2C cross-CONTEXT arm WAIVED by operator 2026-07-21 (the session ran on a top-tier model;
-residual gap recorded: the arm's catch mechanism is independent context + hunt-NEW framing,
-not model tier — same-family folded-spec defects go unhunted by that arm; cross-model review cross-FAMILY arm ran
-regardless, per doctrine the waiver never reaches it); spec pending operator review
+**Status:** Approved design (2026-07-21); two design-review gates folded (2B re-sequenced to rankings-first tranches with the
+ScenarioPrior emitter deferred behind an S4b input-slot sketch; 2A subtractive mods folded: parquet mirror cut, plex compute
+deferred to v1, CLI folded to run+tripwires, flat error classes, enum→string serialization stated).
 **Scope:** personal decision tooling — nothing here places trades or moves money
 **load-bearing-claim:** yes (stress-tester) — "fail-loud loaders, no silent fallback" and
 "schema-enforced output prohibition" are load-bearing correctness claims; stress-tester fires at
@@ -35,7 +30,7 @@ and altitude ruling live in the dossier README and are design invariants here, n
 
 ---
 
-## 1. Intent (locked 2026-07-21, operator-confirmed)
+## 1. Intent (locked 2026-07-21)
 
 A **policy-indexed scenario instrument — never a forecaster.** It emits (a) conditional stress
 parameters for hde's S4b market-scenario layer, (b) relative geography/segment rankings, and
@@ -44,20 +39,20 @@ unconditional crash probability or point price forecast** (the Mankiw–Weil gua
 enforced structurally: the output schema cannot express the forbidden quantities'
 VOCABULARY (§7) — per the #25(B) qualification above, allowlists bind vocabulary and SHAPE, never
 numeric PROVENANCE, and a contract
-test pins the schema to an allowlist. "Forecaster-lite" was named to the operator and rejected.
+test pins the schema to an allowlist. "Forecaster-lite" was considered and rejected.
 
-Consumers, in VALUE ORDER (2B gate re-sequencing, 2026-07-21): (1) the operator — multi-geography
+Consumers, in VALUE ORDER (2B gate re-sequencing, 2026-07-21): (1) the maintainer — multi-geography
 **rankings + tripwires** are the core v0 output (this is where both the decision value and the
 showcase value live); (2) a LinkedIn showcase framed as "scenario map + named epistemic limits" —
 never a crash number; (3) hde S4b Monte-Carlo via the ScenarioPrior artifact — **deferred Tranche 2**,
 gated on a real S4b demographic-input-slot sketch (S4b's roadmapped contract currently has no
 demographic slot; building the emitter against an imagined consumer is the sequencing inversion the
-gate caught). Model output must never be used to argue the operator's 30%-drawdown-survival stress
+gate caught). Model output must never be used to argue the 30%-drawdown-survival stress
 DOWN (skeptic ruling). **Binding cross-spec obligation recorded here:** the future S4b integration
 spec MUST honor the `never_relax_stress` flag semantics (§7); the stress-relaxation guard's only
 enforceable home is the consumer that runs the drawdown test. demoflow does NOT floor the tilt
 (flag-not-clamp is deliberate — a universal floor would kill the legitimate borough-ranking signal;
-flooring, if ever, is an operator decision at the S4b seam).
+flooring, if ever, is a maintainer decision at the S4b seam).
 
 ## 2. Placement & dependency topology
 
@@ -75,7 +70,7 @@ flooring, if ever, is an operator decision at the S4b seam).
 - **actuarial dependency:** uv path dependency on an external actuarial package (a private
   checkout two levels up from the `demoflow/` project directory, declared in its own
   `pyproject.toml`; cross-model review r6-F7 caught the §2/§3 contradiction; showcase
-  runs need both repos checked out side by side, accepted at the operator fork 2026-07-21). Import surface pinned to
+  runs need both repos checked out side by side, accepted 2026-07-21). Import surface pinned to
   `mcp_server.engine.mortality` public functions only: `set_active_mortality`, `active_mortality`,
   `get_qx`. No private reach-ins. Dependency weight (fastmcp/cvxpy/osqp ride along) accepted —
   local batch tool.
@@ -89,7 +84,7 @@ flooring, if ever, is an operator decision at the S4b seam).
   vectorization request into actuarial-system).
 - **actuarial-system charter note:** this makes demoflow that repo's first live external consumer
   using EXISTING machinery only. The multiple-decrement/last-survivor combinator extension remains
-  explicitly DEFERRED (altitude ruling) and would need its own operator sign-off.
+  explicitly DEFERRED (altitude ruling) and would need its own sign-off.
 
 ## 3. Package layout
 
@@ -111,7 +106,7 @@ demoflow/
                             # different vintage (§4)
 ```
 
-No service, no scheduler, no database, no MCP server in v0. Tripwires are a CLI the operator (or a
+No service, no scheduler, no database, no MCP server in v0. Tripwires are a CLI the maintainer (or a
 future cron, out of scope here) runs; outputs are files. Rankings are a byproduct of `run` (single
 vintage, §7b), not a separate pipeline invocation — no third subcommand. Packaging discipline: no
 empty stage-directories; a stage becomes a package only at ≥2 real modules (loaders/ qualifies
@@ -207,9 +202,9 @@ once, plus a mutation test — **asserted against the ORACLE fixture's exact pin
 aggregate envelope (cross-model review r7-F5: the envelope cannot carry this — at q_live's low end, doubled
 mortality still retains ≈0.25, inside [0.20, 0.40] — FIGURE CORRECTED by ruling O 2026-08-08: measured on the spec-pinned cohort, a doubled decrement retains 0.3900 at the LOW q_live end and 0.2293 at the HIGH end, so ≈0.25 belongs to the HIGH end; the envelope's blindness to a doubled decrement is confirmed and WIDER than the original figure claimed):** applying the CPM decrement twice must change
 the hand-computed oracle values (exact inequality against the pinned expectations); the envelope
-remains a coarse gross-error backstop only. **RULING O (steering amendment #6, 2026-08-08): the reconciliation gate binds the CENTRAL-ASSUMPTION run ONLY — sweep legs never re-run check_reconciliation.** The band's Myers anchor is central-only, and binding every leg makes the spec self-contradictory: measured at q_live = 0.06 (the sweep grid's own low endpoint), the spec-pinned cohort retains 0.4565 (gate RAISES on the CORRECT model) while a doubled decrement retains 0.3724 (gate PASSES) — inverted at 21/21 start years. The sweep's product is rank stability; the central run's gate is the calibration check (binds the Task-29 orchestrator). **Named omission (cross-model review r3-F2, deliberate
+remains a coarse gross-error backstop only. **RULING O (amendment #6, 2026-08-08): the reconciliation gate binds the CENTRAL-ASSUMPTION run ONLY — sweep legs never re-run check_reconciliation.** The band's Myers anchor is central-only, and binding every leg makes the spec self-contradictory: measured at q_live = 0.06 (the sweep grid's own low endpoint), the spec-pinned cohort retains 0.4565 (gate RAISES on the CORRECT model) while a doubled decrement retains 0.3724 (gate PASSES) — inverted at 21/21 start years. The sweep's product is rank stability; the central run's gate is the calibration check (binds the Task-29 orchestrator). **Named omission (cross-model review r3-F2, deliberate
 altitude call):** the post-entry cohort is CLOSED — net migration at ages 75+ after band entry is
-omitted. **AMENDED 2026-08-07 (steering ruling J):** the original evidence prescription ("the
+omitted. **AMENDED 2026-08-07 (ruling J):** the original evidence prescription ("the
 `compo-*` workbooks bound the magnitude — record the 75+ net-migration share there") is REFUTED
 for the committed vintage — both compo workbooks carry NO age axis (whole-sheet scan, zero `âge`
 header hits; region × scenario × year totals only), so no 75+ share is computable there. The
@@ -217,10 +212,10 @@ evidence leg is RE-POINTED: an AGE-STRUCTURED migration source (ISQ interregiona
 age group; else StatCan components-of-growth by age) supplies the measured 75+ net-migration
 rate (|75+ net migration| / 75+ population, per modeled geography) recorded in the probe note.
 MATERIALITY TRIPWIRE: a measured rate above 1%/yr in any modeled geography×scenario ESCALATES
-the closed-cohort altitude call back to the operator (rationale: 75+ all-cause exit hazards run
+the closed-cohort altitude call back to the maintainer (rationale: 75+ all-cause exit hazards run
 ≥10%/yr, so a 1%/yr cap keeps the omission's relative distortion near or under 10%). Until that
 probe lands, the note carries the omission as UNEVIDENCED-PENDING — never as bounded.
-**RESOLVED 2026-08-07 (steering ruling K; operator-ruled at the tripwire escalation):** the
+**RESOLVED 2026-08-07 (ruling K; ruled at the tripwire escalation):** the
 probe ran (StatCan 17-10-0149/0151 components + 17-10-0148/0150 populations; identity
 verified exact at All-ages) and the tripwire FIRED — Laval (RA13) 75+ net-migration reached
 1.672% / 1.156% / 1.041% per year in 2007/08–2009/10 (full published span 2001/02–2024/25;
@@ -325,8 +320,8 @@ whose own denominator IS non-immigrant-only does not recover immigrant ownership
 above with #24(A)'s conversion applied; the operand's universe is stated there rather than assumed
 here.
 
-**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (steering amendments #7 through #14;
-operator-ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
+**RULINGS P / Q / R / S / T — the immigrant inputs, RESOLVED (amendments #7 through #14;
+ruled 2026-08-13 and 2026-08-14).** The paragraph above named two source premises that did
 not survive being hit live. **RULING S is the operative one: BOTH immigrant inputs now come from a
 single cube, StatCan 98-10-0621-01, with ZERO geography and ZERO metric transport.** The lineage is
 kept short on purpose — P ruled the ratio's READING (eventual, not arrival-window); Q re-pointed the
@@ -334,12 +329,12 @@ ratio's source when a second probe reached a cube the first could not; R ruled h
 supersedes Q's values and REVERSES R's absence on a third measurement. What follows is the resolved
 present, not a history.
 
-**RULING S (amendment #9, operator-ruled 2026-08-14) — the values that bind.** Source:
+**RULING S (amendment #9, ruled 2026-08-14) — the values that bind.** Source:
 **StatCan 98-10-0621-01**, "Population groups by housing suitability and condition of dwelling"
 (2021 Census, released 2023-10-04, CURRENT), `Before 2016` member of its `Population
 characteristics` dimension — the SAME member for both quantities, because under I2's whole-residency
 argument a ratio and a headship drawn from two different immigrant-member definitions would mix two
-cohort definitions inside one product. Seat-verified live against the WDS coordinates:
+cohort definitions inside one product. Verified live against the WDS coordinates:
 
 | geography | immigrant HEADSHIP (maintainers ÷ persons) | ownership RATIO (owner-maintainer propensity ÷ non-immigrant) |
 |---|---|---|
@@ -355,11 +350,11 @@ supersession in PROSE and left this row untouched, which left the locked spec ca
 contradicting statements about the same ruled quantity for three days — and, worse, made the
 supersession INVISIBLE to the gates.** `_guard_s6_rows` / `_guard_rows_match_spec` key on these
 TABLE ROWS, so the §6 → P8 → join-table coupling that exists to stop a moved value landing quietly
-could not see the move: the seat's own run-26 premise "the coupling is RED right now" was measured
+could not see the move: the build agent's own run-26 premise "the coupling is RED right now" was measured
 FALSE by the implementer, because both the note and the join table still agreed with a table row
 nobody had changed.
 
-**AND THE COUPLING IS WEAKER THAN THAT DIAGNOSIS IMPLIED — measured by the seat at this amendment,
+**AND THE COUPLING IS WEAKER THAN THAT DIAGNOSIS IMPLIED — measured by the build agent at this amendment,
 by mutation.** Setting this row to garbage (0.9999 / 7.7777) DOES red exactly one gate, so the
 coupling is not decorative. But swapping the row between the two LEGITIMATE pairs — ruled
 0.5234 / 1.0248 against superseded 0.5169 / 0.9600 — reds NOTHING, in either direction, because the
@@ -368,12 +363,12 @@ with the RULED pair. So the machinery can catch a typo and cannot catch a supers
 one thing an amendment does. **This is recorded as an OPEN DEFECT with a named owner: the gate must
 bind this row to the note's DECISION-token pair specifically, and a swap between the ruled and
 superseded pairs must RED in both directions.** Until that lands, this table's correctness rests on
-the seat updating it, not on anything that fails. **STANDING RULE, binding on every future amendment: an amendment that moves a
+the build agent updating it, not on anything that fails. **STANDING RULE, binding on every future amendment: an amendment that moves a
 RULED VALUE must update this table in the same commit. Prose alone is not a supersession the
 machinery can see, and the other four rows are bound by exactly the same gates — a prose-only
 amendment moving MTL_RMR, QC_RMR, RA06 or RA13 would be invisible in exactly the same way.**
 
-**AMENDMENT #19 (2026-08-21, seat-verified by execution) — AMENDMENT #14's OPEN DEFECT IS CLOSED, AND
+**AMENDMENT #19 (2026-08-21, verified by execution) — AMENDMENT #14's OPEN DEFECT IS CLOSED, AND
 IT WAS CLOSED MORE BROADLY THAN #14 ASKED. The paragraph above is retired as a live claim and kept as
 the record of what was wrong.** #14 required that "the gate must bind this row to the note's
 DECISION-token pair specifically, and a swap between the ruled and superseded pairs must RED in both
@@ -392,14 +387,14 @@ could not silently cost the case that already worked. Every mutant must refuse a
 `test_p8_the_ruled_column_parser_refuses_what_it_could_not_read`, closes the level-up defect a
 strengthened parser invites: no table, no header naming the columns, a header naming one twice, a
 ruled cell carrying two figures or none, a row missing — each is a REFUSAL, never a quietly smaller
-coupled set. **So the sentence "this table's correctness rests on the seat updating it, not on
+coupled set. **So the sentence "this table's correctness rests on the build agent updating it, not on
 anything that fails" is now FALSE, and that is the point of this amendment: a governing document
 asserting a defect it no longer has is itself a false claim, and it is the kind that decays quietly
 because nothing fails when it goes stale.** #14's STANDING RULE is UNAFFECTED and still binds — an
 amendment that moves a ruled value updates this table in the same commit; the machinery now also
 fails if it does not. Surfaced by a test-hardening sweep that found the P10 twin of this shape still
 open and checked whether the P8 remedy had landed rather than assuming from the spec's text; verified
-by the seat by running the gates and reading their mutants, not on the sweep's word.
+by the build agent by running the gates and reading their mutants, not on the sweep's word.
 
 RA members borrow their parent CMA, `borrowed_prior`. HORS_RMR is the province NET of the six
 wholly-QC CMAs NET OF the 16 Québec-side CSDs of the Ottawa-Gatineau CMA (amendment #13's
@@ -432,11 +427,11 @@ size of those two differences and asserts nothing stronger. P4's three 46-28-000
 the [0.155, 1.033] span from them, and the sweep span is UNCHANGED under this ruling. The layering
 is explicit: **measured (98-10-0621) > sibling-measured (43-10-0060) > borrowed (P4)**.
 
-**RULING T (amendment #10, operator-ruled 2026-08-14) — RA06 and RA13 are MEASURED, not borrowed.**
+**RULING T (amendment #10, ruled 2026-08-14) — RA06 and RA13 are MEASURED, not borrowed.**
 The catalogue-closure sweep (P9) found **StatCan 98-10-0622-01**, the census-division/subdivision
 sibling of the ruled cube: dimension list identical name for name, and the Québec province rows
 **BIT-IDENTICAL** across both cubes — persons 1,007,855, maintainers 527,710, owner-maintainers
-298,100, giving 0.5236 and 0.8993 in each, seat-verified live. This is ONE universe at two geography
+298,100, giving 0.5236 and 0.8993 in each, verified live. This is ONE universe at two geography
 grains, not a second source. Two modeled geographies are exact 1:1 matches to its census divisions
 and take their own measured values on the same `Before 2016` member:
 
@@ -648,12 +643,12 @@ Rank 1 is most-negative ED, so this lands precisely where rankings are decided; 
 argument that would have let it stand is true and irrelevant, because rankings are relative and
 decided near zero, which is exactly where that bound is vacuous.
 
-**AMENDMENT #18 (2026-08-21, operator ruling W + seat rulings X1–X7) — THE OWNERSHIP LATTICE IS SEVEN
+**AMENDMENT #18 (2026-08-21, ruling W + rulings X1–X7) — THE OWNERSHIP LATTICE IS SEVEN
 BANDS, AND THE TWO CONSUMERS THAT NEEDED A LUMPED AGGREGATE NOW COMPUTE ONE. Every four-band figure
 in (B) above is retired as CURRENT and preserved as HISTORY; the structural argument it carries
 SURVIVES and is now weight-independent rather than point-estimated.**
 
-**(A) THE LATTICE. Operator ruling W (2026-08-20) split the retired four bands into seven** —
+**(A) THE LATTICE. Ruling W (2026-08-20) split the retired four bands into seven** —
 `25-34, 35-44, 45-54, 55-64, 65-74, 75-84, 85+` in `census._AGE_BAND_SPEC`, with
 `hors_aligned.CD_BAND_SPEC` tiling the same edges from the CSD cube. **Why it was not cosmetic:** the
 retired 30-year `25-54` band made every age in the immigrant leg's cited reasoning range return one
@@ -676,7 +671,7 @@ POINT.** `S` reads ownership only at ages ≥ 75, i.e. exactly the two least con
 served, and because ruling X1 makes δ_S a convex combination of those two band deltas, δ_S is a
 **MEDIANT** confined to [+0.2416%, +0.2533%] for every feasible 75+ mix — strictly below the
 next-lowest band (45-54, +0.2732%) irrespective of weighting. The household-weighted instance is
-**+0.2441%**. **NAMED LIMIT (seat ruling X6) — that weight-independence is a SERVED-VALUE property and
+**+0.2441%**. **NAMED LIMIT (ruling X6) — that weight-independence is a SERVED-VALUE property and
 does NOT survive the suppression envelope.** At its high corner 85+ alone reaches **+0.3845%**, above
 45-54, so the ordering stops being weight-free; and the weighting that decides it is neither
 households nor population but **pop(a)·ρ(a)** — owner-population — because δ_S weights each band
@@ -690,7 +685,7 @@ owner-population weighting; a household-weighted check reports a pass the model 
 same-signed, and 2.0 pp at one decimal either way. #12(B)'s premise is band-UNIFORMITY, and refuting
 it needs the difference large, same-signed and adversarially arranged — never maximal. What retires is
 only the stronger reading that S rides the two least contaminated bands under any weighting at either
-corner. **AND THE QUANTIFIER IN (B) IS CORRECTED (seat ruling X7):** δ_D − δ_S does NOT sit "at or
+corner. **AND THE QUANTIFIER IN (B) IS CORRECTED (ruling X7):** δ_D − δ_S does NOT sit "at or
 near the FULL spread" — it is **60%** of the 3.3175 pp served spread. Two notes on that figure, both
 of which the record gates rather than assumes. First, δ_D is published as **ΔD/D = +2.243%**, computed
 by calling production `native_formation` twice per projected year (aligned curve against census-net)
@@ -700,7 +695,7 @@ alternative aligned-ρ-weighted construction reads +2.2646%; the two differ by w
 error, and both refute the superlative (60.25% and 60.90%). Second, the fraction is stated at WHOLE
 percent deliberately: at one decimal it flips between δ_S's household (60.3%) and owner-population
 (60.2%) readings, which this same amendment rules immaterial, and a knife-edge figure is precisely the
-drift class ruling X5 exists to close. **A correction the seat owes its own text:** the δ_S figure
+drift class ruling X5 exists to close. **A correction the build agent owes its own text:** the δ_S figure
 +0.244111% quoted upstream is the HOUSEHOLD-weighted blend — the weighting X6 above rules wrong for
 this quantity. Owner-population gives **+0.244392%**; both render +0.244%, and the record gates that
 they still do, so the single published figure is licensed rather than assumed. The amplification
@@ -711,7 +706,7 @@ the most-contaminated band is now `25-34`, and it is the most heavily WEIGHTED o
 `D_native` reads (18 ≤ a < 75 spans five), not the only one; and `S` no longer "rides through
 `initialize_households`" at a single band at all — see (C).
 
-**(C) SEAT RULING X — THE UNIFYING PRINCIPLE, and it is the whole of X.** Refining a lattice
+**(C) RULING X — THE UNIFYING PRINCIPLE, and it is the whole of X.** Refining a lattice
 correctly serves every consumer that reads ownership PER AGE. It BREAKS every consumer that needed an
 AGGREGATE OVER A LUMPED AGE RANGE, because the coarse band that used to supply that aggregate no
 longer exists and a point read inside the range silently becomes a sub-band read. **Re-pointing such a
@@ -796,7 +791,7 @@ LAURENTIDES_RA15_PROXY **−0.000877041660** (2), LAVAL_RA13 **−0.000507703667
 THIS MINT'S VALUES AND HASH, NOT THE STANDING OUTPUT (scope added by #28, 2026-08-23):** three later
 re-mints — #20(D), #22(C), #24(A) — have since moved every level and the hash, and the #27 event-time
 fix moves them again. The current record is the test-bound CURRENT-STATE span of
-`demoflow/artifacts/README.md`. **RETRACTED:** an earlier seat measurement
+`demoflow/artifacts/README.md`. **RETRACTED:** an earlier measurement
 published a table differing from these by up to 8.98e-06 (0.79% at rank 1). Its cause is recorded so
 the class is recognisable — the measuring harness patched the shared reader keyed on `(geography,
 age)`, and since `p_nonimm` and the per-age dict BOTH asked age 40, the patch contaminated the
@@ -825,7 +820,7 @@ the committed T13b external-anchor gates pin HORS_RMR's SHIPPED residual at `rel
 would red ruled gates. A future reader who "simplifies" the two curves into one must move those gates
 first, deliberately.
 
-**(C) Two figures in #12(A) were the SEAT's own errors, corrected by the probe that executed it:**
+**(C) Two figures in #12(A) were the build agent's own errors, corrected by the probe that executed it:**
 the "10.35% person weight" is the MAINTAINER weight (10.336%) — the person weight is 10.770%; and the
 "≈345,000" conversion measures 347,875 at the recorded province ratio against the **347,710**
 private-household persons the resolved membership actually carries (local universe ratio 0.9842 vs
@@ -891,7 +886,7 @@ the widest-leverage, least-validatable demand assumption) and the plex owner-occ
 The plex demand compute (occupancy-share priors + owner-landlord tilt) is **deferred to v1**
 alongside its supply source (rôle CUBF stock, §13) — v0 plex rows would have carried a
 self-discrediting `weak_identification` flag; ship the geography signal clean instead.
-[2A mod 2 — flagged for operator confirm: if a directional plex read is wanted in v0 despite weak
+[2A mod 2 — flagged for confirmation: if a directional plex read is wanted in v0 despite weak
 identification, name the concrete decision it informs.]
 
 ## 7. Outputs (the contract layer)
@@ -1016,14 +1011,14 @@ D_native (21,353 households, 100% of computed D_native being band-entry mass), s
 ownership curve below 25 BEFORE an age-resolved headship curve lands would multiply that artifact into
 demand instead of zeroing it. **Age-resolved headship first, then the floor.**
 **SATISFIED — DISCHARGED BY AMENDMENT #23(D), 2026-08-23.** The age-resolved curve LANDED under
-operator ruling V (2026-08-19, seat runs 34/35): `data/headship_by_age.json`, read by
+ruling V (2026-08-19): `data/headship_by_age.json`, read by
 `demand/formation.py` and `balance/owner_stock.py`, with `headship_shape` a declared central AND
 sweep axis. The ordering constraint above is discharged; `OWNERSHIP_LATTICE_FLOOR` stays 25 per
 amendment #18(A), which is now a SEPARATE decision rather than a blocked one. This note exists
 because the paragraph read as an OPEN precondition for four days after the thing it waited on
 shipped, and a future reader would have re-derived a constraint that was already met.
 
-**AMENDMENT #20 (2026-08-22, round-3 audit gates; seat-verified) — TWO NAMED LIMITS ON THE RANKING'S
+**AMENDMENT #20 (2026-08-22, round-3 audit gates; verified) — TWO NAMED LIMITS ON THE RANKING'S
 ROBUSTNESS, AND FOUR AUTHORIZATIONS. The ranked artifact's ORDER is sound as computed and its
 ROBUSTNESS CLAIM IS NARROWER THAN `rank_stable` IMPLIES; both limits below reorder ranks under
 defensible alternative constructions that the declared sweep structurally cannot reach.** Neither is a
@@ -1044,7 +1039,7 @@ figures below** — as re-measured at #24(A) they had already INVERTED against t
 BASES THAT DISAGREE BY ROUGHLY 1.5×, AND NOTHING IN THE MODULE MEASURES OR BOUNDS IT.** S is generated
 by a CLOSED-COHORT roll-forward — base-year standing stock plus age-75 entrants, decremented at
 `q_live`, never re-anchored to a later population. The ED DENOMINATOR re-estimates the same block every
-year as `Σ_{a≥75} pop(a,t)·headship(a)·ownership(a)`, a cross-section. SEAT-MEASURED, the rolled/static
+year as `Σ_{a≥75} pop(a,t)·headship(a)·ownership(a)`, a cross-section. MEASURED, the rolled/static
 ratio at MTL_RMR runs **0.9505 at the 2021 BASE year — the roll's initial condition, which is OUTSIDE
 the ranking domain — 0.8088 at 2026, the domain's FIRST year, and 0.6472 at 2051**. It falls at all
 eight geographies across the 26-year domain, and **NOT monotonically**: strictly monotone at exactly ONE
@@ -1052,7 +1047,7 @@ eight geographies across the 26-year domain, and **NOT monotonically**: strictly
 spread of the ratio runs **7.4 pp (2036) to 11.1 pp (2051), 12.2 pp at the base year** — a level AND an
 ordering effect, not a wash. The round-3 gate reported this as "monotone" with a "7.6 pp" spread; both
 are retired here as unreproduced — the fall is real and the spread is LARGER than the gate's figure.
-**The load-bearing part is a contradiction internal to this tree, and the seat verified it directly
+**The load-bearing part is a contradiction internal to this tree, and the build agent verified it directly
 rather than on the gate's word:** the denominator's own base-year curves imply a `headship·ownership`
 decline over 75→85 of `(0.52730×0.53069)/(0.64892×0.57227) = 0.7535`, i.e. **2.79 %/yr**, while the
 engine decrements the same households at `q_live = 8.5 %/yr` — a **3.05×** disagreement. Run that
@@ -1060,13 +1055,13 @@ implied retention through the module's own calibration gate and it sits **ABOVE*
 band `(0.20, 0.40)`, while the engine's retention on the spec-pinned cohort is **0.3571**, inside it.
 **Each half of the ED quotient would fail the other half's calibration check.** SIZING INSTRUMENT, and
 it is NAMED because a sensitivity number is meaningless without the perturbation that produced it: the
-seat RE-ANCHORS the rolled 75+ stock to that year's cross-section estimate before each roll — carrying S
+measurement RE-ANCHORS the rolled 75+ stock to that year's cross-section estimate before each roll — carrying S
 on the denominator's basis, explicitly violating I1, a MEASUREMENT and never a proposed construction.
 Measured: mean reference ED moves by **−3.46e-03 … −5.12e-03** per row — of the order of the ENTIRE
 published ranked spread of **5.464e-03** — **FOUR of eight rows change sign**, and the ordering moves
 **HORS_RMR 4→6 with MONTEREGIE_RA16_PROXY 6→4**. The gate's own re-basing reported a narrower delta band
-(−4.05e-03 … −5.03e-03) and SIX sign changes; that instrument was not stated, the seat could not
-reproduce it, and only the seat's reproduced figures are published here. The REORDER is identical under
+(−4.05e-03 … −5.03e-03) and SIX sign changes; that instrument was not stated, the build agent could not
+reproduce it, and only the build agent's reproduced figures are published here. The REORDER is identical under
 both, which is the part the named limit rests on.
 **Why `rank_stable: false` does not price this:** `q_live` moves the hazard INSIDE the closed cohort; no
 declared axis moves the BASIS. The sweep is honest about what it varied and silent about this.
@@ -1093,7 +1088,7 @@ because the surviving-arrival stock carries every cohort landed since 2025 forwa
 and 31.8 %** of that charge — measured at all eight geographies at both endpoints — lands on ages
 (0-16, 75-100) that NEITHER leg of the `native_formation` sum reads, while `immigrant_formation` credits
 100 % of `arrivals(t−1)`.
-SIZING INSTRUMENT, seat-built INSIDE this tree so that it needs no source this tree does not have:
+SIZING INSTRUMENT, built INSIDE this tree so that it needs no source this tree does not have:
 charge the ENTIRE netting to the ages that actually carry DEMAND WEIGHT, population-proportional within
 that range, leaving every other age unnetted — satisfying the identical I2 sum the shipped uniform scale
 satisfies. **THE CHARGE BAND IS 25-74, AND ESTABLISHING WHICH BAND IS THE EXTREME WAS ITSELF A
@@ -1127,7 +1122,7 @@ allocated; it is a large mass whose age placement is unconstrained by anything i
 **The gate's larger figure is NOT published, and why is the point:** it measured against a cohort-aged
 per-age arrival profile (four reorders, six sign flips, a 12× span) that is the auditor's and not this
 tree's — `MODEL_CHOICE_PROVENANCE["p_nonimm_range"]` records verbatim that no source here carries a PR
-arrival age distribution, which is precisely why the uniform scale is forced, and precisely why the seat
+arrival age distribution, which is precisely why the uniform scale is forced, and precisely why the build agent
 could not reproduce that instrument. **So the numbers above are a SENSITIVITY BOUND, not a truth claim,
 and the defect is not the uniform allocation itself but that it was undocumented at its site, ungated
 beyond a sum, and undeclared as a robustness axis while reordering the published ranking.**
@@ -1209,7 +1204,7 @@ quoted in `constants.py`'s own header) and `test_collective_share_is_fraction_an
 only `0.0 <= value <= 1.0` — **not even the anchor's OWN declared band**, so it would not red on a move
 to 0.5 — while four sibling anchors pin exact values (0.36; (0.26,0.31); (0.20,0.40); 0.28 WITH its
 band; 45000). The one anchor left unpinned is the one that reorders the ranking invisibly. Verified at
-the seat: at 0.08 the order becomes HORS_RMR 5 / MTL_RMR 4 with `assumptions_hash` UNCHANGED at
+the build agent: at 0.08 the order becomes HORS_RMR 5 / MTL_RMR 4 with `assumptions_hash` UNCHANGED at
 `fe7c631104c5182b`; at the band LOW 0.02 the order HOLDS, so the axis is one-sided and the high
 endpoint is the one that must be swept. **BOTH HALVES ARE
 TRANCHE-1-BLOCKING and neither is optional:** the registry joins the `assumptions_hash` payload, and the
@@ -1218,7 +1213,7 @@ widening already in flight, the sweep half is its own change — but a Tranche-1
 the other ships a token that moves for the anchor beside a `rank_stable` computed over a grid that still
 never varied it, which is a worse state than either half alone.
 
-**AMENDMENT #21 (2026-08-22, escalated by run 49's fix agent, seat-verified before ruling) — THE
+**AMENDMENT #21 (2026-08-22, escalated by run 49's fix agent, verified before ruling) — THE
 TRIPWIRE DOCUMENT PUBLISHES ITS BANDS AND WITHHOLDS ITS DECLARATIONS, WHICH LEAVES THE HASH-LEDGER'S
 OWN EXCLUSION ARGUMENT UNSOUND. `freshness_years` AND `source_kind` ARE AUTHORIZED AS OPTIONAL PER-ROW
 MEMBERS OF `tripwire_baseline.json`.**
@@ -1228,7 +1223,7 @@ four other unhashed selections. Two of them are tripwire ledgers and both were r
 argument: what the output PUBLISHES per row does not need the token, because *"a move announces itself
 in the diff"* — the token exists for selections the output does not show. That argument is correct, and
 it holds for `pipeline.TRIPWIRE_BANDS`, whose every endpoint is emitted as `band_low`/`band_high` in the
-row it governs. **It does NOT hold for `pipeline._TRIPWIRE_DECLARATIONS`, and the seat verified the
+row it governs. **It does NOT hold for `pipeline._TRIPWIRE_DECLARATIONS`, and the build agent verified the
 asymmetry rather than taking it on report:** `TRIPWIRE_RECORD_REQUIRED` is exactly
 `{indicator, current_value, source, as_of, band_low, band_high, status}` plus optional `reason` — the
 eight keys the shipped artifact carries — while `TripwireSpec` holds `freshness_years` and `source_kind`
@@ -1307,7 +1302,7 @@ unresolved input"*. That record had **no schema home in this document**: `exclus
 `unresolved_input` appear ZERO times in it. Meanwhile the implementation already ships `exclusions` as
 a **REQUIRED root member** of the rankings document with a closed two-field row schema, registry-bound
 values and a per-row contract — i.e. exactly the envelope widening §7's closure rule reserves to a
-seat amendment, taken on no authority but the code's. Amendment #20(C) had to name
+spec amendment, taken on no authority but the code's. Amendment #20(C) had to name
 `committed_sha256`, `rows_moved` and the pairing token to put three OPTIONAL members in the envelope,
 and while doing so it stated the envelope widens *"by exactly three optional members"*. **That was
 false as written: a fourth, REQUIRED root member was already there.** The asymmetry was total — the
@@ -1466,7 +1461,7 @@ obligation; naming a check that cannot exist does.
 
 **(C) RETRACTED — §10's `20 vs 100 → CalibrationError` requires a RED that is mutually exclusive with
 §5 AND with the committed data.** The shipped test at that exact fixture asserts the NEGATION
-(`test_match_couples_20_v_100_per_band_imbalance_is_recorded_not_gated`), because steering ruling A
+(`test_match_couples_20_v_100_per_band_imbalance_is_recorded_not_gated`), because ruling A
 of 2026-07-25 retired the per-band balance gate and §5 carries that ruling — while §10 was never
 re-pointed. `grep "ruling A"` returns ZERO hits in §10. This was not settled by reading the
 contradiction: a verifier REINSTATED the per-band gate that would make §10 true and measured **33
@@ -1479,7 +1474,7 @@ underspecified. §5 writes *"beyond |diff|/max > 0.25"* (strict), the code imple
 0.2500000009999999 RAISES, and two shipped tests pin the bound to [0.25, 0.26). Two conforming
 implementations cannot differ there.
 
-**(D) WRITTEN DOWN AT LAST — operator ruling V shipped four days before this document mentioned it.**
+**(D) WRITTEN DOWN AT LAST — ruling V shipped four days before this document mentioned it.**
 `grep -c "ruling V"`: **spec 0, code 45.** It is not a pending idea: `data/headship_by_age.json` is
 read by `demand/formation.py` and `balance/owner_stock.py`, and `headship_shape` is one of the seven
 declared axes making a golden run 336 legs, feeding the EMITTED `rank_stable`. Two consequences, both
@@ -1686,7 +1681,7 @@ public entry point, rides `data_vintage.source_hashes` UNCONDITIONALLY in BOTH d
 identity inherits it. It has since run 33. So §9's *"a change in any re-mints the artifact BY
 DESIGN"* is TRUE, because the basis digest is inside `data_vintage`. This is REFUTED rather than
 downgraded: it neither restates a declared limit nor exposes an overclaim.
-**The seat's merge concern, answered with four measured layers** and recorded here because it governs
+**The build agent's merge concern, answered with four measured layers** and recorded here because it governs
 pending work: the production environment installs the sibling as a NON-EDITABLE wheel SNAPSHOT with
 its own copy of the tables, so sibling edits reach nothing until a dependency re-sync; after a
 re-sync, any movement in q re-mints the basis digest in both documents; the pairing token re-mints
@@ -1694,7 +1689,7 @@ with it; and a committed guard pins the basis digest at declaration while both g
 same value, so a moved table REDS with an instruction to re-declare in the same commit. **A sibling
 change can move ranks; it cannot move them invisibly, which was the claim.**
 **ONE WATCH ITEM for the coordinated merge, named because it is the single thin place:** the
-seat-coordinated import swap must stay on the three public names, and one test —
+coordinated import swap must stay on the three public names, and one test —
 that the basis digest reaches no private engine surface — is the only guard between that swap and a
 digest taken over a private surface. **The unmet half of the finding's own refutation recipe stands as
 a lineage limit, not a detection gap:** the dependency is declared by PATH and pins no revision, so
@@ -1854,7 +1849,7 @@ measurement (pre-token artifacts with the same `schema_version` exist and valida
 the reverse — whether YESTERDAY's validator accepts TODAY's added optional members. **The reverse
 direction is genuinely untested, and it is also unreachable: this module has no external SOFTWARE
 consumer.** There is no pinned-version validator anywhere to break: S4b's file contract does not
-exist yet, and §1's value-order consumers — the operator and the showcase — are READERS, not
+exist yet, and §1's value-order consumers — the maintainer and the showcase — are READERS, not
 validators. (Framing corrected before this block committed; #27 below makes the same correction.) **Recorded as the precise open condition rather than
 fixed: the no-bump rationale assumes a consumer that IGNORES unknown fields, and the first real
 consumer is where that assumption gets tested.** A Tranche-2 author reading #20(C0)'s
@@ -1934,9 +1929,9 @@ trajectory, not the mean, is what a Tranche-2 consumer will read**, and the mean
 as a boundary-and-trend effect while every individual year stays misaligned. Fixing before any
 consumer exists is the cheap moment: no recalibration, no migration.
 
-**AND A CORRECTION TO THE FRAMING THIS SEAT USED WHILE DECIDING IT.** I had recorded the consumer as
+**AND A CORRECTION TO THE FRAMING USED WHILE DECIDING IT.** I had recorded the consumer as
 "S4b, which does not exist yet", which made level precision look like work for an absent reader. §1
-ranks consumers in VALUE ORDER and S4b is THIRD: **first the operator, for whom rankings AND tripwires
+ranks consumers in VALUE ORDER and S4b is THIRD: **first the maintainer, for whom rankings AND tripwires
 ARE the core v0 output; second the showcase, which ships off Tranche 1.** Two live consumers today,
 both of whom make correctness the product. **This is the last level fix Tranche 1 should absorb**:
 afterwards the triage rule is that a further level finding must move a RANK, flip a HEADLINE SIGN, or
@@ -2016,13 +2011,13 @@ instances; #26(D) named the habit. **Naming it did not stop it** — finding 10 
 between #26 and #27, inside the same uncommitted bytes, after the naming. So this amendment closes
 the class by ENUMERATION instead of by rule: one first-time-reader pass over all 2,214 lines with NO
 amendment resolution (the pass that matters, because a reader WITH the amendments applied resolves
-each contradiction and correctly reports it dispositioned — that is why this seat's own §10 sweep at
+each contradiction and correctly reports it dispositioned — that is why this build agent's own §10 sweep at
 #23(F) came back clean), a correction registry built from amendments #6-#27 and rulings A-X, ~45
 candidate literals adjudicated one at a time against that registry, registry-keyed greps for skimmed
 instances, and both shipped artifacts read wherever a literal claims an emitted field set.
 
 **THE COUNT, REPORTED EITHER WAY — because only a measured count over an ENUMERATED set closes a
-class, where silence leaves it open: 13 live instances against the 4 this seat knew of. SIX are
+class, where silence leaves it open: 13 live instances against the 4 this build agent knew of. SIX are
 act-wrong** (a reader who follows them builds the wrong thing), seven mislead or cite wrongly.
 Every one is corrected AT ITS OWN LINE, with the retracted words QUOTED at the site so the corpse
 stays recognisable to the next reader — the sweep confirmed that quoted-and-labelled corpses are
@@ -2045,7 +2040,7 @@ the pass failed to recognise AS a correction, and (b) two body sentences contrad
 with NO amendment mediating — neither is reachable from a registry keyed on amendments. A confirming
 round is scoped to exactly those two classes and sequenced AFTER this amendment and the #27 cascade
 land: running it sooner re-litigates bytes about to be edited twice. It doubles as the fresh-context
-verification of this amendment's OWN thirteen edits, which this seat authored — **a verifier inside
+verification of this amendment's OWN thirteen edits, which this build agent authored — **a verifier inside
 the fold shares the fold's blind spot.**
 
 **THE CLASS DIAGNOSIS, and why it is NOT fixed here.** This document is simultaneously an
@@ -2055,15 +2050,15 @@ ways: the trail wants sentences frozen, the contract wants every line currently 
 findings is the tax on conflating them, and it is charged per audit round.** The fix is NOT a third
 copy of the live rules inside this document — that is precisely the two-copies-drift failure, and the
 consumer page's marked spans already ARE the test-bound current-truth surface, re-derived at every
-mint. Recorded instead as a **TRANCHE-2 OBLIGATION on the next spec this seat writes: separate the
+mint. Recorded instead as a **TRANCHE-2 OBLIGATION on the next spec this build agent writes: separate the
 amendment log from the normative contract from day one, and have the contract POINT AT test-bound
 spans rather than restate them.** Deliberately not restructured now — this document is days from a
 publish branch, fifteen audit rounds have converged on its line anchors, and a restructure would
 reset every one of them while buying nothing on a document about to freeze.
 
 **PROVENANCE, because a finding set is only as good as its verification.** The sweep was commissioned
-by this seat and run by a peer session with no stake in this document's history. **No finding was
-landed on the peer's word:** the seat confirmed all 13 literals against the file, and seven against
+by this build agent and run by a peer session with no stake in this document's history. **No finding was
+landed on the peer's word:** the build agent confirmed all 13 literals against the file, and seven against
 ground truth OUTSIDE it — finding 1 against `pipeline.py`'s `None`-central branch, finding 2 against
 the shipped `tripwire_baseline.json` (ten keys on every indicator row, against an eight-member
 allowlist this document called exact), finding 4 against the shipped NAMED-LIMITS span, finding 8
@@ -2071,7 +2066,7 @@ against #13's own table row (HORS_RMR's aligned ratio 1.0248), finding 14 agains
 `assumptions_hash` **(numbering note, amendment #30: these citations use the SWEEP'S internal
 F-numbers, which run to fourteen because the fourteenth landed as the #18(E) housekeeping
 scope-line rather than as a numbered finding — the published enumeration above closes at
-thirteen, and cross-model review round 16 read "finding 14" against it with no way to map the two)**. The peer's two proposals this seat did NOT take verbatim are recorded as such:
+thirteen, and cross-model review round 16 read "finding 14" against it with no way to map the two)**. The peer's two proposals this build agent did NOT take verbatim are recorded as such:
 its paste text for finding 4 restated the current reliance verdict, which the #27 cascade would
 stale within days, and its finding-9 wording detached the `§7` pointer from the claim it qualifies.
 
@@ -2103,8 +2098,7 @@ The bracket figures now live in their own **public measured record**
 INDEPENDENTLY of the probe's own emission so the cross-document check remains a check that can
 fail; the probe reads it (`_qfe_record` → `_bracket_record`), and the record's closing rule
 stands verbatim: **never update this record to make a red go away** — a digit changed here must
-be justified at the spec and re-measured against 98-10-0622-01. The dispatch file remains the
-historical audit trail of the re-triage decision; this coupling no longer reads it.
+be justified at the spec and re-measured against 98-10-0622-01.
 
 **AMENDMENT #30 (2026-08-24, cross-model review cross-family round 16 — the confirming round #28 scoped) —
 TWO UNMEDIATED CONTRADICTIONS, BOTH CORRECTED AT THEIR OWN LINE; ZERO CLASS-A FINDINGS; THE
@@ -2149,7 +2143,7 @@ exact nested field allowlist — rankings row: {geography, mean_ed_reference, me
 mean_ed_high, rank, rank_stable, flags[]} with `rank_stable` a TYPED boolean carrying the r8-F1
 robustness-sweep verdict (cross-model review r9-F1 — the mandated stability result needs a schema home, never a
 flag string) and `flags[]` a CLOSED enum {borrowed_prior, ra_proxy, closed_cohort_exceedance
-— **added by steering ruling K, 2026-08-07 (operator-resolved): rides every ranking row of a
+— **added by ruling K, 2026-08-07 (resolved): rides every ranking row of a
 geography whose measured 75+ net-migration rate historically exceeded the 1%/yr materiality
 cap (currently: LAVAL_RA13), marking its rank lower-confidence under the closed-cohort
 assumption**} (scenario
@@ -2179,7 +2173,7 @@ conditionally; that guarantee lives in the single derivation path (the version-s
 module is the only producer of tilt/drift values, origin-asserted in the Tranche-2 emitter tests)
 plus review. Named, not hand-waved.
 
-**Amendment #17 / seat-ruled 2026-08-19 — a NON-FINITE band endpoint is a RUN-LEVEL TERMINAL, not an
+**Amendment #17 / ruled 2026-08-19 — a NON-FINITE band endpoint is a RUN-LEVEL TERMINAL, not an
 UNKNOWN record.** The value-integrity rule above sends an inverted band to UNKNOWN, and the
 implementation extended that to non-finite endpoints — but `_unknown_measured` passes the offending
 endpoint through UNCOERCED into `band_low`/`band_high`, and the contract validator REJECTS exactly
@@ -2199,7 +2193,7 @@ its contract validator, parametrized over the full sub-case set.
 
 
 
-**Amendment #16 / seat-ruled 2026-08-19 — `duplicate_indicator` JOINS the nullable reasons.** The
+**Amendment #16 / ruled 2026-08-19 — `duplicate_indicator` JOINS the nullable reasons.** The
 nullability rule above enumerates four reasons; `duplicate_indicator` was left out while
 `missing_indicator` was included, and the two are produced by the SAME function on the SAME branch.
 `check_registry` emits a duplicate record with `current_value` and `as_of` both null — it has no
@@ -2214,7 +2208,7 @@ a property of today's callers and not of the contract. The nullable set is there
 token; only the nullability set moves.
 
 
-**Amendment #15 / RULING U (seat-ruled 2026-08-18) — the WIRED indicator's completeness contract is
+**Amendment #15 / RULING U (ruled 2026-08-18) — the WIRED indicator's completeness contract is
 MEMBER-SET, not month-presence.** This section pinned the tripwire RECORD contract and left
 completeness to the implementation, which chose "twelve distinct months on the selected year". That
 check is a UNION over members and two members satisfy it: measured on the 2026-08-18 vintage, a feed
@@ -2308,7 +2302,7 @@ PR-visible act, which is review's job to catch, not the runtime's. Scheduling is
 | Junction | Left | Right | Rule |
 |---|---|---|---|
 | Geography | ISQ row labels per workbook — **verified 2026-07-21 to carry trailing whitespace and embedded footnote digits** (`'RMR de Montréal '`, `"RMR d'Ottawa-Gatineau2"`) | `Geography` enum {MTL_RMR, MTL_ISLAND_RA06, LAVAL_RA13, QC_RMR, HORS_RMR, LANAUDIERE_RA14_PROXY, LAURENTIDES_RA15_PROXY, MONTEREGIE_RA16_PROXY} | NORMALIZE first (strip whitespace, strip trailing footnote digits), THEN a TOTAL label map over the workbook's verified label set (cross-model review r4-F2): 'RMR de Montréal' → MTL_RMR, 'RMR de Québec' → QC_RMR, **'Territoire hors des RMR' → HORS_RMR (the workbook's OWN literal row supplies HORS_RMR population directly — cross-model review r7-F4: stated explicitly, never a residual)**; the five present-but-unmodeled rows (Ottawa-Gatineau QC-part, Saguenay, Sherbrooke, Trois-Rivières, Drummondville, plus 'Le Québec') → an explicit `IGNORED` sentinel (recognized-and-excluded — a valid workbook must LOAD); only a label outside the verified set raises. HORS_RMR COMPONENT FLOWS (arrivals): three-way resolution recorded at probe P5/P6 — (i) the compo workbook's own hors-RMR row if present; else (ii) province compo minus all RMR rows, reconciliation-checked; else (iii) HORS_RMR is **EXCLUDED FROM RANKINGS ENTIRELY — no ED is computed for it** (cross-model review r10-F2: a supply-side-only ED would have to feed P_ISQ to native formation, omit a demand term, or invent arrivals — each contradicts a stated contract); the run emits a run-level exclusion record naming the unresolved input, and the rankings cover the remaining members — never a partial ED, never an unstated default. | RA14/15/16 rows carry `ra_proxy` (exact RA data used as couronne/periphery proxies — ranking members, never balance participants, never emitted in ScenarioPrior); Laval is exact (RA13 ≡ ville); couronne-nord precision is DEFERRED to v1 (§11.6: a find enables v1, never v0). MRC-level ISQ projection workbooks EXIST — the 2026-07-21 'no MRC workbook (404)' finding was a METHOD ARTIFACT: HEAD 404s where GET 200s on ISQ's descriptive-French slugs, and the original probe's guessed slugs also 404 on GET, so absence was a property of slug + verb, never the data (P6 probe + independent steering re-verification, 2026-07-28; discovery path = sitemap.xml, 3,273 xlsx locs). v1 is PARKED behind two recorded residuals: the RA↔MRC axis is EDITION-SPECIFIC (present in A2021, absent from the 2025 scenarios workbook), and membership-vs-partition of RA14/15/16 vs the RMR couronne is not yet computed |
-| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and a `100+` terminal column — **AMENDED 2026-08-07 (steering ruling I): `100+` occurs exactly ONCE per sheet in the committed edition (measured across all three pop workbooks by two independent probes); the duplicate-name hazard is CROSS-SHEET (`Groupes d'âge` carries its own `100+` column), not within-sheet — the 2026-07-21 junction note mis-scoped it** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (cross-sheet duplicates + future-edition drift); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (cross-model review r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
+| Age | ISQ `Années d'âge` sheet — **verified: TWO-ROW header (sheet rows 7–8) mixing grouped-age (0-19, 20-64, …), single-year `Âge` block (0..100+), Âge moyen/médian, and a `100+` terminal column — **AMENDED 2026-08-07 (ruling I): `100+` occurs exactly ONCE per sheet in the committed edition (measured across all three pop workbooks by two independent probes); the duplicate-name hazard is CROSS-SHEET (`Groupes d'âge` carries its own `100+` column), not within-sheet — the 2026-07-21 junction note mis-scoped it** | CPM table integer ages | Loader selects the single-year block by header-GROUP context (`Âge`), never by bare column name (cross-sheet duplicates + future-edition drift); `100+` → capped at CPM table max (≥100 verified live — skeleton q₁₀₀ returned); grouped-age columns ignored. **Terminal-bucket semantics (cross-model review r5-F6): 100+ is an ABSORBING age bucket** — each year its stock = surviving prior 100+ stock (table-max hazards) + surviving age-99 age-ins; never overwritten or reinitialized; three-year fixture reconciles mass with each decrement applied once |
 | Sex | ISQ numeric sex codes — **verified: {1.0, 2.0, 3.0}, NOT M/F labels** | actuarial-system `gender` strings | Explicit code→gender map, TRIPLE-checked (cross-model review r2-F5 — additivity alone is swap-symmetric and cannot orient male vs female while mortality is sex-specific): (1) additivity code-3 ≈ code-1 + code-2 per geography×year×scenario (raise if not); (2) semantics pinned from the ISQ metadata at probe time (recorded observation); (3) ORIENTATION guard — at ages 85+, the female-mapped code's population must exceed the male-mapped code's in every geography×year (the universal old-age female survival advantage; raise on violation = swapped map). Code 3 is VALIDATION-ONLY, never enters modeling (exclusion tested). Any other code → raise |
 | Scenario | ISQ `Référence (A2026)/Faible (D2026)/Fort (E2026)` | `{reference, low, high}` | Explicit map at load; missing any of the three for a geography×year → raise |
 | Year | ISQ `Année` + `Statut` (est/proj) | int calendar year | `Statut` is revision status, NOT scenario (skeleton friction #3); est vs proj recorded in vintage |
@@ -2429,8 +2423,6 @@ structure + QC-discount multiplier. Gated on the named artifact: a one-page S4b
 demographic-input-slot sketch (authored in S4b's design session, which itself consumes merged S4a).
 Deferral costs nothing — the artifact is unconsumable until S4b exists.
 
-Handed off to the main steering seat per steering routing.
-
 ## 13. Deferred ledger (explicitly out of v0 / Tranche 1)
 
 **Tranche 2 (gated on S4b input-slot sketch):** ScenarioPrior emitter; ED→drift mapping (β band);
@@ -2441,10 +2433,10 @@ ED-trajectory → horizon_year-row aggregation rule (endpoint vs period-mean —
 distinguishing fixture), and the ED → drawdown_weight_tilt mapping (currently unspecified; the β
 rule determines drift only).
 **v1+:** MRC-level couronne split (pending source); plex demand compute + supply stock from rôle
-CUBF (2A mod 2 — operator may pull forward with a named decision it informs); StatCan paid custom
+CUBF (2A mod 2 — the maintainer may pull forward with a named decision it informs); StatCan paid custom
 tabulation (CT-level immigrant tenure); >2051 horizon tail (only QC-total reaches 2071 — any
 extension is a named extrapolation); actuarial-system multiple-decrement combinator (charter
-extension, operator sign-off); tripwire scheduling/cron.
+extension, maintainer sign-off); tripwire scheduling/cron.
 **CUT (not deferred):** parquet mirror (revisit only at columnar scale); `weak_identification`
 flag (dies with the v0 plex compute).
 **REJECTED (not deferred):** forecaster-lite.

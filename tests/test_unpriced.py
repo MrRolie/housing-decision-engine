@@ -595,7 +595,7 @@ class TestItReachesTheSurfaces:
 # "the minimum qualifying rate a lender would test you at" on runs that also
 # price a renewal, which since 2024-11-21 is false for an uninsured straight
 # switch — and the reader it misleads is the household already facing a
-# payment jump (README, docs/BOARD.md item 5).
+# payment jump.
 #
 # EVERY ASSERTION BELOW IS ON THE RENDERED LINE AGAINST A LITERAL SPELLED OUT
 # HERE, never against a module constant: a rewrite that keeps the constant and
@@ -627,7 +627,7 @@ class TestWhichTransactionItPrices:
                 "at year 6:") in line, line
 
     def test_the_uninsured_clause_names_the_transaction_the_rule_stops_at(self):
-        """THE LINE CITES, THE ANCHORS RECITE (operator ruling 2026-09-21). The
+        """THE LINE CITES, THE ANCHORS RECITE (ruling 2026-09-21). The
         effective date, the three conditions of a straight switch and the B-20
         mechanism are stored verbatim on the two legs the clause cites, and
         `TestTheStraightSwitchRegistry` is what keeps them there. What the LINE

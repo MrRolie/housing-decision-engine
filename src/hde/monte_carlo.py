@@ -658,7 +658,7 @@ def crash_hazard(shock: PriceShockParams, tilt: float) -> float:
     prior's `drawdown_weight_tilt` (1 without a prior), capped at 1."""
     # tilt is an unbounded multiplier from the prior (validated >= 0 only), so
     # the composed hazard is capped at certainty — the same clamp the event
-    # hazard channel applies (readiness plan C.7).
+    # hazard channel applies.
     return min(shock.annual_hazard * tilt, 1.0)
 
 

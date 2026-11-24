@@ -643,7 +643,7 @@ class ComparisonMonteCarloResult:
     renewal_rate_rows: Optional[np.ndarray] = None
 
 
-# ----- Verdict (readiness plan B.1, 2026-09-01) -----
+# ----- Verdict (2026-09-01) -----
 
 @dataclass(frozen=True)
 class Verdict:
@@ -705,7 +705,7 @@ def compute_verdict(
     single_path: bool = False,
 ) -> Optional[Verdict]:
     """
-    Decisiveness rule (operator-ruled 2026-09-01; constants in anchors.py):
+    Decisiveness rule (ruled 2026-09-01; constants in anchors.py):
       - primary, when Monte Carlo ran with real uncertainty (``mc`` given and
         not ``single_path``) and carries a probability for the deterministic
         winner: decisive ⇔ P(best cheapest) ≥ verdict.prob_floor — unless

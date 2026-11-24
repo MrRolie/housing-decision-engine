@@ -364,7 +364,7 @@ def _compute_other_recurring_pv(
     """
     PV of other recurring costs (rent option): year-t cost = amount × (1+e)^t,
     with e composed with inflation in nominal mode exactly as the condo/house
-    loops do (readiness plan D, 2026-09-01 — rent's other costs previously
+    loops do (2026-09-01 — rent's other costs previously
     skipped inflation in nominal mode, unlike every other escalating flow).
     """
     total_pv = 0.0
@@ -712,7 +712,7 @@ def _annual_costs_for_option(
             segments = renewal_segments_for(params, renewal_rates)
 
     # Nominal mode composes inflation into every escalation, exactly as the PV
-    # engine does (readiness plan D.6 — `econ` was accepted and ignored here,
+    # engine does (`econ` was accepted and ignored here,
     # so nominal-mode ratios silently omitted inflation).
     def _g(rate: float) -> float:
         return _effective_growth_rate(rate, econ)

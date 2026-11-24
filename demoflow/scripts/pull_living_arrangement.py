@@ -6,7 +6,7 @@
 This is the ACQUISITION leg of the PIT chain (live response -> filter predicate ->
 committed extract -> derived rates). It writes `data/living_arrangement_98100134.json`
 and NOTHING else: no rate is computed here, and no rate is ever hand-typed
-(steering ruling B). `demoflow.loaders.living_arrangement.derive_living_arrangement`
+(ruling B). `demoflow.loaders.living_arrangement.derive_living_arrangement`
 is the only producer of rates; `scripts/gen_living_arrangement.py` runs it.
 
 RE-PULLING IS A PINNED-VINTAGE CHANGE. The extract's sha256 lives in

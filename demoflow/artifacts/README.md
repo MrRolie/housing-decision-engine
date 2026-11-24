@@ -86,7 +86,7 @@ and its pin, the artifact's recorded digest and a fresh derivation all move toge
 the committed digest in `sha256` would make the whole legitimate-refresh motion pass on a
 materially different vintage. That is why the committed digest joins the row as its OWN field
 instead of replacing the anchor. `pins.py` carries the argument in full. This matters more since
-operator ruling X2 (2026-08-21): that extract now supplies `p_nonimm`, **a rate the model
+ruling X2 (2026-08-21): that extract now supplies `p_nonimm`, **a rate the model
 multiplies 336 times per run** — one per leg × geography × scenario — so it is a live model input
 and not only a derivation-time one. **That figure is COMPUTED, never typed:** it shipped as `288`
 until run 52, which was the RETIRED twelve-leg grid's product, and
@@ -227,17 +227,17 @@ inputs are borrowed (the ownership-curve borrow is wider — see the next sectio
 **What this mint's model is.** FIVE model changes sit between it and the last order this page
 recorded — and the ORDER survived all five, which is why this section describes levels:
 
-* **Seven ownership bands** (operator ruling W, 2026-08-20). `census._AGE_BAND_SPEC` was
+* **Seven ownership bands** (ruling W, 2026-08-20). `census._AGE_BAND_SPEC` was
   refined from a flat `25-54` + `75+` shape to `25-34 / 35-44 / 45-54 / 55-64 / 65-74 / 75-84 /
   85+`. The lattice FLOOR stays 25.
-* **The 75+ bucket is valued at its OWN population-weighted rate** (operator ruling X1,
+* **The 75+ bucket is valued at its OWN population-weighted rate** (ruling X1,
   2026-08-21). `pipeline._standing_stock` values the lumped `age >= 75` slice at
   `Σ_a pop(a)·ρ(a) / Σ_a pop(a)` over exactly the ages it holds, instead of a point read at
   `ROLL_AGE` (80) — which, once ruling W split the flat band, resolved to `75-84` ALONE and
   valued the whole bucket at the upper half of the gradient the refinement had just exposed.
   `ROLL_AGE` still carries the hazard and the living-arrangement read; it no longer selects a
   band.
-* **The immigrant leg reads a 25-54 AGGREGATE, not an age** (operator ruling X2, 2026-08-21).
+* **The immigrant leg reads a 25-54 AGGREGATE, not an age** (ruling X2, 2026-08-21).
   `p_nonimm` is formed by construction from owner counts and total counts summed across
   `25-34 / 35-44 / 45-54` and divided ONCE — never a mean of the three band rates, which is off
   by -1.005 pp at MTL_RMR because the bands carry materially different household counts. The
@@ -571,7 +571,7 @@ bound:
 
 <!-- RATIO-ENDPOINTS:BEGIN -->
 * At `immigrant_ownership_ratio=0.155`: **rank 1 CHANGES HANDS**, the leader is `MTL_RMR`, and
-  **seven** rows move — the ranking is a near-complete reversal, and since operator ruling W's
+  **seven** rows move — the ranking is a near-complete reversal, and since ruling W's
   seven-band lattice `LAVAL_RA13` is the sole fixed point, holding rank 3.
 * At `immigrant_ownership_ratio=1.033`: **rank 1 CHANGES HANDS**, the leader is `LAVAL_RA13`, and
   **five** rows move, `LANAUDIERE_RA14_PROXY` among them dropping to rank 2.
@@ -645,7 +645,7 @@ always were. The ratio span was NOT: `CONSTANTS` sat outside that token, so narr
 widening is what makes `collective_share_75plus` safe to sweep: its value AND its band ride the
 token, so a refinement of the anchor re-mints rather than moving the ranking invisibly.
 
-## HISTORY — the published ORDER moved at operator ruling V (the age-resolved-headship mint)
+## HISTORY — the published ORDER moved at ruling V (the age-resolved-headship mint)
 
 **This section quotes SUPERSEDED figures on purpose.** It is the record of a previous mint, it is
 outside the test-bound span above, and none of its numbers describe the shipped file. Read the
@@ -653,7 +653,7 @@ current-state section for what ships.
 
 The ranking then was **not** the one that shipped before the ruling-V mint. That commit replaced the
 six-band headship rate — one flat value reused at every age inside a band — with a single-year
-graduation that closes on every published maintainer-age member (operator ruling V, 2026-08-19).
+graduation that closes on every published maintainer-age member (ruling V, 2026-08-19).
 Measured **at that mint**:
 
 | Geography | rank before | rank at the ruling-V mint | `mean_ed_reference` before | at the ruling-V mint |
@@ -684,11 +684,11 @@ recomputing the token from payload copies with `headship_shape` dropped from bot
 reproduced `f39a8a240c60d777` exactly. `data_vintage` moved too — the `headship_by_age.json`
 digest, whose `_provenance` prose was rewritten in the same run.
 
-**The design panel's order table is PROBE-GRADE and was only partly reproduced.**
-`docs/research/2026-08-19-headship-curve-design-panel.md` priced that order first-order (raw ISQ
+**The design review's order table is PROBE-GRADE and was only partly reproduced.**
+The design review priced that order first-order (raw ISQ
 population standing in for `P_resident`, per-year ED replaced by its mean) and got the direction
 right where it mattered most — `HORS_RMR`'s sign flip and every row turning positive — while
-missing the permutation. Read the panel for the design, never for the numbers.
+missing the permutation. Read the review for the design, never for the numbers.
 
 **Rulings W, X1 and X2 then moved the order AGAIN, and back across zero.** Every figure in the
 table above is superseded: three rows now carry a NEGATIVE `mean_ed_reference` and rank 1 is one

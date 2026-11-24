@@ -2,7 +2,7 @@
 --break-even: solve ONE input for the value where two priced options' deterministic
 total PVs cross, plus the tie-band edges around it.
 
-Why (2026-09-02, operator product direction): most users arrive certain about
+Why (2026-09-02, product direction): most users arrive certain about
 one side ("houses around $650k") and want the threshold on the other ("what
 rent keeps renting the better deal?"), or the reverse ("at my rent, what price
 makes buying worth it?"). A --sweep grid brackets that point; this solves it,
@@ -101,7 +101,7 @@ RATE_BRACKETS: Dict[str, Tuple[float, float]] = {
 # entry rather than restated: config.py types a renewal rate as "a quoted
 # contract rate of `mortgage_rate`'s class" and converts both through
 # `mortgage_rate_compounding`, so the two cannot plausibly want different
-# ranges and widening one must widen the other (2026-09-22, board item 4 §6).
+# ranges and widening one must widen the other (2026-09-22).
 # Before this entry the leaf had NO bracket — `RATE_BRACKETS` is keyed by the
 # leaf — so `--break-even <opt>.mortgage_renewal_rates` refused rather than
 # borrowing one. The bracket is set in the engine like every other entry here

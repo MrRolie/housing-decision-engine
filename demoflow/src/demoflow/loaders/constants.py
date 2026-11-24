@@ -35,7 +35,7 @@ from demoflow.loaders.validate import assert_fraction, assert_nonneg_finite
 # ANCHOR-PROVENANCE VOCABULARY — closed, and NOT either of spec §7's emitter enums. §7 declares
 # TWO different closed enums for two artifacts: ScenarioPrior rows {borrowed_prior, ra_proxy,
 # never_relax_stress} (spec:352-353) and rankings rows {borrowed_prior, ra_proxy,
-# closed_cohort_exceedance} (spec:434, third member by steering ruling K). NEITHER emitter may
+# closed_cohort_exceedance} (spec:434, third member by ruling K). NEITHER emitter may
 # import this set, and this set is neither of theirs — each emitter binds its OWN §7 enum.
 # Discriminator: an anchor flag says where this VALUE came from; the §7 members omitted here say
 # what an output ROW means (ra_proxy = a geography-row caveat, spec:414 RA14/15/16; never_relax_
@@ -232,7 +232,7 @@ CENTRAL_ASSUMPTIONS = {
     # `CONSTANTS["immigrant_ownership_ratio_sweep_span"]` = [0.155, 1.033], which is why P4's
     # three anchors and that span stay above.
     #
-    # THE ONE CATEGORICAL MEMBER (operator ruling V, 2026-08-19). `headship_shape` names which
+    # THE ONE CATEGORICAL MEMBER (ruling V, 2026-08-19). `headship_shape` names which
     # of the age-resolved headship curve's two tangent rules the headline run reads. It is NOT
     # a banded scalar and it does NOT belong in `MODEL_CHOICES` either: that dict exists for
     # discrete picks with NOTHING to sweep, and this one has a measured, admissible
@@ -360,9 +360,8 @@ CENTRAL_PROVENANCE = {
         "published ranking (HORS_RMR 4->5, MTL_RMR 5->4), which `rank_stable` could not have "
         "seen while the axis was undeclared",
     "headship_shape":
-        "operator ruling V (2026-08-19), design panel `docs/research/2026-08-19-headship-curve-"
-        "design-panel.md` §5: the age-resolved headship curve is a monotone cubic Hermite on the "
-        "cumulative maintainer count against the CUMULATIVE-PERSONS abscissa, and the tangent "
+        "ruling V (2026-08-19), the headship-curve design review §5: the "
+        "age-resolved headship curve is a monotone cubic Hermite on the cumulative maintainer count against the CUMULATIVE-PERSONS abscissa, and the tangent "
         "rule is the one degree of freedom left free by per-member closure. Central "
         "`expo_cum_fc` = three-point width-weighted tangents under the Fritsch-Carlson circle "
         "filter, chosen because its closure is ALGEBRAIC (member endpoints ARE interpolation "
@@ -400,7 +399,7 @@ CENTRAL_PROVENANCE = {
 # and saying so plainly is cheaper than either lie.
 #
 # THAT CRITERION ONCE CUT AGAINST `p_nonimm_age`, AND THE FORK IS DISSOLVED RATHER THAN SWEPT
-# (operator ruling X2, 2026-08-21). The retired entry was an AGE (40) selecting whichever
+# (ruling X2, 2026-08-21). The retired entry was an AGE (40) selecting whichever
 # ownership band contained it. That qualified for this dict while the 30-year `25-54` band made
 # every age in the cited reasoning range return the SAME rate — nothing to sweep. Ruling W
 # (2026-08-20) split that band three ways, so the same reasoning range began offering three

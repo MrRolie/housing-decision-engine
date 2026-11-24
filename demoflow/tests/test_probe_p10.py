@@ -632,7 +632,7 @@ _P10_FROZEN_BANDS = (("25-54", 25, 54), ("55-64", 55, 64), ("65-74", 65, 74), ("
 def test_p10_the_rho_bands_are_an_exact_coarsening_of_the_models_lattice(probe):
     """The probe's bands ARE the model's — at the lattice the probe RAN on, 2026-08-15.
 
-    RE-SCOPED AT OPERATOR RULING W (2026-08-20), and the re-scope is the finding. This gate read
+    RE-SCOPED AT RULING W (2026-08-20), and the re-scope is the finding. This gate read
     `census._AGE_BAND_SPEC` LIVE and asserted the probe's four bands equalled it. That was the
     right check while the model carried the four bands P10 measured; ruling W refined the live
     lattice to seven, so a live equality read now demands the PROBE be regenerated to match.
@@ -1211,7 +1211,7 @@ def test_p10_the_aligned_values_are_RULED_and_the_spec_carries_what_this_run_mea
     stronger check that event makes possible.
 
     Until 2026-08-15 §6 did not carry these figures, and this test asserted their ABSENCE so
-    that nothing could be wired on unruled numbers; it said so out loud the moment the seat
+    that nothing could be wired on unruled numbers; it said so out loud the moment the build agent
     ruled (amendment #13). The successor form is a CITATION COUPLING rather than a scope note:
     the spec must now carry exactly what this run measures, so a later edit to either side that
     moves a ruled value reds here. Wiring — P8's regeneration and the join-table update —

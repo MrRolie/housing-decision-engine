@@ -108,7 +108,7 @@ distinguish two entirely different households: five figures — the qualifying r
 contract rate, the two ratios, the point difference — and a renewal year. It is now the
 longest single warning in the block.
 
-**And the obvious fix is the wrong lever.** The seat proposed moving the fixed scaffolding
+**And the obvious fix is the wrong lever.** The build agent proposed moving the fixed scaffolding
 into the anchors, on the reasoning that produced the line-cites-anchors-recite rule. That
 relocates where the text is STORED and changes nothing at the reader, who still receives 834
 characters. §4's guard is on variance and §5's is on the ability to print nothing; neither is
@@ -268,7 +268,7 @@ is a better line than the original: it points at a key the user can set and swee
 at a limitation they can do nothing about.
 
 Its siblings, for the same reason: correlation between house prices and the user's own income,
-which is still independent (board item 13), and regime change in any anchored series.
+which is still independent, and regime change in any anchored series.
 
 **Qualifier** is the class worth naming. A nameable-only omission that bounds a MEASURED number
 in a known direction should print attached to that number, never as a free-standing disclaimer.
@@ -489,7 +489,7 @@ All three corrections are stored on `qualifying_rate.buffer` and `qualifying_rat
 verbatim in `source`, argued in `rationale` — because the exemption is the scope of the rule
 those two entries state, and a rule and its boundary that live apart can drift apart.
 
-**THE LINE CITES, THE ANCHORS RECITE** — operator ruling the same day, standing, and the
+**THE LINE CITES, THE ANCHORS RECITE** — ruling the same day, standing, and the
 reason the clause is forty words rather than seventy-eight. It was ruled once already on this
 line, when a guillemet quotation of the MQR sentence was cut and the two legs cited instead;
 the first draft of this clause broke it again in a new costume, teaching the effective date,

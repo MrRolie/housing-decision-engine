@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate `demoflow/data/ownership_by_geo_age.json` from the pinned P2 Census extract.
 
-Thin wrapper by design (steering ruling B): all derivation lives in
+Thin wrapper by design (ruling B): all derivation lives in
 `demoflow.loaders.census.derive_ownership_from_csv`, so the shipped artifact and the
 no-drift gate exercise the SAME code path. This file hardcodes no rate.
 

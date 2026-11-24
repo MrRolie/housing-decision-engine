@@ -5,7 +5,7 @@ in `actuarial.compat`, a documented v1 concurrency assumption). Those globals
 live in `sys.modules` for the whole pytest process, so basis state LEAKS BETWEEN TESTS.
 
 DIVERGENCE FROM THE PLAN'S TEST BODY (measured, not assumed — plan
-docs/plans/2026-07-21-demoflow-tranche1.md Task 17): the plan's guard-path test comments
+Task 17): the plan's guard-path test comments
 `# no-op: basis stays US`, but `test_normal_path_sets_qc_basis` runs first in file order
 and flips the process global to QC. Stubbing `set_active_mortality` to a no-op then leaves
 the basis at QC, `ensure_qc_basis()` sees its echo, and the guard correctly does NOT raise.

@@ -276,7 +276,7 @@ def test_p7_records_a_resolved_verdict():
     assert resolution is not None and resolution.upper() not in UNRESOLVED, (
         f"{NOTE} records no `DECISION-RESOLUTION` ({resolution!r}).")
     assert "[cited:" in resolution and "RULING K" in resolution.upper(), (
-        f"{NOTE}'s DECISION-RESOLUTION does not travel cited to steering ruling K: "
+        f"{NOTE}'s DECISION-RESOLUTION does not travel cited to ruling K: "
         f"{resolution!r}. The resolution is an OPERATOR ruling this run did not compute; "
         f"printing it as a derived figure would attribute a decision to a measurement.")
 

@@ -1,8 +1,7 @@
 # Provenance remediation — design + verified citation table
 
 **Status:** landed 2026-09-01 (this document is the design record the uncommitted
-2026-08-28..09-01 work did not carry; see `docs/plans/2026-09-01-readiness-polish.md`
-Step 0.1). **Scope:** `src/hde/anchors.py`, the three-way default pin, the assumptions
+2026-08-28..09-01 work did not carry). **Scope:** `src/hde/anchors.py`, the three-way default pin, the assumptions
 echo, the time-anchor guard, and the example provenance headers.
 
 ## 1. Why

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate `demoflow/data/headship_by_age.json` from the TWO pinned sources.
 
-Thin wrapper by design (steering ruling B): all derivation lives in
+Thin wrapper by design (ruling B): all derivation lives in
 `demoflow.loaders.census.derive_headship_from_sources`, so the shipped artifact and the
 regen-equality gate exercise the SAME code path. This file hardcodes no rate.
 

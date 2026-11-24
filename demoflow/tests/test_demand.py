@@ -141,7 +141,7 @@ def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age
     """ALL SEVEN sub-floor ages under the REAL ownership lattice, as a measured fact.
 
     `census._AGE_BAND_SPEC` starts the ownership lattice at 25 (lowest band `25-34` since
-    operator ruling W, 2026-08-20; `25-54` before it) and the pipeline builds its
+    ruling W, 2026-08-20; `25-54` before it) and the pipeline builds its
     curve over `range(25, 101)` — so in every production run EVERY term of the spec §6
     summation at ages 18..24 multiplies an UNDEFINED rate and contributes zero, not merely the
     age-18 boundary term. UNDEFINED BY THAT SPEC, NOT BY THE TABLE (corrected 2026-08-15, spec

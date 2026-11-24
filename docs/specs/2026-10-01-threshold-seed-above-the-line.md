@@ -1,16 +1,14 @@
 # Threshold seed above the line, and affordability where no crossing is found (2026-10-01)
 
-**Status:** ruled. S1 builds the operator's ruling; S2 is separate engine scope, see §4.
-**Anchored by:** board round 12, items 2 and 3, and the convergence note beneath them.
+**Status:** ruled. S1 builds the ruling; S2 is separate engine scope, see §4.
 
 ## 1. The ruling
 
-On 2026-09-22 the operator ruled on the card "Threshold seed": seed ABOVE the insurance line,
-not below. The board had recorded it as 2026-09-21, the day the card was raised, and this
-change corrects that. A threshold run's
+On 2026-09-22 the maintainer ruled: seed ABOVE the insurance line,
+not below. A threshold run's
 base block has to describe the insured purchase a household short of 20% would actually make,
-with the premium, its tax and the higher loan-to-value all present. The operator was told this
-is a one-line change to the lane doc with no new prose.
+with the premium, its tax and the higher loan-to-value all present. The ruling assumed this
+was a one-line change to the lane doc with no new prose.
 
 ## 2. What was measured (origin/main 83ea552, before any change)
 
@@ -80,8 +78,8 @@ The assistant runs once to read X, as the lanes already say, and the seed stays 
 
 ## 4. S2, affordability at both searched ends (engine; separate scope)
 
-**This is engine work beyond the one-line lane change the operator was shown.** The steering
-seat decided it under board item 3, which says the defect is "not a skill defect". Both lanes
+**This is engine work beyond the one-line lane change the ruling assumed.** It was decided
+because the defect is "not a skill defect". Both lanes
 withhold the price sweep in this shape, so the disclosure cannot depend on the assistant
 running one. The seed flip does not close item 3. At the $380,000 seed above, the no-crossing
 branch still prints no affordability.
@@ -138,6 +136,5 @@ assistant quotes the new line and no sentence implies the no-crossing affordabil
 - A purchase-price cap on insured mortgages. The engine anchors none, and adding one would be
   a registry change with its own source.
 - The refusal when cash does not cover the purchase costs (§3).
-- The rest of board round 12 (items 4–9).
 - Whether a threshold run should print a single-price block at all. That was the other branch
-  of the card, and the operator did not take it.
+  of the card, and it was not taken.

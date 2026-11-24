@@ -11,7 +11,7 @@ or initialization RAISES.
 
 WHY THE SCRIPT RESOLVES ITS OWN DECISION: the note this writes IS the recorded
 observation, and Task 15b consumes its numbers. A template with `[FILL:]` slots
-for a human to complete is an invitation to fabricate — the operator ruling on
+for a human to complete is an invitation to fabricate — the ruling on
 this task is that the committed note must carry a decision computed from live
 responses, never a hand-edited one. So every DECISION token below is derived,
 and the script writes `NOT-FOUND` just as readily as a hit.

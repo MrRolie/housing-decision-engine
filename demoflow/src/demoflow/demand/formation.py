@@ -72,7 +72,7 @@ AGE_BOUNDARY = 75
 #
 # HOW MUCH THAT DROPS — AN ORDER-OF-MAGNITUDE BOUND, NEVER A MEASUREMENT, and the qualifier is
 # load-bearing rather than modest. Measured 2026-08-14 on the real artifacts — WHICH CARRIED THE
-# SIX-BAND HEADSHIP CURVE, retired by operator ruling V on 2026-08-19, so EVERY FIGURE IN THIS
+# SIX-BAND HEADSHIP CURVE, retired by ruling V on 2026-08-19, so EVERY FIGURE IN THIS
 # BLOCK IS PRE-RULING-V and none of them is a reading of the curve now shipped. They stand here
 # unrestated on purpose: re-measuring them against the age-resolved curve is the ordered
 # follow-on that must land BEFORE the ownership lattice moves below 25, and census.py's
@@ -95,13 +95,12 @@ AGE_BOUNDARY = 75
 # WHAT RULING V DID MEASURE, AND IT IS NOT THE RE-MEASUREMENT ORDERED ABOVE. The acceptance
 # metric for the age-resolved curve was the CONCENTRATION of D_native — the largest single-age
 # share. THE COLLAPSE IS THE MEASURED PART; THE 14-18% BAND IT WAS READ AGAINST IS NOT A GATE
-# THIS CURVE MET OR MISSED. That band is the design panel's ("The success criterion, measured";
-# docs/research/2026-08-19-headship-curve-design-panel.md), and the panel states in the same
-# document that ALL its magnitudes are PROBE-GRADE: raw ISQ populations in place of P_resident
+# THIS CURVE MET OR MISSED. That band is the design review's ("The success criterion, measured"), and the review states
+# that ALL its magnitudes are PROBE-GRADE: raw ISQ populations in place of P_resident
 # (~7% of scale), the committed `mean_ed_reference` in place of per-year ED, no immigrant leg.
 # Its baseline for the committed curve — 65-77% at age 35 — does not reproduce: the live recipe
-# below puts that same curve at 79.9%, and the run-34 review could not reproduce 65-77% under
-# any convention it tried (run-record of the headship-curve review). So the
+# below puts that same curve at 79.9%, and the review itself could not reproduce 65-77% under
+# any convention it tried. So the
 # band is CONVENTION-DEPENDENT and not commensurable with a live P_resident measurement; it is
 # recorded here as the design's expectation and never as a threshold, which is the correction
 # the run-34 review made to the mandate that set it.
@@ -147,7 +146,7 @@ AGE_BOUNDARY = 75
 #
 # THE FIX IS ORDERED, NOT OPTIONAL, ITS ORDER BINDS (spec §7 amendment #12) — AND THE ORDER IS
 # NOW HALF DISCHARGED. The first half LANDED with the age-resolved headship curve
-# (operator ruling V): this zero used to be
+# (ruling V): this zero used to be
 # the only thing suppressing the age-20 band-entry artifact, so extending the ownership curve
 # below 25 while the curve was banded would have MULTIPLIED that artifact into demand instead of
 # zeroing it — and that artifact is gone, replaced by the smooth 20..34 rise measured above. WHAT

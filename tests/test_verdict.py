@@ -1,6 +1,6 @@
 """
 Verdict tests (src/hde/models.py compute_verdict): ONE decisiveness rule that
-every surface consumes — readiness plan B.1/B.2, operator-ruled 2026-09-01:
+every surface consumes — readiness plan B.1/B.2, ruled 2026-09-01:
 Monte Carlo probability floor 0.65 when MC ran with real uncertainty; else a
 tie band of 5% of the winner's total PV. Both constants are registered anchors.
 """

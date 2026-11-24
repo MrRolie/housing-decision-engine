@@ -15,7 +15,7 @@ double-decrement strictly changes the HAND-COMPUTED pinned values. Both together
 enforcement; neither alone is. Treating a passing band as evidence of exactly-once is the
 misreading this paragraph exists to block.
 
-WHAT THIS GATE BINDS — RULING O (spec §5, steering amendment #6, 2026-08-08): the
+WHAT THIS GATE BINDS — RULING O (spec §5, amendment #6, 2026-08-08): the
 CENTRAL-ASSUMPTION run ONLY. Sweep legs NEVER re-run `check_reconciliation`. The band's Myers
 anchor is a central-case all-cause envelope, so binding every leg makes the spec
 self-contradictory: measured at q_live = 0.06 — the sweep grid's OWN low endpoint — the

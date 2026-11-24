@@ -63,7 +63,7 @@ DATED = {
 
 def _anchor(**over):
     # `quoted`, `unit` and `refresh_group` are carried because a DATED anchor
-    # owes all three since 2026-09-22 (board item 6): a figure that says it will
+    # owes all three since 2026-09-22: a figure that says it will
     # be replaced must show how its source printed it, what base it is stated
     # on, and who publishes the replacement. They are inert on the undated
     # cases below. The rule itself is pinned in tests/test_anchor_refresh.py.
@@ -287,7 +287,7 @@ class TestWarning:
     def test_an_applied_default_past_its_date_warns(self, monkeypatch):
         anchor = ANCHORS["rent.investment_return_rate"]
         # Dating an anchor that was not dated means owing what a dated anchor
-        # owes (board item 6): the quote, the base, and the release that
+        # owes: the quote, the base, and the release that
         # publishes the replacement.
         monkeypatch.setitem(ANCHORS, anchor.name, dataclasses.replace(
             anchor, valid_until="2026-06-30", refresh_group="fp_canada.pag",

@@ -209,7 +209,7 @@ def generate_story_markdown(
         lines.append("")
     if warnings:
         # An artifact that outlives the terminal carries its own warnings
-        # (coherence + time-anchor), not just stderr (readiness plan E.4).
+        # (coherence + time-anchor), not just stderr.
         for warning in warnings:
             lines.append(f"> warning: {warning}")
         lines.append("")

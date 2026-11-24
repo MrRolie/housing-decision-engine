@@ -13,15 +13,15 @@ living alone" sits under "Persons not in census families"; "Married spouses and
 common-law partners" under "Persons in census families"), so the conditional share is
 well-defined and ≤ 1.
 
-DERIVATION, NEVER TRANSCRIPTION (steering ruling B): every rate is computed by
+DERIVATION, NEVER TRANSCRIPTION (ruling B): every rate is computed by
 `derive_living_arrangement` from the pinned WDS extract `data/living_arrangement_98100134.json`
 (StatCan Table 98-10-0134-01). `data/living_arrangement.json` is a BUILD ARTIFACT of
 `scripts/gen_living_arrangement.py`, never hand-edited, and
 `test_committed_artifact_equals_generator_output` proves the two equal. No living-arrangement
-rate is hand-written anywhere in this package — which is what makes steering ruling A's
+rate is hand-written anywhere in this package — which is what makes ruling A's
 "couple_share stays EXACTLY as cited" a property of the CODE rather than of a promise.
 
-STALENESS REFUSES AT LOAD (steering ruling L): `load_living_arrangement` checks the
+STALENESS REFUSES AT LOAD (ruling L): `load_living_arrangement` checks the
 artifact's recorded `_provenance.sha256` against the pins registry on EVERY load and raises
 on an absent or mismatched digest. Two independent legs, as in census.py: CI compares
 CONTENT (artifact vs a fresh derivation), the load path compares IDENTITY (recorded source
@@ -47,7 +47,7 @@ TWO DIVERGENCES FROM THE PLAN'S TASK-15b BODY, both measured, both reported:
      different domains is a silent-miscompose waiting to happen, and it also makes steering
      ruling A's "75+ AGGREGATE" ambiguous. Nothing downstream consumes the label yet.
 
-WHAT THIS MODULE DOES *NOT* DO (steering ruling A, so the boundary is explicit): the 0.25
+WHAT THIS MODULE DOES *NOT* DO (ruling A, so the boundary is explicit): the 0.25
 same-age couple-balance gate is GONE — live Census breaches it on 13/21 correct rows (probe
 P3 §4b), which refutes its premise. Per-band imbalance is RECORDED here as a source-level
 diagnostic in `_provenance`, never a gate. The engine-side hard gates (coupled_s ≥ 0,
@@ -424,7 +424,7 @@ def _assert_coupled_direction(counts: dict, path: Path) -> None:
     """SOURCE-LEVEL direction check on the 75+ aggregate coupled counts.
 
     NOT the engine's calibration gate, and deliberately a different error class. Spec §5 (as
-    amended by steering ruling A) gates MODELLED coupled counts inside the cohort
+    amended by ruling A) gates MODELLED coupled counts inside the cohort
     initialization and raises `CalibrationError`; this reads the SOURCE and raises
     `LoaderError`, because what it can actually detect is a source/junction defect: if `Men+`
     and `Women+` were transposed anywhere between the cube and this extract, every rate would
@@ -505,7 +505,7 @@ def _couple_balance_diagnostic(counts: dict) -> dict:
 def derive_living_arrangement(extract_path: Path | str) -> dict:
     """Compute the per-sex living-arrangement rate table from the pinned WDS extract.
 
-    The ONLY producer of living-arrangement rates in this package (steering ruling B).
+    The ONLY producer of living-arrangement rates in this package (ruling B).
     Verifies the extract against its sha256 pin FIRST — a derivation run on an unpinned or
     drifted vintage would break the PIT chain (live response → committed extract → derived
     rates) while emitting perfectly plausible fractions.

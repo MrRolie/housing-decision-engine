@@ -1,5 +1,5 @@
 """The refresh path: how a figure gets replaced by someone who did not fetch it
-(board item 6, 2026-09-22; design `docs/specs/2026-09-22-anchor-refresh-path.md`).
+(2026-09-22; design `docs/specs/2026-09-22-anchor-refresh-path.md`).
 
 `tests/test_anchor_validity.py` covers the alarm — `valid_until`, the warning a
 run carries, and the day the suite turns red. This file covers the REPAIR: that

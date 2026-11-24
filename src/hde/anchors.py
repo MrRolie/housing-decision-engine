@@ -180,7 +180,7 @@ class Anchor:
     # after this date is warned once per anchor (config.validity_warnings).
     valid_until: str = ""
     # Which PUBLISHING RELEASE prints this figure — the key of a
-    # `REFRESH_SOURCES` record (board item 6, 2026-09-22). Not a URL and not a
+    # `REFRESH_SOURCES` record (2026-09-22). Not a URL and not a
     # date: those are this anchor's own `url` and `valid_until`. It exists so
     # the figures that come off ONE release (the five federal bracket ceilings
     # and the federal basic personal amount are one CRA release, not six
@@ -283,7 +283,7 @@ class Anchor:
                 ) from exc
             # A `valid_until` is a promise that this figure WILL be replaced.
             # Three things must therefore be on the record, or the promise is
-            # one only its author can keep (board item 6, 2026-09-22):
+            # one only its author can keep (2026-09-22):
             #   - who publishes the replacement (`refresh_group`);
             #   - how this source printed the figure (`quoted`), so the next
             #     edition can be diffed against it rather than retyped from
@@ -338,7 +338,7 @@ class Anchor:
 @dataclass(frozen=True)
 class RefreshSource:
     """One publishing RELEASE the registry depends on, and the record of
-    someone looking at it (board item 6, 2026-09-22).
+    someone looking at it (2026-09-22).
 
     A dated anchor knows when its figure stops being the figure. It does not
     know who publishes the next one, where that appears, or whether anybody has
@@ -829,8 +829,8 @@ ANCHORS: Dict[str, Anchor] = {
         name="house.annual_maintenance_rate",
         value=0.0,
         as_of="2026",
-        source="hde neutrality ruling — deliberately uncited (operator default "
-               "2026-09-01, readiness plan C.1)",
+        source="hde neutrality ruling — deliberately uncited (maintainer default "
+               "2026-09-01)",
         url="none (deliberately uncited)",
         rationale=(
             "0.0 = no maintenance modelled. The engine does not invent a cost "
@@ -950,14 +950,14 @@ ANCHORS: Dict[str, Anchor] = {
         short_cite="p10–p90 Normal fit",
         kind="derivation",
     ),
-    # --- Verdict decisiveness rule (operator-ruled 2026-09-01, readiness plan
-    #     B.2). Derivations, no external source: they define what the engine
+    # --- Verdict decisiveness rule (ruled 2026-09-01).
+    #     Derivations, no external source: they define what the engine
     #     is willing to call a clear winner. ---
     "verdict.prob_floor": Anchor(
         name="verdict.prob_floor",
         value=0.65,
         as_of="2026",
-        source="hde verdict rule — derivation (operator-ruled 2026-09-01)",
+        source="hde verdict rule — derivation (ruled 2026-09-01)",
         url="none — derivation",
         rationale=(
             "When Monte Carlo ran with real uncertainty, the deterministic winner "
@@ -976,7 +976,7 @@ ANCHORS: Dict[str, Anchor] = {
         name="verdict.tie_band",
         value=0.05,
         as_of="2026",
-        source="hde verdict rule — derivation (operator-ruled 2026-09-01)",
+        source="hde verdict rule — derivation (ruled 2026-09-01)",
         url="none — derivation",
         rationale=(
             "Fallback when no Monte Carlo ran or every uncertainty input is off: "
@@ -2893,7 +2893,7 @@ ANCHORS.update({
 
 
 # ---------------------------------------------------------------------------
-# Demographic-prior provenance (readiness plan E.2, 2026-09-01).
+# Demographic-prior provenance (2026-09-01).
 #
 # A ScenarioPrior file carries source FILE NAMES + sha256 digests under
 # data_vintage.source_hashes; the human citation for each lives upstream in
@@ -3073,7 +3073,7 @@ def short_cite(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# The refresh path (board item 6, 2026-09-22)
+# The refresh path (2026-09-22)
 #
 # One record per PUBLISHING RELEASE the dated anchors depend on. Members are
 # derived from `Anchor.refresh_group`, never listed here — membership has one

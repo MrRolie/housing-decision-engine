@@ -1253,7 +1253,7 @@ def all_warnings(
     (wall clock past START_CALENDAR_YEAR), plus the anchors the run used past
     their validity date (`validity_warnings`). ONE assembly for the CLI's
     stderr, and the CLI's --json `warnings`, so no surface can drop
-    a class of warning the others carry (readiness plan A.2). `current_year`
+    a class of warning the others carry. `current_year`
     and `run_date` are injectable for tests; the wall clock is read only here
     at the edge. `raw` (the YAML mapping) reaches `coherence_warnings` for the
     price ceiling.

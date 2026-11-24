@@ -332,7 +332,7 @@ def test_the_hors_rmr_source_states_the_construction_that_makes_it_a_residual():
         "superseded — a citation for a territory this row no longer measures")
 
 
-# ==================================================== the provenance vocabulary (seat ruling)
+# ==================================================== the provenance vocabulary (ruling)
 
 def test_input_provenance_is_closed_and_is_this_tables_own_vocabulary():
     """Three members, and the set is NEITHER `constants.ANCHOR_FLAGS` NOR either of spec §7's
@@ -369,7 +369,7 @@ def test_an_unknown_provenance_raises_at_construction(field):
 
 
 def test_a_mixed_pair_is_EXPRESSIBLE_which_is_why_provenance_is_per_field():
-    """The seat ruling's reason, made checkable: a geography may hold a cited ratio beside a
+    """The ruling's reason, made checkable: a geography may hold a cited ratio beside a
     borrowed headship. NO row in today's table mixes — so without this test the per-field
     carrier is untested structure, and the next editor collapses it back to one flag."""
     mixed = ImmigrantInputs(

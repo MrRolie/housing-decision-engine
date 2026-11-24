@@ -2,7 +2,7 @@
 The hde skill (.claude/skills/hde/SKILL.md) is the agent-facing intake
 contract; its concrete claims about the CLI are pinned here so a renamed flag
 or a dropped JSON key makes the skill fail loudly instead of quietly lying
-(readiness plan F.3, 2026-09-01).
+(2026-09-01).
 """
 
 import json
@@ -166,7 +166,7 @@ def _lane(name: str) -> str:
 
 @pytest.mark.parametrize("name", LANES)
 def test_the_price_threshold_seeds_above_the_20_percent_line(name):
-    """Operator ruling 2026-09-22 (docs/specs/2026-10-01-threshold-seed-above-the-line.md
+    """Ruling 2026-09-22 (docs/specs/2026-10-01-threshold-seed-above-the-line.md
     §3): a seed a step BELOW the 20%-down price printed `none required` and an
     OSFI qualifying rate for a household whose crossing was insured. Both lanes
     now seed at the first round figure above it, with the engine's refusal past

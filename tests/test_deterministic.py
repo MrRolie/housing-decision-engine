@@ -518,7 +518,7 @@ def test_report_mentions_financing_lines():
 
 def test_nominal_mode_affordability_composes_inflation():
     """Nominal mode composes inflation into the cost NUMERATOR exactly as the PV
-    engine does (readiness plan D.6) — and, since the 2026-09-02 review, into
+    engine does — and, since the 2026-09-02 review, into
     income too, so the ratio itself does not drift on inflation."""
     from hde.config import load_config_dict
     from hde.deterministic import _annual_costs_for_option, _compute_income_trajectory

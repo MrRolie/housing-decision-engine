@@ -431,7 +431,7 @@ FEED_FRESHNESS_MONTHS = 5
 #
 # THE ASSUMPTION THAT BAR RESTS ON, STATED AS AN ASSUMPTION: that an unpublished month means
 # ZERO landings rather than missing data — the feed publishing `--` for 1-5 and omitting true
-# zeros. That is the SEAT'S READING of IRCC publication behaviour, NOT a documented IRCC
+# zeros. That is the BUILD AGENT'S READING of IRCC publication behaviour, NOT a documented IRCC
 # statement, and it is recorded here so a reader can re-test it rather than inherit it. If it
 # is false, an interior gap hides landings and the annual sum is low by an unknown amount.
 #

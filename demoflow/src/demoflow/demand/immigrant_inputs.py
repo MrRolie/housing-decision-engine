@@ -27,7 +27,7 @@ REDs on a perturbed digit, REDs on a perturbed digit under reworded prose, and s
 rewording alone. A regenerated P8 whose value moves therefore REDs this table instead of
 leaving it a decorative copy of a measurement nobody re-checked.
 
-PROVENANCE IS PER FIELD, and one flag could not have said it honestly (seat ruling, run 21):
+PROVENANCE IS PER FIELD, and one flag could not have said it honestly (ruling, run 21):
 under rulings Q AND T a geography may hold a cited ratio beside a borrowed headship, so
 `ImmigrantInputs` carries `headship_provenance` and `ratio_provenance` separately. BOTH rulings
 are named because both put a geography's two fields on independent footings, and citing only one

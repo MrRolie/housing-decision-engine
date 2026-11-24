@@ -5,7 +5,7 @@
 
 This is the ACQUISITION leg of the PIT chain (live response -> filter predicate -> committed
 extract -> derived rates). It writes `data/hors_aligned_csd_98100232.json` and NOTHING else:
-no rate is computed here and no rate is ever hand-typed (steering ruling B).
+no rate is computed here and no rate is ever hand-typed (ruling B).
 `demoflow.loaders.hors_aligned.derive_aligned_ownership` is the only producer of aligned
 rates; `scripts/gen_hors_aligned.py` runs it.
 

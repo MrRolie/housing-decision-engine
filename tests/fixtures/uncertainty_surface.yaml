@@ -1,6 +1,6 @@
 # The uncertainty surface — a TEST FIXTURE, not a shipped example.
 #
-# WHY IT IS NOT IN examples/ (board item 12, 2026-09-21). Six of the seven
+# WHY IT IS NOT IN examples/ (2026-09-21). Six of the seven
 # shipped examples set no inflation volatility, so their Monte Carlo block is a
 # constant, and a constant cannot regress: that is why the renter's one-value
 # total and the three-unrelated-economies defect both sat undetected. This file

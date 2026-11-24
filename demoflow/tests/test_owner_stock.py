@@ -8,7 +8,7 @@ WHAT IS PLAN-VERBATIM AND WHAT IS RE-DERIVED, so a reviewer never has to guess:
     missing-rate door and why the plan's second body could assert the defect unnoticed.
 
   * The plan's `test_owner_stock_ignores_ages_without_rates` (age 40, population 1,000, EMPTY
-    rate dicts, expected 0.0) is REPLACED, on the seat carry. It asserted the "missing is not
+    rate dicts, expected 0.0) is REPLACED, on the build agent carry. It asserted the "missing is not
     zero" defect the Task-25 review already raised and `demand/formation.py` already resolved
     for the SAME two curves — and here it lands on the DENOMINATOR, so a silently-shrunk stock
     SCALES |ED| AWAY FROM ZERO in whichever direction ED already points: more excess demand
@@ -76,7 +76,7 @@ def test_ownership_absent_BELOW_the_census_lattice_floor_contributes_nothing(age
 
     `ownership(a)` is UNDEFINED below 25 and the term contributes nothing — because
     `census._AGE_BAND_SPEC` starts the ownership lattice at 25 (its lowest band is `25-34` since
-    operator ruling W, 2026-08-20; `25-54` before it, and the FLOOR is 25 either way), NOT
+    ruling W, 2026-08-20; `25-54` before it, and the FLOOR is 25 either way), NOT
     because the extract is
     silent there (corrected 2026-08-15, spec §7 amendment #12: it publishes `15 to 19 years`
     and `20 to 24 years` at all seven GEO rows, and `_HEADSHIP_MEMBER_SPEC` reads both — pinned
@@ -141,7 +141,7 @@ def test_the_ownership_floor_is_the_demand_packages_constant_and_the_census_latt
 def test_missing_headship_at_a_POPULATED_age_raises(age, ownership_by_age):
     """Headship absence is a HOLE at EVERY age, with no convention to excuse it.
 
-    Since operator ruling V the committed headship curve is AGE-RESOLVED at every single year
+    Since ruling V the committed headship curve is AGE-RESOLVED at every single year
     0-100 (`census._HEADSHIP_MEMBER_SPEC`'s fourteen published members graduated onto the ISQ
     single-year denominator) and the Task-29 sketch materialises it over `range(0, 101)` — so
     unlike ownership, headship has no undefined region to point at, and a missing rate can only

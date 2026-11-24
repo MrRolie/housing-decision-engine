@@ -219,7 +219,7 @@ def test_pure_couple_decade_retention_exceeds_band_hi():
     widen the pin along the declared axis; they are not known to add a catch the run-contract leg
     misses. The inequality's robustness is the convexity argument above, not a leg count.
 
-    THIS ASSERTION REPLACES A FALSE ONE (steering ruling N). The plan body asserted
+    THIS ASSERTION REPLACES A FALSE ONE (ruling N). The plan body asserted
     `lo <= retention <= hi` on THIS pure-couple cohort; at the run-contract q_live it measures
     out of band — ABOVE hi — at every start year 2021-2041, because it read a
     composition-sensitive band against the one composition the band does not describe. The

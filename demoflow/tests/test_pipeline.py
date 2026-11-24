@@ -340,7 +340,7 @@ def test_a_derived_artifacts_own_bytes_ride_the_envelope(tmp_path):
     clean and moves every geography's ED under a byte-identical envelope, so §9's
     data-vs-code attribution could not be made for the inputs that drive the whole run.
 
-    THE PROBE AGE IS DERIVED FROM THE MUTATED BAND, NEVER HARDCODED (operator ruling W,
+    THE PROBE AGE IS DERIVED FROM THE MUTATED BAND, NEVER HARDCODED (ruling W,
     2026-08-20, and the re-derivation is the finding). This body mutates `next(iter(...))` — "the
     first band" — and the age it then probes used to be the literal 40. That pairing was green
     only by COINCIDENCE: the retired first band was `25-54`, which CONTAINED 40. Ruling W refined
@@ -727,7 +727,7 @@ def test_the_published_ed_is_computed_from_the_aligned_curve_and_never_the_shipp
 
     class AlignedOnly:
         """Every ownership read answered from the aligned curve, with NO join consulted — the
-        point of this arm is that it cannot route. Since operator ruling X2 the ED path asks the
+        point of this arm is that it cannot route. Since ruling X2 the ED path asks the
         reader two questions (a rate AT an age, and the aggregate OVER `P_NONIMM_RANGE`), so
         this arm answers both from the aligned surface; a bare `lambda geo, age` would now
         AttributeError on the second and stop testing the first."""
@@ -1528,7 +1528,7 @@ def test_rank_stable_covers_every_ranked_geography(run):
 
 
 def test_the_robustness_sweep_evaluates_EVERY_declared_axis_at_BOTH_endpoints():
-    """CRITICAL — run-33 quant F1 and stress F1, reached independently, and the seat reproduced
+    """CRITICAL — run-33 quant F1 and stress F1, reached independently, and the build agent reproduced
     it: `rank_stable: true` shipped on all eight golden rows as a verdict over ONE of the
     declared axes. `_rank_stability` iterated `SWEEP_GRID["q_live_per_year"]` alone; the grid
     declares FOUR, and `constants.py` states a FIFTH as an existing fact of this very module —
@@ -1720,7 +1720,7 @@ def test_the_join_table_ratio_endpoint_is_the_axis_THAT_REORDERS(run):
     LAURENTIDES 3->7, HORS_RMR 4->8, MTL_RMR 5->1, MONTEREGIE 6->4, QC_RMR 7->5, MTL_ISLAND_RA06
     8->2. Both permutations are kept as DATED RECORDS and neither is pinned.
 
-    THE WITNESS IS NOW THE UNION OF THE AXIS'S TWO ENDPOINTS, re-measured at operator ruling W
+    THE WITNESS IS NOW THE UNION OF THE AXIS'S TWO ENDPOINTS, re-measured at ruling W
     (2026-08-20), and the widening is the finding. Until ruling W this gate evaluated the LOW
     endpoint alone and asserted that EVERY ranked geography moves there — true on both earlier
     curves, and stated as structural. The seven-band ownership lattice FALSIFIES it: at 0.155
@@ -1737,7 +1737,7 @@ def test_the_join_table_ratio_endpoint_is_the_axis_THAT_REORDERS(run):
     rank 1 as well. Both of those 1.033 clauses moved with the lattice, so both are restated here
     rather than one — a stale count beside a live assertion is the defect this file keeps closing.
 
-    RE-MEASURED AFTER OPERATOR RULING X (2026-08-21) and UNCHANGED, which is worth stating
+    RE-MEASURED AFTER RULING X (2026-08-21) and UNCHANGED, which is worth stating
     because it was not safe to assume: X1 re-weighted the 75+ ownership read and X2 replaced the
     immigrant leg's point read with the 25-54 aggregate, so both endpoints were re-run. 0.155
     still moved SEVEN with LAVAL_RA13 the sole fixed point (at rank 3) and still displaced rank 1
@@ -1996,7 +1996,7 @@ def test_the_cheap_tripwire_path_returns_the_SAME_verdict_as_the_full_run(run):
 
 
 # ===========================================================================================
-# OPERATOR RULING V: the headship SHAPE axis, and the bill it comes with
+# RULING V: the headship SHAPE axis, and the bill it comes with
 # ===========================================================================================
 
 def test_the_headship_shape_axis_is_declared_ONCE_and_bound_to_the_CURVE_it_selects():
@@ -2291,7 +2291,7 @@ def _reversal_record():
 
 
 def test_x6_the_tail_ordering_is_a_SERVED_property_and_the_weighting_is_OWNER_POPULATION(frames):
-    """Operator ruling X6 (2026-08-21): the two claims the reversal record used to make
+    """Ruling X6 (2026-08-21): the two claims the reversal record used to make
     unscoped — that S reads the two LEAST contaminated bands, and that the mediant bound is
     weight-independent — are properties of the SERVED values, and the weighting that decides
     them is the model's own.
@@ -2569,7 +2569,7 @@ def test_x6_the_tail_ordering_is_a_SERVED_property_and_the_weighting_is_OWNER_PO
 
 
 def test_x7_the_band_difference_is_MEASURED_and_is_not_the_FULL_spread(frames):
-    """Operator ruling X7 (2026-08-21): δ_D − δ_S is a LARGE, same-signed fraction of the band
+    """Ruling X7 (2026-08-21): δ_D − δ_S is a LARGE, same-signed fraction of the band
     spread — measured, not the whole of it. The record said "at or near the FULL spread".
 
     THE SUPERLATIVE WAS NEVER MEASURED. Probe P10 read it off the ARRANGEMENT (most contaminated
@@ -3755,7 +3755,7 @@ def test_the_gate_is_scoped_to_the_75plus_AGGREGATE_and_NOT_to_band_entry(frames
     """The scoping decision, as a check rather than as prose.
 
     `_band_entry_stock` hands a SINGLE age-75 cohort and deliberately passes no `direction_ctx`:
-    spec §5 states the direction claim at the 75+ AGGREGATE, and steering ruling A's content is
+    spec §5 states the direction claim at the 75+ AGGREGATE, and ruling A's content is
     that a PER-BAND gate is wrong — a per-band direction gate is a different overreach in the
     same family. Nothing is lost by the scoping: the same transposition is caught on the
     standing leg above, in the same run, before any ED is emitted.
@@ -3813,7 +3813,7 @@ def test_the_direction_gate_is_a_KEYWORD_the_standing_caller_supplies(frames, mo
         "the geography it is gating")
     assert entry is None, (
         f"`_band_entry_stock` handed direction_ctx={entry!r} — the single age-75 cohort is NOT "
-        "the 75+ aggregate the gate is scoped to (steering ruling A)")
+        "the 75+ aggregate the gate is scoped to (ruling A)")
 
 
 # ===========================================================================================

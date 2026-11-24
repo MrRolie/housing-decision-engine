@@ -8,11 +8,11 @@ hors-RMR row, which EXCLUDES it. Amendment #12(B) cleared the ownership leg from
 on the ground that a BAND-UNIFORM relative scaling of ρ cancels exactly in ED; probe P10
 measured that premise FALSE (spread 1.202 pp across the FOUR model bands the lattice then had,
 all same-signed, and adversarially arranged — the most contaminated band is the one D_native is
-built from, the least is the one S rides). The seat reversed #12(B) and ORDERED this extraction.
+built from, the least is the one S rides). The build agent reversed #12(B) and ORDERED this extraction.
 
 THE FIGURES IN THE PARAGRAPH ABOVE ARE HISTORICAL, and are kept because they are the reversal's
 WARRANT rather than a current reading. They were measured by P10 on 2026-08-15 against the
-four-band lattice `25-54 / 55-64 / 65-74 / 75+`. Operator ruling W (2026-08-20) refined that
+four-band lattice `25-54 / 55-64 / 65-74 / 75+`. Ruling W (2026-08-20) refined that
 lattice to SEVEN bands, and the current-lattice figures are carried by the regenerated artifact
 and pinned in the oracle block below — the spread WIDENS to 3.318 pp and the arrangement stays
 adverse, so the refinement strengthens the reversal rather than disturbing it. Do not read the
@@ -54,7 +54,7 @@ PROBES = DEMOFLOW / "probes"
 # axis than 98-10-0231-01 (9 dimension members against 15): the band EDGES are the model's, the
 # constituents are whatever each cube publishes.
 #
-# SEVEN BANDS SINCE OPERATOR RULING W (2026-08-20; spec §8 amendment #18). This cube is WHY the
+# SEVEN BANDS SINCE RULING W (2026-08-20; spec §8 amendment #18). This cube is WHY the
 # refined lattice is ten-year and not five-year: every one of its age members at or above 25 is
 # ten-year or a published tail member, so the 7-band partition below is the FINEST ONE BOTH
 # CUBES CAN EXPRESS. A five-year CMA-side refinement would have left HORS_RMR the only
@@ -79,7 +79,7 @@ _BAND_EDGES = {"25-34": (25, 34), "35-44": (35, 44), "45-54": (45, 54), "55-64":
 # that refutes #12(B) is a claim about these specific bands, so they are typed rather than
 # inferred. D reads the youngest band (formation runs from the lattice floor up).
 #
-# S READS BOTH TAIL BANDS, NOT ONE (operator ruling X1, 2026-08-21), AND THAT IS WHY THIS IS A
+# S READS BOTH TAIL BANDS, NOT ONE (ruling X1, 2026-08-21), AND THAT IS WHY THIS IS A
 # TUPLE. `_standing_stock` used to read ownership at `pipeline.ROLL_AGE = 80`; ruling X1 stopped
 # it reading at any age and values the lumped 75+ bucket at the POPULATION-WEIGHTED mean of the
 # per-age rates over the ages it holds, which spans `75-84` and `85+`. A band-name constant
@@ -619,7 +619,7 @@ def test_p11_4b_suppression_outside_the_declared_scope_REFUSES(tmp_path, code, a
 
 def test_p11_5_committed_artifact_equals_a_fresh_derivation():
     """The no-drift gate: the shipped artifact IS what the derivation emits, or it is a
-    hand-authored rate table wearing a provenance block (steering ruling B)."""
+    hand-authored rate table wearing a provenance block (ruling B)."""
     fresh = hors_aligned.derive_aligned_ownership(
         DATA_DIR / census.CENSUS_EXTRACT, DATA_DIR / hors_aligned.EXTRACT)
     assert _artifact() == fresh
@@ -644,7 +644,7 @@ def test_p11_6_the_generator_reproduces_the_committed_artifact_byte_for_byte(tmp
 def test_p11_7_the_aligned_curve_reproduces_the_measured_contamination():
     """The rates themselves, against the TEST-OWNED oracle, at both consumer surfaces.
 
-    These are the five figures the seat ruling rests on. `pytest.approx(rel=1e-12)` rather
+    These are the five figures the ruling rests on. `pytest.approx(rel=1e-12)` rather
     than a round-N form: a rounded comparison would be satisfied by a curve measured over a
     neighbouring territory.
     """
@@ -667,7 +667,7 @@ def test_p11_7_the_aligned_curve_reproduces_the_measured_contamination():
             f"{band} aligned {loaded[Geography.HORS_RMR.value][band]} does not exceed the "
             f"shipped {owner / total} — every measured band moved up")
 
-    # THE REFINEMENT IS EXACT, asserted rather than assumed (operator ruling W, 2026-08-20).
+    # THE REFINEMENT IS EXACT, asserted rather than assumed (ruling W, 2026-08-20).
     # The seven bands must re-aggregate, COUNT FOR COUNT, to the four the lattice published
     # before the split. This is the leg that catches a member leaking between two new bands or
     # being counted in both: every individual rate stays a plausible fraction under that
@@ -1610,10 +1610,10 @@ def test_p11_11d_the_band_spread_survives_every_corner_of_the_feasible_box():
     # δ_D − δ_S is LARGE and same-signed rather than merely positive.
     #
     # TWO THINGS THIS COMMENT CLAIMED AND NO LONGER DOES (2026-08-21). It said the difference
-    # "sits at or near the FULL spread" (operator ruling X7): measured on D_native's own weights
+    # "sits at or near the FULL spread" (ruling X7): measured on D_native's own weights
     # it is 1.999 pp against the 3.318 pp served spread, ~60% of it — large, same-signed and
     # adversarially arranged, which is all #12(B)'s band-uniformity premise needs, but never the
-    # whole spread. And the ordering asserted below is a SERVED-VALUE property (operator ruling
+    # whole spread. And the ordering asserted below is a SERVED-VALUE property (ruling
     # X6): at the 85+ envelope-HIGH corner that band alone rises to +0.384%, above 45-54's
     # +0.273%, so the corner ordering is NOT weight-free — and its weighting is OWNER-POPULATION,
     # `pop(a)*rho(a)`, never households. Both are gated in `tests/test_pipeline.py`
@@ -1819,7 +1819,7 @@ def test_p11_11e_the_provenance_names_the_envelope_as_the_bracket_and_the_diagon
             "Swapped, the same sentence derives the DIAGONAL pair — the run-25 defect — and "
             "then contradicts itself in its own final clause")
 
-    # THE ADVERSE-ARRANGEMENT FIGURES the docstring restates in prose, since operator ruling X1
+    # THE ADVERSE-ARRANGEMENT FIGURES the docstring restates in prose, since ruling X1
     # made S's read a blend of both tail bands. This gate exists because that paragraph went
     # STALE exactly once: it published "the least (75-84) is the one S rides through
     # initialize_households AT pipeline.ROLL_AGE" after X1 had removed that read, and nothing
@@ -1958,7 +1958,7 @@ def test_p11_19b_the_aligned_union_REFUSES_rather_than_serving_a_shorter_span(tm
 # the tail blend, the household weights, the envelope endpoints — so a stale NUMBER reds. It
 # gates no SENTENCE. The paragraph's MECHANISM clause went stale exactly once, on 2026-08-21:
 # it published "the least (75-84) is the one S rides through initialize_households AT
-# pipeline.ROLL_AGE" after operator ruling X1 had removed that read, and NOTHING MOVED WHEN THE
+# pipeline.ROLL_AGE" after ruling X1 had removed that read, and NOTHING MOVED WHEN THE
 # MECHANISM DID. Two reviewers then grepped the suite for that sentence's vocabulary and found
 # the only test-side hits were inside a COMMENT — a note describing the staleness, with no
 # assertion under it. The remedy landed for numbers and not for prose, so this is the prose half.
@@ -1971,7 +1971,7 @@ def test_p11_19b_the_aligned_union_REFUSES_rather_than_serving_a_shorter_span(tm
 # WHAT IS DELIBERATELY OUT OF SCOPE, so this cannot false-positive on correct history. The
 # module docstring's four-band paragraph SAYS the retired thing in the PAST TENSE and marks it
 # ("the least (75+) the one S then RODE through `initialize_households` at `pipeline.ROLL_AGE`
-# — a read operator ruling X1 has since removed, so that clause is HISTORY and not mechanism").
+# — a read ruling X1 has since removed, so that clause is HISTORY and not mechanism").
 # `probes/run_p10.py` likewise writes "S rides ρ(75+) through `initialize_households`" into its
 # own 2026-08-15 report, which is a DATED WARRANT measured on the four-band lattice and must
 # keep saying what it measured. Neither is scanned. A reversal whose warrant has been
@@ -2036,7 +2036,7 @@ def test_p11_20_the_mechanism_sentence_cannot_reacquire_the_retired_ROLL_AGE_REA
             # that quotes retired wordings does not spell any of these six, in any casing
             # (measured on the ratified bytes before this was widened).
             assert not says(text, gone), (
-                f"{name} states {gone!r} in the PRESENT TENSE. Operator ruling X1 (2026-08-21) "
+                f"{name} states {gone!r} in the PRESENT TENSE. Ruling X1 (2026-08-21) "
                 "removed that read: `_standing_stock` values the lumped 75+ bucket at the "
                 "population-weighted mean over the ages it holds, so no single age selects an "
                 "ownership band and `ROLL_AGE` carries the hazard and the living-arrangement "

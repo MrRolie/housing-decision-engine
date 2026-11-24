@@ -13,7 +13,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Running from a git WORKTREE
 # ---------------------------------------------------------------------------
 # demoflow depends on a sibling package by RELATIVE path (`../../actuarial-system`,
-# an operator ruling — see demoflow/pyproject.toml). From a worktree that resolves
+# a ruling — see demoflow/pyproject.toml). From a worktree that resolves
 # to <repo>/.claude/worktrees/actuarial-system, which does not exist, and `uv`
 # refuses before running a single test.
 #

@@ -19,7 +19,7 @@ named `private_pop` and echoed on the result so the claim travels with the numbe
 Ownership rates are HOUSEHOLD-MAINTAINER-denominated (Census tenure tables) and therefore
 multiply HOUSEHOLD counts, never person counts.
 
-GATES — steering ruling A retired the 0.25 SAME-AGE band gate, so what remains is exactly the
+GATES — ruling A retired the 0.25 SAME-AGE band gate, so what remains is exactly the
 set of invariants reality preserves:
 
   1. `coupled_s >= 0`                    (`match_couples`)
@@ -43,7 +43,7 @@ holes measured 2026-08-08 against this module:
 
 Both holes return SILENTLY with a negative `Other` because per-sex conservation still balances
 (that identity is algebraic in the three expressions, so it holds for any rate). NO FOURTH GATE:
-spec §5 as amended enumerates exactly three, and steering ruling A's content is that the gate set
+spec §5 as amended enumerates exactly three, and ruling A's content is that the gate set
 was NARROWED — widening it back here would be fork-class. The two preconditions are therefore
 RECORDED, not closed; `assert_fraction` at the loader boundary is what closes them in practice.
 
@@ -84,7 +84,7 @@ from demoflow.errors import CalibrationError
 
 _SEXES = ("M", "F")
 
-# Spec §5's 75+ AGGREGATE reversal bound — the ONLY 0.25 that survived steering ruling A.
+# Spec §5's 75+ AGGREGATE reversal bound — the ONLY 0.25 that survived ruling A.
 # The SAME VALUE is defined independently at `living_arrangement.py:191` for the SOURCE-side
 # check: no shared symbol, and not to be deduped by importing across the loader/cohort boundary.
 # Changing this number is FORK-CLASS; `test_aggregate_direction_reversal_beyond_bound_raises`
@@ -120,7 +120,7 @@ class HouseholdInit:
     private_pop_f: float
     # |coupled_m − coupled_f| / max, or None at the zero-zero branch where spec §5 evaluates NO
     # RATIO. None rather than 0.0: 0.0 asserts "perfectly balanced", a different claim than
-    # "undefined". RECORDED, NEVER GATED (steering ruling A).
+    # "undefined". RECORDED, NEVER GATED (ruling A).
     coupled_imbalance: float | None
 
 

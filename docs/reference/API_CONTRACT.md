@@ -778,7 +778,7 @@ past it gets the validity `[warning]` above.
 uv run hde --refresh-plan [--refresh-plan-as-of YYYY-MM-DD]
 ```
 
-The other half of `valid_until` (board item 6, 2026-09-22): the warning says a
+The other half of `valid_until` (2026-09-22): the warning says a
 figure went stale, this says how to replace it. One JSON document, no config
 needed.
 

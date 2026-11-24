@@ -25,7 +25,7 @@ THREE CLOSED VOCABULARIES MEET IN THIS FILE AND NONE OF THEM IS ANOTHER:
 The Tranche-2 ScenarioPrior row enum is a fourth and is NOT built here.
 
 DIVERGENCE FROM THE PLAN BODY, SPEC-RULED: the plan's `RANKING_FLAGS_ALLOWED` carried two
-members. Spec §7 closes it at THREE — `closed_cohort_exceedance` was added by steering ruling
+members. Spec §7 closes it at THREE — `closed_cohort_exceedance` was added by ruling
 K (2026-08-07) after the plan was written. See `CLOSED_COHORT_EXCEEDANCE_MEMBERS` below.
 
 WHY THE GUARDS BELOW EXIST BEYOND THE PLAN BODY (precedent: `balance/excess_demand.py`, same
@@ -58,7 +58,7 @@ RANKING_FLAGS_ALLOWED = frozenset({"borrowed_prior", "ra_proxy", "closed_cohort_
 _FLAG_EMIT_ORDER = ("borrowed_prior", "ra_proxy", "closed_cohort_exceedance")
 
 # Geographies whose MEASURED 75+ net-migration rate exceeded the 1 %/yr materiality cap that
-# spec §5 r3-F2 attaches to the closed-cohort assumption. Per operator ruling K (2026-08-07)
+# spec §5 r3-F2 attaches to the closed-cohort assumption. Per ruling K (2026-08-07)
 # the omission STANDS and every ranking row of an exceeding geography carries the flag, marking
 # that rank lower-confidence. The set is MEASURED, not declared: `probes/closed-cohort-migration.md`
 # records max 1.6722 %/yr at LAVAL_RA13 2007/08 (3 exceeding geography-periods, 1 of 7 measured
@@ -191,7 +191,7 @@ def rank_geographies(ed: dict[Geography, dict[Scenario, list[float]]],
         if geo in borrowed:
             flags.add("borrowed_prior")
         if geo in CLOSED_COHORT_EXCEEDANCE_MEMBERS:
-            flags.add("closed_cohort_exceedance")     # operator ruling K — rides EVERY row of the geography
+            flags.add("closed_cohort_exceedance")     # ruling K — rides EVERY row of the geography
         out.append(GeoRanking(rank=i, geography=geo, mean_ed_reference=mref, mean_ed_low=mlow,
                               mean_ed_high=mhigh, rank_stable=(rank_stable or {}).get(geo, True),
                               flags=tuple(f for f in _FLAG_EMIT_ORDER if f in flags)))

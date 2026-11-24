@@ -1,5 +1,5 @@
 """
---break-even KEY[=lo:hi] (2026-09-02, operator product direction): most users
+--break-even KEY[=lo:hi] (2026-09-02, product direction): most users
 arrive certain about one side ("houses in Laval around $650k") and want the
 threshold on the other ("what rent keeps renting the better deal?", or "what
 price makes buying worth it at my rent?"). A sweep grid brackets that; this
@@ -800,7 +800,7 @@ class TestTheNoCrossingGuardsPriceWhatTheSolverSearched:
 
 
 class TestAnIntegerEndIsPricedAndLabelledAtTheWholeNumberTheSolverPriced:
-    """Seat ruling 2026-10-01 (F4): the solver prices an integer key at
+    """ruling 2026-10-01 (F4): the solver prices an integer key at
     `int(round(v))`, so the grid point 3.75 of `mortgage_term_years=0:30` is a
     4-year term to the solver. The no-crossing record printed `3.75` and priced
     affordability at a 3.75-year term, 130.0%, a point no solve priced; at 4 the

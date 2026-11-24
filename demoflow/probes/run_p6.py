@@ -622,7 +622,7 @@ def _guard_not_found(locs: list[str], eligible: list, verified: list, ckan: dict
         )
 
 
-# --- residual probes (RECORDED OBSERVATIONS — steering ruling G; never verdict-moving) ---
+# --- residual probes (RECORDED OBSERVATIONS — ruling G; never verdict-moving) ---
 def _probe_editions(verified: list[str], picked: str, picked_data: bytes) -> list[dict]:
     """Open every verified candidate and record whether it carries an RA column.
 
@@ -1309,7 +1309,7 @@ def _section_3b_editions(note: list[str], verified: list[str], wb: dict) -> dict
     """§3b — residual (i): is the RA↔MRC axis edition-specific? RECORDED, never verdict-moving."""
     picked, data = wb["picked"], wb["data"]
     # ===== §3b — RESIDUAL (i): is the RA↔MRC axis EDITION-SPECIFIC? =================
-    # A RECORDED OBSERVATION (steering ruling G), not a verdict: nothing below can move
+    # A RECORDED OBSERVATION (ruling G), not a verdict: nothing below can move
     # DECISION-VERDICT. Every verified candidate is opened — the picked one reuses the bytes
     # already downloaded — and each is asked the SAME two questions its own header answers.
     editions = _probe_editions(verified, picked, data)
@@ -1538,7 +1538,7 @@ def _section_3c_membership(note: list[str], wb: dict) -> dict:
            f"from it. Stated at that scope deliberately: an unnamed column carrying RMR codes, "
            f"or a footnote row below the header block, is OUTSIDE what this run inspected, so "
            f"a flat \"this file cannot answer it\" would claim more than the search covers. "
-           f"Per steering ruling G this run does NOT consult a second source to close it: the "
+           f"Per ruling G this run does NOT consult a second source to close it: the "
            f"limit is the result."
            if not rmr_cells and not rmr_labels else
            f" — a metropolitan-area marker DOES appear here, so this file may carry an RMR "
@@ -1857,7 +1857,7 @@ def _decision_located(e: dict, spec: dict, guessed_str: str) -> list[str]:
         f"this run opened and shape-checked. The two together say the 404 was a property "
         f"of the GUESSED SLUG CONVENTION, not of the data. This note never edits the "
         f"spec.)",
-        # --- the two RESIDUALS, recorded per steering ruling G. They are OBSERVATIONS:
+        # --- the two RESIDUALS, recorded per ruling G. They are OBSERVATIONS:
         # neither appears in any verdict expression, and §11.6 stands either way.
         f"- `DECISION-RESIDUAL-I-RA-AXIS: of {e['n_editions_opened']} candidate workbooks "
         f"opened, {e['n_ra_separate']} publish a SEPARATE administrative-region column, "
@@ -1888,7 +1888,7 @@ def _decision_located(e: dict, spec: dict, guessed_str: str) -> list[str]:
            f"geography label(s) DO match a metropolitan-area marker; inspect them before "
            f"treating the question as unanswerable from this file")
         + "`  (RECORDED OBSERVATION — see §3c; changes no "
-        "verdict. No second source was consulted to close it, per steering ruling G)",
+        "verdict. No second source was consulted to close it, per ruling G)",
         "",
         "- **Standing rule (spec §11.6): v0 PROCEEDS REGARDLESS.** A find enables a **v1** "
         "`Geography` enum extension for couronne-nord precision — never a v0 change. In v0 "

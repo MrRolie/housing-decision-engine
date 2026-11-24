@@ -1,4 +1,4 @@
-"""The uncertainty machinery's regression surface (docs/BOARD.md item 12).
+"""The uncertainty machinery's regression surface.
 
 WHAT WAS WRONG. Six of the seven configs in `examples/` set no inflation
 volatility. Only `showcase_demographic_prior.yaml` wires a prior and a crash, so

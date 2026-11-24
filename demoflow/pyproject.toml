@@ -16,7 +16,7 @@ dev = ["pytest>=7.0"]
 demoflow = "demoflow.cli:main"
 
 [tool.uv.sources]
-# Operator ruling, 2026-08-24: the path dependency below resolves only inside the
+# Ruling, 2026-08-24: the path dependency below resolves only inside the
 # author's private stack. The public repo is published as-is — a cloner cannot install
 # this dependency and that is accepted (a deliberate teaser, not an oversight). The
 # engine's mortality surface is supplied by that package; see spec §2.

@@ -436,7 +436,7 @@ def test_module_docstring_does_not_misattribute_the_flag_vocabulary_to_spec_7():
 # HORS_RMR) under a byte-identical envelope. Lifting them here closes both halves at once: the
 # citation lands beside the value, and `assumptions_hash` covers it.
 #
-# THE SECOND MEMBER IS A SPAN SINCE OPERATOR RULING X2 (2026-08-21): `p_nonimm_age = 40` became
+# THE SECOND MEMBER IS A SPAN SINCE RULING X2 (2026-08-21): `p_nonimm_age = 40` became
 # `p_nonimm_range = (25, 54)`, because the immigrant leg now reads the span's household-weighted
 # aggregate instead of the band an age landed in. The KEY changed and the coverage claim did
 # not: the span is still a discrete uncited model choice on the money path, so it still belongs

@@ -76,7 +76,7 @@ def test_statut_sublattice_single_transition_and_uniform_projected_domain():
 
 
 # --- Four tests ADDED beyond the plan's 7 (each closes a gate the plan's bodies leave unexercised;
-# --- reported to the seat as a divergence from the plan's "Expected: 7 PASS").
+# --- reported to the build agent as a divergence from the plan's "Expected: 7 PASS").
 
 def test_statut_projected_domain_differs_without_reversal():
     """ADDED (spec §4, cross-model review r10-F5). The plan's RED fixture (proj->est relabel of B's terminal

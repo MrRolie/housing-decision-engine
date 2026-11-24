@@ -1,4 +1,4 @@
-"""Anchor discipline tests (provenance remediation; readiness plan C, 2026-09-01).
+"""Anchor discipline tests (provenance remediation; 2026-09-01).
 
 Pins, beyond the import-time enforcement in anchors.py:
 

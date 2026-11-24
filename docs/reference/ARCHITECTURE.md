@@ -1,6 +1,6 @@
 # Architecture and figure glossary
 
-Rewritten 2026-09-01 (readiness plan D). The first half is the module map; the
+Rewritten 2026-09-01. The first half is the module map; the
 second half — **Figure glossary** — defines every number the engine prints or
 emits, as the code computes it, so "what is this figure and how was it
 calculated?" is answerable from `--json` plus this page without opening `src/`.

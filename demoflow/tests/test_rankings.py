@@ -6,7 +6,7 @@ The first eight tests are the plan's Task-27 bodies, unchanged. Everything below
 `balance/excess_demand.py`'s precedent for adding a guard beyond a plan body.
 
 ONE DIVERGENCE FROM THE PLAN BODY IS DELIBERATE AND SPEC-RULED: the plan's
-`RANKING_FLAGS_ALLOWED` carried TWO members; spec §7 (steering ruling K, 2026-08-07) closes the
+`RANKING_FLAGS_ALLOWED` carried TWO members; spec §7 (ruling K, 2026-08-07) closes the
 rankings flags enum at THREE — `closed_cohort_exceedance` rides every ranking row of a geography
 whose measured 75+ net-migration rate exceeded the 1 %/yr materiality cap. The plan body predates
 the ruling; the spec rules. The plan's own assertion (`set(r.flags) <= RANKING_FLAGS_ALLOWED`)
@@ -141,7 +141,7 @@ def test_faible_tiebreak_decides_against_enum_order_and_against_the_fort_mean():
 
 
 def test_closed_cohort_exceedance_rides_every_row_of_the_measured_geography():
-    # Spec §7 steering ruling K (2026-08-07): the flag rides EVERY ranking row of a geography whose
+    # Spec §7 ruling K (2026-08-07): the flag rides EVERY ranking row of a geography whose
     # measured 75+ net-migration rate exceeded the 1 %/yr cap — currently LAVAL_RA13 alone
     # (probes/closed-cohort-migration.md: max 1.6722 %/yr, LAVAL_RA13 2007/08). Silent failure this
     # kills: Laval's rank ships at full confidence while the closed-cohort omission is known

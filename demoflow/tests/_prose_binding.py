@@ -11,7 +11,7 @@ demonstrated GREEN by verifiers on 2026-08-21:
         occurrence that SCOPES a claim leaves the string present elsewhere.
   (iii) ADDITIVE FALSEHOOD — every true attribution is kept and a FALSE one is added.
 
-All three are evasions of MEMBERSHIP. The cure is the shape operator ruling X7's gate already
+All three are evasions of MEMBERSHIP. The cure is the shape ruling X7's gate already
 uses: bind the figure to the label and assert the binding is FUNCTIONAL — this label maps to
 this value, and to NOTHING else. `bound_map` below returns the observed label -> figures
 relation so a gate can assert it EQUALS the measured one. One equality closes all three: a
@@ -41,7 +41,7 @@ that shape in the document; `tests/test_pipeline.py`'s ED-move gate does both, a
 occurrence-count legs in `tests/test_census_ownership.py` and `tests/test_probe_p10.py` are the
 same remedy for the contiguous-clause gates, which cannot see an addition at all.
 
-THE NEGATION CLASS — MEASURED, AND RECORDED RATHER THAN CHASED (seat ruling, 2026-08-21). A
+THE NEGATION CLASS — MEASURED, AND RECORDED RATHER THAN CHASED (ruling, 2026-08-21). A
 negation inserted AT the claim passes every gate of this shape. `the only two S reads are NOT
 the two LEAST contaminated AT SERVED VALUES` satisfies the joined scope-qualifier regex,
 satisfies the unscoped-claim forbid pattern's lookahead, and leaves every figure bound to its
@@ -75,7 +75,7 @@ in a sentence that also states `8 regional rows`, `within 3/yr` and `footnote: 2
 shape separates the means from the prose around them and a count of the loose shape would be a
 literal no reader could check.
 
-THE UNGATED OPERAND PAIR, ACCEPTED (seat ruling, 2026-08-21). `pipeline._standing_stock` writes
+THE UNGATED OPERAND PAIR, ACCEPTED (ruling, 2026-08-21). `pipeline._standing_stock` writes
 each offset beside the two rates it is the difference OF — `-0.162 pp at MTL_RMR
 (0.5599109544965435 against 0.5615325746167329)` — and that RAW PAIR is ungated: transposing the
 two operands ships the full suite green, because every binder here reads a `pp` or `%` shape and
@@ -104,7 +104,7 @@ wants and tells the author to RE-SITE the leg rather than widen it. The region g
 sliced from -1 is a gate that cannot fail, so the strictness is buying a leg that can fail. A
 rigid clause costs one edit; a slice from -1 costs the whole leg.
 
-THE SELF-CONTRADICTORY CLASS, ACCEPTED (seat ruling, 2026-08-21). Where a sentence states a
+THE SELF-CONTRADICTORY CLASS, ACCEPTED (ruling, 2026-08-21). Where a sentence states a
 DIRECTION beside the SIGNED FIGURES that entail it, flipping the direction word alone leaves the
 figures bound to their names, so the sentence refutes itself instead of asserting a falsehood the
 record elsewhere supports. The measured instance is `_standing_stock`'s straddle sentence: "two
@@ -243,7 +243,7 @@ red after it:
       `tests/test_pipeline.py::
       test_x4_the_two_CHANNELS_of_the_per_age_gap_keep_their_own_RANGES_and_their_ORDER`.
 
-WHAT IS NAMED-OPEN, deliberately (seat ruling, run 47) — with the one-line mutation that reaches
+WHAT IS NAMED-OPEN, deliberately (ruling, run 47) — with the one-line mutation that reaches
 each one, so a future reader can act without re-deriving it. Every one re-verified GREEN against
 the FINAL suite: the three plain residuals on the full 1190-test run, the two pairs
 through the generator.

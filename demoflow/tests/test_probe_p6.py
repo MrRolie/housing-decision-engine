@@ -343,7 +343,7 @@ def test_p6_records_a_resolved_verdict():
         f"'CONTRADICTED' would assert a conflict with text that no longer exists."
     )
 
-    # --- the two RESIDUALS (steering ruling G): recorded, computed, self-consistent ------
+    # --- the two RESIDUALS (ruling G): recorded, computed, self-consistent ------
     residual_i = _token(text, "DECISION-RESIDUAL-I-RA-AXIS")
     assert residual_i is not None and residual_i.upper() not in UNRESOLVED, (
         f"{NOTE} claims LOCATED but records no `DECISION-RESIDUAL-I-RA-AXIS` ({residual_i!r})."

@@ -3,10 +3,10 @@ rate by geography x age band, STRICT full-geography join, fractions asserted in
 [0,1]; HORS_RMR is province net of ALL SIX WHOLLY-QUÉBEC CMAs (cross-model review r4-F2) — the
 precise denotation, and NOT the same territory as ISQ's literal hors-RMR population
 row, both recorded in _provenance. Headship: base-year households/person at every SINGLE
-YEAR of age 0-100, graduated from the 14 published maintainer-age members (operator ruling V,
+YEAR of age 0-100, graduated from the 14 published maintainer-age members (ruling V,
 2026-08-19; PIT-fixed, §7 r3-F3).
 
-DERIVATION, NEVER TRANSCRIPTION (steering ruling B, 2026-07-25): every rate is computed —
+DERIVATION, NEVER TRANSCRIPTION (ruling B, 2026-07-25): every rate is computed —
 ownership by `derive_ownership_from_csv` from the pinned P2 extract, headship by
 `derive_headship_from_sources` from that extract AND the pinned ISQ QC-total pop workbook.
 Both JSONs under `data/` are BUILD ARTIFACTS of `scripts/gen_ownership.py` /
@@ -25,13 +25,13 @@ scenario POPULATION, so headship is
     QC private-household PRIMARY MAINTAINERS  (committed P2 Census extract)
     ÷ ISQ 2021 Le Québec Référence (A2026) PERSONS  (committed pop-as-qc-base.xlsx)
 and nothing else. T13b read BOTH sides at the six model bands and served the band rate flat at
-every age inside it; since operator ruling V (2026-08-19) each side is read at its FINEST
+every age inside it; since ruling V (2026-08-19) each side is read at its FINEST
 published resolution — the 14 maintainer-age MEMBERS against the 101 single-year person
 denominators — and the value at a single age is a GRADUATION that closes exactly on every
 member, never a band rate reused at each age (`derive_headship_from_sources`). Both sources are
 sha256-pinned and read at derivation.
 
-STALENESS REFUSES AT LOAD (steering ruling L, 2026-08-08): a no-drift gate is a TEST — it
+STALENESS REFUSES AT LOAD (ruling L, 2026-08-08): a no-drift gate is a TEST — it
 defends the repo, not a runtime load. So `load_ownership_rates` and `load_headship_rates`
 independently check the artifact's recorded source digests against the pins registry on EVERY
 load and raise on an absent or mismatched one. Two legs, neither subsuming the other: CI
@@ -151,7 +151,7 @@ _QC_CMAS = (
 # replace; that identity is what makes the refinement below ARITHMETIC rather than a remodel,
 # and it is the property `test_census_ownership.py` re-anchors the retired 75+ oracle on.
 #
-# SEVEN BANDS, NOT FOUR (operator ruling W, 2026-08-20; spec §8 amendment #18). Until this
+# SEVEN BANDS, NOT FOUR (ruling W, 2026-08-20; spec §8 amendment #18). Until this
 # change the lattice was `25-54 / 55-64 / 65-74 / 75+`, and its 25-54 band was THIRTY YEARS
 # WIDE — the same defect class ruling V retired the flat headship curve over: a coarse band
 # flattening an age gradient THIS SAME extract publishes finer. Measured on the pinned extract:
@@ -219,7 +219,7 @@ _POP_SEX_TOTAL = 3
 _POP_SEX_PARTS = (1, 2)
 _POP_TERMINAL_AGE = 100                     # single-year block span (isq_ages: 100+ capped)
 
-# --- the AGE-RESOLVED headship curve (operator ruling V, 2026-08-19) -----------------------
+# --- the AGE-RESOLVED headship curve (ruling V, 2026-08-19) -----------------------
 #
 # WHAT THIS REPLACED AND WHY. Until this change the curve was SIX bands materialised flat at
 # single years of age, and `_zero_support_note` forbade that reuse in its own words. The
@@ -766,14 +766,14 @@ def ownership_rate(rates: dict, geography: Geography, age: int) -> float:
 
 
 # ===========================================================================================
-# THE BANDED AGGREGATE OVER A LUMPED AGE RANGE (operator ruling X, 2026-08-21)
+# THE BANDED AGGREGATE OVER A LUMPED AGE RANGE (ruling X, 2026-08-21)
 # ===========================================================================================
 #
 # WHY A SECOND ACCESSOR EXISTS AT ALL. `ownership_rate` answers "the rate AT an age" and is
 # correct for every consumer that reads ownership PER AGE. A consumer that needs the rate over
 # a LUMPED RANGE — one number multiplying a whole span at once — cannot get it from that
 # accessor: reading the range's midpoint returns ONE band's rate, and under the seven-band
-# lattice (operator ruling W) that is a sub-band of the span, not the span. Ruling W did not
+# lattice (ruling W) that is a sub-band of the span, not the span. Ruling W did not
 # create that class of consumer; it removed the coarse band that had been silently SERVING it.
 # Until the refinement, `25-54` and `75+` existed as bands, so a point read inside either
 # returned the very household-weighted union a lumped consumer wanted, and the two questions

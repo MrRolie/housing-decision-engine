@@ -125,7 +125,7 @@ _P_BORROWERS = ("MTL_ISLAND_RA06", "LAVAL_RA13", "LANAUDIERE_RA14_PROXY",
                 "LAURENTIDES_RA15_PROXY", "MONTEREGIE_RA16_PROXY")
 
 # P3 §4 / DECISION-COUPLE-SHARE-CITATION, 4 dp as the committed note publishes them. These
-# ARE the "exactly as cited" values steering ruling A protects.
+# ARE the "exactly as cited" values ruling A protects.
 _P3_CITED = {
     ("MTL_RMR", "75-84", "M"): (0.2150, 0.9077),
     ("MTL_RMR", "75-84", "F"): (0.4344, 0.7295),
@@ -170,12 +170,12 @@ def _expected_rate_table() -> dict:
 
 
 def test_committed_artifact_equals_generator_output():
-    """No-drift gate (steering ruling B): the committed JSON must equal a fresh derivation.
+    """No-drift gate (ruling B): the committed JSON must equal a fresh derivation.
 
     FULL-DICT equality, not `["rates"]` only — `_provenance` carries the extract's sha256, the
     vintage, the caveats and the couple-balance diagnostic, and comparing only `rates` would
     leave that whole subtree free to go stale. This is the CONTENT leg; the load path
-    independently checks IDENTITY on every load (steering ruling L). Neither subsumes the other.
+    independently checks IDENTITY on every load (ruling L). Neither subsumes the other.
     """
     assert _committed_artifact() == derive_living_arrangement(DATA_DIR / EXTRACT)
 
@@ -365,7 +365,7 @@ def test_band_labels_partition_75_plus_and_agree_with_the_ownership_bands():
     """A label shared with census.py must denote the SAME domain — the miscompose is a shared
     SPELLING over a different range, never the sharing itself.
 
-    RESHAPED AT OPERATOR RULING W (2026-08-20), and the reshape is the finding. The gate was
+    RESHAPED AT RULING W (2026-08-20), and the reshape is the finding. The gate was
     written when census.py published a single `75+` band meaning 75..200 while this loader
     published `75-84` and `85+`: it asserted the label sets were DISJOINT, on the ground that
     the plan's original `"75+"` label for the 75-84 band would have collided. Ruling W split
@@ -392,7 +392,7 @@ def test_band_labels_partition_75_plus_and_agree_with_the_ownership_bands():
         assert str(lo) in member, f"{label}: cube member {member!r} is not this band"
         prev_hi = hi
     mine = {label: (lo, hi) for label, lo, hi, _ in spec}
-    # `census._HEADSHIP_BANDS` is GONE (operator ruling V): headship is age-resolved and its
+    # `census._HEADSHIP_BANDS` is GONE (ruling V): headship is age-resolved and its
     # six LEGACY band labels survive only as provenance, so the surface to check is the
     # ownership lattice plus that legacy label set — the same labels, read from the specs that
     # still publish them.
@@ -1025,7 +1025,7 @@ def test_a_cell_the_acquisition_path_did_not_verify_is_refused_at_derivation(
             f"{shape}: a PRESENT value is exactly what makes this cell dangerous; show it")
 
 
-# --- recorded diagnostic (steering ruling A) -------------------------------------------
+# --- recorded diagnostic (ruling A) -------------------------------------------
 
 def test_couple_balance_imbalance_is_recorded_and_not_gated():
     """STEERING RULING A retired the 0.25 SAME-AGE balance gate; the imbalance is RECORDED.

@@ -1,5 +1,5 @@
 """
-Demographic-prior provenance (readiness plan E, 2026-09-01): everything hde
+Demographic-prior provenance (2026-09-01): everything hde
 says about a prior is rendered from the FILE plus a closed citation registry —
 never a literal. Pins the registry against the committed golden, the honest
 degradation for unknown keys, and the surfaces the description reaches.

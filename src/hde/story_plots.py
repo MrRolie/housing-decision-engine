@@ -1,6 +1,6 @@
 """
 Story-driven decision plots: a five-act narrative rendering of a housing
-decision, built for a non-technical viewer (operator doctrine: PLOTS ARE
+decision, built for a non-technical viewer (design rule: PLOTS ARE
 FIRST-CLASS — each plot must TELL A STORY, not just chart data).
 
 Acts:

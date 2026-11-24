@@ -298,7 +298,7 @@ def pv_to_monthly_savings(pv: float, rate: float, n_years: int) -> float:
     (the report's "≈ $/month equivalent" line): an amortizing annuity, not a
     sinking fund.
 
-    Convention (readiness plan D.4, 2026-09-01): the monthly rate is the
+    Convention (2026-09-01): the monthly rate is the
     effective-annual rate converted exactly, m = (1 + rate)^(1/12) − 1, so the
     monthly line decomposes the SAME present value the rest of the report
     discounts at (1 + rate)^-t. (Before 2026-09-01 this used rate/12, which

@@ -130,7 +130,7 @@ def format_text_report(
         lines.append(header)
         lines.extend(f"  {line}" for line in per_option)
 
-    # Verdict (readiness plan B.4): the SAME computation the story headline
+    # Verdict: the SAME computation the story headline
     # and --json use — runner-up margin, decisiveness rule stated in words.
     single_path = spec is not None and single_path_run(spec)
     verdict = compute_verdict(
@@ -154,7 +154,7 @@ def format_text_report(
 
     # MC summary — a single-path run (every uncertainty input off) is stamped
     # 'not a forecast' and its degenerate 100% probabilities are not printed
-    # (audit U3; readiness plan B.4 — the story surface already did this).
+    # (audit U3 — the story surface already did this).
     if mc is not None:
         if single_path:
             lines.append("\nMonte Carlo: single-path run: all uncertainty inputs off — not a forecast")

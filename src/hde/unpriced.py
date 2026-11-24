@@ -237,7 +237,7 @@ def straight_switch_clause(load: QualifyingLoad) -> str:
     OSFI no longer prescribes the MQR for an uninsured STRAIGHT SWITCH at
     renewal. The reader most likely to meet the sentence is the household
     already frightened by a payment jump, which is the first user this tool
-    was written for (README, `docs/BOARD.md` item 5).
+    was written for.
 
     WHAT THIS MAY NEVER SAY, and it is the whole difficulty (spec §15, and the
     scope paragraph on both anchors). A straight switch is defined by facts
@@ -263,7 +263,7 @@ def straight_switch_clause(load: QualifyingLoad) -> str:
       the branch reports the absence instead of borrowing the other branch's
       exemption.
 
-    THE LINE CITES, THE ANCHORS RECITE (operator ruling, standing, 2026-09-21;
+    THE LINE CITES, THE ANCHORS RECITE (ruling, standing, 2026-09-21;
     ruled once before the same day when a guillemet quotation of the MQR
     sentence was cut from the line and the legs cited instead). The first draft
     of this clause ran 78 words and took the line to 205 — longer than a

@@ -2,7 +2,7 @@
 closed exclusion schema, and spec §7's GENERAL "no open string anywhere" rule.
 
 FILE PLACEMENT DIVERGES FROM THE PLAN, which put these three bodies in `test_pipeline.py`.
-The seat cut plan Task 29 into artifacts / pipeline / cli; the test file follows the code
+The build agent cut plan Task 29 into artifacts / pipeline / cli; the test file follows the code
 split so `test_pipeline.py` stays free for the orchestrator's own contracts.
 
 THE LOAD-BEARING TEST IN THIS FILE IS `test_walk_visits_every_string_in_the_document`.

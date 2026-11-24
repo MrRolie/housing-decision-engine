@@ -1,6 +1,6 @@
 """
 Reference docs that restate registry facts are pinned to the registry
-(readiness plan G.3, 2026-09-01): the CONFIG_SCHEMAS.md defaults table must
+(2026-09-01): the CONFIG_SCHEMAS.md defaults table must
 quote each anchored default's value and citation tag exactly, and must not
 attribute a source to a structural default.
 """
@@ -58,7 +58,7 @@ def test_defaults_table_matches_the_registry():
 
 
 # ---------------------------------------------------------------------------
-# Figure glossary completeness (readiness plan D.2): every key the engine
+# Figure glossary completeness: every key the engine
 # prints or emits has a glossary row, so "what is this number?" always has an
 # answer without opening src/.
 # ---------------------------------------------------------------------------

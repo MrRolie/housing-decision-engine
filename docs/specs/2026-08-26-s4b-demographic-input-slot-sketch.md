@@ -1,7 +1,7 @@
 # S4b — demographic input-slot sketch
 
 **Date:** 2026-08-26
-**Status:** Draft for operator ratification. This is the unblocking artifact named by
+**Status:** Draft for ratification. This is the unblocking artifact named by
 demoflow's Tranche-2 deferral (`demoflow` spec §7(a)); ratification opens that build.
 **Scope:** where demoflow's ScenarioPrior artifact plugs into hde's engines — nothing
 here builds the emitter (that is Tranche 2's own task list).
@@ -58,8 +58,8 @@ Ruled semantics (stated here so neither side improvises):
   layer can defend). One Z per (draw, band) — constant within a band, independent
   across bands, seeded from the same rng (reproducibility preserved).
 - **No floor.** Drift passes through unfloored; the existing
-  `value_growth_rate ≤ −1` guard remains the only protection. Flooring is an
-  operator decision explicitly deferred (demoflow spec records the same deferral).
+  `value_growth_rate ≤ −1` guard remains the only protection. Flooring is a
+  maintainer decision explicitly deferred (demoflow spec records the same deferral).
 
 ### Slot 3 — `drawdown_weight_tilt` on a NEW price-shock channel
 

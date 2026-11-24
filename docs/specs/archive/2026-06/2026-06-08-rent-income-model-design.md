@@ -5,7 +5,7 @@
 **Status:** DRAFT  
 **Date:** 2026-06-08  
 **Session:** S3 brainstorm-to-execute  
-**Roadmap:** `docs/roadmaps/2026-06-07_housing-decision-engine.md`
+**Roadmap:** the project roadmap
 
 ---
 

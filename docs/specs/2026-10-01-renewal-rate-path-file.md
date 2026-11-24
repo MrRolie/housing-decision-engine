@@ -18,7 +18,7 @@ prototype.
 
 ## 0. The ruling
 
-**Operator, 2026-10-01.** When a run draws renewal rates per future, the distribution comes from
+**Ruling, 2026-10-01.** When a run draws renewal rates per future, the distribution comes from
 the path file of a fitted model. The model is fitted outside the engine, parametric or
 machine-learning. It writes sampled renewal-rate paths to a file, together with its method, its
 data window and its validation record. The engine prices those paths, on the precedent of the
@@ -607,7 +607,7 @@ pin and of `m/two_opts.yaml`'s shape are committed beside it as test data.
 ## 10. Out of scope
 
 - **`rate_shift`** (ruling 2). Without it, a file run has no renewal-level crossing (§6).
-- **Correlation with any other channel** (ruling 5, board item 13). A joint fit merges
+- **Correlation with any other channel** (ruling 5). A joint fit merges
   channels in the partition (§4).
 - **A producer or fitting script, or any calibrated file** (ruling 8).
 - **The flagship fixture** (ruling 7). See §8 for the roster check.

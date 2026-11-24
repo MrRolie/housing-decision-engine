@@ -62,12 +62,12 @@ _ADDITIVITY_KEY = ["geography", "scenario", "year", "age", "status"]
 _PRIMARY_KEY = ["geography", "scenario", "year", "sex", "age"]
 _SERIES_KEY = ["geography", "scenario", "sex"]
 
-# MEASURED 2026-08-07 in ALL THREE pinned pop workbooks (steering ruling: the plan body's
+# MEASURED 2026-08-07 in ALL THREE pinned pop workbooks (ruling: the plan body's
 # {'est','proj'} was never in the data): 'r' réel (2021–2024), 'p' provisoire (2025),
 # 'proj' projeté (2026→). assert_statut_sublattice's startswith('proj') logic is unchanged.
 _STATUT_ALLOWED = frozenset({"r", "p", "proj"})
 
-# Year span per FILE FAMILY (spec §4 + steering ruling H): the spec's "(2021–2051)" governs
+# Year span per FILE FAMILY (spec §4 + ruling H): the spec's "(2021–2051)" governs
 # the pop-as-rmr / pop-as-ra family; the QC-total workbook runs to 2071 (measured). The qc
 # entry is declared for the family, not exercised: every one of its rows classifies IGNORED,
 # so load_population refuses that workbook at gate 3 (see test_isq_loader.py).

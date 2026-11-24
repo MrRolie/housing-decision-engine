@@ -143,7 +143,7 @@ from ._prose_binding import says
 def test_mtl_rmr_75plus_derivation_matches_spec_oracle():
     """The spec's own provenance figure, still anchoring the producer AFTER the lattice split.
 
-    THE ANCHOR WAS THE POINT, NOT THE BAND SHAPE (operator ruling W, 2026-08-20). The spec
+    THE ANCHOR WAS THE POINT, NOT THE BAND SHAPE (ruling W, 2026-08-20). The spec
     quotes 56.2% = 113,730 / 202,535 = 0.56153... for MTL at 75+, and until this change the
     producer served exactly one rate over that age range, so `age=78` read it directly. The
     lattice now SPLITS 75+ into `75-84` and `85+`, so no single served rate is that figure any
@@ -236,7 +236,7 @@ def test_headship_curve_covers_all_ages_and_is_fraction():
 
 
 def test_committed_ownership_json_equals_generator_output():
-    # No-drift gate (steering ruling B): the committed JSON must equal a fresh derivation
+    # No-drift gate (ruling B): the committed JSON must equal a fresh derivation
     # from the pinned P2 CSV. A hand-edit, a stale vintage, or a schema drift fails here —
     # the P2 content-gate pattern applied to the ownership artifact.
     #
@@ -259,7 +259,7 @@ def test_committed_ownership_json_equals_generator_output():
 # recompute that borrowed the producer's band membership, geography map, or band labels
 # would move WITH a mutation to them and entail nothing. Every literal here is transcribed
 # from the spec / probe note, so the two sides can only agree by both being right.
-#   - _SPEC_AGE_BANDS      spec §8 model bands AS AMENDED — SEVEN of them (operator ruling W,
+#   - _SPEC_AGE_BANDS      spec §8 model bands AS AMENDED — SEVEN of them (ruling W,
 #                          2026-08-20; amendment #18). Until that ruling this tuple read
 #                          `25-54 / 55-64 / 65-74 / 75+`, and its 25-54 band was thirty years
 #                          wide: the producer served MTL 0.5120 at every age 25..54 while the
@@ -446,7 +446,7 @@ def test_model_band_lattices_are_spec_labelled_and_partition_their_domain():
     # are exactly the spec bands' constituents — a member moved between bands reds here too.
     assert {label: members for label, _, _, members in census._AGE_BAND_SPEC} == _BAND_MEMBERS
 
-    # HEADSHIP NO LONGER HAS A BAND LATTICE (operator ruling V): it reads the 14 PUBLISHED
+    # HEADSHIP NO LONGER HAS A BAND LATTICE (ruling V): it reads the 14 PUBLISHED
     # members and graduates them onto the single-year denominator, so the property to pin is
     # not "labels agree with ranges and partition a domain" but "the member spec IS the
     # published dimension, contiguous from the youngest published member to the denominator's
@@ -651,7 +651,7 @@ def test_headship_curve_matches_a_full_band_independent_recompute():
 
 
 def test_committed_headship_json_equals_generator_output():
-    """Regen equality (steering ruling B), FULL dict — `_provenance` included, so a stale
+    """Regen equality (ruling B), FULL dict — `_provenance` included, so a stale
     digest, a stale closure figure or a stale caveat cannot ship."""
     fresh = derive_headship_from_sources(DATA_DIR / CENSUS_EXTRACT, DATA_DIR / POP_QC_WORKBOOK)
     assert _committed_headship() == fresh
@@ -1769,7 +1769,7 @@ def test_hors_rmr_netting_identity_is_anchored_by_the_published_province_cell():
 
 
 # ===========================================================================================
-# OPERATOR RULING V (2026-08-19): the AGE-RESOLVED headship curve
+# RULING V (2026-08-19): the AGE-RESOLVED headship curve
 # ===========================================================================================
 #
 # TEST-OWNED oracle inputs, transcribed from the PUBLISHED dimension and never imported from

@@ -3,7 +3,7 @@
 **What this is.** The measured whole-CD bracket for HORS_RMR's immigrant operands: settled persons,
 headship and the immigrant/non-immigrant ownership ratio, for the shipped residual and the three
 alternative residual constructions. Measured via **98-10-0622-01** (a ruled one-universe source
-under steering ruling T), on the same date as the Task-26 re-triage.
+under ruling T), on the same date as the Task-26 re-triage.
 
 **Why it exists as its own public record.** `demoflow/probes/run_p10.py` recomputes eight of these
 figures from live data and its `_guard_citation` refuses unless each recomputed value appears
@@ -13,8 +13,8 @@ authored INDEPENDENTLY of the probe's own emission: pointing it at the probe's o
 (`probes/P10-hors-operand-alignment.md`) would make the probe verify itself, which is a check that
 cannot fail. This record is therefore the independent half of that pair, and it is public so that
 the shipped test suite has no read outside what ships. (Spec amendment #29, 2026-08-23 — the read it
-replaces resolved into an internal dispatch record, which made 16 tests in the public suite
-unrunnable from any checkout that did not carry internal ledger files.)
+replaces resolved into an internal file that does not ship, which made 16 tests in the public suite
+unrunnable from any checkout that did not carry that file.)
 
 ## The bracket
 

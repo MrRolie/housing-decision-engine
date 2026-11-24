@@ -65,7 +65,7 @@ SUPPRESSION_MARKER = "..."
 
 # Two spans, because they describe two different objects and the difference is semantic,
 # not a truncation:
-#   RAW_SHEET_SPAN — the sheet's own `Année` column (steering ruling H, measured on the
+#   RAW_SHEET_SPAN — the sheet's own `Année` column (ruling H, measured on the
 #                    sheet: 2025-2051, NOT the pop family's 2021-2051).
 #   FLOW_SPAN      — the FLOW series this loader emits. The terminal year publishes no
 #                    flow because a flow row labeled t is the t -> t+1 bridge; verified
@@ -372,7 +372,7 @@ def compo_evidence_lines(df: pd.DataFrame) -> list[str]:
     and this section). Two functions writing one artifact is a hand-edit surface by another
     name: whichever ran last would silently define the file, and the byte-diff that proves
     the note is generated would prove nothing about the half that did not run. (This
-    function was `write_closed_cohort_evidence(df, out_path)` until steering ruling K
+    function was `write_closed_cohort_evidence(df, out_path)` until ruling K
     re-pointed the evidence leg at an age-structured source; the measurement below is
     unchanged, only its writer moved.)
 

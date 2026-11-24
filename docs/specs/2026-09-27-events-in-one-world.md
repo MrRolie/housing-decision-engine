@@ -140,7 +140,7 @@ half of the futures have fired it") is superseded by E7, and E4, E8 and E11 are 
 Each carries a one-line pointer to the ruling that replaced or withdrew it, so no reader takes the
 older text as current.
 
-**E13. The gate is split out; this change lands what holds** *(operator ruling 2026-09-28, taken on
+**E13. The gate is split out; this change lands what holds** *(ruling 2026-09-28, taken on
 the second review of the fix)*. The rulings that decide whether a run is single-path (E4, E8,
 E11) predict from event fields whether the futures' present values disperse. Present value
 depends on more than those fields, and the prediction failed on each of these:

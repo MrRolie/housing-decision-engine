@@ -1140,8 +1140,8 @@ def test_the_readme_binds_the_OPTIONAL_MEMBER_census():
 # reaches only the first figure in a clause — are asserted as the EXACT ORDERED LIST of that
 # shape in the span, which is the remedy that file prescribes for a range.
 #
-# THE FIGURES ARE THE SEAT'S, AND THIS GATE PINS THE PROSE RATHER THAN RE-MEASURING THEM. Both
-# instruments are seat-built perturbations that deliberately VIOLATE a module invariant (limit A
+# THE FIGURES ARE THE BUILD AGENT'S, AND THIS GATE PINS THE PROSE RATHER THAN RE-MEASURING THEM. Both
+# instruments are built perturbations that deliberately VIOLATE a module invariant (limit A
 # carries S on the denominator's basis, violating I1) and neither exists in this tree; the spec
 # is their record. What is checkable here — and what actually went wrong on this page before —
 # is whether the shipped document still states them, attached to the right roles, with nothing

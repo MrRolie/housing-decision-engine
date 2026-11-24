@@ -6,8 +6,8 @@ Scope: spec §5 r3-F2's closed-cohort omission — the 75+ net-migration rate it
 This run registered 23 provenance-tagged figures: 17 DERIVED (computed here from the live responses named beside them) and 6 CITED (published elsewhere, quoted with their source).
 
 Externally cited figures (NOT computed by this run):
-- 1.000 %/yr — spec §5 r3-F2 MATERIALITY TRIPWIRE (steering ruling J, 2026-08-07)
-- THE OMISSION STANDS for Tranche 1 — spec §5 r3-F2 STEERING RULING K (operator-ruled at the tripwire escalation, 2026-08-07)
+- 1.000 %/yr — spec §5 r3-F2 MATERIALITY TRIPWIRE (ruling J, 2026-08-07)
+- THE OMISSION STANDS for Tranche 1 — spec §5 r3-F2 STEERING RULING K (ruled at the tripwire escalation, 2026-08-07)
 - Components of population change by census metropolitan area and census agglomeration, 2021 boundaries — 17-10-0149-01 live cube metadata
 - Components of population change by economic region, 2021 boundaries — 17-10-0151-01 live cube metadata
 - Population estimates, July 1, by census metropolitan area and census agglomeration, 2021 boundaries — 17-10-0148-01 live cube metadata
@@ -21,16 +21,16 @@ Externally cited figures (NOT computed by this run):
 - `DECISION-COVERAGE: 7 of 8 modeled geographies MEASURED, 1 NOT-COVERED (HORS_RMR)`
 - `DECISION-IDENTITY: EXACT — max |difference| 0 person`
 - `DECISION-MAX-RATE: 1.6722 %/yr at LAVAL_RA13 2007/08`
-- `DECISION-TRIPWIRE: FIRED — 3 geography-period(s) above 1.000 %/yr [cited: spec §5 r3-F2 MATERIALITY TRIPWIRE (steering ruling J, 2026-08-07)], in 1 of 7 measured geographies (LAVAL_RA13)`
+- `DECISION-TRIPWIRE: FIRED — 3 geography-period(s) above 1.000 %/yr [cited: spec §5 r3-F2 MATERIALITY TRIPWIRE (ruling J, 2026-08-07)], in 1 of 7 measured geographies (LAVAL_RA13)`
 - `DECISION-WINDOW-CONTRAST: latest-5-period max 0.7738 %/yr vs full-span max 1.6722 %/yr — the FULL SPAN rules`
-- `DECISION-RESOLUTION: THE OMISSION STANDS for Tranche 1 [cited: spec §5 r3-F2 STEERING RULING K (operator-ruled at the tripwire escalation, 2026-08-07)]`
+- `DECISION-RESOLUTION: THE OMISSION STANDS for Tranche 1 [cited: spec §5 r3-F2 STEERING RULING K (ruled at the tripwire escalation, 2026-08-07)]`
 
 ## 1. What the omission is
 
 The 75+ owner roll-forward is CLOSED after band entry: post-entry net migration at
 ages 75+ is OMITTED. That is a STATED ASSUMPTION with a sensitivity remark in
 outputs — not a modeled mechanism. Spec §5 r3-F2 attaches a MATERIALITY TRIPWIRE to
-it: a measured 75+ net-migration rate above 1.000 %/yr [cited: spec §5 r3-F2 MATERIALITY TRIPWIRE (steering ruling J, 2026-08-07)] in any modeled geography
+it: a measured 75+ net-migration rate above 1.000 %/yr [cited: spec §5 r3-F2 MATERIALITY TRIPWIRE (ruling J, 2026-08-07)] in any modeled geography
 escalates the altitude call back to the operator. The spec's stated rationale for
 that level: 75+ all-cause exit hazards run ≥10%/yr, so a 1%/yr cap keeps the
 omission's relative distortion near or under 10%.
@@ -118,7 +118,7 @@ an unevaluated geography is not a passing one.
 
 Every geography that never exceeds the tripwire peaks at **0.8113 %/yr** (MTL_ISLAND_RA06 2009/10).
 
-## 3. Tripwire evaluation and the OPERATOR RESOLUTION (steering ruling K)
+## 3. Tripwire evaluation and the OPERATOR RESOLUTION (ruling K)
 
 **Evaluated on the FULL published span** (2001/02–2024/25, 24 periods): the
 tripwire **FIRED** — 3 geography-period(s)
@@ -130,7 +130,7 @@ against a full-span peak of 1.6722 %/yr. That window is RECORDED and REFUSED as
 evidence, per ruling K: a window whose sole visible effect is to remove the
 exceedance is not evidence. The full span rules.
 
-**OPERATOR RESOLUTION (2026-08-07):** THE OMISSION STANDS for Tranche 1 [cited: spec §5 r3-F2 STEERING RULING K (operator-ruled at the tripwire escalation, 2026-08-07)]. The verdict form is
+**OPERATOR RESOLUTION (2026-08-07):** THE OMISSION STANDS for Tranche 1 [cited: spec §5 r3-F2 STEERING RULING K (ruled at the tripwire escalation, 2026-08-07)]. The verdict form is
 `EVIDENCED-WITH-NAMED-EXCEEDANCE` — the omission is evidenced rather than
 unevidenced-pending, and the exceedance it carries is named rather than smoothed by a
 window. Every ranking row of an exceeding geography carries the

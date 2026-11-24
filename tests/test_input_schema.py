@@ -1,6 +1,6 @@
 """
 The published input contract (src/hde/input_schema.py) must be TRUE, not just
-complete (readiness plan F.3, 2026-09-01): every parser key carries a curated
+complete (2026-09-01): every parser key carries a curated
 note, every `required` flag survives a drop-one round trip against the parser,
 `required_if` states the capital-structure rule, and the top level enumerates
 every block the parser accepts.

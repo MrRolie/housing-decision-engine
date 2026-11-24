@@ -34,7 +34,7 @@ WORKBOOK_SHA256 = {
     # scripts/pull_living_arrangement.py). Same PIT role as the P2 extract above:
     # `derive_living_arrangement` verifies this pin before reading a single cell, and the
     # generated artifact records the digest so the load path can refuse a stale vintage
-    # (steering ruling L). Two independent pulls of this cube produced byte-identical output,
+    # (ruling L). Two independent pulls of this cube produced byte-identical output,
     # so re-pinning is only ever a VINTAGE change, never pull noise.
     "living_arrangement_98100134.json":
         "2dfb73b91c7346576acf9e352002d101dcfede3abbdb152545474414a0838a39",
@@ -45,7 +45,7 @@ WORKBOOK_SHA256 = {
     # territory matches the ISQ hors-RMR flow it multiplies (spec §6, the #12(B) reversal).
     # Same PIT role as the P2 and P3 extracts above: `derive_aligned_ownership` verifies this
     # pin before reading a cell, and the artifact records the digest so the load path can
-    # refuse a stale vintage (steering ruling L). NO raw-source anchor row: unlike the P2
+    # refuse a stale vintage (ruling L). NO raw-source anchor row: unlike the P2
     # extract this is a WDS COORDINATE pull with no uncommittable upstream member behind it —
     # the committed file IS the response, projected and sorted (pins.py's ISQ parenthetical
     # argument). Two independent pulls minutes apart produced byte-identical output and

@@ -231,7 +231,7 @@ def test_p3_records_sex_specific_fallbacks():
 # §4c and the DECISION block) shipped the full demoflow suite green, and
 # `test_probes_common.py::test_provenance_header_matches_pinned_goldens` does not reach it
 # either — it pins the `provenance_header` FUNCTION against synthetic fact mixes, never this
-# file. The seat's ruling is that byte-identity regeneration is STRONGER than binding each
+# file. The build agent's ruling is that byte-identity regeneration is STRONGER than binding each
 # claim to its attribution, and P8/P10 already carry that shape, so this is theirs applied
 # here: run the REAL producer over a recorded capture of its two boundaries and compare BYTES.
 #

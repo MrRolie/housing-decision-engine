@@ -8,7 +8,7 @@ and the 2021 census.
 
 Built with Claude Code under my direction.
 
-![Bar chart of total cost in today's dollars over 25 years for renting ($537k), buying a condo ($519k) and buying a house ($515k, cheapest by best guess), each with a whisker spanning its middle 80% of 5,000 simulated futures; the whiskers overlap heavily, so the verdict is too close to call.](docs/story/act1_the_answer.png)
+![Bar chart of total cost in today's dollars over 25 years for renting ($537k), buying a condo ($519k) and buying a house ($515k, cheapest by best guess), each with a whisker spanning its middle 80% of 5,000 simulated futures; the whiskers overlap heavily; the verdict is too close to call.](docs/story/act1_the_answer.png)
 
 *Example output for a made-up household with illustrative numbers (rent $2,400 a month, a $480k condo,
 a $550k house, 25 years, Montréal metropolitan area). Each bar is the best-guess total cost; each whisker
@@ -33,7 +33,7 @@ someone to see it first. It does not advise. It shows its work.
 Of those three, it serves two today. **A household that already owns cannot yet be
 described to it:** there is no way to state an existing mortgage, its remaining balance or
 the years already paid, so someone facing a renewal cannot run their own situation. That is
-open work, ranked, in [docs/BOARD.md](docs/BOARD.md). Until it lands this page says so,
+not built yet. Until it is, this page says so,
 rather than letting the tool look like it fits.
 
 You run it with your own Claude, on your own numbers. Nothing here reports anywhere, and
@@ -107,7 +107,7 @@ examples/            # Scenario YAMLs + ordered walkthrough (examples/README.md)
 tests/               # pytest suite (fixtures/ holds the golden ScenarioPrior)
 docs/
   story/             # Living showcase: six-act PNGs + STORY.md + report.txt
-  roadmaps/ specs/ plans/ reference/ research/ archive/
+  specs/ plans/ reference/ research/ archive/
 demoflow/            # Self-contained uv project — the upstream demand-model pipeline
 ```
 
@@ -117,7 +117,7 @@ demoflow/            # Self-contained uv project — the upstream demand-model p
 - **Example walkthrough** — [examples/README.md](examples/README.md): the smallest config that runs, then six scenarios in reading order
 - **Every figure explained** — [docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md) § Figure glossary; every default's source — `uv run hde --print-anchors`
 - **Library use** — all engines take a single `ComparisonSpec`; see `src/hde/__init__.py` exports
-- **What changed between releases** — `git tag -n99` (each tag's note lists what landed); the build record is `docs/roadmaps/2026-06-07_housing-decision-engine.md`
+- **What changed between releases** — `git tag -n99` (each tag's note lists what landed)
 
 ## Tests
 

@@ -11,9 +11,9 @@ says which.
 
 ---
 
-## 0. Rulings this spec is built under, and the seat's own verification
+## 0. Rulings this spec is built under, and the build agent's own verification
 
-Three rulings were taken BEFORE this design and bind it. Two are the operator's.
+Three rulings were taken BEFORE this design and bind it. Two are the maintainer's.
 
 **No cross-channel ranking; split the rows by EXACTNESS instead.** Ordering a renewal rate's
 1.4 points against a rent's $310/mo needs a plausibility magnitude per input and the registry
@@ -24,11 +24,11 @@ honesty and the reader supplies the ordering from what he knows about his own li
 **A flag you ask for, not an always-on line — the flag is `--decompose`.** Nothing changes for a run that does not ask, and
 it stays out of the warnings channel that `2026-09-21-unpriced-dimensions.md` slice 2 owns.
 
-**One solver, two consumers** (seat ruling, mechanism). The deterministic renewal-flip figure in
+**One solver, two consumers** (ruling, mechanism). The deterministic renewal-flip figure in
 that slice and this module's central-case boundary are the SAME number. The solver lives here
 and that line calls it. Named so neither builder can grow a second copy.
 
-**The headline, re-measured by the seat rather than accepted.** The claim that decides this
+**The headline, re-measured by the build agent rather than accepted.** The claim that decides this
 spec's whole shape is that a variance decomposition names the WRONG channel. Verified
 independently on `tests/fixtures/uncertainty_surface.yaml` at 2,000 paths, turning each channel
 off the way the config actually allows — the lease-reset pair by DELETION, since the engine
@@ -106,7 +106,7 @@ shape.
 
 **8. Two shelter-freeze figures, two methods, both real.** +$127,876 (§0, §5, §13) and
 +$125,074 (§1, §3.4, §7) are not a disagreement to resolve by picking one. The first is the
-seat's probe, which DELETED the lease-reset pair from the config — the only way this engine
+build agent's probe, which DELETED the lease-reset pair from the config — the only way this engine
 allows the channel off, since it refuses a zeroed hazard beside a stated market rent — and so
 also removes the market-escalation default. The second is the freeze mask, which suppresses the
 draw and leaves the config alone. **The freeze-mask figure is what the register prints**, because
@@ -171,8 +171,8 @@ re-taken once the streams land, and §10's assertions stay inequalities with mar
 equalities to a bound.
 
 **16. The flag is `--decompose`, and the two `--reversal` mentions were residue.** §0 and §13
-said `--reversal`; §7, §8, §9, §12 and the JSON key say `--decompose`. The operator's ruling was
-*a flag you ask for rather than an always-on line* — the NAME was never the operator's call, and
+said `--reversal`; §7, §8, §9, §12 and the JSON key say `--decompose`. The maintainer's ruling was
+*a flag you ask for rather than an always-on line* — the NAME was never the maintainer's call, and
 the earlier name dates from when the ruling was about the reversal half alone. The feature is one
 block with three registers, so it is one flag. Two flags for one block would be the worse
 outcome. `--decompose=N` belongs to the assembler, since N is a sample-size override consumed at
@@ -286,10 +286,10 @@ and a sampled one. Worth watching for a fourth.
 
 **25. A PATH-FREE RUN REFUSES THE WHOLE BLOCK, and the reversal register's no-futures branch is
 deliberately UNREACHED from `--decompose`.** §0.1 item 24 fixed `--no-monte-carlo` returning an
-empty reversal register, and the seat then ruled that a gate measured on a path-free run must
+empty reversal register, and the build agent then ruled that a gate measured on a path-free run must
 disclose the paths it consumed. Both were rulings about a case §8 refusal 2 already prevents
 from ever reaching a renderer: on `--no-monte-carlo` the block refuses with `no_futures` BEFORE
-any register is built. The seat ruled on the case without checking whether the surface could
+any register is built. The build agent ruled on the case without checking whether the surface could
 reach it; the formatter track found the collision.
 
 **The refusal stands and the block stays futures-only.** §1 already says this block is not a
@@ -427,7 +427,7 @@ contradict a tag printed above it.** On the fixture it said "every channel above
 figure the assistant chose, not by you", beneath a population row carrying
 `market_scenario.geography [user]`.
 
-**35. THE BLOCK PRINTS FIGURES, NOT INTERPRETATION** *(operator ruling 2026-09-26, taken after
+**35. THE BLOCK PRINTS FIGURES, NOT INTERPRETATION** *(ruling 2026-09-26, taken after
 four fix-and-review rounds)*. Across those rounds the figures held: every crossing matched a
 sweep of the same axis, every source tag matched the run's own read-back, and the estimators
 matched answers derived on paper. Every failure after the second round was in the prose around
@@ -689,7 +689,7 @@ judged on one axis: is it true of the code at this commit. A module claims nothi
 restatements ("this module restates neither" is cut), because no test backs that claim.
 
 **56. THE FIRST LANDING IS THE SPREAD AND THE LEVEL; THE REVERSAL REGISTER IS THE NEXT SLICE**
-*(operator ruling 2026-09-27, taken after four more reviews; it supersedes §13's inclusion of the
+*(ruling 2026-09-27, taken after four more reviews; it supersedes §13's inclusion of the
 reversal register in slice 1)*. The spread and level registers have been sound since the
 measured-liveness build (item 39). Their later findings were unpinned guards and false internal
 comments. The reversal register produced three of the four new kinds of defect across the last
@@ -815,8 +815,8 @@ The mutant list that last full review ran is part of this register's gate. Every
 dies, or its code is deleted.
 
 **67. THE REVERSAL REGISTER PRINTS A KEY'S CROSSINGS AND REFUSALS, AND NO OTHER FIGURE PLACED
-ON THAT AXIS** *(operator ruling 2026-09-28, taken on the review of rulings 63-66. The bracket
-clause and the word PLACED are a same-day amendment made on its recheck, not a further operator
+ON THAT AXIS** *(ruling 2026-09-28, taken on the review of rulings 63-66. The bracket
+clause and the word PLACED are a same-day amendment made on its recheck, not a further
 ruling.)* Across that review
 and the two before it, every wrong line printed a SECOND figure beside a crossing, and each one
 was misplaced below the printed precision:
@@ -1205,7 +1205,7 @@ figure the assistant chose, not by you.* At 10,000 paths, where `ΣS_c` resolves
 sum. On a config where every width is the user's or an anchor's, the clause does not print at
 all.
 
-**5. The level register is BOUND to the spread table, structurally** *(operator ruling
+**5. The level register is BOUND to the spread table, structurally** *(ruling
 2026-09-22, superseding this section's earlier "label" default)*. The fork this section left
 open was: label the ranking, or refuse to rank when the top width is assistant-chosen. The
 answer was neither. The ranking prints — a refusal would delete the only thing this feature can
@@ -1517,7 +1517,7 @@ says five of seven shipped examples engage, so that multiple is the common case 
 worst case built to look bad.
 
 **That is why it is opt-in.** `--decompose`, optionally `--decompose=N` to run the decomposition
-at its own sample size. §13 puts the automatic-vs-opt-in question to the operator, because
+at its own sample size. §13 puts the automatic-vs-opt-in question to the maintainer, because
 "first-class output, not a one-off study" is the board's phrasing and a flag is a reading of it.
 
 **What it does to a run that does not ask: nothing.** Not one extra draw, not one extra branch
@@ -1683,14 +1683,14 @@ A and B meet at the index table's shape; C and D meet at the block.
 
 ## 13. Forks — ALL THREE NOW RULED
 
-The three forks this design left open were put to the operator on 2026-09-22 and answered. The
+The three forks this design left open were put to the maintainer on 2026-09-22 and answered. The
 rulings are binding and the sections they touch are amended above; they are restated here
 because a later reader will find the arguments for the rejected side and should know they were
 weighed rather than missed.
 
 **Fork 1 — the spread register's ranking, when every width in it is assistant-chosen.**
 RULED: print the shares, but NEVER ALONE. The spread table may not appear without the level
-register beside it, structurally, not by convention. The reason is the seat's §0 measurement:
+register beside it, structurally, not by convention. The reason is the build agent's §0 measurement:
 the spread table's top row on this repo's own fixture is the renter's portfolio at 0.78–0.88 of
 the scatter, and freezing it moves the decision by −$2,200, while the lease reset at under 0.08
 of the scatter moves it by +$127,876. A reader given the spread table alone quotes the channel
@@ -1736,7 +1736,7 @@ section against the code it was about to type.
   mostly gate refusals today, which is the honest output and proves the gate discriminates; the
   joint move along a two-input ray turns §4's non-additivity sentence into a measurement and is
   slice 3.
-- **A price ↔ income correlation** (board item 13). It would be an eighth channel, and the
+- **A price ↔ income correlation**. It would be an eighth channel, and the
   per-path keying was chosen so that adding one cannot move channels 0–6.
 - **The tie state.** `f` and its sign are well defined on a tie, but the header's sentence is
   not, and the block should be read once more against `state == "tie"` before slice 1 lands.

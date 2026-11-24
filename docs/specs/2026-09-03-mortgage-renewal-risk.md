@@ -170,7 +170,7 @@ than left open:
   work. The ladder stays the default surface; the process is opt-in.
 
 Sequencing: slice 1 (the ladder, §10) ships first and alone. The process arrives with the
-price-diffusion channel (board item 2), because a rate distribution is only worth having
+price-diffusion channel, because a rate distribution is only worth having
 beside a price distribution — comparing one risk against a constant is comparing it against
 zero.
 

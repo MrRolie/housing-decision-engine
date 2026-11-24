@@ -124,7 +124,7 @@ STAGING_SUFFIX = ".partial"
 # ROLL_AGE — the single lumped 75+ bucket's hazard age (Tranche-1 coarseness, the plan body's).
 # A MODEL choice and not an index: the bucket holds everyone 75+ and is decremented at one age,
 # so raising or lowering it moves S for every geography. IT NO LONGER SELECTS THE BUCKET'S
-# OWNERSHIP RATE (operator ruling X1, 2026-08-21): `_standing_stock` values the bucket at the
+# OWNERSHIP RATE (ruling X1, 2026-08-21): `_standing_stock` values the bucket at the
 # POPULATION-WEIGHTED mean of the per-age rates over the ages it actually holds, so the rate is
 # the slice's own and no band read at this age enters S. What still rides ROLL_AGE is the
 # HAZARD and the living-arrangement read, both unchanged. NOT retired here: Tranche 2's
@@ -173,7 +173,7 @@ POP_AGES = tuple(range(0, 101))
 #
 # THE FOUR DERIVED RATE ARTIFACTS ARE DECLARED TOO, and that is the other half of F1. The landed
 # body named their upstream SOURCES instead, on the argument that each artifact refuses at load
-# if its recorded source digests drift from the pins (steering ruling L). That gate is real and
+# if its recorded source digests drift from the pins (ruling L). That gate is real and
 # still runs — and it is blind in the direction the model's numbers live in: the loaders verify
 # `_provenance`, never the payload. Editing one rate cell and leaving `_provenance` alone loads
 # clean, moves every geography's ED and can REORDER the rankings under a byte-identical envelope
@@ -398,7 +398,7 @@ def _verify_pinned(name: str, digest: str) -> None:
     checked nothing, which is how a garbage census extract left a run completing with an
     unchanged envelope (review finding F1).
 
-    `census_tenure_age_98100231.csv` LEFT THAT SET at operator ruling X2 (2026-08-21): the
+    `census_tenure_age_98100231.csv` LEFT THAT SET at ruling X2 (2026-08-21): the
     immigrant leg's propensity is an aggregate over `P_NONIMM_RANGE` formed from that extract's
     own counts, which the derived rate artifact does not publish, so `_ownership_reader` now
     opens it once per run through `census.read_totals_cube` — which `verify_pin`s it itself.
@@ -723,7 +723,7 @@ class _OwnershipReader:
     file would be a THIRD statement of that fence and the one a reader would have to reconcile
     against the artifact by hand.
 
-    TWO QUESTIONS, ONE ROUTER (operator ruling X2, 2026-08-21). `__call__` answers "the rate AT
+    TWO QUESTIONS, ONE ROUTER (ruling X2, 2026-08-21). `__call__` answers "the rate AT
     an age"; `p_nonimm` answers "the rate OVER `P_NONIMM_RANGE`", which is a household-weighted
     aggregate and not any band's value. Both are routed by the SAME join, because the routing
     question — whose territory is this geography's — is identical for both and a second
@@ -1042,7 +1042,7 @@ def _household_stock(rows: pd.DataFrame, geo: Geography, age: int, la: dict,
     `Other` (persons living with others) is excluded from the owner stock as presumptive
     non-maintainers — `HouseholdInit` carries no `owner_other` for exactly that reason.
 
-    THE OWNERSHIP RATE ARRIVES FROM THE CALLER AND IS REQUIRED (operator ruling X1,
+    THE OWNERSHIP RATE ARRIVES FROM THE CALLER AND IS REQUIRED (ruling X1,
     2026-08-21). The two callers value DIFFERENT populations: `_band_entry_stock` hands a single
     age-75 cohort and reads the rate at that age, while `_standing_stock` hands the whole
     age>=75 slice and must hand the slice's own POPULATION-WEIGHTED rate — no age inside a
@@ -1072,7 +1072,7 @@ def _household_stock(rows: pd.DataFrame, geo: Geography, age: int, la: dict,
     `HouseholdInit` returns exactly `coupled_m`/`coupled_f`, and this function discarded both.
     Only `_standing_stock` passes a context, because §5 states the claim at the 75+ AGGREGATE and
     `_band_entry_stock` hands a SINGLE age-75 cohort — a direction gate applied per band is the
-    overreach steering ruling A retired the per-band magnitude gate for, and the gate's own
+    overreach ruling A retired the per-band magnitude gate for, and the gate's own
     docstring says "call this on 75+ aggregate counts, not per band".
 
     WIRING COST IS ZERO, MEASURED: all eight geographies run M > F, worst signed (F-M)/max
@@ -1152,14 +1152,14 @@ def _standing_stock(pop_g_s: pd.DataFrame, year: int, geo: Geography, la: dict,
                     read_ownership, *, collective_share: float) -> Stock:
     """The 75+ owner stock standing at `year` — the roll-forward's initial condition.
 
-    ONE RATE MULTIPLIES THE WHOLE BUCKET, AND IT IS THE BUCKET'S OWN (operator ruling X1,
+    ONE RATE MULTIPLIES THE WHOLE BUCKET, AND IT IS THE BUCKET'S OWN (ruling X1,
     2026-08-21). The slice below is every age >= 75 and the rate applied to it is the
     POPULATION-WEIGHTED mean of the per-age rates over exactly those ages — the aggregate a
     lumped bucket has to be valued at, built from the rates the seven-band lattice publishes.
 
     WHAT THIS REPLACED. The rate used to be read at `ROLL_AGE` (80), which resolved to the flat
     `75+` band while that band existed — the household-weighted union over this same population,
-    so the point read WAS that union and the coarseness cost nothing. Operator ruling W
+    so the point read WAS that union and the coarseness cost nothing. Ruling W
     (2026-08-20) split that band, and 80 then resolved to `75-84` ALONE: the bucket was valued
     at the upper half of the very gradient the refinement exposed. Measured against each
     geography's OWN served 75+ household union — the baseline has to be NAMED, because a figure
@@ -1169,7 +1169,7 @@ def _standing_stock(pop_g_s: pd.DataFrame, year: int, geo: Geography, la: dict,
     ALIGNED curve it actually reads (0.6693599636858829 against 0.6526588753507868), with 85+
     households 21.7-25.8% of the block and owning at a materially lower rate.
 
-    IT IS A SMALL, DECLARED, MEASURED MODEL CHANGE ON S — NOT A RESTORATION (operator ruling X3,
+    IT IS A SMALL, DECLARED, MEASURED MODEL CHANGE ON S — NOT A RESTORATION (ruling X3,
     2026-08-21, correcting this docstring's own earlier "restores the aggregate"). The retired
     flat band supplied the HOUSEHOLD-weighted union; this POPULATION-weighted mean sits BELOW it
     AT THE THREE GEOGRAPHIES THAT READ THEIR OWN TERRITORY — -0.162 pp at MTL_RMR
@@ -1219,7 +1219,7 @@ def _standing_stock(pop_g_s: pd.DataFrame, year: int, geo: Geography, la: dict,
     0.730 at MTL_RMR).
 
     THE ATTRIBUTION OF THAT GAP WAS MISLABELLED HERE, AND BOTH DENOMINATORS ARE NOW NAMED
-    (operator ruling X4, 2026-08-21). This docstring said a decomposition "attributed 0.90-1.03
+    (ruling X4, 2026-08-21). This docstring said a decomposition "attributed 0.90-1.03
     of the whole per-age-vs-lumped gap to matching alone"; that ratio is real but its denominator
     is the LA-LUMPED FAMILY — arms with the living arrangement held at `ROLL_AGE` in BOTH legs,
     where matching is nearly the only channel left open and re-measures at 0.88-0.98 of that

@@ -28,7 +28,7 @@ premise FALSE: on the FOUR-band lattice the model then had, the bands' relative 
 ran +0.223% to +1.425%, a spread of 1.202 percentage points, all same-signed, and ADVERSARIALLY
 arranged — the most contaminated band (25-54) was the one `D_native` is built from, the least
 (75+) the one S then RODE through `initialize_households` at `pipeline.ROLL_AGE` — a read
-operator ruling X1 has since removed, so that clause is HISTORY and not mechanism — so δ_D − δ_S
+ruling X1 has since removed, so that clause is HISTORY and not mechanism — so δ_D − δ_S
 sat FAR from zero rather than near it. (P10 wrote that difference as "at or near the FULL
 spread". The superlative was READ OFF THE ARRANGEMENT and never measured against `D_native`'s own
 weights, so it is carried here as the probe's REASONING and not as a measurement — operator
@@ -51,7 +51,7 @@ of the seven — it reads FIVE bands and not one (it sums ages 18-74, so 25-34, 
 because `demand/formation._ownership` returns 0.0 below `OWNERSHIP_LATTICE_FLOOR` 25: ages
 18-24 contribute EXACTLY zero, so the formation gains pile on the first ages the lattice
 admits. S reads the two least contaminated AT SERVED VALUES — 75-84 (+0.242%) and 85+
-(+0.253%) — because operator ruling X1 (2026-08-21) stopped `_standing_stock` reading
+(+0.253%) — because ruling X1 (2026-08-21) stopped `_standing_stock` reading
 ownership at `pipeline.ROLL_AGE` at all: the
 lumped 75+ bucket is now valued at the POPULATION-WEIGHTED mean of the per-age rates over the
 ages it holds, which spans both tail bands. That does not weaken the arrangement, and AT SERVED
@@ -59,7 +59,7 @@ VALUES the argument does not depend on a weighting: a weighted mean of two rates
 them, so δ_S lies between those two band deltas for EVERY feasible weight, and the whole SERVED
 interval [+0.242%, +0.253%] sits below the next-lowest band, 45-54 at +0.273%.
 
-THAT SCOPE IS THE LIMIT AND NOT A HEDGE, AND THE WEIGHTING IS NOT FREE TO CHOOSE (operator ruling
+THAT SCOPE IS THE LIMIT AND NOT A HEDGE, AND THE WEIGHTING IS NOT FREE TO CHOOSE (ruling
 X6, 2026-08-21). The mediant bound is a property of the SERVED values: at the suppression HIGH
 corner `85+` alone rises to +0.384%, ABOVE 45-54, so the ordering is not weight-free there. And
 δ_S's weights are fixed by the quantity — S's rate is Σ_a pop(a)·ρ(a) / Σ_a pop(a) and the
@@ -157,7 +157,7 @@ thing that carries the reversal, because no feasible configuration of the withhe
 it. (On the retired four-band lattice the same box ran 1.174-1.241 pp — see the history
 paragraph above; the refinement widened it, it did not create it.)
 
-STALENESS REFUSES AT LOAD (steering ruling L), on BOTH sources — an artifact derived from a
+STALENESS REFUSES AT LOAD (ruling L), on BOTH sources — an artifact derived from a
 stale CSD extract is exactly as wrong as one derived from a stale Census extract — and every
 rate is instantiated as a `constants.Anchor` at derivation AND at load, so an undated or
 uncited curve serves nothing.
@@ -211,7 +211,7 @@ AGE_TOTAL_MEMBER = census.MAINTAINER_TOTAL_MEMBER
 # age dimension members here against 15 there). Sharing the constituents is therefore
 # impossible and sharing the edges is mandatory.
 #
-# THIS CUBE IS WHY THE MODEL LATTICE IS TEN-YEAR AND NOT FIVE-YEAR (operator ruling W,
+# THIS CUBE IS WHY THE MODEL LATTICE IS TEN-YEAR AND NOT FIVE-YEAR (ruling W,
 # 2026-08-20; spec §8 amendment #18). The 7-band partition below is the FINEST ONE BOTH CUBES
 # CAN EXPRESS: of this cube's 9 age dimension members, 8 are age bands and every one at or
 # above 25 is TEN-year (`25 to 34`, `35 to 44`, `45 to 54`, `55 to 64`, `65 to 74`) or a
@@ -474,7 +474,7 @@ def _subtract_band(cells: dict, members: tuple[str, ...]) -> tuple[tuple[int, in
     count of the same band: dropping the published one would net a territory's households out
     of one denominator and its owners out of another. The upper bound on a withheld field is
     the subdivision's own all-ages count MINUS everything it publishes across all SEVEN bands
-    (four until operator ruling W refined the lattice on 2026-08-20) — the unpublished remainder,
+    (four until ruling W refined the lattice on 2026-08-20) — the unpublished remainder,
     which contains the missing cell by construction, and which is CLAMPED at zero rather than
     allowed negative by the round-to-5 step. The remainder itself did not move at the refinement
     — it ranges over everything the subdivision publishes, however that is cut — but it is now
@@ -924,7 +924,7 @@ def aligned_ownership_union(lo: int, hi: int, data_dir: Path | None = None) -> f
     """Owner households / total households over ages [lo, hi] on the ALIGNED territory.
 
     THE SIBLING OF `census.ownership_union_rates`, for the one geography this surface
-    re-points (operator ruling X, 2026-08-21). A consumer that multiplies a whole age span by
+    re-points (ruling X, 2026-08-21). A consumer that multiplies a whole age span by
     ONE rate needs the span's household-weighted union, and no point read inside the span
     returns it — see that function's header for why the seven-band lattice made the two
     questions distinguishable.

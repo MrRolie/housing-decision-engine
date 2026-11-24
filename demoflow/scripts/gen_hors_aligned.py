@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate `demoflow/data/ownership_hors_aligned.json` — the OPERAND-ALIGNED HORS_RMR curve.
 
-Thin wrapper by design (steering ruling B): all derivation lives in
+Thin wrapper by design (ruling B): all derivation lives in
 `demoflow.loaders.hors_aligned.derive_aligned_ownership`, so the shipped artifact and the
 no-drift gate exercise the SAME code path. This file hardcodes no rate.
 

@@ -40,7 +40,7 @@ sibling 98-10-0232-01, on the FOUR bands `census._AGE_BAND_SPEC` then carried
 its strict form and the residual it leaves is measured second-order; both halves are published,
 because the premise is what the ruling rests on and the size is what makes the ruling survive.
 
-THAT LATTICE IS NOW A DATED RECORD, NOT THE LIVE ONE. Operator ruling W (2026-08-20) refined the
+THAT LATTICE IS NOW A DATED RECORD, NOT THE LIVE ONE. Ruling W (2026-08-20) refined the
 model's ownership lattice to seven bands; this file is deliberately NOT re-run for it, and
 `RHO_BANDS_CMA` below carries the full argument plus the test that holds the two lattices in an
 exact-coarsening relation. Every sentence and every emitted DECISION token in this file describes
@@ -192,7 +192,7 @@ RHO_AGE_TOTAL = "Total - Age of primary household maintainer"
 # members. The band EDGES were `census._AGE_BAND_SPEC`'s; the constituents are whatever each cube
 # publishes, and the two cubes publish different granularities of the same partition.
 #
-# FROZEN, NOT STALE — DO NOT "REFRESH" THESE TO THE LIVE SPEC. Operator ruling W (2026-08-20;
+# FROZEN, NOT STALE — DO NOT "REFRESH" THESE TO THE LIVE SPEC. Ruling W (2026-08-20;
 # spec §8 amendment #18) refined the model's ownership lattice to SEVEN bands
 # (25-34/35-44/45-54/55-64/65-74/75-84/85+), so these four no longer equal it. They are kept
 # because the ρ table they produce is the WARRANT for reversing spec §6 amendment #12(B):
@@ -489,7 +489,7 @@ def _bracket_record() -> str:
 
     bracket's other variants and the shipped settled-persons figure are stated. It lives in
     docs/research/ so the shipped test suite reads nothing outside what ships; it replaced
-    the internal dispatch record this read previously resolved to.
+    an internal file that does not ship.
     """
     if not BRACKET_RECORD.exists():
         raise ProbeRefusal("bracket-record",
@@ -872,7 +872,7 @@ def _guard_citation(source_name: str, text: str, coupled: list) -> None:
     """Every figure this run REPRODUCES from a document must match that document's digits.
 
     Deliberately scoped to the REPRODUCED set. The ALIGNED values are new measurements: they
-    are not in §6 and must not be, until the seat rules them in — so a gate demanding their
+    are not in §6 and must not be, until the build agent rules them in — so a gate demanding their
     presence would either fail today or force the wiring this run refuses to do.
     """
     absent = [(label, tok) for label, tok in coupled if tok not in text]
