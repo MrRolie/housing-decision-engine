@@ -1,9 +1,25 @@
 # Housing Decision Engine
 
-![The answer](docs/story/act1_the_answer.png)
+Should you rent or buy? This tool compares renting, buying a condo and buying a house over the
+years you expect to stay, in today's dollars. It says how sure it is, and when the answer is too
+close to call it says that instead of picking. Where you have no view of your own on local
+price trends, it uses population scenarios from the Institut de la statistique du Québec (ISQ)
+and the 2021 census.
 
-A present-value comparison engine for housing decisions — rent vs condo vs house on a
-net-wealth basis — with demographic scenario priors from a UN-data pipeline.
+Built with Claude Code under my direction.
+
+![Bar chart of total cost in today's dollars over 25 years for renting ($537k), buying a condo ($519k) and buying a house ($515k, cheapest by best guess), each with a whisker spanning its middle 80% of 5,000 simulated futures; the whiskers overlap heavily, so the verdict is too close to call.](docs/story/act1_the_answer.png)
+
+*Example output for a made-up household with illustrative numbers (rent $2,400 a month, a $480k condo,
+a $550k house, 25 years, Montréal metropolitan area). Each bar is the best-guess total cost; each whisker
+spans the middle 80% of 5,000 simulated futures (10th to 90th percentile). The demographic prior in this
+example is a test fixture committed to the repo, so read it as a demonstration, not a forecast.*
+
+![Two panels showing total cost against monthly rent and against house price; the renting line crosses the house line near $2,298 a month and a $581k price, with a shaded band around the crossing where the verdict is too close to call.](docs/story/act6_the_market_line.png)
+
+*The same household, the market line: the rent (left) or house price (right) at which the verdict flips. The shaded band is where it is too close to call.*
+
+All six charts of this example, with every assumption listed, are in [docs/story/STORY.md](docs/story/STORY.md).
 
 ## What this is for
 
@@ -24,18 +40,6 @@ You run it with your own Claude, on your own numbers. Nothing here reports anywh
 no part of an answer depends on the people who built it being around: every assumption,
 source and caveat an answer needs is printed by the engine itself. Take a tagged release
 if you want a stable engine — `main` is the development tree.
-
-## What you get
-
-- **3-way PV comparison** — rent / condo / house, leveraged or all-cash, with end-of-horizon equity credited back
-- **Monte Carlo uncertainty** — full cost distributions and P(each option cheapest), seeded and reproducible
-- **Demographic priors via `ScenarioPrior`** — a population-based view of where local prices may head, used when you have no view of your own: UN WPP → ISQ scenario → demand-model drift bands that tilt price growth and crash risk by geography
-- **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win — and when the central case and most simulated futures favour different options, a named disagreement that picks neither), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
-- **The welcome tax computed, not guessed** — `land_transfer_tax: auto` prices the duty from the published bracket schedule for the option's `province` and `municipality` (Québec and Ontario provincial, Montréal, Toronto), applies the first-time-buyer rebate where one is anchored, adds it to year-0 cash and re-derives it at every `--sweep` / `--break-even` grid point
-- **Insured mortgages priced, not recalled** — `mortgage_insurance: auto` picks the CMHC tier from the anchored premium schedule, finances the premium and pays the provincial tax on it in cash, re-deriving the tier at every `--sweep` / `--break-even` grid point
-- **A source class for every value you state** — an optional `sources:` block marks each input `user`, `assistant` or `anchor:<name>`, so the read-back can tell your numbers from the ones someone typed for you; when Monte Carlo decisiveness rests on uncertainty inputs you never stated, the engine says so and prices the deterministic alternative
-- **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
-- **Published property-tax and home-insurance figures by jurisdiction** — municipal rates for Laval, Montréal, Québec City, Ottawa and Toronto, and provincial home-insurance figures for QC and ON, each with the figure as its source quotes it and the base it is levied on (assessed value, which is not market value). The engine applies none of them: they are there so your own figure gets cited when it matches, and so a jurisdiction with no source says `source: none` (Gatineau, which taxes by neighbourhood unit) instead of guessing
 
 ## Test drive
 
@@ -70,6 +74,18 @@ its source printed it, where the next edition appears, when that source was last
 checked and what was found. It exits non-zero once a figure has actually lapsed. The
 engine never carries a figure forward silently and never estimates the next one.
 
+## What you get
+
+- **3-way PV comparison** — rent / condo / house, leveraged or all-cash, with end-of-horizon equity credited back
+- **Monte Carlo uncertainty** — full cost distributions and P(each option cheapest), seeded and reproducible
+- **Demographic priors via `ScenarioPrior`** — a population-based view of where local prices may head, used when you have no view of your own: ISQ population scenarios and 2021 census tables → demand-model drift bands that tilt price growth and crash risk by geography
+- **Six-act story plots** — the verdict (with a decisiveness rule, never a coin flip dressed as a win — and when the central case and most simulated futures favour different options, a named disagreement that picks neither), the cost race, uncertainty, home-value futures, the demographic signal, the break-even market line ([docs/story/STORY.md](docs/story/STORY.md))
+- **The welcome tax computed, not guessed** — `land_transfer_tax: auto` prices the duty from the published bracket schedule for the option's `province` and `municipality` (Québec and Ontario provincial, Montréal, Toronto), applies the first-time-buyer rebate where one is anchored, adds it to year-0 cash and re-derives it at every `--sweep` / `--break-even` grid point
+- **Insured mortgages priced, not recalled** — `mortgage_insurance: auto` picks the CMHC tier from the anchored premium schedule, finances the premium and pays the provincial tax on it in cash, re-deriving the tier at every `--sweep` / `--break-even` grid point
+- **A source class for every value you state** — an optional `sources:` block marks each input `user`, `assistant` or `anchor:<name>`, so the read-back can tell your numbers from the ones someone typed for you; when Monte Carlo decisiveness rests on uncertainty inputs you never stated, the engine says so and prices the deterministic alternative
+- **Provenance for every default** — a registry with source, URL, band and retrieval date (`hde --print-anchors`), echoed as `assumptions` in `--json`, plus a figure glossary for every printed number ([docs/reference/ARCHITECTURE.md](docs/reference/ARCHITECTURE.md))
+- **Published property-tax and home-insurance figures by jurisdiction** — municipal rates for Laval, Montréal, Québec City, Ottawa and Toronto, and provincial home-insurance figures for QC and ON, each with the figure as its source quotes it and the base it is levied on (assessed value, which is not market value). The engine applies none of them: they are there so your own figure gets cited when it matches, and so a jurisdiction with no source says `source: none` (Gatineau, which taxes by neighbourhood unit) instead of guessing
+
 ## The showcase
 
 ```bash
@@ -78,8 +94,6 @@ uv run hde examples/showcase_demographic_prior.yaml --story docs/story
 
 Renders the full six-act story under the MTL_RMR demographic prior — the committed
 [docs/story/STORY.md](docs/story/STORY.md) is this command's output, regenerable at any time.
-
-> **Surface doctrine (2026-08-26; MCP server removed 2026-09-01):** the interface is the **`hde` CLI + the repo-local `hde` skill** (`.claude/skills/hde/SKILL.md` plus its `references/`, the dispatch contract Claude follows). `uv run hde --print-schema` is the input contract, `--print-anchors` the provenance registry.
 
 ## Repo map
 
